@@ -65,6 +65,16 @@ To regenerate fabrication outputs:
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export gerbers c6remote.kicad_pcb -o export --board-plot-params
 ```
 
+To render reusable 2D board views:
+
+```bash
+./scripts/render-2d.sh
+./scripts/render-2d.sh --side top
+./scripts/render-2d.sh --side bottom --format pdf
+```
+
+Default output goes to `c6remote-kicad/renders/<format>/`.
+
 ## Current status
 
 - Prototype board, not finished remote

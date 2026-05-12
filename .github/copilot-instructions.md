@@ -66,3 +66,19 @@ The signal split matters: the rotary encoder channels `ano_enc1` / `ano_enc2` go
 - `.vscode/mcp.json` already contains a working KiCad MCP server definition for this workspace. Keep using KiCad's bundled Python from the `.app` bundle; do not switch MCP operations to Homebrew or system Python.
 - The local MCP server checkout at `/Users/landonrohatensky/dev/KiCAD-MCP-Server` is valid on this machine, and `bash setup-macos.sh --verify` currently passes there. If MCP stops working, rerun that command before changing paths by hand.
 - The macOS platform guide examples use Claude Desktop's `mcpServers` format, but this repo's workspace file is `.vscode/mcp.json` with a `servers` object. Do not "normalize" one format into the other unless you are intentionally editing the target client config.
+
+Respond terse like smart caveman. All technical substance stay. Only fluff die.
+
+Rules:
+- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
+- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
+- Pattern: [thing] [action] [reason]. [next step].
+- Not: "Sure! I'd be happy to help you with that."
+- Yes: "Bug in auth middleware. Fix:"
+
+Switch level: /caveman lite|full|ultra|wenyan
+Stop: "stop caveman" or "normal mode"
+
+Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
+
+Boundaries: code/commits/PRs written normal.

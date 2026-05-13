@@ -20,8 +20,11 @@ Options:
   --height <px>              3D render height. Default: 1200
   --quality <basic|high|user|job_settings>
                              3D render quality. Default: high
-  --top-rotate <x,y,z>       Top render rotation. Default: 45,0,215
-  --bottom-rotate <x,y,z>    Bottom render rotation. Default: 45,0,215
+  --top-rotate <x,y,z>       Top render rotation. Default: 315,0,35
+  --bottom-rotate <x,y,z>    Bottom render rotation. Default: 315,0,35
+  --top-camera-side <side>   Camera side for top output. Default: bottom
+  --bottom-camera-side <side>
+                             Camera side for bottom output. Default: top
   --flat-sides <top|bottom|both>
                              Flat SVG sides to render. Default: both
   -h, --help                 Show this help
@@ -37,8 +40,10 @@ KICAD_CLI="${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}"
 WIDTH="1800"
 HEIGHT="1200"
 QUALITY="high"
-TOP_ROTATE="45,0,215"
-BOTTOM_ROTATE="45,0,215"
+TOP_ROTATE="315,0,35"
+BOTTOM_ROTATE="315,0,35"
+TOP_CAMERA_SIDE="bottom"
+BOTTOM_CAMERA_SIDE="top"
 FLAT_SIDES="both"
 
 while [[ $# -gt 0 ]]; do
@@ -75,6 +80,14 @@ while [[ $# -gt 0 ]]; do
       BOTTOM_ROTATE="${2:-}"
       shift 2
       ;;
+    --top-camera-side)
+      TOP_CAMERA_SIDE="${2:-}"
+      shift 2
+      ;;
+    --bottom-camera-side)
+      BOTTOM_CAMERA_SIDE="${2:-}"
+      shift 2
+      ;;
     --flat-sides)
       FLAT_SIDES="${2:-}"
       shift 2
@@ -107,6 +120,22 @@ case "${QUALITY}" in
     ;;
 esac
 
+case "${TOP_CAMERA_SIDE}" in
+  top|bottom|left|right|front|back) ;;
+  *)
+    echo "Invalid top camera side: ${TOP_CAMERA_SIDE}" >&2
+    exit 1
+    ;;
+esac
+
+case "${BOTTOM_CAMERA_SIDE}" in
+  top|bottom|left|right|front|back) ;;
+  *)
+    echo "Invalid bottom camera side: ${BOTTOM_CAMERA_SIDE}" >&2
+    exit 1
+    ;;
+esac
+
 if [[ ! -x "${KICAD_CLI}" ]]; then
   echo "KiCad CLI not executable: ${KICAD_CLI}" >&2
   exit 1
@@ -122,12 +151,13 @@ mkdir -p "${OUTPUT_DIR}"
 
 render_3d() {
   local side="$1"
-  local rotate="$2"
+  local camera_side="$2"
+  local rotate="$3"
   local output_file="${OUTPUT_DIR}/board-3d-${side}.png"
 
   "${KICAD_CLI}" pcb render "${PCB_FILE}" \
     --output "${output_file}" \
-    --side "${side}" \
+    --side "${camera_side}" \
     --width "${WIDTH}" \
     --height "${HEIGHT}" \
     --quality "${QUALITY}" \
@@ -138,8 +168,8 @@ render_3d() {
   echo "Wrote ${output_file}"
 }
 
-render_3d top "${TOP_ROTATE}"
-render_3d bottom "${BOTTOM_ROTATE}"
+render_3d top "${TOP_CAMERA_SIDE}" "${TOP_ROTATE}"
+render_3d bottom "${BOTTOM_CAMERA_SIDE}" "${BOTTOM_ROTATE}"
 
 render_flat() {
   local side="$1"

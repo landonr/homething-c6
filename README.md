@@ -4,7 +4,10 @@ A handheld remote for TV, Sonos, zigbee lights, and Home Assistant. No touchscre
 
 This repo is the hardware side of that project. The source of truth lives in `c6remote-kicad/`. Current design is a KiCad prototype built around a Seeed Studio XIAO ESP32-C6.
 
-![3D preview of current board prototype](docs/board-preview-3d.png)
+| View | Top | Bottom |
+| --- | --- | --- |
+| 3D | ![3D top preview of current board prototype](docs/readme-assets/board-3d-top.png) | ![3D bottom preview of current board prototype](docs/readme-assets/board-3d-bottom.png) |
+| Flat SVG | ![Flat top SVG preview of current board prototype](docs/readme-assets/board-flat-top.svg) | ![Flat bottom SVG preview of current board prototype](docs/readme-assets/board-flat-bottom.svg) |
 
 ## What this remote is meant to do
 
@@ -74,6 +77,14 @@ To render reusable 2D board views:
 ```
 
 Default output goes to `c6remote-kicad/renders/<format>/`.
+
+To regenerate README preview assets in one shot:
+
+```bash
+./scripts/render-readme-assets.sh
+```
+
+Default output goes to `docs/readme-assets/`.
 
 ## Current status
 

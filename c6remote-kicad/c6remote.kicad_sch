@@ -7960,7 +7960,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "cb0e6873-4fcf-48d6-b47f-7a43a7923b83")
-		(property "Reference" "U4"
+		(property "Reference" "ENC1"
 			(at 168.91 48.26 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8043,7 +8043,7 @@
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "U4")
+					(reference "ENC1")
 					(unit 1)
 				)
 			)
@@ -8986,7 +8986,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "d9f224fc-d16f-4d69-b912-644bb569c79a")
-		(property "Reference" "M1"
+		(property "Reference" "MK1"
 			(at 43.18 33.0199 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9062,7 +9062,7 @@
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "M1")
+					(reference "MK1")
 					(unit 1)
 				)
 			)

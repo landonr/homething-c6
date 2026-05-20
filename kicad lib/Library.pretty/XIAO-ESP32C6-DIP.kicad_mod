@@ -338,13 +338,13 @@
 	)
 	(model "${KIPRJMOD}/3dmodels/Seeed Studio XIAO ESP32-C6.step"
 		(offset
-			(xyz -1.7018 -6.096 0)
+			(xyz -1.7018 -6.096 0.71)
 		)
 		(scale
 			(xyz 1 1 1)
 		)
 		(rotate
-			(xyz -90 0 0)
+			(xyz -90 0 -90)
 		)
 	)
 	(model "${AMZPATH}/3dmodels/AMz3D.3dshapes/Seeed Studio XIAO RP2040 v26.step"

@@ -606,6 +606,7 @@
 			)
 		)
 		(model "${AMZPATH}/3dmodels/AMz3D.3dshapes/Seeeduino XIAO SAMD21 v4.step"
+			(hide yes)
 			(offset
 				(xyz 0 0 0)
 			)
@@ -650,6 +651,17 @@
 			)
 			(rotate
 				(xyz -90 0 0)
+			)
+		)
+		(model "${KIPRJMOD}/3dmodels/Seeed Studio XIAO ESP32-C6.step"
+			(offset
+				(xyz 6 -1.74 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz -90 -0 -90)
 			)
 		)
 	)

@@ -40,10 +40,10 @@ KICAD_CLI="${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}"
 WIDTH="1800"
 HEIGHT="1200"
 QUALITY="high"
-TOP_ROTATE="315,0,35"
-BOTTOM_ROTATE="315,0,35"
-TOP_CAMERA_SIDE="bottom"
-BOTTOM_CAMERA_SIDE="top"
+TOP_ROTATE="-45,0,45"
+BOTTOM_ROTATE="-45,0,45"
+TOP_CAMERA_SIDE="top"
+BOTTOM_CAMERA_SIDE="bottom"
 FLAT_SIDES="both"
 
 while [[ $# -gt 0 ]]; do
@@ -162,7 +162,6 @@ render_3d() {
     --height "${HEIGHT}" \
     --quality "${QUALITY}" \
     --background transparent \
-    --perspective \
     --rotate "${rotate}"
 
   echo "Wrote ${output_file}"

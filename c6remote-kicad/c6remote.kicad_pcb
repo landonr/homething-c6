@@ -6242,7 +6242,7 @@
 		(layer "F.Cu")
 		(uuid "e1f454f4-b187-4c91-9e65-47d3a2f44500")
 		(at 52.227297 68.824158)
-		(property "Reference" "U4"
+		(property "Reference" "ENC1"
 			(at 9.8 -18.22 0)
 			(unlocked yes)
 			(layer "F.SilkS")
@@ -7395,7 +7395,7 @@
 		(at 54.05 36.714 180)
 		(descr "TDK InvenSense MEMS I2S Microphone: https://invensense.tdk.com/products/ics-43434/")
 		(tags "microphone MEMS I2S ICS-43434 TDK InvenSense")
-		(property "Reference" "M1"
+		(property "Reference" "MK1"
 			(at 0 3.71 0)
 			(unlocked yes)
 			(layer "B.SilkS")

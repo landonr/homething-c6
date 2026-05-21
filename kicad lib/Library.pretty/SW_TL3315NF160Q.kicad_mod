@@ -377,4 +377,15 @@
 		(uuid "5076f80b-0e9b-49c6-b652-a894a2356406")
 	)
 	(embedded_fonts no)
+	(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
 )

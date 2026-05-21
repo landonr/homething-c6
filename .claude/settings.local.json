@@ -13,7 +13,8 @@
       "mcp__kicad__get_schematic_view_region",
       "mcp__kicad__list_schematic_wires",
       "mcp__kicad__get_schematic_component",
-      "mcp__kicad__run_erc"
+      "mcp__kicad__run_erc",
+      "mcp__kicad__list_schematic_components"
     ]
   },
   "enabledMcpjsonServers": [

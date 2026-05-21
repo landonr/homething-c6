@@ -24,11 +24,11 @@ This is not a finished product yet. Right now this repo is about the hardware pr
 Board in `c6remote-kicad/` currently includes:
 
 - Seeed Studio XIAO ESP32-C6 (`U1`)
-- I2S microphone (`M1`)
+- I2S microphone (`MK1`)
 - TSOP45xx-style IR receiver (`U2`) and IR LED transmitter (`D1`) through `Q1`
 - PCF8575 I2C GPIO expander (`U3`)
 - Discrete switches `sw1` through `sw11`
-- Custom "Ano Rotary" part (`U4`) with encoder channels and five switch signals
+- Custom "Ano Rotary" part (`ENC1`) with encoder channels and five switch signals
 - SK6812 mini addressable status LED (`D2`)
 
 In practice, that gives the board a lot of physical input options plus IR and wireless paths for mixed home gear.

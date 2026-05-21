@@ -2,4 +2,5 @@
   (version 7)
   (lib (name "ano rotary")(type "KiCad")(uri "${KIPRJMOD}/ano rotary.kicad_sym")(options "")(descr ""))
   (lib (name "Seeed_Studio_XIAO_Series")(type "KiCad")(uri "${KIPRJMOD}/Seeed_Studio_XIAO_Series.kicad_sym")(options "")(descr "Seeed Studio XIAO Series"))
+  (lib (name "inmp441_microphone_i2s")(type "KiCad")(uri "${KIPRJMOD}/inmp441_microphone_i2s.kicad_sym")(options "")(descr "INMP441 I2S Microphone"))
 )

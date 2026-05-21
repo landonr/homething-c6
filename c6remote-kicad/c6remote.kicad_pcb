@@ -6422,6 +6422,17 @@
 			)
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/3dmodels/5221 ANO Rotary Encoder.step"
+			(offset
+				(xyz 1 1 -0.05)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz -180 -0 -0)
+			)
+		)
 	)
 	(footprint "Library:SW_TL3315NF160Q"
 		(layer "F.Cu")

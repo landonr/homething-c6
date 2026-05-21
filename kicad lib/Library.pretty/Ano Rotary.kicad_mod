@@ -139,5 +139,16 @@
 			"e906015c-1585-4222-b4be-d8ad2302ec65"
 		)
 	)
+	(model "${KIPRJMOD}/3dmodels/5221 ANO Rotary Encoder.step"
+		(offset
+			(xyz 1 1 -0.05)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz -180 -0 -0)
+		)
+	)
 	(embedded_fonts no)
 )

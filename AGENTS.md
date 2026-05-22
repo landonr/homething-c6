@@ -13,3 +13,11 @@ Stop: "stop caveman" or "normal mode"
 Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
 
 Boundaries: code/commits/PRs written normal.
+
+Repo notes:
+- KiCad source of truth: `c6remote-kicad/c6remote.kicad_pcb` and `c6remote-kicad/c6remote.kicad_sch`
+- KiCad tools may rewrite large file sections for small edits. Re-read file before second patch if turn interrupted.
+- Before commit, check tracked vs untracked. Common untracked KiCad/editor artifacts here:
+  `c6remote-kicad/.history/`, `c6remote-kicad/DRC.rpt`, `c6remote-kicad/renders/`,
+  `.cursor/`, `.windsurf/`, `.opencode/`, `.clinerules/`
+- Git write ops may need escalation when sandbox cannot create `.git/index.lock`.

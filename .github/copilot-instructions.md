@@ -63,9 +63,10 @@ The signal split matters: the rotary encoder channels `ano_enc1` / `ano_enc2` go
 - `ano rotary.kicad_sym` defines the custom rotary symbol used as `ENC1`. Its pin electrical types are not modeled cleanly for ERC today, so changing that symbol can shift the existing ERC baseline.
 - The stored plot settings in the KiCad files point at a Windows path. For automated exports, always pass an explicit output directory such as `-o export` instead of relying on the saved project path.
 - `kicad-cli` writes report files such as `c6remote-erc.rpt` and `c6remote-drc.rpt` in `c6remote-kicad/` when you run validation. Treat them as generated scratch output unless a task explicitly asks you to keep or inspect them.
-- `.vscode/mcp.json` already contains a working KiCad MCP server definition for this workspace. Keep using KiCad's bundled Python from the `.app` bundle; do not switch MCP operations to Homebrew or system Python.
+- `.mcp.json` already contains a working KiCad MCP server definition for Codex in this workspace. `.vscode/mcp.json` mirrors same server for VS Code MCP clients. Keep using KiCad's bundled Python from the `.app` bundle; do not switch MCP operations to Homebrew or system Python.
+- `docs/mcp-setup.md` is source of truth for multi-client MCP setup in this repo. Use it when touching Codex, Claude Desktop, or Copilot / VS Code MCP configuration.
 - The local MCP server checkout at `/Users/landonrohatensky/dev/KiCAD-MCP-Server` is valid on this machine, and `bash setup-macos.sh --verify` currently passes there. If MCP stops working, rerun that command before changing paths by hand.
-- The macOS platform guide examples use Claude Desktop's `mcpServers` format, but this repo's workspace file is `.vscode/mcp.json` with a `servers` object. Do not "normalize" one format into the other unless you are intentionally editing the target client config.
+- Upstream docs often show Claude Desktop's `mcpServers` format. Codex uses workspace `.mcp.json` with `mcpServers`; VS Code uses `.vscode/mcp.json` with `servers`. Do not "normalize" one format into another unless you are intentionally editing that client config.
 
 Respond terse like smart caveman. All technical substance stay. Only fluff die.
 

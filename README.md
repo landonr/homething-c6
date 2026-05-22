@@ -57,6 +57,16 @@ Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
 - `ano rotary` — project-local custom rotary symbol (`ano rotary.kicad_sym`), sourced from [Adafruit ANO Rotary Navigation Encoder](https://github.com/adafruit/Adafruit-ANO-Rotary-Navigation-Encoder-Breakout-PCB)
 - `Seeed_Studio_XIAO_Series` — XIAO module symbols (`Seeed_Studio_XIAO_Series.kicad_sym`), sourced from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
 
+## KiCad MCP
+
+This repo is set up to use same KiCad MCP server with Codex, Claude Desktop, and GitHub Copilot / VS Code.
+
+- Codex workspace config: `.mcp.json`
+- VS Code / Copilot workspace config: `.vscode/mcp.json`
+- Claude Desktop example config: `docs/claude-desktop-config.example.json`
+
+Full setup notes live in [docs/mcp-setup.md](docs/mcp-setup.md).
+
 ## Validation
 
 Run from `c6remote-kicad/`:

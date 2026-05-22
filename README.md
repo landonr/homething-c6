@@ -1,4 +1,4 @@
-# c6homeThing
+# homeThing C6
 
 A handheld remote for TV, Sonos, zigbee lights, and Home Assistant. No touchscreen, no digging through apps, no device that has to live on a charger. Physical buttons, a rotary control, fast access, and long idle life.
 

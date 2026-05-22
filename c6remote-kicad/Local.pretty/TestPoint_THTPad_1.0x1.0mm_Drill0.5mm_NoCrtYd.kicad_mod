@@ -1,0 +1,42 @@
+(footprint "TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
+  (version 20241229)
+  (generator "kicad-mcp")
+  (generator_version "9.0")
+  (layer "F.Cu")
+  (descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+  (tags "test point THT pad no courtyard")
+
+  (property "Reference" "REF**" (at 0 -1.448 0)
+    (layer "F.SilkS")
+    (uuid "f99df513-e67e-424e-8f77-7beac9620010")
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+  (property "Value" "TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd" (at 0 1.55 0)
+    (layer "F.Fab")
+    (uuid "49b32bc7-3c80-47d5-ad6c-db4942cfb151")
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+  (property "Datasheet" "" (at 0 0 0)
+    (layer "F.Fab")
+    (uuid "9c338a92-a9fc-4614-be47-9d649e5cbb5d")
+    (effects (font (size 1 1) (thickness 0.15)))
+  )
+
+  (fp_rect
+    (start -0.7 -0.7)
+    (end 0.7 0.7)
+    (stroke (width 0.12) (type default))
+    (fill none)
+    (layer "F.SilkS")
+    (uuid "04739815-822b-48e5-9fb4-61b6800f5330")
+  )
+
+  (pad "1" thru_hole circle
+    (at 0 0)
+    (size 1 1)
+    (drill 0.5)
+    (layers "*.Cu" "*.Mask")
+    (uuid "f426ae2b-6796-4e11-b176-d9cedca1fee5")
+  )
+
+)

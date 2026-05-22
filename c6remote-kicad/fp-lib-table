@@ -2,4 +2,5 @@
   (version 7)
   (lib (name "Library")(type "KiCad")(uri "${KIPRJMOD}/../kicad lib/Library.pretty")(options "")(descr "Project-local custom footprints"))
   (lib (name "Seeed_Studio_XIAO_Series")(type "KiCad")(uri "${KIPRJMOD}/Seeed_Studio_XIAO_Series.pretty")(options "")(descr "Untouched Seeed Studio XIAO footprints"))
+  (lib (name "Local")(type "KiCad")(uri "/Users/landonrohatensky/dev/c6homething/c6remote-kicad/Local.pretty")(options "")(descr "Project-local custom footprints"))
 )

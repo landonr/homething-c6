@@ -18,6 +18,8 @@ Repo notes:
 - KiCad source of truth: `c6remote-kicad/c6remote.kicad_pcb` and `c6remote-kicad/c6remote.kicad_sch`
 - Prefer KiCad MCP over `kicad-cli` for board/schematic inspection, validation, and edits. Use CLI only as fallback when MCP lacks needed operation or fails.
 - Before using KiCad CLI or manual file patching, use tool discovery to check for deferred KiCad MCP tools that can perform needed edit or inspection directly.
+- After KiCad MCP connect/edit operations, re-run ERC/DRC immediately because some MCP tools may also mutate PCB-side metadata or parity-relevant state.
+- For schematic parity work, prefer KiCad MCP schematic tools over raw file patching because labels and wire endpoints must snap to exact coordinates.
 - KiCad tools may rewrite large file sections for small edits. Re-read file before second patch if turn interrupted.
 - Before commit, check tracked vs untracked. Common untracked KiCad/editor artifacts here:
   `c6remote-kicad/.history/`, `c6remote-kicad/DRC.rpt`, `c6remote-kicad/renders/`,

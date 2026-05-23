@@ -11,6 +11,7 @@ Render README board preview assets:
   - 3D bottom PNG
   - flat top SVG
   - flat bottom SVG
+  - schematic SVG
 
 Options:
   --project-dir <dir>        KiCad project directory. Default: c6remote-kicad
@@ -184,6 +185,24 @@ render_flat() {
   echo "Wrote ${OUTPUT_DIR}/board-flat-${side}.svg"
 }
 
+render_schematic() {
+  local schematic_file="${PROJECT_DIR}/c6remote.kicad_sch"
+
+  if [[ ! -f "${schematic_file}" ]]; then
+    echo "Schematic file not found: ${schematic_file}" >&2
+    exit 1
+  fi
+
+  "${KICAD_CLI}" sch export svg "${schematic_file}" \
+    --output "${OUTPUT_DIR}" \
+    --exclude-drawing-sheet \
+    --black-and-white \
+    --no-background-color
+
+  mv "${OUTPUT_DIR}/c6remote.svg" "${OUTPUT_DIR}/schematic.svg"
+  echo "Wrote ${OUTPUT_DIR}/schematic.svg"
+}
+
 case "${FLAT_SIDES}" in
   both)
     render_flat top
@@ -193,3 +212,5 @@ case "${FLAT_SIDES}" in
     render_flat "${FLAT_SIDES}"
     ;;
 esac
+
+render_schematic

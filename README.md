@@ -9,6 +9,10 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 | 3D | ![3D top preview of current board prototype](docs/readme-assets/board-3d-top.png) | ![3D bottom preview of current board prototype](docs/readme-assets/board-3d-bottom.png) |
 | Flat SVG | ![Flat top SVG preview of current board prototype](docs/readme-assets/board-flat-top.svg) | ![Flat bottom SVG preview of current board prototype](docs/readme-assets/board-flat-bottom.svg) |
 
+## Schematic
+
+![Current schematic preview](docs/readme-assets/schematic.svg)
+
 ## What this remote is meant to do
 
 - Control a TV through on-board IR receive and transmit hardware
@@ -125,6 +129,7 @@ To regenerate README preview assets in one shot:
 ```
 
 Default output goes to `docs/readme-assets/`.
+Includes `board-3d-top.png`, `board-3d-bottom.png`, `board-flat-top.svg`, `board-flat-bottom.svg`, and `schematic.svg`.
 
 ## Current status
 

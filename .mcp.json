@@ -10,7 +10,8 @@
         "PYTHONPATH": "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/lib/python3.9/site-packages",
         "LOG_LEVEL": "info",
         "KICAD_AUTO_LAUNCH": "false",
-        "KICAD_MCP_DEV": "0"
+        "KICAD_MCP_DEV": "0",
+        "KICAD_ALLOWED_ROOTS": "/Users/landonrohatensky/dev/c6homething"
       }
     }
   }

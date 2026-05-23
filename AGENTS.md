@@ -16,6 +16,7 @@ Boundaries: code/commits/PRs written normal.
 
 Repo notes:
 - KiCad source of truth: `c6remote-kicad/c6remote.kicad_pcb` and `c6remote-kicad/c6remote.kicad_sch`
+- For board validation, DRC/ERC, status, or "what's left" work, read `prototype-board-todo.md` first.
 - Prefer KiCad MCP over `kicad-cli` for board/schematic inspection, validation, and edits. Use CLI only as fallback when MCP lacks needed operation or fails.
 - Before using KiCad CLI or manual file patching, use tool discovery to check for deferred KiCad MCP tools that can perform needed edit or inspection directly.
 - After KiCad MCP connect/edit operations, re-run ERC/DRC immediately because some MCP tools may also mutate PCB-side metadata or parity-relevant state.

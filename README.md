@@ -61,7 +61,9 @@ Open `c6remote-kicad/c6remote.kicad_pro` in KiCad.
 
 Project uses local custom footprints under `kicad lib/Library.pretty/`. KiCad needs that footprint library to resolve under nickname `Library`.
 
-Project also uses local STEP models under `c6remote-kicad/3dmodels/` for 3D preview. These are not duplicate footprints; footprints in `Library.pretty` reference those 3D models.
+## 3D models
+
+Project also uses local STEP models under `c6remote-kicad/3dmodels/` for 3D preview.
 
 3D model files in `c6remote-kicad/3dmodels/`:
 

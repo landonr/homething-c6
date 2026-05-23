@@ -1,45 +1,46 @@
 # Prototype Board Todo
 
-Current PCB state no longer matches old checklist. `C2`, `R2`, `D2`, and routed nets are present on board. Latest validation state below comes from fresh checks against current KiCad sources:
+Current PCB state moved past old checklist. `C2`, `R2`, `D2`, routed nets, battery connector placement, and prior board-level DRC blockers are fixed. Latest validation state below comes from fresh checks against current KiCad sources:
 
 - Board size: `37.4 mm x 130.4 mm`
-- ERC on `2026-05-23`: 11 warnings, 0 errors
-- DRC: last known report still `49 warnings, 0 errors, 0 unconnected pads`
-- Fab outputs in `c6remote-kicad/export/` are stale relative to board + schematic edits
+- ERC on `2026-05-23`: `10 warnings, 0 errors`
+- DRC on `2026-05-23`: `16 warnings, 0 errors, 0 unconnected pads`
+- Remaining DRC warnings are all `lib_footprint_mismatch`
+- Fab outputs in `c6remote-kicad/export/` are still stale relative to current board + schematic edits
 
 ## Pre-Order Blockers
 
-1. **Run final ERC/DRC on order candidate**  
-   Fresh ERC no longer shows `BAT` issue. Re-run full KiCad validation from `c6remote-kicad/` and confirm final board still has no DRC errors and no unconnected pads.
-
-2. **Regenerate fabrication outputs**  
+1. **Regenerate fabrication outputs**
    Re-export Gerbers and drill files into `c6remote-kicad/export/` after final validation. Current export files were generated before latest PCB/schematic edits.
 
-## Should-Fix Before Order
+## Should-Review Before Order
 
-3. **Clean silkscreen around `U1`**  
-   Current DRC includes repeated `silk_over_copper` warnings around XIAO pads. Text/outline will likely be clipped by solder mask.
+2. **Review or accept remaining footprint mismatch warnings**
+   Fresh DRC still has `16` `lib_footprint_mismatch` warnings on `U1`, `J1`, and local testpoint footprints. If these are intentional local overrides, document/accept them before lock. If not, refresh footprints from source libraries and re-run DRC.
 
-4. **Clean edge-clipped silkscreen**  
-   Current DRC includes `silk_edge_clearance` warnings near board edge. Trim or move silk that crosses `Edge.Cuts`.
+3. **Review duplicate local/global label warnings**
+   Fresh ERC still reports `same_local_global_label` warnings for `scl`, `sda`, `sck`, `sd`, `ws`, `IR REC`, `IR EMIT`, `ano_enc1`, `ano_enc2`, and `led_1`. Usually not order-blocking if intentional, but clean them up or explicitly accept them before lock.
 
-5. **Increase undersized silkscreen text**  
-   Current DRC includes `text_height` and `text_thickness` warnings. Increase text size/stroke if board markings need to survive fab limits.
+## Done Since Previous Checklist
 
-## Project Hygiene / Reproducibility
+- `J1` schematic missing-footprint ERC warning is gone
+- `J1` clearance errors are gone
+- `MK1` unconnected-pad error is gone
+- Prior shorting, solder-mask, thermal, and silkscreen warnings still absent in fresh DRC
 
-6. **Resolve missing local footprint library entry for `J1`**  
-   Fresh ERC reports missing `Local:WirePad_1x02_P2.54mm_Back` footprint for battery connector `J1`. Board still contains embedded footprint data, but local library should be fixed so future edits/exports stay reproducible.
+## Fast Validation Next Time
 
-7. **Review footprint mismatch warnings**  
-   Current DRC includes multiple `lib_footprint_mismatch` warnings for overridden or locally edited footprints. Usually not order-blocking, but worth reviewing before locking revision.
+MCP-first flow:
 
-8. **Review duplicate local/global label warnings**  
-   Fresh ERC reports `same_local_global_label` warnings for `scl`, `sda`, `sck`, `sd`, `ws`, `IR REC`, `IR EMIT`, `ano_enc1`, `ano_enc2`, and `led_1`. Usually not order-blocking if intentional, but clean them up or explicitly accept them before lock.
+1. Open `c6remote-kicad/c6remote.kicad_pro` in KiCad MCP first.
+2. Run ERC on `c6remote-kicad/c6remote.kicad_sch`.
+3. Run DRC and write report to `c6remote-kicad/DRC-mcp.rpt`.
+4. Read `c6remote-kicad/c6remote_drc_violations.json` for machine-readable results.
+5. If MCP says `No board is loaded`, project was not opened first. Re-open project, then re-run DRC.
 
 ## Validation Commands
 
-Run from `c6remote-kicad/`:
+CLI fallback. Run from `c6remote-kicad/`:
 
 ```bash
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations
@@ -50,4 +51,4 @@ Run from `c6remote-kicad/`:
 
 ## Order Sequence
 
-`final-erc-drc` -> `fix-order-relevant-warnings` -> `regen-fab-files` -> `upload-order-package`
+`review-remaining-warnings` -> `regen-fab-files` -> `upload-order-package`

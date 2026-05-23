@@ -10562,7 +10562,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Local:WirePad_1x02_P2.54mm_Back"
+		(property "Footprint" "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal"
 			(at 270.51 34.29 0)
 			(hide yes)
 			(show_name no)

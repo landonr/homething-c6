@@ -4637,7 +4637,7 @@
 	)
 	(text "BATTERY"
 		(exclude_from_sim no)
-		(at 262.128 15.24 0)
+		(at 124.968 134.62 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4657,7 +4657,7 @@
 	)
 	(text "IR Emitter"
 		(exclude_from_sim no)
-		(at 108.204 15.494 0)
+		(at 138.684 15.494 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4667,7 +4667,7 @@
 	)
 	(text "ANO Encoder"
 		(exclude_from_sim no)
-		(at 153.67 15.494 0)
+		(at 29.21 134.874 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4677,7 +4677,7 @@
 	)
 	(text "IR Receiver"
 		(exclude_from_sim no)
-		(at 65.786 15.494 0)
+		(at 82.296 15.494 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4707,7 +4707,7 @@
 	)
 	(text "LED"
 		(exclude_from_sim no)
-		(at 203.962 15.494 0)
+		(at 192.532 15.494 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4728,19 +4728,19 @@
 		(uuid "a7529152-0501-4c44-90d8-75d7460e14af")
 	)
 	(junction
-		(at 212.09 33.02)
+		(at 204.47 31.75)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "d447f7b6-c71a-4a35-8806-304bd789dd18")
 	)
 	(junction
-		(at 35.56 45.72)
+		(at 48.26 38.1)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e296593c-30f0-4956-92e5-3c7eea50b776")
 	)
 	(junction
-		(at 241.3 46.99)
+		(at 233.68 45.72)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fe8823b3-ac53-445b-8a00-df633c4df5a9")
@@ -4774,7 +4774,7 @@
 		(uuid "82d0be72-8726-4e31-8aa5-e82a77b59d4d")
 	)
 	(no_connect
-		(at 233.68 25.4)
+		(at 226.06 24.13)
 		(uuid "dd956110-8bb6-4cbe-8188-2ba82db6e3e8")
 	)
 	(no_connect
@@ -4783,7 +4783,7 @@
 	)
 	(wire
 		(pts
-			(xy 233.68 44.45) (xy 228.6 44.45)
+			(xy 226.06 43.18) (xy 220.98 43.18)
 		)
 		(stroke
 			(width 0)
@@ -4801,9 +4801,19 @@
 		)
 		(uuid "0820afb1-29b5-4655-97e9-910dd79b1b74")
 	)
+	(polyline
+		(pts
+			(xy 11.43 137.16) (xy 285.75 137.16)
+		)
+		(stroke
+			(width 0)
+			(type dash)
+		)
+		(uuid "0df681e2-e66e-410d-9ed6-6fd2679a41a4")
+	)
 	(wire
 		(pts
-			(xy 35.56 21.59) (xy 35.56 25.4)
+			(xy 24.13 38.1) (xy 27.94 38.1)
 		)
 		(stroke
 			(width 0)
@@ -4813,7 +4823,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 46.99) (xy 212.09 40.64)
+			(xy 204.47 45.72) (xy 204.47 39.37)
 		)
 		(stroke
 			(width 0)
@@ -4823,7 +4833,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 33.02) (xy 226.06 33.02)
+			(xy 204.47 31.75) (xy 218.44 31.75)
 		)
 		(stroke
 			(width 0)
@@ -4833,7 +4843,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 33.02) (xy 209.55 33.02)
+			(xy 204.47 31.75) (xy 201.93 31.75)
 		)
 		(stroke
 			(width 0)
@@ -4853,6 +4863,16 @@
 	)
 	(polyline
 		(pts
+			(xy 113.03 198.12) (xy 113.03 129.54)
+		)
+		(stroke
+			(width 0)
+			(type dash)
+		)
+		(uuid "1d77e440-a533-4afc-a91f-26782bb31e04")
+	)
+	(polyline
+		(pts
 			(xy 11.43 57.15) (xy 285.75 57.15)
 		)
 		(stroke
@@ -4863,7 +4883,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 46.99) (xy 241.3 46.99)
+			(xy 204.47 45.72) (xy 233.68 45.72)
 		)
 		(stroke
 			(width 0)
@@ -4883,7 +4903,7 @@
 	)
 	(wire
 		(pts
-			(xy 218.44 44.45) (xy 220.98 44.45)
+			(xy 210.82 43.18) (xy 213.36 43.18)
 		)
 		(stroke
 			(width 0)
@@ -4891,19 +4911,9 @@
 		)
 		(uuid "4557bafd-c0d0-43ee-8bca-f1716005509f")
 	)
-	(polyline
-		(pts
-			(xy 254 50.8) (xy 254 11.43)
-		)
-		(stroke
-			(width 0)
-			(type dash)
-		)
-		(uuid "45d3f75b-7e42-40df-99c0-9108598acafc")
-	)
 	(wire
 		(pts
-			(xy 233.68 40.64) (xy 233.68 44.45)
+			(xy 226.06 39.37) (xy 226.06 43.18)
 		)
 		(stroke
 			(width 0)
@@ -4923,7 +4933,7 @@
 	)
 	(wire
 		(pts
-			(xy 110.49 22.86) (xy 113.03 22.86)
+			(xy 144.78 22.86) (xy 147.32 22.86)
 		)
 		(stroke
 			(width 0)
@@ -4983,7 +4993,7 @@
 	)
 	(wire
 		(pts
-			(xy 241.3 46.99) (xy 243.84 46.99)
+			(xy 233.68 45.72) (xy 236.22 45.72)
 		)
 		(stroke
 			(width 0)
@@ -5013,7 +5023,7 @@
 	)
 	(wire
 		(pts
-			(xy 118.11 38.1) (xy 121.92 38.1)
+			(xy 152.4 38.1) (xy 156.21 38.1)
 		)
 		(stroke
 			(width 0)
@@ -5041,16 +5051,6 @@
 		)
 		(uuid "ac62860d-1b51-4cd3-9ebd-77bd75d616a2")
 	)
-	(polyline
-		(pts
-			(xy 198.12 50.8) (xy 198.12 11.43)
-		)
-		(stroke
-			(width 0)
-			(type dash)
-		)
-		(uuid "b3e158c3-0100-4fc5-9567-fe2718529c9b")
-	)
 	(wire
 		(pts
 			(xy 198.12 120.65) (xy 198.12 118.11)
@@ -5063,7 +5063,7 @@
 	)
 	(polyline
 		(pts
-			(xy 140.97 50.8) (xy 140.97 11.43)
+			(xy 184.15 50.8) (xy 184.15 11.43)
 		)
 		(stroke
 			(width 0)
@@ -5073,7 +5073,7 @@
 	)
 	(wire
 		(pts
-			(xy 241.3 33.02) (xy 241.3 46.99)
+			(xy 233.68 31.75) (xy 233.68 45.72)
 		)
 		(stroke
 			(width 0)
@@ -5083,7 +5083,7 @@
 	)
 	(polyline
 		(pts
-			(xy 97.79 50.8) (xy 97.79 11.43)
+			(xy 125.73 50.8) (xy 125.73 11.43)
 		)
 		(stroke
 			(width 0)
@@ -5133,7 +5133,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 30.48) (xy 212.09 33.02)
+			(xy 204.47 29.21) (xy 204.47 31.75)
 		)
 		(stroke
 			(width 0)
@@ -5143,7 +5143,7 @@
 	)
 	(wire
 		(pts
-			(xy 35.56 43.18) (xy 35.56 45.72)
+			(xy 45.72 38.1) (xy 48.26 38.1)
 		)
 		(stroke
 			(width 0)
@@ -5153,7 +5153,7 @@
 	)
 	(polyline
 		(pts
-			(xy 54.61 50.8) (xy 54.61 11.43)
+			(xy 69.85 50.8) (xy 69.85 11.43)
 		)
 		(stroke
 			(width 0)
@@ -5202,7 +5202,7 @@
 		(uuid "328929c2-c85c-4525-839f-2219a9ef48bd")
 	)
 	(label "GND"
-		(at 265.43 36.83 180)
+		(at 128.27 156.21 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5272,7 +5272,7 @@
 		(uuid "885bf95f-dd81-463d-9f9a-e73ae9fca4ed")
 	)
 	(label "BAT"
-		(at 265.43 34.29 180)
+		(at 128.27 153.67 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5353,17 +5353,17 @@
 	)
 	(global_label "sd"
 		(shape input)
-		(at 33.02 43.18 270)
+		(at 45.72 40.64 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right)
+			(justify left)
 		)
 		(uuid "08fdfc08-c75e-4734-8e08-0679a30b180a")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 33.02 48.3423 90)
+			(at 50.8823 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5371,7 +5371,7 @@
 				(font
 					(size 1.27 1.27)
 				)
-				(justify right)
+				(justify left)
 			)
 		)
 	)
@@ -5473,7 +5473,7 @@
 	)
 	(global_label "ano_sw3"
 		(shape input)
-		(at 181.61 35.56 0)
+		(at 71.12 154.94 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5483,7 +5483,7 @@
 		)
 		(uuid "4699fcd5-d7fd-4fe6-b6c8-e8c36f0e6616")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 192.5779 35.56 0)
+			(at 82.0879 154.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5545,7 +5545,7 @@
 	)
 	(global_label "ano_sw1"
 		(shape input)
-		(at 156.21 43.18 180)
+		(at 45.72 162.56 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5555,7 +5555,7 @@
 		)
 		(uuid "5762b72e-4f71-45d4-b648-c99ce3280e08")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 145.2421 43.18 0)
+			(at 34.7521 162.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5665,7 +5665,7 @@
 	)
 	(global_label "ano_sw4"
 		(shape input)
-		(at 156.21 39.37 180)
+		(at 45.72 158.75 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5675,7 +5675,7 @@
 		)
 		(uuid "825ee587-025e-49af-b1c0-3b05be0676d2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 145.2421 39.37 0)
+			(at 34.7521 158.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5689,7 +5689,7 @@
 	)
 	(global_label "IR REC"
 		(shape input)
-		(at 85.09 33.02 0)
+		(at 104.14 35.56 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5699,7 +5699,7 @@
 		)
 		(uuid "897a946c-b28a-4a08-b9ff-994df26d1c08")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 94.6066 33.02 0)
+			(at 113.6566 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5713,7 +5713,7 @@
 	)
 	(global_label "ano_sw5"
 		(shape input)
-		(at 181.61 43.18 0)
+		(at 71.12 162.56 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5723,7 +5723,7 @@
 		)
 		(uuid "8bece864-1d3a-4069-b27a-37a511f35a98")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 192.5779 43.18 0)
+			(at 82.0879 162.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5833,7 +5833,7 @@
 	)
 	(global_label "ws"
 		(shape input)
-		(at 35.56 21.59 0)
+		(at 24.13 38.1 90)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5843,7 +5843,7 @@
 		)
 		(uuid "9a51c840-db05-4a52-9e29-2aa9f06f8869")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 40.9038 21.59 0)
+			(at 24.13 32.7562 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5929,17 +5929,17 @@
 	)
 	(global_label "sck"
 		(shape input)
-		(at 33.02 25.4 90)
+		(at 27.94 40.64 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left)
+			(justify right)
 		)
 		(uuid "a0026ff1-31ee-451e-8601-b06526fc143d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 33.02 19.27 90)
+			(at 21.81 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5947,7 +5947,7 @@
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
+				(justify right)
 			)
 		)
 	)
@@ -5977,7 +5977,7 @@
 	)
 	(global_label "IR EMIT"
 		(shape input)
-		(at 110.49 22.86 180)
+		(at 144.78 22.86 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -5987,7 +5987,7 @@
 		)
 		(uuid "ad6ab575-4cfe-447a-9168-fa591541fce4")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 100.4896 22.86 0)
+			(at 134.7796 22.86 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6121,7 +6121,7 @@
 	)
 	(global_label "led_1"
 		(shape input)
-		(at 218.44 44.45 90)
+		(at 210.82 43.18 90)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6131,7 +6131,7 @@
 		)
 		(uuid "c276fa94-e82a-4e3f-b5c1-8f67cb460d1d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 218.44 36.3849 90)
+			(at 210.82 35.1149 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6169,7 +6169,7 @@
 	)
 	(global_label "ano_sw2"
 		(shape input)
-		(at 181.61 39.37 0)
+		(at 71.12 158.75 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6179,7 +6179,7 @@
 		)
 		(uuid "c8d98db3-c7fc-4f25-81ca-ac35ebe967f9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 192.5779 39.37 0)
+			(at 82.0879 158.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6193,7 +6193,7 @@
 	)
 	(global_label "ano_enc2"
 		(shape input)
-		(at 156.21 35.56 180)
+		(at 45.72 154.94 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6203,7 +6203,7 @@
 		)
 		(uuid "ca0d4596-5e19-44d1-83d9-9ed17cfc80dc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 144.2745 35.56 0)
+			(at 33.7845 154.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6217,7 +6217,7 @@
 	)
 	(global_label "ano_enc1"
 		(shape input)
-		(at 156.21 31.75 180)
+		(at 45.72 151.13 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6227,7 +6227,7 @@
 		)
 		(uuid "ce43d948-fda7-4b36-8f32-734fa047c1eb")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 144.2745 31.75 0)
+			(at 33.7845 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6404,7 +6404,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 87.63 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -6415,7 +6415,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 92.71 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -6426,15 +6426,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 92.71 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 92.71 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 92.71 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "a29e64d6-a4d5-46bf-9607-9961ca012a97")
 		)
@@ -6452,7 +6443,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 170.18 26.67 180)
+		(at 59.69 146.05 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6463,7 +6454,7 @@
 		(fields_autoplaced yes)
 		(uuid "03af4cfc-010c-4fc3-b970-030ea241fe0c")
 		(property "Reference" "#PWR012"
-			(at 170.18 20.32 0)
+			(at 59.69 139.7 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6474,7 +6465,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 170.18 21.59 0)
+			(at 59.69 140.97 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6484,7 +6475,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 170.18 26.67 0)
+			(at 59.69 146.05 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6495,7 +6486,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 170.18 26.67 0)
+			(at 59.69 146.05 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6506,7 +6497,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 170.18 26.67 0)
+			(at 59.69 146.05 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6573,7 +6564,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 68.58 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -6584,7 +6575,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 73.66 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -6595,15 +6586,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 73.66 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 73.66 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 73.66 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "fb2aedc9-9bd6-4f75-a47f-5034a8603d73")
 		)
@@ -6621,7 +6603,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 85.09 27.94 270)
+		(at 104.14 30.48 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6632,7 +6614,7 @@
 		(fields_autoplaced yes)
 		(uuid "10600892-be5d-47e3-8042-0cbd07a09feb")
 		(property "Reference" "#PWR028"
-			(at 81.28 27.94 0)
+			(at 100.33 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6643,7 +6625,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 88.9 27.9399 90)
+			(at 107.95 30.4799 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6654,7 +6636,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 85.09 27.94 0)
+			(at 104.14 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6665,7 +6647,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 85.09 27.94 0)
+			(at 104.14 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6676,7 +6658,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 85.09 27.94 0)
+			(at 104.14 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6743,7 +6725,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 125.73 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -6754,7 +6736,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 130.81 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -6765,15 +6747,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 130.81 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 130.81 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 130.81 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "aebbc034-390b-4009-bf90-f63079c8549c")
 		)
@@ -6949,7 +6922,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 129.54 38.1 270)
+		(at 163.83 38.1 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6960,7 +6933,7 @@
 		(fields_autoplaced yes)
 		(uuid "38efdee6-ebc2-4de6-96fd-bd5cbdec86d0")
 		(property "Reference" "#PWR07"
-			(at 125.73 38.1 0)
+			(at 160.02 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6971,7 +6944,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 133.35 38.0999 90)
+			(at 167.64 38.0999 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6982,7 +6955,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 129.54 38.1 0)
+			(at 163.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6993,7 +6966,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 129.54 38.1 0)
+			(at 163.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7004,7 +6977,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 129.54 38.1 0)
+			(at 163.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7028,7 +7001,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 181.61 31.75 90)
+		(at 71.12 151.13 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7039,7 +7012,7 @@
 		(fields_autoplaced yes)
 		(uuid "3e4feb27-01b2-4a1c-aaf8-fbc0b58e4b35")
 		(property "Reference" "#PWR030"
-			(at 187.96 31.75 0)
+			(at 77.47 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7050,7 +7023,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 185.42 31.7499 90)
+			(at 74.93 151.1299 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7061,7 +7034,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 181.61 31.75 0)
+			(at 71.12 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7072,7 +7045,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 181.61 31.75 0)
+			(at 71.12 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7083,7 +7056,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 181.61 31.75 0)
+			(at 71.12 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7150,7 +7123,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 106.68 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7161,7 +7134,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 111.76 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7172,15 +7145,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 111.76 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 111.76 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 111.76 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "251bfd74-008b-4b8f-a9dc-5db41b99d1e6")
 		)
@@ -7277,7 +7241,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 38.1 25.4 90)
+		(at 27.94 35.56 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7285,10 +7249,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "4afd2b7a-be47-4963-808a-c18b4dc86651")
 		(property "Reference" "#PWR04"
-			(at 44.45 25.4 0)
+			(at 27.94 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7299,7 +7262,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 41.91 25.3999 90)
+			(at 27.9399 31.75 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7310,7 +7273,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 38.1 25.4 0)
+			(at 27.94 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7321,7 +7284,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 38.1 25.4 0)
+			(at 27.94 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7332,7 +7295,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 38.1 25.4 0)
+			(at 27.94 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7356,7 +7319,7 @@
 	)
 	(symbol
 		(lib_id "LED:SK6812MINI")
-		(at 233.68 33.02 90)
+		(at 226.06 31.75 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7366,7 +7329,7 @@
 		(dnp no)
 		(uuid "5364fd58-ec03-4750-a3f9-2c6bb74d0e8c")
 		(property "Reference" "D2"
-			(at 224.028 25.146 90)
+			(at 216.408 23.876 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7376,7 +7339,7 @@
 			)
 		)
 		(property "Value" "SK6812MINI"
-			(at 224.028 22.606 90)
+			(at 216.408 21.336 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7386,7 +7349,7 @@
 			)
 		)
 		(property "Footprint" "LED_SMD:LED_SK6812MINI_PLCC4_3.5x3.5mm_P1.75mm"
-			(at 241.3 31.75 0)
+			(at 233.68 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7397,8 +7360,8 @@
 				(justify left top)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107?s=N4IgTCBcDaIMoGkBsAOAjGAsgSQHLZAF0BfIA"
-			(at 243.205 30.48 0)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/2686/SK6812MINI_REV.01-1-2.pdf"
+			(at 235.585 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7409,8 +7372,8 @@
 				(justify left top)
 			)
 		)
-		(property "Description" "ADDRESS LED DISC SERIAL RGB 10PK"
-			(at 233.68 33.02 0)
+		(property "Description" "RGB LED with integrated controller"
+			(at 226.06 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7420,15 +7383,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Adafruit Industries LLC" (at 233.68 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "2686" (at 233.68 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "1528-1541-ND" (at 233.68 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "1144c98b-42f6-4dd3-be06-375b459f6d0b")
 		)
@@ -7452,7 +7406,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 38.1 43.18 90)
+		(at 45.72 35.56 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7460,10 +7414,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "60fd3ca6-08c0-4a65-a741-8f40192033f5")
 		(property "Reference" "#PWR05"
-			(at 44.45 43.18 0)
+			(at 45.72 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7474,7 +7427,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 41.91 43.1799 90)
+			(at 45.7199 31.75 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7485,7 +7438,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 38.1 43.18 0)
+			(at 45.72 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7496,7 +7449,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 38.1 43.18 0)
+			(at 45.72 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7507,7 +7460,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 38.1 43.18 0)
+			(at 45.72 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7531,7 +7484,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 35.56 45.72 270)
+		(at 48.26 38.1 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7539,10 +7492,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "6945fb28-d60d-4a1e-b8a3-ed19fe81749a")
 		(property "Reference" "#PWR06"
-			(at 31.75 45.72 0)
+			(at 48.26 41.91 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7553,7 +7505,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 39.37 45.7199 90)
+			(at 52.832 35.052 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7564,7 +7516,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7575,7 +7527,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7586,7 +7538,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7610,7 +7562,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 212.09 36.83 0)
+		(at 204.47 35.56 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7620,7 +7572,7 @@
 		(dnp no)
 		(uuid "6e745721-ae27-4f28-946a-d58aa76ea837")
 		(property "Reference" "C2"
-			(at 206.756 34.544 0)
+			(at 199.136 33.274 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7630,7 +7582,7 @@
 			)
 		)
 		(property "Value" "1uF"
-			(at 207.01 36.83 0)
+			(at 199.39 35.56 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7640,7 +7592,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 213.0552 40.64 0)
+			(at 205.4352 39.37 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7650,8 +7602,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/murata-electronics/GRM21BR71A105MA01L/2546937"
-			(at 212.09 36.83 0)
+		(property "Datasheet" ""
+			(at 204.47 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7661,8 +7613,8 @@
 				)
 			)
 		)
-		(property "Description" "CAP CER 1UF 10V X7R 0805"
-			(at 212.09 36.83 0)
+		(property "Description" "Unpolarized capacitor"
+			(at 204.47 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7672,15 +7624,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Murata Electronics" (at 212.09 36.83 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "GRM21BR71A105MA01L" (at 212.09 36.83 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "490-GRM21BR71A105MA01LCT-ND" (at 212.09 36.83 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "a9d3fc11-f83a-42e9-9fed-917fa050dda9")
 		)
@@ -7698,7 +7641,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 35.56 45.72 0)
+		(at 48.26 38.1 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7708,7 +7651,7 @@
 		(dnp no)
 		(uuid "714b231a-94e3-4188-a5a2-d702d03ecb41")
 		(property "Reference" "#PWR_FLAG01"
-			(at 35.56 43.18 0)
+			(at 59.182 37.338 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7718,7 +7661,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 35.56 48.26 0)
+			(at 57.404 39.878 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7728,7 +7671,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7739,7 +7682,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7750,7 +7693,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 35.56 45.72 0)
+			(at 48.26 38.1 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8209,7 +8152,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 68.58 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8220,7 +8163,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 73.66 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8231,15 +8174,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 73.66 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 73.66 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 73.66 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "5d05e552-527b-4837-a707-85fa6fe590fe")
 		)
@@ -8300,7 +8234,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 106.68 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -8311,7 +8245,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 111.76 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -8322,15 +8256,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 111.76 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 111.76 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 111.76 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "9bd90b44-f7eb-4d2d-8969-bbc99b8509ae")
 		)
@@ -8391,7 +8316,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 87.63 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8402,7 +8327,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 92.71 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8413,15 +8338,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 92.71 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 92.71 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 92.71 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "72bcd5dd-9c47-4f04-bd16-917a4dce1a71")
 		)
@@ -8482,7 +8398,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 106.68 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8493,7 +8409,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 111.76 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8504,15 +8420,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 111.76 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 111.76 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 111.76 73.66 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "48bc7920-ecac-4b8a-840c-65b7c28770b0")
 		)
@@ -8688,7 +8595,7 @@
 	)
 	(symbol
 		(lib_id "Interface_Optical:TSOP45xx")
-		(at 74.93 33.02 0)
+		(at 93.98 35.56 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8699,7 +8606,7 @@
 		(fields_autoplaced yes)
 		(uuid "a8b19f0b-7e95-424f-9fc2-00938649478e")
 		(property "Reference" "U2"
-			(at 73.195 21.59 0)
+			(at 92.245 24.13 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8709,7 +8616,7 @@
 			)
 		)
 		(property "Value" "TSOP45xx"
-			(at 73.195 24.13 0)
+			(at 92.245 26.67 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8719,7 +8626,7 @@
 			)
 		)
 		(property "Footprint" "OptoDevice:Vishay_MOLD-3Pin"
-			(at 73.66 42.545 0)
+			(at 92.71 45.085 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8729,8 +8636,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/vishay-semiconductor-opto-division/TSOP4536/4695671?s=N4IgTCBcDaIC4GcD2AHALAVgMwDYQF0BfIA"
-			(at 91.44 25.4 0)
+		(property "Datasheet" "http://www.vishay.com/docs/82460/tsop45.pdf"
+			(at 110.49 27.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8741,7 +8648,7 @@
 			)
 		)
 		(property "Description" "IR Receiver Modules for Remote Control Systems"
-			(at 74.93 33.02 0)
+			(at 93.98 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8751,15 +8658,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Vishay Semiconductor Opto Division" (at 74.93 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TSOP4536" (at 74.93 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "TSOP4536-ND" (at 74.93 33.02 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "1"
 			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
 		)
@@ -8823,7 +8721,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 68.58 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -8834,7 +8732,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 73.66 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -8845,15 +8743,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 73.66 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 73.66 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 73.66 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "6c2460cd-ef57-426d-aa1a-a58439e8d09f")
 		)
@@ -8914,7 +8803,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/murata-electronics/GRM21BR71A105MA01L/2546937"
+		(property "Datasheet" ""
 			(at 20.32 115.57 0)
 			(hide yes)
 			(show_name no)
@@ -8925,7 +8814,7 @@
 				)
 			)
 		)
-		(property "Description" "CAP CER 1UF 10V X7R 0805"
+		(property "Description" "Unpolarized capacitor"
 			(at 20.32 115.57 0)
 			(hide yes)
 			(show_name no)
@@ -8936,15 +8825,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Murata Electronics" (at 20.32 115.57 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "GRM21BR71A105MA01L" (at 20.32 115.57 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "490-GRM21BR71A105MA01LCT-ND" (at 20.32 115.57 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "ee45faac-808d-4597-9b38-5996f5639cbf")
 		)
@@ -9084,7 +8964,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551"
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/pcf8575.pdf"
 			(at 41.91 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -9095,7 +8975,7 @@
 				)
 			)
 		)
-		(property "Description" "IC XPNDR 400KHZ I2C SMBUS 24SSOP"
+		(property "Description" "16 Bits Port/Expander to I2C Bus, SSOP-24"
 			(at 41.91 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -9106,15 +8986,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Texas Instruments" (at 41.91 93.98 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "PCF8575DBR" (at 41.91 93.98 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "296-17856-1-ND" (at 41.91 93.98 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "1"
 			(uuid "0724da5b-16a9-4e56-882b-5a3b72e66fb1")
 		)
@@ -9198,7 +9069,7 @@
 	)
 	(symbol
 		(lib_id "ano rotary:_1")
-		(at 168.91 36.83 0)
+		(at 58.42 156.21 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9209,7 +9080,7 @@
 		(fields_autoplaced yes)
 		(uuid "cb0e6873-4fcf-48d6-b47f-7a43a7923b83")
 		(property "Reference" "ENC1"
-			(at 168.91 48.26 0)
+			(at 58.42 167.64 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9218,8 +9089,8 @@
 				)
 			)
 		)
-		(property "Value" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
-			(at 168.91 50.8 0)
+		(property "Value" ""
+			(at 58.42 170.18 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9229,7 +9100,7 @@
 			)
 		)
 		(property "Footprint" "Library:Ano Rotary"
-			(at 168.91 36.83 0)
+			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9239,8 +9110,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.adafruit.com/product/5001"
-			(at 168.91 36.83 0)
+		(property "Datasheet" ""
+			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9250,41 +9121,8 @@
 				)
 			)
 		)
-		(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
-			(at 168.91 36.83 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Adafruit"
-			(at 168.91 36.83 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "5001"
-			(at 168.91 36.83 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "SKU" "5001"
-			(at 168.91 36.83 0)
+		(property "Description" ""
+			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9372,7 +9210,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066"
+		(property "Datasheet" ""
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9383,7 +9221,7 @@
 				)
 			)
 		)
-		(property "Description" "XIAO ESP32C6"
+		(property "Description" ""
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9394,7 +9232,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" "Seeed Technology Co., Ltd"
+		(property "Manufacturer" ""
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9405,7 +9243,7 @@
 				)
 			)
 		)
-		(property "MPN" "113991254"
+		(property "MPN" ""
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9416,7 +9254,7 @@
 				)
 			)
 		)
-		(property "SKU" "1597-113991254-ND"
+		(property "SKU" "XIAO-DIP"
 			(at 194.818 91.186 0)
 			(hide yes)
 			(show_name no)
@@ -9643,7 +9481,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 224.79 44.45 90)
+		(at 217.17 43.18 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9653,7 +9491,7 @@
 		(dnp no)
 		(uuid "cb9b92dd-e197-497b-8721-2cf3be6f03da")
 		(property "Reference" "R2"
-			(at 225.552 40.132 90)
+			(at 217.932 38.862 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9664,7 +9502,7 @@
 			)
 		)
 		(property "Value" "330"
-			(at 226.0599 41.91 90)
+			(at 218.4399 40.64 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9675,7 +9513,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 224.79 46.228 90)
+			(at 217.17 44.958 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9685,8 +9523,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/yageo/RC0603FR-07330RL/727162"
-			(at 224.79 44.45 0)
+		(property "Datasheet" ""
+			(at 217.17 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9696,8 +9534,8 @@
 				)
 			)
 		)
-		(property "Description" "RES 330 OHM 1% 1/10W 0603"
-			(at 224.79 44.45 0)
+		(property "Description" "Resistor"
+			(at 217.17 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9707,15 +9545,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "YAGEO" (at 224.79 44.45 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "RC0603FR-07330RL" (at 224.79 44.45 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "311-330HRCT-ND" (at 224.79 44.45 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "a24fb66b-70bf-4392-8600-487baf6d9a4a")
 		)
@@ -9812,7 +9641,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 85.09 38.1 90)
+		(at 104.14 40.64 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9823,7 +9652,7 @@
 		(fields_autoplaced yes)
 		(uuid "d1e19959-ccb6-4231-9ed2-e8f9cfd33b19")
 		(property "Reference" "#PWR029"
-			(at 91.44 38.1 0)
+			(at 110.49 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9834,7 +9663,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 88.9 38.0999 90)
+			(at 107.95 40.6399 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9845,7 +9674,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 85.09 38.1 0)
+			(at 104.14 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9856,7 +9685,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 85.09 38.1 0)
+			(at 104.14 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9867,7 +9696,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 85.09 38.1 0)
+			(at 104.14 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9969,7 +9798,7 @@
 	)
 	(symbol
 		(lib_id "Transistor_BJT:MMBT2222A")
-		(at 113.03 35.56 270)
+		(at 147.32 35.56 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9980,7 +9809,7 @@
 		(fields_autoplaced yes)
 		(uuid "d51f27c1-1096-41ee-be36-761ba348c99f")
 		(property "Reference" "Q1"
-			(at 113.03 41.91 90)
+			(at 147.32 41.91 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9990,7 +9819,7 @@
 			)
 		)
 		(property "Value" "MMBT2222A"
-			(at 113.03 44.45 90)
+			(at 147.32 44.45 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10000,7 +9829,7 @@
 			)
 		)
 		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
-			(at 111.125 40.64 0)
+			(at 145.415 40.64 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10012,8 +9841,8 @@
 				(justify left)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598"
-			(at 113.03 35.56 0)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 147.32 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10024,8 +9853,8 @@
 				(justify left)
 			)
 		)
-		(property "Description" "TRANS NPN 40V 0.6A SOT23-3"
-			(at 113.03 35.56 0)
+		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+			(at 147.32 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10035,15 +9864,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Nexperia USA Inc." (at 113.03 35.56 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "MMBT2222A,215" (at 113.03 35.56 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "1727-4043-1-ND" (at 113.03 35.56 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "1"
 			(uuid "69fa5cd8-9483-4429-bf6a-dbdf83f77c5e")
 		)
@@ -10064,7 +9884,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 243.84 46.99 0)
+		(at 236.22 45.72 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10074,7 +9894,7 @@
 		(dnp no)
 		(uuid "d6b35221-9d50-4ced-82be-18e675945cfa")
 		(property "Reference" "#PWR_FLAG03"
-			(at 243.84 44.45 0)
+			(at 236.22 43.18 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10084,7 +9904,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 243.84 49.53 0)
+			(at 236.22 48.26 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10094,7 +9914,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 243.84 46.99 0)
+			(at 236.22 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10105,7 +9925,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 243.84 46.99 0)
+			(at 236.22 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10116,7 +9936,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 243.84 46.99 0)
+			(at 236.22 45.72 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10261,7 +10081,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 87.63 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -10272,7 +10092,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 92.71 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -10283,15 +10103,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 92.71 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 92.71 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 92.71 106.68 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "41f7db0f-a071-4d47-99a9-99e0b37432b1")
 		)
@@ -10309,7 +10120,7 @@
 	)
 	(symbol
 		(lib_id "inmp441_microphone_i2s:INMP441_Microphone_I2S")
-		(at 35.56 34.29 0)
+		(at 36.83 38.1 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10317,10 +10128,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "d9f224fc-d16f-4d69-b912-644bb569c79a")
 		(property "Reference" "MK1"
-			(at 43.18 33.0199 0)
+			(at 41.91 25.908 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10331,7 +10141,7 @@
 			)
 		)
 		(property "Value" "ICS_43434"
-			(at 43.18 35.5599 0)
+			(at 41.91 28.194 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10342,7 +10152,7 @@
 			)
 		)
 		(property "Footprint" "Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm"
-			(at 35.56 34.29 0)
+			(at 36.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10352,8 +10162,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298"
-			(at 35.56 34.29 0)
+		(property "Datasheet" ""
+			(at 36.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10363,8 +10173,8 @@
 				)
 			)
 		)
-		(property "Description" "MICROPHONE MEMS DIGITAL I2S OMNI"
-			(at 35.56 34.29 0)
+		(property "Description" ""
+			(at 36.83 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10374,15 +10184,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "TDK InvenSense" (at 35.56 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "ICS-43434" (at 35.56 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "1428-1066-1-ND" (at 35.56 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "000a8980-695a-4ade-b9a4-7507c1baf3c8")
 		)
@@ -10455,7 +10256,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
+		(property "Datasheet" ""
 			(at 125.73 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -10466,7 +10267,7 @@
 				)
 			)
 		)
-		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
+		(property "Description" "Push button switch, generic, two pins"
 			(at 130.81 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -10477,15 +10278,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "E-Switch" (at 130.81 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "TL3315NF160Q" (at 130.81 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "EG4621CT-ND" (at 130.81 90.17 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "7361d0c9-bf23-4fac-b92f-860a7d122bb2")
 		)
@@ -10503,7 +10295,7 @@
 	)
 	(symbol
 		(lib_id "LED:IR204A")
-		(at 127 38.1 0)
+		(at 161.29 38.1 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10514,7 +10306,7 @@
 		(fields_autoplaced yes)
 		(uuid "e48259d9-a3e1-41df-9491-ec26dbdd3551")
 		(property "Reference" "D1"
-			(at 125.857 30.48 0)
+			(at 160.147 30.48 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10524,7 +10316,7 @@
 			)
 		)
 		(property "Value" "IR204A"
-			(at 125.857 33.02 0)
+			(at 160.147 33.02 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10534,7 +10326,7 @@
 			)
 		)
 		(property "Footprint" "LED_THT:LED_D3.0mm_IRBlack"
-			(at 127 33.655 0)
+			(at 161.29 33.655 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10544,8 +10336,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/IR204-A/2675566"
-			(at 125.73 38.1 0)
+		(property "Datasheet" "http://www.everlight.com/file/ProductFile/IR204-A.pdf"
+			(at 160.02 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10555,8 +10347,8 @@
 				)
 			)
 		)
-		(property "Description" "EMITTER IR 940NM 100MA RADIAL"
-			(at 127 38.1 0)
+		(property "Description" "Infrared LED , 3mm LED package"
+			(at 161.29 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10566,15 +10358,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "Everlight Electronics Co Ltd" (at 127.0 38.1 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "IR204-A" (at 127.0 38.1 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "1080-1075-ND" (at 127.0 38.1 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "7c7729af-b89f-46c8-aab2-54b13134bd5c")
 		)
@@ -10592,7 +10375,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 107.95 38.1 270)
+		(at 142.24 38.1 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10603,7 +10386,7 @@
 		(fields_autoplaced yes)
 		(uuid "e4add0d2-a092-495a-b1cf-c0a4a8f2c7be")
 		(property "Reference" "#PWR08"
-			(at 101.6 38.1 0)
+			(at 135.89 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10614,7 +10397,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 104.14 38.0999 90)
+			(at 138.43 38.0999 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10625,7 +10408,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 107.95 38.1 0)
+			(at 142.24 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10636,7 +10419,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 107.95 38.1 0)
+			(at 142.24 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10647,7 +10430,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 107.95 38.1 0)
+			(at 142.24 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10671,7 +10454,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 209.55 33.02 0)
+		(at 201.93 31.75 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10681,7 +10464,7 @@
 		(dnp no)
 		(uuid "e727b3c5-c5b0-4f6b-9cc9-657e3f0f32cd")
 		(property "Reference" "#PWR_FLAG02"
-			(at 209.55 30.48 0)
+			(at 201.93 29.21 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10691,7 +10474,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 209.55 35.56 0)
+			(at 201.93 34.29 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10701,7 +10484,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 209.55 33.02 0)
+			(at 201.93 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10712,7 +10495,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 209.55 33.02 0)
+			(at 201.93 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10723,7 +10506,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 209.55 33.02 0)
+			(at 201.93 31.75 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10746,7 +10529,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x02")
-		(at 270.51 34.29 0)
+		(at 133.35 153.67 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10756,7 +10539,7 @@
 		(dnp no)
 		(uuid "e89932a3-f781-4a64-91d7-71e6c1ca850d")
 		(property "Reference" "J1"
-			(at 270.51 30.734 0)
+			(at 133.35 150.114 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10766,7 +10549,7 @@
 			)
 		)
 		(property "Value" "Battery"
-			(at 270.51 40.386 0)
+			(at 133.35 159.766 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10776,7 +10559,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal"
-			(at 270.51 34.29 0)
+			(at 133.35 153.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10786,8 +10569,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/jst-sales-america-inc/S2B-PH-K-S/926626"
-			(at 270.51 34.29 0)
+		(property "Datasheet" "~"
+			(at 133.35 153.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10797,8 +10580,8 @@
 				)
 			)
 		)
-		(property "Description" "CONN HEADER R/A 2POS 2.00MM"
-			(at 270.51 34.29 0)
+		(property "Description" ""
+			(at 133.35 153.67 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10807,15 +10590,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "JST Sales America Inc." (at 270.51 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "S2B-PH-K-S(LF)(SN)" (at 270.51 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "455-1719-ND" (at 270.51 34.29 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "1"
 			(uuid "b0633f67-183c-4e1b-bfff-342557148568")
 		)
@@ -10833,7 +10607,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 241.3 46.99 90)
+		(at 233.68 45.72 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10844,7 +10618,7 @@
 		(fields_autoplaced yes)
 		(uuid "e9dc46b6-d24d-4d73-98f2-72f065740b8c")
 		(property "Reference" "#PWR032"
-			(at 247.65 46.99 0)
+			(at 240.03 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10855,7 +10629,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 245.11 46.9899 90)
+			(at 237.49 45.7199 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10866,7 +10640,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 241.3 46.99 0)
+			(at 233.68 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10877,7 +10651,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 241.3 46.99 0)
+			(at 233.68 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10888,7 +10662,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 241.3 46.99 0)
+			(at 233.68 45.72 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10987,7 +10761,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 113.03 26.67 0)
+		(at 147.32 26.67 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10998,7 +10772,7 @@
 		(fields_autoplaced yes)
 		(uuid "ee44aa22-218f-46b4-baa7-e01b293d82ca")
 		(property "Reference" "R1"
-			(at 115.57 25.3999 0)
+			(at 149.86 25.3999 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11009,7 +10783,7 @@
 			)
 		)
 		(property "Value" "470"
-			(at 115.57 27.9399 0)
+			(at 149.86 27.9399 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11020,7 +10794,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 111.252 26.67 90)
+			(at 145.542 26.67 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11030,8 +10804,8 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.digikey.ca/en/products/detail/yageo/RC0603FR-07470RL/727256"
-			(at 113.03 26.67 0)
+		(property "Datasheet" ""
+			(at 147.32 26.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11041,8 +10815,8 @@
 				)
 			)
 		)
-		(property "Description" "RES 470 OHM 1% 1/10W 0603"
-			(at 113.03 26.67 0)
+		(property "Description" "Resistor"
+			(at 147.32 26.67 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11052,15 +10826,6 @@
 				)
 			)
 		)
-    (property "Manufacturer" "YAGEO" (at 113.03 26.67 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "MPN" "RC0603FR-07470RL" (at 113.03 26.67 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
-    (property "SKU" "311-470HRCT-ND" (at 113.03 26.67 0)
-      (effects (font (size 1.27 1.27)) (hide yes))
-    )
 		(pin "2"
 			(uuid "9b1d933c-d356-4311-b111-c3786ac462ad")
 		)
@@ -11078,7 +10843,7 @@
 	)
 	(symbol
 		(lib_id "power:VCC")
-		(at 212.09 30.48 0)
+		(at 204.47 29.21 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -11088,7 +10853,7 @@
 		(dnp no)
 		(uuid "efda8d5a-324e-4a52-aec3-064bb5a6b26f")
 		(property "Reference" "#PWR013"
-			(at 212.09 34.29 0)
+			(at 204.47 33.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11099,7 +10864,7 @@
 			)
 		)
 		(property "Value" "VCC"
-			(at 212.0899 26.67 0)
+			(at 204.4699 25.4 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11110,7 +10875,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 212.09 30.48 0)
+			(at 204.47 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11121,7 +10886,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 212.09 30.48 0)
+			(at 204.47 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11132,7 +10897,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"VCC\""
-			(at 212.09 30.48 0)
+			(at 204.47 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

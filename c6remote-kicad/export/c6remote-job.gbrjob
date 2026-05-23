@@ -5,7 +5,7 @@
       "Application": "Pcbnew",
       "Version": "10.0.2"
     },
-    "CreationDate": "2026-05-11T23:16:53-07:00"
+    "CreationDate": "2026-05-23T13:51:48-07:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
@@ -34,48 +34,108 @@
   ],
   "FilesAttributes": [
     {
-      "Path": "c6remote-F_Cu.gbr",
+      "Path": "c6remote-F_Cu.gtl",
       "FileFunction": "Copper,L1,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-B_Cu.gbr",
+      "Path": "c6remote-B_Cu.gbl",
       "FileFunction": "Copper,L2,Bot",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-F_Paste.gbr",
+      "Path": "c6remote-F_Adhesive.gta",
+      "FileFunction": "Glue,Top",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-B_Adhesive.gba",
+      "FileFunction": "Glue,Bot",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-F_Paste.gtp",
       "FileFunction": "SolderPaste,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-B_Paste.gbr",
+      "Path": "c6remote-B_Paste.gbp",
       "FileFunction": "SolderPaste,Bot",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-F_Silkscreen.gbr",
+      "Path": "c6remote-F_Silkscreen.gto",
       "FileFunction": "Legend,Top",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-B_Silkscreen.gbr",
+      "Path": "c6remote-B_Silkscreen.gbo",
       "FileFunction": "Legend,Bot",
       "FilePolarity": "Positive"
     },
     {
-      "Path": "c6remote-F_Mask.gbr",
+      "Path": "c6remote-F_Mask.gts",
       "FileFunction": "SolderMask,Top",
       "FilePolarity": "Negative"
     },
     {
-      "Path": "c6remote-B_Mask.gbr",
+      "Path": "c6remote-B_Mask.gbs",
       "FileFunction": "SolderMask,Bot",
       "FilePolarity": "Negative"
     },
     {
-      "Path": "c6remote-Edge_Cuts.gbr",
+      "Path": "c6remote-User_Drawings.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_Comments.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_Eco1.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_Eco2.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-Edge_Cuts.gm1",
       "FileFunction": "Profile",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-F_Fab.gbr",
+      "FileFunction": "AssemblyDrawing,Top",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-B_Fab.gbr",
+      "FileFunction": "AssemblyDrawing,Bot",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_1.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_2.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_3.gbr",
+      "FileFunction": "Other,User",
+      "FilePolarity": "Positive"
+    },
+    {
+      "Path": "c6remote-User_4.gbr",
+      "FileFunction": "Other,User",
       "FilePolarity": "Positive"
     }
   ],

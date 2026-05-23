@@ -25,4 +25,4 @@ Repo notes:
 - Before commit, check tracked vs untracked. Common untracked KiCad/editor artifacts here:
   `c6remote-kicad/.history/`, `c6remote-kicad/DRC.rpt`, `c6remote-kicad/renders/`,
   `.cursor/`, `.windsurf/`, `.opencode/`, `.clinerules/`
-- Git write ops may need escalation when sandbox cannot create `.git/index.lock`.
+- Git write ops from Codex may fail with `.git/index.lock` errors because sandbox blocks writes inside `.git`, not because stale lock exists. If lock file is absent, use escalation for `git add`/`git commit`/other Git write ops instead of chasing repo corruption.

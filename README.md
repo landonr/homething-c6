@@ -33,6 +33,14 @@ Board in `c6remote-kicad/` currently includes:
 
 In practice, that gives the board a lot of physical input options plus IR and wireless paths for mixed home gear.
 
+## BOM
+
+Latest auto-generated BOM:
+
+- CSV: [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv)
+
+This BOM tracks latest repo state and is not release-validated.
+
 ## Repo layout
 
 ```text
@@ -54,7 +62,7 @@ Project uses local custom footprints under `kicad lib/Library.pretty/`. KiCad ne
 
 Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
 
-- `ano rotary` — project-local custom rotary symbol (`ano rotary.kicad_sym`), sourced from [Adafruit ANO Rotary Navigation Encoder](https://github.com/adafruit/Adafruit-ANO-Rotary-Navigation-Encoder-Breakout-PCB)
+- `ano rotary` — project-local custom rotary symbol (`ano rotary.kicad_sym`), sourced from [Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder](https://www.adafruit.com/product/5001)
 - `Seeed_Studio_XIAO_Series` — XIAO module symbols (`Seeed_Studio_XIAO_Series.kicad_sym`), sourced from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
 
 ## KiCad MCP
@@ -81,6 +89,12 @@ To regenerate fabrication outputs:
 
 ```bash
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export gerbers c6remote.kicad_pcb -o export --board-plot-params
+```
+
+To regenerate BOM CSV:
+
+```bash
+/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch export bom --fields 'Reference,${QUANTITY},Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --labels 'Reference,Qty,Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --group-by 'Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --ref-delimiter ', ' --ref-range-delimiter '' -o export/c6remote-bom.csv c6remote.kicad_sch
 ```
 
 To render reusable 2D board views:

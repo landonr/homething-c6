@@ -14,7 +14,7 @@
 				)
 			)
 		)
-		(property "Value" ""
+		(property "Value" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
 			(at 0 0 0)
 			(effects
 				(font
@@ -31,7 +31,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.adafruit.com/product/5001"
 			(at 0 0 0)
 			(effects
 				(font
@@ -40,7 +40,34 @@
 				(hide yes)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Manufacturer" "Adafruit"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "MPN" "5001"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "SKU" "5001"
 			(at 0 0 0)
 			(effects
 				(font

@@ -6404,7 +6404,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 87.63 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -6415,7 +6415,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 92.71 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -6426,6 +6426,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 92.71 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 92.71 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 92.71 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "a29e64d6-a4d5-46bf-9607-9961ca012a97")
 		)
@@ -6564,7 +6573,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 68.58 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -6575,7 +6584,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 73.66 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -6586,6 +6595,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 73.66 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 73.66 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 73.66 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "fb2aedc9-9bd6-4f75-a47f-5034a8603d73")
 		)
@@ -6725,7 +6743,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 125.73 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -6736,7 +6754,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 130.81 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -6747,6 +6765,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 130.81 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 130.81 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 130.81 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "aebbc034-390b-4009-bf90-f63079c8549c")
 		)
@@ -7123,7 +7150,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 106.68 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7134,7 +7161,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 111.76 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7145,6 +7172,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 111.76 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 111.76 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 111.76 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "251bfd74-008b-4b8f-a9dc-5db41b99d1e6")
 		)
@@ -7361,7 +7397,7 @@
 				(justify left top)
 			)
 		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/2686/SK6812MINI_REV.01-1-2.pdf"
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107?s=N4IgTCBcDaIMoGkBsAOAjGAsgSQHLZAF0BfIA"
 			(at 243.205 30.48 0)
 			(hide yes)
 			(show_name no)
@@ -7373,7 +7409,7 @@
 				(justify left top)
 			)
 		)
-		(property "Description" "RGB LED with integrated controller"
+		(property "Description" "ADDRESS LED DISC SERIAL RGB 10PK"
 			(at 233.68 33.02 0)
 			(hide yes)
 			(show_name no)
@@ -7384,6 +7420,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Adafruit Industries LLC" (at 233.68 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "2686" (at 233.68 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "1528-1541-ND" (at 233.68 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "1144c98b-42f6-4dd3-be06-375b459f6d0b")
 		)
@@ -7605,7 +7650,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/murata-electronics/GRM21BR71A105MA01L/2546937"
 			(at 212.09 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -7616,7 +7661,7 @@
 				)
 			)
 		)
-		(property "Description" "Unpolarized capacitor"
+		(property "Description" "CAP CER 1UF 10V X7R 0805"
 			(at 212.09 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -7627,6 +7672,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Murata Electronics" (at 212.09 36.83 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "GRM21BR71A105MA01L" (at 212.09 36.83 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "490-GRM21BR71A105MA01LCT-ND" (at 212.09 36.83 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "a9d3fc11-f83a-42e9-9fed-917fa050dda9")
 		)
@@ -8155,7 +8209,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 68.58 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8166,7 +8220,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 73.66 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8177,6 +8231,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 73.66 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 73.66 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 73.66 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "5d05e552-527b-4837-a707-85fa6fe590fe")
 		)
@@ -8237,7 +8300,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 106.68 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -8248,7 +8311,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 111.76 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -8259,6 +8322,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 111.76 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 111.76 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 111.76 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "9bd90b44-f7eb-4d2d-8969-bbc99b8509ae")
 		)
@@ -8319,7 +8391,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 87.63 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8330,7 +8402,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 92.71 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8341,6 +8413,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 92.71 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 92.71 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 92.71 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "72bcd5dd-9c47-4f04-bd16-917a4dce1a71")
 		)
@@ -8401,7 +8482,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 106.68 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8412,7 +8493,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 111.76 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8423,6 +8504,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 111.76 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 111.76 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 111.76 73.66 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "48bc7920-ecac-4b8a-840c-65b7c28770b0")
 		)
@@ -8639,7 +8729,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "http://www.vishay.com/docs/82460/tsop45.pdf"
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/vishay-semiconductor-opto-division/TSOP4536/4695671?s=N4IgTCBcDaIC4GcD2AHALAVgMwDYQF0BfIA"
 			(at 91.44 25.4 0)
 			(hide yes)
 			(show_name no)
@@ -8661,6 +8751,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Vishay Semiconductor Opto Division" (at 74.93 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TSOP4536" (at 74.93 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "TSOP4536-ND" (at 74.93 33.02 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "1"
 			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
 		)
@@ -8724,7 +8823,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 68.58 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -8735,7 +8834,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 73.66 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -8746,6 +8845,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 73.66 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 73.66 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 73.66 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "6c2460cd-ef57-426d-aa1a-a58439e8d09f")
 		)
@@ -8806,7 +8914,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/murata-electronics/GRM21BR71A105MA01L/2546937"
 			(at 20.32 115.57 0)
 			(hide yes)
 			(show_name no)
@@ -8817,7 +8925,7 @@
 				)
 			)
 		)
-		(property "Description" "Unpolarized capacitor"
+		(property "Description" "CAP CER 1UF 10V X7R 0805"
 			(at 20.32 115.57 0)
 			(hide yes)
 			(show_name no)
@@ -8828,6 +8936,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Murata Electronics" (at 20.32 115.57 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "GRM21BR71A105MA01L" (at 20.32 115.57 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "490-GRM21BR71A105MA01LCT-ND" (at 20.32 115.57 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "ee45faac-808d-4597-9b38-5996f5639cbf")
 		)
@@ -8967,7 +9084,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/pcf8575.pdf"
+		(property "Datasheet" "https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551"
 			(at 41.91 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -8978,7 +9095,7 @@
 				)
 			)
 		)
-		(property "Description" "16 Bits Port/Expander to I2C Bus, SSOP-24"
+		(property "Description" "IC XPNDR 400KHZ I2C SMBUS 24SSOP"
 			(at 41.91 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -8989,6 +9106,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Texas Instruments" (at 41.91 93.98 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "PCF8575DBR" (at 41.91 93.98 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "296-17856-1-ND" (at 41.91 93.98 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "1"
 			(uuid "0724da5b-16a9-4e56-882b-5a3b72e66fb1")
 		)
@@ -9092,7 +9218,7 @@
 				)
 			)
 		)
-		(property "Value" ""
+		(property "Value" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
 			(at 168.91 50.8 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9113,7 +9239,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.adafruit.com/product/5001"
 			(at 168.91 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -9124,7 +9250,40 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
+			(at 168.91 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Adafruit"
+			(at 168.91 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "5001"
+			(at 168.91 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKU" "5001"
 			(at 168.91 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -9213,7 +9372,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066"
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9224,7 +9383,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "XIAO ESP32C6"
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9235,7 +9394,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" ""
+		(property "Manufacturer" "Seeed Technology Co., Ltd"
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9246,7 +9405,7 @@
 				)
 			)
 		)
-		(property "MPN" ""
+		(property "MPN" "113991254"
 			(at 200.66 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -9257,7 +9416,7 @@
 				)
 			)
 		)
-		(property "SKU" "XIAO-DIP"
+		(property "SKU" "1597-113991254-ND"
 			(at 194.818 91.186 0)
 			(hide yes)
 			(show_name no)
@@ -9526,7 +9685,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/yageo/RC0603FR-07330RL/727162"
 			(at 224.79 44.45 0)
 			(hide yes)
 			(show_name no)
@@ -9537,7 +9696,7 @@
 				)
 			)
 		)
-		(property "Description" "Resistor"
+		(property "Description" "RES 330 OHM 1% 1/10W 0603"
 			(at 224.79 44.45 0)
 			(hide yes)
 			(show_name no)
@@ -9548,6 +9707,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "YAGEO" (at 224.79 44.45 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "RC0603FR-07330RL" (at 224.79 44.45 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "311-330HRCT-ND" (at 224.79 44.45 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "a24fb66b-70bf-4392-8600-487baf6d9a4a")
 		)
@@ -9844,7 +10012,7 @@
 				(justify left)
 			)
 		)
-		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598"
 			(at 113.03 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -9856,7 +10024,7 @@
 				(justify left)
 			)
 		)
-		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+		(property "Description" "TRANS NPN 40V 0.6A SOT23-3"
 			(at 113.03 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -9867,6 +10035,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Nexperia USA Inc." (at 113.03 35.56 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "MMBT2222A,215" (at 113.03 35.56 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "1727-4043-1-ND" (at 113.03 35.56 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "1"
 			(uuid "69fa5cd8-9483-4429-bf6a-dbdf83f77c5e")
 		)
@@ -10084,7 +10261,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 87.63 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -10095,7 +10272,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 92.71 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -10106,6 +10283,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 92.71 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 92.71 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 92.71 106.68 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "41f7db0f-a071-4d47-99a9-99e0b37432b1")
 		)
@@ -10166,7 +10352,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298"
 			(at 35.56 34.29 0)
 			(hide yes)
 			(show_name no)
@@ -10177,7 +10363,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "MICROPHONE MEMS DIGITAL I2S OMNI"
 			(at 35.56 34.29 0)
 			(hide yes)
 			(show_name no)
@@ -10188,6 +10374,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "TDK InvenSense" (at 35.56 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "ICS-43434" (at 35.56 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "1428-1066-1-ND" (at 35.56 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "000a8980-695a-4ade-b9a4-7507c1baf3c8")
 		)
@@ -10260,7 +10455,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 125.73 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -10271,7 +10466,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "SWITCH TACTILE SPST-NO 0.05A 15V"
 			(at 130.81 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -10282,6 +10477,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "E-Switch" (at 130.81 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "TL3315NF160Q" (at 130.81 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "EG4621CT-ND" (at 130.81 90.17 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "7361d0c9-bf23-4fac-b92f-860a7d122bb2")
 		)
@@ -10340,7 +10544,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "http://www.everlight.com/file/ProductFile/IR204-A.pdf"
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/IR204-A/2675566"
 			(at 125.73 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -10351,7 +10555,7 @@
 				)
 			)
 		)
-		(property "Description" "Infrared LED , 3mm LED package"
+		(property "Description" "EMITTER IR 940NM 100MA RADIAL"
 			(at 127 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -10362,6 +10566,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "Everlight Electronics Co Ltd" (at 127.0 38.1 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "IR204-A" (at 127.0 38.1 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "1080-1075-ND" (at 127.0 38.1 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "7c7729af-b89f-46c8-aab2-54b13134bd5c")
 		)
@@ -10573,7 +10786,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "~"
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/jst-sales-america-inc/S2B-PH-K-S/926626"
 			(at 270.51 34.29 0)
 			(hide yes)
 			(show_name no)
@@ -10584,7 +10797,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "CONN HEADER R/A 2POS 2.00MM"
 			(at 270.51 34.29 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10594,6 +10807,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "JST Sales America Inc." (at 270.51 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "S2B-PH-K-S(LF)(SN)" (at 270.51 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "455-1719-ND" (at 270.51 34.29 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "1"
 			(uuid "b0633f67-183c-4e1b-bfff-342557148568")
 		)
@@ -10808,7 +11030,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.digikey.ca/en/products/detail/yageo/RC0603FR-07470RL/727256"
 			(at 113.03 26.67 0)
 			(hide yes)
 			(show_name no)
@@ -10819,7 +11041,7 @@
 				)
 			)
 		)
-		(property "Description" "Resistor"
+		(property "Description" "RES 470 OHM 1% 1/10W 0603"
 			(at 113.03 26.67 0)
 			(hide yes)
 			(show_name no)
@@ -10830,6 +11052,15 @@
 				)
 			)
 		)
+    (property "Manufacturer" "YAGEO" (at 113.03 26.67 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "MPN" "RC0603FR-07470RL" (at 113.03 26.67 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
+    (property "SKU" "311-470HRCT-ND" (at 113.03 26.67 0)
+      (effects (font (size 1.27 1.27)) (hide yes))
+    )
 		(pin "2"
 			(uuid "9b1d933c-d356-4311-b111-c3786ac462ad")
 		)

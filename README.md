@@ -23,13 +23,13 @@ This is not a finished product yet. Right now this repo is about the hardware pr
 
 Board in `c6remote-kicad/` currently includes:
 
-- Seeed Studio XIAO ESP32-C6 (`U1`)
-- I2S microphone (`MK1`)
-- TSOP45xx-style IR receiver (`U2`) and IR LED transmitter (`D1`) through `Q1`
-- PCF8575 I2C GPIO expander (`U3`)
-- Discrete switches `sw1` through `sw11`
-- Custom "Ano Rotary" part (`ENC1`) with encoder channels and five switch signals
-- SK6812 mini addressable status LED (`D2`)
+- [Seeed Studio XIAO ESP32-C6](https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066) (`U1`)
+- [ICS-43434 I2S microphone](https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298) (`MK1`)
+- [TSOP4536 IR receiver](https://www.digikey.ca/en/products/detail/vishay-semiconductor-opto-division/TSOP4536/4695671) (`U2`) and [IR204-A IR LED](https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/IR204-A/2675566) (`D1`) through [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) (`Q1`)
+- [PCF8575DBR I2C GPIO expander](https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551) (`U3`)
+- [TL3315NF160Q tactile switches](https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395) (`SW1` through `SW11`)
+- [Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder](https://www.adafruit.com/product/5001) (`ENC1`) with encoder channels and five switch signals
+- [Adafruit 2686 / SK6812 mini addressable status LED pack](https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107) (`D2`)
 
 In practice, that gives the board a lot of physical input options plus IR and wireless paths for mixed home gear.
 
@@ -49,9 +49,10 @@ This BOM tracks latest repo state and is not release-validated.
 │   ├── c6remote.kicad_sch   Schematic
 │   ├── c6remote.kicad_pcb   PCB layout
 │   ├── c6remote.kicad_pro   Project settings
+│   ├── 3dmodels/            STEP models used for 3D board view
 │   └── export/              Generated fabrication outputs
-├── kicad lib/Library.pretty Custom footprints used by board
-└── ano rotary.kicad_sym     Project-local custom symbol library
+├── kicad lib/Library.pretty Custom PCB footprints used by board
+└── ano rotary.kicad_sym     Project-local schematic symbol library
 ```
 
 ## Open project
@@ -59,6 +60,14 @@ This BOM tracks latest repo state and is not release-validated.
 Open `c6remote-kicad/c6remote.kicad_pro` in KiCad.
 
 Project uses local custom footprints under `kicad lib/Library.pretty/`. KiCad needs that footprint library to resolve under nickname `Library`.
+
+Project also uses local STEP models under `c6remote-kicad/3dmodels/` for 3D preview. These are not duplicate footprints; footprints in `Library.pretty` reference those 3D models.
+
+3D model files in `c6remote-kicad/3dmodels/`:
+
+- `5221 ANO Rotary Encoder.step` — ANO rotary model source: [GrabCAD Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1)
+- `SW_SPST_PTS647Sx50_black.step` — local forked STEP model matching [C&K PTS647 series](https://www.ckswitches.com/products/switches/product-details/Tactile/PTS647/)
+- `Seeed Studio XIAO ESP32-C6.step` — XIAO model source: [GrabCAD XIAO ESP32-C6 3D model](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1)
 
 Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
 
@@ -120,7 +129,7 @@ Default output goes to `docs/readme-assets/`.
 - Prototype board, not finished remote
 - KiCad source of truth lives in `c6remote-kicad/`
 - Generated fabrication outputs live in `c6remote-kicad/export/`
-- Current baseline still has known ERC and DRC issues
+- Current baseline still has ERC and DRC warnings, but board has not been tested in a real order yet
 - Firmware and runtime integrations are not in this repo yet
 
 ## Why this lives separately from homeThing

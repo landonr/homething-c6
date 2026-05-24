@@ -4655,6 +4655,16 @@
 		)
 		(uuid "25c95359-5370-4526-95fc-8bcb39eccb5c")
 	)
+	(text "homeThing C6"
+		(exclude_from_sim no)
+		(at 201.168 174.752 0)
+		(effects
+			(font
+				(size 3.81 3.81)
+			)
+		)
+		(uuid "5a7faa5e-fb6e-4127-b2cd-7f5a0d82958f")
+	)
 	(text "IR Emitter"
 		(exclude_from_sim no)
 		(at 138.684 15.494 0)

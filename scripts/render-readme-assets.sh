@@ -7,8 +7,10 @@ usage() {
 Usage: scripts/render-readme-assets.sh [options]
 
 Render README board preview assets:
-  - 3D top PNG
-  - 3D bottom PNG
+  - basic top PNG
+  - basic bottom PNG
+  - rotated high-quality top PNG
+  - rotated high-quality bottom PNG
   - flat top SVG
   - flat bottom SVG
   - schematic SVG
@@ -19,13 +21,15 @@ Options:
   --kicad-cli <path>         KiCad CLI path. Default: bundled macOS KiCad path
   --width <px>               3D render width. Default: 1800
   --height <px>              3D render height. Default: 1200
-  --quality <basic|high|user|job_settings>
-                             3D render quality. Default: high
-  --top-rotate <x,y,z>       Top render rotation. Default: 315,0,35
-  --bottom-rotate <x,y,z>    Bottom render rotation. Default: 315,0,35
-  --top-camera-side <side>   Camera side for top output. Default: bottom
+  --basic-quality <basic|high|user|job_settings>
+                             Basic 3D render quality. Default: basic
+  --rotated-quality <basic|high|user|job_settings>
+                             Rotated 3D render quality. Default: high
+  --top-rotate <x,y,z>       Rotated top render rotation. Default: -45,0,45
+  --bottom-rotate <x,y,z>    Rotated bottom render rotation. Default: -45,0,-45
+  --top-camera-side <side>   Camera side for top outputs. Default: top
   --bottom-camera-side <side>
-                             Camera side for bottom output. Default: top
+                             Camera side for bottom outputs. Default: bottom
   --flat-sides <top|bottom|both>
                              Flat SVG sides to render. Default: both
   -h, --help                 Show this help
@@ -40,7 +44,8 @@ OUTPUT_DIR="${REPO_ROOT}/docs/readme-assets"
 KICAD_CLI="${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}"
 WIDTH="1800"
 HEIGHT="1200"
-QUALITY="high"
+BASIC_QUALITY="basic"
+ROTATED_QUALITY="high"
 TOP_ROTATE="-45,0,45"
 BOTTOM_ROTATE="-45,0,-45"
 TOP_CAMERA_SIDE="top"
@@ -69,8 +74,12 @@ while [[ $# -gt 0 ]]; do
       HEIGHT="${2:-}"
       shift 2
       ;;
-    --quality)
-      QUALITY="${2:-}"
+    --basic-quality)
+      BASIC_QUALITY="${2:-}"
+      shift 2
+      ;;
+    --rotated-quality)
+      ROTATED_QUALITY="${2:-}"
       shift 2
       ;;
     --top-rotate)
@@ -113,10 +122,18 @@ case "${FLAT_SIDES}" in
     ;;
 esac
 
-case "${QUALITY}" in
+case "${BASIC_QUALITY}" in
   basic|high|user|job_settings) ;;
   *)
-    echo "Invalid quality: ${QUALITY}" >&2
+    echo "Invalid basic quality: ${BASIC_QUALITY}" >&2
+    exit 1
+    ;;
+esac
+
+case "${ROTATED_QUALITY}" in
+  basic|high|user|job_settings) ;;
+  *)
+    echo "Invalid rotated quality: ${ROTATED_QUALITY}" >&2
     exit 1
     ;;
 esac
@@ -151,25 +168,28 @@ fi
 mkdir -p "${OUTPUT_DIR}"
 
 render_3d() {
-  local side="$1"
+  local output_name="$1"
   local camera_side="$2"
-  local rotate="$3"
-  local output_file="${OUTPUT_DIR}/board-3d-${side}.png"
+  local quality="$3"
+  local rotate="$4"
+  local output_file="${OUTPUT_DIR}/${output_name}"
 
   "${KICAD_CLI}" pcb render "${PCB_FILE}" \
     --output "${output_file}" \
     --side "${camera_side}" \
     --width "${WIDTH}" \
     --height "${HEIGHT}" \
-    --quality "${QUALITY}" \
+    --quality "${quality}" \
     --background transparent \
     --rotate "${rotate}"
 
   echo "Wrote ${output_file}"
 }
 
-render_3d top "${TOP_CAMERA_SIDE}" "${TOP_ROTATE}"
-render_3d bottom "${BOTTOM_CAMERA_SIDE}" "${BOTTOM_ROTATE}"
+render_3d "board-3d-top.png" "${TOP_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
+render_3d "board-3d-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
+render_3d "board-3d-rotated-top.png" "${TOP_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${TOP_ROTATE}"
+render_3d "board-3d-rotated-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${BOTTOM_ROTATE}"
 
 render_flat() {
   local side="$1"

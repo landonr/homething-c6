@@ -4,6 +4,12 @@ A handheld remote for TV, Sonos, zigbee lights, and Home Assistant. No touchscre
 
 This repo is the hardware side of that project. The source of truth lives in `c6remote-kicad/`. Current design is a KiCad prototype built around a Seeed Studio XIAO ESP32-C6.
 
+## Learn More
+
+- [Discord](https://discord.gg/BX6ZtGKHTy)
+- [Instagram](https://www.instagram.com/homething.io/)
+- [Website](https://homething.io/)
+
 | View | Top | Bottom |
 | --- | --- | --- |
 | 3D | ![3D top preview of current board prototype](docs/readme-assets/board-3d-top.png) | ![3D bottom preview of current board prototype](docs/readme-assets/board-3d-bottom.png) |
@@ -11,7 +17,13 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 
 ## Schematic
 
-![Current schematic preview](docs/readme-assets/schematic.svg)
+<table>
+  <tr>
+    <td bgcolor="#ffffff">
+      <img src="docs/readme-assets/schematic.svg" alt="Current schematic preview" />
+    </td>
+  </tr>
+</table>
 
 ## What this remote is meant to do
 

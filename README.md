@@ -17,13 +17,7 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 
 ## Schematic
 
-<table>
-  <tr>
-    <td bgcolor="#ffffff">
-      <img src="docs/readme-assets/schematic.svg" alt="Current schematic preview" />
-    </td>
-  </tr>
-</table>
+![Current schematic preview](docs/readme-assets/schematic.svg)
 
 ## What this remote is meant to do
 

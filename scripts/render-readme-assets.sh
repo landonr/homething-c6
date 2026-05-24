@@ -195,9 +195,7 @@ render_schematic() {
 
   "${KICAD_CLI}" sch export svg "${schematic_file}" \
     --output "${OUTPUT_DIR}" \
-    --exclude-drawing-sheet \
-    --black-and-white \
-    --no-background-color
+    --black-and-white
 
   mv "${OUTPUT_DIR}/c6remote.svg" "${OUTPUT_DIR}/schematic.svg"
   echo "Wrote ${OUTPUT_DIR}/schematic.svg"

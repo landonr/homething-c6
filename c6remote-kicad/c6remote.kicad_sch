@@ -4951,6 +4951,16 @@
 		)
 		(uuid "6e9b9c57-fead-4df1-ae32-ce85fc997900")
 	)
+	(wire
+		(pts
+			(xy 166.37 34.29) (xy 166.37 38.1)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "75200b83-c88b-44ea-89e6-5473b0cf0460")
+	)
 	(polyline
 		(pts
 			(xy 11.43 129.54) (xy 285.75 129.54)
@@ -5083,6 +5093,16 @@
 	)
 	(wire
 		(pts
+			(xy 166.37 38.1) (xy 163.83 38.1)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ca92e292-f4b7-479e-9bf6-65dee77a56e2")
+	)
+	(wire
+		(pts
 			(xy 233.68 31.75) (xy 233.68 45.72)
 		)
 		(stroke
@@ -5120,6 +5140,16 @@
 			(type default)
 		)
 		(uuid "d480efdb-e1ca-41cb-a519-08812415ae10")
+	)
+	(wire
+		(pts
+			(xy 166.37 22.86) (xy 166.37 26.67)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db222b23-104a-426e-ae6c-0cb904fdd7b7")
 	)
 	(wire
 		(pts
@@ -6932,7 +6962,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 163.83 38.1 270)
+		(at 166.37 22.86 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6943,7 +6973,7 @@
 		(fields_autoplaced yes)
 		(uuid "38efdee6-ebc2-4de6-96fd-bd5cbdec86d0")
 		(property "Reference" "#PWR07"
-			(at 160.02 38.1 0)
+			(at 162.56 22.86 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6954,7 +6984,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 167.64 38.0999 90)
+			(at 170.18 22.8599 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6965,7 +6995,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 163.83 38.1 0)
+			(at 166.37 22.86 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6976,7 +7006,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 163.83 38.1 0)
+			(at 166.37 22.86 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6987,7 +7017,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 163.83 38.1 0)
+			(at 166.37 22.86 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7565,6 +7595,84 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 166.37 30.48 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "6a4a0366-8106-4f23-824e-488ab12997ff")
+		(property "Reference" "R3"
+			(at 169.672 29.464 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "22"
+			(at 169.672 31.496 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 166.37 30.48 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 166.37 30.48 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 166.37 30.48 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "606bfa61-9ec7-4b3d-a4c1-028671cffe45")
+		)
+		(pin "1"
+			(uuid "91a9d581-8b06-402a-a712-7b833aaec571")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "R3")
 					(unit 1)
 				)
 			)

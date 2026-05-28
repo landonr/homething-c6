@@ -4,7 +4,7 @@ Findings from schematic + PCB audit (2026-05-25). Ordered by severity.
 
 ## Critical
 
-- [x] **Add IR LED current-limit resistor (D1).** ~~No series R between +3.3V and D1 — only base R1 (470Ω) on Q1. Will destroy IR LED or transistor. Add ~22Ω 0603 between +3.3V and D1 anode, OR between D1 cathode and Q1 collector. Value: `(3.3 − Vf_LED − Vce_sat) / I_target` → (3.3 − 1.3 − 0.2)/0.1A ≈ 18Ω → use 22Ω 1/4W.~~ Added R3 22Ω 0603 in series between +3.3V (#PWR07) and D1 anode in schematic. PCB layout still needs the footprint placed and routed.
+- [x] **Add IR LED current-limit resistor (D1).** ~~No series R between +3.3V and D1 — only base R1 (470Ω) on Q1. Will destroy IR LED or transistor. Add ~22Ω 0603 between +3.3V and D1 anode, OR between D1 cathode and Q1 collector. Value: `(3.3 − Vf_LED − Vce_sat) / I_target` → (3.3 − 1.3 − 0.2)/0.1A ≈ 18Ω → use 22Ω 1/4W.~~ Added R3 22Ω 0603 in series between +3.3V and D1 anode in schematic, placed on PCB at (55, 33.258) on F.Cu with horizontal trace to D1 anode and via to B.Cu +3.3V pour. DRC clean for this change (48 total violations, baseline 50, no R3-related errors).
 
 ## High
 

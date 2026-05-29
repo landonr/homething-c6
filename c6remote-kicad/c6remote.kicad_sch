@@ -5311,16 +5311,6 @@
 		)
 		(uuid "885bf95f-dd81-463d-9f9a-e73ae9fca4ed")
 	)
-	(label "BAT"
-		(at 128.27 153.67 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "8b90a451-ec7b-41dc-9aac-077c44d6c2a9")
-	)
 	(label "+3.3V"
 		(at 222.25 92.71 0)
 		(effects
@@ -5370,16 +5360,6 @@
 			(justify left bottom)
 		)
 		(uuid "c5f220df-8d64-4a8c-b961-71f6f138eafe")
-	)
-	(label "BAT"
-		(at 198.12 120.65 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "eb15becf-e061-417f-b31d-8f22da26df55")
 	)
 	(label "IR EMIT"
 		(at 168.91 88.9 0)
@@ -5700,6 +5680,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "BAT"
+		(shape bidirectional)
+		(at 128.27 153.67 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "7c44f486-7a9e-42bf-ac8e-61151bf3aec0")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 128.27 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -6276,6 +6278,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "BAT"
+		(shape bidirectional)
+		(at 198.12 120.65 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "dd262886-acca-41a6-ba38-333a35c581f9")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 198.12 120.65 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)

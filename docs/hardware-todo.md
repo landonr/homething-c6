@@ -9,7 +9,7 @@ Findings from schematic + PCB audit (2026-05-25). Ordered by severity.
 ## High
 
 - [x] **Add I²C pull-ups.** ~~SDA and SCL have no external pull-ups. ESP32-C6 internal pulls (~45kΩ) are too weak for PCF8575 + 16 keys + rotary. Add 4.7kΩ 0603 each: `SDA → +3.3V`, `SCL → +3.3V`.~~ R4 4.7k SDA→+3.3V, R5 4.7k SCL→+3.3V added; placed on F.Cu near U1/U3 (R4 at 60,121 / R5 at 61.325,125). DRC: 0 errors, 42 warnings (all baseline cosmetic).
-- [ ] **Decide D2 SK6812 power rail.** Currently `VCC = U1/14 (VBUS)` → LED dead on battery-only. If LED must work on battery, re-wire D2/4 and C2/1 to +3.3V (SK6812MINI runs dimmer at 3.3V but functional).
+- [x] **Decide D2 SK6812 power rail.** ~~Currently `VCC = U1/14 (VBUS)` → LED dead on battery-only. If LED must work on battery, re-wire D2/4 and C2/1 to +3.3V (SK6812MINI runs dimmer at 3.3V but functional).~~ Rewired D2/4 and C2/1 to +3.3V — LED now works on battery. VCC label remains on U1.14 (VBUS) as dangling single-node net `/VCC`; consider renaming to `VBUS` for clarity.
 - [ ] **Add TSOP IR receiver supply filter.** U2 TSOP45xx missing datasheet-recommended filter. Add 100Ω 0603 inline on `+3.3V → U2/3 (Vs)` and 100nF 0603 from `U2/3 → U2/2 (GND)`, placed close to U2.
 
 ## Medium

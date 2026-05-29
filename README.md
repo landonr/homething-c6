@@ -10,18 +10,18 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 - [Instagram](https://www.instagram.com/homething.io/)
 - [Website](https://homething.io/)
 
+## Raytraced Views
+
+| View | Top | Bottom |
+| --- | --- | --- |
+| High 3D | ![High-quality rotated 3D top preview of current board prototype](docs/readme-assets/board-3d-rotated-top.png) | ![High-quality rotated 3D bottom preview of current board prototype](docs/readme-assets/board-3d-rotated-bottom.png) |
+
 ## Board Views
 
 | View | Top | Bottom |
 | --- | --- | --- |
 | Basic 3D | ![Basic 3D top preview of current board prototype](docs/readme-assets/board-3d-top.png) | ![Basic 3D bottom preview of current board prototype](docs/readme-assets/board-3d-bottom.png) |
 | Flat SVG | ![Flat top SVG preview of current board prototype](docs/readme-assets/board-flat-top.svg) | ![Flat bottom SVG preview of current board prototype](docs/readme-assets/board-flat-bottom.svg) |
-
-## Raytraced Views
-
-| View | Top | Bottom |
-| --- | --- | --- |
-| High 3D | ![High-quality rotated 3D top preview of current board prototype](docs/readme-assets/board-3d-rotated-top.png) | ![High-quality rotated 3D bottom preview of current board prototype](docs/readme-assets/board-3d-rotated-bottom.png) |
 
 ## Schematic
 

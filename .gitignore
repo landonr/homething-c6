@@ -2,3 +2,6 @@ c6remote-kicad/*-drc.rpt
 c6remote-kicad/*-erc.rpt
 c6remote-kicad/~*.lck
 docs/superpowers/
+
+# PCBWay vendor quotes/BOMs (working docs, not design source)
+pcbway/

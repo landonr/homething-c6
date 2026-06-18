@@ -5,7 +5,13 @@
   </picture>
 </p>
 
-# homeThing C6
+<h1 align="center">homeThing C6</h1>
+
+<p align="center">
+  <sub>Prototype and fab costs sponsored by <a href="https://pcbway.com/g/Xymq6O">PCBWay</a>. No soldering required, fully assembled by PCBWay.</sub>
+  <br>
+  <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
+</p>
 
 A handheld remote for TV, Sonos, zigbee lights, and Home Assistant. No touchscreen, no digging through apps, no device that has to live on a charger. Physical buttons, a rotary control, fast access, and long idle life.
 
@@ -13,9 +19,17 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 
 ## Learn More
 
-- [Discord](https://discord.gg/BX6ZtGKHTy)
-- [Instagram](https://www.instagram.com/homething.io/)
-- [Website](https://homething.io/)
+<p align="center">
+  <a href="https://discord.gg/BX6ZtGKHTy"><img alt="Discord" src="https://img.shields.io/discord/1021434469917413498?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
+  <a href="https://www.instagram.com/homething.io/"><img alt="Instagram" src="https://img.shields.io/badge/Instagram-%40homething.io-E4405F?style=for-the-badge&logo=instagram&logoColor=white"></a>
+  <a href="https://homething.io/"><img alt="Website" src="https://img.shields.io/badge/Website-homething.io-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/landonr/homeThing"><img alt="homeThing on GitHub" src="https://img.shields.io/github/stars/landonr/homeThing?style=for-the-badge&logo=github&logoColor=white&label=homeThing&color=181717"></a>
+  <br>
+  <sub>The project this remote grew out of</sub>
+</p>
 
 ## Raytraced Views
 
@@ -36,13 +50,11 @@ This repo is the hardware side of that project. The source of truth lives in `c6
 
 ## What this remote is meant to do
 
-- Control a TV through on-board IR receive and transmit hardware
-- Handle Sonos and other music controls once firmware and Home Assistant integration land
-- Use the ESP32-C6 for Zigbee, Thread, or Matter-adjacent control work
+- Control a TV with on-board IR receive and transmit hardware
+- Drive music playback over Wi-Fi and BLE
+- Switch lights over Zigbee, Thread, or Matter
 - Map Home Assistant actions to physical buttons instead of app screens
 - Last longer than the usual "charge it every week" gadget
-
-This is not a finished product yet. Right now this repo is about the hardware prototype. Firmware, battery tuning, UX, and the full integration story still come later.
 
 ## Current hardware
 

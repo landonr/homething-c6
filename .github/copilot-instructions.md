@@ -41,6 +41,8 @@ scripts/regen-fab.sh
 
 `scripts/regen-fab.sh` wraps the four `kicad-cli` exports (gerbers + drill + `c6remote-pos.csv` position file + `c6remote-bom.csv` BOM) with the project's established formats: position file is CSV/mm/both-sides; BOM is grouped by Value+Footprint with the custom sourcing columns (Reference, Qty, Value, Footprint, Datasheet, Description, Manufacturer, MPN, SKU) and ", "-joined references. Override the binary with `KICAD_CLI=/path/to/kicad-cli scripts/regen-fab.sh`.
 
+A tracked pre-commit hook (`scripts/hooks/pre-commit`) runs `regen-fab.sh` and stages `export/` automatically whenever `c6remote.kicad_sch` or `c6remote.kicad_pcb` is part of a commit, so fabrication outputs never drift from the design. Activate it once per clone with `git config core.hooksPath scripts/hooks`; bypass a single commit with `git commit --no-verify`. Because gerber/drill headers embed a creation timestamp, any board-touching commit restages all of `export/` even when geometry is unchanged.
+
 There is no finer-grained single-test harness in this repo; the closest scoped checks are ERC for the schematic and DRC for the PCB run separately.
 
 Current baseline is not clean. `kicad-cli sch erc` currently reports 23 violations, and `kicad-cli pcb drc` currently reports 50 violations plus 3 unconnected items. Treat those as pre-existing unless the task is specifically about fixing electrical or layout issues.

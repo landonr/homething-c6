@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: keep fabrication outputs in lockstep with the design.
+#
+# When the schematic or PCB is part of the commit, regenerate all fab outputs
+# (gerbers + drill + pick-and-place + BOM) via scripts/regen-fab.sh and stage
+# export/ so the checked-in outputs never drift from the source.
+#
+# Install (once per clone):
+#   git config core.hooksPath scripts/hooks
+#
+# Skip for a one-off commit:
+#   git commit --no-verify
+#
+# Note: gerber/drill headers embed a creation timestamp, so any commit that
+# touches the board will restage all of export/ even if geometry is unchanged.
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Only regenerate when a design file is actually part of this commit.
+if ! git diff --cached --name-only | grep -qE '^c6remote-kicad/c6remote\.(kicad_sch|kicad_pcb)$'; then
+	exit 0
+fi
+
+echo "[pre-commit] schematic/PCB staged -> regenerating fabrication outputs"
+"$REPO_ROOT/scripts/regen-fab.sh"
+git add "$REPO_ROOT/c6remote-kicad/export/"
+echo "[pre-commit] export/ regenerated and staged"

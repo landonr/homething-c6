@@ -975,49 +975,49 @@
 			(thermal_bridge_angle 45)
 			(uuid "fd579d63-bbef-4609-9252-aad3f944a314")
 		)
-		(pad "15" smd circle
+		(pad "24" smd circle
 			(at 7.6166 -19.1415 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "ad890579-1e55-4b71-9d59-080a59598896")
 		)
-		(pad "16" smd circle
+		(pad "25" smd circle
 			(at 10.1566 -19.1415 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "25d6fdae-01ac-4ca4-8702-55badc8bcbc8")
 		)
-		(pad "17" smd circle
+		(pad "26" smd circle
 			(at 7.6166 -16.6015 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "e73ae295-736f-4acf-8ee1-0c120ebcebea")
 		)
-		(pad "18" smd circle
+		(pad "27" smd circle
 			(at 10.1566 -16.6015 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "7adfba87-f861-42a5-bb73-c3f9fac53180")
 		)
-		(pad "19" smd circle
+		(pad "28" smd circle
 			(at 7.6166 -14.0615 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "619dc2a5-519d-48ac-9c78-8c438df2a14d")
 		)
-		(pad "20" smd circle
+		(pad "29" smd circle
 			(at 10.1566 -14.0615 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "aa8b72d0-17bf-47d4-94b1-df9199638a29")
 		)
-		(pad "21" smd circle
+		(pad "30" smd circle
 			(at 7.6166 -11.5215 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(uuid "8539b5cc-db2c-4fa4-9ead-b842a1885293")
 		)
-		(pad "22" smd circle
+		(pad "31" smd circle
 			(at 10.064 -11.5783 180)
 			(size 1.7 1.7)
 			(layers "F.Cu" "F.Mask" "F.Paste")

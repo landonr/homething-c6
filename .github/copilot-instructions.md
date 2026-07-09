@@ -31,9 +31,15 @@ cd c6remote-kicad
 # Full board validation with schematic parity and zone refill
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations
 
-# Regenerate fabrication outputs into the checked-in export directory
+# Regenerate ALL fabrication outputs (gerbers, drill, pick-and-place, BOM) into export/
+# Run this after any schematic or board change so export/ stays in sync.
+scripts/regen-fab.sh
+
+# Or just the gerbers, directly:
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export gerbers c6remote.kicad_pcb -o export --board-plot-params
 ```
+
+`scripts/regen-fab.sh` wraps the four `kicad-cli` exports (gerbers + drill + `c6remote-pos.csv` position file + `c6remote-bom.csv` BOM) with the project's established formats: position file is CSV/mm/both-sides; BOM is grouped by Value+Footprint with the custom sourcing columns (Reference, Qty, Value, Footprint, Datasheet, Description, Manufacturer, MPN, SKU) and ", "-joined references. Override the binary with `KICAD_CLI=/path/to/kicad-cli scripts/regen-fab.sh`.
 
 There is no finer-grained single-test harness in this repo; the closest scoped checks are ERC for the schematic and DRC for the PCB run separately.
 

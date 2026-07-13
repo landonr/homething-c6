@@ -4661,10 +4661,6 @@
 		(uuid "5eb2a8a9-6e7c-4db8-8538-b873f5b6a0cc")
 	)
 	(no_connect
-		(at 201.93 66.04)
-		(uuid "82d0be72-8726-4e31-8aa5-e82a77b59d4d")
-	)
-	(no_connect
 		(at 226.06 24.13)
 		(uuid "dd956110-8bb6-4cbe-8188-2ba82db6e3e8")
 	)
@@ -4724,7 +4720,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 63.5) (xy 213.36 63.5)
+			(xy 214.63 63.5) (xy 213.36 63.5)
 		)
 		(stroke
 			(width 0)
@@ -4834,13 +4830,23 @@
 	)
 	(wire
 		(pts
-			(xy 217.17 60.96) (xy 217.17 66.04)
+			(xy 219.71 60.96) (xy 219.71 62.23)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "4a51ea82-8992-4a15-a2bd-c931c195c2cf")
+	)
+	(wire
+		(pts
+			(xy 201.93 62.23) (xy 201.93 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "537f676d-b82c-4bfb-ad17-d7243a45f6a0")
 	)
 	(wire
 		(pts
@@ -4871,6 +4877,16 @@
 			(type default)
 		)
 		(uuid "59fd90e1-2453-43cf-a0cc-bc55f917d073")
+	)
+	(wire
+		(pts
+			(xy 201.93 62.23) (xy 199.39 62.23)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6275b731-616d-4507-9be7-c9ac72808159")
 	)
 	(wire
 		(pts
@@ -4924,6 +4940,16 @@
 	)
 	(wire
 		(pts
+			(xy 191.77 62.23) (xy 190.5 62.23)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "80039ec6-e91b-42ac-8b69-cf61eee45849")
+	)
+	(wire
+		(pts
 			(xy 228.6 66.04) (xy 228.6 64.77)
 		)
 		(stroke
@@ -4974,7 +5000,7 @@
 	)
 	(wire
 		(pts
-			(xy 212.09 63.5) (xy 212.09 62.23)
+			(xy 214.63 63.5) (xy 214.63 62.23)
 		)
 		(stroke
 			(width 0)
@@ -5024,6 +5050,16 @@
 	)
 	(wire
 		(pts
+			(xy 217.17 62.23) (xy 217.17 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a93d8353-ef75-4787-ada9-14361d99483d")
+	)
+	(wire
+		(pts
 			(xy 20.32 68.58) (xy 41.91 68.58)
 		)
 		(stroke
@@ -5041,6 +5077,16 @@
 			(type default)
 		)
 		(uuid "b13332ef-ee8c-4eed-b48d-66423ccd0f4b")
+	)
+	(wire
+		(pts
+			(xy 219.71 62.23) (xy 217.17 62.23)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "be9d19df-52b1-4026-9b79-7ebc5efd53b4")
 	)
 	(wire
 		(pts
@@ -5243,7 +5289,7 @@
 		(uuid "15363048-cb11-4f33-8257-9a63fc95cb5f")
 	)
 	(label "GND"
-		(at 212.09 62.23 0)
+		(at 214.63 62.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5416,6 +5462,28 @@
 			)
 		)
 	)
+	(global_label "exp_int"
+		(shape bidirectional)
+		(at 31.75 93.98 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "0fabab92-45bb-4c3f-8fbe-b509034ab2a9")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 31.75 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw4"
 		(shape input)
 		(at 52.07 81.28 0)
@@ -5466,7 +5534,7 @@
 	)
 	(global_label "bat_sense"
 		(shape bidirectional)
-		(at 217.17 60.96 0)
+		(at 219.71 60.96 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5475,7 +5543,7 @@
 		)
 		(uuid "20e3188f-6f1e-4b1d-aa47-69416c5e6851")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 217.17 60.96 90)
+			(at 219.71 60.96 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6337,6 +6405,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "exp_int"
+		(shape bidirectional)
+		(at 201.93 62.23 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c43c3173-68b3-46c3-a9aa-27cb6cdcecec")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 201.93 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -8065,6 +8155,84 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:R")
+		(at 195.58 62.23 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "53f262fb-1259-40d8-abcb-a2772736e31c")
+		(property "Reference" "R9"
+			(at 195.326 65.532 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100k"
+			(at 195.58 59.944 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 195.58 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 195.58 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 195.58 62.23 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a9cedfe1-8e3d-4a9a-8f61-5e3c4d07acaa")
+		)
+		(pin "2"
+			(uuid "baf14391-d60d-493e-a4bd-4421cddb60d1")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "R9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 45.72 35.56 180)
 		(unit 1)
@@ -9409,6 +9577,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "U2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3.3V")
+		(at 190.5 62.23 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "acfbc0cc-5f9b-42c0-86f2-e7517f3bae13")
+		(property "Reference" "#PWR034"
+			(at 185.674 59.944 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 186.69 64.262 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 190.5 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 190.5 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 190.5 62.23 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "3df5c24f-8a29-4362-8c83-6256f9dc2cec")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR034")
 					(unit 1)
 				)
 			)

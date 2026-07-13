@@ -12,7 +12,7 @@
 "R3","1","22","Resistor_SMD:R_0603_1608Metric","~","","","",""
 "R4, R5","2","4.7k","Resistor_SMD:R_0603_1608Metric","~","","","",""
 "R6","1","100","Resistor_SMD:R_0603_1608Metric","~","","","",""
-"R7, R8","2","100k","Resistor_SMD:R_0603_1608Metric","~","","","",""
+"R7, R8, R9","3","100k","Resistor_SMD:R_0603_1608Metric","~","","","",""
 "SW1, SW2, SW3, SW4, SW5, SW6, SW7, SW8, SW9, SW10, SW11","11","SW_Push","Library:SW_TL3315NF160Q","","Push button switch, generic, two pins","","",""
 "U1","1","XIAO-ESP32-C6","Seeed_Studio_XIAO_Series:XIAO-ESP32-C6-SMD","","","","","XIAO-DIP"
 "U2","1","TSOP4136","OptoDevice:Vishay_MOLD-3Pin","http://www.vishay.com/docs/82460/tsop45.pdf","IR Receiver Modules for Remote Control Systems","","",""

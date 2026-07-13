@@ -1,5 +1,5 @@
 Ref,Val,Package,PosX,PosY,Rot,Side
-"J1","Battery","JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal",52.900000,-155.700000,0.000000,bottom
+"J1","Battery","JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",53.900000,-152.850000,0.000000,bottom
 "MK1","ICS_43434","InvenSense_ICS-43434-6_3.5x2.65mm",53.350000,-35.990000,180.000000,bottom
 "R3","22","R_0603_1608Metric",58.175000,-33.258000,0.000000,bottom
 "R7","100k","R_0603_1608Metric",58.000000,-142.250000,0.000000,bottom

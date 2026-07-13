@@ -32,6 +32,9 @@ Options:
                              Camera side for bottom outputs. Default: bottom
   --flat-sides <top|bottom|both>
                              Flat SVG sides to render. Default: both
+  --only <board|schematic|all>
+                             Subset of assets to render: board = 3D + flat board
+                             views, schematic = schematic SVG only. Default: all
   -h, --help                 Show this help
 EOF
 }
@@ -51,6 +54,7 @@ BOTTOM_ROTATE="-45,0,-45"
 TOP_CAMERA_SIDE="top"
 BOTTOM_CAMERA_SIDE="bottom"
 FLAT_SIDES="both"
+ONLY="all"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,6 +106,10 @@ while [[ $# -gt 0 ]]; do
       FLAT_SIDES="${2:-}"
       shift 2
       ;;
+    --only)
+      ONLY="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -118,6 +126,14 @@ case "${FLAT_SIDES}" in
   top|bottom|both) ;;
   *)
     echo "Invalid flat sides value: ${FLAT_SIDES}" >&2
+    exit 1
+    ;;
+esac
+
+case "${ONLY}" in
+  board|schematic|all) ;;
+  *)
+    echo "Invalid --only value: ${ONLY}" >&2
     exit 1
     ;;
 esac
@@ -186,10 +202,12 @@ render_3d() {
   echo "Wrote ${output_file}"
 }
 
-render_3d "board-3d-top.png" "${TOP_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
-render_3d "board-3d-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
-render_3d "board-3d-rotated-top.png" "${TOP_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${TOP_ROTATE}"
-render_3d "board-3d-rotated-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${BOTTOM_ROTATE}"
+if [[ "${ONLY}" != "schematic" ]]; then
+  render_3d "board-3d-top.png" "${TOP_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
+  render_3d "board-3d-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
+  render_3d "board-3d-rotated-top.png" "${TOP_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${TOP_ROTATE}"
+  render_3d "board-3d-rotated-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${BOTTOM_ROTATE}"
+fi
 
 render_flat() {
   local side="$1"
@@ -221,14 +239,18 @@ render_schematic() {
   echo "Wrote ${OUTPUT_DIR}/schematic.svg"
 }
 
-case "${FLAT_SIDES}" in
-  both)
-    render_flat top
-    render_flat bottom
-    ;;
-  top|bottom)
-    render_flat "${FLAT_SIDES}"
-    ;;
-esac
+if [[ "${ONLY}" != "schematic" ]]; then
+  case "${FLAT_SIDES}" in
+    both)
+      render_flat top
+      render_flat bottom
+      ;;
+    top|bottom)
+      render_flat "${FLAT_SIDES}"
+      ;;
+  esac
+fi
 
-render_schematic
+if [[ "${ONLY}" != "board" ]]; then
+  render_schematic
+fi

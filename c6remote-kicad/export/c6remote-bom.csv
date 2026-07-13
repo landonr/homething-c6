@@ -4,7 +4,7 @@
 "D1","1","INL-3AHIR30","LED_THT:LED_D3.0mm_IRBlack","http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf","Infrared LED , 3mm LED package","","",""
 "D2","1","SK6812MINI","LED_SMD:LED_SK6812MINI_PLCC4_3.5x3.5mm_P1.75mm","https://cdn-shop.adafruit.com/product-files/2686/SK6812MINI_REV.01-1-2.pdf","RGB LED with integrated controller","","",""
 "ENC1","1","","Library:Ano Rotary","","","","",""
-"J1","1","Battery","Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal","~","","","",""
+"J1","1","Battery","Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal","~","CONN HEADER SMD R/A 2POS 2MM","JST","S2B-PH-SM4-TB(LF)(SN)",""
 "MK1","1","ICS_43434","Sensor_Audio:InvenSense_ICS-43434-6_3.5x2.65mm","","","","",""
 "Q1","1","MMBT2222A","Package_TO_SOT_SMD:SOT-23","https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf","600mA Ic, 40V Vce, NPN Transistor, SOT-23","","",""
 "R1","1","470","Resistor_SMD:R_0603_1608Metric","","Resistor","","",""

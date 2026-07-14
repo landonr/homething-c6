@@ -65,6 +65,7 @@ The signal split matters: the rotary encoder channels `ano_enc1` / `ano_enc2` go
 
 ## Key repository conventions
 
+- **Never add `Co-Authored-By:` trailers to commit messages** — no Claude, no Copilot, none.
 - The schematic is a **single sheet** that relies on **global labels** for most interconnects. For cross-cutting changes, search label names such as `sw*`, `ano_*`, `IR EMIT`, `IR REC`, `led_1`, `sda`, `scl`, `sck`, `ws`, and `sd`.
 - The live design files are `c6remote.kicad_sch`, `c6remote.kicad_pcb`, and `c6remote.kicad_pro`. Files such as `*.bak`, `*-bak`, and `c6remote-backups/` are archival backups, not the normal edit targets.
 - `export/` contains **generated fabrication artifacts**. Update it only when intentionally regenerating manufacturing outputs; do not hand-edit Gerbers or drill files.

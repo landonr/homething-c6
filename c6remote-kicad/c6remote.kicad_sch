@@ -3550,7 +3550,7 @@
 					)
 				)
 			)
-			(property "Value" ""
+			(property "Value" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -3571,7 +3571,7 @@
 					)
 				)
 			)
-			(property "Datasheet" ""
+			(property "Datasheet" "https://www.adafruit.com/product/5001"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -3582,7 +3582,40 @@
 					)
 				)
 			)
-			(property "Description" ""
+			(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Manufacturer" "Adafruit"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "MPN" "5001"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "SKU" "5001"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -10134,8 +10167,8 @@
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
-		(in_pos_files yes)
-		(dnp yes)
+		(in_pos_files no)
+		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "cb0e6873-4fcf-48d6-b47f-7a43a7923b83")
 		(property "Reference" "ENC1"
@@ -10169,7 +10202,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.adafruit.com/product/5001"
 			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -10180,7 +10213,40 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
+			(at 58.42 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Adafruit"
+			(at 58.42 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "5001"
+			(at 58.42 156.21 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "SKU" "5001"
 			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)

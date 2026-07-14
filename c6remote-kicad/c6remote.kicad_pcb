@@ -7474,7 +7474,7 @@
 				(pins "7" "3" "2" "9" "1" "8" "4" "6" "5")
 			)
 		)
-		(attr smd dnp)
+		(attr smd exclude_from_pos_files)
 		(duplicate_pad_numbers_are_jumpers no)
 		(pad "1" thru_hole roundrect
 			(at -2.142533 14.969532 90)

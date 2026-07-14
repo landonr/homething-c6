@@ -157,7 +157,6 @@ Prototype fab and assembly are ordered from PCBWay (order YT1753739, PCB plus SM
 
 | Date | Milestone |
 | --- | --- |
-| 2026-06-15 | PCBWay sponsorship requested for the prototype run; approved the next day |
 | 2026-06-16 | Quotation received for PCB and assembly, replied with updates |
 | 2026-06-17 | Updated quotation approved; assembly order passed review |
 | 2026-06-18 | Order confirmed, production queued |

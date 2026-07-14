@@ -199,6 +199,11 @@ render_3d() {
     --background transparent \
     --rotate "${rotate}"
 
+  # Trim transparent margins so README images align instead of floating in empty canvas
+  if command -v magick >/dev/null 2>&1; then
+    magick "${output_file}" -trim +repage "${output_file}"
+  fi
+
   echo "Wrote ${output_file}"
 }
 

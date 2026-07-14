@@ -8,75 +8,62 @@
 <h1 align="center">homeThing C6</h1>
 
 <p align="center">
-  <sub>Prototype and fab costs sponsored by <a href="https://pcbway.com/g/Xymq6O">PCBWay</a>. No soldering required, fully assembled by PCBWay.</sub>
-  <br>
-  <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
+  A handheld remote for TV, Sonos, Zigbee lights, and Home Assistant.<br>
+  Physical buttons, a rotary control, fast access, and long idle life — no touchscreen, no apps, no daily charging.
 </p>
-
-A handheld remote for TV, Sonos, zigbee lights, and Home Assistant. No touchscreen, no digging through apps, no device that has to live on a charger. Physical buttons, a rotary control, fast access, and long idle life.
-
-This repo is the hardware side of that project. The source of truth lives in `c6remote-kicad/`. Current design is a KiCad prototype built around a Seeed Studio XIAO ESP32-C6.
-
-## Learn More
 
 <p align="center">
   <a href="https://discord.gg/BX6ZtGKHTy"><img alt="Discord" src="https://img.shields.io/discord/1021434469917413498?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
   <a href="https://www.instagram.com/homething.io/"><img alt="Instagram" src="https://img.shields.io/badge/Instagram-%40homething.io-E4405F?style=for-the-badge&logo=instagram&logoColor=white"></a>
   <a href="https://homething.io/"><img alt="Website" src="https://img.shields.io/badge/Website-homething.io-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+  <a href="https://github.com/landonr/homeThing"><img alt="homeThing on GitHub" src="https://img.shields.io/github/stars/landonr/homeThing?style=for-the-badge&logo=github&logoColor=white&label=homeThing&color=181717"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/landonr/homeThing"><img alt="homeThing on GitHub" src="https://img.shields.io/github/stars/landonr/homeThing?style=for-the-badge&logo=github&logoColor=white&label=homeThing&color=181717"></a>
+  <sub>Prototype and fab costs sponsored by <a href="https://pcbway.com/g/Xymq6O">PCBWay</a> — boards arrive fully assembled, no soldering required.</sub>
   <br>
-  <sub>The project this remote grew out of</sub>
+  <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
 </p>
 
-## Raytraced Views
+This repo is the hardware side of the project: a KiCad prototype built around a Seeed Studio XIAO ESP32-C6. The source of truth lives in `c6remote-kicad/`. Firmware and runtime integrations are not in this repo yet.
 
-| View | Top | Bottom |
-| --- | --- | --- |
-| High 3D | ![High-quality rotated 3D top preview of current board prototype](docs/readme-assets/board-3d-rotated-top.png) | ![High-quality rotated 3D bottom preview of current board prototype](docs/readme-assets/board-3d-rotated-bottom.png) |
+| Top | Bottom |
+| :---: | :---: |
+| ![Raytraced 3D top view of the board](docs/readme-assets/board-3d-rotated-top.png) | ![Raytraced 3D bottom view of the board](docs/readme-assets/board-3d-rotated-bottom.png) |
 
-## Board Views
-
-| View | Top | Bottom |
-| --- | --- | --- |
-| Basic 3D | ![Basic 3D top preview of current board prototype](docs/readme-assets/board-3d-top.png) | ![Basic 3D bottom preview of current board prototype](docs/readme-assets/board-3d-bottom.png) |
-| Flat SVG | ![Flat top SVG preview of current board prototype](docs/readme-assets/board-flat-top.svg) | ![Flat bottom SVG preview of current board prototype](docs/readme-assets/board-flat-bottom.svg) |
-
-## Schematic
-
-![Current schematic preview](docs/readme-assets/schematic.svg)
-
-## What this remote is meant to do
+## Features
 
 - Control a TV with on-board IR receive and transmit hardware
 - Drive music playback over Wi-Fi and BLE
 - Switch lights over Zigbee, Thread, or Matter
 - Map Home Assistant actions to physical buttons instead of app screens
-- Last longer than the usual "charge it every week" gadget
+- Run for a long time between charges
 
-## Current hardware
+## Hardware
 
-Board in `c6remote-kicad/` currently includes:
+| Ref | Part | Role |
+| --- | --- | --- |
+| `U1` | [Seeed Studio XIAO ESP32-C6](https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066) | Main module — Wi-Fi, BLE, Zigbee/Thread |
+| `MK1` | [ICS-43434 I2S microphone](https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298) | Audio input |
+| `U2` | [TSOP4536 IR receiver](https://www.digikey.ca/en/products/detail/vishay-semiconductor-opto-division/TSOP4536/4695671) | IR receive |
+| `D1`, `Q1` | [IR204-A IR LED](https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/IR204-A/2675566) driven by [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) | IR transmit |
+| `U3` | [PCF8575DBR I2C GPIO expander](https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551) | Button input fan-out |
+| `SW1`–`SW11` | [TL3315NF160Q tactile switches](https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395) | Discrete buttons |
+| `ENC1` | [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001) | Scroll wheel — encoder channels plus five switch signals |
+| `D2` | [SK6812MINI addressable LED](https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107) | Status light |
 
-- [Seeed Studio XIAO ESP32-C6](https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066) (`U1`)
-- [ICS-43434 I2S microphone](https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298) (`MK1`)
-- [TSOP4536 IR receiver](https://www.digikey.ca/en/products/detail/vishay-semiconductor-opto-division/TSOP4536/4695671) (`U2`) and [IR204-A IR LED](https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/IR204-A/2675566) (`D1`) through [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) (`Q1`)
-- [PCF8575DBR I2C GPIO expander](https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551) (`U3`)
-- [TL3315NF160Q tactile switches](https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395) (`SW1` through `SW11`)
-- [Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder](https://www.adafruit.com/product/5001) (`ENC1`) with encoder channels and five switch signals
-- [Adafruit 2686 / SK6812 mini addressable status LED pack](https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107) (`D2`)
+The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
 
-In practice, that gives the board a lot of physical input options plus IR and wireless paths for mixed home gear.
+## Board views
 
-## BOM
+| View | Top | Bottom |
+| --- | --- | --- |
+| Basic 3D | ![Basic 3D top view](docs/readme-assets/board-3d-top.png) | ![Basic 3D bottom view](docs/readme-assets/board-3d-bottom.png) |
+| Flat SVG | ![Flat top SVG view](docs/readme-assets/board-flat-top.svg) | ![Flat bottom SVG view](docs/readme-assets/board-flat-bottom.svg) |
 
-Latest auto-generated BOM:
+## Schematic
 
-- CSV: [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv)
-
-This BOM tracks latest repo state and is not release-validated.
+![Current schematic](docs/readme-assets/schematic.svg)
 
 ## Repo layout
 
@@ -92,30 +79,24 @@ This BOM tracks latest repo state and is not release-validated.
 └── ano rotary.kicad_sym     Project-local schematic symbol library
 ```
 
-## Open project
+## Opening the project
 
-Open `c6remote-kicad/c6remote.kicad_pro` in KiCad.
-
-Project uses local custom footprints under `kicad lib/Library.pretty/`. KiCad needs that footprint library to resolve under nickname `Library`.
-
-## 3D models
-
-Project also uses local STEP models under `c6remote-kicad/3dmodels/` for 3D preview.
-
-3D model files in `c6remote-kicad/3dmodels/`:
-
-- `5221 ANO Rotary Encoder.step` — ANO rotary model source: [GrabCAD Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1)
-- `SW_SPST_PTS647Sx50_black.step` — local forked STEP model matching [C&K PTS647 series](https://www.ckswitches.com/products/switches/product-details/Tactile/PTS647/)
-- `Seeed Studio XIAO ESP32-C6.step` — XIAO model source: [GrabCAD XIAO ESP32-C6 3D model](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1)
+Open `c6remote-kicad/c6remote.kicad_pro` in KiCad. The board uses local custom footprints under `kicad lib/Library.pretty/`, which KiCad must resolve under the library nickname `Library`.
 
 Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
 
-- `ano rotary` — project-local custom rotary symbol (`ano rotary.kicad_sym`), sourced from [Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder](https://www.adafruit.com/product/5001)
-- `Seeed_Studio_XIAO_Series` — XIAO module symbols (`Seeed_Studio_XIAO_Series.kicad_sym`), sourced from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
+- `ano rotary` — project-local custom rotary symbol (`ano rotary.kicad_sym`) for the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001)
+- `Seeed_Studio_XIAO_Series` — XIAO module symbols from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
+
+STEP models for the 3D board view live in `c6remote-kicad/3dmodels/`:
+
+- `5221 ANO Rotary Encoder.step` — [GrabCAD Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1)
+- `SW_SPST_PTS647Sx50_black.step` — local fork matching the [C&K PTS647 series](https://www.ckswitches.com/products/switches/product-details/Tactile/PTS647/)
+- `Seeed Studio XIAO ESP32-C6.step` — [GrabCAD XIAO ESP32-C6 3D model](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1)
 
 ## KiCad MCP
 
-This repo is set up to use same KiCad MCP server with Codex, Claude Desktop, and GitHub Copilot / VS Code.
+The repo is set up to use the same KiCad MCP server with Codex, Claude Desktop, and GitHub Copilot / VS Code:
 
 - Codex workspace config: `.mcp.json`
 - VS Code / Copilot workspace config: `.vscode/mcp.json`
@@ -123,29 +104,28 @@ This repo is set up to use same KiCad MCP server with Codex, Claude Desktop, and
 
 Full setup notes live in [docs/mcp-setup.md](docs/mcp-setup.md).
 
-## Validation
+## Validation and fabrication
 
 Run from `c6remote-kicad/`:
 
 ```bash
+# Schematic ERC
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations
+
+# Board DRC
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --exit-code-violations
+
+# Full board DRC with schematic parity and zone refill
 /Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations
 ```
 
-To regenerate fabrication outputs:
+Regenerate all fabrication outputs (gerbers, drill, position file, BOM) into `export/`:
 
 ```bash
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export gerbers c6remote.kicad_pcb -o export --board-plot-params
+scripts/regen-fab.sh
 ```
 
-To regenerate BOM CSV:
-
-```bash
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch export bom --fields 'Reference,${QUANTITY},Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --labels 'Reference,Qty,Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --group-by 'Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU' --ref-delimiter ', ' --ref-range-delimiter '' -o export/c6remote-bom.csv c6remote.kicad_sch
-```
-
-To render reusable 2D board views:
+Render reusable 2D board views (default output: `c6remote-kicad/renders/<format>/`):
 
 ```bash
 ./scripts/render-2d.sh
@@ -153,34 +133,18 @@ To render reusable 2D board views:
 ./scripts/render-2d.sh --side bottom --format pdf
 ```
 
-Default output goes to `c6remote-kicad/renders/<format>/`.
-
-To regenerate README preview assets in one shot:
+Regenerate the README preview assets in `docs/readme-assets/`:
 
 ```bash
 ./scripts/render-readme-assets.sh
 ```
 
-Default output goes to `docs/readme-assets/`.
-Includes `board-3d-top.png`, `board-3d-bottom.png`, `board-flat-top.svg`, `board-flat-bottom.svg`, and `schematic.svg`.
+## Status
 
-## Current status
-
-- Prototype board, not finished remote
-- KiCad source of truth lives in `c6remote-kicad/`
-- Generated fabrication outputs live in `c6remote-kicad/export/`
-- Current baseline still has ERC and DRC warnings, but board has not been tested in a real order yet
+- Prototype board, not a finished remote
+- Current baseline still has ERC and DRC warnings; the board has not been tested in a real order yet
 - Firmware and runtime integrations are not in this repo yet
 
-## Why this lives separately from homeThing
+## Relationship to homeThing
 
-Original inspiration came from [homeThing](https://github.com/landonr/homeThing).
-
-This repo has a narrower job:
-
-- Less "general smart display"
-- More "grab remote, hit button, control house"
-- Custom PCB around ESP32-C6
-- Easier to own and iterate in KiCad
-
-If question is "why build this at all?", answer is still pretty straightforward: one remote for TV, music, lights, and Home Assistant, without a charger becoming part of the routine.
+This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a dedicated remote — grab it, hit a button, control the house — built on a custom ESP32-C6 PCB that is easy to own and iterate in KiCad.

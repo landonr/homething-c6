@@ -11547,7 +11547,7 @@
 				)
 			)
 		)
-		(property "Description" "Infrared LED , 3mm LED package"
+		(property "Description" "Infrared LED , 3mm LED package (BEND 90 deg toward top-edge notch = IR emitter aperture; hand-form leads)"
 			(at 161.29 38.1 0)
 			(hide yes)
 			(show_name no)

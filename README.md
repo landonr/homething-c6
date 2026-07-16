@@ -162,6 +162,9 @@ Prototype fab and assembly are ordered from PCBWay (order YT1753739, PCB plus SM
 | 2026-06-18 | Order confirmed, production queued |
 | 2026-07-10 | Component engineering questions received from PCBWay |
 | 2026-07-12 | Answers returned; PCBWay confirmed production is proceeding |
+| 2026-07-14 | Assembled sample board photos received; PCBWay asked to confirm D1/U2 orientation before completing solder |
+| 2026-07-15 | PCBWay adjusted D1 (90° lead bend firing through top-edge notch) and requested recheck |
+| 2026-07-16 | D1 and full board orientation confirmed correct; assembly proceeding |
 
 ## Relationship to homeThing
 

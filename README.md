@@ -48,7 +48,7 @@ This repo is the hardware side of the project: a KiCad prototype built around a 
 | `U1` | [Seeed Studio XIAO ESP32-C6](https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066) | Main module: Wi-Fi, BLE, Zigbee/Thread |
 | `MK1` | [ICS-43434 I2S microphone](https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298) | Audio input |
 | `U2` | [TSOP4136 IR receiver](https://www.vishay.com/docs/82460/tsop45.pdf) | IR receive |
-| `D1`, `Q1` | [INL-3AHIR30 IR LED](http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf) driven by [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) | IR transmit |
+| `D1`, `Q1` | [INL-3AHIR30 IR LED](http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf) driven by [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) | IR transmit; D1 leads hand-bent 90° to fire through the top-edge notch (see `BEND 90°` silk mark) |
 | `U3` | [PCF8575DBR I2C GPIO expander](https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551) | Button input fan-out |
 | `SW1`–`SW11` | [TL3315NF160Q tactile switches](https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395) | Discrete buttons |
 | `ENC1` | [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001) | Scroll wheel: encoder channels plus five switch signals |

@@ -4040,7 +4040,7 @@
 			(uuid "d99d80dd-8efb-4a21-ae7d-a5416f795bd3")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/LED_THT.3dshapes/LED_D3.0mm_IRBlack.step"
+		(model "${KICAD10_3DMODEL_DIR}/LED_THT.3dshapes/LED_D3.0mm_Horizontal_O1.27mm_Z2.0mm_IRBlack.step"
 			(offset
 				(xyz 0 0 0)
 			)

@@ -24,6 +24,18 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# Policy guard: never let a co-author / AI-attribution trailer enter the repo.
+# Scans staged *additions* across all files (AGENTS.md included). Matches real
+# trailer-shaped lines and known AI-bot emails, so prose documenting the rule
+# (e.g. "no Co-Authored-By trailers") does not trip it.
+ADDED="$(git diff --cached --unified=0 --no-color -- . ':(exclude)*.gbr' ':(exclude)*.drl' ':(exclude)scripts/hooks/*' | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+if grep -iqE '^\+[[:space:]]*co[- ]?authored[- ]?by:[[:space:]]*.+<[^>]*@' <<<"$ADDED" \
+	|| grep -iqE 'noreply@anthropic\.com|[0-9]+\+copilot@users\.noreply\.github\.com' <<<"$ADDED"; then
+	echo "[pre-commit] BLOCKED: a staged change adds a co-author / AI-attribution trailer" >&2
+	echo "[pre-commit] Repo forbids Co-Authored-By / Claude / Copilot attribution. Remove it, or use --no-verify." >&2
+	exit 1
+fi
+
 STAGED="$(git diff --cached --name-only)"
 SCH_STAGED=false
 PCB_STAGED=false

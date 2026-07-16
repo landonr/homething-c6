@@ -16,6 +16,7 @@ Boundaries: code/commits/PRs written normal.
 
 Repo notes:
 - No em dashes anywhere: docs, README, commit messages, comments, chat. Use period, colon, comma, or parentheses instead.
+- No co-author / AI-attribution trailers anywhere: commit messages, docs, this file. No `Co-Authored-By:`, no Claude/Copilot/Anthropic identities. Enforced by `scripts/hooks/commit-msg` (message) and `scripts/hooks/pre-commit` (staged content); install with `git config core.hooksPath scripts/hooks`.
 - KiCad source of truth: `c6remote-kicad/c6remote.kicad_pcb` and `c6remote-kicad/c6remote.kicad_sch`
 - For board validation, DRC/ERC, status, or "what's left" work, read `prototype-board-todo.md` first.
 - Prefer KiCad MCP over `kicad-cli` for board/schematic inspection, validation, and edits. Use CLI only as fallback when MCP lacks needed operation or fails.

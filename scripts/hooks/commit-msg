@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#
+# commit-msg hook: reject co-author / AI-attribution trailers.
+#
+# Repo policy forbids Co-Authored-By trailers (Claude, Copilot, or any) and any
+# AI-bot author identity in commit messages. A pre-commit hook cannot see the
+# message (it runs before the message is entered), so this check lives here.
+#
+# Install (once per clone):
+#   git config core.hooksPath scripts/hooks
+#
+# Bypass a single commit:
+#   git commit --no-verify
+#
+set -euo pipefail
+
+MSG_FILE="$1"
+
+# Drop git's comment lines before scanning.
+CONTENT="$(grep -vE '^[[:space:]]*#' "$MSG_FILE" || true)"
+
+fail() {
+	echo "[commit-msg] BLOCKED: $1" >&2
+	echo "[commit-msg] Repo policy forbids co-author / AI-attribution trailers." >&2
+	echo "[commit-msg] Remove the offending line, or use 'git commit --no-verify' if truly intended." >&2
+	exit 1
+}
+
+# 1. Any Co-Authored-By trailer (proper or malformed/embedded). The trailing
+#    colon keeps prose like "forbid Co-Authored-By trailers" from matching.
+if grep -iqE 'co[- ]?authored[- ]?by:' <<<"$CONTENT"; then
+	fail "commit message contains a Co-Authored-By trailer"
+fi
+
+# 2. Known AI-bot identities that show up as GitHub contributors.
+if grep -iqE 'noreply@anthropic\.com|[0-9]+\+copilot@users\.noreply\.github\.com' <<<"$CONTENT"; then
+	fail "commit message references an AI co-author identity (Claude / Copilot / Anthropic)"
+fi
+
+exit 0

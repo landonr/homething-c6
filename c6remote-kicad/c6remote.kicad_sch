@@ -4686,10 +4686,6 @@
 		(uuid "4f6d2777-e840-4ee6-b5db-5afda6db097b")
 	)
 	(no_connect
-		(at 31.75 93.98)
-		(uuid "50a3c51c-2b9e-405a-8600-b7ddb34b62ca")
-	)
-	(no_connect
 		(at 209.55 66.04)
 		(uuid "5eb2a8a9-6e7c-4db8-8538-b873f5b6a0cc")
 	)
@@ -5321,7 +5317,8 @@
 		)
 		(uuid "15363048-cb11-4f33-8257-9a63fc95cb5f")
 	)
-	(label "GND"
+	(global_label "GND"
+		(shape bidirectional)
 		(at 214.63 62.23 0)
 		(effects
 			(font
@@ -5341,7 +5338,8 @@
 		)
 		(uuid "328929c2-c85c-4525-839f-2219a9ef48bd")
 	)
-	(label "GND"
+	(global_label "GND"
+		(shape bidirectional)
 		(at 128.27 158.75 180)
 		(effects
 			(font
@@ -5361,7 +5359,8 @@
 		)
 		(uuid "53f746f3-3c3c-47aa-8d06-872b51673a90")
 	)
-	(label "GND"
+	(global_label "GND"
+		(shape bidirectional)
 		(at 236.22 88.9 0)
 		(effects
 			(font
@@ -5431,7 +5430,8 @@
 		)
 		(uuid "9eae8925-1e7b-4cf7-aea1-212e39978fc7")
 	)
-	(label "GND"
+	(global_label "GND"
+		(shape bidirectional)
 		(at 220.98 118.11 0)
 		(effects
 			(font

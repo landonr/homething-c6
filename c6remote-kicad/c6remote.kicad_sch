@@ -5307,7 +5307,8 @@
 		)
 		(uuid "fe14f347-dcb2-441b-9c39-b63a05b9c7b8")
 	)
-	(label "ano_enc2"
+	(global_label "ano_enc2"
+		(shape input)
 		(at 236.22 104.14 0)
 		(effects
 			(font
@@ -5328,7 +5329,8 @@
 		)
 		(uuid "26f089ce-a9fe-4ba4-9854-2e356654589b")
 	)
-	(label "IR REC"
+	(global_label "IR REC"
+		(shape input)
 		(at 182.88 107.95 0)
 		(effects
 			(font
@@ -5370,7 +5372,8 @@
 		)
 		(uuid "5bc86ea0-52b4-4875-b70a-02a43fa59756")
 	)
-	(label "sck"
+	(global_label "sck"
+		(shape input)
 		(at 182.88 92.71 0)
 		(effects
 			(font
@@ -5380,7 +5383,8 @@
 		)
 		(uuid "680e749a-d026-4846-a139-91716e3d626a")
 	)
-	(label "ano_enc1"
+	(global_label "ano_enc1"
+		(shape input)
 		(at 236.22 100.33 0)
 		(effects
 			(font
@@ -5390,7 +5394,8 @@
 		)
 		(uuid "6b64abcb-bfb1-4e18-9bb5-504304ebe6a3")
 	)
-	(label "sda"
+	(global_label "sda"
+		(shape input)
 		(at 182.88 100.33 0)
 		(effects
 			(font
@@ -5400,7 +5405,8 @@
 		)
 		(uuid "70dcac6a-56fd-41f5-b4df-01b71d72dca3")
 	)
-	(label "sd"
+	(global_label "sd"
+		(shape input)
 		(at 182.88 85.09 0)
 		(effects
 			(font
@@ -5420,7 +5426,8 @@
 		)
 		(uuid "91394653-29bf-4f99-800b-40c834424435")
 	)
-	(label "led_1"
+	(global_label "led_1"
+		(shape input)
 		(at 236.22 107.95 0)
 		(effects
 			(font
@@ -5441,7 +5448,8 @@
 		)
 		(uuid "b8c3ae58-210f-4936-8c85-93d51a918b53")
 	)
-	(label "ws"
+	(global_label "ws"
+		(shape input)
 		(at 182.88 96.52 0)
 		(effects
 			(font
@@ -5451,7 +5459,8 @@
 		)
 		(uuid "c3e44988-bd7e-4d25-b23e-8e6fbb091ad3")
 	)
-	(label "scl"
+	(global_label "scl"
+		(shape input)
 		(at 182.88 104.14 0)
 		(effects
 			(font
@@ -5461,7 +5470,8 @@
 		)
 		(uuid "c5f220df-8d64-4a8c-b961-71f6f138eafe")
 	)
-	(label "IR EMIT"
+	(global_label "IR EMIT"
+		(shape input)
 		(at 182.88 88.9 0)
 		(effects
 			(font

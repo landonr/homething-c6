@@ -10358,7 +10358,7 @@
 		(at 45.2 155.2)
 		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
 		(tags "test point THT pad rectangle square")
-		(property "Reference" "TP_VCC"
+		(property "Reference" "TP_VCC1"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
 			(hide yes)

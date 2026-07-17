@@ -5,6 +5,129 @@
 	(uuid "0cbb6fa3-42c1-48e5-afd9-e4923c6691f6")
 	(paper "A4")
 	(lib_symbols
+		(symbol "Connector:TestPoint"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0.762)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "TP"
+				(at 0 6.858 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "TestPoint"
+				(at 0 5.08 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 5.08 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 5.08 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "test point"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "test point tp"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "Pin* Test*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "TestPoint_0_1"
+				(circle
+					(center 0 3.302)
+					(radius 0.762)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "TestPoint_1_1"
+				(pin passive line
+					(at 0 0 90)
+					(length 2.54)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector_Generic:Conn_01x02"
 			(pin_names
 				(offset 1.016)
@@ -4020,129 +4143,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Connector:TestPoint"
-			(pin_numbers
-				(hide yes)
-			)
-			(pin_names
-				(offset 0.762)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(in_pos_files yes)
-			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "TP"
-				(at 0 6.858 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "TestPoint"
-				(at 0 5.08 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" ""
-				(at 5.08 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Datasheet" ""
-				(at 5.08 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "test point"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_keywords" "test point tp"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_fp_filters" "Pin* Test*"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(symbol "TestPoint_0_1"
-				(circle
-					(center 0 3.302)
-					(radius 0.762)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "TestPoint_1_1"
-				(pin passive line
-					(at 0 0 90)
-					(length 2.54)
-					(name "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "power:+3.3V"
 			(power global)
 			(pin_numbers
@@ -4840,16 +4840,6 @@
 		)
 		(uuid "06104dc2-7e3f-4be9-b803-fe00d5768304")
 	)
-	(wire
-		(pts
-			(xy 182.88 92.71) (xy 193.04 92.71)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0820afb1-29b5-4655-97e9-910dd79b1b74")
-	)
 	(polyline
 		(pts
 			(xy 11.43 137.16) (xy 285.75 137.16)
@@ -4869,16 +4859,6 @@
 			(type default)
 		)
 		(uuid "0f61eeeb-fe26-4aef-8a86-7eeeed60e196")
-	)
-	(wire
-		(pts
-			(xy 214.63 63.5) (xy 213.36 63.5)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "14f3e7a8-5014-4548-9723-91a13a213c0f")
 	)
 	(wire
 		(pts
@@ -4982,16 +4962,6 @@
 	)
 	(wire
 		(pts
-			(xy 219.71 60.96) (xy 219.71 62.23)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4a51ea82-8992-4a15-a2bd-c931c195c2cf")
-	)
-	(wire
-		(pts
 			(xy 201.93 62.23) (xy 201.93 66.04)
 		)
 		(stroke
@@ -5019,16 +4989,6 @@
 			(type default)
 		)
 		(uuid "58646126-f99d-42a4-b03e-a38817bc24e0")
-	)
-	(wire
-		(pts
-			(xy 182.88 96.52) (xy 193.04 96.52)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "59fd90e1-2453-43cf-a0cc-bc55f917d073")
 	)
 	(wire
 		(pts
@@ -5072,16 +5032,6 @@
 	)
 	(wire
 		(pts
-			(xy 182.88 104.14) (xy 193.04 104.14)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7f5e4437-6071-4ee6-a0aa-8efd7f6c5e93")
-	)
-	(wire
-		(pts
 			(xy 220.98 118.11) (xy 217.17 118.11)
 		)
 		(stroke
@@ -5099,16 +5049,6 @@
 			(type default)
 		)
 		(uuid "80039ec6-e91b-42ac-8b69-cf61eee45849")
-	)
-	(wire
-		(pts
-			(xy 228.6 66.04) (xy 228.6 64.77)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8a317bfb-9766-438a-b2e4-6a8f04793f23")
 	)
 	(polyline
 		(pts
@@ -5142,6 +5082,16 @@
 	)
 	(wire
 		(pts
+			(xy 182.88 104.14) (xy 193.04 104.14)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "96351f20-0bad-47e0-85a3-4393051b385c")
+	)
+	(wire
+		(pts
 			(xy 128.27 158.75) (xy 128.27 156.21)
 		)
 		(stroke
@@ -5162,7 +5112,7 @@
 	)
 	(wire
 		(pts
-			(xy 214.63 63.5) (xy 214.63 62.23)
+			(xy 213.36 59.69) (xy 213.36 66.04)
 		)
 		(stroke
 			(width 0)
@@ -5179,16 +5129,6 @@
 			(type default)
 		)
 		(uuid "9fd4d6f1-672e-401f-9a13-0f1cbf631dfb")
-	)
-	(wire
-		(pts
-			(xy 182.88 107.95) (xy 193.04 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a03bfde5-c4be-4cb0-9e1c-23f04720e33e")
 	)
 	(wire
 		(pts
@@ -5242,7 +5182,7 @@
 	)
 	(wire
 		(pts
-			(xy 219.71 62.23) (xy 217.17 62.23)
+			(xy 224.79 62.23) (xy 217.17 62.23)
 		)
 		(stroke
 			(width 0)
@@ -5312,36 +5252,6 @@
 	)
 	(wire
 		(pts
-			(xy 213.36 63.5) (xy 213.36 66.04)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d2a8df3c-7a29-4cc4-a775-cf236235cd29")
-	)
-	(wire
-		(pts
-			(xy 182.88 88.9) (xy 193.04 88.9)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d403f6c4-c7a3-4203-8f14-dcd9dafe903c")
-	)
-	(wire
-		(pts
-			(xy 182.88 85.09) (xy 193.04 85.09)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d480efdb-e1ca-41cb-a519-08812415ae10")
-	)
-	(wire
-		(pts
 			(xy 168.91 86.36) (xy 168.91 100.33)
 		)
 		(stroke
@@ -5362,7 +5272,7 @@
 	)
 	(wire
 		(pts
-			(xy 255.27 88.9) (xy 255.27 97.79)
+			(xy 146.05 181.61) (xy 137.16 181.61)
 		)
 		(stroke
 			(width 0)
@@ -5422,7 +5332,7 @@
 	)
 	(wire
 		(pts
-			(xy 255.27 78.74) (xy 255.27 81.28)
+			(xy 156.21 181.61) (xy 153.67 181.61)
 		)
 		(stroke
 			(width 0)
@@ -5430,114 +5340,15 @@
 		)
 		(uuid "fe14f347-dcb2-441b-9c39-b63a05b9c7b8")
 	)
-	(global_label "ano_enc2"
-		(shape input)
-		(at 236.22 104.14 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "15363048-cb11-4f33-8257-9a63fc95cb5f")
-	)
-	(global_label "GND"
-		(shape bidirectional)
-		(at 214.63 62.23 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "26f089ce-a9fe-4ba4-9854-2e356654589b")
-	)
-	(global_label "IR REC"
-		(shape input)
-		(at 182.88 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "328929c2-c85c-4525-839f-2219a9ef48bd")
-	)
-	(global_label "GND"
-		(shape bidirectional)
-		(at 128.27 158.75 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "51d5e005-48ba-4dc9-8b22-e95ba839d9e5")
-	)
 	(label "+3.3V"
-		(at 228.6 64.77 0)
+		(at 228.6 66.04 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "53f746f3-3c3c-47aa-8d06-872b51673a90")
-	)
-	(global_label "GND"
-		(shape bidirectional)
-		(at 236.22 88.9 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "5bc86ea0-52b4-4875-b70a-02a43fa59756")
-	)
-	(global_label "sck"
-		(shape input)
-		(at 182.88 92.71 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "680e749a-d026-4846-a139-91716e3d626a")
-	)
-	(global_label "ano_enc1"
-		(shape input)
-		(at 236.22 100.33 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "6b64abcb-bfb1-4e18-9bb5-504304ebe6a3")
-	)
-	(global_label "sda"
-		(shape input)
-		(at 182.88 100.33 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "70dcac6a-56fd-41f5-b4df-01b71d72dca3")
-	)
-	(global_label "sd"
-		(shape input)
-		(at 182.88 85.09 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "885bf95f-dd81-463d-9f9a-e73ae9fca4ed")
 	)
 	(label "+3.3V"
 		(at 236.22 92.71 0)
@@ -5545,64 +5356,9 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "91394653-29bf-4f99-800b-40c834424435")
-	)
-	(global_label "led_1"
-		(shape input)
-		(at 236.22 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "9eae8925-1e7b-4cf7-aea1-212e39978fc7")
-	)
-	(global_label "GND"
-		(shape bidirectional)
-		(at 220.98 118.11 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "b8c3ae58-210f-4936-8c85-93d51a918b53")
-	)
-	(global_label "ws"
-		(shape input)
-		(at 182.88 96.52 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "c3e44988-bd7e-4d25-b23e-8e6fbb091ad3")
-	)
-	(global_label "scl"
-		(shape input)
-		(at 182.88 104.14 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "c5f220df-8d64-4a8c-b961-71f6f138eafe")
-	)
-	(global_label "IR EMIT"
-		(shape input)
-		(at 182.88 88.9 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "ee94ddd2-37f1-4f49-aa08-46e817cbd0ec")
 	)
 	(global_label "sd"
 		(shape input)
@@ -5635,11 +5391,33 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify right)
 		)
 		(uuid "0fabab92-45bb-4c3f-8fbe-b509034ab2a9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 31.75 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "ano_enc2"
+		(shape input)
+		(at 236.22 104.14 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "15363048-cb11-4f33-8257-9a63fc95cb5f")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 236.22 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5700,16 +5478,38 @@
 	)
 	(global_label "bat_sense"
 		(shape bidirectional)
-		(at 219.71 60.96 0)
+		(at 224.79 62.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "20e3188f-6f1e-4b1d-aa47-69416c5e6851")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 219.71 60.96 90)
+			(at 224.79 62.23 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "GND"
+		(shape bidirectional)
+		(at 213.36 59.69 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "26f089ce-a9fe-4ba4-9854-2e356654589b")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 213.36 59.69 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5741,6 +5541,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "IR REC"
+		(shape input)
+		(at 193.04 107.95 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "328929c2-c85c-4525-839f-2219a9ef48bd")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 107.95 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -5840,6 +5662,28 @@
 			)
 		)
 	)
+	(global_label "GND"
+		(shape bidirectional)
+		(at 128.27 158.75 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "51d5e005-48ba-4dc9-8b22-e95ba839d9e5")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 128.27 158.75 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "ano_sw1"
 		(shape input)
 		(at 45.72 162.56 180)
@@ -5861,6 +5705,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "GND"
+		(shape bidirectional)
+		(at 236.22 88.9 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5bc86ea0-52b4-4875-b70a-02a43fa59756")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 236.22 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -5914,16 +5780,60 @@
 	)
 	(global_label "GND"
 		(shape bidirectional)
-		(at 255.27 105.41 270)
+		(at 129.54 181.61 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify right)
 		)
 		(uuid "63ce0365-bba8-4151-8d86-e1b868852fef")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 255.27 105.41 0)
+			(at 129.54 181.61 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "sck"
+		(shape input)
+		(at 193.04 92.71 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "680e749a-d026-4846-a139-91716e3d626a")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 92.71 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "ano_enc1"
+		(shape input)
+		(at 236.22 100.33 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "6b64abcb-bfb1-4e18-9bb5-504304ebe6a3")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 236.22 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5958,6 +5868,28 @@
 			)
 		)
 	)
+	(global_label "sda"
+		(shape input)
+		(at 193.04 100.33 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "70dcac6a-56fd-41f5-b4df-01b71d72dca3")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 100.33 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw9"
 		(shape input)
 		(at 52.07 96.52 0)
@@ -5984,16 +5916,16 @@
 	)
 	(global_label "bat_sense"
 		(shape bidirectional)
-		(at 255.27 92.71 0)
+		(at 142.24 181.61 90)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "7a92b4ee-ae80-4bc4-941c-4417acd4c0d1")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 255.27 92.71 0)
+			(at 142.24 181.61 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6011,7 +5943,7 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify right)
 		)
 		(uuid "7c44f486-7a9e-42bf-ac8e-61151bf3aec0")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
@@ -6028,16 +5960,16 @@
 	)
 	(global_label "BAT"
 		(shape bidirectional)
-		(at 255.27 78.74 90)
+		(at 156.21 181.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "7cd8ee95-4653-4f0f-b438-a01286c870cc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 255.27 78.74 0)
+			(at 156.21 181.61 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6072,6 +6004,28 @@
 			)
 		)
 	)
+	(global_label "sd"
+		(shape input)
+		(at 193.04 85.09 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "885bf95f-dd81-463d-9f9a-e73ae9fca4ed")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 85.09 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "IR REC"
 		(shape input)
 		(at 95.25 38.1 0)
@@ -6103,7 +6057,7 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "8ba9d8fd-33a4-4afc-9734-5cae57863186")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
@@ -6114,108 +6068,6 @@
 			(effects
 				(font
 					(size 1.27 1.27)
-				)
-			)
-		)
-	)
-	(global_label "VCC"
-		(shape bidirectional)
-		(at 259.08 82.55 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e2d75123-4788-4af7-8cd5-f74ab99cb5fd")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 259.08 82.55 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 259.08 82.55 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files no)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "60050373-eea9-4a62-ba42-6dc8ba4310f0")
-		(property "Reference" "TP_VCC"
-			(at 261.62 81.28 0)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
-			(at 261.62 83.82 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Local:TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
-			(at 259.08 82.55 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 259.08 82.55 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 259.08 82.55 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "928e840e-4e0b-4782-a6d4-cca746004cf5")
-		)
-		(instances
-			(project "c6remote"
-				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "TP_VCC")
-					(unit 1)
 				)
 			)
 		)
@@ -6436,6 +6288,28 @@
 			)
 		)
 	)
+	(global_label "led_1"
+		(shape input)
+		(at 236.22 107.95 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "9eae8925-1e7b-4cf7-aea1-212e39978fc7")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 236.22 107.95 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sck"
 		(shape input)
 		(at 27.94 40.64 180)
@@ -6580,6 +6454,28 @@
 			)
 		)
 	)
+	(global_label "GND"
+		(shape bidirectional)
+		(at 220.98 118.11 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "b8c3ae58-210f-4936-8c85-93d51a918b53")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 220.98 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw4"
 		(shape input)
 		(at 130.81 68.58 180)
@@ -6676,6 +6572,28 @@
 			)
 		)
 	)
+	(global_label "ws"
+		(shape input)
+		(at 193.04 96.52 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c3e44988-bd7e-4d25-b23e-8e6fbb091ad3")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 96.52 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "exp_int"
 		(shape bidirectional)
 		(at 201.93 62.23 0)
@@ -6683,11 +6601,33 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "c43c3173-68b3-46c3-a9aa-27cb6cdcecec")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 201.93 62.23 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "scl"
+		(shape input)
+		(at 193.04 104.14 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c5f220df-8d64-4a8c-b961-71f6f138eafe")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 104.14 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6777,7 +6717,7 @@
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
 		(uuid "dd262886-acca-41a6-ba38-333a35c581f9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
@@ -6789,6 +6729,30 @@
 				(font
 					(size 1.27 1.27)
 				)
+			)
+		)
+	)
+	(global_label "VCC"
+		(shape bidirectional)
+		(at 240.03 72.39 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "e2d75123-4788-4af7-8cd5-f74ab99cb5fd")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 240.03 80.1151 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -6837,6 +6801,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "IR EMIT"
+		(shape input)
+		(at 193.04 88.9 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ee94ddd2-37f1-4f49-aa08-46e817cbd0ec")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 88.9 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -6979,12 +6965,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "a29e64d6-a4d5-46bf-9607-9961ca012a97")
-		)
-		(pin "1"
-			(uuid "a3932c4c-db87-466b-8b53-dfd5730f7d8c")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -7028,6 +7008,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "a29e64d6-a4d5-46bf-9607-9961ca012a97")
+		)
+		(pin "1"
+			(uuid "a3932c4c-db87-466b-8b53-dfd5730f7d8c")
 		)
 		(instances
 			(project "c6remote"
@@ -7171,6 +7157,7 @@
 		)
 		(property "Description" "Resistor: 4.7k 1% 0.1W 0603 (I2C SDA/SCL pull-up)"
 			(at 179.07 104.14 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7178,12 +7165,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "1"
-			(uuid "81592a89-fae8-4d06-82e2-e9dddb473826")
-		)
-		(pin "2"
-			(uuid "adeecc40-9951-4755-a51e-13c49f1bbed7")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-074K7L/727212"
 			(at 0 0 0)
@@ -7228,6 +7209,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "1"
+			(uuid "81592a89-fae8-4d06-82e2-e9dddb473826")
+		)
+		(pin "2"
+			(uuid "adeecc40-9951-4755-a51e-13c49f1bbed7")
 		)
 		(instances
 			(project "c6remote"
@@ -7305,12 +7292,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "fb2aedc9-9bd6-4f75-a47f-5034a8603d73")
-		)
-		(pin "1"
-			(uuid "0a216ca0-9227-4ec1-8edf-2eecd7690a6a")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -7354,6 +7335,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "fb2aedc9-9bd6-4f75-a47f-5034a8603d73")
+		)
+		(pin "1"
+			(uuid "0a216ca0-9227-4ec1-8edf-2eecd7690a6a")
 		)
 		(instances
 			(project "c6remote"
@@ -7445,7 +7432,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 255.27 101.6 0)
+		(at 133.35 181.61 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7455,7 +7442,7 @@
 		(dnp no)
 		(uuid "106e0f11-4f74-47c2-9753-219d34b5cb12")
 		(property "Reference" "R8"
-			(at 258.826 100.584 0)
+			(at 134.366 185.166 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7465,7 +7452,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 259.842 102.616 0)
+			(at 132.334 186.182 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7475,7 +7462,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 255.27 101.6 0)
+			(at 133.35 181.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7486,7 +7473,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 255.27 101.6 0)
+			(at 133.35 181.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7497,7 +7484,52 @@
 			)
 		)
 		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
-			(at 255.27 101.6 0)
+			(at 133.35 181.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 234.95 -73.66 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7511,50 +7543,6 @@
 		)
 		(pin "2"
 			(uuid "eed93ae4-8bda-4fb8-b979-2398430812e4")
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "RC0603FR-07100KL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Yageo"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
 		)
 		(instances
 			(project "c6remote"
@@ -7632,12 +7620,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "aebbc034-390b-4009-bf90-f63079c8549c")
-		)
-		(pin "1"
-			(uuid "be7f2dd2-c624-448e-a44e-a362058bf1a8")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -7681,6 +7663,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "aebbc034-390b-4009-bf90-f63079c8549c")
+		)
+		(pin "1"
+			(uuid "be7f2dd2-c624-448e-a44e-a362058bf1a8")
 		)
 		(instances
 			(project "c6remote"
@@ -7979,6 +7967,7 @@
 		)
 		(property "Description" "Capacitor: 100nF 50V X7R 0603 (U2 TSOP Vs filter)"
 			(at 113.03 38.1 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7986,12 +7975,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "1"
-			(uuid "ec6fb887-43a2-4324-ad9a-ceb787b493f5")
-		)
-		(pin "2"
-			(uuid "875982da-09e8-420c-98cc-aeb93cd2e895")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0603KRX7R9BB104/2103082"
 			(at 0 0 0)
@@ -8036,6 +8019,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "1"
+			(uuid "ec6fb887-43a2-4324-ad9a-ceb787b493f5")
+		)
+		(pin "2"
+			(uuid "875982da-09e8-420c-98cc-aeb93cd2e895")
 		)
 		(instances
 			(project "c6remote"
@@ -8101,6 +8090,7 @@
 		)
 		(property "Description" "Resistor: 4.7k 1% 0.1W 0603 (I2C SDA/SCL pull-up)"
 			(at 172.72 100.33 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8108,12 +8098,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "1"
-			(uuid "f7d772ab-a5b9-44b2-9de6-b24a38b1abd0")
-		)
-		(pin "2"
-			(uuid "136df7ab-aa66-4a34-b465-9a57e17a639f")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-074K7L/727212"
 			(at 0 0 0)
@@ -8159,6 +8143,12 @@
 				)
 			)
 		)
+		(pin "1"
+			(uuid "f7d772ab-a5b9-44b2-9de6-b24a38b1abd0")
+		)
+		(pin "2"
+			(uuid "136df7ab-aa66-4a34-b465-9a57e17a639f")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -8170,7 +8160,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 255.27 85.09 0)
+		(at 149.86 181.61 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8180,7 +8170,7 @@
 		(dnp no)
 		(uuid "3665dbb4-8771-44e9-89db-a651aec3a673")
 		(property "Reference" "R7"
-			(at 258.572 84.074 0)
+			(at 150.876 184.912 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8190,7 +8180,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 259.588 86.106 0)
+			(at 148.844 185.928 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8200,7 +8190,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 255.27 85.09 0)
+			(at 149.86 181.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8211,7 +8201,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 255.27 85.09 0)
+			(at 149.86 181.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8222,7 +8212,52 @@
 			)
 		)
 		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
-			(at 255.27 85.09 0)
+			(at 149.86 181.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 234.95 -73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 234.95 -73.66 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8236,50 +8271,6 @@
 		)
 		(pin "2"
 			(uuid "bd70cd5c-2ef8-437a-945a-b15498eb2273")
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "RC0603FR-07100KL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Yageo"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
 		)
 		(instances
 			(project "c6remote"
@@ -8515,12 +8506,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "251bfd74-008b-4b8f-a9dc-5db41b99d1e6")
-		)
-		(pin "1"
-			(uuid "91fdaac0-b8ed-44ae-9deb-b562d500454a")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -8564,6 +8549,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "251bfd74-008b-4b8f-a9dc-5db41b99d1e6")
+		)
+		(pin "1"
+			(uuid "91fdaac0-b8ed-44ae-9deb-b562d500454a")
 		)
 		(instances
 			(project "c6remote"
@@ -8797,18 +8788,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "1144c98b-42f6-4dd3-be06-375b459f6d0b")
-		)
-		(pin "1"
-			(uuid "19d82fe3-de04-446d-9be2-afb2b311ab7d")
-		)
-		(pin "3"
-			(uuid "55abdf9e-4a5b-4994-8309-6978f2658f7d")
-		)
-		(pin "4"
-			(uuid "8bffaf59-dc97-4083-9e5e-b4db0f979b85")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4960/14302512"
 			(at 0 0 0)
 			(hide yes)
@@ -8863,6 +8842,18 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "1144c98b-42f6-4dd3-be06-375b459f6d0b")
+		)
+		(pin "1"
+			(uuid "19d82fe3-de04-446d-9be2-afb2b311ab7d")
+		)
+		(pin "3"
+			(uuid "55abdf9e-4a5b-4994-8309-6978f2658f7d")
+		)
+		(pin "4"
+			(uuid "8bffaf59-dc97-4083-9e5e-b4db0f979b85")
 		)
 		(instances
 			(project "c6remote"
@@ -8928,6 +8919,7 @@
 		)
 		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
 			(at 195.58 62.23 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8935,12 +8927,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "1"
-			(uuid "a9cedfe1-8e3d-4a9a-8f61-5e3c4d07acaa")
-		)
-		(pin "2"
-			(uuid "baf14391-d60d-493e-a4bd-4421cddb60d1")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
 			(at 0 0 0)
@@ -8986,10 +8972,96 @@
 				)
 			)
 		)
+		(pin "1"
+			(uuid "a9cedfe1-8e3d-4a9a-8f61-5e3c4d07acaa")
+		)
+		(pin "2"
+			(uuid "baf14391-d60d-493e-a4bd-4421cddb60d1")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "R9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 240.03 72.39 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "60050373-eea9-4a62-ba42-6dc8ba4310f0")
+		(property "Reference" "TP_VCC1"
+			(at 242.57 71.12 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
+			(at 242.57 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Local:TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
+			(at 240.03 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 240.03 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 240.03 72.39 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "928e840e-4e0b-4782-a6d4-cca746004cf5")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP_VCC1")
 					(unit 1)
 				)
 			)
@@ -9206,6 +9278,7 @@
 		)
 		(property "Description" "Resistor: 22R 1% 0.1W 0603 (D1 IR LED current limit)"
 			(at 166.37 30.48 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9213,12 +9286,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "2"
-			(uuid "606bfa61-9ec7-4b3d-a4c1-028671cffe45")
-		)
-		(pin "1"
-			(uuid "91a9d581-8b06-402a-a712-7b833aaec571")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-0722RL/727055"
 			(at 0 0 0)
@@ -9263,6 +9330,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "606bfa61-9ec7-4b3d-a4c1-028671cffe45")
+		)
+		(pin "1"
+			(uuid "91a9d581-8b06-402a-a712-7b833aaec571")
 		)
 		(instances
 			(project "c6remote"
@@ -9337,12 +9410,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "a9d3fc11-f83a-42e9-9fed-917fa050dda9")
-		)
-		(pin "1"
-			(uuid "505dba2a-f5fe-4cbd-a6fb-6d781af1b38a")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
 			(at 0 0 0)
 			(hide yes)
@@ -9386,6 +9453,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "a9d3fc11-f83a-42e9-9fed-917fa050dda9")
+		)
+		(pin "1"
+			(uuid "505dba2a-f5fe-4cbd-a6fb-6d781af1b38a")
 		)
 		(instances
 			(project "c6remote"
@@ -9931,12 +10004,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "5d05e552-527b-4837-a707-85fa6fe590fe")
-		)
-		(pin "1"
-			(uuid "be2138c0-a6e6-46bc-b267-f75a0f01821c")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -9980,6 +10047,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "5d05e552-527b-4837-a707-85fa6fe590fe")
+		)
+		(pin "1"
+			(uuid "be2138c0-a6e6-46bc-b267-f75a0f01821c")
 		)
 		(instances
 			(project "c6remote"
@@ -10057,12 +10130,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "9bd90b44-f7eb-4d2d-8969-bbc99b8509ae")
-		)
-		(pin "1"
-			(uuid "c9c37857-52b2-45da-9ffe-6d8867b3facb")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -10106,6 +10173,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "9bd90b44-f7eb-4d2d-8969-bbc99b8509ae")
+		)
+		(pin "1"
+			(uuid "c9c37857-52b2-45da-9ffe-6d8867b3facb")
 		)
 		(instances
 			(project "c6remote"
@@ -10183,12 +10256,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "72bcd5dd-9c47-4f04-bd16-917a4dce1a71")
-		)
-		(pin "1"
-			(uuid "d33a488b-4be0-4e98-a9d1-5b8acceda2e5")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -10232,6 +10299,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "72bcd5dd-9c47-4f04-bd16-917a4dce1a71")
+		)
+		(pin "1"
+			(uuid "d33a488b-4be0-4e98-a9d1-5b8acceda2e5")
 		)
 		(instances
 			(project "c6remote"
@@ -10309,12 +10382,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "48bc7920-ecac-4b8a-840c-65b7c28770b0")
-		)
-		(pin "1"
-			(uuid "bef61d3e-bbc7-48db-be1e-0d9d9dd50101")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -10358,6 +10425,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "48bc7920-ecac-4b8a-840c-65b7c28770b0")
+		)
+		(pin "1"
+			(uuid "bef61d3e-bbc7-48db-be1e-0d9d9dd50101")
 		)
 		(instances
 			(project "c6remote"
@@ -10591,15 +10664,6 @@
 				)
 			)
 		)
-		(pin "1"
-			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
-		)
-		(pin "3"
-			(uuid "c34109cc-de18-4942-a164-2b7e5c5c6d7e")
-		)
-		(pin "2"
-			(uuid "d233b8d8-8cfc-4774-904e-127d6cf21564")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/vishay-semiconductor-opto-division/TSOP4136/4074522"
 			(at 0 0 0)
 			(hide yes)
@@ -10643,6 +10707,15 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "1"
+			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
+		)
+		(pin "3"
+			(uuid "c34109cc-de18-4942-a164-2b7e5c5c6d7e")
+		)
+		(pin "2"
+			(uuid "d233b8d8-8cfc-4774-904e-127d6cf21564")
 		)
 		(instances
 			(project "c6remote"
@@ -10783,6 +10856,7 @@
 		)
 		(property "Description" "Resistor: 100R 1% 0.1W 0603 (U2 TSOP Vs filter)"
 			(at 95.25 27.94 0)
+			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10790,12 +10864,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "2"
-			(uuid "3ec52ebb-b477-47da-8a99-cf85437474fa")
-		)
-		(pin "1"
-			(uuid "245e2fde-d04a-407e-a68e-3c69fd85eb9b")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100RL/726888"
 			(at 0 0 0)
@@ -10840,6 +10908,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "3ec52ebb-b477-47da-8a99-cf85437474fa")
+		)
+		(pin "1"
+			(uuid "245e2fde-d04a-407e-a68e-3c69fd85eb9b")
 		)
 		(instances
 			(project "c6remote"
@@ -10917,12 +10991,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "6c2460cd-ef57-426d-aa1a-a58439e8d09f")
-		)
-		(pin "1"
-			(uuid "c340b9b8-6229-44ea-8423-760788438512")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -10966,6 +11034,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "6c2460cd-ef57-426d-aa1a-a58439e8d09f")
+		)
+		(pin "1"
+			(uuid "c340b9b8-6229-44ea-8423-760788438512")
 		)
 		(instances
 			(project "c6remote"
@@ -11043,12 +11117,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "ee45faac-808d-4597-9b38-5996f5639cbf")
-		)
-		(pin "1"
-			(uuid "18cae116-be4c-4c14-9f56-7ed9123d0f3e")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
 			(at 0 0 0)
 			(hide yes)
@@ -11092,6 +11160,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "ee45faac-808d-4597-9b38-5996f5639cbf")
+		)
+		(pin "1"
+			(uuid "18cae116-be4c-4c14-9f56-7ed9123d0f3e")
 		)
 		(instances
 			(project "c6remote"
@@ -11248,6 +11322,50 @@
 				)
 			)
 		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Texas-Instruments/PCF8575DBR"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "PCF8575DBR"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Texas Instruments"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "1"
 			(uuid "0724da5b-16a9-4e56-882b-5a3b72e66fb1")
 		)
@@ -11319,50 +11437,6 @@
 		)
 		(pin "5"
 			(uuid "e980e63d-15fd-415f-8b04-88cfab19f868")
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/Texas-Instruments/PCF8575DBR"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "PCF8575DBR"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Texas Instruments"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
 		)
 		(instances
 			(project "c6remote"
@@ -11471,33 +11545,6 @@
 				)
 			)
 		)
-		(pin "4"
-			(uuid "c2ba019c-52ab-4cbb-a8ee-706f5c9101fa")
-		)
-		(pin "2"
-			(uuid "690981a5-6693-4c70-a638-3cd3c682d636")
-		)
-		(pin "3"
-			(uuid "0fe8b785-eec3-46fb-bb65-d358145216d8")
-		)
-		(pin "6"
-			(uuid "fda4ec56-8313-44a2-b75b-2263b59e988e")
-		)
-		(pin "7"
-			(uuid "b075785e-fa86-4f60-98e4-c9574d149e9d")
-		)
-		(pin "8"
-			(uuid "3857add2-7680-4d70-9ade-fd6458ce9425")
-		)
-		(pin "1"
-			(uuid "5ae1f679-4eac-44a5-b8af-c8e3d905b149")
-		)
-		(pin "5"
-			(uuid "d711a3b6-abf2-4076-b7c5-92d4436c0df0")
-		)
-		(pin "9"
-			(uuid "3b2eae6e-68e3-4254-8b2c-3829fefd57ed")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/5001/15277532"
 			(at 0 0 0)
 			(hide yes)
@@ -11530,6 +11577,33 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "4"
+			(uuid "c2ba019c-52ab-4cbb-a8ee-706f5c9101fa")
+		)
+		(pin "2"
+			(uuid "690981a5-6693-4c70-a638-3cd3c682d636")
+		)
+		(pin "3"
+			(uuid "0fe8b785-eec3-46fb-bb65-d358145216d8")
+		)
+		(pin "6"
+			(uuid "fda4ec56-8313-44a2-b75b-2263b59e988e")
+		)
+		(pin "7"
+			(uuid "b075785e-fa86-4f60-98e4-c9574d149e9d")
+		)
+		(pin "8"
+			(uuid "3857add2-7680-4d70-9ade-fd6458ce9425")
+		)
+		(pin "1"
+			(uuid "5ae1f679-4eac-44a5-b8af-c8e3d905b149")
+		)
+		(pin "5"
+			(uuid "d711a3b6-abf2-4076-b7c5-92d4436c0df0")
+		)
+		(pin "9"
+			(uuid "3b2eae6e-68e3-4254-8b2c-3829fefd57ed")
 		)
 		(instances
 			(project "c6remote"
@@ -11691,6 +11765,28 @@
 				)
 			)
 		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991254/24613066"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Seeed-Studio/113991254"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "5"
 			(uuid "4b0835f8-f8e4-4127-8ab4-2353e62385ca")
 		)
@@ -11762,28 +11858,6 @@
 		)
 		(pin "33"
 			(uuid "111faebf-99de-4fd0-a64e-b807d81a7239")
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991254/24613066"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/Seeed-Studio/113991254"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
 		)
 		(instances
 			(project "c6remote"
@@ -11939,12 +12013,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "a24fb66b-70bf-4392-8600-487baf6d9a4a")
-		)
-		(pin "1"
-			(uuid "e7be65e7-a7d6-4613-9aa2-807f410d8ebf")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07330RL/727162"
 			(at 0 0 0)
 			(hide yes)
@@ -11988,6 +12056,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "a24fb66b-70bf-4392-8600-487baf6d9a4a")
+		)
+		(pin "1"
+			(uuid "e7be65e7-a7d6-4613-9aa2-807f410d8ebf")
 		)
 		(instances
 			(project "c6remote"
@@ -12377,15 +12451,6 @@
 				)
 			)
 		)
-		(pin "1"
-			(uuid "69fa5cd8-9483-4429-bf6a-dbdf83f77c5e")
-		)
-		(pin "2"
-			(uuid "b5756faa-1038-4ef6-9416-112c9a76073e")
-		)
-		(pin "3"
-			(uuid "30fcb574-63a3-4607-af9e-e6d99cf3a9c2")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598"
 			(at 0 0 0)
 			(hide yes)
@@ -12429,6 +12494,15 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "1"
+			(uuid "69fa5cd8-9483-4429-bf6a-dbdf83f77c5e")
+		)
+		(pin "2"
+			(uuid "b5756faa-1038-4ef6-9416-112c9a76073e")
+		)
+		(pin "3"
+			(uuid "30fcb574-63a3-4607-af9e-e6d99cf3a9c2")
 		)
 		(instances
 			(project "c6remote"
@@ -12660,12 +12734,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "41f7db0f-a071-4d47-99a9-99e0b37432b1")
-		)
-		(pin "1"
-			(uuid "12d88b60-45f1-448f-b795-f0c5c1764525")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -12709,6 +12777,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "41f7db0f-a071-4d47-99a9-99e0b37432b1")
+		)
+		(pin "1"
+			(uuid "12d88b60-45f1-448f-b795-f0c5c1764525")
 		)
 		(instances
 			(project "c6remote"
@@ -12785,24 +12859,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "000a8980-695a-4ade-b9a4-7507c1baf3c8")
-		)
-		(pin "5"
-			(uuid "7c70a185-a529-4f5f-a2c2-03818be2a767")
-		)
-		(pin "3"
-			(uuid "08cf7097-25a8-46e6-b554-ee0d937a8b4e")
-		)
-		(pin "4"
-			(uuid "0657e64a-d448-4980-99fe-c4094f71bfd8")
-		)
-		(pin "1"
-			(uuid "c2e25afd-0d4e-4211-bc47-555645a512d5")
-		)
-		(pin "6"
-			(uuid "7b0fa097-80cf-4c49-acb2-4bdab1172679")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/tdk-invensense/ICS-43434/6140298"
 			(at 0 0 0)
 			(hide yes)
@@ -12846,6 +12902,24 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "000a8980-695a-4ade-b9a4-7507c1baf3c8")
+		)
+		(pin "5"
+			(uuid "7c70a185-a529-4f5f-a2c2-03818be2a767")
+		)
+		(pin "3"
+			(uuid "08cf7097-25a8-46e6-b554-ee0d937a8b4e")
+		)
+		(pin "4"
+			(uuid "0657e64a-d448-4980-99fe-c4094f71bfd8")
+		)
+		(pin "1"
+			(uuid "c2e25afd-0d4e-4211-bc47-555645a512d5")
+		)
+		(pin "6"
+			(uuid "7b0fa097-80cf-4c49-acb2-4bdab1172679")
 		)
 		(instances
 			(project "c6remote"
@@ -12923,12 +12997,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "7361d0c9-bf23-4fac-b92f-860a7d122bb2")
-		)
-		(pin "1"
-			(uuid "9c3cb6df-93de-4a2e-8126-138797558368")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
 			(at 0 0 0)
 			(hide yes)
@@ -12973,6 +13041,12 @@
 				)
 			)
 		)
+		(pin "2"
+			(uuid "7361d0c9-bf23-4fac-b92f-860a7d122bb2")
+		)
+		(pin "1"
+			(uuid "9c3cb6df-93de-4a2e-8126-138797558368")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -12992,10 +13066,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "e48259d9-a3e1-41df-9491-ec26dbdd3551")
 		(property "Reference" "D1"
-			(at 160.147 30.48 0)
+			(at 160.528 33.528 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13005,7 +13078,7 @@
 			)
 		)
 		(property "Value" "INL-3AHIR30"
-			(at 160.147 33.02 0)
+			(at 160.274 41.402 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13046,12 +13119,6 @@
 					(size 1.27 1.27)
 				)
 			)
-		)
-		(pin "2"
-			(uuid "7c7729af-b89f-46c8-aab2-54b13134bd5c")
-		)
-		(pin "1"
-			(uuid "b4ed92df-17fc-4802-81da-6ebf89b5f143")
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/inolux/INL-3AHIR30/10384806"
 			(at 0 0 0)
@@ -13096,6 +13163,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "7c7729af-b89f-46c8-aab2-54b13134bd5c")
+		)
+		(pin "1"
+			(uuid "b4ed92df-17fc-4802-81da-6ebf89b5f143")
 		)
 		(instances
 			(project "c6remote"
@@ -13239,7 +13312,7 @@
 			)
 		)
 		(property "Description" "Connector: battery, JST PH 2-pos SMD right-angle 2.0mm"
-			(at 133.35 146.558 0)
+			(at 146.812 143.002 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13270,12 +13343,6 @@
 				)
 			)
 		)
-		(pin "1"
-			(uuid "b0633f67-183c-4e1b-bfff-342557148568")
-		)
-		(pin "2"
-			(uuid "bc304fb1-8ca6-4202-a8ed-32d13a5b2e66")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/jst-sales-america-inc/S2B-PH-SM4-TB-LF-SN/926655"
 			(at 0 0 0)
 			(hide yes)
@@ -13297,6 +13364,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "1"
+			(uuid "b0633f67-183c-4e1b-bfff-342557148568")
+		)
+		(pin "2"
+			(uuid "bc304fb1-8ca6-4202-a8ed-32d13a5b2e66")
 		)
 		(instances
 			(project "c6remote"
@@ -13527,12 +13600,6 @@
 				)
 			)
 		)
-		(pin "2"
-			(uuid "9b1d933c-d356-4311-b111-c3786ac462ad")
-		)
-		(pin "1"
-			(uuid "c8fa4365-f58b-4379-b83e-972654da0aba")
-		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07470RL/727256"
 			(at 0 0 0)
 			(hide yes)
@@ -13576,6 +13643,12 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "9b1d933c-d356-4311-b111-c3786ac462ad")
+		)
+		(pin "1"
+			(uuid "c8fa4365-f58b-4379-b83e-972654da0aba")
 		)
 		(instances
 			(project "c6remote"

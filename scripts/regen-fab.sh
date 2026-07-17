@@ -39,8 +39,8 @@ echo "==> Pick-and-place (position)"
 
 echo "==> BOM"
 "$KICAD_CLI" sch export bom "$SCH" -o "$OUT/c6remote-bom.csv" \
-	--fields "Reference,QUANTITY,Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU" \
-	--labels "Reference,Qty,Value,Footprint,Datasheet,Description,Manufacturer,MPN,SKU" \
+	--fields "Reference,QUANTITY,Value,Footprint,Datasheet,Description,Manufacturer,MPN,Digikey,Mouser,Adafruit" \
+	--labels "Reference,Qty,Value,Footprint,Datasheet,Description,Manufacturer,MPN,Digikey,Mouser,Adafruit" \
 	--group-by "Value,Footprint" \
 	--ref-delimiter ", " --ref-range-delimiter ""
 

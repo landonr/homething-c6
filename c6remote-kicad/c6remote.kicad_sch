@@ -6733,7 +6733,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 92.71 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -6749,6 +6749,50 @@
 		)
 		(pin "1"
 			(uuid "a3932c4c-db87-466b-8b53-dfd5730f7d8c")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -6890,7 +6934,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 4.7k 1% 0.1W 0603 (I2C SDA/SCL pull-up)"
 			(at 179.07 104.14 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6905,6 +6949,50 @@
 		)
 		(pin "2"
 			(uuid "adeecc40-9951-4755-a51e-13c49f1bbed7")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-074K7L/727212"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-074K7L"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-074K7L"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -6971,7 +7059,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 73.66 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -6987,6 +7075,50 @@
 		)
 		(pin "1"
 			(uuid "0a216ca0-9227-4ec1-8edf-2eecd7690a6a")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7129,7 +7261,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
 			(at 255.27 101.6 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7144,6 +7276,50 @@
 		)
 		(pin "2"
 			(uuid "eed93ae4-8bda-4fb8-b979-2398430812e4")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7210,7 +7386,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 130.81 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -7226,6 +7402,50 @@
 		)
 		(pin "1"
 			(uuid "be7f2dd2-c624-448e-a44e-a362058bf1a8")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7522,7 +7742,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Capacitor: 100nF 50V X7R 0603 (U2 TSOP Vs filter)"
 			(at 113.03 38.1 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7537,6 +7757,50 @@
 		)
 		(pin "2"
 			(uuid "875982da-09e8-420c-98cc-aeb93cd2e895")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0603KRX7R9BB104/2103082"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0603KRX7R9BB104"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "CC0603KRX7R9BB104"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7600,7 +7864,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 4.7k 1% 0.1W 0603 (I2C SDA/SCL pull-up)"
 			(at 172.72 100.33 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7615,6 +7879,50 @@
 		)
 		(pin "2"
 			(uuid "136df7ab-aa66-4a34-b465-9a57e17a639f")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-074K7L/727212"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-074K7L"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-074K7L"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7678,7 +7986,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
 			(at 255.27 85.09 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7693,6 +8001,50 @@
 		)
 		(pin "2"
 			(uuid "bd70cd5c-2ef8-437a-945a-b15498eb2273")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -7917,7 +8269,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 111.76 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7933,6 +8285,50 @@
 		)
 		(pin "1"
 			(uuid "91fdaac0-b8ed-44ae-9deb-b562d500454a")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -8155,7 +8551,7 @@
 				(justify left top)
 			)
 		)
-		(property "Description" "RGB LED with integrated controller"
+		(property "Description" "RGB LED: SK6812MINI addressable, integrated controller, 3535 PLCC4"
 			(at 222.25 30.48 0)
 			(hide yes)
 			(show_name no)
@@ -8177,6 +8573,61 @@
 		)
 		(pin "4"
 			(uuid "8bffaf59-dc97-4083-9e5e-b4db0f979b85")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4960/14302512"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4960"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/4960"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "4960"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Adafruit"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -8240,7 +8691,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
 			(at 195.58 62.23 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8255,6 +8706,50 @@
 		)
 		(pin "2"
 			(uuid "baf14391-d60d-493e-a4bd-4421cddb60d1")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -8474,7 +8969,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 22R 1% 0.1W 0603 (D1 IR LED current limit)"
 			(at 166.37 30.48 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8489,6 +8984,50 @@
 		)
 		(pin "1"
 			(uuid "91a9d581-8b06-402a-a712-7b833aaec571")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-0722RL/727055"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-0722RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-0722RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -8552,7 +9091,7 @@
 				)
 			)
 		)
-		(property "Description" "Unpolarized capacitor"
+		(property "Description" "Capacitor: 1uF 50V X7R 0805 (decoupling)"
 			(at 200.66 34.29 0)
 			(hide yes)
 			(show_name no)
@@ -8568,6 +9107,50 @@
 		)
 		(pin "1"
 			(uuid "505dba2a-f5fe-4cbd-a6fb-6d781af1b38a")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0805KKX7R9BB105"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "CC0805KKX7R9BB105"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9102,7 +9685,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 73.66 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -9118,6 +9701,50 @@
 		)
 		(pin "1"
 			(uuid "be2138c0-a6e6-46bc-b267-f75a0f01821c")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9184,7 +9811,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 111.76 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -9200,6 +9827,50 @@
 		)
 		(pin "1"
 			(uuid "c9c37857-52b2-45da-9ffe-6d8867b3facb")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9266,7 +9937,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 92.71 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -9282,6 +9953,50 @@
 		)
 		(pin "1"
 			(uuid "d33a488b-4be0-4e98-a9d1-5b8acceda2e5")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9348,7 +10063,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 111.76 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -9364,6 +10079,50 @@
 		)
 		(pin "1"
 			(uuid "bef61d3e-bbc7-48db-be1e-0d9d9dd50101")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9586,7 +10345,7 @@
 				)
 			)
 		)
-		(property "Description" "IR Receiver Modules for Remote Control Systems"
+		(property "Description" "IR Receiver: remote control module, 36kHz"
 			(at 85.09 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -9605,6 +10364,50 @@
 		)
 		(pin "2"
 			(uuid "d233b8d8-8cfc-4774-904e-127d6cf21564")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/vishay-semiconductor-opto-division/TSOP4136/4074522"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Vishay-Semiconductors/TSOP4136"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TSOP4136"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Vishay"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9743,7 +10546,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Resistor: 100R 1% 0.1W 0603 (U2 TSOP Vs filter)"
 			(at 95.25 27.94 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9758,6 +10561,50 @@
 		)
 		(pin "1"
 			(uuid "245e2fde-d04a-407e-a68e-3c69fd85eb9b")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100RL/726888"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9824,7 +10671,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 73.66 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -9840,6 +10687,50 @@
 		)
 		(pin "1"
 			(uuid "c340b9b8-6229-44ea-8423-760788438512")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -9906,7 +10797,7 @@
 				)
 			)
 		)
-		(property "Description" "Unpolarized capacitor"
+		(property "Description" "Capacitor: 1uF 50V X7R 0805 (decoupling)"
 			(at 20.32 115.57 0)
 			(hide yes)
 			(show_name no)
@@ -9922,6 +10813,50 @@
 		)
 		(pin "1"
 			(uuid "18cae116-be4c-4c14-9f56-7ed9123d0f3e")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0805KKX7R9BB105"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "CC0805KKX7R9BB105"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -10067,7 +11002,7 @@
 				)
 			)
 		)
-		(property "Description" "16 Bits Port/Expander to I2C Bus, SSOP-24"
+		(property "Description" "GPIO Expander: 16-bit I2C, SSOP-24"
 			(at 41.91 93.98 0)
 			(hide yes)
 			(show_name no)
@@ -10150,6 +11085,50 @@
 		(pin "5"
 			(uuid "e980e63d-15fd-415f-8b04-88cfab19f868")
 		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Texas-Instruments/PCF8575DBR"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "PCF8575DBR"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Texas Instruments"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10213,7 +11192,7 @@
 				)
 			)
 		)
-		(property "Description" "ANO Directional Navigation and Scroll Wheel Rotary Encoder"
+		(property "Description" "Rotary Encoder: ANO directional navigation + scroll wheel"
 			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -10284,6 +11263,39 @@
 		(pin "9"
 			(uuid "3b2eae6e-68e3-4254-8b2c-3829fefd57ed")
 		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/5001/15277532"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/5001"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/5001"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10335,7 +11347,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8932/102010636.pdf"
 			(at 214.63 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -10346,7 +11358,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "MCU Module: Seeed XIAO ESP32-C6, Wi-Fi 6 / BLE 5 / Zigbee / Thread"
 			(at 214.63 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -10357,7 +11369,7 @@
 				)
 			)
 		)
-		(property "Manufacturer" ""
+		(property "Manufacturer" "Seeed Studio"
 			(at 214.63 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -10368,7 +11380,7 @@
 				)
 			)
 		)
-		(property "MPN" ""
+		(property "MPN" "113991254"
 			(at 214.63 88.9 0)
 			(hide yes)
 			(show_name no)
@@ -10516,6 +11528,28 @@
 		(pin "33"
 			(uuid "111faebf-99de-4fd0-a64e-b807d81a7239")
 		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991254/24613066"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Seeed-Studio/113991254"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10659,7 +11693,7 @@
 				)
 			)
 		)
-		(property "Description" "Resistor"
+		(property "Description" "Resistor: 330R 1% 0.1W 0603 (D2 data series)"
 			(at 213.36 39.37 0)
 			(hide yes)
 			(show_name no)
@@ -10675,6 +11709,50 @@
 		)
 		(pin "1"
 			(uuid "e7be65e7-a7d6-4613-9aa2-807f410d8ebf")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07330RL/727162"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07330RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07330RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11053,7 +12131,7 @@
 				(justify left)
 			)
 		)
-		(property "Description" "600mA Ic, 40V Vce, NPN Transistor, SOT-23"
+		(property "Description" "Transistor: NPN 40V 600mA SOT-23 (IR LED driver)"
 			(at 147.32 35.56 0)
 			(hide yes)
 			(show_name no)
@@ -11072,6 +12150,50 @@
 		)
 		(pin "3"
 			(uuid "30fcb574-63a3-4607-af9e-e6d99cf3a9c2")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Nexperia/MMBT2222A215"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "MMBT2222A,215"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Nexperia"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11292,7 +12414,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 92.71 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -11308,6 +12430,50 @@
 		)
 		(pin "1"
 			(uuid "12d88b60-45f1-448f-b795-f0c5c1764525")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11362,7 +12528,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://invensense.tdk.com/wp-content/uploads/2016/02/DS-000069-ICS-43434-v1.2.pdf"
 			(at 36.83 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -11373,7 +12539,7 @@
 				)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Microphone: I2S MEMS, 24-bit, omnidirectional bottom port"
 			(at 36.83 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -11401,6 +12567,50 @@
 		)
 		(pin "6"
 			(uuid "7b0fa097-80cf-4c49-acb2-4bdab1172679")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/tdk-invensense/ICS-43434/6140298"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/TDK-InvenSense/ICS-43434"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "ICS-43434"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "TDK InvenSense"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11467,7 +12677,7 @@
 				)
 			)
 		)
-		(property "Description" "Push button switch, generic, two pins"
+		(property "Description" "Switch: tactile pushbutton SPST-NO SMD"
 			(at 130.81 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -11483,6 +12693,50 @@
 		)
 		(pin "1"
 			(uuid "9c3cb6df-93de-4a2e-8126-138797558368")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/E-Switch/TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "TL3315NF160Q"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "E-Switch"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11547,7 +12801,7 @@
 				)
 			)
 		)
-		(property "Description" "Infrared LED , 3mm LED package (BEND 90 deg toward top-edge notch = IR emitter aperture; hand-form leads)"
+		(property "Description" "IR Emitter: 940nm 3mm THT LED (leads bent 90 deg to top-edge notch = IR aperture)"
 			(at 161.29 38.1 0)
 			(hide yes)
 			(show_name no)
@@ -11563,6 +12817,50 @@
 		)
 		(pin "1"
 			(uuid "b4ed92df-17fc-4802-81da-6ebf89b5f143")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/inolux/INL-3AHIR30/10384806"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Inolux/INL-3AHIR30"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "INL-3AHIR30"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Inolux"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11705,7 +13003,7 @@
 				)
 			)
 		)
-		(property "Description" "CONN HEADER SMD R/A 2POS 2MM"
+		(property "Description" "Connector: battery, JST PH 2-pos SMD right-angle 2.0mm"
 			(at 133.35 146.558 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11742,6 +13040,28 @@
 		)
 		(pin "2"
 			(uuid "bc304fb1-8ca6-4202-a8ed-32d13a5b2e66")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/jst-sales-america-inc/S2B-PH-SM4-TB-LF-SN/926655"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/JST-Commercial/S2B-PH-SM4-TBLFSN"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"
@@ -11961,7 +13281,7 @@
 				)
 			)
 		)
-		(property "Description" "Resistor"
+		(property "Description" "Resistor: 470R 1% 0.1W 0603 (Q1 base)"
 			(at 147.32 26.67 0)
 			(hide yes)
 			(show_name no)
@@ -11977,6 +13297,50 @@
 		)
 		(pin "1"
 			(uuid "c8fa4365-f58b-4379-b83e-972654da0aba")
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07470RL/727256"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07470RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07470RL"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 0 0 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
 		)
 		(instances
 			(project "c6remote"

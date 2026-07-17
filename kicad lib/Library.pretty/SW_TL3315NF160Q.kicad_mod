@@ -377,7 +377,7 @@
 		(uuid "5076f80b-0e9b-49c6-b652-a894a2356406")
 	)
 	(embedded_fonts no)
-	(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+	(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 		(offset
 			(xyz 0 0 0)
 		)

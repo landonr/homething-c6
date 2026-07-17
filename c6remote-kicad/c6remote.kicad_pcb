@@ -1865,7 +1865,7 @@
 			(uuid "890dedbd-2f5c-4d99-8e7e-61e24466a802")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -2271,7 +2271,7 @@
 			(uuid "f63875af-2a89-4ad5-b2eb-90af11e85e7d")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -2993,7 +2993,7 @@
 			(uuid "56b8ec60-d91c-48ac-b235-e53a692ecd1b")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -3399,7 +3399,7 @@
 			(uuid "af8f9a6f-a170-4b7f-acdd-7511d3b1ac6d")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -3805,7 +3805,7 @@
 			(uuid "634f2844-ce56-4708-bc39-80efba8e5ef3")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -4446,7 +4446,7 @@
 			(uuid "3215ae15-ef7b-4b6a-b1af-371dc448cf27")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -5444,7 +5444,7 @@
 			(uuid "3376226e-1c6d-4d7c-9db8-989348f06133")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -5850,7 +5850,7 @@
 			(uuid "3824887b-c58c-41d9-aeec-984de699f1de")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -6950,7 +6950,7 @@
 			(uuid "11887fae-b958-4762-8823-8ea7ceb6f932")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -7993,7 +7993,7 @@
 			(uuid "ddba5dbc-ee64-47ae-bfec-456fec9c02f7")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -8399,7 +8399,7 @@
 			(uuid "b449cfc3-cd9b-4fa6-8d24-0ebb8c2dadaa")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/SW_SPST_PTS647Sx50_black.step"
+		(model "${KIPRJMOD}/3dmodels/TL3315NF160Q.wrl"
 			(offset
 				(xyz 0 0 0)
 			)

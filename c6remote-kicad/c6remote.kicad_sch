@@ -6979,7 +6979,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 87.63 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -7312,7 +7312,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 68.58 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -7646,7 +7646,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 125.73 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -8538,7 +8538,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 106.68 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -10042,7 +10042,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 68.58 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -10174,7 +10174,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 106.68 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -10306,7 +10306,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 87.63 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -10438,7 +10438,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 106.68 73.66 0)
 			(hide yes)
 			(show_name no)
@@ -11053,7 +11053,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 68.58 90.17 0)
 			(hide yes)
 			(show_name no)
@@ -11580,7 +11580,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.adafruit.com/product/5001"
+		(property "Datasheet" "https://cdn-learn.adafruit.com/assets/assets/000/104/942/original/tsw.pdf"
 			(at 58.42 156.21 0)
 			(hide yes)
 			(show_name no)
@@ -12802,7 +12802,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 87.63 106.68 0)
 			(hide yes)
 			(show_name no)
@@ -13071,7 +13071,7 @@
 				)
 			)
 		)
-		(property "Datasheet" ""
+		(property "Datasheet" "https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf"
 			(at 125.73 90.17 0)
 			(hide yes)
 			(show_name no)

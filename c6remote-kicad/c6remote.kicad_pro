@@ -70,12 +70,7 @@
         }
       },
       "diff_pair_dimensions": [],
-      "drc_exclusions": [
-        [
-          "unconnected_items|45250000|150160000|F.Cu|4|eb6539ef-4d84-4ae5-bc4e-237dae21b9ef|313edcfe-ad25-4ea7-b786-d8290dfb479a",
-          "3v doesnt need to be connected"
-        ]
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },
@@ -666,7 +661,7 @@
         "uuid": "0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
       }
     ],
-    "used_designators": "R5",
+    "used_designators": "",
     "variants": []
   },
   "sheets": [

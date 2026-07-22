@@ -3764,7 +3764,7 @@
 				(pin passive line
 					(at 1.27 10.16 270)
 					(length 2.54)
-					(name "COM2"
+					(name "COM_B"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3779,10 +3779,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at -12.7 -2.54 0)
 					(length 2.54)
-					(name "ano_sw4"
+					(name "S2_DOWN"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3797,10 +3797,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at -12.7 1.27 0)
 					(length 2.54)
-					(name "ano_enc1"
+					(name "ENCA"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3815,10 +3815,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at 12.7 1.27 180)
 					(length 2.54)
-					(name "ano_sw3"
+					(name "S1_CENTER"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3833,10 +3833,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at 12.7 -6.35 180)
 					(length 2.54)
-					(name "ano_sw1"
+					(name "S5_LEFT"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3851,17 +3851,17 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at 12.7 -2.54 180)
 					(length 2.54)
-					(name "ano_sw2"
+					(name "S4_UP"
 						(effects
 							(font
 								(size 1.27 1.27)
 							)
 						)
 					)
-					(number "6"
+					(number "8"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3869,10 +3869,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at -12.7 5.08 0)
 					(length 2.54)
-					(name "ano_enc2"
+					(name "ENCB"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3890,14 +3890,14 @@
 				(pin passive line
 					(at 12.7 5.08 180)
 					(length 2.54)
-					(name "COM1"
+					(name "COM_A"
 						(effects
 							(font
 								(size 1.27 1.27)
 							)
 						)
 					)
-					(number "8"
+					(number "6"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3905,10 +3905,10 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at -12.7 -6.35 0)
 					(length 2.54)
-					(name "ano_sw5"
+					(name "S3_RIGHT"
 						(effects
 							(font
 								(size 1.27 1.27)

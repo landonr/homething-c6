@@ -3250,7 +3250,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Switch:SW_Push"
+		(symbol "Local:SW_TL3315NF160Q"
 			(pin_numbers
 				(hide yes)
 			)
@@ -3328,7 +3328,7 @@
 					)
 				)
 			)
-			(symbol "SW_Push_0_1"
+			(symbol "SW_TL3315NF160Q_0_1"
 				(circle
 					(center -2.032 0)
 					(radius 0.508)
@@ -3394,7 +3394,7 @@
 					)
 				)
 				(pin passive line
-					(at 5.08 0 180)
+					(at -5.08 0 0)
 					(length 2.54)
 					(name "2"
 						(effects
@@ -3404,6 +3404,42 @@
 						)
 					)
 					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 2.54)
+					(name "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 2.54)
+					(name "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -6899,7 +6935,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 92.71 90.17 90)
 		(unit 1)
 		(body_style 1)
@@ -7014,6 +7050,12 @@
 		)
 		(pin "1"
 			(uuid "a3932c4c-db87-466b-8b53-dfd5730f7d8c")
+		)
+		(pin "3"
+			(uuid "c009f6a6-d360-41f8-bba7-a6d5db93b833")
+		)
+		(pin "4"
+			(uuid "add60c49-95cb-4eab-880f-4a4e91304a60")
 		)
 		(instances
 			(project "c6remote"
@@ -7226,7 +7268,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 73.66 106.68 90)
 		(unit 1)
 		(body_style 1)
@@ -7341,6 +7383,12 @@
 		)
 		(pin "1"
 			(uuid "0a216ca0-9227-4ec1-8edf-2eecd7690a6a")
+		)
+		(pin "3"
+			(uuid "2d158d2b-f92a-4e0b-a82c-bf4729ae4799")
+		)
+		(pin "4"
+			(uuid "833accb4-e48e-42c1-886d-2328f3de2271")
 		)
 		(instances
 			(project "c6remote"
@@ -7554,7 +7602,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 130.81 73.66 90)
 		(unit 1)
 		(body_style 1)
@@ -7669,6 +7717,12 @@
 		)
 		(pin "1"
 			(uuid "be7f2dd2-c624-448e-a44e-a362058bf1a8")
+		)
+		(pin "3"
+			(uuid "96f37582-1005-4573-818a-11711d6af98a")
+		)
+		(pin "4"
+			(uuid "6066cabd-628c-43e5-8dda-60dee0d9bbc1")
 		)
 		(instances
 			(project "c6remote"
@@ -8440,7 +8494,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 111.76 90.17 90)
 		(unit 1)
 		(body_style 1)
@@ -8555,6 +8609,12 @@
 		)
 		(pin "1"
 			(uuid "91fdaac0-b8ed-44ae-9deb-b562d500454a")
+		)
+		(pin "3"
+			(uuid "ecdb2b5f-5424-4bad-8122-d0f8bacf83c2")
+		)
+		(pin "4"
+			(uuid "22600c54-a639-42cf-a8b9-92478af3c877")
 		)
 		(instances
 			(project "c6remote"
@@ -9938,7 +9998,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 73.66 73.66 90)
 		(unit 1)
 		(body_style 1)
@@ -10054,6 +10114,12 @@
 		(pin "1"
 			(uuid "be2138c0-a6e6-46bc-b267-f75a0f01821c")
 		)
+		(pin "3"
+			(uuid "f22636d2-a790-4296-9e29-cfd7b191b754")
+		)
+		(pin "4"
+			(uuid "a5487013-6289-43ef-9699-a29170902526")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10064,7 +10130,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 111.76 106.68 90)
 		(unit 1)
 		(body_style 1)
@@ -10180,6 +10246,12 @@
 		(pin "1"
 			(uuid "c9c37857-52b2-45da-9ffe-6d8867b3facb")
 		)
+		(pin "3"
+			(uuid "1442afbe-89fa-4ead-bb47-7f642f15b8d5")
+		)
+		(pin "4"
+			(uuid "e4a8cfd7-eefa-4430-83ee-10e1bd4ac2ff")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10190,7 +10262,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 92.71 73.66 90)
 		(unit 1)
 		(body_style 1)
@@ -10306,6 +10378,12 @@
 		(pin "1"
 			(uuid "d33a488b-4be0-4e98-a9d1-5b8acceda2e5")
 		)
+		(pin "3"
+			(uuid "86d0d047-1219-46ba-be2a-e9b1d082d04e")
+		)
+		(pin "4"
+			(uuid "c99c0020-e0b0-48af-8ad6-7bd73bcd291c")
+		)
 		(instances
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
@@ -10316,7 +10394,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 111.76 73.66 90)
 		(unit 1)
 		(body_style 1)
@@ -10431,6 +10509,12 @@
 		)
 		(pin "1"
 			(uuid "bef61d3e-bbc7-48db-be1e-0d9d9dd50101")
+		)
+		(pin "3"
+			(uuid "a3a24d1c-0219-46c9-b59d-fe912e0d3997")
+		)
+		(pin "4"
+			(uuid "d1aa8eab-1b65-46de-a82b-6c1c639ef85e")
 		)
 		(instances
 			(project "c6remote"
@@ -10925,7 +11009,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 73.66 90.17 90)
 		(unit 1)
 		(body_style 1)
@@ -11040,6 +11124,12 @@
 		)
 		(pin "1"
 			(uuid "c340b9b8-6229-44ea-8423-760788438512")
+		)
+		(pin "3"
+			(uuid "79d609e5-cba3-43d3-a21b-95a9ac373da3")
+		)
+		(pin "4"
+			(uuid "f51a326e-6999-4930-8705-90d0e0efd3ba")
 		)
 		(instances
 			(project "c6remote"
@@ -12668,7 +12758,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 92.71 106.68 90)
 		(unit 1)
 		(body_style 1)
@@ -12783,6 +12873,12 @@
 		)
 		(pin "1"
 			(uuid "12d88b60-45f1-448f-b795-f0c5c1764525")
+		)
+		(pin "3"
+			(uuid "686ab03e-c5cf-4a05-af94-ffaa4c160b84")
+		)
+		(pin "4"
+			(uuid "6ad7ac55-5164-4a48-96ed-cecc1b9fa238")
 		)
 		(instances
 			(project "c6remote"
@@ -12931,7 +13027,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Switch:SW_Push")
+		(lib_id "Local:SW_TL3315NF160Q")
 		(at 130.81 90.17 90)
 		(unit 1)
 		(body_style 1)
@@ -13046,6 +13142,12 @@
 		)
 		(pin "1"
 			(uuid "9c3cb6df-93de-4a2e-8126-138797558368")
+		)
+		(pin "3"
+			(uuid "2f306a8f-d1e7-45bd-bec9-151c35dbc543")
+		)
+		(pin "4"
+			(uuid "e7d1a65f-bb74-45c6-b390-83a8aae1a009")
 		)
 		(instances
 			(project "c6remote"

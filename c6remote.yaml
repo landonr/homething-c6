@@ -1,0 +1,241 @@
+substitutions:
+  device_name: homething-c6
+  friendly_name: homeThing C6
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: seeed_xiao_esp32c6
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Setup"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+web_server:
+  port: 80
+  version: 3
+
+i2c:
+  sda: GPIO22
+  scl: GPIO23
+  frequency: 100kHz
+  scan: true
+
+pcf8574:
+  - id: button_expander
+    address: 0x20
+    pcf8575: true
+
+binary_sensor:
+  - platform: gpio
+    name: Button 1
+    pin: &button_1
+      pcf8574: button_expander
+      number: 0
+      mode: INPUT
+      inverted: true
+  - platform: gpio
+    name: Button 2
+    pin:
+      <<: *button_1
+      number: 1
+  - platform: gpio
+    name: Button 3
+    pin:
+      <<: *button_1
+      number: 2
+  - platform: gpio
+    name: Button 4
+    pin:
+      <<: *button_1
+      number: 3
+  - platform: gpio
+    name: Button 5
+    pin:
+      <<: *button_1
+      number: 4
+  - platform: gpio
+    name: Button 6
+    pin:
+      <<: *button_1
+      number: 5
+  - platform: gpio
+    name: Button 7
+    pin:
+      <<: *button_1
+      number: 6
+  - platform: gpio
+    name: Button 8
+    pin:
+      <<: *button_1
+      number: 7
+  - platform: gpio
+    name: Button 9
+    pin:
+      <<: *button_1
+      number: 8
+  - platform: gpio
+    name: Button 10
+    pin:
+      <<: *button_1
+      number: 9
+  - platform: gpio
+    name: Button 11
+    pin:
+      <<: *button_1
+      number: 10
+  # ENC1 ANO encoder mounts rotated 90deg CW vs part-relative switch names
+  # (S3 faces device-down, S5 faces device-up). Names below are device
+  # directions confirmed during 2026-07-21 rework: device-up fired old
+  # "Encoder Left" (P17/ano_sw5), device-down fired old "Encoder Right"
+  # (P13/ano_sw1). P12/P14 inferred from same rotation; verify after
+  # pad 8 rework.
+  - platform: gpio
+    name: Encoder Down
+    pin:
+      <<: *button_1
+      number: 11
+  - platform: gpio
+    name: Encoder Right
+    pin:
+      <<: *button_1
+      number: 12
+  - platform: gpio
+    name: Encoder Press
+    pin:
+      <<: *button_1
+      number: 13
+  - platform: gpio
+    name: Encoder Left
+    pin:
+      <<: *button_1
+      number: 14
+  - platform: gpio
+    name: Encoder Up
+    pin:
+      <<: *button_1
+      number: 15
+
+sensor:
+  - platform: rotary_encoder
+    name: Encoder
+    pin_a:
+      number: GPIO20
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO19
+      mode:
+        input: true
+        pullup: true
+    resolution: 2
+
+  - platform: adc
+    name: Battery Voltage
+    pin: GPIO4
+    attenuation: auto
+    update_interval: 5s
+    filters:
+      - multiply: 2.0
+    unit_of_measurement: V
+    accuracy_decimals: 2
+    device_class: voltage
+    state_class: measurement
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_light
+    name: Status Light
+    pin: GPIO17
+    chipset: SK6812
+    rgb_order: GRB
+    num_leds: 1
+    restore_mode: ALWAYS_OFF
+
+remote_receiver:
+  pin:
+    number: GPIO16
+    mode:
+      input: true
+      pullup: true
+    inverted: true
+  dump: all
+  tolerance: 35%
+
+remote_transmitter:
+  pin: GPIO1
+  carrier_duty_percent: 50%
+  non_blocking: true
+
+i2s_audio:
+  id: mic_bus
+  i2s_bclk_pin: GPIO2
+  i2s_lrclk_pin: GPIO21
+
+microphone:
+  - platform: i2s_audio
+    id: board_microphone
+    i2s_audio_id: mic_bus
+    i2s_din_pin: GPIO0
+    adc_type: external
+    pdm: false
+    channel: left
+    sample_rate: 48000
+    bits_per_sample: 32bit
+    on_data:
+      - lambda: id(mic_bytes) += x.size();
+
+globals:
+  - id: mic_bytes
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            microphone.is_capturing:
+              id: board_microphone
+          then:
+            - lambda: |-
+                ESP_LOGI("microphone", "Captured %u bytes/s", id(mic_bytes));
+                id(mic_bytes) = 0;
+
+button:
+  - platform: template
+    name: Start Microphone Test
+    on_press:
+      - microphone.capture:
+          id: board_microphone
+
+  - platform: template
+    name: Stop Microphone Test
+    on_press:
+      - microphone.stop_capture:
+          id: board_microphone
+
+  - platform: template
+    name: Send Short IR Test Burst
+    on_press:
+      - remote_transmitter.transmit_raw:
+          carrier_frequency: 36kHz
+          code: [560, -560]

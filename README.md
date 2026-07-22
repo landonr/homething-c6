@@ -25,7 +25,7 @@
   <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
 </p>
 
-This repo is the hardware side of the project: a KiCad prototype built around a Seeed Studio XIAO ESP32-C6. The source of truth lives in `c6remote-kicad/`. Firmware and runtime integrations are not in this repo yet.
+This repo contains the KiCad hardware and ESPHome bring-up configuration for a prototype built around a Seeed Studio XIAO ESP32-C6. The hardware source of truth lives in `c6remote-kicad/`.
 
 <p align="center">
   <img alt="Raytraced 3D top view of the board" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
@@ -151,9 +151,23 @@ Regenerate the README preview assets in `docs/readme-assets/`:
 ./scripts/render-readme-assets.sh
 ```
 
+## ESPHome hardware bring-up
+
+`c6remote.yaml` exposes all board inputs and provides guarded tests for the status LED, IR hardware, microphone, and battery ADC. Deep sleep stays disabled during bring-up so USB logs and recovery remain available.
+
+Copy the secrets template and replace every value.
+
+```bash
+cp secrets.example.yaml secrets.yaml
+esphome config c6remote.yaml
+esphome run c6remote.yaml
+```
+
+For first power-up, use current-limited USB with no battery attached. Confirm the board stays cool and the 3.3 V rail is correct before testing peripherals. The I2C log should find the PCF8575 at `0x20`. Test the IR transmitter only with the bounded `Send Short IR Test Burst` action. Do not drive GPIO1 high continuously.
+
 ## Status
 
-Prototype fab and assembly are ordered from PCBWay (order YT1753739, PCB plus SMD assembly). Current baseline still has ERC and DRC warnings. Firmware and runtime integrations are not in this repo yet.
+The first assembled prototype arrived from PCBWay on 2026-07-20 (order YT1753739, PCB plus SMD assembly). Hardware bring-up and validation are in progress.
 
 | Date | Milestone |
 | --- | --- |
@@ -165,6 +179,7 @@ Prototype fab and assembly are ordered from PCBWay (order YT1753739, PCB plus SM
 | 2026-07-14 | Assembled sample board photos received; PCBWay asked to confirm D1/U2 orientation before completing solder |
 | 2026-07-15 | PCBWay adjusted D1 (90° lead bend firing through top-edge notch) and requested recheck |
 | 2026-07-16 | D1 and full board orientation confirmed correct; assembly proceeding |
+| 2026-07-20 | First assembled prototype delivered; hardware bring-up started |
 
 ## Relationship to homeThing
 

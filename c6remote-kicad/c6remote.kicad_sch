@@ -2026,6 +2026,277 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "LED:WS2812B-2020"
+			(pin_names
+				(offset 0.254)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "D"
+				(at 5.08 5.715 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify right bottom)
+				)
+			)
+			(property "Value" "WS2812B-2020"
+				(at 1.27 -5.715 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+				)
+			)
+			(property "Footprint" "LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm"
+				(at 1.27 -7.62 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+				)
+			)
+			(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf"
+				(at 2.54 -9.525 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left top)
+				)
+			)
+			(property "Description" "RGB LED with integrated controller, 2.0 x 2.0 mm, 12 mA"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "RGB LED NeoPixel Nano addressable"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "LED*WS2812*-2020_PLCC4*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "WS2812B-2020_0_0"
+				(text "RGB"
+					(at 2.286 -4.191 0)
+					(effects
+						(font
+							(size 0.762 0.762)
+						)
+					)
+				)
+			)
+			(symbol "WS2812B-2020_0_1"
+				(polyline
+					(pts
+						(xy 1.27 -2.54) (xy 1.778 -2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -3.556) (xy 1.778 -3.556)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.286 -1.524) (xy 1.27 -2.54) (xy 1.27 -2.032)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.286 -2.54) (xy 1.27 -3.556) (xy 1.27 -3.048)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 3.683 -1.016) (xy 3.683 -3.556) (xy 3.683 -4.064)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 4.699 -1.524) (xy 2.667 -1.524) (xy 3.683 -3.556) (xy 4.699 -1.524)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 4.699 -3.556) (xy 2.667 -3.556)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start 5.08 5.08)
+					(end -5.08 -5.08)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+			)
+			(symbol "WS2812B-2020_1_1"
+				(pin output line
+					(at 7.62 0 180)
+					(length 2.54)
+					(name "DOUT"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at 0 -7.62 90)
+					(length 2.54)
+					(name "VSS"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at -7.62 0 0)
+					(length 2.54)
+					(name "DIN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at 0 7.62 270)
+					(length 2.54)
+					(name "VDD"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Local:SW_TL3315NF160Q"
 			(pin_numbers
 				(hide yes)
@@ -4690,7 +4961,7 @@
 	)
 	(text "BATTERY"
 		(exclude_from_sim no)
-		(at 124.968 134.62 0)
+		(at 191.77 15.494 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4770,7 +5041,7 @@
 	)
 	(text "LED"
 		(exclude_from_sim no)
-		(at 192.532 15.494 0)
+		(at 117.348 133.858 0)
 		(effects
 			(font
 				(size 1.905 1.905)
@@ -4809,10 +5080,10 @@
 		(uuid "a7529152-0501-4c44-90d8-75d7460e14af")
 	)
 	(junction
-		(at 200.66 30.48)
+		(at 123.19 153.67)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "d447f7b6-c71a-4a35-8806-304bd789dd18")
+		(uuid "cb462545-2d72-4a1f-a1f3-52d9f0632a9f")
 	)
 	(junction
 		(at 113.03 33.02)
@@ -4827,7 +5098,7 @@
 		(uuid "e296593c-30f0-4956-92e5-3c7eea50b776")
 	)
 	(junction
-		(at 229.87 41.91)
+		(at 152.4 165.1)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fe8823b3-ac53-445b-8a00-df633c4df5a9")
@@ -4845,26 +5116,16 @@
 		(uuid "4f6d2777-e840-4ee6-b5db-5afda6db097b")
 	)
 	(no_connect
+		(at 240.03 152.4)
+		(uuid "50f08042-2dc9-4d14-8d9b-c6ddf49f3a60")
+	)
+	(no_connect
 		(at 209.55 66.04)
 		(uuid "5eb2a8a9-6e7c-4db8-8538-b873f5b6a0cc")
 	)
 	(no_connect
-		(at 222.25 22.86)
-		(uuid "dd956110-8bb6-4cbe-8188-2ba82db6e3e8")
-	)
-	(no_connect
 		(at 205.74 66.04)
 		(uuid "e6f2abdf-a775-48f2-9fef-ec0e86a460f9")
-	)
-	(wire
-		(pts
-			(xy 222.25 39.37) (xy 217.17 39.37)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "01fdabd4-7b2c-4b04-a07c-8b986824bdef")
 	)
 	(wire
 		(pts
@@ -4875,6 +5136,26 @@
 			(type default)
 		)
 		(uuid "06104dc2-7e3f-4be9-b803-fe00d5768304")
+	)
+	(wire
+		(pts
+			(xy 256.54 22.86) (xy 256.54 25.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "07bb48fb-1ad8-4b1b-8f37-a08cf84b81ce")
+	)
+	(wire
+		(pts
+			(xy 217.17 152.4) (xy 215.9 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0d61787d-578e-4097-b5a8-3ff3c9cb7665")
 	)
 	(polyline
 		(pts
@@ -4898,23 +5179,13 @@
 	)
 	(wire
 		(pts
-			(xy 200.66 41.91) (xy 200.66 38.1)
+			(xy 123.19 165.1) (xy 123.19 161.29)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "16116388-4f23-4e8b-9e64-7740b26532f5")
-	)
-	(wire
-		(pts
-			(xy 200.66 30.48) (xy 214.63 30.48)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "17b24297-216f-4fcc-ab86-01ae731533ad")
 	)
 	(wire
 		(pts
@@ -4958,6 +5229,16 @@
 	)
 	(wire
 		(pts
+			(xy 223.52 152.4) (xy 224.79 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1f50a8c4-8242-42fd-ac91-556467aaea65")
+	)
+	(wire
+		(pts
 			(xy 113.03 33.02) (xy 95.25 33.02)
 		)
 		(stroke
@@ -4968,7 +5249,7 @@
 	)
 	(wire
 		(pts
-			(xy 200.66 41.91) (xy 229.87 41.91)
+			(xy 123.19 165.1) (xy 152.4 165.1)
 		)
 		(stroke
 			(width 0)
@@ -4988,13 +5269,13 @@
 	)
 	(wire
 		(pts
-			(xy 207.01 39.37) (xy 209.55 39.37)
+			(xy 129.54 162.56) (xy 144.78 162.56)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "4557bafd-c0d0-43ee-8bca-f1716005509f")
+		(uuid "4a5eab6e-1e1b-4943-8cd0-1135822b8d9a")
 	)
 	(wire
 		(pts
@@ -5018,16 +5299,6 @@
 	)
 	(wire
 		(pts
-			(xy 222.25 38.1) (xy 222.25 39.37)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "58646126-f99d-42a4-b03e-a38817bc24e0")
-	)
-	(wire
-		(pts
 			(xy 201.93 62.23) (xy 199.39 62.23)
 		)
 		(stroke
@@ -5045,6 +5316,16 @@
 			(type default)
 		)
 		(uuid "6e9b9c57-fead-4df1-ae32-ce85fc997900")
+	)
+	(wire
+		(pts
+			(xy 144.78 144.78) (xy 144.78 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6ea7e9fa-c38f-4104-9682-d19ab36dd352")
 	)
 	(wire
 		(pts
@@ -5086,6 +5367,16 @@
 		)
 		(uuid "80039ec6-e91b-42ac-8b69-cf61eee45849")
 	)
+	(wire
+		(pts
+			(xy 123.19 153.67) (xy 137.16 153.67)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "83256a56-f2e9-4147-9c10-8bd569e67811")
+	)
 	(polyline
 		(pts
 			(xy 11.43 50.8) (xy 285.75 50.8)
@@ -5098,13 +5389,13 @@
 	)
 	(wire
 		(pts
-			(xy 229.87 30.48) (xy 229.87 41.91)
+			(xy 193.04 152.4) (xy 191.77 152.4)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "8fdaee1f-3e14-4b7f-9ba1-e1e9ab6ad0d6")
+		(uuid "8f4dbd65-8782-4420-9023-65bc848caa72")
 	)
 	(wire
 		(pts
@@ -5128,7 +5419,7 @@
 	)
 	(wire
 		(pts
-			(xy 128.27 158.75) (xy 128.27 156.21)
+			(xy 212.09 35.56) (xy 212.09 33.02)
 		)
 		(stroke
 			(width 0)
@@ -5138,7 +5429,7 @@
 	)
 	(wire
 		(pts
-			(xy 229.87 41.91) (xy 232.41 41.91)
+			(xy 152.4 165.1) (xy 154.94 165.1)
 		)
 		(stroke
 			(width 0)
@@ -5198,6 +5489,16 @@
 	)
 	(wire
 		(pts
+			(xy 199.39 152.4) (xy 200.66 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "abb57d03-79db-4836-80df-5b090094d1a7")
+	)
+	(wire
+		(pts
 			(xy 20.32 68.58) (xy 41.91 68.58)
 		)
 		(stroke
@@ -5205,6 +5506,16 @@
 			(type default)
 		)
 		(uuid "ac62860d-1b51-4cd3-9ebd-77bd75d616a2")
+	)
+	(wire
+		(pts
+			(xy 144.78 161.29) (xy 144.78 162.56)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "acbbccbd-e10e-42a7-90e1-55d3ae493bb4")
 	)
 	(wire
 		(pts
@@ -5225,6 +5536,16 @@
 			(type default)
 		)
 		(uuid "be9d19df-52b1-4026-9b79-7ebc5efd53b4")
+	)
+	(wire
+		(pts
+			(xy 175.26 152.4) (xy 176.53 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c1a63425-9ef1-45fd-a94e-3cc8aa4a96b5")
 	)
 	(wire
 		(pts
@@ -5288,6 +5609,16 @@
 	)
 	(wire
 		(pts
+			(xy 152.4 153.67) (xy 152.4 165.1)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d68cafa0-5b77-4b2c-ba78-e83daa43a2b6")
+	)
+	(wire
+		(pts
 			(xy 168.91 86.36) (xy 168.91 100.33)
 		)
 		(stroke
@@ -5308,7 +5639,7 @@
 	)
 	(wire
 		(pts
-			(xy 146.05 181.61) (xy 137.16 181.61)
+			(xy 256.54 35.56) (xy 256.54 33.02)
 		)
 		(stroke
 			(width 0)
@@ -5338,7 +5669,7 @@
 	)
 	(wire
 		(pts
-			(xy 200.66 27.94) (xy 200.66 30.48)
+			(xy 123.19 151.13) (xy 123.19 153.67)
 		)
 		(stroke
 			(width 0)
@@ -5368,7 +5699,7 @@
 	)
 	(wire
 		(pts
-			(xy 156.21 181.61) (xy 153.67 181.61)
+			(xy 256.54 45.72) (xy 256.54 43.18)
 		)
 		(stroke
 			(width 0)
@@ -5395,6 +5726,28 @@
 			(justify left)
 		)
 		(uuid "91394653-29bf-4f99-800b-40c834424435")
+	)
+	(global_label "led_4"
+		(shape bidirectional)
+		(at 217.17 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "016574b5-1238-4bcf-9d6c-7f851fb9bfd2")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 217.17 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 	)
 	(global_label "sd"
 		(shape input)
@@ -5602,6 +5955,28 @@
 			)
 		)
 	)
+	(global_label "led_2"
+		(shape bidirectional)
+		(at 175.26 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "411c290c-56fd-4e21-85bc-00485df33742")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 175.26 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "ano_sw3"
 		(shape input)
 		(at 52.07 109.22 0)
@@ -5623,6 +5998,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "led_3"
+		(shape bidirectional)
+		(at 199.39 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "467237f5-6b9c-4b69-bf71-160c1b38e26e")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 199.39 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -5700,7 +6097,7 @@
 	)
 	(global_label "GND"
 		(shape bidirectional)
-		(at 128.27 158.75 180)
+		(at 212.09 35.56 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5709,7 +6106,7 @@
 		)
 		(uuid "51d5e005-48ba-4dc9-8b22-e95ba839d9e5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 128.27 158.75 0)
+			(at 212.09 35.56 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5816,16 +6213,16 @@
 	)
 	(global_label "GND"
 		(shape bidirectional)
-		(at 129.54 181.61 180)
+		(at 256.54 22.86 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right)
+			(justify left)
 		)
 		(uuid "63ce0365-bba8-4151-8d86-e1b868852fef")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 129.54 181.61 90)
+			(at 256.54 22.86 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5952,7 +6349,7 @@
 	)
 	(global_label "bat_sense"
 		(shape bidirectional)
-		(at 142.24 181.61 90)
+		(at 256.54 34.29 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5961,7 +6358,7 @@
 		)
 		(uuid "7a92b4ee-ae80-4bc4-941c-4417acd4c0d1")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 142.24 181.61 90)
+			(at 256.54 34.29 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5974,7 +6371,7 @@
 	)
 	(global_label "BAT"
 		(shape bidirectional)
-		(at 128.27 153.67 180)
+		(at 212.09 30.48 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5983,7 +6380,7 @@
 		)
 		(uuid "7c44f486-7a9e-42bf-ac8e-61151bf3aec0")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 128.27 153.67 0)
+			(at 212.09 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5996,7 +6393,7 @@
 	)
 	(global_label "BAT"
 		(shape bidirectional)
-		(at 156.21 181.61 0)
+		(at 256.54 45.72 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6005,7 +6402,7 @@
 		)
 		(uuid "7cd8ee95-4653-4f0f-b438-a01286c870cc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 156.21 181.61 90)
+			(at 256.54 45.72 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6536,6 +6933,28 @@
 			)
 		)
 	)
+	(global_label "led_4"
+		(shape bidirectional)
+		(at 223.52 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "bff3ee35-d25e-42fb-8137-9679c7234196")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 223.52 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw5"
 		(shape input)
 		(at 73.66 85.09 180)
@@ -6562,7 +6981,7 @@
 	)
 	(global_label "led_1"
 		(shape input)
-		(at 207.01 39.37 90)
+		(at 129.54 162.56 90)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6572,7 +6991,7 @@
 		)
 		(uuid "c276fa94-e82a-4e3f-b5c1-8f67cb460d1d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 207.01 31.3049 90)
+			(at 129.54 154.4949 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6674,6 +7093,28 @@
 			)
 		)
 	)
+	(global_label "led_3"
+		(shape bidirectional)
+		(at 193.04 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "c803d2d7-ac42-40e2-93a8-e16b530478a8")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.04 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "ano_sw2"
 		(shape input)
 		(at 71.12 158.75 0)
@@ -6743,6 +7184,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "led_2"
+		(shape bidirectional)
+		(at 144.78 144.78 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cf34a897-750a-4f7e-a60d-3c74888d6326")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 144.78 144.78 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -7480,7 +7943,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 133.35 181.61 270)
+		(at 256.54 29.21 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7490,7 +7953,7 @@
 		(dnp no)
 		(uuid "106e0f11-4f74-47c2-9753-219d34b5cb12")
 		(property "Reference" "R8"
-			(at 134.366 185.166 0)
+			(at 252.984 30.226 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7500,7 +7963,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 132.334 186.182 0)
+			(at 251.968 28.194 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7510,7 +7973,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 133.35 181.61 0)
+			(at 256.54 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7521,7 +7984,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 133.35 181.61 0)
+			(at 256.54 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7532,7 +7995,7 @@
 			)
 		)
 		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
-			(at 133.35 181.61 0)
+			(at 256.54 29.21 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7543,7 +8006,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
-			(at 234.95 -73.66 0)
+			(at 511.81 130.81 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7554,7 +8017,7 @@
 			)
 		)
 		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
-			(at 234.95 -73.66 0)
+			(at 511.81 130.81 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7565,7 +8028,7 @@
 			)
 		)
 		(property "MPN" "RC0603FR-07100KL"
-			(at 234.95 -73.66 0)
+			(at 511.81 130.81 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7576,7 +8039,7 @@
 			)
 		)
 		(property "Manufacturer" "Yageo"
-			(at 234.95 -73.66 0)
+			(at 511.81 130.81 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7596,6 +8059,308 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "R8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 184.15 152.4 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "15b8aa2c-20ab-4cbb-9d2b-90c746aee233")
+		(property "Reference" "D3"
+			(at 186.944 149.352 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B-2020"
+			(at 184.404 139.446 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: WS2812B-2020 addressable, integrated controller, 12mA/ch, 2020 PLCC4"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Worldsemi"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "WS2812B-2020"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C965555.html"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4684/13170959"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4684"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/4684"
+			(at 184.15 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "9dd22204-8c01-45d9-a48c-cd0eab802c94")
+		)
+		(pin "2"
+			(uuid "2ea84513-01f5-4dec-abd0-e668e51902da")
+		)
+		(pin "3"
+			(uuid "9085f97a-527b-4934-bfaf-426cd96e480d")
+		)
+		(pin "4"
+			(uuid "3a6a6064-5ad7-4070-a0e1-f9825eed171e")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 208.28 152.4 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "183cbd06-52aa-4f1d-aa97-fbbdca321290")
+		(property "Reference" "D4"
+			(at 211.074 149.352 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B-2020"
+			(at 208.534 139.446 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: WS2812B-2020 addressable, integrated controller, 12mA/ch, 2020 PLCC4"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Worldsemi"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "WS2812B-2020"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C965555.html"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4684/13170959"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4684"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/4684"
+			(at 208.28 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "d8b0a993-2a5e-416f-b9cf-47668551f453")
+		)
+		(pin "2"
+			(uuid "5b845913-6db1-4e0f-b482-0c2b0eabdc17")
+		)
+		(pin "3"
+			(uuid "6f03a7f4-3304-4ad8-b321-be30e4ede030")
+		)
+		(pin "4"
+			(uuid "a471113e-6a65-4587-aa25-eb159cfb6383")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D4")
 					(unit 1)
 				)
 			)
@@ -7728,6 +8493,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "SW4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3.3V")
+		(at 208.28 144.78 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "1ec1f33e-25b1-44b1-ac16-b41b791d7f21")
+		(property "Reference" "#PWR037"
+			(at 204.47 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 212.598 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 208.28 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 208.28 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 208.28 144.78 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "ed2f5d88-d065-43cb-9a5b-e5534dc91d93")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR037")
 					(unit 1)
 				)
 			)
@@ -8214,7 +9054,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 149.86 181.61 270)
+		(at 256.54 39.37 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8224,7 +9064,7 @@
 		(dnp no)
 		(uuid "3665dbb4-8771-44e9-89db-a651aec3a673")
 		(property "Reference" "R7"
-			(at 150.876 184.912 0)
+			(at 253.238 40.386 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8234,7 +9074,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 148.844 185.928 0)
+			(at 252.222 38.354 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8244,7 +9084,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 149.86 181.61 0)
+			(at 256.54 39.37 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8255,7 +9095,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 149.86 181.61 0)
+			(at 256.54 39.37 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8266,7 +9106,7 @@
 			)
 		)
 		(property "Description" "Resistor: 100k 1% 0.1W 0603 (batt sense divider / INT pull-up)"
-			(at 149.86 181.61 0)
+			(at 256.54 39.37 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8277,7 +9117,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
-			(at 234.95 -73.66 0)
+			(at 511.81 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8288,7 +9128,7 @@
 			)
 		)
 		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
-			(at 234.95 -73.66 0)
+			(at 511.81 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8299,7 +9139,7 @@
 			)
 		)
 		(property "MPN" "RC0603FR-07100KL"
-			(at 234.95 -73.66 0)
+			(at 511.81 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8310,7 +9150,7 @@
 			)
 		)
 		(property "Manufacturer" "Yageo"
-			(at 234.95 -73.66 0)
+			(at 511.81 124.46 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8330,6 +9170,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "R7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 232.41 160.02 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "370bef21-fc17-4b1c-9ec8-58965af173f8")
+		(property "Reference" "#PWR040"
+			(at 228.346 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 236.22 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 232.41 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 232.41 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 232.41 160.02 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "4a7cbe46-a1ac-465f-9846-369b2e9953ba")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR040")
 					(unit 1)
 				)
 			)
@@ -8783,148 +9698,6 @@
 		)
 	)
 	(symbol
-		(lib_id "LED:SK6812MINI")
-		(at 222.25 30.48 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "5364fd58-ec03-4750-a3f9-2c6bb74d0e8c")
-		(property "Reference" "D2"
-			(at 212.598 22.606 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "SK6812MINI"
-			(at 212.598 20.066 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_SMD:LED_SK6812MINI_PLCC4_3.5x3.5mm_P1.75mm"
-			(at 229.87 29.21 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/2686/SK6812MINI_REV.01-1-2.pdf"
-			(at 231.775 27.94 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Description" "RGB LED: SK6812MINI addressable, integrated controller, 3535 PLCC4"
-			(at 222.25 30.48 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4960/14302512"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4960"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Adafruit" "https://www.adafruit.com/product/4960"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "4960"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Adafruit"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "1144c98b-42f6-4dd3-be06-375b459f6d0b")
-		)
-		(pin "1"
-			(uuid "19d82fe3-de04-446d-9be2-afb2b311ab7d")
-		)
-		(pin "3"
-			(uuid "55abdf9e-4a5b-4994-8309-6978f2658f7d")
-		)
-		(pin "4"
-			(uuid "8bffaf59-dc97-4083-9e5e-b4db0f979b85")
-		)
-		(instances
-			(project "c6remote"
-				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "D2")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:R")
 		(at 195.58 62.23 90)
 		(unit 1)
@@ -9206,6 +9979,157 @@
 		)
 	)
 	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 144.78 153.67 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "63b456fb-0f9b-490b-bc0e-23b9885c708d")
+		(property "Reference" "D2"
+			(at 135.128 145.796 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B-2020"
+			(at 135.128 143.256 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: WS2812B-2020 addressable, integrated controller, 12mA/ch, 2020 PLCC4"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Worldsemi"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "WS2812B-2020"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C965555.html"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4684/13170959"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4684"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/4684"
+			(at 144.78 153.67 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "ff68c6a7-c7a9-4693-aa20-8f8b9ee41563")
+		)
+		(pin "2"
+			(uuid "12a531e0-0772-482d-98f2-ee41cd483a1c")
+		)
+		(pin "3"
+			(uuid "fb9101d1-8302-4c49-bc00-154b34847af9")
+		)
+		(pin "4"
+			(uuid "cf0d7660-28cf-4c60-9f89-194b1232100f")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3.3V")
 		(at 48.26 38.1 0)
 		(unit 1)
@@ -9408,7 +10332,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 200.66 34.29 0)
+		(at 123.19 157.48 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9418,7 +10342,7 @@
 		(dnp no)
 		(uuid "6e745721-ae27-4f28-946a-d58aa76ea837")
 		(property "Reference" "C2"
-			(at 195.326 32.004 0)
+			(at 117.856 155.194 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9427,8 +10351,8 @@
 				)
 			)
 		)
-		(property "Value" "1uF"
-			(at 195.58 34.29 0)
+		(property "Value" "100nF"
+			(at 118.11 157.48 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9437,8 +10361,8 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 201.6252 38.1 0)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 124.1552 161.29 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9449,7 +10373,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 200.66 34.29 0)
+			(at 123.19 157.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9459,8 +10383,8 @@
 				)
 			)
 		)
-		(property "Description" "Capacitor: 1uF 50V X7R 0805 (decoupling)"
-			(at 200.66 34.29 0)
+		(property "Description" "Capacitor: 100nF 50V X7R 0603 (D2 decoupling)"
+			(at 123.19 157.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9470,8 +10394,8 @@
 				)
 			)
 		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
-			(at 0 0 0)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0603KRX7R9BB104/2103082"
+			(at -77.47 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9481,8 +10405,8 @@
 				)
 			)
 		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0805KKX7R9BB105"
-			(at 0 0 0)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0603KRX7R9BB104"
+			(at -77.47 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9492,8 +10416,8 @@
 				)
 			)
 		)
-		(property "MPN" "CC0805KKX7R9BB105"
-			(at 0 0 0)
+		(property "MPN" "CC0603KRX7R9BB104"
+			(at -77.47 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9504,7 +10428,7 @@
 			)
 		)
 		(property "Manufacturer" "Yageo"
-			(at 0 0 0)
+			(at -77.47 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9524,6 +10448,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "C2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3.3V")
+		(at 184.15 144.78 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "6ea429eb-32ac-4d95-9d1a-ae4619f0d979")
+		(property "Reference" "#PWR035"
+			(at 180.34 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 188.468 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 184.15 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 184.15 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 184.15 144.78 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "1569ee99-fd0e-4fdf-8033-2d9610040579")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR035")
 					(unit 1)
 				)
 			)
@@ -9599,6 +10598,157 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR_FLAG01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 232.41 152.4 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "715481cb-3bd9-40e4-a990-1623fa9310a0")
+		(property "Reference" "D5"
+			(at 235.204 149.352 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B-2020"
+			(at 232.664 139.446 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B-2020_PLCC4_2.0x2.0mm"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: WS2812B-2020 addressable, integrated controller, 12mA/ch, 2020 PLCC4"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Worldsemi"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "WS2812B-2020"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C965555.html"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/adafruit-industries-llc/4684/13170959"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Adafruit/4684"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Adafruit" "https://www.adafruit.com/product/4684"
+			(at 232.41 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e4eb113e-653b-47b0-923e-b332d55863e5")
+		)
+		(pin "2"
+			(uuid "ffc83bf1-c066-462c-81e8-703c4411969f")
+		)
+		(pin "3"
+			(uuid "294e38e3-263c-4e58-8cfa-79c4632e56f3")
+		)
+		(pin "4"
+			(uuid "56b92544-9dde-40de-ba68-ab97b88a89a2")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D5")
 					(unit 1)
 				)
 			)
@@ -10124,6 +11274,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "SW1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 208.28 160.02 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "8f6ff8ac-7841-48c1-8424-89605176ba03")
+		(property "Reference" "#PWR038"
+			(at 204.216 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 212.09 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 208.28 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 208.28 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 208.28 160.02 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "bed9af88-778a-4c6b-a569-d8190e4d2665")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR038")
 					(unit 1)
 				)
 			)
@@ -12038,131 +13263,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:R")
-		(at 213.36 39.37 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "cb9b92dd-e197-497b-8721-2cf3be6f03da")
-		(property "Reference" "R2"
-			(at 214.122 35.052 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "330"
-			(at 214.6299 36.83 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 213.36 41.148 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 213.36 39.37 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Resistor: 330R 1% 0.1W 0603 (D2 data series)"
-			(at 213.36 39.37 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07330RL/727162"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07330RL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MPN" "RC0603FR-07330RL"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Manufacturer" "Yageo"
-			(at 0 0 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "a24fb66b-70bf-4392-8600-487baf6d9a4a")
-		)
-		(pin "1"
-			(uuid "e7be65e7-a7d6-4613-9aa2-807f410d8ebf")
-		)
-		(instances
-			(project "c6remote"
-				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "R2")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:GND")
 		(at 31.75 83.82 270)
 		(unit 1)
@@ -12311,6 +13411,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR033")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3.3V")
+		(at 232.41 144.78 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "d0a4e54a-1e38-463d-b115-fc718b52492b")
+		(property "Reference" "#PWR039"
+			(at 228.6 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 236.728 142.494 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 232.41 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 232.41 144.78 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 232.41 144.78 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "cffee600-6e5e-494f-b0c1-ddc71fd68e80")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR039")
 					(unit 1)
 				)
 			)
@@ -12605,7 +13780,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 232.41 41.91 0)
+		(at 154.94 165.1 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -12615,7 +13790,7 @@
 		(dnp no)
 		(uuid "d6b35221-9d50-4ced-82be-18e675945cfa")
 		(property "Reference" "#PWR_FLAG03"
-			(at 237.49 37.084 0)
+			(at 160.02 160.274 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12625,7 +13800,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 238.506 40.132 0)
+			(at 161.036 163.322 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12635,7 +13810,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 232.41 41.91 0)
+			(at 154.94 165.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12646,7 +13821,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 232.41 41.91 0)
+			(at 154.94 165.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12657,7 +13832,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 232.41 41.91 0)
+			(at 154.94 165.1 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13362,7 +14537,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x02")
-		(at 133.35 153.67 0)
+		(at 217.17 30.48 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13372,7 +14547,7 @@
 		(dnp no)
 		(uuid "e89932a3-f781-4a64-91d7-71e6c1ca850d")
 		(property "Reference" "J1"
-			(at 133.35 150.114 0)
+			(at 217.17 26.924 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13382,7 +14557,7 @@
 			)
 		)
 		(property "Value" "Battery"
-			(at 133.35 159.766 0)
+			(at 217.17 36.576 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13392,7 +14567,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal"
-			(at 133.35 153.67 0)
+			(at 217.17 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13403,7 +14578,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 133.35 153.67 0)
+			(at 217.17 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13414,7 +14589,7 @@
 			)
 		)
 		(property "Description" "Connector: battery, JST PH 2-pos SMD right-angle 2.0mm"
-			(at 146.812 143.002 0)
+			(at 216.408 43.434 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13424,7 +14599,7 @@
 			)
 		)
 		(property "Manufacturer" "JST"
-			(at 133.35 153.67 0)
+			(at 217.17 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13435,7 +14610,7 @@
 			)
 		)
 		(property "MPN" "S2B-PH-SM4-TB(LF)(SN)"
-			(at 133.35 153.67 0)
+			(at 217.17 30.48 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13446,7 +14621,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/jst-sales-america-inc/S2B-PH-SM4-TB-LF-SN/926655"
-			(at 0 0 0)
+			(at 83.82 -123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13457,7 +14632,7 @@
 			)
 		)
 		(property "Mouser" "https://www.mouser.com/ProductDetail/JST-Commercial/S2B-PH-SM4-TBLFSN"
-			(at 0 0 0)
+			(at 83.82 -123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13484,7 +14659,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 229.87 41.91 0)
+		(at 152.4 165.1 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13494,7 +14669,7 @@
 		(dnp no)
 		(uuid "e9dc46b6-d24d-4d73-98f2-72f065740b8c")
 		(property "Reference" "#PWR032"
-			(at 229.87 48.26 0)
+			(at 152.4 171.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13505,7 +14680,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 227.838 45.72 0)
+			(at 150.368 168.91 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13516,7 +14691,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 229.87 41.91 0)
+			(at 152.4 165.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13527,7 +14702,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 229.87 41.91 0)
+			(at 152.4 165.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13538,7 +14713,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 229.87 41.91 0)
+			(at 152.4 165.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13762,8 +14937,83 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 184.15 160.02 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "eee635db-90d8-4590-b250-f57ac1390cdb")
+		(property "Reference" "#PWR036"
+			(at 180.086 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 187.96 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 184.15 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 184.15 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 184.15 160.02 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a93fd9be-b7dd-4e9f-83f8-5d93c3caad8f")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR036")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3.3V")
-		(at 200.66 27.94 0)
+		(at 123.19 151.13 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13773,7 +15023,7 @@
 		(dnp no)
 		(uuid "efda8d5a-324e-4a52-aec3-064bb5a6b26f")
 		(property "Reference" "#PWR013"
-			(at 200.66 31.75 0)
+			(at 123.19 154.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13784,7 +15034,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 200.6599 24.13 0)
+			(at 123.1899 147.32 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13795,7 +15045,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 200.66 27.94 0)
+			(at 123.19 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13806,7 +15056,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 200.66 27.94 0)
+			(at 123.19 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13817,7 +15067,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 200.66 27.94 0)
+			(at 123.19 151.13 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

@@ -14,7 +14,13 @@
       "mcp__kicad__list_schematic_wires",
       "mcp__kicad__get_schematic_component",
       "mcp__kicad__run_erc",
-      "mcp__kicad__list_schematic_components"
+      "mcp__kicad__list_schematic_components",
+      "mcp__kicad__get_component_properties",
+      "mcp__kicad__get_pad_position",
+      "mcp__kicad__query_traces",
+      "mcp__kicad__get_board_2d_view",
+      "mcp__kicad__get_component_list",
+      "mcp__kicad__query_zones"
     ]
   },
   "enabledMcpjsonServers": [

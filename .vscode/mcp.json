@@ -12,7 +12,7 @@
         "LOG_LEVEL": "info",
         "KICAD_AUTO_LAUNCH": "false",
         "KICAD_MCP_DEV": "0",
-        "KICAD_ALLOWED_ROOTS": "/Users/landonrohatensky/dev/c6homething"
+        "KICAD_ALLOWED_ROOTS": "/Users/landonrohatensky/dev/homething-c6"
       }
     }
   }

@@ -45,14 +45,14 @@ This repo contains the KiCad hardware and ESPHome bring-up configuration for a p
 
 | Ref | Part | Role |
 | --- | --- | --- |
-| `U1` | [Seeed Studio XIAO ESP32-C6](https://www.digikey.ca/en/products/detail/seeed-technology-co-ltd/113991254/24613066) | Main module: Wi-Fi, BLE, Zigbee/Thread |
-| `MK1` | [ICS-43434 I2S microphone](https://www.digikey.ca/en/products/detail/tdk-invensense/ICS-43434/6140298) | Audio input |
+| `U1` | [Seeed Studio XIAO ESP32-C6](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8932/102010636.pdf) | Main module: Wi-Fi, BLE, Zigbee/Thread |
+| `MK1` | [ICS-43434 I2S microphone](https://invensense.tdk.com/wp-content/uploads/2016/02/DS-000069-ICS-43434-v1.2.pdf) | Audio input |
 | `U2` | [TSOP4136 IR receiver](https://www.vishay.com/docs/82460/tsop45.pdf) | IR receive |
-| `D1`, `Q1` | [INL-3AHIR30 IR LED](http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf) driven by [MMBT2222A,215](https://www.digikey.ca/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598) | IR transmit; D1 leads hand-bent 90° to fire through the top-edge notch (see `BEND 90°` silk mark) |
-| `U3` | [PCF8575DBR I2C GPIO expander](https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551) | Button input fan-out |
-| `SW1`–`SW11` | [TL3315NF160Q tactile switches](https://www.digikey.ca/en/products/detail/e-switch/TL3315NF160Q/1870395) | Discrete buttons |
-| `ENC1` | [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001) | Scroll wheel: encoder channels plus five switch signals |
-| `D2` | [SK6812MINI addressable LED](https://www.digikey.ca/en/products/detail/adafruit-industries-llc/2686/5804107) | Status light |
+| `D1`, `Q1` | [INL-3AHIR30 IR LED](http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf) driven by [MMBT2222A](https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf) | IR transmit; D1 leads hand-bent 90° to fire through the top-edge notch (see `BEND 90°` silk mark) |
+| `U3` | [PCF8575DBR I2C GPIO expander](https://www.ti.com/lit/ds/symlink/pcf8575.pdf) | Button input fan-out |
+| `SW1`–`SW11` | [TL3315NF160Q tactile switches](https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf) | Discrete buttons |
+| `ENC1` | [Adafruit ANO rotary encoder](https://cdn-learn.adafruit.com/assets/assets/000/104/942/original/tsw.pdf) | Scroll wheel: encoder channels plus five switch signals |
+| `D2`–`D5` | [WS2812B-2020 addressable LEDs](https://cdn-shop.adafruit.com/product-files/4684/4684_WS2812B-2020_V1.3_EN.pdf) | Status light chain of 4; `GPIO17` drives `D2` DIN, then `led_2`/`led_3`/`led_4` cascade DOUT to DIN. 100nF local decoupling at `D2` (`C2`) |
 | `J1` | [JST S2B-PH-SM4-TB(LF)(SN)](https://www.jst-mfg.com/product/pdf/eng/ePH.pdf) | Battery connector, PH series right-angle SMD |
 
 The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
@@ -135,6 +135,12 @@ Regenerate all fabrication outputs (gerbers, drill, position file, BOM) into `ex
 
 ```bash
 scripts/regen-fab.sh
+```
+
+Regenerate just the BOM after editing symbol sourcing fields (Datasheet, MPN, vendor links). Use this, not the KiCad MCP `export_bom` tool, which emits a different schema and drops the custom sourcing columns:
+
+```bash
+scripts/export-bom.sh
 ```
 
 Render reusable 2D board views (default output: `c6remote-kicad/renders/<format>/`):

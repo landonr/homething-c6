@@ -18,7 +18,6 @@ KICAD_CLI="${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KI="$REPO_ROOT/c6remote-kicad"
 PCB="$KI/c6remote.kicad_pcb"
-SCH="$KI/c6remote.kicad_sch"
 OUT="$KI/export"
 
 if [[ ! -x "$KICAD_CLI" ]]; then
@@ -37,11 +36,6 @@ echo "==> Drill"
 echo "==> Pick-and-place (position)"
 "$KICAD_CLI" pcb export pos "$PCB" -o "$OUT/c6remote-pos.csv" --format csv --units mm --side both
 
-echo "==> BOM"
-"$KICAD_CLI" sch export bom "$SCH" -o "$OUT/c6remote-bom.csv" \
-	--fields "Reference,QUANTITY,Value,Footprint,Datasheet,Description,Manufacturer,MPN,Digikey,Mouser,Adafruit" \
-	--labels "Reference,Qty,Value,Footprint,Datasheet,Description,Manufacturer,MPN,Digikey,Mouser,Adafruit" \
-	--group-by "Value,Footprint" \
-	--ref-delimiter ", " --ref-range-delimiter ""
+KICAD_CLI="$KICAD_CLI" "$REPO_ROOT/scripts/export-bom.sh"
 
 echo "==> Done. Fabrication outputs written to $OUT"

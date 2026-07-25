@@ -164,9 +164,9 @@ light:
     id: status_light
     name: Status Light
     pin: GPIO17
-    chipset: SK6812
+    chipset: WS2812
     rgb_order: GRB
-    num_leds: 1
+    num_leds: 4
     restore_mode: ALWAYS_OFF
 
 remote_receiver:

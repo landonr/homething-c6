@@ -80,7 +80,7 @@ There is no finer-grained single-test harness in this repo; the closest scoped c
 
 **Zone refill before commit:** `kicad-cli pcb drc --refill-zones` refills copper zones in memory only, it never saves the refill back into `c6remote.kicad_pcb`. After any board edit that can affect copper pours (moved/changed footprints, new tracks or vias, net changes), do NOT commit until Landon has refilled zones in the KiCad GUI (Edit → Fill All Zones, then save) and confirmed. Stage and commit the board file only after that confirmation.
 
-Baseline as of 2026-07-25: `sch erc` 0 violations, `pcb drc` 0 errors and 0 unconnected items with 43 silkscreen/library warnings. Treat those 43 as pre-existing unless the task is specifically about them. Schematic-vs-board parity currently diverges by design: the schematic carries the D2 `WS2812B-2020` swap and the SW1-11 terminal remap, the board does not yet (see `ROADMAP.md`).
+Baseline as of 2026-07-26: `sch erc` 0 violations, `pcb drc` 0 errors and 0 unconnected items with 48 silkscreen/library warnings (24 `silk_over_copper`, 14 `lib_footprint_mismatch`, 7 `silk_edge_clearance`, 3 `silk_overlap`). Treat those 48 as pre-existing unless the task is specifically about them; 5 of the `silk_over_copper` are the ANO wheel outline crossing ENC1 pads, which is intentional. Schematic-vs-board parity is 13 issues, all `extra_footprint` for the board-only `TP_*` test points. The board now carries the D2 `WS2812B-2020` swap, the D3-D5 chain, and the SW1-11 terminal remap, so those no longer diverge.
 
 ## High-level architecture
 

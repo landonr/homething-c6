@@ -130,6 +130,17 @@
 		(remove_unused_layers no)
 		(uuid "004490c8-f15d-49cf-a3e4-773fe7f65b65")
 	)
+	(fp_circle
+		(center 1.110158 -1.110113)
+		(end 18.310158 -1.110113)
+		(stroke
+			(width 0.25)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "5b2e7c11-8d43-4e92-a7c5-2b91d6e4f001")
+	)
 	(group ""
 		(uuid "3635a12d-0530-4834-8740-55909b3b3899")
 		(members "004490c8-f15d-49cf-a3e4-773fe7f65b65" "0229b6ac-d773-414a-afb5-cd5b8c79b9dd"

@@ -1,6 +1,7 @@
 c6remote-kicad/*-drc.rpt
 c6remote-kicad/*-erc.rpt
 c6remote-kicad/~*.lck
+c6remote-kicad/ibom.html
 docs/superpowers/
 .esphome/
 secrets.yaml

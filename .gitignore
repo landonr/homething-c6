@@ -14,3 +14,8 @@ pcbway/
 
 # Photoshop sources for social/story artwork (large binaries, not design source)
 *.psd
+
+# Fab upload archives. The pre-commit hook blanket-stages export/, so a stray
+# zip dropped in there gets tracked; export.zip is rebuilt from export/ on demand.
+c6remote-kicad/export.zip
+c6remote-kicad/export/*.zip

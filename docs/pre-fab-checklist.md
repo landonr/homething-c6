@@ -15,16 +15,12 @@ Commands assume `cd c6remote-kicad` first, matching the conventions in
   `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations`
   Result (2026-07-27): 0 violations.
 
-- [x] Full board DRC with schematic parity and zone refill, JLCPCB fab-capability
-  rules loaded (`c6remote.kicad_dru`, auto-loaded by `kicad-cli` and the GUI
-  from the project directory, no flag needed):
+- [x] Full board DRC with schematic parity and zone refill:
   `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations`
   Result (2026-07-27): 0 errors, 46 pre-existing warnings (24 `silk_over_copper`,
   14 `lib_footprint_mismatch`, 7 `silk_edge_clearance`, 1 `silk_overlap`), 0
   unconnected. Parity 13 issues, all `extra_footprint` for board-only `TP_*`
-  test points (known, not a defect). JLC rule set verified live via a canary
-  test (an intentionally too-large minimum track width rule produced 245
-  violations, confirming `kicad-cli` actually loads `c6remote.kicad_dru`).
+  test points (known, not a defect).
 
 - [x] STEP export succeeds (catches broken 3D model references before they
   show up as a mechanical surprise):
@@ -54,8 +50,8 @@ pin-1 walk.
 
 - [ ] JLCPCB DFM analysis: upload `export/` gerbers through the JLCPCB order
   flow and review its DFM report. Catches acid traps, soldermask slivers, and
-  annular ring issues against their actual process, which is a stricter and
-  more current check than the static `c6remote.kicad_dru` limits above.
+  annular ring issues against their actual process, the authoritative
+  capability check.
 
 - [ ] JLCPCB assembly rotation preview: compare against
   `export/c6remote-pos.csv`. KiCad's rotation convention differs from JLC's
@@ -85,11 +81,15 @@ pin-1 walk.
 
 ## Findings log
 
-- **2026-07-27**: Added `c6remote.kicad_dru` with JLCPCB 2-layer capability
-  limits as custom DRC rules; verified `kicad-cli` loads it (canary rule
-  test); full DRC with real rules unchanged at 46 warnings, 0 errors, board
-  passes JLC limits with zero new violations. STEP export succeeds but is
+- **2026-07-27**: One-shot check against JLCPCB 2-layer capability limits
+  (trace/space 0.127mm, via 0.3/0.45mm, hole-to-hole 0.5mm different nets,
+  PTH annular 0.25mm, copper-to-edge 0.3mm, per-type hole-to-copper
+  clearances) as a temporary `.kicad_dru`: zero new violations, board passes
+  JLC limits with margin (project constraints are stricter for track width
+  and clearance). Rules file removed after the pass; the JLC DFM upload above
+  is the live capability check going forward. STEP export succeeds but is
   missing 3D models for `D2`-`D5` (`LED_WS2812B-2020_PLCC4_2.0x2.0mm.step`)
   and `J1` (`JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal.step`); both are
   cosmetic gaps in the local 3D model cache, not fab-blocking. Generated
-  first IBOM review artifact via `scripts/gen-ibom.sh`.
+  first IBOM review artifact via `scripts/gen-ibom.sh`. Q1/R1 moved and
+  `IR EMIT` rerouted after review; DRC re-run clean at the same baseline.

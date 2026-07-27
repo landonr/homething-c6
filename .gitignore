@@ -8,3 +8,9 @@ secrets.yaml
 
 # PCBWay vendor quotes/BOMs (working docs, not design source)
 pcbway/
+
+# macOS Finder metadata
+.DS_Store
+
+# Photoshop sources for social/story artwork (large binaries, not design source)
+*.psd

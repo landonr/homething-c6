@@ -3,11 +3,14 @@
 # substitutions and define the LED strip.
 #
 # Pin map (c6remote.kicad_sch):
-#   GPIO0  sd (I2S data)   GPIO16 IR REC        GPIO21 ws
+#   GPIO0  ws              GPIO16 IR REC        GPIO21 sd (I2S data)
 #   GPIO1  IR EMIT         GPIO17 led_1 (D2-D5) GPIO22 sda
 #   GPIO2  sck             GPIO19 ano_enc2      GPIO23 scl
 #   GPIO4  bat_sense /2    GPIO20 ano_enc1
-#   GPIO5  exp_int (nINT)  GPIO18 no connect
+#   GPIO5  exp_int (nINT)
+#
+# Spare, unconnected at U1: GPIO18 (D10, has a test point), GPIO6, GPIO7.
+# GPIO6/7 are also deep-sleep wake capable (C6 wakes only on GPIO0-7).
 
 # Defaults; version files override (main config wins per packages docs).
 substitutions:
@@ -390,17 +393,19 @@ remote_transmitter:
   # one 48-symbol RMT block, the other goes to the LED strip
   rmt_symbols: 48
 
-# I2S microphone MK1
+# I2S microphone MK1. GPIO0 is WS and GPIO21 is data in, not the other way
+# round: the two swapped at the XIAO when MK1 was rerouted. Getting them
+# backwards drives LRCLK onto the mic's SD output and makes two drivers fight.
 i2s_audio:
   id: mic_bus
   i2s_bclk_pin: GPIO2
-  i2s_lrclk_pin: GPIO21
+  i2s_lrclk_pin: GPIO0
 
 microphone:
   - platform: i2s_audio
     id: board_microphone
     i2s_audio_id: mic_bus
-    i2s_din_pin: GPIO0
+    i2s_din_pin: GPIO21
     adc_type: external
     pdm: false
     channel: left

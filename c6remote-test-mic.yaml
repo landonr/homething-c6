@@ -56,16 +56,19 @@ web_server:
   port: 80
   version: 3
 
+# GPIO0 is WS and GPIO21 is data in, not the other way round: the two swapped
+# at the XIAO when MK1 was rerouted. Getting them backwards drives LRCLK onto
+# the mic's SD output and makes two drivers fight.
 i2s_audio:
   id: mic_bus
   i2s_bclk_pin: GPIO2
-  i2s_lrclk_pin: GPIO21
+  i2s_lrclk_pin: GPIO0
 
 microphone:
   - platform: i2s_audio
     id: board_microphone
     i2s_audio_id: mic_bus
-    i2s_din_pin: GPIO0
+    i2s_din_pin: GPIO21
     adc_type: external
     pdm: false
     channel: ${mic_channel}

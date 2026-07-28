@@ -100,19 +100,16 @@ binary_sensor:
     pin:
       <<: *button_1
       number: 10
-  # ENC1 ANO encoder mounts rotated 90deg CW vs part-relative switch names
-  # (S3 faces device-down, S5 faces device-up). Names below are device
-  # directions confirmed during 2026-07-21 rework: device-up fired old
-  # "Encoder Left" (P17/ano_sw5), device-down fired old "Encoder Right"
-  # (P13/ano_sw1). P12/P14 inferred from same rotation; verify after
-  # pad 8 rework.
+  # ANO wheel on PCF8575 P13..P17. Directions verified on unit 1 2026-07-27 by
+  # logging expander edges per press; they match the ENC1 symbol pin names, so
+  # the part is mounted as drawn and there is no rotation to compensate for.
   - platform: gpio
-    name: Encoder Down
+    name: Encoder Right
     pin:
       <<: *button_1
       number: 11
   - platform: gpio
-    name: Encoder Right
+    name: Encoder Up
     pin:
       <<: *button_1
       number: 12
@@ -122,12 +119,12 @@ binary_sensor:
       <<: *button_1
       number: 13
   - platform: gpio
-    name: Encoder Left
+    name: Encoder Down
     pin:
       <<: *button_1
       number: 14
   - platform: gpio
-    name: Encoder Up
+    name: Encoder Left
     pin:
       <<: *button_1
       number: 15

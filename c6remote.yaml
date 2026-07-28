@@ -129,6 +129,20 @@ binary_sensor:
       <<: *button_1
       number: 15
 
+  # PCF8575 nINT, R9 100k pull-up on board. ESPHome polls the expander, so this
+  # is visibility only: it does not make button reads interrupt-driven. Useful
+  # because an edge shows here even when the port bit itself is misrouted.
+  - platform: gpio
+    name: Expander INT
+    id: expander_int
+    entity_category: diagnostic
+    pin:
+      number: GPIO5
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
 sensor:
   - platform: rotary_encoder
     name: Encoder

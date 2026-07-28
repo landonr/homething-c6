@@ -22,12 +22,14 @@ The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT
 
 Unit 1 is the only board that exists, and the design has moved on since it was fabbed. Everything below is a difference, so a photo or measurement from unit 1 does not describe what the next order will build. The v0.1 fab package is attached to the [v0.1 release](https://github.com/landonr/homething-c6/releases/tag/v0.1).
 
-Quickest way to tell the two apart in a photo: the front silkscreen under the logo reads **V0.1** on unit 1 and **V0.2** on the current design. Both renders come out of `scripts/render-readme-assets.sh`. The left pair is pinned to the fab commit, so it keeps showing the board PCBWay built no matter what lands on `main`; the right pair tracks `main`. The 06-16 fab commit only touched a symbol value and the BOM, so these renders are the ones generated at `0df2483` and they match the delivered copper.
+Quickest way to tell the two apart in a photo: the front silkscreen under the logo reads **V0.1** on unit 1 and **V0.2** on the current design.
 
 | Unit 1, as fabbed (`70ab9b0`) | Current design (`main`) |
 | --- | --- |
-| <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-3d-top.png" width="360" alt="Front of the board as fabbed, single SK6812MINI and front-side IR receiver"> | <img src="https://raw.githubusercontent.com/landonr/homething-c6/main/docs/readme-assets/board-3d-top.png" width="360" alt="Front of the current design, four LEDs around the wheel and no front IR receiver"> |
-| <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-3d-bottom.png" width="360" alt="Back of the board as fabbed, no silkscreen artwork"> | <img src="https://raw.githubusercontent.com/landonr/homething-c6/main/docs/readme-assets/board-3d-bottom.png" width="360" alt="Back of the current design, IR receiver moved back and silkscreen artwork added"> |
+| <img src="timeline-assets/v0.1-board-3d-top.png" width="240" alt="Front of the board as fabbed, single SK6812MINI and front-side IR receiver"> | <img src="readme-assets/board-3d-top.png" width="240" alt="Front of the current design, four LEDs around the wheel and no front IR receiver"> |
+| <img src="timeline-assets/v0.1-board-3d-bottom.png" width="240" alt="Back of the board as fabbed, no silkscreen artwork"> | <img src="readme-assets/board-3d-bottom.png" width="240" alt="Back of the current design, IR receiver moved back and silkscreen artwork added"> |
+
+The right column is the live render from `scripts/render-readme-assets.sh`, so it tracks the current design. The left column is `docs/readme-assets/board-3d-*.png` as they stood at [`70ab9b0`](https://github.com/landonr/homething-c6/blob/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-3d-top.png), trimmed of the render's whitespace border so both columns scale alike, and frozen: the render script must never overwrite them. Those renders were generated at `0df2483` and the 06-16 fab commit only touched a symbol value and the BOM, so they match the delivered copper.
 
 | Block | Unit 1, as fabbed (`70ab9b0`) | Current design |
 | --- | --- | --- |

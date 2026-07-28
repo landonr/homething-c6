@@ -157,35 +157,11 @@ Regenerate the README preview assets in `docs/readme-assets/`:
 ./scripts/render-readme-assets.sh
 ```
 
-## ESPHome hardware bring-up
-
-`c6remote.yaml` exposes all board inputs and provides guarded tests for the status LED, IR hardware, microphone, and battery ADC. Deep sleep stays disabled during bring-up so USB logs and recovery remain available.
-
-Copy the secrets template and replace every value.
-
-```bash
-cp secrets.example.yaml secrets.yaml
-esphome config c6remote.yaml
-esphome run c6remote.yaml
-```
-
-For first power-up, use current-limited USB with no battery attached. Confirm the board stays cool and the 3.3 V rail is correct before testing peripherals. The I2C log should find the PCF8575 at `0x20`. Test the IR transmitter only with the bounded `Send Short IR Test Burst` action. Do not drive GPIO1 high continuously.
-
 ## Status
 
-The first assembled prototype arrived from PCBWay on 2026-07-20 (order YT1753739, PCB plus SMD assembly). Hardware bring-up and validation are in progress.
+The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT1753739, PCB plus SMD assembly). Bring-up found three wiring faults, all fixed in the design: ANO encoder pad 6/8 swap, TL3315 switch terminal short, ICS-43434 microphone pin numbering. Switches and encoder are reworkable on unit 1, the microphone is not, so a rev-B board is needed for the first working mic.
 
-| Date | Milestone |
-| --- | --- |
-| 2026-06-16 | Quotation received for PCB and assembly, replied with updates |
-| 2026-06-17 | Updated quotation approved; assembly order passed review |
-| 2026-06-18 | Order confirmed, production queued |
-| 2026-07-10 | Component engineering questions received from PCBWay |
-| 2026-07-12 | Answers returned; PCBWay confirmed production is proceeding |
-| 2026-07-14 | Assembled sample board photos received; PCBWay asked to confirm D1/U2 orientation before completing solder |
-| 2026-07-15 | PCBWay adjusted D1 (90° lead bend firing through top-edge notch) and requested recheck |
-| 2026-07-16 | D1 and full board orientation confirmed correct; assembly proceeding |
-| 2026-07-20 | First assembled prototype delivered; hardware bring-up started |
+Unit 1 was built from the [v0.1](https://github.com/landonr/homething-c6/releases/tag/v0.1) fab package and differs from the current design in ten blocks, so its photos and measurements do not describe what the next order will build. Full fab and bring-up history, plus the unit 1 versus current comparison, is in [`docs/timeline.md`](docs/timeline.md).
 
 ## Relationship to homeThing
 

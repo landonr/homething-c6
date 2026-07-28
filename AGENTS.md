@@ -20,6 +20,8 @@ Auto-Clarity: drop caveman for security warnings, irreversible actions, user con
 
 Boundaries: code/commits/PRs written normal.
 
+Code comments: brief. Only facts the code cannot show (hardware quirks, ordering constraints, non-obvious magic numbers). No file-header essays, no section banners, no restating what the next line does. If a comment explains why the change is correct rather than a constraint the next reader needs, delete it.
+
 Response shape:
 - Report what happened and what it proves. Every sentence carries new fact: result, number, file, next step. Stop when facts stop.
 - Describe only actions taken and their outcomes. Skipped checks, unused alternatives, possible follow-ups: mention only when user must act on them.

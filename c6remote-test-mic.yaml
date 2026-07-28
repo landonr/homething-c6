@@ -1,0 +1,364 @@
+# c6remote microphone bring-up firmware. `esphome run c6remote-test-mic.yaml`
+#
+# MK1 pins: GPIO0 sd, GPIO2 sck, GPIO21 ws. L/R is at GND so the sample lands
+# in the left half of the frame and `channel: right` would read clean zeros.
+# ICS-43434 class part: 24-bit sample MSB aligned in a 32-bit slot, full scale
+# 2^23. Expected rate 192000 B/s. Quiet room RMS lands near -70 to -50 dBFS,
+# talking at the board pushes peak past -30. Read Mic Verdict first.
+
+substitutions:
+  device_name: c6remote-mic
+  friendly_name: c6remote Mic Test
+  # 2020 LEDs are specified from 3.5V on a 3.3V rail, same cap as v1/v2.
+  max_level: "0.4"
+  # I2S slot is compile time, so flip it by reflashing:
+  # esphome run c6remote-test-mic.yaml -s mic_channel right
+  mic_channel: left
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    # -100 is after every component setup. Starting capture any earlier hits a
+    # null I2S queue and panics in xQueueSemaphoreTake.
+    priority: -100
+    then:
+      - light.turn_on:
+          id: led_strip
+          brightness: 100%
+          effect: VU Meter
+      - switch.turn_on: mic_capture
+      - logger.log: "c6remote mic test ready, capturing"
+
+esp32:
+  board: seeed_xiao_esp32c6
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Setup"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+api:
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+  version: 3
+
+i2s_audio:
+  id: mic_bus
+  i2s_bclk_pin: GPIO2
+  i2s_lrclk_pin: GPIO21
+
+microphone:
+  - platform: i2s_audio
+    id: board_microphone
+    i2s_audio_id: mic_bus
+    i2s_din_pin: GPIO0
+    adc_type: external
+    pdm: false
+    channel: ${mic_channel}
+    sample_rate: 48000
+    bits_per_sample: 32bit
+    on_data:
+      - lambda: |-
+          const size_t n = x.size() / sizeof(int32_t);
+          id(mic_bytes) += x.size();
+          id(mic_blocks) += 1;
+          if (n == 0)
+            return;
+          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
+          for (size_t i = 0; i < n; i++) {
+            const int32_t v = samples[i] >> 8;
+            const int32_t mag = v < 0 ? -v : v;
+            if (mag > id(mic_peak_raw))
+              id(mic_peak_raw) = mag;
+            if (v == 0)
+              id(mic_zeros) += 1;
+            if (v < id(mic_min))
+              id(mic_min) = v;
+            if (v > id(mic_max))
+              id(mic_max) = v;
+            id(mic_dc_sum) += v;
+            id(mic_sq_sum) += (double) v * (double) v;
+            id(mic_samples) += 1;
+          }
+
+globals:
+  - id: mic_bytes
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_blocks
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_samples
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_zeros
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_peak_raw
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_min
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_max
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_dc_sum
+    type: double
+    restore_value: false
+    initial_value: "0"
+  - id: mic_sq_sum
+    type: double
+    restore_value: false
+    initial_value: "0"
+
+  # Floored at -100 dBFS so a silent stream plots flat instead of -inf.
+  - id: lvl_peak_db
+    type: float
+    restore_value: false
+    initial_value: "-100.0f"
+  - id: lvl_rms_db
+    type: float
+    restore_value: false
+    initial_value: "-100.0f"
+  - id: lvl_peak_norm
+    type: float
+    restore_value: false
+    initial_value: "0"
+  - id: rate_bytes
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: pct_zero
+    type: float
+    restore_value: false
+    initial_value: "0"
+  - id: dc_offset
+    type: float
+    restore_value: false
+    initial_value: "0"
+  - id: seen_min
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  - id: seen_max
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  - id: verdict
+    type: std::string
+    restore_value: false
+    initial_value: '"starting"'
+  - id: vu_env
+    type: float
+    restore_value: false
+    initial_value: "0"
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          const bool capturing = id(board_microphone)->is_running();
+          const uint32_t bytes = id(mic_bytes);
+          const uint32_t samples = id(mic_samples);
+          const uint32_t zeros = id(mic_zeros);
+          const int32_t peak = id(mic_peak_raw);
+          const double sq = id(mic_sq_sum);
+          const double dc = id(mic_dc_sum);
+          const float full = 8388608.0f;
+
+          id(rate_bytes) = bytes;
+          id(seen_min) = id(mic_min);
+          id(seen_max) = id(mic_max);
+          id(pct_zero) = samples ? 100.0f * (float) zeros / (float) samples : 0.0f;
+          id(dc_offset) = samples ? (float) (dc / (double) samples) : 0.0f;
+          id(lvl_peak_norm) = (float) peak / full;
+          id(lvl_peak_db) = peak > 0 ? 20.0f * log10f((float) peak / full) : -100.0f;
+          const float rms = samples ? sqrt(sq / (double) samples) : 0.0;
+          id(lvl_rms_db) = rms > 0.0f ? 20.0f * log10f(rms / full) : -100.0f;
+
+          // Ordered so the first failure that explains the rest wins.
+          if (!capturing) {
+            id(verdict) = "capture off";
+          } else if (bytes == 0) {
+            id(verdict) = "no data: I2S read stalled";
+          } else if (bytes < 100000) {
+            id(verdict) = "underrun: only " + esphome::to_string(bytes) + " B/s";
+          } else if (id(pct_zero) > 99.9f) {
+            id(verdict) = "clocked but all zeros: check SD, L/R pin, channel";
+          } else if (peak >= 8388607) {
+            id(verdict) = "railed at full scale: SD stuck or wrong slot";
+          } else if (id(lvl_rms_db) < -85.0f) {
+            id(verdict) = "near-silent stream, likely dead mic";
+          } else if (id(lvl_peak_db) > -30.0f) {
+            id(verdict) = "PASS: mic live, loud signal";
+          } else {
+            id(verdict) = "PASS: mic live, room noise only";
+          }
+
+          ESP_LOGD("mic", "%u B/s, %u blocks, peak %.1f dBFS, rms %.1f dBFS, "
+                          "zero %.1f%%, dc %.0f, min %ld max %ld, %s",
+                   bytes, id(mic_blocks), id(lvl_peak_db), id(lvl_rms_db),
+                   id(pct_zero), id(dc_offset), (long) id(mic_min),
+                   (long) id(mic_max), id(verdict).c_str());
+
+          id(mic_bytes) = 0;
+          id(mic_blocks) = 0;
+          id(mic_samples) = 0;
+          id(mic_zeros) = 0;
+          id(mic_peak_raw) = 0;
+          id(mic_min) = 0;
+          id(mic_max) = 0;
+          id(mic_dc_sum) = 0;
+          id(mic_sq_sum) = 0;
+
+switch:
+  - platform: template
+    name: Mic Capture
+    id: mic_capture
+    optimistic: true
+    # Must not restore ON: a restored state runs during setup, before the I2S
+    # queue exists. on_boot starts capture instead.
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - microphone.capture: board_microphone
+    turn_off_action:
+      - microphone.stop_capture: board_microphone
+      - lambda: |-
+          id(vu_env) = 0.0f;
+          id(lvl_peak_db) = -100.0f;
+          id(lvl_rms_db) = -100.0f;
+          id(lvl_peak_norm) = 0.0f;
+
+sensor:
+  - platform: template
+    name: Mic Peak Level
+    id: mic_peak_level
+    lambda: return id(lvl_peak_db);
+    unit_of_measurement: dBFS
+    accuracy_decimals: 1
+    state_class: measurement
+    update_interval: 1s
+
+  - platform: template
+    name: Mic RMS Level
+    id: mic_rms_level
+    lambda: return id(lvl_rms_db);
+    unit_of_measurement: dBFS
+    accuracy_decimals: 1
+    state_class: measurement
+    update_interval: 1s
+
+  - platform: template
+    name: Mic Peak Fraction
+    lambda: return id(lvl_peak_norm);
+    accuracy_decimals: 4
+    state_class: measurement
+    update_interval: 1s
+
+  - platform: template
+    name: Mic Data Rate
+    lambda: return (float) id(rate_bytes);
+    unit_of_measurement: B/s
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 1s
+
+  - platform: template
+    name: Mic Zero Samples
+    lambda: return id(pct_zero);
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    state_class: measurement
+    update_interval: 1s
+
+  - platform: template
+    name: Mic DC Offset
+    lambda: return id(dc_offset);
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 5s
+
+  - platform: template
+    name: Mic Sample Min
+    lambda: return (float) id(seen_min);
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 5s
+
+  - platform: template
+    name: Mic Sample Max
+    lambda: return (float) id(seen_max);
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 5s
+
+binary_sensor:
+  - platform: template
+    name: Mic Signal Detected
+    lambda: return id(lvl_peak_db) > -40.0f;
+
+text_sensor:
+  - platform: template
+    name: Mic Verdict
+    lambda: return id(verdict);
+    update_interval: 1s
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_strip
+    name: Status Light
+    pin: GPIO17
+    chipset: WS2812
+    rgb_order: GRB
+    num_leds: 4
+    rmt_symbols: 48
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    effects:
+      # VU bar, D2 at the bottom, -60 dBFS dark to 0 dBFS full, top LED red.
+      # Dim blue idle while capture is off, so a dark strip means a real fault.
+      - addressable_lambda:
+          name: VU Meter
+          update_interval: 30ms
+          lambda: |-
+            const float cap = ${max_level};
+            if (!id(board_microphone)->is_running()) {
+              for (int i = 0; i < it.size(); i++)
+                it[i] = Color(0, 0, (uint8_t) (255 * cap * 0.15f));
+              return;
+            }
+            float m = (id(lvl_peak_db) + 60.0f) / 60.0f;
+            m = m < 0.0f ? 0.0f : (m > 1.0f ? 1.0f : m);
+            id(vu_env) += (m - id(vu_env)) * (m > id(vu_env) ? 0.6f : 0.06f);
+            const float lit = id(vu_env) * it.size();
+            for (int i = 0; i < it.size(); i++) {
+              const float frac = lit - (float) i;
+              const float v = (frac <= 0.0f ? 0.0f : (frac > 1.0f ? 1.0f : frac)) * cap;
+              const uint8_t level = (uint8_t) (255 * v);
+              if (i == it.size() - 1)
+                it[i] = Color(level, 0, 0);
+              else
+                it[i] = Color(0, level, 0);
+            }

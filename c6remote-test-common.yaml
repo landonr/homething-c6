@@ -1,0 +1,503 @@
+# Shared package for the c6remote bring-up firmwares. Not flashable alone:
+# c6remote-test-v1.yaml / c6remote-test-v2.yaml include it, override
+# substitutions and define the LED strip.
+#
+# Pin map (c6remote.kicad_sch):
+#   GPIO0  sd (I2S data)   GPIO16 IR REC        GPIO21 ws
+#   GPIO1  IR EMIT         GPIO17 led_1 (D2-D5) GPIO22 sda
+#   GPIO2  sck             GPIO19 ano_enc2      GPIO23 scl
+#   GPIO4  bat_sense /2    GPIO20 ano_enc1
+#   GPIO5  exp_int (nINT)  GPIO18 no connect
+
+# Defaults; version files override (main config wins per packages docs).
+substitutions:
+  device_name: c6remote-test
+  friendly_name: c6remote Test
+  revision: dev
+  led_sel_init: "4"
+  hue_init: "{0.0f, 0.0f, 0.0f, 0.0f}"
+  led_count: "4"
+  max_level: "0.4"
+  brightness_wrap: "false"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  includes:
+    - c6remote_test.h
+  on_boot:
+    priority: -100
+    then:
+      - light.turn_on:
+          id: led_strip
+          brightness: 100%
+          red: 100%
+          green: 100%
+          blue: 100%
+          effect: Test Render
+      - logger.log: "c6remote bring-up firmware ${revision} ready"
+
+esp32:
+  board: seeed_xiao_esp32c6
+  framework:
+    type: esp-idf
+
+logger:
+  # DEBUG so the I2C scan (CONFIG level) shows in the boot dump
+  level: DEBUG
+
+# No wifi/api/ota on purpose: factory firmware, LEDs and USB serial only.
+
+# led_sel picks which LED the controls edit: 0-3 single, 4 all. v1 pins it
+# at 4, v2 cycles it with the centre press.
+globals:
+  - id: led_hue
+    type: float[4]
+    restore_value: false
+    initial_value: "${hue_init}"
+  - id: led_sat
+    type: float[4]
+    restore_value: false
+    initial_value: "{1.0f, 1.0f, 1.0f, 1.0f}"
+  - id: led_val
+    type: float[4]
+    restore_value: false
+    initial_value: "{0.4f, 0.4f, 0.4f, 0.4f}"
+
+  - id: led_sel
+    type: int
+    restore_value: false
+    initial_value: "${led_sel_init}"
+  - id: preset_idx
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  # 0 steady, 1 slowest, 8 fastest
+  - id: blink_rate
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  # white flash overlay (button acks)
+  - id: fb_pulses
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: fb_start
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+  # chase self-test, white dot walks D2 -> D5 to prove chain order
+  - id: chase
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+  # Blackout inside the render, not light.toggle: an off light stops the
+  # effect and looks bricked.
+  - id: blank
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+  - id: mic_bytes
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_peak
+    type: float
+    restore_value: false
+    initial_value: "0.0f"
+  - id: mic_env
+    type: float
+    restore_value: false
+    initial_value: "0.0f"
+  # raw max-hold sample; right byte rate but 0 here means MK1 not driving SD
+  - id: mic_raw
+    type: int32_t
+    restore_value: false
+    initial_value: "0"
+  # millis() of last IR frame, drives the decaying brightness surge
+  - id: ir_last
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+script:
+  # flash the strip white `count` times
+  - id: feedback
+    mode: restart
+    parameters:
+      count: int
+    then:
+      - lambda: |-
+          id(fb_pulses) = count;
+          id(fb_start) = millis();
+
+  # dir +1/-1, applies to led_sel or all four when 4
+  - id: adjust_hue
+    parameters:
+      dir: int
+    then:
+      - lambda: |-
+          const int i0 = (id(led_sel) < 4) ? id(led_sel) : 0;
+          const int i1 = (id(led_sel) < 4) ? id(led_sel) : 3;
+          for (int i = i0; i <= i1; i++) {
+            float h = id(led_hue)[i] + 8.0f * dir;
+            while (h < 0.0f) h += 360.0f;
+            while (h >= 360.0f) h -= 360.0f;
+            id(led_hue)[i] = h;
+            id(led_sat)[i] = 1.0f;  // wheel sweeps pure hues
+          }
+          ESP_LOGI("test", "hue -> %.0f", id(led_hue)[i0]);
+
+  # brightness_wrap: v1 wraps because up (ENC1 pad 8) is open on prototypes
+  # and down alone must reach the whole range. v2 clamps.
+  - id: adjust_brightness
+    parameters:
+      dir: int
+    then:
+      - lambda: |-
+          const bool wrap = ${brightness_wrap};
+          const int i0 = (id(led_sel) < 4) ? id(led_sel) : 0;
+          const int i1 = (id(led_sel) < 4) ? id(led_sel) : 3;
+          for (int i = i0; i <= i1; i++) {
+            float v = id(led_val)[i] + 0.08f * dir;
+            if (wrap)
+              v = (v < 0.0f) ? 1.0f : ((v > 1.0f) ? 0.0f : v);
+            else
+              v = (v < 0.0f) ? 0.0f : ((v > 1.0f) ? 1.0f : v);
+            id(led_val)[i] = v;
+          }
+          ESP_LOGI("test", "brightness -> %.2f", id(led_val)[i0]);
+
+  - id: adjust_blink
+    parameters:
+      dir: int
+    then:
+      - lambda: |-
+          int n = id(blink_rate) + dir;
+          id(blink_rate) = n < 0 ? 0 : (n > 8 ? 8 : n);
+          ESP_LOGI("test", "blink rate -> %d", id(blink_rate));
+      # always ack, else a press clamped at 0 or 8 looks like a dead switch
+      - script.execute:
+          id: feedback
+          count: 1
+
+  - id: apply_preset
+    parameters:
+      idx: int
+    then:
+      - lambda: |-
+          static const int P_HUE[10]   = {0, 30, 60, 100, 150, 180, 210, 250, 300, 0};
+          static const float P_SAT[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 0};
+          const int p = idx < 0 ? 0 : (idx > 9 ? 9 : idx);
+          const int i0 = (id(led_sel) < 4) ? id(led_sel) : 0;
+          const int i1 = (id(led_sel) < 4) ? id(led_sel) : 3;
+          for (int i = i0; i <= i1; i++) {
+            id(led_hue)[i] = (float) P_HUE[p];
+            id(led_sat)[i] = P_SAT[p];
+            if (id(led_val)[i] < 0.05f)
+              id(led_val)[i] = 0.4f;
+          }
+          id(preset_idx) = p;
+          ESP_LOGI("test", "preset %d -> LED %d..%d", p, i0, i1);
+
+# PCF8575 button expander U3, A0/A1/A2 low -> 0x20
+i2c:
+  sda: GPIO22
+  scl: GPIO23
+  frequency: 100kHz
+  scan: true
+
+pcf8574:
+  - id: button_expander
+    address: 0x20
+    pcf8575: true
+
+# ANO rotary ENC1 on PCF8575 P13..P17. Mapping verified on hardware
+# 2026-07-27, matches the ENC1 symbol pin names, so there is no mounting
+# rotation (c6remote.yaml carried a rotation note until it was corrected to
+# match this):
+#   bit 12 up, 14 down, 15 left, 11 right, 13 centre (defined per revision)
+binary_sensor:
+  - platform: gpio
+    name: Encoder Up
+    id: ano_up
+    pin: &expander_pin
+      pcf8574: button_expander
+      number: 12
+      mode: INPUT
+      inverted: true
+    # tap steps, hold ramps
+    on_press:
+      - script.execute:
+          id: adjust_brightness
+          dir: 1
+      - delay: 500ms
+      - while:
+          condition:
+            binary_sensor.is_on: ano_up
+          then:
+            - script.execute:
+                id: adjust_brightness
+                dir: 1
+            - delay: 90ms
+
+  - platform: gpio
+    name: Encoder Down
+    id: ano_down
+    pin:
+      <<: *expander_pin
+      number: 14
+    on_press:
+      - script.execute:
+          id: adjust_brightness
+          dir: -1
+      - delay: 500ms
+      - while:
+          condition:
+            binary_sensor.is_on: ano_down
+          then:
+            - script.execute:
+                id: adjust_brightness
+                dir: -1
+            - delay: 90ms
+
+  - platform: gpio
+    name: Encoder Left
+    id: ano_left
+    pin:
+      <<: *expander_pin
+      number: 15
+    on_press:
+      - script.execute:
+          id: adjust_blink
+          dir: -1
+
+  - platform: gpio
+    name: Encoder Right
+    id: ano_right
+    pin:
+      <<: *expander_pin
+      number: 11
+    on_press:
+      - script.execute:
+          id: adjust_blink
+          dir: 1
+
+  # PCF8575 nINT: any expander edge shows here even if the port bit is misrouted
+  - platform: gpio
+    name: Expander INT
+    id: expander_int
+    pin:
+      number: GPIO5
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+sensor:
+  - platform: rotary_encoder
+    name: Encoder
+    id: wheel
+    pin_a:
+      number: GPIO20
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO19
+      mode:
+        input: true
+        pullup: true
+    resolution: 2
+    on_clockwise:
+      - script.execute:
+          id: adjust_hue
+          dir: 1
+    on_anticlockwise:
+      - script.execute:
+          id: adjust_hue
+          dir: -1
+
+  - platform: adc
+    name: Battery Voltage
+    pin: GPIO4
+    attenuation: auto
+    update_interval: 5s
+    filters:
+      - multiply: 2.0
+    unit_of_measurement: V
+    accuracy_decimals: 2
+    device_class: voltage
+    state_class: measurement
+
+  - platform: template
+    name: Mic Peak
+    id: mic_peak_sensor
+    lambda: return id(mic_peak);
+    update_interval: 1s
+    accuracy_decimals: 3
+    # else a silent room logs 0.000 forever
+    filters:
+      - delta: 0.02
+
+text_sensor:
+  - platform: template
+    name: Test State
+    update_interval: 1s
+    # publish only on change
+    filters:
+      - lambda: |-
+          static std::string last;
+          if (x == last)
+            return {};
+          last = x;
+          return x;
+    lambda: |-
+      const int i = (id(led_sel) < 4) ? id(led_sel) : 0;
+      char target[8];
+      if (id(led_sel) < 4)
+        snprintf(target, sizeof(target), "D%d", id(led_sel) + 2);
+      else
+        snprintf(target, sizeof(target), "all");
+      char buf[96];
+      snprintf(buf, sizeof(buf), "target %s | hue %.0f | sat %.2f | bright %.2f | blink %d",
+               target, id(led_hue)[i], id(led_sat)[i], id(led_val)[i], id(blink_rate));
+      return {std::string(buf)};
+
+# IR: receiver U2 on GPIO16, emitter D1 via Q1 on GPIO1
+remote_receiver:
+  pin:
+    number: GPIO16
+    mode:
+      input: true
+      pullup: true
+    inverted: true
+  dump: all
+  tolerance: 35%
+  on_raw:
+    - logger.log: "IR frame received"
+    - lambda: id(ir_last) = millis();
+
+remote_transmitter:
+  pin: GPIO1
+  carrier_duty_percent: 50%
+  non_blocking: true
+  # one 48-symbol RMT block, the other goes to the LED strip
+  rmt_symbols: 48
+
+# I2S microphone MK1
+i2s_audio:
+  id: mic_bus
+  i2s_bclk_pin: GPIO2
+  i2s_lrclk_pin: GPIO21
+
+microphone:
+  - platform: i2s_audio
+    id: board_microphone
+    i2s_audio_id: mic_bus
+    i2s_din_pin: GPIO0
+    adc_type: external
+    pdm: false
+    channel: left
+    sample_rate: 48000
+    bits_per_sample: 32bit
+    on_data:
+      - lambda: |-
+          id(mic_bytes) += x.size();
+          const size_t n = x.size() / sizeof(int32_t);
+          if (n == 0)
+            return;
+          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
+          int32_t peak = 0;
+          for (size_t i = 0; i < n; i++) {
+            int32_t v = samples[i] >> 8;  // 24-bit payload in a 32-bit slot
+            if (v < 0)
+              v = -v;
+            if (v > peak)
+              peak = v;
+          }
+          if (peak > id(mic_raw))
+            id(mic_raw) = peak;  // max-hold, reset by the 1s log
+          id(mic_peak) = (float) peak / 8388608.0f;
+
+switch:
+  - platform: template
+    name: Mic Reactive
+    id: mic_vu
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - microphone.capture: board_microphone
+    turn_off_action:
+      - microphone.stop_capture: board_microphone
+      - lambda: |-
+          id(mic_peak) = 0.0f;
+          id(mic_env) = 0.0f;
+
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            microphone.is_capturing:
+              id: board_microphone
+          then:
+            - lambda: |-
+                ESP_LOGI("microphone", "%u bytes/s, peak %ld raw, %.4f norm",
+                         id(mic_bytes), (long) id(mic_raw), id(mic_peak));
+                id(mic_bytes) = 0;
+                id(mic_raw) = 0;
+
+button:
+  - platform: template
+    name: IR Test Burst
+    on_press:
+      - remote_transmitter.transmit_raw:
+          carrier_frequency: 38kHz
+          code: [9000, -4500, 560, -560, 560, -1690, 560, -560, 560, -1690]
+      - logger.log: "IR burst sent on GPIO1"
+
+  - platform: template
+    name: IR Test NEC
+    on_press:
+      - remote_transmitter.transmit_nec:
+          address: 0x1234
+          command: 0x78AB
+      - logger.log: "NEC 0x1234/0x78AB sent"
+
+  - platform: template
+    name: Blank Toggle
+    on_press:
+      - lambda: |-
+          id(blank) = !id(blank);
+          ESP_LOGI("test", "blank -> %s", id(blank) ? "on" : "off");
+
+  - platform: template
+    name: LED Chase Self Test
+    on_press:
+      - lambda: id(chase) = !id(chase);
+      - logger.log: "chase toggled, white dot walks D2 D3 D4 D5"
+
+  - platform: template
+    name: Reset Test State
+    on_press:
+      - lambda: |-
+          for (int i = 0; i < 4; i++) {
+            id(led_hue)[i] = 0.0f;
+            id(led_sat)[i] = 1.0f;
+            id(led_val)[i] = 0.4f;
+          }
+          id(preset_idx) = 0;
+          id(blink_rate) = 0;
+          id(chase) = false;
+          id(blank) = false;
+          id(led_sel) = ${led_sel_init};
+      - light.turn_on:
+          id: led_strip
+          brightness: 100%
+          effect: Test Render

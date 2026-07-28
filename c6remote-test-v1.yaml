@@ -1,0 +1,208 @@
+# c6remote bring-up firmware v1: esphome run c6remote-test-v1.yaml
+#
+# v1 grid is broken (TL3315 terminal short), so SW1..SW11 stay undeclared and
+# the ANO drives everything. All four LEDs mirror one colour.
+#
+#   wheel        hue
+#   up / down    brightness, tap steps, hold ramps (down wraps at 0, see below)
+#   left / right blink rate 0..8, each press flashes white once as ack
+#   centre       tap blanks, hold >=1s toggles Mic Reactive
+#
+# IR frame surges brightness to full with 700ms decay; Mic Reactive pushes it
+# up with loudness (strip goes green). Neither pulls below the set level.
+
+substitutions:
+  device_name: c6remote-test-v1
+  friendly_name: c6remote Test v1
+  revision: v1
+  led_sel_init: "4"
+  hue_init: "{0.0f, 0.0f, 0.0f, 0.0f}"
+  led_count: "4"
+  # output ceiling, full white is painful at bench distance
+  max_level: "0.4"
+  # up (ENC1 pad 8) open on prototypes, wrap so down alone reaches full range
+  brightness_wrap: "true"
+
+packages:
+  common: !include c6remote-test-common.yaml
+
+binary_sensor:
+  - platform: gpio
+    name: Encoder Press
+    id: ano_press
+    pin:
+      pcf8574: button_expander
+      number: 13
+      mode: INPUT
+      inverted: true
+    # tap blanks, hold toggles the mic (no network, so it needs a button)
+    on_multi_click:
+      - timing:
+          - ON for at most 800ms
+          - OFF for at least 50ms
+        then:
+          - lambda: |-
+              id(blank) = !id(blank);
+              ESP_LOGI("test", "blank -> %s", id(blank) ? "on" : "off");
+      - timing:
+          - ON for at least 1s
+        then:
+          - switch.toggle: mic_vu
+          # 3 flashes on, 1 off
+          - script.execute:
+              id: feedback
+              count: !lambda |-
+                return id(mic_vu).state ? 3 : 1;
+          - lambda: |-
+              ESP_LOGI("test", "mic reactive -> %s", id(mic_vu).state ? "on" : "off");
+
+  # Diagnostic: the 11 grid bits, log-only, to see if a "dead" direction
+  # toggles any expander bit at all. Drop once the ANO is confirmed.
+  - platform: gpio
+    name: Raw P00
+    internal: true
+    pin: &raw_pin
+      pcf8574: button_expander
+      number: 0
+      mode: INPUT
+      inverted: true
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P01
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 1
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P02
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 2
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P03
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 3
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P04
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 4
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P05
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 5
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P06
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 6
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P07
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 7
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P10
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 8
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P11
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 9
+    filters:
+      - delayed_on_off: 30ms
+  - platform: gpio
+    name: Raw P12
+    internal: true
+    pin:
+      <<: *raw_pin
+      number: 10
+    filters:
+      - delayed_on_off: 30ms
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_strip
+    name: Status Light
+    pin: GPIO17
+    chipset: WS2812
+    rgb_order: GRB
+    num_leds: ${led_count}
+    # C6 has 96 RMT TX symbols; the default takes all 96 and starves
+    # remote_transmitter (ESP_ERR_NOT_FOUND). One 48-block each.
+    rmt_symbols: 48
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    effects:
+      - addressable_lambda:
+          name: Test Render
+          update_interval: 33ms
+          lambda: |-
+            using namespace c6remote_test;
+            const uint32_t now = millis();
+            const float cap = safe_cap(${max_level}f);
+            const uint8_t W = (uint8_t) (255.0f * cap);
+
+            if (id(blank)) {
+              for (int i = 0; i < it.size(); i++)
+                it[i] = Color(0, 0, 0);
+              return;
+            }
+
+            if (id(chase)) {
+              const int pos = chase_index(now, it.size());
+              for (int i = 0; i < it.size(); i++)
+                it[i] = (i == pos) ? Color(W, W, W) : Color(0, 0, 0);
+              return;
+            }
+
+            const bool listening = id(mic_vu).state;
+            float boost = ir_boost(now, id(ir_last));
+            if (listening) {
+              const float m = mic_boost(id(mic_env), id(mic_peak));
+              if (m > boost)
+                boost = m;
+            }
+
+            // slot 0 is the whole strip on v1
+            float v = apply_boost(id(led_val)[0], boost);
+            if (!blink_gate(now, id(blink_rate)))
+              v = 0.0f;
+
+            Color c = listening ? hsv(MIC_HUE, 1.0f, v * cap)
+                                : hsv(id(led_hue)[0], id(led_sat)[0], v * cap);
+
+            if (flash_on(now, id(fb_start), id(fb_pulses)))
+              c = Color(W, W, W);
+
+            for (int i = 0; i < it.size(); i++)
+              it[i] = c;

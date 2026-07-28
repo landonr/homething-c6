@@ -1,0 +1,231 @@
+# c6remote bring-up firmware v2: esphome run c6remote-test-v2.yaml
+#
+# v2 grid works, so all 11 switches are declared and the four WS2812s render
+# independently. Boot spreads four hues so chain order and dead LEDs show
+# before touching anything; the armed LED breathes.
+#
+#   wheel        hue on target
+#   up / down    brightness on target, tap steps, hold ramps
+#   left / right blink rate 0..8 (global), each press flashes white as ack
+#   centre       tap cycles target D2..D5/all, hold >=1s toggles Mic Reactive
+#   SW1..SW10    colour presets
+#   SW11         chase self test
+#
+# IR frame surges brightness to full with 700ms decay; Mic Reactive pushes it
+# up with loudness (strip goes green). Neither pulls below the set level.
+
+substitutions:
+  device_name: c6remote-test-v2
+  friendly_name: c6remote Test v2
+  revision: v2
+  # start on "all" until a target is picked
+  led_sel_init: "4"
+  hue_init: "{0.0f, 90.0f, 180.0f, 280.0f}"
+  led_count: "4"
+  # output ceiling, full white is painful at bench distance
+  max_level: "0.4"
+
+packages:
+  common: !include c6remote-test-common.yaml
+
+# Grid on PCF8575 P00..P12. sw1..sw8 on P00..P07, then P10=sw10 and P11=sw9
+# (swapped in the schematic), P12=sw11. Names follow silkscreen.
+binary_sensor:
+  - platform: gpio
+    name: Encoder Press
+    id: ano_press
+    pin: &grid_pin
+      pcf8574: button_expander
+      number: 13
+      mode: INPUT
+      inverted: true
+    # tap cycles the target, hold toggles the mic (no network, needs a button)
+    on_multi_click:
+      - timing:
+          - ON for at most 800ms
+          - OFF for at least 50ms
+        then:
+          - lambda: |-
+              id(led_sel) = (id(led_sel) + 1) % 5;
+              ESP_LOGI("test", "target -> %d", id(led_sel));
+      - timing:
+          - ON for at least 1s
+        then:
+          - switch.toggle: mic_vu
+          # 3 flashes on, 1 off
+          - script.execute:
+              id: feedback
+              count: !lambda |-
+                return id(mic_vu).state ? 3 : 1;
+          - lambda: |-
+              ESP_LOGI("test", "mic reactive -> %s", id(mic_vu).state ? "on" : "off");
+
+  - platform: gpio
+    name: SW1
+    pin:
+      <<: *grid_pin
+      number: 0
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 0
+
+  - platform: gpio
+    name: SW2
+    pin:
+      <<: *grid_pin
+      number: 1
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 1
+
+  - platform: gpio
+    name: SW3
+    pin:
+      <<: *grid_pin
+      number: 2
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 2
+
+  - platform: gpio
+    name: SW4
+    pin:
+      <<: *grid_pin
+      number: 3
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 3
+
+  - platform: gpio
+    name: SW5
+    pin:
+      <<: *grid_pin
+      number: 4
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 4
+
+  - platform: gpio
+    name: SW6
+    pin:
+      <<: *grid_pin
+      number: 5
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 5
+
+  - platform: gpio
+    name: SW7
+    pin:
+      <<: *grid_pin
+      number: 6
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 6
+
+  - platform: gpio
+    name: SW8
+    pin:
+      <<: *grid_pin
+      number: 7
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 7
+
+  - platform: gpio
+    name: SW9
+    pin:
+      <<: *grid_pin
+      number: 9
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 8
+
+  - platform: gpio
+    name: SW10
+    pin:
+      <<: *grid_pin
+      number: 8
+    on_press:
+      - script.execute:
+          id: apply_preset
+          idx: 9
+
+  - platform: gpio
+    name: SW11
+    pin:
+      <<: *grid_pin
+      number: 10
+    on_press:
+      - lambda: id(chase) = !id(chase);
+      - logger.log: "SW11, chase toggled"
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: led_strip
+    name: Status Light
+    pin: GPIO17
+    chipset: WS2812
+    rgb_order: GRB
+    num_leds: ${led_count}
+    # C6 has 96 RMT TX symbols; the default takes all 96 and starves
+    # remote_transmitter (ESP_ERR_NOT_FOUND). One 48-block each.
+    rmt_symbols: 48
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    effects:
+      - addressable_lambda:
+          name: Test Render
+          update_interval: 33ms
+          lambda: |-
+            using namespace c6remote_test;
+            const uint32_t now = millis();
+            const float cap = safe_cap(${max_level}f);
+            const uint8_t W = (uint8_t) (255.0f * cap);
+
+            if (id(blank)) {
+              for (int i = 0; i < it.size(); i++)
+                it[i] = Color(0, 0, 0);
+              return;
+            }
+
+            if (id(chase)) {
+              const int pos = chase_index(now, it.size());
+              for (int i = 0; i < it.size(); i++)
+                it[i] = (i == pos) ? Color(W, W, W) : Color(0, 0, 0);
+              return;
+            }
+
+            const bool listening = id(mic_vu).state;
+            float boost = ir_boost(now, id(ir_last));
+            if (listening) {
+              const float m = mic_boost(id(mic_env), id(mic_peak));
+              if (m > boost)
+                boost = m;
+            }
+
+            const bool flash = flash_on(now, id(fb_start), id(fb_pulses));
+            const bool lit = blink_gate(now, id(blink_rate));
+            // armed LED breathes
+            const float breathe = 0.55f + 0.45f * sinf(now / 250.0f);
+
+            for (int i = 0; i < it.size(); i++) {
+              if (flash) {
+                it[i] = Color(W, W, W);
+                continue;
+              }
+              float v = lit ? apply_boost(id(led_val)[i], boost) : 0.0f;
+              if (id(led_sel) == i)
+                v *= breathe;
+              it[i] = listening ? hsv(MIC_HUE, 1.0f, v * cap)
+                                : hsv(id(led_hue)[i], id(led_sat)[i], v * cap);
+            }

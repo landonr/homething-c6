@@ -1,12 +1,14 @@
 # MK1 microphone bring-up
 
-Status as of 2026-07-27: **FAIL on this build, root cause found.** The fault
-is the schematic symbol's pin numbering, not firmware and not assembly. Every
-mic signal lands on the wrong physical pin, and the mic's data output is
-soldered into the ground pour, so no firmware change can recover this board.
-Rev-B fix is in progress (symbol renumbered, PCB being updated by hand). This
-was the first time the mic was actually exercised on hardware; `ROADMAP.md`
-only ever recorded that its nets were mapped in the schematic.
+Status as of 2026-07-27: **FAIL on this build, root cause found and fixed in
+the design.** The fault was the schematic symbol's pin numbering, not firmware
+and not assembly. Every mic signal landed on the wrong physical pin, and the
+mic's data output was soldered into the ground pour, so no firmware change can
+recover this board. The design is now corrected: symbol renumbered and board
+rerouted at `b2d85c0`, firmware realigned at `634d967`. Unit 1 stays dead, the
+first working microphone will be a rev-B board. This was the first time the mic
+was actually exercised on hardware; `ROADMAP.md` only ever recorded that its
+nets were mapped in the schematic.
 
 Test firmware: `c6remote-test-mic.yaml` (repo root, alongside
 `c6remote-test-v1.yaml` and `c6remote-test-v2.yaml`).
@@ -61,14 +63,36 @@ Firmware cannot recover this board: the mic SD pad has no path to any GPIO, it
 is tied into the ground pour. The mic is dead on this build without impractical
 rework (LGA bottom-terminal part).
 
-Fix in progress for rev-B: schematic symbol pins renumbered to the datasheet,
-PCB nets and routing being updated to match (Landon is doing the PCB side by
-hand).
+## Current wiring (rev-B design, after the fix)
 
-## Ruled out in firmware
+This is the wiring to build firmware against. Taken from the exported schematic
+netlist, which is source of truth, not from the yaml comments:
 
-Pins were checked against the exported schematic netlist, not against the
-comments in the yaml:
+| Net | Mic pad | Function | XIAO pin | ESPHome key |
+|---|---|---|---|---|
+| `sck` | MK1.4 | SCK | U1.3 GPIO2 | `i2s_bclk_pin` |
+| `ws` | MK1.1 | WS | U1.1 GPIO0 | `i2s_lrclk_pin` |
+| `sd` | MK1.6 | SD | U1.4 GPIO21 | `i2s_din_pin` |
+| GND | MK1.2, MK1.3 | L/R, GND | | |
+| +3.3V | MK1.5 | VDD | | |
+
+Two traps here, both already survived once:
+
+**The XIAO end swapped too.** Rerouting moved `ws` to GPIO0 and `sd` to GPIO21,
+the opposite of the as-fabbed board. Firmware that keeps the old
+`i2s_lrclk_pin: GPIO21` / `i2s_din_pin: GPIO0` does not merely fail, it drives
+LRCLK onto the mic's SD output and the two contend. Fixed at `634d967`.
+
+**Do not check firmware against other firmware.** All the configs agreed with
+each other and all disagreed with the netlist. Diff against the netlist.
+
+MK1.2 L/R sits on GND, so the part transmits in the left half of the frame and
+`channel: left` stays correct.
+
+## As fabbed (what unit 1 actually has)
+
+The board in hand predates the fix. Its wiring, using the symbol's wrong pin
+numbers, was:
 
 | Net | Mic pin | XIAO pin |
 |---|---|---|
@@ -78,12 +102,12 @@ comments in the yaml:
 | GND | MK1.3 L/R, MK1.6 GND | |
 | +3.3V | MK1.5 VDD | |
 
-MK1.3 L/R sits on GND, so the part transmits in the left half of the frame and
-`channel: left` is the correct setting. That is what the firmware ships with.
-(Note: the mic pin numbers above are the symbol's, which the root cause shows
-are wrong. The firmware conclusions stand, the netlist itself was the fault.)
+Those mic pin numbers are the symbol's, which the root cause above shows are
+wrong. Kept because it is what the failing measurements were taken on.
 
-Sample decode is also correct for an ICS-43434 class part: 24-bit sample, MSB
+## Ruled out in firmware
+
+Sample decode is correct for an ICS-43434 class part: 24-bit sample, MSB
 aligned in a 32-bit slot, so the firmware shifts each raw word right by 8 and
 treats 2^23 as full scale. A wrong shift or slot width would produce garbage or
 a large DC offset, not exact zeros.

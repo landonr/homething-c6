@@ -26,10 +26,10 @@ Quickest way to tell the two apart in a photo: the front silkscreen under the lo
 
 | Unit 1, as fabbed (`70ab9b0`) | Current design (`main`) |
 | --- | --- |
-| <img src="timeline-assets/v0.1-board-3d-top.png" width="240" alt="Front of the board as fabbed, single SK6812MINI and front-side IR receiver"> | <img src="readme-assets/board-3d-top.png" width="240" alt="Front of the current design, four LEDs around the wheel and no front IR receiver"> |
-| <img src="timeline-assets/v0.1-board-3d-bottom.png" width="240" alt="Back of the board as fabbed, no silkscreen artwork"> | <img src="readme-assets/board-3d-bottom.png" width="240" alt="Back of the current design, IR receiver moved back and silkscreen artwork added"> |
+| <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-top.svg" width="240" alt="Front copper as fabbed, U2 on the front and one LED by the XIAO"> | <img src="readme-assets/board-flat-top.svg" width="240" alt="Front copper of the current design, four LEDs around the wheel and no front U2"> |
+| <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-bottom.svg" width="240" alt="Back copper as fabbed"> | <img src="readme-assets/board-flat-bottom.svg" width="240" alt="Back copper of the current design, U2 moved to the back plus silkscreen artwork"> |
 
-The right column is the live render from `scripts/render-readme-assets.sh`, so it tracks the current design. The left column is `docs/readme-assets/board-3d-*.png` as they stood at [`70ab9b0`](https://github.com/landonr/homething-c6/blob/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-3d-top.png), trimmed of the render's whitespace border so both columns scale alike, and frozen: the render script must never overwrite them. Those renders were generated at `0df2483` and the 06-16 fab commit only touched a symbol value and the BOM, so they match the delivered copper.
+Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 130mm board outline, so the two scale alike with no cropping and no copied files. The right column is a relative path, so it tracks the current design. The left column is pinned to the fab commit by full sha and keeps showing the board PCBWay built regardless of what lands on `main`. Those renders were generated at `0df2483` and the 06-16 fab commit only touched a symbol value and the BOM, so they match the delivered copper.
 
 | Block | Unit 1, as fabbed (`70ab9b0`) | Current design |
 | --- | --- | --- |

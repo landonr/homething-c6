@@ -222,6 +222,16 @@ switch:
       number: GPIO18
       inverted: true
     restore_mode: ALWAYS_OFF
+    on_turn_off:
+      # Interlock. Turning this switch off by hand while the light is on leaves
+      # the RMT writing frames into a dead rail, so blank the light first. The
+      # light's own on_turn_off then calls switch.turn_off again, which re-fires
+      # this trigger once and stops on the guard.
+      - if:
+          condition:
+            light.is_on: status_light
+          then:
+            - light.turn_off: status_light
 
 remote_receiver:
   pin:

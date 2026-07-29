@@ -38,15 +38,20 @@ Commands assume `cd c6remote-kicad` first, matching the conventions in
 
 - [x] Interactive HTML BOM generated for the manual pin-1 walk below:
   `scripts/gen-ibom.sh`
-  Result (2026-07-27): generates `c6remote-kicad/ibom.html` (not committed,
-  see below). Clones `openscopeproject/InteractiveHtmlBom` into
-  `~/.cache/InteractiveHtmlBom` on first run and invokes it with KiCad's
-  bundled Python (has `pcbnew`).
+  Result (2026-07-28): generates `c6remote-kicad/ibom.html` (not committed,
+  see below), 282KB, includes `Q2`, `R10` and `C4`. Clones
+  `openscopeproject/InteractiveHtmlBom` into `~/.cache/InteractiveHtmlBom` on
+  first run and invokes it with KiCad's bundled Python (has `pcbnew`).
 
 `ibom.html` is a generated review artifact, not design source: it is
 gitignored (`c6remote-kicad/ibom.html` in `.gitignore`) and must never be
-committed. Regenerate it with `scripts/gen-ibom.sh` whenever you need a fresh
-pin-1 walk.
+committed. The pre-commit hook reruns `scripts/gen-ibom.sh` whenever
+`c6remote.kicad_pcb` is staged, so it tracks the board automatically; that
+step is non-fatal, and a `WARNING: gen-ibom.sh failed` line during a commit
+means the file is stale and needs a manual rerun before any pin-1 walk. It had
+gone a day stale before the hook existed, dated 07-27 against an 07-28 board,
+which is exactly the failure mode the hook removes: the walk is only worth
+anything against current geometry.
 
 ## Manual checks before ordering
 
@@ -56,9 +61,40 @@ pin-1 walk.
   capability check.
 
 - [ ] JLCPCB assembly rotation preview: compare against
-  `export/c6remote-pos.csv`. KiCad's rotation convention differs from JLC's
-  for many footprint families, so eyeball every polarized/oriented part in
-  the preview: `D2`-`D5`, `U1`, `U2`, `U3`, `Q1`, `Q2`, `ENC1`, `J1`.
+  `export/c6remote-pos.csv`. JLC does not place parts at the footprint's own
+  0 degree orientation, it uses the orientation stored for that LCSC part in
+  JLC's component library, and the `Rot` column in the CPL is KiCad-relative,
+  so whole package families disagree by 90 or 180 degrees. `SOT-23` is the
+  worst offender, and two- and three-pin diodes, some SSOP and LGA parts, and
+  JST connectors all drift too. The failure is silent: assembly completes, the
+  part sits on the correct pads, rotated.
+
+  Mechanics: after uploading gerbers, BOM and CPL, the order flow renders the
+  board with every component at the rotation it will actually be placed and
+  pin 1 / polarity marked. Step through each oriented part and confirm pin 1
+  points where the datasheet says. Fix a mismatch by editing that ref's `Rot`
+  value in the CPL, NOT by rotating the board footprint: the board is correct
+  and the CPL is only a translation layer into JLC's library.
+
+  Parts to walk, worst first:
+
+  | Ref | Package | CPL Rot | Why |
+  | --- | --- | --- | --- |
+  | `Q2` | SOT-23 | 90, top | Pin 1 is the gate. A rotation lands `+3.3V` on it, the P-FET never conducts and `led_vdd` is dead with no complaint from anything. |
+  | `Q1` | SOT-23 | 90, top | Same family, same offset risk. Kills IR emit. |
+  | `MK1` | ICS-43434 LGA | 0, bottom | Bottom-terminal, pin 1 invisible after assembly, and this part already cost one revision on pin numbering. |
+  | `D2`-`D5` | custom 2020 PLCC4 | -45, -135, 135, -135, top | Non-orthogonal, and the footprint is project-local so JLC has no matching library entry to key from. A rotation permutes DIN/DOUT/VDD/GND. |
+  | `U3` | SSOP-24 | 0, top | A 180 error puts the supply pins on signal pads. |
+  | `J1` | JST PH horizontal | 0, bottom | Bottom side and polarized: a reversed battery. |
+  | `U2` | Vishay MOLD-3 | 0, bottom | Swaps Vs, GND and OUT on the IR receiver. |
+  | `U1` | XIAO module | 180, top | Only if JLC places it rather than hand-soldering. |
+  | `ENC1` | Ano Rotary | THT, not in CPL | Hand-soldered, so it is a paper check against the footprint, not the preview. |
+
+  `PosY` is negative for every row because the CPL uses Y-up with the origin
+  at the board's bottom-left corner. That is normal, not a fault. Bottom-side
+  rotation uses the mirrored convention, so check `C4`, `J1`, `MK1`, `R3`,
+  `R6`-`R8`, `R10` and `U2` for side placement independently of the top-side
+  walk.
 
 - [ ] IBOM pin-1 walk: open `c6remote-kicad/ibom.html` and verify pin-1
   orientation of `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `Q2`, `ENC1` against their

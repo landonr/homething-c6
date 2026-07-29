@@ -1,0 +1,78 @@
+# Release the fab package whenever dev lands on main.
+#
+# Work happens on dev. A merge into main is the release event: this packages the
+# committed fabrication outputs, tags an ESPHome-style CalVer, and publishes the
+# release with the gerber zip plus the BOM and pick-and-place files as separate
+# assets, which is how JLCPCB and PCBWay want them uploaded.
+#
+# No KiCad runs here. export/ is already kept in lockstep with the design by
+# scripts/hooks/pre-commit, so CI only has to package what is committed. If that
+# directory is stale, the fix belongs in the commit, not in this workflow.
+name: Release fab package
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed to work out the patch number.
+          fetch-depth: 0
+
+      - name: Work out the next CalVer
+        id: ver
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          # ESPHome convention: YYYY.M.PATCH, month not zero padded (2026.7.0).
+          series="$(date -u +%Y).$(date -u +%-m)"
+          patch=-1
+          for tag in $(git tag --list "${series}.*"); do
+            p="${tag##*.}"
+            [[ "$p" =~ ^[0-9]+$ ]] || continue
+            if (( p > patch )); then patch=$p; fi
+          done
+          version="${series}.$(( patch + 1 ))"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version}"
+
+      - name: Check the fab outputs are present
+        run: |
+          set -euo pipefail
+          cd c6remote-kicad/export
+          for f in c6remote-Edge_Cuts.gbr c6remote-F_Cu.gbr c6remote-B_Cu.gbr \
+                   c6remote.drl c6remote-job.gbrjob \
+                   c6remote-bom.csv c6remote-pos.csv; do
+            test -s "$f" || { echo "missing or empty: export/$f" >&2; exit 1; }
+          done
+
+      - name: Build the fab zip
+        id: zip
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/c6remote-${{ steps.ver.outputs.version }}-fab.zip"
+          # -X drops extra file attributes so the archive is reproducible.
+          (cd c6remote-kicad/export && zip -q -X "$out" *.gbr *.gbrjob *.drl)
+          unzip -l "$out"
+          echo "path=${out}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          gh release create "$v" \
+            --target "$GITHUB_SHA" \
+            --title "$v" \
+            --generate-notes \
+            "${{ steps.zip.outputs.path }}#Gerbers, drill and job file" \
+            "c6remote-kicad/export/c6remote-bom.csv#BOM with sourcing columns" \
+            "c6remote-kicad/export/c6remote-pos.csv#Pick and place, CSV mm both sides"

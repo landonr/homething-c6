@@ -84,6 +84,16 @@ There is no finer-grained single-test harness in this repo; the closest scoped c
 
 Baseline as of 2026-07-27: `sch erc` 0 violations, `pcb drc` 0 errors and 0 unconnected items with 43 silkscreen/library warnings (24 `silk_over_copper`, 14 `lib_footprint_mismatch`, 4 `silk_edge_clearance`, 1 `silk_overlap`). Treat those 43 as pre-existing unless the task is specifically about them; 5 of the `silk_over_copper` are the ANO wheel outline crossing ENC1 pads, which is intentional. It was 48 until 2026-07-26, dropping in two steps: `silk_overlap` 3 to 1 during the back-silk artwork, then `silk_edge_clearance` 7 to 4 at 25f2f92 when dropping the two IR cutouts took away three of the four U2 back-silk clips that sat against the notch walls. A count above 43 is a regression introduced by the current task, not inherited. Schematic-vs-board parity is 13 issues, all `extra_footprint` for the board-only `TP_*` test points. The board now carries the D2-D5 `XL-2020RGBC-WS2812B` swap, the D3-D5 chain, the SW1-11 terminal remap, and the MK1 ICS-43434 pin renumber, so those no longer diverge.
 
+## Branches and releases
+
+Work happens on **`dev`**, which is the GitHub default branch. **`main`** holds released snapshots only. Do not commit to `main` directly and do not push it as a shortcut: a push to `main` is the release event.
+
+`.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/` directory, tags an ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`, patch derived by scanning existing tags for that year and month), and publishes a release with three assets: `c6remote-<version>-fab.zip` holding the gerbers, drill and job file, plus `c6remote-bom.csv` and `c6remote-pos.csv` as separate files, which is how JLCPCB and PCBWay want them uploaded. The historical `v0.1` tag predates this scheme and is left alone.
+
+No KiCad runs in CI, so the release is only as correct as what is committed. `scripts/hooks/pre-commit` is what keeps `export/` in lockstep, so a stale `export/` is a bad commit, not a workflow bug.
+
+`c6remote-kicad/export.zip` is gitignored on purpose. It is a local convenience copy of the same gerber set, rebuilt on demand with `(cd c6remote-kicad/export && zip -X ../export.zip *.gbr *.gbrjob *.drl)`. It is deliberately **not** wired into the pre-commit hook, because the release workflow is the thing that publishes a fab package. Never track it.
+
 ## High-level architecture
 
 The board is centered on a **Seeed Studio XIAO ESP32-C6** module (`U1`). Single-sheet KiCad design with heavy use of global labels, so understanding behavior usually means following named nets across the sheet and then checking the matching PCB nets and footprints.

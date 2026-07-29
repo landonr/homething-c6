@@ -17,6 +17,12 @@ on:
 permissions:
   contents: write
 
+# Serialize, never cancel. Two merges landing close together must not both read
+# the same highest tag and try to claim the same patch number.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest

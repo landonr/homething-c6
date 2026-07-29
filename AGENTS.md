@@ -88,7 +88,9 @@ Baseline as of 2026-07-27: `sch erc` 0 violations, `pcb drc` 0 errors and 0 unco
 
 Work happens on **`dev`**, which is the GitHub default branch. **`main`** holds released snapshots only. Do not commit to `main` directly and do not push it as a shortcut: a push to `main` is the release event.
 
-`.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/` directory, tags an ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`, patch derived by scanning existing tags for that year and month), and publishes a release with three assets: `c6remote-<version>-fab.zip` holding the gerbers, drill and job file, plus `c6remote-bom.csv` and `c6remote-pos.csv` as separate files, which is how JLCPCB and PCBWay want them uploaded. The historical `v0.1` tag predates this scheme and is left alone.
+`.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/` directory, tags an ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`, patch derived by scanning existing tags for that year and month), and publishes a release with three assets: `c6remote-<version>-fab.zip` holding the gerbers, drill and job file, plus `c6remote-bom.csv` and `c6remote-pos.csv` as separate files, which is how JLCPCB and PCBWay want them uploaded. The historical `v0.1` tag was renamed `2026.6.0` on 2026-07-29 so every tag matches the CalVer scheme, mapped from the 2026-06-16 fab date. The old `releases/tag/v0.1` and `releases/download/v0.1/...` URLs are dead: any new link must use `2026.6.0`.
+
+The PCB front silkscreen revision marking must be kept equal to the release the board will ship in; it currently reads `2026.7.0`. If a merge to `main` slips into a later month, the workflow computes a different version than the silk shows, so update the silk before merging, not after.
 
 No KiCad runs in CI, so the release is only as correct as what is committed. `scripts/hooks/pre-commit` is what keeps `export/` in lockstep, so a stale `export/` is a bad commit, not a workflow bug.
 

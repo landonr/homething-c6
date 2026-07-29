@@ -170,7 +170,7 @@ Everything that has to happen before a board order, including the orientation an
 
 The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT1753739, PCB plus SMD assembly). Bring-up found three wiring faults, all fixed in the design: ANO encoder pad 6/8 swap, TL3315 switch terminal short, ICS-43434 microphone pin numbering. Switches and encoder are reworkable on unit 1, the microphone is not, so a rev-B board is needed for the first working mic.
 
-Unit 1 was built from the [v0.1](https://github.com/landonr/homething-c6/releases/tag/v0.1) fab package and differs from the current design in ten blocks, so its photos and measurements do not describe what the next order will build. Full fab and bring-up history, plus the unit 1 versus current comparison, is in [`docs/timeline.md`](docs/timeline.md).
+Unit 1 was built from the [2026.6.0](https://github.com/landonr/homething-c6/releases/tag/2026.6.0) fab package and differs from the current design in ten blocks, so its photos and measurements do not describe what the next order will build. Full fab and bring-up history, plus the unit 1 versus current comparison, is in [`docs/timeline.md`](docs/timeline.md).
 
 ## Relationship to homeThing
 

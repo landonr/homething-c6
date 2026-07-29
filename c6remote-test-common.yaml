@@ -5,12 +5,15 @@
 # Pin map (c6remote.kicad_sch):
 #   GPIO0  ws              GPIO16 IR REC        GPIO21 sd (I2S data)
 #   GPIO1  IR EMIT         GPIO17 led_1 (D2-D5) GPIO22 sda
-#   GPIO2  sck             GPIO19 ano_enc2      GPIO23 scl
-#   GPIO4  bat_sense /2    GPIO20 ano_enc1
-#   GPIO5  exp_int (nINT)
+#   GPIO2  sck             GPIO18 led_en (D10)  GPIO23 scl
+#   GPIO4  bat_sense /2    GPIO19 ano_enc2
+#   GPIO5  exp_int (nINT)  GPIO20 ano_enc1
 #
-# Spare, unconnected at U1: GPIO18 (D10, has a test point), GPIO6, GPIO7.
-# GPIO6/7 are also deep-sleep wake capable (C6 wakes only on GPIO0-7).
+# led_en gates Q2, a high-side P-FET feeding led_vdd on D2-D5: low powers the
+# rail, and R10 1M holds it off while GPIO18 floats.
+#
+# Spare, unconnected at U1: GPIO6, GPIO7. Both are deep-sleep wake capable
+# (C6 wakes only on GPIO0-7).
 
 # Defaults; version files override (main config wins per packages docs).
 substitutions:
@@ -39,6 +42,16 @@ esphome:
           blue: 100%
           effect: Test Render
       - logger.log: "c6remote bring-up firmware ${revision} ready"
+  on_shutdown:
+    - switch.turn_off: led_rail
+    # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
+    # through the LED input clamp. Pull GPIO17 down: the RMT driver can leave a
+    # pull-up on it, which would sit on DIN.
+    - lambda: |-
+        gpio_set_direction(GPIO_NUM_17, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_17, GPIO_PULLDOWN_ONLY);
+        gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_18, GPIO_FLOATING);
 
 esp32:
   board: seeed_xiao_esp32c6
@@ -207,6 +220,33 @@ script:
           }
           id(preset_idx) = p;
           ESP_LOGI("test", "preset %d -> LED %d..%d", p, i0, i1);
+
+  # Called from the light's on_turn_on / on_turn_off in the revision files.
+  - id: led_rail_up
+    mode: restart
+    then:
+      - switch.turn_on: led_rail
+      # The first frame is written in the same loop tick as the trigger, before
+      # led_vdd has risen at D2, so re-send it once the rail is up.
+      - delay: 20ms
+      # Guarded: a turn-off inside the 20ms window would otherwise be undone.
+      - if:
+          condition:
+            light.is_on: led_strip
+          then:
+            - light.turn_on: led_strip
+
+  - id: led_rail_down
+    mode: restart
+    then:
+      # on_turn_off fires one write before the final all-black frame, so let
+      # that frame land while the LEDs still have power. GPIO17 then idles low.
+      - delay: 100ms
+      - if:
+          condition:
+            light.is_off: led_strip
+          then:
+            - switch.turn_off: led_rail
 
 # PCF8575 button expander U3, A0/A1/A2 low -> 0x20
 i2c:
@@ -431,6 +471,18 @@ microphone:
           id(mic_peak) = (float) peak / 8388608.0f;
 
 switch:
+  # Q2 is a high-side P-FET on the LED rail: gate low powers led_vdd, so the
+  # switch pin is inverted. R10 1M holds the gate at +3.3V, so the rail is off
+  # whenever GPIO18 floats (boot, deep sleep).
+  - platform: gpio
+    name: LED Rail
+    id: led_rail
+    entity_category: config
+    pin:
+      number: GPIO18
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
   - platform: template
     name: Mic Reactive
     id: mic_vu

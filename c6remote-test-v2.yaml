@@ -182,6 +182,12 @@ light:
     rmt_symbols: 48
     restore_mode: ALWAYS_OFF
     default_transition_length: 0s
+    # Q2 gates led_vdd; the rail follows the light so the chain draws nothing
+    # while it is off. Scripts live in c6remote-test-common.yaml.
+    on_turn_on:
+      - script.execute: led_rail_up
+    on_turn_off:
+      - script.execute: led_rail_down
     effects:
       - addressable_lambda:
           name: Test Render

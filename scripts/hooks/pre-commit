@@ -11,6 +11,12 @@
 # a staged PCB rerenders the board views (3D PNGs + flat SVGs), a staged
 # schematic rerenders schematic.svg; docs/readme-assets/ is then staged.
 #
+# A staged PCB also refreshes c6remote-kicad/ibom.html via scripts/gen-ibom.sh,
+# so the pre-fab pin-1 walk artifact never lags the board. It is gitignored and
+# deliberately not staged. Non-fatal: the generator needs KiCad's bundled Python
+# and a first-run network clone, neither of which should be able to block a
+# commit.
+#
 # Install (once per clone):
 #   git config core.hooksPath scripts/hooks
 #
@@ -64,3 +70,13 @@ else
 fi
 git add "$REPO_ROOT/docs/readme-assets/"
 echo "[pre-commit] docs/readme-assets/ regenerated and staged"
+
+if $PCB_STAGED; then
+	echo "[pre-commit] PCB staged -> refreshing ibom.html (not staged, gitignored)"
+	if "$REPO_ROOT/scripts/gen-ibom.sh" >/dev/null; then
+		echo "[pre-commit] ibom.html refreshed"
+	else
+		echo "[pre-commit] WARNING: gen-ibom.sh failed, ibom.html is stale" >&2
+		echo "[pre-commit] Run scripts/gen-ibom.sh by hand before any pin-1 walk." >&2
+	fi
+fi

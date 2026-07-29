@@ -15032,7 +15032,7 @@
 				)
 			)
 		)
-		(property "Footprint" "LED_THT:LED_D3.0mm_IRBlack"
+		(property "Footprint" "Library:LED_D3.0mm_Horizontal_O1.27mm_Z2.0mm_IRBlack"
 			(at 161.29 33.655 0)
 			(hide yes)
 			(show_name no)

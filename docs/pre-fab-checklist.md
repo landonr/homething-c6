@@ -13,19 +13,21 @@ Commands assume `cd c6remote-kicad` first, matching the conventions in
 
 - [x] Schematic ERC clean:
   `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations`
-  Result (2026-07-27): 0 violations.
+  Result (2026-07-28): 0 violations.
 
 - [x] Full board DRC with schematic parity and zone refill:
   `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations`
-  Result (2026-07-27): 0 errors, 46 pre-existing warnings (24 `silk_over_copper`,
-  14 `lib_footprint_mismatch`, 7 `silk_edge_clearance`, 1 `silk_overlap`), 0
+  Result (2026-07-28): 0 errors, 43 pre-existing warnings (24 `silk_over_copper`,
+  14 `lib_footprint_mismatch`, 4 `silk_edge_clearance`, 1 `silk_overlap`), 0
   unconnected. Parity 13 issues, all `extra_footprint` for board-only `TP_*`
   test points (known, not a defect).
 
 - [x] STEP export succeeds (catches broken 3D model references before they
   show up as a mechanical surprise):
   `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export step c6remote.kicad_pcb --subst-models -o /tmp/c6remote-check.step`
-  Result (2026-07-27): export succeeds, 3.0 MB. Two missing 3D models noted:
+  Result (2026-07-28): export succeeds, 3.0 MB. `Q2` (SOT-23), `R10` (0603) and
+  `C4` (0805) all resolve their models, so the LED rail parts added nothing to
+  the gap list. The same two missing 3D models as the 07-27 run remain:
   `D2`-`D5` footprint reference `LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step`
   (file does not exist) and `J1` references
   `Connector_JST.3dshapes/JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal.step`
@@ -56,12 +58,15 @@ pin-1 walk.
 - [ ] JLCPCB assembly rotation preview: compare against
   `export/c6remote-pos.csv`. KiCad's rotation convention differs from JLC's
   for many footprint families, so eyeball every polarized/oriented part in
-  the preview: `D2`-`D5`, `U1`, `U2`, `U3`, `Q1`, `ENC1`, `J1`.
+  the preview: `D2`-`D5`, `U1`, `U2`, `U3`, `Q1`, `Q2`, `ENC1`, `J1`.
 
 - [ ] IBOM pin-1 walk: open `c6remote-kicad/ibom.html` and verify pin-1
-  orientation of `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `ENC1` against their
-  datasheets. This is the check DRC cannot do. Two documented failure modes
-  make this non-optional: the `ENC1` pad 6/8 swap found and fixed on this
+  orientation of `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `Q2`, `ENC1` against their
+  datasheets. `Q2` is worth the extra care: it is SOT-23 and pin 1 is the gate,
+  so a mis-rotation lands `+3.3V` on the gate, the P-FET never turns on and the
+  LED rail stays dead with no DRC or assembly complaint, a silent failure rather
+  than an obvious one. This is the check DRC cannot do. Two documented failure
+  modes make this non-optional: the `ENC1` pad 6/8 swap found and fixed on this
   board (a real pinout error that shipped once), and the `XL-2020RGBC-WS2812B`
   datasheet pin-table-vs-diagram contradiction recorded in `AGENTS.md` (one
   hosted revision's table disagrees with its own diagram). Datasheets and
@@ -93,3 +98,21 @@ pin-1 walk.
   cosmetic gaps in the local 3D model cache, not fab-blocking. Generated
   first IBOM review artifact via `scripts/gen-ibom.sh`. Q1/R1 moved and
   `IR EMIT` rerouted after review; DRC re-run clean at the same baseline.
+
+- **2026-07-28**: Status LED rail gated instead of permanently on, killing the
+  ~2.4mA the dark `D2`-`D5` chain drew off `+3.3V`: `Q2` AO3401A P-FET high-side
+  switch (source `+3.3V`, drain the new `led_vdd` net feeding all four VDD pads),
+  `R10` 1M gate pull-up so the rail is off by default while `GPIO18` boots as a
+  floating input, `C4` 1µF X7R 0805 bulk cap mid-chain on `led_vdd`, enable net
+  `led_en` on `U1` pad 11 (`GPIO18`/`D10`, the last free XIAO edge pad), rail on
+  means `GPIO18` driven low. Expected idle in the tens of µA, not yet measured on
+  hardware. One real fault caught during layout: the first `led_vdd` routing
+  severed the F.Cu GND pour neck and orphaned `D5`'s VSS pad in a 77mm² island,
+  which DRC flagged as its only unconnected item. Moving that branch to B.Cu
+  fixed it, leaving the pour at 2 islands with all four LED VSS pads in the main
+  one. Post-change validation: ERC 0 violations, DRC 0 errors and 0 unconnected
+  with 43 warnings (24 `silk_over_copper`, 14 `lib_footprint_mismatch`, 4
+  `silk_edge_clearance`, 1 `silk_overlap`), parity 13 `extra_footprint` for the
+  `TP_*` test points. Firmware note carried into the LED work: `GPIO17` must be
+  held low or high-impedance whenever the rail is down, else DIN pushes current
+  into the dead rail.

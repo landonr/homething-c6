@@ -5,6 +5,16 @@ substitutions:
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
+  on_shutdown:
+    - switch.turn_off: led_rail
+    # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
+    # through the LED input clamp. Pull GPIO17 down: the RMT driver can leave a
+    # pull-up on it, which would sit on DIN.
+    - lambda: |-
+        gpio_set_direction(GPIO_NUM_17, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_17, GPIO_PULLDOWN_ONLY);
+        gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_18, GPIO_FLOATING);
 
 esp32:
   board: seeed_xiao_esp32c6
@@ -178,6 +188,39 @@ light:
     chipset: WS2812
     rgb_order: GRB
     num_leds: 4
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - switch.turn_on: led_rail
+      # The first frame is written in the same loop tick as this trigger, before
+      # led_vdd has risen at D2, so re-send it once the rail is up.
+      - delay: 20ms
+      # Guarded: a turn-off inside the 20ms window would otherwise be undone.
+      - if:
+          condition:
+            light.is_on: status_light
+          then:
+            - light.turn_on: status_light
+    on_turn_off:
+      # Fires one write before the final all-black frame, so let that frame land
+      # while the LEDs still have power. GPIO17 then idles low.
+      - delay: 100ms
+      - if:
+          condition:
+            light.is_off: status_light
+          then:
+            - switch.turn_off: led_rail
+
+switch:
+  # Q2 is a high-side P-FET on the LED rail: gate low powers led_vdd, so the
+  # switch pin is inverted. R10 1M holds the gate at +3.3V, so the rail is off
+  # whenever GPIO18 floats (boot, deep sleep).
+  - platform: gpio
+    name: LED Rail
+    id: led_rail
+    entity_category: config
+    pin:
+      number: GPIO18
+      inverted: true
     restore_mode: ALWAYS_OFF
 
 remote_receiver:

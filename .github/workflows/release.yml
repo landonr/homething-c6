@@ -69,6 +69,18 @@ jobs:
           unzip -l "$out"
           echo "path=${out}" >> "$GITHUB_OUTPUT"
 
+      # gh names an asset after the file, so the version has to be in the
+      # filename. Staged copies, since export/ is the committed name.
+      - name: Stage versioned BOM and position files
+        id: csv
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          cp c6remote-kicad/export/c6remote-bom.csv "${RUNNER_TEMP}/c6remote-${v}-bom.csv"
+          cp c6remote-kicad/export/c6remote-pos.csv "${RUNNER_TEMP}/c6remote-${v}-pos.csv"
+          echo "bom=${RUNNER_TEMP}/c6remote-${v}-bom.csv" >> "$GITHUB_OUTPUT"
+          echo "pos=${RUNNER_TEMP}/c6remote-${v}-pos.csv" >> "$GITHUB_OUTPUT"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,5 +92,5 @@ jobs:
             --title "$v" \
             --generate-notes \
             "${{ steps.zip.outputs.path }}#Gerbers, drill and job file" \
-            "c6remote-kicad/export/c6remote-bom.csv#BOM with sourcing columns" \
-            "c6remote-kicad/export/c6remote-pos.csv#Pick and place, CSV mm both sides"
+            "${{ steps.csv.outputs.bom }}#BOM with sourcing columns" \
+            "${{ steps.csv.outputs.pos }}#Pick and place, CSV mm both sides"

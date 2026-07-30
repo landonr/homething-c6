@@ -117,8 +117,18 @@ anything against current geometry.
   change (repo rule, see `AGENTS.md`): `kicad-cli --refill-zones` only fills
   in memory and never writes the refill back to `c6remote.kicad_pcb`.
 
-- [ ] 1:1 paper print of the board outline: mechanical/ergonomic check of
-  switch and wheel spacing against a real hand.
+- [x] 1:1 mechanical check of switch and wheel spacing against a real hand.
+  Done as a 3D print rather than a paper print, which also checks hole
+  positions and board thickness:
+  `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb export stl --board-only -f -o /tmp/c6remote-board.stl c6remote.kicad_pcb`
+  Result (2026-07-30): printed and test fitted, spacing good. `export stl`
+  emits no silkscreen, so the F.SilkS artwork was raised 0.4mm on the printed
+  copy by a local script that strokes the layer through `pcbnew` and extrudes
+  it. Neither that script nor the STL is committed, so a rerun means
+  regenerating both. Front only: back relief would sit against the build plate.
+  Silk must be clipped to the board outline first, because it overhangs the
+  bottom edge by 1.5mm, which is fine in gerbers and prints as detached
+  floating geometry.
 
 ## Findings log
 
@@ -152,3 +162,10 @@ anything against current geometry.
   `TP_*` test points. Firmware note carried into the LED work: `GPIO17` must be
   held low or high-impedance whenever the rail is down, else DIN pushes current
   into the dead rail.
+
+- **2026-07-30**: 1:1 mechanical check closed by 3D print. Printed the
+  `--board-only` STL with F.SilkS raised 0.4mm, test fitted, switch and wheel
+  spacing good. Confirms hole geometry as well as spacing: all nine holes came
+  out at nominal in the mesh, three mount at 2.9mm, four ANO at 4.0mm, two pegs
+  at 1.6mm, and the slab at 1.51mm rather than the 1.6mm nominal because that is
+  what the project stackup stores. No board change resulted.

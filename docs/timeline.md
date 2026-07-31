@@ -1,6 +1,6 @@
 # Timeline and hardware revisions
 
-Fabrication and bring-up history for c6remote. Design status and open work live in [`ROADMAP.md`](../ROADMAP.md); the microphone bring-up log is in [`mic-bringup.md`](mic-bringup.md).
+Fabrication and bring-up history for c6remote. Design status and open work live in [`ROADMAP.md`](../ROADMAP.md), which also carries the microphone root cause and the corrected MK1 wiring.
 
 The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT1753739, PCB plus SMD assembly). Bring-up found three wiring faults, all fixed in the design: ANO encoder pad 6/8 swap, TL3315 switch terminal short, ICS-43434 microphone pin numbering. Switches and encoder are reworkable on unit 1, the microphone is not, so a rev-B board is needed for the first working mic.
 
@@ -18,14 +18,16 @@ The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT
 | 2026-07-16 | D1 and full board orientation confirmed correct; assembly proceeding |
 | 2026-07-20 to 2026-07-27 | First prototype delivered and brought up: PCF8575 found, TL3315 terminal short and ENC1 pad 6/8 swap root-caused and fixed in schematic and board, microphone found dead from an ICS-43434 pin-numbering fault, ANO directions measured (no 90° rotation after all), status lighting moved to a 4-LED XL-2020RGBC chain, back-silkscreen artwork added |
 | 2026-07-29 | Release numbering moved to ESPHome-style CalVer (`YYYY.M.PATCH`); the `v0.1` tag and release were renamed `2026.6.0`, mapped from the 2026-06-16 fab date, and its asset renamed `c6remote-2026.6.0-fab.zip` |
+| 2026-07-30 | Second fab package released: [2026.7.0](https://github.com/landonr/homething-c6/releases/tag/2026.7.0) at `f884350`, the first push to `main` under the new release workflow. PCBWay's review of it flagged four vias sitting inside SMD pads as a solder-paste leakage risk; all four cleared at `1693423`, and the front silk revision went to `2026.7.1` because a copper change makes it a different board. `silk_over_copper` and `silk_edge_clearance` were muted in DRC the same day, artwork unchanged |
+| 2026-07-31 | No design change. `c6remote.kicad_pro` rule and severity drift root-caused to eeschema rewriting the file on save or close, now blocked by a pre-commit checker; the 13 stale `TP_*` footprint instances resynced to their library, taking DRC from 15 warnings to 2 |
 
 ## Unit 1 (2026.6.0) versus the current design
 
 Unit 1 is the only board that exists, and the design has moved on since it was fabbed. Everything below is a difference, so a photo or measurement from unit 1 does not describe what the next order will build. The 2026.6.0 fab package is attached to the [2026.6.0 release](https://github.com/landonr/homething-c6/releases/tag/2026.6.0).
 
-Quickest way to tell the two apart in a photo: the front silkscreen under the logo reads **V0.1** on unit 1 and **2026.7.0** on the current design. The two strings differ in format, not just value, because the release numbering scheme changed from ad hoc `vX.Y` to CalVer between the two boards: unit 1 was fabbed under the old scheme and keeps its printed `V0.1` forever, the current design carries the new scheme's format. That mismatch in format is expected, not an inconsistency.
+Quickest way to tell the two apart in a photo: the front silkscreen under the logo reads **V0.1** on unit 1 and **2026.7.1** on the current design. The two strings differ in format, not just value, because the release numbering scheme changed from ad hoc `vX.Y` to CalVer between the two boards: unit 1 was fabbed under the old scheme and keeps its printed `V0.1` forever, the current design carries the new scheme's format. That mismatch in format is expected, not an inconsistency.
 
-| Unit 1, as fabbed (`70ab9b0`) | Current design (`main`) |
+| Unit 1, as fabbed (`70ab9b0`) | Current design (`dev`) |
 | --- | --- |
 | <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-top.svg" width="240" alt="Front copper as fabbed, U2 on the front and one LED by the XIAO"> | <img src="readme-assets/board-flat-top.svg" width="240" alt="Front copper of the current design, four LEDs around the wheel and no front U2"> |
 | <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-bottom.svg" width="240" alt="Back copper as fabbed"> | <img src="readme-assets/board-flat-bottom.svg" width="240" alt="Back copper of the current design, U2 moved to the back plus silkscreen artwork"> |
@@ -43,6 +45,9 @@ Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 
 | Expander interrupt | Absent, no `exp_int` net and no R9 pull-up | R9 100k pull-up, nINT to GPIO5 |
 | Battery connector | J1 through-hole `S2B-PH-K` | J1 SMD `S2B-PH-SM4-TB` |
 | Board edge | Square corners, four square encoder cutouts | 3mm filleted corners, real Adafruit ANO cutout shapes |
+| Mounting | No fixing points | Three 2.9mm holes for loose M2.5 screws into a case |
+| IR emitter | D1 on a plain 3mm LED footprint, leads bent 90° by PCBWay at assembly | Forked horizontal footprint with + and - silk glyphs, so the bend is designed in |
+| Via in pad | Four vias inside SMD pads, which PCBWay flagged 2026-07-30 as a solder-paste leakage risk | All four cleared |
 | Silkscreen | Front homeThing logo only | Plus back artwork (flag, OSHW gear, made-in text) and a front mic-port mark |
 
 Unit 1 hand rework so far: `sw*` traces cut and jumpered to the free terminal on all 11 switches, and ENC1 pad 6 severed from `ano_sw2` and jumpered to GND. Left, right, down, centre and both encoder channels work. Up cannot work until pad 8 is freed from the GND pour. The microphone is unreachable by rework because its SD pad is under a bottom-terminal LGA.

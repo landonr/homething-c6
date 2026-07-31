@@ -146,7 +146,7 @@ anything against current geometry.
   `IR EMIT` rerouted after review; DRC re-run clean at the same baseline.
 
 - **2026-07-28**: Status LED rail gated instead of permanently on, killing the
-  ~2.4mA the dark `D2`-`D5` chain drew off `+3.3V`: `Q2` AO3401A P-FET high-side
+  ~2.0mA the dark `D2`-`D5` chain drew off `+3.3V`: `Q2` AO3401A P-FET high-side
   switch (source `+3.3V`, drain the new `led_vdd` net feeding all four VDD pads),
   `R10` 1M gate pull-up so the rail is off by default while `GPIO18` boots as a
   floating input, `C4` 1µF X7R 0805 bulk cap mid-chain on `led_vdd`, enable net

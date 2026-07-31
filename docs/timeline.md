@@ -27,7 +27,7 @@ Unit 1 is the only board that exists, and the design has moved on since it was f
 
 Quickest way to tell the two apart in a photo: the front silkscreen under the logo reads **V0.1** on unit 1 and **2026.7.1** on the current design. The two strings differ in format, not just value, because the release numbering scheme changed from ad hoc `vX.Y` to CalVer between the two boards: unit 1 was fabbed under the old scheme and keeps its printed `V0.1` forever, the current design carries the new scheme's format. That mismatch in format is expected, not an inconsistency.
 
-| Unit 1, as fabbed (`70ab9b0`) | Current design (`dev`) |
+| Unit 1, as fabbed (`70ab9b0`) | Current design (`develop`) |
 | --- | --- |
 | <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-top.svg" width="240" alt="Front copper as fabbed, U2 on the front and one LED by the XIAO"> | <img src="readme-assets/board-flat-top.svg" width="240" alt="Front copper of the current design, four LEDs around the wheel and no front U2"> |
 | <img src="https://raw.githubusercontent.com/landonr/homething-c6/70ab9b0be579d5dc36652c1610cfae01774bdac0/docs/readme-assets/board-flat-bottom.svg" width="240" alt="Back copper as fabbed"> | <img src="readme-assets/board-flat-bottom.svg" width="240" alt="Back copper of the current design, U2 moved to the back plus silkscreen artwork"> |

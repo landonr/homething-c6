@@ -95,7 +95,7 @@ Treat those counts as pre-existing unless the task is about them. Anything above
 
 ## Branches and releases
 
-Work happens on **`dev`**, the GitHub default branch. **`main`** holds released snapshots only. Do not commit to `main` and do not push it as a shortcut: a push to `main` is the release event.
+Work happens on **`develop`**. **`main`** holds released snapshots only and is the GitHub default branch, so it is what a visitor sees first and what relative doc links resolve against. Do not commit to `main` and do not push it as a shortcut: a push to `main` is the release event. Check `git branch --show-current` before the first commit of a session, since a checkout left on `main` puts working commits on the release branch.
 
 `.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/`, tags ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`; patch derived by scanning existing tags for that year and month), and publishes three assets: `c6remote-<version>-fab.zip` (gerbers, drill, job file) plus `c6remote-<version>-bom.csv` and `c6remote-<version>-pos.csv` as separate files, which is how JLCPCB and PCBWay want them uploaded. All three names carry the version, so `gh` cannot name assets after the files in `export/`; the workflow copies the two CSVs to versioned names in `RUNNER_TEMP` first.
 

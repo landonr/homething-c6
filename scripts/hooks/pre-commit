@@ -42,6 +42,11 @@ if grep -iqE '^\+[[:space:]]*co[- ]?authored[- ]?by:[[:space:]]*.+<[^>]*@' <<<"$
 	exit 1
 fi
 
+# Policy guard: block a staged c6remote.kicad_pro that moved on the guarded
+# board-setting fields. Almost always an eeschema save clobbering the project
+# file from the stale copy it loaded at open time, not an intended edit.
+"$REPO_ROOT/scripts/check-kicad-pro-drift.py"
+
 STAGED="$(git diff --cached --name-only)"
 SCH_STAGED=false
 PCB_STAGED=false

@@ -109,13 +109,10 @@ STEP models for the 3D board view live in `c6remote-kicad/3dmodels/`:
 
 ## KiCad MCP
 
-The repo is set up to use the same KiCad MCP server with Codex, Claude Desktop, and GitHub Copilot / VS Code:
+The repo is set up to use the same KiCad MCP server with Codex and GitHub Copilot / VS Code:
 
 - Codex workspace config: `.mcp.json`
 - VS Code / Copilot workspace config: `.vscode/mcp.json`
-- Claude Desktop example config: `docs/claude-desktop-config.example.json`
-
-Full setup notes live in [docs/mcp-setup.md](docs/mcp-setup.md).
 
 ## Validation and fabrication
 

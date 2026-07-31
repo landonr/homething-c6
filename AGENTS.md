@@ -162,6 +162,5 @@ The part is WS2812B protocol compatible (single wire, 800kHz, GRB high bit first
 - Check tracked vs untracked before commit. Common untracked artifacts: `c6remote-kicad/.history/`, `c6remote-kicad/DRC.rpt`, `c6remote-kicad/renders/`, `.cursor/`, `.windsurf/`, `.opencode/`, `.clinerules/`.
 - Git writes from Codex can fail with `.git/index.lock` because the sandbox blocks writes inside `.git`, not because a lock is stale. If the lock file is absent, rerun the git write with escalation instead of chasing repo corruption.
 - `.mcp.json` holds the working KiCad MCP server definition for Codex; `.vscode/mcp.json` mirrors it for VS Code. Keep using KiCad's bundled Python from the `.app` bundle, not Homebrew or system Python.
-- `docs/mcp-setup.md` is source of truth for multi-client MCP setup. Use it when touching Codex, Claude Desktop, or Copilot / VS Code MCP config.
 - The MCP server checkout at `/Users/landonrohatensky/dev/KiCAD-MCP-Server` is valid on this machine and `bash setup-macos.sh --verify` passes there. If MCP breaks, rerun that before changing paths by hand.
 - Upstream docs usually show Claude Desktop's `mcpServers` shape. Codex uses `.mcp.json` with `mcpServers`, VS Code uses `.vscode/mcp.json` with `servers`. Do not normalize one into the other unless intentionally editing that client's config.

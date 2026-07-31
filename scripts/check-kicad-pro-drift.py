@@ -21,14 +21,14 @@ import sys
 
 PRO = "c6remote-kicad/c6remote.kicad_pro"
 
-# Severities whose value has drifted here before, plus the three set
-# deliberately on 2026-07-30 that a stale eeschema copy would revert.
-GUARDED_SEVERITIES = (
-    "pth_inside_courtyard",
-    "npth_inside_courtyard",
-    "silk_over_copper",
-    "silk_edge_clearance",
-    "track_not_centered_on_via",
+# Whole dicts rather than a hand-picked field list: the first version guarded
+# only the five board severities seen drifting, and the very next clobber landed
+# on erc.rule_severities.pin_to_pin instead. Anything a stale editor copy can
+# revert belongs here.
+GUARDED_DICTS = (
+    ("board", "design_settings", "rules"),
+    ("board", "design_settings", "rule_severities"),
+    ("erc", "rule_severities"),
 )
 
 
@@ -52,18 +52,17 @@ def blob(rev):
 
 
 def fields(d):
-    """Flatten the guarded subset into a comparable dict."""
-    ds = d.get("board", {}).get("design_settings", {})
-    sev = ds.get("rule_severities", {})
+    """Flatten the guarded subset into one flat dict of dotted path -> value."""
+    out = {}
+    for path in GUARDED_DICTS:
+        node = d
+        for k in path:
+            node = node.get(k, {}) if isinstance(node, dict) else {}
+        prefix = ".".join(path)
+        for k, v in (node.items() if isinstance(node, dict) else ()):
+            out[f"{prefix}.{k}"] = v
     classes = d.get("net_settings", {}).get("classes", [])
-    out = {
-        "rules.min_copper_edge_clearance": ds.get("rules", {}).get(
-            "min_copper_edge_clearance"
-        ),
-        "net_settings.classes (names)": [c.get("name") for c in classes],
-    }
-    for k in GUARDED_SEVERITIES:
-        out[f"rule_severities.{k}"] = sev.get(k)
+    out["net_settings.classes (names)"] = [c.get("name") for c in classes]
     for c in classes:
         if c.get("name") == "Default":
             out["net_settings.Default.priority"] = c.get("priority")

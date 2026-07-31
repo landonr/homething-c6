@@ -11501,8 +11501,8 @@
 		(layer "B.Cu")
 		(uuid "3eec12ae-3d98-4a97-91ed-62285d91cf0b")
 		(at 64.25 155.25)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_SD"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -11555,45 +11555,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "544912ee-ba40-4486-804b-10cc96d5cd67")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "5d16da57-ecc2-4b9b-95ea-595dea7b728c")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "2d4a32be-469d-4640-bbac-54b88451883d")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "1a51fc9c-aa94-430d-bbcb-06b02f325273")
+			(uuid "544912ee-ba40-4486-804b-10cc96d5cd67")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -11610,8 +11581,8 @@
 		(layer "B.Cu")
 		(uuid "40e9f03d-4743-4d41-84cc-190e70e6ad6a")
 		(at 48 142.5)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_ANO_ENC2"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -11664,45 +11635,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom allow_missing_courtyard)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "ba49d183-4085-4554-8dcb-3158dcff1c5d")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "0904064d-06cd-4032-9648-f50b071413a6")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "595e69a4-adc3-49e9-affe-0635b5107e64")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "131893cf-9c6f-48b7-a584-5c79820e218b")
+			(uuid "ba49d183-4085-4554-8dcb-3158dcff1c5d")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -11939,8 +11881,8 @@
 		(layer "B.Cu")
 		(uuid "52e0ea89-ffe3-4716-8a4f-b6a08e59b9bf")
 		(at 48 147.75)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_GPIO18_D10_MOSI"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -11993,45 +11935,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom allow_missing_courtyard)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "f5a9fdce-c539-4099-821f-98dac509742a")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "0cfb1c50-bc26-46a5-b436-3b2e3fe846c8")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "558b6a9b-2d7f-4668-8d75-3ae5a6c4f4c2")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "351fc976-0294-4131-8745-2e4697009bda")
+			(uuid "f5a9fdce-c539-4099-821f-98dac509742a")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -12720,8 +12633,8 @@
 		(layer "B.Cu")
 		(uuid "76eb409e-f24c-43fb-ad1a-4e025ed381cc")
 		(at 64.25 150.25)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_SCK"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -12774,45 +12687,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "28311cba-e1ff-4087-9e58-a4b7aceb9e41")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "d72c86a6-1b81-4216-a8fc-37045663b9dd")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "d1b1eca5-3366-4478-9f89-104bf4691e73")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "a3b10bae-70fb-4f17-b070-c2d200f1e518")
+			(uuid "28311cba-e1ff-4087-9e58-a4b7aceb9e41")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -13386,8 +13270,8 @@
 		(layer "B.Cu")
 		(uuid "85742a96-114f-44a7-8361-a02cbb499314")
 		(at 47.95 152.8)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_GND"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -13440,45 +13324,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom allow_missing_courtyard)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "0cd87c4f-9ad6-4519-9c1f-95f798fe582c")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "020be357-2980-46ad-b9b0-9fbae589d2b9")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "4fd91904-7572-4af5-88e5-450d1b3f8a17")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "a9d41ab3-d4f6-4bd8-9330-7fd3edfe43ea")
+			(uuid "0cd87c4f-9ad6-4519-9c1f-95f798fe582c")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -13495,8 +13350,8 @@
 		(layer "B.Cu")
 		(uuid "902081ec-e844-49b1-8abf-a0f41b450de8")
 		(at 64.25 140)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_IR_REC"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -13549,45 +13404,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "dc676e9e-9ec2-4983-a74f-b18e78000ec8")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "5a3df609-c0b3-4d58-b063-789f0ee934e4")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "67e969f2-0904-49b3-ac55-56bede6f5323")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "6b525b43-404d-4110-90e6-8c3ea7dbda73")
+			(uuid "dc676e9e-9ec2-4983-a74f-b18e78000ec8")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -13604,8 +13430,8 @@
 		(layer "B.Cu")
 		(uuid "b3c6d8ca-0ea8-4a81-8cd8-e3412f3e0472")
 		(at 64.25 145)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_SDA"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -13658,45 +13484,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "0a627017-ca78-4319-8ce9-14d9b5309175")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "64c99df7-8923-4749-8dc5-ea071ef42b6d")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "41fbbbaa-434f-4998-9b46-11678770b058")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "4833bcc1-99c1-4224-9eb2-15de3b0cc0f6")
+			(uuid "0a627017-ca78-4319-8ce9-14d9b5309175")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -13713,8 +13510,8 @@
 		(layer "B.Cu")
 		(uuid "b6662a4e-72af-4bc2-94d6-9b505524846b")
 		(at 64.25 142.5)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_SCL"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -13767,45 +13564,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "b0e72819-1a88-471d-befe-b881d4a0ce26")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "b93202f4-a827-4687-9bcd-5788cddb6ffe")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "b3ea3070-7742-4316-9903-079612dda20b")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "68b703ef-61ba-494d-aa35-9d5495273c8c")
+			(uuid "b0e72819-1a88-471d-befe-b881d4a0ce26")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -13822,8 +13590,8 @@
 		(layer "B.Cu")
 		(uuid "b81f03aa-d551-4383-95eb-251774eacc33")
 		(at 47.95 150.2)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_3V3"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -13876,45 +13644,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "3c9bc438-05ce-4a44-a0a9-c6165df821f9")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "9a154df9-5a03-448a-b872-3f5d5e59fe52")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "11931657-e586-4b97-8e09-34ac5fc08a29")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "148fae30-15f9-49ca-bb6f-8fd8855a7155")
+			(uuid "3c9bc438-05ce-4a44-a0a9-c6165df821f9")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -14151,8 +13890,8 @@
 		(layer "B.Cu")
 		(uuid "c3e229cb-f361-457e-a1a0-71b182e32c37")
 		(at 64.25 147.5)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_WS"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -14205,45 +13944,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "7ff54758-5e93-413e-8760-1aec279d1e93")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "e4d9f435-b0fa-4c2a-8947-12ce085b9612")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "fc60d1ed-c04b-49d7-8d42-926cd4ee276e")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "6017b6bf-8ab7-4392-a7fa-042c06e36fdf")
+			(uuid "7ff54758-5e93-413e-8760-1aec279d1e93")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -14260,8 +13970,8 @@
 		(layer "B.Cu")
 		(uuid "cf186e04-b90c-4ba7-b047-ffb59c695e53")
 		(at 48 145)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_ANO_ENC1"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -14314,45 +14024,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom allow_missing_courtyard)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "3295cb71-3ee7-41ad-8e6e-f2fa501fbce2")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "e7a86efa-2961-4de1-bb65-b2d59efb3aac")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "ee307144-3b5f-4dab-b25d-5bef6bda1609")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "57bc0243-28d2-4381-841f-fe960eff95c6")
+			(uuid "3295cb71-3ee7-41ad-8e6e-f2fa501fbce2")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -14589,8 +14270,8 @@
 		(layer "B.Cu")
 		(uuid "ed4ded7c-8c41-4ef2-9460-a9817e96372f")
 		(at 48 140)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_LED1"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -14643,45 +14324,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "a39321da-7ebd-4d3f-aa8e-797cb6ae124b")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "03600cdd-4c34-4cb5-aa9f-a5715aeebdc2")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "b9f120ec-7fad-4fd5-80b9-2f6c97ed4dc3")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "1ce5ef71-67aa-4dbc-9841-f8ac1d384508")
+			(uuid "a39321da-7ebd-4d3f-aa8e-797cb6ae124b")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)
@@ -14698,8 +14350,8 @@
 		(layer "B.Cu")
 		(uuid "fb73073d-e455-4917-94ce-ab662f8129ee")
 		(at 64.25 152.75)
-		(descr "THT rectangular pad as test Point, square 1.0mm side length, hole diameter 0.5mm")
-		(tags "test point THT pad rectangle square")
+		(descr "Board-only testpoint pad without courtyard for intentional overlap regions")
+		(tags "test point THT pad no courtyard")
 		(property "Reference" "TP_IR_EMIT"
 			(at 0 -1.448 0)
 			(layer "B.SilkS")
@@ -14752,45 +14404,16 @@
 		)
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
+		(fp_rect
 			(start -0.7 -0.7)
-			(end 0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "94640367-6c76-4e0d-9868-1b0664711876")
-		)
-		(fp_line
-			(start -0.7 0.7)
-			(end -0.7 -0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "c8c17b2c-6262-4728-98f9-93923cf8536e")
-		)
-		(fp_line
-			(start 0.7 -0.7)
 			(end 0.7 0.7)
 			(stroke
 				(width 0.12)
-				(type solid)
+				(type default)
 			)
+			(fill no)
 			(layer "B.SilkS")
-			(uuid "e59fa459-e948-4ab7-940d-e48ca9016e8b")
-		)
-		(fp_line
-			(start 0.7 0.7)
-			(end -0.7 0.7)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "61f0fc52-205a-41b1-9b3c-049677ebb9ca")
+			(uuid "94640367-6c76-4e0d-9868-1b0664711876")
 		)
 		(pad "1" thru_hole circle
 			(at 0 0)

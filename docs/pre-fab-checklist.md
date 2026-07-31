@@ -60,42 +60,6 @@ anything against current geometry.
   annular ring issues against their actual process, the authoritative
   capability check.
 
-- [ ] JLCPCB assembly rotation preview: compare against
-  `export/c6remote-pos.csv`. JLC does not place parts at the footprint's own
-  0 degree orientation, it uses the orientation stored for that LCSC part in
-  JLC's component library, and the `Rot` column in the CPL is KiCad-relative,
-  so whole package families disagree by 90 or 180 degrees. `SOT-23` is the
-  worst offender, and two- and three-pin diodes, some SSOP and LGA parts, and
-  JST connectors all drift too. The failure is silent: assembly completes, the
-  part sits on the correct pads, rotated.
-
-  Mechanics: after uploading gerbers, BOM and CPL, the order flow renders the
-  board with every component at the rotation it will actually be placed and
-  pin 1 / polarity marked. Step through each oriented part and confirm pin 1
-  points where the datasheet says. Fix a mismatch by editing that ref's `Rot`
-  value in the CPL, NOT by rotating the board footprint: the board is correct
-  and the CPL is only a translation layer into JLC's library.
-
-  Parts to walk, worst first:
-
-  | Ref | Package | CPL Rot | Why |
-  | --- | --- | --- | --- |
-  | `Q2` | SOT-23 | 90, top | Pin 1 is the gate. A rotation lands `+3.3V` on it, the P-FET never conducts and `led_vdd` is dead with no complaint from anything. |
-  | `Q1` | SOT-23 | 90, top | Same family, same offset risk. Kills IR emit. |
-  | `MK1` | ICS-43434 LGA | 0, bottom | Bottom-terminal, pin 1 invisible after assembly, and this part already cost one revision on pin numbering. |
-  | `D2`-`D5` | custom 2020 PLCC4 | -45, -135, 135, -135, top | Non-orthogonal, and the footprint is project-local so JLC has no matching library entry to key from. A rotation permutes DIN/DOUT/VDD/GND. |
-  | `U3` | SSOP-24 | 0, top | A 180 error puts the supply pins on signal pads. |
-  | `J1` | JST PH horizontal | 0, bottom | Bottom side and polarized: a reversed battery. |
-  | `U2` | Vishay MOLD-3 | 0, bottom | Swaps Vs, GND and OUT on the IR receiver. |
-  | `U1` | XIAO module | 180, top | Only if JLC places it rather than hand-soldering. |
-  | `ENC1` | Ano Rotary | THT, not in CPL | Hand-soldered, so it is a paper check against the footprint, not the preview. |
-
-  `PosY` is negative for every row because the CPL uses Y-up with the origin
-  at the board's bottom-left corner. That is normal, not a fault. Bottom-side
-  rotation uses the mirrored convention, so check `C4`, `J1`, `MK1`, `R3`,
-  `R6`-`R8`, `R10` and `U2` for side placement independently of the top-side
-  walk.
-
 - [ ] IBOM pin-1 walk: open `c6remote-kicad/ibom.html` and verify pin-1
   orientation of `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `Q2`, `ENC1` against their
   datasheets. `Q2` is worth the extra care: it is SOT-23 and pin 1 is the gate,
@@ -162,6 +126,13 @@ anything against current geometry.
   `TP_*` test points. Firmware note carried into the LED work: `GPIO17` must be
   held low or high-impedance whenever the rail is down, else DIN pushes current
   into the dead rail.
+
+- **2026-07-30**: Dropped the JLCPCB assembly rotation preview item, Landon's
+  call, not needed. It had been the longest entry on the list, carrying the CPL
+  `Rot` explanation and a worst-first table of `Q2`, `Q1`, `MK1`, `D2`-`D5`,
+  `U3`, `J1`, `U2`, `U1` and `ENC1`. Recoverable from git history if a later
+  order does go through JLC assembly. The one failure mode worth keeping,
+  `Q2`'s gate on SOT-23 pin 1, is already called out under the IBOM pin-1 walk.
 
 - **2026-07-30**: 1:1 mechanical check closed by 3D print. Printed the
   `--board-only` STL with F.SilkS raised 0.4mm, test fitted, switch and wheel

@@ -5434,6 +5434,10 @@
 		(uuid "5eb2a8a9-6e7c-4db8-8538-b873f5b6a0cc")
 	)
 	(no_connect
+		(at 236.22 85.09)
+		(uuid "a5583de3-e2d8-4b69-b443-a52f185e8200")
+	)
+	(no_connect
 		(at 205.74 66.04)
 		(uuid "e6f2abdf-a775-48f2-9fef-ec0e86a460f9")
 	)
@@ -6887,28 +6891,6 @@
 			)
 		)
 	)
-	(global_label "VCC"
-		(shape bidirectional)
-		(at 236.22 85.09 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "8ba9d8fd-33a4-4afc-9734-5cae57863186")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 236.22 85.09 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-	)
 	(global_label "ano_sw5"
 		(shape input)
 		(at 71.12 162.56 0)
@@ -7720,30 +7702,6 @@
 				(font
 					(size 1.27 1.27)
 				)
-			)
-		)
-	)
-	(global_label "VCC"
-		(shape bidirectional)
-		(at 240.03 72.39 270)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "e2d75123-4788-4af7-8cd5-f74ab99cb5fd")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 240.03 80.1151 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 			)
 		)
 	)
@@ -9208,7 +9166,14 @@
 		(pin "2"
 			(uuid "9ab532cf-88d8-43e2-a1c3-9d93c545e25e")
 		)
-		(instances)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "C4")
+					(unit 1)
+				)
+			)
+		)
 	)
 	(symbol
 		(lib_id "power:GND")
@@ -10602,86 +10567,6 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR042")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 240.03 72.39 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files no)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "60050373-eea9-4a62-ba42-6dc8ba4310f0")
-		(property "Reference" "TP_VCC1"
-			(at 242.57 71.12 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
-			(at 242.57 73.66 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Local:TestPoint_THTPad_1.0x1.0mm_Drill0.5mm_NoCrtYd"
-			(at 240.03 72.39 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 240.03 72.39 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 240.03 72.39 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "928e840e-4e0b-4782-a6d4-cca746004cf5")
-		)
-		(instances
-			(project "c6remote"
-				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
-					(reference "TP_VCC1")
 					(unit 1)
 				)
 			)
@@ -15824,11 +15709,19 @@
 		(pin "1"
 			(uuid "df152a56-a8bd-46a5-8553-64a02e41b434")
 		)
-		(instances)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR043")
+					(unit 1)
+				)
+			)
+		)
 	)
 	(sheet_instances
 		(path "/"
 			(page "1")
 		)
 	)
+	(embedded_fonts no)
 )

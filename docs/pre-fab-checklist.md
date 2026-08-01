@@ -7,10 +7,10 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 ## Automated
 
 - [x] **ERC** `$KC sch erc c6remote.kicad_sch --exit-code-violations`
-  2026-07-31: 0 violations.
+  2026-08-01: 0 violations.
 
 - [x] **DRC, parity, refill** `$KC pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations`
-  2026-07-31: 0 errors, 0 unconnected, 2 warnings (`lib_footprint_mismatch` on `U1`, 1 `silk_overlap`). Parity 13, all `extra_footprint` for board-only `TP_*`. Known, not defects.
+  2026-08-01: 0 errors, 0 unconnected, 1 warning (`lib_footprint_mismatch` on `U1`). Parity 0. Known, not a defect.
 
 - [x] **STEP export** catches broken 3D model refs before they become mechanical surprises.
   `$KC pcb export step c6remote.kicad_pcb --subst-models -o /tmp/c6remote-check.step`
@@ -46,3 +46,5 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 - **2026-07-30:** Mechanical check closed by 3D print. All nine holes nominal in the mesh, three mount 2.9mm, four ANO 4.0mm, two pegs 1.6mm; slab 1.51mm rather than 1.6mm because that is what the project stackup stores. No board change.
 
 - **2026-07-30:** PCBWay flagged four vias inside SMD pads on the `2026.7.0` package, solder-paste leakage risk. All four cleared, front silk revision bumped to `2026.7.1`.
+
+- **2026-08-01:** PCBWay reported vias in pad again against the newer files. Not reproducible: a geometric sweep of every via against every pad (via centre plus annular ring versus each pad rectangle, layer-agnostic) finds the four originals at `1693423^` sitting dead centre in R9.1, R9.2, SW11.2 and U3.1 at -0.300mm, and zero hits on both `2026.7.1` and the current board. Closest approach now is 0.305mm of clear copper at U3 pin 1. Either their review ran against the `2026.7.0` package or their DFM means something else by the term, so their marked-up file is needed to close it. Reusable check: `scripts/check-via-in-pad.py`.

@@ -1,6 +1,6 @@
 {
   "board": {
-    "active_layer": 1,
+    "active_layer": 0,
     "active_layer_preset": "",
     "auto_track_width": true,
     "hidden_netclasses": [],
@@ -9,7 +9,7 @@
     "net_color_mode": 1,
     "opacity": {
       "images": 0.6,
-      "pads": 1.0,
+      "pads": 0.9800000190734863,
       "shapes": 1.0,
       "tracks": 1.0,
       "vias": 1.0,
@@ -49,7 +49,8 @@
       "drc_exclusions",
       "locked_item_shadows",
       "conflict_shadows",
-      "shapes"
+      "shapes",
+      "ly_points"
     ],
     "visible_layers": "ffffffff_ffffffff_ffffffff_ffffffff",
     "zone_display_mode": 0

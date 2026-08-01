@@ -83,13 +83,13 @@ Tracked at `scripts/hooks/pre-commit`. Activate once per clone with `git config 
 
 Gerber and drill headers embed a creation timestamp, so any board-touching commit restages all of `export/` even when geometry is unchanged.
 
-### Baseline as of 2026-07-31
+### Baseline as of 2026-08-01
 
 - `sch erc`: 0 violations.
-- `pcb drc`: 0 errors, 0 unconnected, 2 warnings (`lib_footprint_mismatch` on `U1`, one `silk_overlap`). `U1` is the only footprint still diverging from its library.
-- Parity: 13 issues, all `extra_footprint` for the board-only `TP_*` test points.
+- `pcb drc`: 0 errors, 0 unconnected, 1 warning (`lib_footprint_mismatch` on `U1`). `U1` is the only footprint diverging from its library.
+- Parity: 0 issues. The 14 `TP_*` test points are gone from the board, so nothing is board-only any more.
 
-Treat those counts as pre-existing unless the task is about them. Anything above 2 warnings is a regression from the current task, not inherited.
+Treat those counts as pre-existing unless the task is about them. Anything above 1 warning is a regression from the current task, not inherited.
 
 `silk_over_copper` and `silk_edge_clearance` were set to `ignore` in the GUI on 2026-07-30, deliberately. The 24 `silk_over_copper` and 4 `silk_edge_clearance` are muted, not fixed, and still in the artwork; 5 of the `silk_over_copper` are the ANO wheel outline crossing ENC1 pads, which is intentional. Do not re-enable either severity to "restore the baseline".
 
@@ -101,7 +101,7 @@ Work happens on **`develop`**. **`main`** holds released snapshots only and is t
 
 Dead URLs, use the new tags in any new link: `v0.1` was renamed `2026.6.0` (2026-07-29, mapped from the 2026-06-16 fab date), so `releases/tag/v0.1` and `releases/download/v0.1/...` are gone; `2026.7.0` was renamed in place (2026-07-30), killing its `c6remote-bom.csv` and `c6remote-pos.csv` download URLs.
 
-The PCB front silkscreen revision marking must equal the release the board ships in. It currently reads `2026.7.1`. The patch counts, not only the month: a copper change makes it a different board, and the workflow derives the next patch from existing tags. Whenever a merge to `main` would compute a version the silk does not show, update the silk before merging.
+The PCB front silkscreen revision marking must equal the release the board ships in. It currently reads `2026.8.0`. The patch counts, not only the month: a copper change makes it a different board, and the workflow derives the next patch from existing tags. Whenever a merge to `main` would compute a version the silk does not show, update the silk before merging.
 
 No KiCad runs in CI, so the release is only as correct as what is committed. `scripts/hooks/pre-commit` is what keeps `export/` in lockstep; a stale `export/` is a bad commit, not a workflow bug.
 
@@ -117,11 +117,11 @@ Centered on a **Seeed Studio XIAO ESP32-C6** module (`U1`). Single sheet, heavy 
 - **Custom rotary:** `ENC1`, the project-specific "Ano Rotary" part. Encoder outputs `ano_enc1`/`ano_enc2` plus `ano_sw1`-`ano_sw5`.
 - **Status lighting:** `D2`-`D5`, four `XL-2020RGBC-WS2812B` (XINGLIGHT, LCSC `C5349955`) in cascade. See below.
 
-Pin budget: all 11 XIAO edge pads (D0-D10) are used. `D10`/`GPIO18` was the last free one and now carries `led_en`, so `TP_GPIO18_D10_MOSI` is a probe point, not a spare pad. The module's bottom pad row is also available and routable, proven by `GPIO4` (`bat_sense`) and `GPIO5` (`exp_int`) already coming off it. `GPIO6` (pad 29) and `GPIO7` (pad 25) are unconnected and free, both in the `GPIO0`-`GPIO7` LP range so they can serve as deep-sleep wake sources. `GPIO9` (pad 30) is unconnected but is the BOOT strapping pin, so avoid it. Verify against `U1`'s pads in the board file before relying on any of this.
+Pin budget: all 11 XIAO edge pads (D0-D10) are used. `D10`/`GPIO18` was the last free one and now carries `led_en`. The board has no test points at all since 2026-08-01, so there is no probe pad on any signal. The module's bottom pad row is also available and routable, proven by `GPIO4` (`bat_sense`) and `GPIO5` (`exp_int`) already coming off it. `GPIO6` (pad 29) and `GPIO7` (pad 25) are unconnected and free, both in the `GPIO0`-`GPIO7` LP range so they can serve as deep-sleep wake sources. `GPIO9` (pad 30) is unconnected but is the BOOT strapping pin, so avoid it. Verify against `U1`'s pads in the board file before relying on any of this.
 
 Signal split: `ano_enc1`/`ano_enc2` go straight from `ENC1` to `U1`, while the rotary push-switch nets and all eleven discrete switches go through `U3`.
 
-Power splits three ways: **`+3.3V`** for logic, the switched **`led_vdd`** branch off it for `D2`-`D5`, and **`VCC`**, now only the dangling `U1`/14 VBUS node. Do not collapse or rename those rails casually, and in particular do not "simplify" `led_vdd` back onto `+3.3V`.
+Power splits two ways: **`+3.3V`** for logic and the switched **`led_vdd`** branch off it for `D2`-`D5`. Do not collapse or rename those rails casually, and in particular do not "simplify" `led_vdd` back onto `+3.3V`. The old **`VCC`** rail is gone as of 2026-08-01: it had shrunk to the `U1`/14 VBUS node alone, and that pin now carries a schematic no-connect flag, so the board reads `unconnected-(U1-VBUS-Pad14)`. VBUS is unavailable on the board; a 5V feature needs a new net, not a revived label.
 
 ### LED rail detail
 

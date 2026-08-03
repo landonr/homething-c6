@@ -101,7 +101,7 @@ Work happens on **`develop`**. **`main`** holds released snapshots only and is t
 
 Dead URLs, use the new tags in any new link: `v0.1` was renamed `2026.6.0` (2026-07-29, mapped from the 2026-06-16 fab date), so `releases/tag/v0.1` and `releases/download/v0.1/...` are gone; `2026.7.0` was renamed in place (2026-07-30), killing its `c6remote-bom.csv` and `c6remote-pos.csv` download URLs.
 
-The PCB front silkscreen revision marking must equal the release the board ships in. It currently reads `2026.8.0`. The patch counts, not only the month: a copper change makes it a different board, and the workflow derives the next patch from existing tags. Whenever a merge to `main` would compute a version the silk does not show, update the silk before merging.
+The PCB front silkscreen revision marking must equal the release the board ships in. It currently reads `2026.8.1`. The patch counts, not only the month: any artwork change, copper or silk, makes it a different board, and the workflow derives the next patch from existing tags. Whenever a merge to `main` would compute a version the silk does not show, update the silk before merging.
 
 No KiCad runs in CI, so the release is only as correct as what is committed. `scripts/hooks/pre-commit` is what keeps `export/` in lockstep; a stale `export/` is a bad commit, not a workflow bug.
 

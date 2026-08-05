@@ -233,6 +233,22 @@ switch:
           then:
             - light.turn_off: status_light
 
+  # Q3 is a high-side P-FET on the IR receiver rail: gate low powers ir_vdd, so
+  # the switch pin is inverted. R11 1M holds the gate at +3.3V, so the rail is
+  # off whenever GPIO6 floats. This one defaults ON, unlike the LED rail, because
+  # remote_receiver cannot decode with U2 unpowered. Turning it off while awake
+  # leaks: GPIO16's pullup feeds U2's internal 30k to a dead Vs, roughly 44uA,
+  # which partially powers the rail. Deep sleep releases the pullup, so the 350uA
+  # is only reclaimable there.
+  - platform: gpio
+    name: IR Rail
+    id: ir_rail
+    entity_category: config
+    pin:
+      number: GPIO6
+      inverted: true
+    restore_mode: ALWAYS_ON
+
 remote_receiver:
   pin:
     number: GPIO16

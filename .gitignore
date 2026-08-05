@@ -15,6 +15,10 @@ pcbway/
 # Photoshop sources for social/story artwork (large binaries, not design source)
 *.psd
 
+# Vendor datasheets dropped at the repo root for reference. Sourcing URLs live
+# in the BOM. Root only, so a kicad-cli pdf export under docs/ still tracks.
+/*.pdf
+
 # Fab upload archives. The pre-commit hook blanket-stages export/, so a stray
 # zip dropped in there gets tracked; export.zip is rebuilt from export/ on demand.
 c6remote-kicad/export.zip

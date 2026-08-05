@@ -8,12 +8,14 @@
 #   GPIO2  sck             GPIO18 led_en (D10)  GPIO23 scl
 #   GPIO4  bat_sense /2    GPIO19 ano_enc2
 #   GPIO5  exp_int (nINT)  GPIO20 ano_enc1
+#   GPIO6  ir_en
 #
 # led_en gates Q2, a high-side P-FET feeding led_vdd on D2-D5: low powers the
-# rail, and R10 1M holds it off while GPIO18 floats.
+# rail, and R10 1M holds it off while GPIO18 floats. ir_en gates Q3 the same way
+# for ir_vdd on U2, but defaults on, since the receiver is useless unpowered.
 #
-# Spare, unconnected at U1: GPIO6, GPIO7. Both are deep-sleep wake capable
-# (C6 wakes only on GPIO0-7).
+# Spare, unconnected at U1: GPIO7 only. It is deep-sleep wake capable (C6 wakes
+# only on GPIO0-7); IR REC on GPIO16 is not, so IR cannot wake from deep sleep.
 
 # Defaults; version files override (main config wins per packages docs).
 substitutions:
@@ -492,6 +494,19 @@ switch:
             light.is_on: led_strip
           then:
             - light.turn_off: led_strip
+
+  # Q3 gates ir_vdd on U2 the same way, inverted, R11 1M holding it off while
+  # GPIO6 floats. Defaults ON: remote_receiver cannot decode with U2 unpowered,
+  # and turning it off while awake leaks about 44uA through GPIO16's pullup into
+  # U2's internal 30k against a dead Vs.
+  - platform: gpio
+    name: IR Rail
+    id: ir_rail
+    entity_category: config
+    pin:
+      number: GPIO6
+      inverted: true
+    restore_mode: ALWAYS_ON
 
   - platform: template
     name: Mic Reactive

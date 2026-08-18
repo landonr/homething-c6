@@ -1111,7 +1111,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Interface_Optical:TSOP45xx"
+		(symbol "Local:TSOP61xx"
 			(pin_names
 				(offset 1.016)
 			)
@@ -1131,7 +1131,7 @@
 					(justify left)
 				)
 			)
-			(property "Value" "TSOP45xx"
+			(property "Value" "TSOP61xx"
 				(at -10.16 -7.62 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1142,7 +1142,7 @@
 					(justify left)
 				)
 			)
-			(property "Footprint" "OptoDevice:Vishay_MOLD-3Pin"
+			(property "Footprint" "Library:Vishay_PANHEAD-4Pin_SideView"
 				(at -1.27 -9.525 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1153,7 +1153,7 @@
 					)
 				)
 			)
-			(property "Datasheet" "http://www.vishay.com/docs/82460/tsop45.pdf"
+			(property "Datasheet" "https://www.vishay.com/docs/82457/tsop61.pdf"
 				(at 16.51 7.62 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1175,7 +1175,7 @@
 					)
 				)
 			)
-			(property "ki_keywords" "opto IR receiver"
+			(property "ki_keywords" "opto IR receiver panhead smd side view"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1186,7 +1186,7 @@
 					)
 				)
 			)
-			(property "ki_fp_filters" "Vishay*MOLD*"
+			(property "ki_fp_filters" "Vishay*PANHEAD*"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1197,7 +1197,7 @@
 					)
 				)
 			)
-			(symbol "TSOP45xx_0_0"
+			(symbol "TSOP61xx_0_0"
 				(arc
 					(start -10.287 -1.778)
 					(mid -11.0899 -0.1905)
@@ -1243,7 +1243,7 @@
 					)
 				)
 			)
-			(symbol "TSOP45xx_0_1"
+			(symbol "TSOP61xx_0_1"
 				(polyline
 					(pts
 						(xy -8.763 0.381) (xy -9.652 1.27)
@@ -1494,11 +1494,11 @@
 					)
 				)
 			)
-			(symbol "TSOP45xx_1_1"
-				(pin output line
-					(at 10.16 0 180)
+			(symbol "TSOP61xx_1_1"
+				(pin power_in line
+					(at 10.16 -5.08 180)
 					(length 2.54)
-					(name "OUT"
+					(name "GND"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1513,10 +1513,10 @@
 						)
 					)
 				)
-				(pin power_in line
-					(at 10.16 -5.08 180)
+				(pin no_connect line
+					(at 10.16 -2.54 180)
 					(length 2.54)
-					(name "GND"
+					(name "NC"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1542,6 +1542,24 @@
 						)
 					)
 					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin output line
+					(at 10.16 0 180)
+					(length 2.54)
+					(name "OUT"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -5422,6 +5440,10 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fe8823b3-ac53-445b-8a00-df633c4df5a9")
+	)
+	(no_connect
+		(at 26.67 163.83)
+		(uuid "3f6c94b1-0d52-4a7e-bd10-2c8f5a41e904")
 	)
 	(no_connect
 		(at 223.52 68.58)
@@ -12728,7 +12750,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Interface_Optical:TSOP45xx")
+		(lib_id "Local:TSOP61xx")
 		(at 29.21 153.67 270)
 		(unit 1)
 		(body_style 1)
@@ -12748,7 +12770,7 @@
 				)
 			)
 		)
-		(property "Value" "TSOP4136"
+		(property "Value" "TSOP6136"
 			(at 40.894 154.178 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12758,7 +12780,7 @@
 				)
 			)
 		)
-		(property "Footprint" "OptoDevice:Vishay_MOLD-3Pin"
+		(property "Footprint" "Library:Vishay_PANHEAD-4Pin_SideView"
 			(at 19.685 152.4 0)
 			(hide yes)
 			(show_name no)
@@ -12769,7 +12791,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "http://www.vishay.com/docs/82460/tsop45.pdf"
+		(property "Datasheet" "https://www.vishay.com/docs/82457/tsop61.pdf"
 			(at 36.83 170.18 0)
 			(hide yes)
 			(show_name no)
@@ -12791,7 +12813,7 @@
 				)
 			)
 		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/vishay-semiconductor-opto-division/TSOP4136/4074522"
+		(property "Digikey" "https://www.digikey.com/en/products/detail/vishay-semiconductor-opto-division/TSOP6136TT/4075852"
 			(at 67.31 68.58 0)
 			(hide yes)
 			(show_name no)
@@ -12802,7 +12824,7 @@
 				)
 			)
 		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/Vishay-Semiconductors/TSOP4136"
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Vishay-Semiconductors/TSOP6136TT"
 			(at 67.31 68.58 0)
 			(hide yes)
 			(show_name no)
@@ -12813,7 +12835,7 @@
 				)
 			)
 		)
-		(property "MPN" "TSOP4136"
+		(property "MPN" "TSOP6136TT"
 			(at 67.31 68.58 0)
 			(hide yes)
 			(show_name no)
@@ -12836,13 +12858,16 @@
 			)
 		)
 		(pin "1"
-			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
+			(uuid "d233b8d8-8cfc-4774-904e-127d6cf21564")
+		)
+		(pin "2"
+			(uuid "3f6c94b1-0d52-4a7e-bd10-2c8f5a41e903")
 		)
 		(pin "3"
 			(uuid "c34109cc-de18-4942-a164-2b7e5c5c6d7e")
 		)
-		(pin "2"
-			(uuid "d233b8d8-8cfc-4774-904e-127d6cf21564")
+		(pin "4"
+			(uuid "fbc21239-6ad0-4867-b59b-5d6e971ddfea")
 		)
 		(instances
 			(project "c6remote"

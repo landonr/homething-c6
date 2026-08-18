@@ -11069,7 +11069,7 @@
 				)
 			)
 		)
-		(property "Value" "22"
+		(property "Value" "10"
 			(at 169.672 31.496 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11101,7 +11101,7 @@
 				)
 			)
 		)
-		(property "Description" "Resistor: 22R 1% 0.1W 0603 (D1 IR LED current limit)"
+		(property "Description" "Resistor: 10R 1% 0.1W 0603 (D1 IR LED current limit)"
 			(at 166.37 30.48 0)
 			(hide yes)
 			(show_name no)
@@ -11112,7 +11112,7 @@
 				)
 			)
 		)
-		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-0722RL/727055"
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-0710RL/726879"
 			(at 0 0 0)
 			(hide yes)
 			(show_name no)
@@ -11123,7 +11123,7 @@
 				)
 			)
 		)
-		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-0722RL"
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-0710RL"
 			(at 0 0 0)
 			(hide yes)
 			(show_name no)
@@ -11134,7 +11134,7 @@
 				)
 			)
 		)
-		(property "MPN" "RC0603FR-0722RL"
+		(property "MPN" "RC0603FR-0710RL"
 			(at 0 0 0)
 			(hide yes)
 			(show_name no)

@@ -40,7 +40,7 @@ Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 
 | Block | Unit 1, as fabbed (`70ab9b0`) | Current design |
 | --- | --- | --- |
 | Status lighting | One `SK6812MINI` (3.5x3.5) as D2, with R2 330Ω in series on the data line and C2 1µF decoupling | Four `XL-2020RGBC-WS2812B` (2.0x2.0) as D2-D5 in a cascade around the wheel, no series R, and the VDD rail gated by a high-side load switch: Q2 AO3401A P-FET from `+3.3V` onto `led_vdd`, R10 1M gate pull-up holding it off by default, C4 1µF bulk cap mid-chain, enable net `led_en` on GPIO18 (drive low for on) |
-| IR receiver | U2 `TSOP4136` on the front (F.Cu), two receiver cutouts in the top board edge | U2 on the back (B.Cu), both top-edge cutouts dropped |
+| IR receiver | U2 `TSOP4136` on the front (F.Cu), a through-hole part standing 10.43mm off the board, two receiver cutouts in the top board edge | U2 `TSOP6136` on the back (B.Cu), a Panhead SMD part standing 5.34mm off it, same AGC1 setting and same 36kHz carrier, both top-edge cutouts dropped |
 | Discrete switches | TL3315 terminals 1/2 on `sw*` and 3/4 on GND, which shorts every populated switch input to GND | Terminals 1/2 on GND, 3/4 on `sw*` |
 | ANO encoder | ENC1 pads 6 and 8 swapped, so COM_A sits on `ano_sw2` and the up switch common sits on GND | Pad 6 GND, pad 8 `ano_sw2` |
 | Microphone | MK1 wired to INMP441 pin numbers, so the ICS-43434 gets the bit clock on WS and its SD pad buried in the GND pour | MK1 on the ICS-43434 numbering, `sck`/`ws`/`sd` on GPIO2/GPIO0/GPIO21 |

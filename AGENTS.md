@@ -31,8 +31,10 @@ KiCad hardware project, not a software application. Source of truth under `c6rem
 - `c6remote.kicad_sch` - single-sheet schematic
 - `c6remote.kicad_pcb` - board layout
 - `c6remote.kicad_pro` - ERC/DRC settings, BOM settings, project metadata
-- `ano rotary.kicad_sym` - project-local custom symbol library
+- `ano rotary.kicad_sym` - project-local custom symbol library, `ENC1` only
+- `Local.kicad_sym` - the other project symbol library, `SW_TL3315NF160Q` and `TSOP61xx`
 - `../kicad lib/Library.pretty/` - custom footprints used by the board
+- `3dmodels/` - 3D models the project footprints point at through `${KIPRJMOD}`
 - `export/` - generated Gerbers and drill files
 
 Board status, validation history, and "what's left" work live in `ROADMAP.md`. Read it first.
@@ -114,7 +116,7 @@ No KiCad runs in CI, so the release is only as correct as what is committed. `sc
 Centered on a **Seeed Studio XIAO ESP32-C6** module (`U1`). Single sheet, heavy use of global labels, so understanding behavior means following named nets across the sheet and then checking the matching PCB nets and footprints.
 
 - **Audio input:** `MK1`, ICS-43434 / INMP441-style I2S mic on `sck`, `ws`, `sd`.
-- **IR:** `U2` is a TSOP45xx receiver on `IR REC`. `D1` is the IR LED, driven through `Q1` and `R1` from `IR EMIT`.
+- **IR:** `U2` is a `TSOP6136` receiver on `IR REC`, a Vishay Panhead SMD part on B.Cu that listens out the +Y end wall. `D1` is the IR LED, driven through `Q1` and `R1` from `IR EMIT`.
 - **Input expansion:** `U3` is a `PCF8575DBR` on `sda`/`scl`, fanning out `sw1`-`sw11` plus the rotary switch nets `ano_sw1`-`ano_sw5`. All 16 expander IO used.
 - **Custom rotary:** `ENC1`, the project-specific "Ano Rotary" part. Encoder outputs `ano_enc1`/`ano_enc2` plus `ano_sw1`-`ano_sw5`.
 - **Status lighting:** `D2`-`D5`, four `XL-2020RGBC-WS2812B` (XINGLIGHT, LCSC `C5349955`) in cascade. See below.
@@ -143,7 +145,9 @@ Added 2026-08-04. `Q3` (`AO3401A`, F.Cu at 38.45, 140.3125) gates `ir_vdd` off `
 
 `Q3` and `R11` sit next to `U1`, not next to `U2`, which is the opposite of `Q2`. That is deliberate: `ir_en` is a 1M high-impedance node whenever `GPIO6` is an input, so the whole net is kept short, while `ir_vdd` takes the ~110mm run to `R6` because 350uA of DC over that length costs 0.2mV. Do not "tidy" this by moving `Q3` up beside its load.
 
-Unlike the LED rail, **the IR rail defaults on**: `remote_receiver` cannot decode with `U2` unpowered, so the ESPHome `IR Rail` switch on `GPIO6` is `inverted: true` with `restore_mode: ALWAYS_ON`. Turning it off while awake saves less than it looks: `GPIO16` carries a pullup and `U2` has an internal 30k from OUT to Vs, so against a dead rail roughly 44uA flows back into it. The 350uA is only genuinely reclaimable in deep sleep, where the pullup is released.
+Unlike the LED rail, **the IR rail defaults on**: `remote_receiver` cannot decode with `U2` unpowered, so the ESPHome `IR Rail` switch on `GPIO6` is `inverted: true` with `restore_mode: ALWAYS_ON`. Turning it off while awake saves less than it looks: `GPIO16` carries a pullup and `U2` has an internal 33k from OUT to Vs, so against a dead rail roughly 42uA flows back into it. The 350uA is only genuinely reclaimable in deep sleep, where the pullup is released.
+
+`U2` went from the through-hole `TSOP4136` to the SMD `TSOP6136` on 2026-08-17 (`e6da487`). `ISD` is unchanged at 0.35mA typ, so every number above still holds; what changed is the package, not the rail. It is a 4-pin part now, 1 GND, 2 N.C., 3 Vs, 4 OUT, on the project footprint `Library:Vishay_PANHEAD-4Pin_SideView` at 42.845,31.8575 on B.Cu, with pad 1 reaching the F.Cu GND pour through a via rather than through a barrel. Keep the AGC digit at 1 if the carrier frequency ever moves: `TSOP6136` is AGC1, the most permissive setting Vishay makes, and both firmwares run `remote_receiver` with `dump: all`, so a code the AGC rejects as noise is one that can never be learned. Vishay's AGC map tool at `vishay.com/en/landingpage/agcmaptool/` is how to re-check code acceptance before swapping to any other AGC.
 
 ## KiCad workflow
 
@@ -166,7 +170,7 @@ Unlike the LED rail, **the IR rail defaults on**: `remote_receiver` cannot decod
 - Live design files are `c6remote.kicad_sch`, `c6remote.kicad_pcb`, `c6remote.kicad_pro`. `*.bak`, `*-bak`, and `c6remote-backups/` are archival, not edit targets.
 - `export/` is generated. Update it only by regenerating; never hand-edit Gerbers or drill files.
 - Both library tables are checked in and wired: `sym-lib-table` for symbols, `fp-lib-table` for the three footprint nicknames the board uses (`Library` to `../kicad lib/Library.pretty`, plus `Local` and `Seeed_Studio_XIAO_Series` to the `.pretty` directories beside it). Nothing needs mapping by hand.
-- Custom footprints under `kicad lib/Library.pretty/` are part of the design, especially `XIAO-ESP32C6-DIP.kicad_mod`, `SW_TL3315NF160Q.kicad_mod`, `Ano Rotary.kicad_mod`, `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`. Editing one affects both symbol-footprint linking and PCB geometry, so verify schematic symbol properties and PCB footprint instances after.
+- Custom footprints under `kicad lib/Library.pretty/` are part of the design, especially `XIAO-ESP32C6-DIP.kicad_mod`, `SW_TL3315NF160Q.kicad_mod`, `Ano Rotary.kicad_mod`, `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`, `Vishay_PANHEAD-4Pin_SideView.kicad_mod`. Editing one affects both symbol-footprint linking and PCB geometry, so verify schematic symbol properties and PCB footprint instances after. The Panhead one carries `${KIPRJMOD}/3dmodels/TSOP6136.step`, which is Vishay doc 82826 re-exported already rotated into place, so its `offset` and `rotate` are all zero on purpose; do not "fix" them.
 - `ano rotary.kicad_sym` defines `ENC1`. Its pin electrical types are not modeled cleanly for ERC, so changing that symbol can shift the ERC baseline.
 - Stored plot settings point at a Windows path. Always pass an explicit output directory such as `-o export`.
 - `kicad-cli` drops `c6remote-erc.rpt` and `c6remote-drc.rpt` in `c6remote-kicad/`. Generated scratch output unless a task says to keep them.

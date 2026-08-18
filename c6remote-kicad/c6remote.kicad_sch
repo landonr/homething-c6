@@ -13930,7 +13930,7 @@
 				)
 			)
 		)
-		(property "MPN" "5001"
+		(property "MPN" "Adafruit 5001"
 			(at 97.79 35.56 0)
 			(hide yes)
 			(show_name no)

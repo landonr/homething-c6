@@ -5,7 +5,7 @@
       "Application": "Pcbnew",
       "Version": "10.0.3"
     },
-    "CreationDate": "2026-08-18T06:47:14-07:00"
+    "CreationDate": "2026-08-18T20:39:31-07:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
@@ -82,6 +82,7 @@
   "MaterialStackup": [
     {
       "Type": "Legend",
+      "Color": "R229G193B0",
       "Name": "Top Silk Screen"
     },
     {
@@ -90,7 +91,7 @@
     },
     {
       "Type": "SolderMask",
-      "Color": "R55G21B112",
+      "Color": "R11G11B11",
       "Thickness": 0.01,
       "Name": "Top Solder Mask"
     },
@@ -113,7 +114,7 @@
     },
     {
       "Type": "SolderMask",
-      "Color": "R55G21B112",
+      "Color": "R11G11B11",
       "Thickness": 0.01,
       "Name": "Bottom Solder Mask"
     },
@@ -123,6 +124,7 @@
     },
     {
       "Type": "Legend",
+      "Color": "R229G193B0",
       "Name": "Bottom Silk Screen"
     }
   ]

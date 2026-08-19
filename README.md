@@ -101,11 +101,7 @@ Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
 - `ano rotary`: project-local custom rotary symbol (`ano rotary.kicad_sym`) for the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001)
 - `Seeed_Studio_XIAO_Series`: XIAO module symbols from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
 
-STEP models for the 3D board view live in `c6remote-kicad/3dmodels/`:
-
-- `5221 ANO Rotary Encoder.step`: [GrabCAD Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1)
-- `SW_SPST_PTS647Sx50_black.step`: local fork matching the [C&K PTS647 series](https://www.ckswitches.com/products/switches/product-details/Tactile/PTS647/)
-- `Seeed Studio XIAO ESP32-C6.step`: [GrabCAD XIAO ESP32-C6 3D model](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1)
+3D models for the board view live in `c6remote-kicad/3dmodels/`; every file's source is cited in [`c6remote-kicad/3dmodels/README.md`](c6remote-kicad/3dmodels/README.md).
 
 ## KiCad MCP
 

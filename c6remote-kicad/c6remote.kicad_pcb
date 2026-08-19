@@ -37,13 +37,14 @@
 		(stackup
 			(layer "F.SilkS"
 				(type "Top Silk Screen")
+				(color "#E5C100")
 			)
 			(layer "F.Paste"
 				(type "Top Solder Paste")
 			)
 			(layer "F.Mask"
 				(type "Top Solder Mask")
-				(color "#371570D5")
+				(color "#0B0B0BF8")
 				(thickness 0.01)
 			)
 			(layer "F.Cu"
@@ -63,7 +64,7 @@
 			)
 			(layer "B.Mask"
 				(type "Bottom Solder Mask")
-				(color "#371570D5")
+				(color "#0B0B0BF8")
 				(thickness 0.01)
 			)
 			(layer "B.Paste"
@@ -71,6 +72,7 @@
 			)
 			(layer "B.SilkS"
 				(type "Bottom Silk Screen")
+				(color "#E5C100")
 			)
 			(copper_finish "None")
 			(dielectric_constraints no)
@@ -882,7 +884,7 @@
 			(uuid "6c66e07a-b42d-4b4e-9eef-2b4161ccfe74")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step"
+		(model "${KIPRJMOD}/3dmodels/WS2812C-2020.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -6162,7 +6164,7 @@
 			(uuid "0d29501a-a30c-4832-bc59-efb9fe97104e")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step"
+		(model "${KIPRJMOD}/3dmodels/WS2812C-2020.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -8232,7 +8234,7 @@
 			(uuid "2a2c55ef-c307-49d1-846a-0b74be66d69f")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step"
+		(model "${KIPRJMOD}/3dmodels/WS2812C-2020.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -11192,7 +11194,7 @@
 			(uuid "52e25202-dab0-4617-8cfd-22c3d4e1636c")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step"
+		(model "${KIPRJMOD}/3dmodels/WS2812C-2020.step"
 			(offset
 				(xyz 0 0 0)
 			)

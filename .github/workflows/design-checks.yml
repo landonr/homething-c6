@@ -1,0 +1,33 @@
+# Run ERC and DRC on every push and pull request.
+#
+# The release workflow deliberately runs no KiCad: it only packages what is
+# committed. This one is the other half, checking that what gets committed is
+# electrically sound in the first place. scripts/hooks/pre-commit is local and
+# skippable with --no-verify, so nothing enforced the AGENTS.md baseline once a
+# commit left the machine.
+#
+# The container has to match the KiCad the design files were saved by, 10.x.
+# The base image ships the stock symbol and footprint libraries plus a global
+# fp-lib-table under /home/kicad, which is why HOME points there: without it
+# every stock footprint reports lib_footprint_issues.
+name: ERC and DRC
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  design-checks:
+    runs-on: ubuntu-latest
+    container:
+      image: kicad/kicad:10.0
+      options: --user root
+    env:
+      HOME: /home/kicad
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ERC and DRC against the baseline
+        run: python3 scripts/check-design.py

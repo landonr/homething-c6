@@ -81,7 +81,7 @@ The firmware files are in the repository root:
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
 
-Read `ROADMAP.md` first. It records the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
+Read `ROADMAP.md` when the task needs the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
 
 ## Validation and fabrication commands
 
@@ -118,6 +118,15 @@ If a board edit can affect pours, do not commit until Landon refills and saves t
 Use Edit → Fill All Zones. Stage the board file only after Landon confirms the refill.
 
 This rule covers footprint moves, footprint changes, new tracks, new vias, and net changes.
+
+`scripts/check-design.py` runs both from the repository root and compares the result against the baseline below, so it fails on anything that is not the inherited `U1` warning. It is what `.github/workflows/design-checks.yml` runs on every push and pull request, in the `kicad/kicad:10.0` container. Run it locally the same way CI does:
+
+```bash
+python3 scripts/check-design.py            # both checks
+python3 scripts/check-design.py --only erc # or --only drc
+```
+
+It finds `kicad-cli` on `PATH`, falls back to the app bundle path above, and takes `KICAD_CLI` as an override. When the baseline legitimately moves, edit `ALLOWED_DRC` in that script and the counts below in the same commit.
 
 ### Scripts
 
@@ -195,6 +204,8 @@ Before the first commit, run `git branch --show-current`. This check prevents wo
 GitHub uses `main` as the default branch. Visitors and relative documentation links use its released state.
 
 `.github/workflows/release.yml` runs on each push to `main`.
+
+The release workflow itself runs no KiCad; it only packages what is committed. `scripts/hooks/pre-commit` is what keeps `export/` in lockstep, and nothing in CI checks it, so a stale `export/` is a bad commit, not a workflow bug. ERC and DRC are checked in CI by `design-checks.yml`, which is the one thing `--no-verify` no longer gets past.
 
 The workflow packages `c6remote-kicad/export/` and creates an ESPHome-style CalVer tag.
 
@@ -486,8 +497,9 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 - Use only the Git user as the author in commits and documentation.
 - The `scripts/hooks/commit-msg` and `scripts/hooks/pre-commit` hooks reject trailer lines and known AI bot email addresses.
 - Use a period, colon, comma, or parentheses for a break. Do not use an em dash anywhere.
-- Use Terra for exploration, search, and research subagents.
-- Delegate edits to Opus implementation subagents. Keep the main thread for planning, dispatch, and synthesis.
+- Use Opus or Terra for exploration, search, research, and implementation subagents.
+- Use Sonnet or Luna for summarization, classification, drafting, extraction, templating, formatting, and simple lookups.
+- Keep the main thread for planning, dispatch, and synthesis.
 - Make only trivial one-line edits on the main thread.
 - Search global labels for cross-cutting changes. Important labels include `sw*`, `ano_*`, `IR EMIT`, and `IR REC`.
 - Other important labels include `led_1`, `sda`, `scl`, `sck`, `ws`, and `sd`.

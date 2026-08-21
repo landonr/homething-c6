@@ -233,7 +233,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Library:Vishay_PANHEAD-4Pin_SideView"
+		(property "Footprint" "Library:Vishay_PANHEAD-4Pin_TopView"
 			(at -1.27 -9.525 0)
 			(show_name no)
 			(do_not_autoplace no)

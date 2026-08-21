@@ -13440,12 +13440,12 @@
 			)
 		)
 	)
-	(footprint "Library:Vishay_PANHEAD-4Pin_SideView"
+	(footprint "Library:Vishay_PANHEAD-4Pin_TopView"
 		(layer "B.Cu")
 		(uuid "81ae7b62-a10e-4fa8-8a4e-25cf9b5bcf93")
 		(at 42.845 31.8575)
-		(descr "Vishay TSOP61../TSOP63../TSOP65.. IR receiver, Panhead SMD package, 7.5 W x 5.3 H x 4.0 D. Side view: the lens fires in the board plane, toward +Y at rotation 0, with pin 1 at -X. Pinning 1 GND, 2 N.C., 3 VS, 4 OUT. Land pattern per datasheet: 0.9 x 2.2 pads on 1.27 pitch, 3 x 1.27 = 3.81 span, centred on the lead feet. https://www.vishay.com/docs/82457/tsop61.pdf")
-		(tags "IR Receiver Vishay TSOP61 TSOP63 TSOP65 Panhead SMD side view")
+		(descr "Vishay TSOP61../TSOP63../TSOP65.. IR receiver, Panhead SMD package, top view with lens perpendicular to board. Pin 1 at -X. Pinning 1 GND, 2 N.C., 3 VS, 4 OUT. AGC1. Land pattern per datasheet: 0.9 x 2.2 pads on 1.27 pitch, 3 x 1.27 = 3.81 span, centred on the lead feet. https://www.vishay.com/docs/82457/tsop61.pdf")
+		(tags "IR Receiver Vishay TSOP61 TSOP63 TSOP65 Panhead SMD top view AGC1")
 		(property "Reference" "U2"
 			(at 0 2.6 180)
 			(layer "B.SilkS")
@@ -13567,59 +13567,20 @@
 		)
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
-		(fp_line
-			(start -4.01 -3.31)
-			(end 3.71 -3.31)
+		(fp_circle
+			(center 0 2.8)
+			(end 1.55 2.8)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
+			(fill none)
 			(layer "B.SilkS")
 			(uuid "f14add1c-d0ef-4e37-8748-c3af8821179a")
 		)
-		(fp_line
-			(start -4.01 0.91)
-			(end -4.01 -3.31)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "fc5e6ec5-86d8-4453-921e-5cedd640597e")
-		)
-		(fp_line
-			(start -4.01 0.91)
-			(end -2.6 0.91)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "8ff06563-8133-4b49-91fd-2e93224e1515")
-		)
-		(fp_line
-			(start 2.6 0.91)
-			(end 3.71 0.91)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "fb3a5b1c-3da0-4323-a46b-fd684a58c671")
-		)
-		(fp_line
-			(start 3.71 -3.31)
-			(end 3.71 0.91)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "B.SilkS")
-			(uuid "83c70a3b-810d-4fef-a435-0499038d9372")
-		)
 		(fp_circle
-			(center -1.905 1.6)
-			(end -1.805 1.6)
+			(center -1.905 -1.6)
+			(end -1.805 -1.6)
 			(stroke
 				(width 0.12)
 				(type solid)
@@ -13628,98 +13589,24 @@
 			(layer "B.SilkS")
 			(uuid "13f6a700-6216-4489-b5c1-894c8e69dd9c")
 		)
-		(fp_line
-			(start -4.15 -3.45)
-			(end -4.15 1.35)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
+		(fp_rect
+			(start -4.15 5.6)
+			(end 3.85 -1.35)
+			(stroke (width 0.05) (type solid))
+			(fill none)
 			(layer "B.CrtYd")
 			(uuid "cff8c8c0-5010-456c-a849-7cdb3326918a")
 		)
-		(fp_line
-			(start -4.15 1.35)
-			(end 3.85 1.35)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "B.CrtYd")
-			(uuid "52f0b1e5-f2ad-4439-b417-82f8f39c804d")
-		)
-		(fp_line
-			(start 3.85 -3.45)
-			(end -4.15 -3.45)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "B.CrtYd")
-			(uuid "539d264f-5b23-43ae-8937-c0166f4b0800")
-		)
-		(fp_line
-			(start 3.85 1.35)
-			(end 3.85 -3.45)
-			(stroke
-				(width 0.05)
-				(type solid)
-			)
-			(layer "B.CrtYd")
-			(uuid "60081204-4596-4fbd-8567-063e41112d29")
-		)
-		(fp_line
-			(start -3.9 -3.2)
-			(end 3.6 -3.2)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
+		(fp_rect
+			(start -3.9 5.34)
+			(end 3.6 0)
+			(stroke (width 0.1) (type solid))
+			(fill none)
 			(layer "B.Fab")
 			(uuid "f0baf087-f454-4662-9804-eaef6076a9b7")
 		)
-		(fp_line
-			(start -3.9 0)
-			(end -3.9 -3.2)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "B.Fab")
-			(uuid "141b56cf-9fae-45fb-9d85-23fe66154404")
-		)
-		(fp_line
-			(start -3.1 0.8)
-			(end -3.9 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "B.Fab")
-			(uuid "2033df16-5ba7-4968-912f-d5e871c7a853")
-		)
-		(fp_line
-			(start 3.6 -3.2)
-			(end 3.6 0.8)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "B.Fab")
-			(uuid "28406966-4af4-4fc0-9510-32b4f51969bd")
-		)
-		(fp_line
-			(start 3.6 0.8)
-			(end -3.1 0.8)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "B.Fab")
-			(uuid "3d765627-b9e4-4e72-b414-0007a48ef59a")
-		)
 		(fp_text user "${REFERENCE}"
-			(at 0 -2.2 180)
+			(at 0 4.4 180)
 			(layer "B.Fab")
 			(uuid "72b50416-5ada-4f23-945f-a873e17e10e6")
 			(effects
@@ -13771,7 +13658,7 @@
 			(uuid "8c53814e-12ef-467f-801f-0954167a8eb3")
 		)
 		(embedded_fonts no)
-		(model "${KIPRJMOD}/3dmodels/TSOP6136.step"
+		(model "${KIPRJMOD}/3dmodels/TSOP6136TT.step"
 			(offset
 				(xyz 0 0 0)
 			)

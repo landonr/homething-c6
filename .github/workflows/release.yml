@@ -3,7 +3,7 @@
 # Work happens on dev. A merge into main is the release event: this packages the
 # committed fabrication outputs, tags an ESPHome-style CalVer, and publishes the
 # release with the gerber zip plus the BOM and pick-and-place files as separate
-# assets, which is how JLCPCB and PCBWay want them uploaded.
+# assets, which is how PCBWay wants them uploaded.
 #
 # No KiCad runs here. export/ is already kept in lockstep with the design by
 # scripts/hooks/pre-commit, so CI only has to package what is committed. If that

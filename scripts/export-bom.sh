@@ -5,8 +5,7 @@
 # MPN, Digikey, Mouser, Adafruit, LCSC) so export/c6remote-bom.csv stays in sync.
 #
 # The LCSC column holds a product URL like the other distributor columns, not a
-# bare C-number. JLCPCB's assembly upload matches on the bare part number, so
-# read it out of the URL when filling their template.
+# bare C-number.
 #
 # Use kicad-cli, NOT the KiCad MCP export_bom tool: the MCP tool emits a
 # different schema (regrouped rows, drops the custom sourcing columns, lists

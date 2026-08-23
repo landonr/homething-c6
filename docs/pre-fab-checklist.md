@@ -23,7 +23,7 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 
 ## Manual, before ordering
 
-- [ ] **JLCPCB DFM.** Upload `export/` gerbers through the order flow, read the DFM report. Authoritative capability check: acid traps, mask slivers, annular rings against their real process.
+- [ ] **PCBWay DFM.** Upload `export/` gerbers through the order flow, read the DFM report. Authoritative capability check: acid traps, mask slivers, annular rings against their real process.
 
 - [ ] **IBOM pin-1 walk.** Open `ibom.html`, verify pin 1 on `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `Q2`, `ENC1` against the primary datasheet diagram. DRC cannot do this. `Q2` first: SOT-23, pin 1 is the gate, so a mis-rotation puts `+3.3V` on the gate, the P-FET never turns on, the LED rail stays dead, and nothing complains. Two documented reasons it is not optional: the `ENC1` pad 6/8 swap that shipped once, and the `XL-2020RGBC-WS2812B` datasheet whose pin table contradicts its own diagram (see `AGENTS.md`).
 

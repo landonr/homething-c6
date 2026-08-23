@@ -71,7 +71,7 @@ ERC for the schematic and DRC for the PCB are the only scoped checks; there is n
 
 `scripts/regen-fab.sh` wraps four `kicad-cli` exports (gerbers, drill, `c6remote-pos.csv`, `c6remote-bom.csv`) in the project's formats: position file CSV/mm/both-sides; BOM grouped by Value+Footprint with the custom sourcing columns (Reference, Qty, Value, Footprint, Datasheet, Description, Manufacturer, MPN, Digikey, Mouser, Adafruit, LCSC) and ", "-joined references. Override the binary with `KICAD_CLI=/path/to/kicad-cli`.
 
-`LCSC` holds a product URL like the other distributor columns, not a bare C-number, and only `Q2` (`C15127`) and `D2`-`D5` (`C5349955`) carry one. JLCPCB assembly upload matches on the bare part number, so read it out of the URL rather than pasting the column.
+`LCSC` holds a product URL like the other distributor columns, not a bare C-number, and only `Q2` (`C15127`) and `D2`-`D5` (`C5349955`) carry one.
 
 BOM regen goes through `scripts/export-bom.sh` (or `regen-fab.sh`, which calls it). NOT the MCP `export_bom` tool: it emits a different schema (regrouped rows, no sourcing columns, test points listed) and clobbers the curated CSV. Datasheet and sourcing fields live on the schematic symbols; edit them there, then rerun the script.
 
@@ -101,7 +101,7 @@ Run DRC with `--refill-zones` when checking against this baseline. Without it yo
 
 Work happens on **`develop`**. **`main`** holds released snapshots only and is the GitHub default branch, so it is what a visitor sees first and what relative doc links resolve against. Do not commit to `main` and do not push it as a shortcut: a push to `main` is the release event. Check `git branch --show-current` before the first commit of a session, since a checkout left on `main` puts working commits on the release branch.
 
-`.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/`, tags ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`; patch derived by scanning existing tags for that year and month), and publishes three assets: `c6remote-<version>-fab.zip` (gerbers, drill, job file) plus `c6remote-<version>-bom.csv` and `c6remote-<version>-pos.csv` as separate files, which is how JLCPCB and PCBWay want them uploaded. All three names carry the version, so `gh` cannot name assets after the files in `export/`; the workflow copies the two CSVs to versioned names in `RUNNER_TEMP` first.
+`.github/workflows/release.yml` fires on every push to `main`. It packages the committed `c6remote-kicad/export/`, tags ESPHome-style CalVer (`YYYY.M.PATCH`, month not zero padded, so `2026.7.0` then `2026.7.1`; patch derived by scanning existing tags for that year and month), and publishes three assets: `c6remote-<version>-fab.zip` (gerbers, drill, job file) plus `c6remote-<version>-bom.csv` and `c6remote-<version>-pos.csv` as separate files, which is how PCBWay wants them uploaded. All three names carry the version, so `gh` cannot name assets after the files in `export/`; the workflow copies the two CSVs to versioned names in `RUNNER_TEMP` first.
 
 Dead URLs, use the new tags in any new link: `v0.1` was renamed `2026.6.0` (2026-07-29, mapped from the 2026-06-16 fab date), so `releases/tag/v0.1` and `releases/download/v0.1/...` are gone; `2026.7.0` was renamed in place (2026-07-30), killing its `c6remote-bom.csv` and `c6remote-pos.csv` download URLs.
 

@@ -23,3 +23,9 @@ pcbway/
 # zip dropped in there gets tracked; export.zip is rebuilt from export/ on demand.
 c6remote-kicad/export.zip
 c6remote-kicad/export/*.zip
+
+# Session-scoped schematic and custom-footprint validation cache.
+.cache/hw/
+
+# Python bytecode from scripts/ and its tests.
+scripts/**/__pycache__/

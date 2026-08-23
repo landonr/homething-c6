@@ -112,6 +112,34 @@ The repo is set up to use the same KiCad MCP server with Codex and GitHub Copilo
 
 ## Validation and fabrication
 
+### Fast agent schematic loop
+
+Use a unique session name for one schematic or custom-footprint edit loop. The PCB is excluded from this workflow and must remain byte-for-byte unchanged between `preflight` and `verify`. Native KiCad ERC is authoritative; semantic analysis detects topology, BOM, metadata, findings, and custom-footprint regressions.
+
+```bash
+./scripts/hw.py doctor
+./scripts/hw.py preflight my-edit
+
+# Run after every schematic or custom-footprint edit.
+./scripts/hw.py quick my-edit
+
+# Run once before handoff.
+./scripts/hw.py verify my-edit
+./scripts/hw.py clean my-edit
+```
+
+Session artifacts stay under `.cache/hw/<session>/`. `preflight` refuses to replace an existing session. Reuse the same session for repeated `quick` runs, then use `clean` before creating a fresh baseline. A failed new `preflight` may intentionally leave ERC or analyzer diagnostics in its session directory; inspect them, then run `clean` before retrying.
+
+The analyzer resolves from `KICAD_HAPPY_DIR` first, then `${CODEX_HOME:-$HOME/.codex}/skills/kicad`. It must emit schema 1.4.x. `KICAD_CLI` overrides the default macOS application binary. `doctor` may report the installed analyzer package version as unknown because this runtime has no package-version metadata; a compatible schema 1.4.x still passes.
+
+If the analyzer is missing or incompatible, move or remove its existing destination before reinstalling the pinned version:
+
+```bash
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo aklofas/kicad-happy --ref v2.2.0 --path skills/kicad
+```
+
+Exit codes are `0` for pass, `1` for a design regression, and `2` for missing tools, incompatible configuration, parser failure, process abort, or missing output. `quick` blocks only newly introduced analyzer findings whose severity is `error` and confidence is `deterministic`; warnings are reported without blocking. `verify` also runs native ERC, netlist and curated BOM export, full custom-footprint parsing, changed-footprint SVG export, PCB hash comparison, and `git diff --check`, with all outputs kept inside the session cache.
+
 Run from `c6remote-kicad/`:
 
 ```bash

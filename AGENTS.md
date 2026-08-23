@@ -151,6 +151,8 @@ Unlike the LED rail, **the IR rail defaults on**: `remote_receiver` cannot decod
 
 ## KiCad workflow
 
+- Agent schematic and custom-footprint work starts with `scripts/hw.py preflight <session>`, reruns `scripts/hw.py quick <session>` after each edit, and ends with `scripts/hw.py verify <session>`. Reuse one session for one edit loop, then remove it with `scripts/hw.py clean <session>`.
+- This fast loop excludes PCB edits. `verify` requires the PCB hash to match `preflight`; use the board validation commands above for PCB work. Native KiCad ERC remains authoritative for schematic validity, while analyzer output supplies semantic regression detection.
 - Inspection, validation, and edits: KiCad MCP tools first (run tool discovery for deferred ones). Fall back to `kicad-cli` or manual file patching only when MCP lacks the operation or fails.
 - Parity work goes through the MCP schematic tools, not raw file patching, because labels and wire endpoints must snap to exact coordinates.
 - Re-run ERC and DRC immediately after MCP connect or edit operations; some of those tools also mutate PCB-side metadata and parity state.

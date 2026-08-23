@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Handheld microphone, as filled outlines rather than strokes, the same
+     reasoning as power.svg: capsule, yoke, stem and base are each a closed
+     filled shape with no hole in it. The yoke is a half-annulus band, open
+     at the top, so it too is simply connected. Stem overlaps the yoke and
+     the base by a unit or two rather than touching at a line, so the four
+     debossed solids read as one groove. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <path d="M 38 20
+           A 12 12 0 0 1 62 20
+           L 62 40
+           A 12 12 0 0 1 38 40
+           Z" fill="#000000"/>
+  <path d="M 21 36
+           A 29 29 0 0 0 79 36
+           L 72 36
+           A 22 22 0 0 1 28 36
+           Z" fill="#000000"/>
+  <path d="M 46 63 L 54 63 L 54 78 L 46 78 Z" fill="#000000"/>
+  <path d="M 36 77
+           L 64 77
+           A 4 4 0 0 1 64 85
+           L 36 85
+           A 4 4 0 0 1 36 77
+           Z" fill="#000000"/>
+</svg>

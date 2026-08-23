@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- IEC 60417-5009 power symbol, as filled outlines rather than strokes:
+     import_svg gives closed wires and case._legend_faces fills them, so a
+     stroked path would import as a hairline and cut nothing. Two disjoint
+     shapes, neither with a hole: the ring is broken at the top, which makes
+     it a C rather than an annulus, and the bar is a plain stadium. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <path d="M 61.63 23.05
+           A 34 34 0 1 1 38.37 23.05
+           L 41.79 32.45
+           A 24 24 0 1 0 58.21 32.45
+           Z" fill="#000000"/>
+  <path d="M 45.5 14.5
+           A 4.5 4.5 0 0 1 54.5 14.5
+           L 54.5 47.5
+           A 4.5 4.5 0 0 1 45.5 47.5
+           Z" fill="#000000"/>
+</svg>

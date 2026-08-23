@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Plus sign as one filled outline rather than a stroke: import_svg gives
+     closed wires and case._legend_faces fills them, so a stroked path would
+     import as a hairline and cut nothing. Drawn here instead of set from the
+     font because DejaVu's plus is a thin text glyph and carries no heavy
+     variant; the bar thickness is the point of the file. minus.svg is this
+     bar's horizontal half, so the two cut a matched pair. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <path d="M 40 0 L 60 0 L 60 40 L 100 40 L 100 60 L 60 60 L 60 100 L 40 100 L 40 60 L 0 60 L 0 40 L 40 40 Z" fill="#000000"/>
+</svg>

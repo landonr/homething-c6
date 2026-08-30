@@ -4,7 +4,7 @@ This file is datasheet arithmetic as of 2026-08-04. No bench measurement exists.
 
 Every figure below is a typical value at 25 °C unless noted. `U1` figures are Seeed's for the module, so they already include its LDO and power-path quiescent.
 
-Three loads are zero in the sleep column: `D2`-`D5` sit behind `Q2` on `led_vdd`, `U2` sits behind `Q3` on `ir_vdd` as of 2026-08-04, and `MK1` drops to sleep on its own whenever the I²S clock stops, which ESPHome does whenever nothing is streaming.
+Three loads are zero in the sleep column: `D2`-`D5` sit behind `Q2` on `led_vdd`, `U2` sits behind `Q3` on `ir_vdd` as of 2026-08-04, and `MK1` drops to sleep on its own whenever the I²S clock stops, which ESPHome does whenever nothing is streaming. Rev-B is the `2026.8.0` board and has no `Q3`. On that build `U2` draws its 350 µA in sleep, so the floor is the pre-gate ~0.41 mA quoted at the end of this file.
 
 | Part | Deep sleep | Awake | Source |
 | --- | --- | --- | --- |

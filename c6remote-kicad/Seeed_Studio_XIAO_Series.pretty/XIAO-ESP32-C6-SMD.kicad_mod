@@ -11,7 +11,7 @@
 		(effects
 			(font
 				(size 0.78232 0.78232)
-				(thickness 0.10668)
+				(thickness 0.15)
 			)
 			(justify left bottom)
 		)
@@ -170,7 +170,7 @@
 		(start 17.78 -1.987)
 		(end 17.78 -19.132)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -180,7 +180,7 @@
 		(start 15.875 -21.037)
 		(end 1.905 -21.037)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -190,7 +190,7 @@
 		(start 13.394 -22.047)
 		(end 13.394 -21.037)
 		(stroke
-			(width 0.127)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -200,7 +200,7 @@
 		(start 4.898728 -22.547)
 		(end 12.894 -22.547)
 		(stroke
-			(width 0.127)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -210,7 +210,7 @@
 		(start 4.395 -21.037)
 		(end 4.398728 -22.047272)
 		(stroke
-			(width 0.127)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -220,7 +220,7 @@
 		(start 1.905 -0.082)
 		(end 15.875 -0.082)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -230,7 +230,7 @@
 		(start 0 -1.987)
 		(end 0 -19.132)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -241,7 +241,7 @@
 		(mid 17.222038 -0.639962)
 		(end 15.875 -0.082)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -252,7 +252,7 @@
 		(mid 17.222038 -20.479038)
 		(end 17.78 -19.132)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -263,7 +263,7 @@
 		(mid 13.247553 -22.400553)
 		(end 13.394 -22.047)
 		(stroke
-			(width 0.127)
+			(width 0.15)
 			(type default)
 		)
 		(layer "F.SilkS")
@@ -274,7 +274,7 @@
 		(mid 4.545276 -22.400644)
 		(end 4.898728 -22.547)
 		(stroke
-			(width 0.127)
+			(width 0.15)
 			(type default)
 		)
 		(layer "F.SilkS")
@@ -285,7 +285,7 @@
 		(mid 0.557962 -0.639962)
 		(end 0 -1.987)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")
@@ -296,7 +296,7 @@
 		(mid 0.557962 -20.483038)
 		(end 1.905 -21.041)
 		(stroke
-			(width 0.1)
+			(width 0.15)
 			(type solid)
 		)
 		(layer "F.SilkS")

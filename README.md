@@ -61,16 +61,16 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 ## Board views
 
 <p align="center">
-  <img alt="Basic 3D top view" src="docs/readme-assets/board-3d-top.png" width="180">
+  <img alt="Basic 3D top view" src="docs/readme-assets/board-3d-top.png" width="180" style="border: 1px solid #30363d; border-radius: 6px;">
   &nbsp;&nbsp;
-  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180">
+  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180" style="border: 1px solid #30363d; border-radius: 6px;">
 </p>
 <p align="center"><sub>Top: basic 3D and flat copper</sub></p>
 
 <p align="center">
-  <img alt="Basic 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180">
+  <img alt="Basic 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180" style="border: 1px solid #30363d; border-radius: 6px;">
   &nbsp;&nbsp;
-  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180">
+  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180" style="border: 1px solid #30363d; border-radius: 6px;">
 </p>
 <p align="center"><sub>Bottom: basic 3D and flat copper</sub></p>
 

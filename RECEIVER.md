@@ -1,93 +1,108 @@
-# IR receiver mode plan
+# Assignment mode
 
 ## Goal
 
-Add a local mode that assigns each input on the board. An input can hold an IR code, the voice assistant, or nothing.
+Assignment mode gives each supported input one active action. An action can be
+an IR code, a Zigbee Toggle group, the voice assistant, or no action.
 
-Store each assignment in flash. Replay the assignment when the user presses that input outside the mode.
+Store assignments in flash. Outside assignment mode, an input replays its active
+action.
 
-Enter receiver mode when the user holds `SW2` for two seconds. Leave it on a second hold of `SW2` or after three seconds without input.
+## Enter and leave the mode
 
-## Assumptions
+Hold `SW2` for two seconds to enter assignment mode. Hold `SW2` for two seconds
+again to leave it.
 
-- Use `SW1` through `SW11` and the five ANO wheel directions as assignable inputs.
-- Use clockwise and anticlockwise wheel rotation as two more assignable inputs.
-- Reserve the `SW2` hold gesture for receiver mode control.
-- Store one IR code or one voice assignment for each input.
-- Replace the old assignment when the user assigns the same input again.
-- Learn common decoded protocols when ESPHome identifies them.
-- Store raw pulse timings when ESPHome cannot identify the protocol.
-- Keep all learning and playback functions local. Home Assistant must not be necessary.
+The ready state closes after five seconds without an input. The Zigbee training
+state waits for 60 seconds.
 
-## User sequence
+A tap during Zigbee training stops that wait. The tap then moves the cycle
+forward. You do not need to wait out the full training timeout.
 
-1. Hold `SW2` for two seconds.
-2. Release `SW2` when all four LEDs show the ready state.
-3. Tap one input. The LEDs chase and the receiver waits for a code.
-4. Point the source remote at `U2` and press the source remote button once.
-5. Wait for the read state.
-6. Tap the same input a second time to give it the voice assistant instead. The LEDs pulse blue.
-7. Tap the same input a third time to clear it. The LEDs go amber and no input stays selected.
-8. Tap another input to assign it.
-9. Hold `SW2` for two seconds to leave receiver mode.
+The release that ends an `SW2` hold does not count as a tap.
 
-A tap on a different input always starts that input at the first stage of the cycle.
+## Assignment cycle
 
-The ready state closes after three seconds without a tap. Every other state returns to the ready state and restarts this timeout.
+For `SW1`, `SW3` through `SW11`, and the five wheel directions, tap the same
+input in this order:
 
-Outside receiver mode, an assignable button will send its stored code. A button without a code will give an error indication.
+1. First tap: train an IR code.
+2. Second tap: train a Zigbee Toggle group.
+3. Third tap: assign the voice assistant.
+4. Fourth tap: clear the input.
 
-## State model
+For `SW2`, tap the same input in this order:
 
-Use one `IrLearnState` value as the source of truth.
+1. First tap: train an IR code.
+2. Second tap: train a Zigbee Toggle group.
+3. Third tap: clear the input.
 
-| State | Meaning | `D2`-`D5` indication | Exit |
-| --- | --- | --- | --- |
-| `OFF` | Normal remote operation | Existing status behavior | Hold `SW2` |
-| `READY` | Receiver is on and waits for a target button | Four solid blue LEDs | Press a target button, hold `SW2`, or wait three seconds |
-| `READING` | Receiver waits for the source remote | Blue chase toward `D5` | Receive a frame, hold `SW2`, or reach ten seconds |
-| `READ` | Code passed validation and reached flash | Four solid green LEDs for one second | Return to `READY` |
-| `ERROR` | Read, validation, or storage failed | Four red flashes | Return to `READY` |
-| `VOICE` | The input now starts the voice assistant | Four LEDs pulse blue | Tap again, or ten seconds |
-| `CLEARED` | The input holds nothing | Four amber LEDs for one second | Return to `READY` |
+`SW2` has no voice stage because its hold gesture controls assignment mode.
 
-Turn on `ir_rail` before the `READY` indication. Wait 10 ms before the receiver accepts frames.
+Clockwise and anticlockwise wheel rotation are IR-only. Each detent starts IR
+training. Rotation has no Zigbee, voice, or clear stage because it has no release
+edge.
 
-Turn off `ir_rail` when the mode closes. Keep it on during playback only for receiver-mode diagnostics.
+A tap on a different supported input always starts at the IR stage for that
+input.
 
-The current configuration uses `restore_mode: ALWAYS_ON` for `ir_rail`. Change it to `ALWAYS_OFF` with this feature.
+## IR training
 
-## Button behavior
+After the first tap, point the source remote at `U2` and press its button once.
+The remote accepts the first complete frame and stores it as raw pulse data.
 
-Add click and hold handling to `SW2`.
+The remote rejects empty, truncated, oversized, and repeat-only frames. A failed
+capture does not replace the old assignment.
 
-- A hold of two seconds from `OFF` enters receiver mode.
-- A hold of two seconds in any learn state closes receiver mode.
-- A release before two seconds is a short press.
-- A short press in the mode runs the assignment cycle for `SW2`.
-- A short press in `OFF` sends the code stored for `SW2`.
+## Zigbee training
 
-Ignore the release that ends a hold. That release must not count as a short press.
+After the second tap, the input waits for an allowed Zigbee2MQTT target
+transition. Change the target from `ON` to `OFF`, or from `OFF` to `ON`, within
+60 seconds.
 
-`SW2` has no voice stage. Push-to-talk needs the press edge, and the hold gesture already owns that edge.
+A wall switch target needs a walk to the switch, so the window is 60 seconds.
 
-Wheel rotation has no voice stage and no clear stage. A detent has no release edge, so each detent arms a capture.
+Read [ZIGBEE.md](ZIGBEE.md) before Zigbee training. Zigbee2MQTT, its MQTT broker,
+and working Wi-Fi are required only for this step.
 
-In `READY`, the next tap selects the target. Do not transmit its existing code in this state.
+The remote uses an existing target group directly. For an individual device, it
+creates a reserved group and adds the device. It stores the assignment after
+Zigbee2MQTT confirms all required requests.
 
-In `READING`, ignore assignable button presses. Let a hold of `SW2` cancel the operation and close the mode.
+Outside assignment mode, a trained input sends a direct Zigbee Toggle command.
+It does not need MQTT or Wi-Fi for playback.
 
-In `OFF`, send the stored code on the assignable button press. Ignore button release for IR playback.
+## Clear and replace an assignment
+
+An IR, Zigbee, or voice assignment replaces the previous action for that input.
+The remote never keeps two active actions on one input.
+
+The clear tap removes the local assignment. For a device assignment, it also
+asks Zigbee2MQTT to remove the old member when MQTT is connected. It does not
+change an existing target group.
+
+If training fails, the old assignment remains. If the old group member was
+removed, the remote requests a rollback. A failed rollback leaves the mode in
+the error state and needs Zigbee2MQTT repair.
+
+A failed Zigbee training keeps the cycle position. The next tap moves to the
+voice stage or the clear stage. A failure does not start a second training wait.
 
 ## Web configurator
 
-The device serves a button page at `http://homething-c6.local/buttons`. It uses the same `web_server` as the ESPHome dashboard on port 80.
+The device serves a button page at `http://homething-c6.local/buttons`. It uses
+the same `web_server` as the ESPHome dashboard on port 80.
 
-The page draws the remote layout: the two top buttons, the wheel, and the nine keypad buttons.
+The page draws the remote layout: the two top buttons, the wheel, and the nine
+keypad buttons.
 
-Select an input. The page shows the current assignment and the actions that the input accepts.
+Select an input. The page shows the current assignment and the actions that the
+input accepts.
 
-The page is an alternative to the three-tap gesture, not a replacement. Both routes write the same flash records.
+The page is an alternative to the tap cycle, not a replacement. Both routes write
+the same flash records.
+
+The page cannot train a Zigbee group. Use the tap cycle for Zigbee training.
 
 ### Capability matrix
 
@@ -101,33 +116,44 @@ The page is an alternative to the three-tap gesture, not a replacement. Both rou
 
 `SW2` has no voice action because the hold gesture owns its press edge.
 
-Wheel rotation has no voice action because a detent has no release edge to end push-to-talk.
+Wheel rotation has no voice action because a detent has no release edge to end
+push-to-talk.
 
-The page hides the voice button on those three slots. The firmware checks the same rule again on each request.
+The page hides the voice button on those three slots. The firmware checks the
+same rule again on each request.
 
 A voice request for slot 17, 18, or 19 gets HTTP 400 and changes nothing.
 
 ### One operation at a time
 
-The remote runs one assignment operation at a time. The page polls `/buttons/api/state` for the current owner.
+The remote runs one assignment operation at a time. The page polls
+`/buttons/api/state` for the current owner.
 
-If the remote owns the operation, the page disables its action buttons. The notice reads "Assignment in progress on the remote."
+If the remote owns the operation, the page disables its action buttons. The
+notice reads "Assignment in progress on the remote."
 
-If a second browser owns the operation, the notice reads "Another assignment is already running."
+If a second browser owns the operation, the notice reads "Another assignment is
+already running."
 
-A request that arrives during an operation gets HTTP 409. The remote keeps its current operation.
+A request that arrives during an operation gets HTTP 409. The remote keeps its
+current operation.
 
-A web operation looks like a local one on the remote. The LEDs show the same ready and read states.
+A web operation looks like a local one on the remote. `D3` and `D4` show the same
+ready state and IR training state.
 
-The remote gesture stays active during a web operation. A tap on the remote can move the capture to another input.
+The remote gesture stays active during a web operation. A tap on the remote can
+move the capture to another input.
 
 ### A failed or cancelled capture
 
-The store keeps the previous assignment after a failed capture. A rejected frame writes nothing to flash.
+The store keeps the previous assignment after a failed capture. A rejected frame
+writes nothing to flash.
 
-Cancel gives the same result. The page sends the `cancel` action and the remote closes receiver mode.
+Cancel gives the same result. The page sends the `cancel` action and the remote
+closes assignment mode.
 
-If no frame arrives, the capture times out. The page then reports "No code received" and the old assignment remains.
+If no frame arrives, the capture times out. The page then reports "No code
+received" and the old assignment remains.
 
 To replace an assignment, record again or select a different action.
 
@@ -159,144 +185,50 @@ The board transmits at 38 kHz with 50 percent duty, so it ignores the `frequency
 
 ### Trusted-LAN warning
 
-The `/buttons` page and its two endpoints have no authentication. The `web_server`, `api`, and `ota` components on this device have none either.
+The `/buttons` page and its two endpoints have no authentication. The
+`web_server`, `api`, and `ota` components on this device have none either.
 
-This is a deliberate choice for a trusted home network. Any device on that network can change an assignment.
+This is a deliberate choice for a trusted home network. Any device on that
+network can change an assignment.
 
-Do not expose port 80 of the remote to the internet. If the network is not trusted, add `web_server` authentication.
+Do not expose port 80 of the remote to the internet. If the network is not
+trusted, add `web_server` authentication.
 
-## Capture rules
+## LED meanings
 
-Disable the current unrestricted `dump: all` log in production. Route received frames to one learning handler.
+Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
+`D5` keeps the Zigbee state. A connection fault stays visible during training.
 
-Accept only the first complete frame after the target selection. Ignore repeat-only frames and receiver noise.
+`D2` shows the transports that Zigbee training needs:
 
-For decoded frames, store these fields:
+| `D2` | Meaning |
+| --- | --- |
+| Red pulse | Wi-Fi is down. Training is not possible. |
+| Orange pulse | Wi-Fi is up, but the API is down. |
+| Cyan pulse | The API is up, but MQTT is down. Training is not possible. |
+| Solid green | Wi-Fi, the API, and MQTT are all up. Training is possible. |
 
-- Format version
-- Target button number
-- Protocol identifier
-- Address and command data
-- Protocol bit count or required protocol metadata
-- Carrier frequency when the protocol requires it
-- Checksum for the record
+Green means that training can run. Train only on solid green.
 
-For unknown protocols, store normalized mark and space durations. Store the carrier frequency as `38 kHz` by default.
+| State | `D3` and `D4` indication | Next action |
+| --- | --- | --- |
+| Ready | Solid blue | Select an input. |
+| IR training | Blue chase | Send one IR frame. |
+| Zigbee training | Yellow pulse | Change one target state. |
+| Saved | Solid green for one second | Continue or leave. |
+| Error | Red flashes | Retry or leave. |
+| Voice | Blue pulse | Tap again to clear. |
+| Cleared | Amber for one second | Select an input. |
 
-Set explicit limits for raw captures:
+`D3` and `D4` show voice-assistant state when assignment mode is closed. See
+[ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
 
-- Maximum pulse count: 512
-- Maximum frame duration: 250 ms
-- Minimum pulse duration: 80 microseconds
-- Capture timeout: 10 seconds
+## Normal playback
 
-Reject an empty, truncated, oversized, or repeat-only capture. Keep the previous code after any rejected capture.
+Outside assignment mode, an input uses its one active assignment in this order:
 
-## Storage design
+1. Voice assistant, if assigned.
+2. Zigbee Toggle, if assigned.
+3. IR playback, if assigned.
 
-Use one ESPHome flash preference record for each assignable button.
-
-The store holds 18 slots. Slots 3 to 11 are `SW3` to `SW11`. Slots 12 to 16 are the wheel directions right, up, press, down, and left. Slot 17 is clockwise rotation and slot 18 is anticlockwise rotation. Slot 19 is `SW2` and slot 20 is `SW1`.
-
-The key of a record is `0x49524330` plus the slot offset. `SW1` and `SW2` use the top slots because a lower first slot would shift every existing key.
-
-Store the voice assignments as one bitmask under key `0x49524356`, one bit per slot offset. Seed the `SW1` bit when the key is absent, so a new board has an Assist button before anyone opens the mode. Do not seed again once the key exists.
-
-A voice assignment and an IR code cannot both apply. Each write clears the other.
-
-An erase writes a zeroed record. The record then fails validation on the next boot.
-
-Each record contains a magic value, schema version, pulse count, pulse data, and checksum.
-
-Write the new record before you replace the active in-memory record.
-
-Load and validate each record during boot. Ignore a damaged record and keep that button unassigned.
-
-Limit writes to successful learning events. Do not write during playback, boot, timeout, or cancellation.
-
-Add an exposed action that erases one assignment. Add a separate action that erases all assignments.
-
-## Firmware structure
-
-Keep YAML automations small. Put capture, serialization, validation, and playback logic in a C++ include.
-
-Add these parts:
-
-- `IrCodeStore` for LittleFS load and atomic replacement
-- `IrLearner` for state, timeout, target selection, and capture
-- `IrCode` as the decoded-or-raw record type
-- One playback method that selects the correct ESPHome transmitter call
-- One LED renderer that owns `D2`-`D5` while receiver mode is active
-
-The receiver-mode renderer must override `Status Indicators` and `Voice Listening`. Restore idle status after mode exit.
-
-Guard learning state with one execution context. Copy a completed capture before any file operation starts.
-
-Log state changes, target buttons, protocol names, pulse counts, and storage results. Do not log every pulse by default.
-
-## Implementation order
-
-1. Add tests for `SW2` hold detection and short-press detection.
-2. Add the state model and receiver-mode LED effect.
-3. Change `ir_rail` to default off and control it from mode entry and exit.
-4. Add target-button selection without storage or playback.
-5. Add decoded protocol capture and playback for the protocols ESPHome supports.
-6. Add bounded raw capture and raw playback.
-7. Add LittleFS serialization, CRC validation, and atomic replacement.
-8. Load assignments during boot and connect normal button presses to playback.
-9. Add erase actions, timeouts, cancellation, and error indications.
-10. Run automated configuration tests and complete hardware validation.
-
-## Automated checks
-
-Extend `scripts/tests/test_c6remote_config.py` with these checks:
-
-- Every assignable input calls the tap handler with the correct slot.
-- `SW2` hold enters receiver mode only once.
-- The release that ends a hold does not count as a short press.
-- `READY` closes after three seconds without a tap.
-- `SW2` and wheel rotation pass a tap mode without the voice stage.
-- Each assignable button selects a target in `READY`.
-- Each assignable button transmits only in `OFF`.
-- `ir_rail` defaults off and follows receiver-mode transitions.
-- The receiver-mode LED effect controls all four LEDs.
-- Every capture limit has a fixed constant.
-- A failed write preserves the previous assignment.
-
-Add tests for the C++ storage format. Cover valid records, bad checksums, invalid lengths, and unknown schema versions.
-
-Run `esphome config c6remote.yaml`. Compile the firmware after configuration validation passes.
-
-## Hardware validation
-
-Test one decoded NEC remote and one remote that requires raw storage.
-
-For each test, power-cycle the board after learning. Confirm that the assigned button still controls the target device.
-
-Verify these cases:
-
-- A short `SW2` press learns and sends the code in slot 19.
-- A two-second `SW2` hold enters and leaves receiver mode.
-- The five wheel directions and both rotation directions learn and send.
-- A second tap assigns the voice assistant and the LEDs pulse blue.
-- A third tap clears the input and the LEDs go amber.
-- A voice assignment survives a power cycle.
-- `SW1` starts Assist on a board with an empty NVS.
-- `D2`-`D5` show `READY`, `READING`, `READ`, and `ERROR` correctly.
-- Noise does not overwrite a stored code.
-- A repeat frame does not become a stored code.
-- A failed capture preserves the previous code.
-- Relearning a button replaces only that button.
-- Mode timeout turns off `ir_rail` and restores idle LEDs.
-- Playback does not leave the transmitter or LED rail active.
-- Fifty repeated learning operations do not corrupt the file.
-
-Measure idle current before and after the `ir_rail` default changes. Confirm that `GPIO16` does not partially power an inactive receiver.
-
-## Completion criteria
-
-Complete the feature when all assignable buttons can learn, retain, and replay both test remotes.
-
-The feature must recover safely from invalid storage, capture timeout, cancellation, and power loss during a write.
-
-The existing voice assistant, status LEDs, Wi-Fi status, and IR test action must continue to work.
+An input without an assignment does not transmit a command.

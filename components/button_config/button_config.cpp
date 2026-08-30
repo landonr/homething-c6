@@ -211,6 +211,10 @@ static const char *state_name(uint8_t state) {
       return "voice";
     case IrUi::CLEARED:
       return "cleared";
+    case IrUi::ZIGBEE_WAIT:
+      return "zigbee_wait";
+    case IrUi::ZIGBEE_SAVED:
+      return "zigbee_saved";
     default:
       return "off";
   }

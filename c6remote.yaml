@@ -1,14 +1,25 @@
 substitutions:
   device_name: homething-c6
   friendly_name: homeThing C6
+  zigbee2mqtt_base_topic: zigbee2mqtt
+  zigbee_group_id_base: "0xC600"
 
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
   includes:
     - ir_learning.h
+    - zigbee_learning.h
   on_boot:
     - lambda: ir_code_store.setup();
+    - lambda: |-
+        zigbee_assignments.setup("${zigbee2mqtt_base_topic}", "${device_name}", ${zigbee_group_id_base}, {
+          "office_lights",
+          "Bedroom Lights",
+          "Hallway Lights",
+          "Kitchen Light Switch",
+          "Downstairs Lights",
+        });
     - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
@@ -35,6 +46,8 @@ external_components:
   - source:
       type: local
       path: components
+  - source: github://luar123/zigbee_esphome@6cb5480cd2499faf9afb825754fa46b084296cb8
+    components: [zigbee]
 
 logger:
 
@@ -51,11 +64,29 @@ wifi:
     - script.execute: show_idle_status
   on_disconnect:
     - script.execute: show_idle_status
-  ap:
-    ssid: "${friendly_name} Setup"
-    password: !secret fallback_ap_password
 
-captive_portal:
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  discovery: false
+  log_topic: null
+
+zigbee:
+  id: zigbee_radio
+  name: ${device_name}
+  manufacturer: homeThing
+  router: false
+  sleepy: false
+  endpoints:
+    - num: 1
+      device_type: ON_OFF_SWITCH
+      clusters:
+        - id: ON_OFF
+          role: CLIENT
+  on_join:
+    then:
+      - script.execute: show_idle_status
 
 web_server:
   port: 80
@@ -76,9 +107,8 @@ pcf8574:
     pcf8575: true
 
 binary_sensor:
-  # Every input below is assignable. In receiver mode a tap arms an IR capture,
-  # a second tap on the same input hands it to the voice assistant, and a third
-  # clears it. Outside receiver mode the input replays whatever it holds.
+  # Every input below is assignable. The cycle is IR, Zigbee, voice, then clear.
+  # Outside receiver mode the input replays its one active assignment.
   - platform: gpio
     name: Button 1
     pin: &button_1
@@ -122,9 +152,8 @@ binary_sensor:
       number: 1
     # SW2 carries the receiver-mode gesture as well as its own assignment. A hold
     # of two seconds opens the mode from OFF and closes it from any learn state.
-    # A tap runs the assignment cycle, minus the voice stage: push-to-talk needs
-    # the press edge, and that edge already belongs to the hold. The consumed
-    # flag keeps the release that ends a hold from also counting as a tap.
+    # A tap runs IR, Zigbee, then clear. The consumed flag keeps the release that
+    # ends a hold from also counting as a tap.
     on_press:
       - lambda: ir_ui.sw2_consumed = false;
       - if:
@@ -354,23 +383,65 @@ light:
     effects:
       - addressable_lambda:
           name: Status Indicators
-          update_interval: 250ms
+          update_interval: 50ms
           lambda: |-
             if (initial_run) {
               id(mic_level) = 0.0f;
             }
             it.all() = Color::BLACK;
 
-            // D2 is Wi-Fi status. D5 is Home Assistant API status.
-            const Color wifi_color = wifi::global_wifi_component->is_connected()
-                ? Color(0, 96, 0) : Color(96, 24, 0);
-            const Color api_color = api::global_api_server->is_connected()
-                ? Color(0, 96, 0) : Color(96, 24, 0);
-            it[0] = wifi_color;
-            it[3] = api_color;
+            // D2 pulses red offline, orange on Wi-Fi alone, and cyan when the API
+            // is up but MQTT is down. Solid green needs both, because Zigbee
+            // training needs MQTT and green used to promise a training the
+            // remote could not run.
+            const bool wifi_connected = wifi::global_wifi_component->is_connected();
+            const bool api_connected = api::global_api_server->is_connected();
+            const bool mqtt_connected = mqtt::global_mqtt_client->is_connected();
+            if (!api_connected || !mqtt_connected) {
+              const float phase = (millis() % 2400) / 2400.0f;
+              // Input 98 produces 3/255 after 50% brightness and gamma correction.
+              const uint8_t level = 98 + static_cast<uint8_t>(
+                  64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              if (!wifi_connected) {
+                it[0] = Color(level, 0, 0);
+              } else if (!api_connected) {
+                it[0] = Color(level, level / 4, 0);
+              } else {
+                it[0] = Color(0, level, level);
+              }
+            } else {
+              it[0] = Color(0, 96, 24);
+            }
 
-            // D3 and D4 are the top pair. Show voice-assistant state.
-            if (id(voice_led_state) == 1) {
+            // D3 and D4 show assignment mode when it is open, otherwise
+            // voice-assistant state. Assignment mode never writes D2 or D5, so a
+            // Wi-Fi or Zigbee fault stays visible while an input is trained.
+            if (ir_ui.state != IrUi::OFF) {
+              if (ir_ui.state == IrUi::READING) {
+                // Two LEDs at 300 ms keep the former four-LED 600 ms chase.
+                it[1 + ((millis() / 300) % 2)] = Color(0, 0, 200);
+              } else {
+                const float mode_phase = (millis() % 1200) / 1200.0f;
+                const uint8_t mode_level = 40 + static_cast<uint8_t>(
+                    160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * mode_phase)));
+                Color mode = Color::BLACK;
+                if (ir_ui.state == IrUi::READY) {
+                  mode = Color(0, 0, 160);
+                } else if (ir_ui.state == IrUi::SAVED || ir_ui.state == IrUi::ZIGBEE_SAVED) {
+                  mode = Color(0, 180, 0);
+                } else if (ir_ui.state == IrUi::ERROR && ((millis() / 150) % 2) == 0) {
+                  mode = Color(200, 0, 0);
+                } else if (ir_ui.state == IrUi::ZIGBEE_WAIT) {
+                  mode = Color(mode_level, mode_level, 0);
+                } else if (ir_ui.state == IrUi::VOICE) {
+                  mode = Color(0, 0, mode_level);
+                } else if (ir_ui.state == IrUi::CLEARED) {
+                  mode = Color(160, 60, 0);
+                }
+                it[1] = mode;
+                it[2] = mode;
+              }
+            } else if (id(voice_led_state) == 1) {
               it[1] = Color(192, 48, 0);
               it[2] = Color(192, 48, 0);
             } else if (id(voice_led_state) == 2) {
@@ -383,26 +454,17 @@ light:
               it[1] = Color(255, 0, 0);
               it[2] = Color(255, 0, 0);
             }
-      - addressable_lambda:
-          name: IR Receiver
-          update_interval: 100ms
-          lambda: |-
-            it.all() = Color::BLACK;
-            if (ir_ui.state == IrUi::READY) {
-              it.all() = Color(0, 0, 160);
-            } else if (ir_ui.state == IrUi::READING) {
-              it[(millis() / 150) % 4] = Color(0, 0, 200);
-            } else if (ir_ui.state == IrUi::SAVED) {
-              it.all() = Color(0, 180, 0);
-            } else if (ir_ui.state == IrUi::ERROR && ((millis() / 150) % 2) == 0) {
-              it.all() = Color(200, 0, 0);
-            } else if (ir_ui.state == IrUi::VOICE) {
-              const float phase = (millis() % 1200) / 1200.0f;
-              const uint8_t level = 40 + static_cast<uint8_t>(
-                  160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              it.all() = Color(0, 0, level);
-            } else if (ir_ui.state == IrUi::CLEARED) {
-              it.all() = Color(160, 60, 0);
+
+            // D5 is Zigbee status during normal operation.
+            if (!id(zigbee_radio).is_started()) {
+              it[3] = Color::BLACK;
+            } else if (id(zigbee_radio).is_connected()) {
+              it[3] = Color(0, 128, 0);
+            } else {
+              const float phase = (millis() % 1600) / 1600.0f;
+              const uint8_t level = 48 + static_cast<uint8_t>(
+                  144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              it[3] = Color(level, 0, 0);
             }
     on_turn_on:
       - switch.turn_on: led_rail
@@ -548,7 +610,7 @@ script:
           ir_ui.open();
           ir_ui.sw2_consumed = true;
           id(ir_rail).turn_on();
-          id(status_light).turn_on().set_effect("IR Receiver").perform();
+          id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();
   - id: exit_receiver_hold
     mode: restart
     then:
@@ -556,6 +618,7 @@ script:
       - lambda: |-
           if (ir_ui.state == IrUi::OFF)
             return;
+          zigbee_assignments.cancel_training();
           ir_ui.close();
           ir_ui.sw2_consumed = true;
   - id: show_idle_status
@@ -660,9 +723,10 @@ interval:
   - interval: 250ms
     then:
       - lambda: |-
+          zigbee_assignments.tick();
           if (ir_ui.take_open_request()) {
             id(ir_rail).turn_on();
-            id(status_light).turn_on().set_effect("IR Receiver").perform();
+            id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();
           }
           if (ir_ui.tick())
             id(show_idle_status).execute();

@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 class IrCodeStore {
@@ -189,6 +190,8 @@ class IrCodeStore {
     const bool written = voice_pref_.save(&next_mask);
     if (written)
       voice_mask_ = next_mask;
+    if (assignment_clear_callback_)
+      assignment_clear_callback_(button);
     ESP_LOGI("ir_learn", "Button %u assigned to the voice assistant%s", button,
              erased && written ? "" : " (flash write failed)");
     return erased && written;
@@ -202,6 +205,8 @@ class IrCodeStore {
     const bool written = voice_pref_.save(&next_mask);
     if (written)
       voice_mask_ = next_mask;
+    if (assignment_clear_callback_)
+      assignment_clear_callback_(button);
     ESP_LOGI("ir_learn", "Button %u cleared%s", button,
              erased && written ? "" : " (flash write failed)");
     return erased && written;
@@ -272,6 +277,8 @@ class IrCodeStore {
     // A paste names the slot again after this call.
     if (names_.names[slot][0] != '\0')
       write_name_(button, "");
+    if (assignment_clear_callback_)
+      assignment_clear_callback_(button);
     ESP_LOGI("ir_learn", "Saved button %u: %u pulses, %u us", button,
              static_cast<unsigned>(next.count), static_cast<unsigned>(total_us));
     return true;
@@ -292,6 +299,18 @@ class IrCodeStore {
     ESP_LOGI("ir_learn", "Playback button %u: %u pulses", button, static_cast<unsigned>(record.count));
     log_output_(button, raw);
     return true;
+  }
+
+  void set_assignment_clear_callback(std::function<void(uint8_t)> callback) {
+    assignment_clear_callback_ = std::move(callback);
+  }
+
+  bool clear_for_zigbee(uint8_t button) {
+    if (!button_valid_(button))
+      return false;
+    erase_code_(button);
+    voice_mask_ &= ~slot_bit_(button);
+    return voice_pref_.save(&voice_mask_);
   }
 
   void log_received(const std::vector<int32_t> &raw) const {
@@ -487,6 +506,7 @@ class IrCodeStore {
   esphome::ESPPreferenceObject voice_pref_{};
   uint32_t voice_mask_ = 0;
   uint32_t saves_ = 0;
+  std::function<void(uint8_t)> assignment_clear_callback_{};
 };
 
 inline IrCodeStore ir_code_store;
@@ -495,11 +515,20 @@ inline IrCodeStore ir_code_store;
 // rather than in YAML globals so that eighteen inputs share one call each.
 class IrUi {
  public:
-  enum : uint8_t { OFF = 0, READY = 1, READING = 2, SAVED = 3, ERROR = 4, VOICE = 5, CLEARED = 6 };
+  enum : uint8_t {
+    OFF = 0,
+    READY = 1,
+    READING = 2,
+    SAVED = 3,
+    ERROR = 4,
+    VOICE = 5,
+    CLEARED = 6,
+    ZIGBEE_WAIT = 7,
+    ZIGBEE_SAVED = 8,
+  };
 
-  // FULL cycles code, voice, clear. NO_VOICE cycles code, clear: SW2 needs its
-  // hold gesture, so it cannot also be a push-to-talk button. ARM_ONLY always
-  // arms a capture, for the wheel detents that have no release edge.
+  // FULL cycles IR, Zigbee, voice, clear. NO_VOICE omits voice. ARM_ONLY always
+  // arms IR capture for wheel rotation, which has no release edge.
   enum class Tap : uint8_t { FULL, NO_VOICE, ARM_ONLY };
 
   uint8_t state = OFF;
@@ -515,7 +544,7 @@ class IrUi {
     web_result_ = OFF;
     web_result_slot_ = 0;
     mark_();
-    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW2 or wait 3 s to leave");
+    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW2 or wait 5 s to leave");
   }
 
   void close() {
@@ -552,13 +581,31 @@ class IrUi {
       play_(button);
       return;
     }
+    // A tap abandons a pending transition wait so the cycle can reach the voice
+    // and clear stages without waiting out the whole training timeout. Leaving
+    // ZIGBEE_WAIT first makes the manager's late result a no-op.
+    if (state == ZIGBEE_WAIT) {
+      state = READY;
+      if (zigbee_cancel_callback_)
+        zigbee_cancel_callback_();
+    }
     if (button != target || mode == Tap::ARM_ONLY || stage == 0) {
       arm_(button);
       return;
     }
-    if (stage == 1 && mode == Tap::FULL) {
-      ir_code_store.set_voice(button);
+    if (stage == 1 && mode != Tap::ARM_ONLY) {
       stage = 2;
+      state = ZIGBEE_WAIT;
+      mark_();
+      if (zigbee_learn_callback_)
+        zigbee_learn_callback_(button);
+      else
+        zigbee_result(false);
+      return;
+    }
+    if (stage == 2 && mode == Tap::FULL) {
+      ir_code_store.set_voice(button);
+      stage = 3;
       state = VOICE;
       mark_();
       return;
@@ -567,6 +614,16 @@ class IrUi {
     target = 0;
     stage = 0;
     state = CLEARED;
+    mark_();
+  }
+
+  // The stage stays at the Zigbee step on a failure. Rewinding it to the IR step
+  // made the next tap start another training wait, so a button that kept failing
+  // could never reach its voice or clear stage.
+  void zigbee_result(bool saved) {
+    if (state != ZIGBEE_WAIT)
+      return;
+    state = saved ? ZIGBEE_SAVED : ERROR;
     mark_();
   }
 
@@ -594,13 +651,18 @@ class IrUi {
     }
     const uint32_t elapsed = esphome::millis() - since_;
     if (state == READY) {
-      if (elapsed < 3000)
+      if (elapsed < 5000)
         return false;
-      ESP_LOGI("ir_learn", "Receiver mode OFF after 3 s idle");
+      ESP_LOGI("ir_learn", "Receiver mode OFF after 5 s idle");
       close();
       closed_ = false;
       return true;
     }
+    // The Zigbee manager owns this timeout. It can leave the transition wait for
+    // a Zigbee2MQTT request phase that has its own deadline, so a second timer
+    // here fired mid-request, flashed red, and then dropped the real result.
+    if (state == ZIGBEE_WAIT)
+      return false;
     const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;
     if (elapsed >= hold) {
       // Keep target and stage so the next tap on the same button still advances.
@@ -633,6 +695,13 @@ class IrUi {
 
   const std::vector<int32_t> &code() const { return code_; }
 
+  void set_zigbee_callbacks(std::function<void(uint8_t)> learn, std::function<bool(uint8_t)> play,
+                            std::function<void()> cancel) {
+    zigbee_learn_callback_ = std::move(learn);
+    zigbee_play_callback_ = std::move(play);
+    zigbee_cancel_callback_ = std::move(cancel);
+  }
+
  private:
   void mark_() { since_ = esphome::millis(); }
 
@@ -652,6 +721,8 @@ class IrUi {
       voice_active_ = button;
       return;
     }
+    if (zigbee_play_callback_ && zigbee_play_callback_(button))
+      return;
     pending_transmit_ = ir_code_store.load(button, code_);
   }
 
@@ -665,6 +736,9 @@ class IrUi {
   bool open_requested_ = false;
   bool closed_ = false;
   uint8_t voice_active_ = 0;
+  std::function<void(uint8_t)> zigbee_learn_callback_{};
+  std::function<bool(uint8_t)> zigbee_play_callback_{};
+  std::function<void()> zigbee_cancel_callback_{};
 };
 
 inline IrUi ir_ui;

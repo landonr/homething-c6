@@ -395,7 +395,8 @@ class WiringTest(unittest.TestCase):
         block = section(CONFIG, "  - interval: 250ms", "  - interval: 1s")
         self.assertIn("if (ir_ui.take_open_request()) {", block)
         self.assertIn("id(ir_rail).turn_on();", block)
-        self.assertIn('set_effect("IR Receiver")', block)
+        # Assignment mode shares the one effect, so a web open selects it too.
+        self.assertIn('set_brightness(0.5f).set_effect("Status Indicators")', block)
 
     def test_the_interval_restores_idle_status_on_any_close(self) -> None:
         block = section(CONFIG, "  - interval: 250ms", "  - interval: 1s")

@@ -24,7 +24,8 @@ class IrLearningTest(unittest.TestCase):
     def test_sw2_hold_enters_receiver_mode(self) -> None:
         self.assertIn("id: detect_receiver_hold", CONFIG)
         self.assertIn("- delay: 2s", CONFIG)
-        self.assertIn('set_effect("IR Receiver")', CONFIG)
+        self.assertIn('set_effect("Status Indicators")', CONFIG)
+        self.assertNotIn("IR Receiver", CONFIG)
 
     def test_only_sw1_controls_voice_assistant(self) -> None:
         sw1 = CONFIG.split("name: Button 1", 1)[1].split("name: Button 2", 1)[0]
@@ -33,28 +34,72 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn("voice_assistant.stop:", sw1)
         self.assertNotIn("voice_assistant", sw2)
 
-    def test_receiver_states_drive_all_leds(self) -> None:
-        """IrUi owns the state, so the effect reads the singleton, not a global."""
-        effect = CONFIG.split("name: IR Receiver", 1)[1].split("on_turn_on:", 1)[0]
-        for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
-            self.assertIn(f"ir_ui.state == IrUi::{state}", effect)
-        self.assertNotIn("ir_learn_state", CONFIG)
+    def test_receiver_states_drive_only_d3_and_d4(self) -> None:
+        for state in ("READY", "READING", "SAVED", "ERROR", "ZIGBEE_WAIT",
+                      "ZIGBEE_SAVED", "VOICE", "CLEARED"):
+            self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
+        # D2 is Wi-Fi and D5 is Zigbee. Assignment mode must not hide either, so
+        # its branch writes no it[0], no it[3], and no whole-strip colour.
+        mode = CONFIG.split("if (ir_ui.state != IrUi::OFF) {", 1)[1]
+        mode = mode.split("} else if (id(voice_led_state) == 1)", 1)[0]
+        for forbidden in ("it[0]", "it[3]", "it.all()"):
+            self.assertNotIn(forbidden, mode)
+        self.assertIn("it[1]", mode)
+        self.assertIn("it[2]", mode)
 
-    def test_a_result_holds_briefly_and_idle_closes_the_mode(self) -> None:
-        """A save must stay visible, and an abandoned mode must not hold the
-        LEDs and the rail for ever."""
+    def test_wifi_and_zigbee_leds_render_outside_the_mode_branch(self) -> None:
+        status = CONFIG.split("name: Status Indicators", 1)[1].split("on_turn_on:", 1)[0]
+        self.assertIn("it[0] = Color(0, 96, 24);", status)
+        self.assertIn("id(zigbee_radio).is_connected()", status)
+        self.assertIn("it[3] = Color(0, 128, 0);", status)
+
+    def test_d2_green_requires_mqtt_because_training_needs_it(self) -> None:
+        # Green used to mean API only, so it promised a training that the remote
+        # could not run while MQTT was down.
+        status = CONFIG.split("name: Status Indicators", 1)[1].split("// D3 and D4", 1)[0]
+        self.assertIn("mqtt::global_mqtt_client->is_connected()", status)
+        self.assertIn("if (!api_connected || !mqtt_connected)", status)
+        # Cyan is the API-up, MQTT-down pulse.
+        self.assertIn("it[0] = Color(0, level, level);", status)
+        green = status.index("it[0] = Color(0, 96, 24);")
+        self.assertLess(status.index("!api_connected || !mqtt_connected"), green)
+
+    def test_successful_save_returns_to_ready_until_sw2(self) -> None:
+        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)
+        self.assertIn("state = READY", HEADER)
+        self.assertIn("elapsed < 5000", HEADER)
+        sw2 = CONFIG.split("name: Button 2", 1)[1].split("name: Button 3", 1)[0]
+        self.assertIn("lambda: return ir_ui.state != IrUi::OFF;", sw2)
+        self.assertIn("script.execute: exit_receiver_hold", sw2)
         tick = HEADER.split("bool tick() {", 1)[1].split("\n  }", 1)[0]
-        self.assertIn("if (elapsed < 3000)", tick)
-        self.assertIn("close();", tick)
-        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;", tick)
-        self.assertIn("if (elapsed >= hold) {", tick)
-        self.assertIn("state = READY;", tick)
         self.assertIn("if (state == READY)", tick)
-        # SW2 still leaves the mode on a hold, without waiting for the timeout.
-        self.assertIn("id: exit_receiver_hold", CONFIG)
+        self.assertIn("close();", tick)
         exit_hold = CONFIG.split("id: exit_receiver_hold", 1)[1].split("- id: ", 1)[0]
         self.assertIn("ir_ui.close();", exit_hold)
         self.assertIn("ir_ui.sw2_consumed = true;", exit_hold)
+
+    def test_zigbee_manager_owns_the_training_timeout(self) -> None:
+        # A second timeout here expired mid-request, flashed red, and then made
+        # zigbee_result() drop the success that the manager had already saved.
+        self.assertIn("if (state == ZIGBEE_WAIT)\n      return false;", HEADER)
+        self.assertNotIn("elapsed < 30000", HEADER)
+        zigbee = (ROOT / "zigbee_learning.h").read_text()
+        self.assertIn("TRAINING_TIMEOUT_MS = 60000", zigbee)
+
+    def test_zigbee_failure_keeps_the_cycle_position(self) -> None:
+        # Rewinding to the IR stage trapped the button: every tap started another
+        # training wait, so voice and clear were unreachable.
+        result = HEADER.split("void zigbee_result(bool saved)", 1)[1].split("}", 1)[0]
+        self.assertNotIn("stage = 1", result)
+        self.assertIn("state = saved ? ZIGBEE_SAVED : ERROR;", result)
+
+    def test_tap_cancels_a_pending_zigbee_wait(self) -> None:
+        self.assertIn("zigbee_cancel_callback_()", HEADER)
+        tap = HEADER.split("void tap(uint8_t button, Tap mode)", 1)[1]
+        cancel = tap.index("zigbee_cancel_callback_()")
+        self.assertLess(cancel, tap.index("arm_(button)"))
+        zigbee = (ROOT / "zigbee_learning.h").read_text()
+        self.assertIn("[this]() { this->cancel_training(); }", zigbee)
 
     def test_all_assignable_buttons_have_playback_paths(self) -> None:
         """Playback rides the tap, so every input needs its own slot number."""

@@ -5,6 +5,11 @@ substitutions:
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
+  includes:
+    - ir_learning.h
+  on_boot:
+    - lambda: ir_code_store.setup();
+    - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
     # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
@@ -31,6 +36,11 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  power_save_mode: none
+  on_connect:
+    - script.execute: show_idle_status
+  on_disconnect:
+    - script.execute: show_idle_status
   ap:
     ssid: "${friendly_name} Setup"
     password: !secret fallback_ap_password
@@ -60,56 +70,150 @@ binary_sensor:
       number: 0
       mode: INPUT
       inverted: true
+    on_press:
+      - logger.log: "SW1: down"
+      # Start on press. Home Assistant VAD ends the stream after speech.
+      - lambda: |-
+          id(voice_led_state) = 1;
+          ESP_LOGD("main", "VA LED: 1 (start requested)");
+      - light.turn_on:
+          id: status_light
+          effect: Status Indicators
+          brightness: 100%
+      - voice_assistant.start:
+      - lambda: id(mic_meter_active) = true;
+    on_release:
+      - logger.log: "SW1: up"
+      - voice_assistant.stop:
   - platform: gpio
     name: Button 2
+    id: button_2
     pin:
       <<: *button_1
       number: 1
+    on_press:
+      - if:
+          condition:
+            lambda: return id(ir_learn_state) != 0;
+          then:
+            - lambda: |-
+                ESP_LOGI("ir_learn", "Receiver mode OFF by SW2; passive IR logging remains active");
+                id(ir_learn_state) = 0;
+            - script.execute: show_idle_status
+          else:
+            - script.execute: detect_receiver_hold
+    on_release:
+      - script.stop: detect_receiver_hold
   - platform: gpio
     name: Button 3
     pin:
       <<: *button_1
       number: 2
+    on_press: &ir_button_3
+      - lambda: |-
+          if (id(ir_learn_state) == 1) {
+            id(ir_target_button) = 3;
+            id(ir_learn_state) = 2;
+            id(ir_state_since) = millis();
+            return;
+          }
+          if (id(ir_learn_state) == 0)
+            id(ir_tx_ready) = ir_code_store.load(3, id(ir_tx_code));
+      - if:
+          condition:
+            lambda: return id(ir_learn_state) == 0 && id(ir_tx_ready);
+          then:
+            - remote_transmitter.transmit_raw:
+                carrier_frequency: 38kHz
+                code: !lambda return id(ir_tx_code);
+            - lambda: id(ir_tx_ready) = false;
   - platform: gpio
     name: Button 4
     pin:
       <<: *button_1
       number: 3
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 4; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(4, id(ir_tx_code));
+      - if: &send_ir_code
+          condition:
+            lambda: return id(ir_learn_state) == 0 && id(ir_tx_ready);
+          then:
+            - remote_transmitter.transmit_raw:
+                carrier_frequency: 38kHz
+                code: !lambda return id(ir_tx_code);
+            - lambda: id(ir_tx_ready) = false;
   - platform: gpio
     name: Button 5
     pin:
       <<: *button_1
       number: 4
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 5; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(5, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 6
     pin:
       <<: *button_1
       number: 5
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 6; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(6, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 7
     pin:
       <<: *button_1
       number: 6
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 7; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(7, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 8
     pin:
       <<: *button_1
       number: 7
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 8; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(8, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 9
     pin:
       <<: *button_1
-      number: 8
+      number: 9
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 9; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(9, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 10
     pin:
       <<: *button_1
-      number: 9
+      number: 8
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 10; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(10, id(ir_tx_code));
+      - if: *send_ir_code
   - platform: gpio
     name: Button 11
     pin:
       <<: *button_1
       number: 10
+    on_press:
+      - lambda: |-
+          if (id(ir_learn_state) == 1) { id(ir_target_button) = 11; id(ir_learn_state) = 2; id(ir_state_since) = millis(); return; }
+          if (id(ir_learn_state) == 0) id(ir_tx_ready) = ir_code_store.load(11, id(ir_tx_code));
+      - if: *send_ir_code
   # ANO wheel on PCF8575 P13..P17. Directions verified on unit 1 2026-07-27 by
   # logging expander edges per press; they match the ENC1 symbol pin names, so
   # the part is mounted as drawn and there is no rotation to compensate for.
@@ -188,7 +292,57 @@ light:
     chipset: WS2812
     rgb_order: GRB
     num_leds: 4
+    # The C6 has two RMT TX channels of 48 symbols. Without this the strip takes
+    # the 96-symbol default, remote_transmitter gets no channel and is marked
+    # failed at boot, and every IR send returns silently.
+    rmt_symbols: 48
     restore_mode: ALWAYS_OFF
+    effects:
+      - addressable_lambda:
+          name: Status Indicators
+          update_interval: 250ms
+          lambda: |-
+            if (initial_run) {
+              id(mic_level) = 0.0f;
+            }
+            it.all() = Color::BLACK;
+
+            // D2 is Wi-Fi status. D5 is Home Assistant API status.
+            const Color wifi_color = wifi::global_wifi_component->is_connected()
+                ? Color(0, 96, 0) : Color(96, 24, 0);
+            const Color api_color = api::global_api_server->is_connected()
+                ? Color(0, 96, 0) : Color(96, 24, 0);
+            it[0] = wifi_color;
+            it[3] = api_color;
+
+            // D3 and D4 are the top pair. Show voice-assistant state.
+            if (id(voice_led_state) == 1) {
+              it[1] = Color(192, 48, 0);
+              it[2] = Color(192, 48, 0);
+            } else if (id(voice_led_state) == 2) {
+              it[1] = Color(0, 48, 255);
+              it[2] = Color(0, 48, 255);
+            } else if (id(voice_led_state) == 3) {
+              it[1] = Color(96, 0, 96);
+              it[2] = Color(96, 0, 96);
+            } else if (id(voice_led_state) == 4) {
+              it[1] = Color(255, 0, 0);
+              it[2] = Color(255, 0, 0);
+            }
+      - addressable_lambda:
+          name: IR Receiver
+          update_interval: 100ms
+          lambda: |-
+            it.all() = Color::BLACK;
+            if (id(ir_learn_state) == 1) {
+              it.all() = Color(0, 0, 160);
+            } else if (id(ir_learn_state) == 2) {
+              it[(millis() / 150) % 4] = Color(0, 0, 200);
+            } else if (id(ir_learn_state) == 3) {
+              it.all() = Color(0, 180, 0);
+            } else if (id(ir_learn_state) == 4 && ((millis() / 150) % 2) == 0) {
+              it.all() = Color(200, 0, 0);
+            }
     on_turn_on:
       - switch.turn_on: led_rail
       # The first frame is written in the same loop tick as this trigger, before
@@ -211,6 +365,22 @@ light:
             - switch.turn_off: led_rail
 
 switch:
+  # Bench diagnostic for the missing 100k pull-down on sd (see ROADMAP). DS-000069
+  # page 12 wants one so MK1's tristated SD output cannot float; the board has
+  # none. Toggle this while the mic test runs and watch whether the reported peak
+  # moves. i2s_audio offers no pull setting for the data pin, so this reaches
+  # past it to the GPIO. Delete once the question is settled either way.
+  - platform: template
+    name: Mic SD Pulldown
+    id: sd_pulldown
+    entity_category: diagnostic
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);
+    turn_off_action:
+      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_FLOATING);
+
   # Q2 is a high-side P-FET on the LED rail: gate low powers led_vdd, so the
   # switch pin is inverted. R10 1M holds the gate at +3.3V, so the rail is off
   # whenever GPIO18 floats (boot, deep sleep).
@@ -258,11 +428,28 @@ remote_receiver:
     inverted: true
   dump: all
   tolerance: 35%
+  on_raw:
+    - lambda: ir_code_store.log_received(x);
+    - if:
+          condition:
+            lambda: return id(ir_learn_state) == 2;
+          then:
+            - lambda: |-
+                ESP_LOGI("ir_learn", "Capture candidate for button %u: %u pulses",
+                         id(ir_target_button), static_cast<unsigned>(x.size()));
+                const bool saved = ir_code_store.save(id(ir_target_button), x);
+                id(ir_learn_state) = saved ? 3 : 4;
+                id(ir_state_since) = millis();
+                ESP_LOGI("ir_learn", "Button %u capture: %s (%u pulses)",
+                         id(ir_target_button), saved ? "saved" : "rejected",
+                         static_cast<unsigned>(x.size()));
 
 remote_transmitter:
   pin: GPIO1
   carrier_duty_percent: 50%
   non_blocking: true
+  # Share ESP32-C6 TX RMT memory with the status LED strip.
+  rmt_symbols: 48
 
 # MK1 I2S. GPIO0 is WS and GPIO21 is data in, not the other way round: the two
 # swapped at the XIAO when MK1 was rerouted. Getting them backwards drives
@@ -280,18 +467,170 @@ microphone:
     adc_type: external
     pdm: false
     channel: left
-    sample_rate: 48000
+    sample_rate: 16000
     bits_per_sample: 32bit
     on_data:
-      - lambda: id(mic_bytes) += x.size();
+      - lambda: |-
+          id(mic_bytes) += x.size();
+          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
+          const size_t count = x.size() / sizeof(int32_t);
+          uint16_t peak = 0;
+          for (size_t i = 0; i < count; i++) {
+            const int32_t sample = samples[i] >> 16;
+            const uint16_t magnitude = sample < 0 ? -sample : sample;
+            if (magnitude > peak)
+              peak = magnitude;
+          }
+          if (peak > id(mic_peak))
+            id(mic_peak) = peak;
+          const float level = std::min(1.0f, std::max(0.0f,
+              (static_cast<float>(peak) - 24.0f) / (512.0f - 24.0f)));
+          id(mic_level) = std::max(level, id(mic_level) * 0.82f);
+
+script:
+  - id: detect_receiver_hold
+    mode: restart
+    then:
+      - delay: 2s
+      - lambda: |-
+          if (id(ir_learn_state) != 0)
+            return;
+          ESP_LOGI("ir_learn", "Receiver mode READY; press SW2 to leave");
+          id(ir_learn_state) = 1;
+          id(ir_state_since) = millis();
+          id(ir_rail).turn_on();
+          id(status_light).turn_on().set_effect("IR Receiver").perform();
+  - id: show_idle_status
+    then:
+      - if:
+          condition:
+            lambda: return !id(mic_meter_active);
+          then:
+            - lambda: |-
+                id(voice_led_state) = 0;
+                ESP_LOGD("main", "VA LED: 0 (idle)");
+            - light.turn_on:
+                id: status_light
+                effect: Status Indicators
+                brightness: 100%
+  - id: stop_voice_listening
+    then:
+      - lambda: id(mic_meter_active) = false;
+      - script.execute: show_idle_status
+
+voice_assistant:
+  # gain_factor is applied in the Q31 domain before the 32-to-16 bit truncation,
+  # so it recovers the mic's low bits rather than amplifying quantization noise.
+  # The ICS-43434 is -26 dBFS at 94 dB SPL, which puts speech near -54 dBFS raw.
+  microphone:
+    - microphone: board_microphone
+      gain_factor: 32
+  # noise_suppression_level, auto_gain and volume_multiplier are applied by HA's
+  # server-side enhancer, not on the device. Left at defaults: with them set to
+  # 2 / 31dBFS / 2.0 HA aborted the stream 7.6s in with stt-stream-failed.
+  # gain_factor above is device-side and unaffected.
+  on_start:
+    - logger.log: "VA: pipeline start requested"
+  on_listening:
+    # The LEDs are the cue to start talking, so they light here rather than on
+    # the button press: HA's reply can lag the request by seconds, and audio
+    # captured before streaming opens is discarded.
+    - logger.log: "VA: listening"
+    - lambda: |-
+        id(voice_led_state) = 2;
+        ESP_LOGD("main", "VA LED: 2 (listening)");
+    - light.turn_on:
+        id: status_light
+        effect: Status Indicators
+        brightness: 100%
+  on_stt_vad_start:
+    - logger.log: "VA: speech detected"
+  on_stt_vad_end:
+    - logger.log: "VA: speech ended"
+    - lambda: id(mic_meter_active) = false;
+    - lambda: |-
+        id(voice_led_state) = 3;
+        ESP_LOGD("main", "VA LED: 3 (speech ended)");
+    - light.turn_on:
+        id: status_light
+        effect: Status Indicators
+        brightness: 100%
+  on_stt_end:
+    - lambda: |-
+        ESP_LOGI("voice_assistant", "STT result: '%s'", x.c_str());
+  on_end:
+    - script.execute: stop_voice_listening
+  on_error:
+    - lambda: |-
+        ESP_LOGE("voice_assistant", "Error %s / %s", code.c_str(), message.c_str());
+    - lambda: id(mic_meter_active) = false;
+    - lambda: |-
+        id(voice_led_state) = 4;
+        ESP_LOGD("main", "VA LED: 4 (voice-assistant error)");
+    - light.turn_on:
+        id: status_light
+        effect: Status Indicators
+        brightness: 100%
+    - delay: 2s
+    - script.execute: stop_voice_listening
+  on_client_disconnected:
+    - script.execute: stop_voice_listening
 
 globals:
+  - id: ir_tx_code
+    type: std::vector<int32_t>
+    restore_value: false
+  - id: ir_learn_state
+    type: uint8_t
+    restore_value: false
+    initial_value: "0"
+  - id: ir_target_button
+    type: uint8_t
+    restore_value: false
+    initial_value: "0"
+  - id: ir_state_since
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: ir_tx_ready
+    type: bool
+    restore_value: false
+    initial_value: "false"
   - id: mic_bytes
     type: uint32_t
     restore_value: false
     initial_value: "0"
+  - id: mic_level
+    type: float
+    restore_value: false
+    initial_value: "0.0f"
+  - id: mic_peak
+    type: uint16_t
+    restore_value: false
+    initial_value: "0"
+  - id: mic_meter_active
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: voice_led_state
+    type: uint8_t
+    restore_value: false
+    initial_value: "0"
 
 interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          const uint32_t elapsed = millis() - id(ir_state_since);
+          // Stay in receiver mode across saves so several codes can be learned
+          // in one session. Only SW2 leaves it.
+          if ((id(ir_learn_state) == 3 && elapsed >= 1000) ||
+              (id(ir_learn_state) == 2 && elapsed >= 10000) ||
+              (id(ir_learn_state) == 4 && elapsed >= 1000)) {
+            ESP_LOGI("ir_learn", "Receiver mode READY after state %u; press SW2 to leave", id(ir_learn_state));
+            id(ir_learn_state) = 1;
+            id(ir_state_since) = millis();
+          }
   - interval: 1s
     then:
       - if:
@@ -300,21 +639,42 @@ interval:
               id: board_microphone
           then:
             - lambda: |-
-                ESP_LOGI("microphone", "Captured %u bytes/s", id(mic_bytes));
+                ESP_LOGI("microphone", "Captured %u bytes/s, level %.3f, peak %u",
+                         static_cast<unsigned>(id(mic_bytes)), id(mic_level),
+                         static_cast<unsigned>(id(mic_peak)));
                 id(mic_bytes) = 0;
+                id(mic_peak) = 0;
 
 button:
   - platform: template
     name: Start Microphone Test
     on_press:
+      - lambda: id(mic_level) = 0.0f;
+      - lambda: id(mic_meter_active) = true;
+      - lambda: id(voice_led_state) = 2;
       - microphone.capture:
           id: board_microphone
+      # The I2S driver claims GPIO21 on capture start, so reassert whatever the
+      # pulldown switch is set to after the mic is up, not before.
+      - delay: 100ms
+      - if:
+          condition:
+            switch.is_on: sd_pulldown
+          then:
+            - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);
+          else:
+            - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_FLOATING);
+      - light.turn_on:
+          id: status_light
+          effect: Status Indicators
+          brightness: 100%
 
   - platform: template
     name: Stop Microphone Test
     on_press:
       - microphone.stop_capture:
           id: board_microphone
+      - script.execute: stop_voice_listening
 
   - platform: template
     name: Send Short IR Test Burst

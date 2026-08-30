@@ -1,5 +1,6 @@
 #pragma once
 
+#include "esphome/core/hal.h"
 #include "esphome/core/preferences.h"
 #include "esphome/core/log.h"
 
@@ -12,7 +13,14 @@
 class IrCodeStore {
  public:
   static constexpr uint8_t FIRST_BUTTON = 3;
-  static constexpr uint8_t LAST_BUTTON = 11;
+  // 3..11 are SW3..SW11. 12..16 are the ANO directions. 17 and 18 are wheel
+  // rotation. 19 is SW2 and 20 is SW1. Slots are contiguous because each one
+  // keys its own NVS record. SW1 and SW2 sit at the top rather than at 1 and 2
+  // because the NVS key is 0x49524330 + (button - FIRST_BUTTON): moving
+  // FIRST_BUTTON would shift every existing key by one slot and hand each
+  // button its neighbour's code.
+  static constexpr uint8_t LAST_BUTTON = 20;
+  static constexpr uint8_t VOICE_BUTTON = 20;
   static constexpr size_t SLOT_COUNT = LAST_BUTTON - FIRST_BUTTON + 1;
   static constexpr size_t MAX_PULSES = 512;
 
@@ -28,8 +36,52 @@ class IrCodeStore {
                  static_cast<unsigned>(loaded.count));
       }
     }
-    ESP_LOGI("ir_learn", "IR store ready: %u/%u buttons assigned", static_cast<unsigned>(loaded_count),
-             static_cast<unsigned>(SLOT_COUNT));
+
+    voice_pref_ = esphome::global_preferences->make_preference<uint32_t>(VOICE_KEY, true);
+    uint32_t mask = 0;
+    if (voice_pref_.load(&mask)) {
+      voice_mask_ = mask;
+    } else {
+      // First boot after this feature. Seed SW1 so the board still has an Assist
+      // button before anyone opens receiver mode. A clear writes the mask, so a
+      // cleared SW1 stays cleared.
+      voice_mask_ = slot_bit_(VOICE_BUTTON);
+      voice_pref_.save(&voice_mask_);
+    }
+
+    ESP_LOGI("ir_learn", "IR store ready: %u/%u codes, voice mask 0x%05X",
+             static_cast<unsigned>(loaded_count), static_cast<unsigned>(SLOT_COUNT),
+             static_cast<unsigned>(voice_mask_));
+  }
+
+  bool is_voice(uint8_t button) const {
+    return button_valid_(button) && (voice_mask_ & slot_bit_(button)) != 0;
+  }
+
+  bool has_code(uint8_t button) const {
+    return button_valid_(button) && valid_(records_[button - FIRST_BUTTON]);
+  }
+
+  // The voice assignment replaces whatever the button held, so drop the code.
+  bool set_voice(uint8_t button) {
+    if (!button_valid_(button))
+      return false;
+    erase_code_(button);
+    voice_mask_ |= slot_bit_(button);
+    const bool written = voice_pref_.save(&voice_mask_);
+    ESP_LOGI("ir_learn", "Button %u assigned to the voice assistant%s", button,
+             written ? "" : " (flash write failed)");
+    return written;
+  }
+
+  bool clear(uint8_t button) {
+    if (!button_valid_(button))
+      return false;
+    erase_code_(button);
+    voice_mask_ &= ~slot_bit_(button);
+    const bool written = voice_pref_.save(&voice_mask_);
+    ESP_LOGI("ir_learn", "Button %u cleared%s", button, written ? "" : " (flash write failed)");
+    return written;
   }
 
   bool save(uint8_t button, const std::vector<int32_t> &raw) {
@@ -84,6 +136,10 @@ class IrCodeStore {
       return false;
     }
     records_[slot] = next;
+    if ((voice_mask_ & slot_bit_(button)) != 0) {
+      voice_mask_ &= ~slot_bit_(button);
+      voice_pref_.save(&voice_mask_);
+    }
     ESP_LOGI("ir_learn", "Saved button %u: %u pulses, %u us", button,
              static_cast<unsigned>(next.count), static_cast<unsigned>(total_us));
     return true;
@@ -143,6 +199,7 @@ class IrCodeStore {
 
  private:
   static constexpr uint32_t MAGIC = 0x49524336U;
+  static constexpr uint32_t VOICE_KEY = 0x49524356U;
   static constexpr uint16_t VERSION = 1;
 
   struct Record {
@@ -154,6 +211,16 @@ class IrCodeStore {
   };
 
   static bool button_valid_(uint8_t button) { return button >= FIRST_BUTTON && button <= LAST_BUTTON; }
+
+  static uint32_t slot_bit_(uint8_t button) { return 1UL << (button - FIRST_BUTTON); }
+
+  // A zeroed record fails valid_(), so the slot reads as unassigned after a reboot.
+  void erase_code_(uint8_t button) {
+    const size_t slot = button - FIRST_BUTTON;
+    Record empty{};
+    prefs_[slot].save(&empty);
+    records_[slot] = empty;
+  }
 
   static bool in_range_(int32_t value, int32_t low, int32_t high) {
     const int32_t duration = value < 0 ? -value : value;
@@ -238,6 +305,148 @@ class IrCodeStore {
 
   std::array<Record, SLOT_COUNT> records_{};
   std::array<esphome::ESPPreferenceObject, SLOT_COUNT> prefs_{};
+  esphome::ESPPreferenceObject voice_pref_{};
+  uint32_t voice_mask_ = 0;
 };
 
 inline IrCodeStore ir_code_store;
+
+// Receiver-mode state machine and per-button assignment cycle. This lives here
+// rather than in YAML globals so that eighteen inputs share one call each.
+class IrUi {
+ public:
+  enum : uint8_t { OFF = 0, READY = 1, READING = 2, SAVED = 3, ERROR = 4, VOICE = 5, CLEARED = 6 };
+
+  // FULL cycles code, voice, clear. NO_VOICE cycles code, clear: SW2 needs its
+  // hold gesture, so it cannot also be a push-to-talk button. ARM_ONLY always
+  // arms a capture, for the wheel detents that have no release edge.
+  enum class Tap : uint8_t { FULL, NO_VOICE, ARM_ONLY };
+
+  uint8_t state = OFF;
+  uint8_t target = 0;
+  uint8_t stage = 0;
+  bool sw2_consumed = false;
+
+  void open() {
+    state = READY;
+    target = 0;
+    stage = 0;
+    mark_();
+    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW2 or wait 3 s to leave");
+  }
+
+  void close() {
+    state = OFF;
+    target = 0;
+    stage = 0;
+    mark_();
+    ESP_LOGI("ir_learn", "Receiver mode OFF; passive IR logging remains active");
+  }
+
+  void tap(uint8_t button, Tap mode) {
+    if (state == OFF) {
+      play_(button);
+      return;
+    }
+    if (button != target || mode == Tap::ARM_ONLY || stage == 0) {
+      arm_(button);
+      return;
+    }
+    if (stage == 1 && mode == Tap::FULL) {
+      ir_code_store.set_voice(button);
+      stage = 2;
+      state = VOICE;
+      mark_();
+      return;
+    }
+    ir_code_store.clear(button);
+    target = 0;
+    stage = 0;
+    state = CLEARED;
+    mark_();
+  }
+
+  void captured(const std::vector<int32_t> &raw) {
+    if (state != READING)
+      return;
+    ESP_LOGI("ir_learn", "Capture candidate for button %u: %u pulses", target,
+             static_cast<unsigned>(raw.size()));
+    const bool saved = ir_code_store.save(target, raw);
+    state = saved ? SAVED : ERROR;
+    mark_();
+  }
+
+  // True when the mode closed on this tick, so the caller restores idle status.
+  bool tick() {
+    if (state == OFF)
+      return false;
+    const uint32_t elapsed = esphome::millis() - since_;
+    if (state == READY) {
+      if (elapsed < 3000)
+        return false;
+      ESP_LOGI("ir_learn", "Receiver mode OFF after 3 s idle");
+      close();
+      return true;
+    }
+    const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;
+    if (elapsed >= hold) {
+      // Keep target and stage so the next tap on the same button still advances.
+      state = READY;
+      mark_();
+    }
+    return false;
+  }
+
+  bool take_transmit() {
+    const bool pending = pending_transmit_;
+    pending_transmit_ = false;
+    return pending;
+  }
+
+  bool take_voice_start() {
+    const bool pending = pending_voice_;
+    pending_voice_ = false;
+    return pending;
+  }
+
+  // The press that started Assist records itself, so every release handler can
+  // share one condition instead of naming its own button.
+  bool release() {
+    if (voice_active_ == 0)
+      return false;
+    voice_active_ = 0;
+    return true;
+  }
+
+  const std::vector<int32_t> &code() const { return code_; }
+
+ private:
+  void mark_() { since_ = esphome::millis(); }
+
+  void arm_(uint8_t button) {
+    target = button;
+    stage = 1;
+    state = READING;
+    mark_();
+    ESP_LOGI("ir_learn", "Button %u armed for capture", button);
+  }
+
+  void play_(uint8_t button) {
+    pending_transmit_ = false;
+    pending_voice_ = false;
+    if (ir_code_store.is_voice(button)) {
+      pending_voice_ = true;
+      voice_active_ = button;
+      return;
+    }
+    pending_transmit_ = ir_code_store.load(button, code_);
+  }
+
+  std::vector<int32_t> code_;
+  uint32_t since_ = 0;
+  bool pending_transmit_ = false;
+  bool pending_voice_ = false;
+  uint8_t voice_active_ = 0;
+};
+
+inline IrUi ir_ui;

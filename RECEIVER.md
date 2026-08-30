@@ -2,19 +2,19 @@
 
 ## Goal
 
-Add a local mode that learns IR codes from another remote.
+Add a local mode that assigns each input on the board. An input can hold an IR code, the voice assistant, or nothing.
 
-Store each learned code in flash. Send the stored code when the user presses its assigned button.
+Store each assignment in flash. Replay the assignment when the user presses that input outside the mode.
 
-Keep the current short-press action for `SW2`. Enter receiver mode when the user holds `SW2` for two seconds.
+Enter receiver mode when the user holds `SW2` for two seconds. Leave it on a second hold of `SW2` or after three seconds without input.
 
 ## Assumptions
 
-- Use `SW3` through `SW11` as assignable buttons.
-- Preserve the current voice action on `SW1`.
-- Reserve `SW2` for push-to-talk and receiver mode control.
-- Store one IR code for each assignable button.
-- Replace the old code when the user learns a new code for the same button.
+- Use `SW1` through `SW11` and the five ANO wheel directions as assignable inputs.
+- Use clockwise and anticlockwise wheel rotation as two more assignable inputs.
+- Reserve the `SW2` hold gesture for receiver mode control.
+- Store one IR code or one voice assignment for each input.
+- Replace the old assignment when the user assigns the same input again.
 - Learn common decoded protocols when ESPHome identifies them.
 - Store raw pulse timings when ESPHome cannot identify the protocol.
 - Keep all learning and playback functions local. Home Assistant must not be necessary.
@@ -23,14 +23,17 @@ Keep the current short-press action for `SW2`. Enter receiver mode when the user
 
 1. Hold `SW2` for two seconds.
 2. Release `SW2` when all four LEDs show the ready state.
-3. Press one assignable button.
-4. Point the source remote at `U2`.
-5. Press the source remote button once.
-6. Wait for the read state.
-7. Press another assignable button to learn another code.
-8. Press `SW2` to leave receiver mode.
+3. Tap one input. The LEDs chase and the receiver waits for a code.
+4. Point the source remote at `U2` and press the source remote button once.
+5. Wait for the read state.
+6. Tap the same input a second time to give it the voice assistant instead. The LEDs pulse blue.
+7. Tap the same input a third time to clear it. The LEDs go amber and no input stays selected.
+8. Tap another input to assign it.
+9. Hold `SW2` for two seconds to leave receiver mode.
 
-The mode will close after 30 seconds without input. A successful read will restart this timeout.
+A tap on a different input always starts that input at the first stage of the cycle.
+
+The ready state closes after three seconds without a tap. Every other state returns to the ready state and restarts this timeout.
 
 Outside receiver mode, an assignable button will send its stored code. A button without a code will give an error indication.
 
@@ -41,10 +44,12 @@ Use one `IrLearnState` value as the source of truth.
 | State | Meaning | `D2`-`D5` indication | Exit |
 | --- | --- | --- | --- |
 | `OFF` | Normal remote operation | Existing status behavior | Hold `SW2` |
-| `READY` | Receiver is on and waits for a target button | Four solid blue LEDs | Press a target button |
-| `READING` | Receiver waits for the source remote | Blue chase toward `D5` | Receive a frame or reach ten seconds |
+| `READY` | Receiver is on and waits for a target button | Four solid blue LEDs | Press a target button, hold `SW2`, or wait three seconds |
+| `READING` | Receiver waits for the source remote | Blue chase toward `D5` | Receive a frame, hold `SW2`, or reach ten seconds |
 | `READ` | Code passed validation and reached flash | Four solid green LEDs for one second | Return to `READY` |
 | `ERROR` | Read, validation, or storage failed | Four red flashes | Return to `READY` |
+| `VOICE` | The input now starts the voice assistant | Four LEDs pulse blue | Tap again, or ten seconds |
+| `CLEARED` | The input holds nothing | Four amber LEDs for one second | Return to `READY` |
 
 Turn on `ir_rail` before the `READY` indication. Wait 10 ms before the receiver accepts frames.
 
@@ -56,17 +61,21 @@ The current configuration uses `restore_mode: ALWAYS_ON` for `ir_rail`. Change i
 
 Add click and hold handling to `SW2`.
 
-- A release before two seconds keeps the current push-to-talk action.
-- A hold of two seconds enters receiver mode and suppresses push-to-talk.
-- A short press in receiver mode closes receiver mode.
+- A hold of two seconds from `OFF` enters receiver mode.
+- A hold of two seconds in any learn state closes receiver mode.
+- A release before two seconds is a short press.
+- A short press in the mode runs the assignment cycle for `SW2`.
+- A short press in `OFF` sends the code stored for `SW2`.
 
-Do not start voice capture on the initial `SW2` edge. Start it only after the hold window closes.
+Ignore the release that ends a hold. That release must not count as a short press.
 
-This change adds a two-second delay to push-to-talk. If that delay is unacceptable, use a different entry gesture.
+`SW2` has no voice stage. Push-to-talk needs the press edge, and the hold gesture already owns that edge.
 
-In `READY`, the next assignable button becomes the target. Do not transmit its existing code in this state.
+Wheel rotation has no voice stage and no clear stage. A detent has no release edge, so each detent arms a capture.
 
-In `READING`, ignore assignable button presses. Let `SW2` cancel the operation and close the mode.
+In `READY`, the next tap selects the target. Do not transmit its existing code in this state.
+
+In `READING`, ignore assignable button presses. Let a hold of `SW2` cancel the operation and close the mode.
 
 In `OFF`, send the stored code on the assignable button press. Ignore button release for IR playback.
 
@@ -101,6 +110,16 @@ Reject an empty, truncated, oversized, or repeat-only capture. Keep the previous
 
 Use one ESPHome flash preference record for each assignable button.
 
+The store holds 18 slots. Slots 3 to 11 are `SW3` to `SW11`. Slots 12 to 16 are the wheel directions right, up, press, down, and left. Slot 17 is clockwise rotation and slot 18 is anticlockwise rotation. Slot 19 is `SW2` and slot 20 is `SW1`.
+
+The key of a record is `0x49524330` plus the slot offset. `SW1` and `SW2` use the top slots because a lower first slot would shift every existing key.
+
+Store the voice assignments as one bitmask under key `0x49524356`, one bit per slot offset. Seed the `SW1` bit when the key is absent, so a new board has an Assist button before anyone opens the mode. Do not seed again once the key exists.
+
+A voice assignment and an IR code cannot both apply. Each write clears the other.
+
+An erase writes a zeroed record. The record then fails validation on the next boot.
+
 Each record contains a magic value, schema version, pulse count, pulse data, and checksum.
 
 Write the new record before you replace the active in-memory record.
@@ -131,7 +150,7 @@ Log state changes, target buttons, protocol names, pulse counts, and storage res
 
 ## Implementation order
 
-1. Add tests for `SW2` hold detection and push-to-talk suppression.
+1. Add tests for `SW2` hold detection and short-press detection.
 2. Add the state model and receiver-mode LED effect.
 3. Change `ir_rail` to default off and control it from mode entry and exit.
 4. Add target-button selection without storage or playback.
@@ -146,9 +165,11 @@ Log state changes, target buttons, protocol names, pulse counts, and storage res
 
 Extend `scripts/tests/test_c6remote_config.py` with these checks:
 
-- `SW2` short press still starts push-to-talk.
+- Every assignable input calls the tap handler with the correct slot.
 - `SW2` hold enters receiver mode only once.
-- Receiver mode suppresses voice capture.
+- The release that ends a hold does not count as a short press.
+- `READY` closes after three seconds without a tap.
+- `SW2` and wheel rotation pass a tap mode without the voice stage.
 - Each assignable button selects a target in `READY`.
 - Each assignable button transmits only in `OFF`.
 - `ir_rail` defaults off and follows receiver-mode transitions.
@@ -168,8 +189,13 @@ For each test, power-cycle the board after learning. Confirm that the assigned b
 
 Verify these cases:
 
-- A short `SW2` press still controls push-to-talk.
-- A two-second `SW2` hold does not start voice capture.
+- A short `SW2` press learns and sends the code in slot 19.
+- A two-second `SW2` hold enters and leaves receiver mode.
+- The five wheel directions and both rotation directions learn and send.
+- A second tap assigns the voice assistant and the LEDs pulse blue.
+- A third tap clears the input and the LEDs go amber.
+- A voice assignment survives a power cycle.
+- `SW1` starts Assist on a board with an empty NVS.
 - `D2`-`D5` show `READY`, `READING`, `READ`, and `ERROR` correctly.
 - Noise does not overwrite a stored code.
 - A repeat frame does not become a stored code.

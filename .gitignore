@@ -19,13 +19,54 @@ pcbway/
 # in the BOM. Root only, so a kicad-cli pdf export under docs/ still tracks.
 /*.pdf
 
+# Local component datasheets used for bench investigation.
+localdatasheets/
+
+# Local-only agent config: hookify rules and anything else *.local.md.
+.claude/*.local.md
+
 # Fab upload archives. The pre-commit hook blanket-stages export/, so a stray
 # zip dropped in there gets tracked; export.zip is rebuilt from export/ on demand.
 c6remote-kicad/export.zip
 c6remote-kicad/export/*.zip
+c6remote-kicad/snapshots/
 
 # Session-scoped schematic and custom-footprint validation cache.
 .cache/hw/
 
 # Python bytecode from scripts/ and its tests.
 scripts/**/__pycache__/
+c6remote-kicad/.mcp-backups
+case/.cache
+c6remote-kicad/_restore_backup_2026-05-28T19-10-25-806
+**/__pycache__
+
+# Python virtualenv for the case model scripts. Rebuilt from case/requirements.
+case/.venv/
+
+# VS Code Local History extension snapshots of the KiCad sources.
+c6remote-kicad/.history/
+
+# kicad-cli scratch reports written at the repo root, not under c6remote-kicad/.
+/*-drc.rpt
+/*-erc.rpt
+
+# KiCad and MCP scratch output: Specctra export, autorouter result, 2D preview,
+# DRC dumps, and pre-edit board backups. All rebuilt on demand.
+c6remote-kicad/*.dsn
+c6remote-kicad/*_routed.kicad_*
+c6remote-kicad/c6remote_2d_view.png
+c6remote-kicad/*_drc_violations.json
+c6remote-kicad/drc-*.json
+c6remote-kicad/_restore_backup_*/
+c6remote-kicad/*.kicad_pcb.*.bak
+
+# Stray KiCad local settings written at the repo root. The real one is
+# c6remote-kicad/c6remote.kicad_prl.
+/c6remote.kicad_prl
+
+# Local MCP server clone. The canonical checkout is ~/dev/KiCAD-MCP-Server.
+KiCAD-MCP-Server/
+
+# Local-only Codex instruction override.
+AGENTS.override.md

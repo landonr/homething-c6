@@ -68,6 +68,42 @@ class IrCodeStore {
     return records_[button - FIRST_BUTTON].count;
   }
 
+  // Stored pulses are 10 us ticks, so the frame length needs the scale back.
+  uint32_t code_duration_us(uint8_t button) const {
+    if (!has_code(button))
+      return 0;
+    const Record &record = records_[button - FIRST_BUTTON];
+    uint32_t total = 0;
+    for (size_t i = 0; i < record.count; i++) {
+      const int16_t pulse = record.pulses[i];
+      total += static_cast<uint32_t>(pulse < 0 ? -pulse : pulse) * 10U;
+    }
+    return total;
+  }
+
+  // save() canonicalizes a Samsung frame, so the 32 data bits read back out of
+  // the record. Ticks are 10 us: a 4.5 ms header is 450, a one space is 169.
+  bool code_samsung_data(uint8_t button, uint32_t &data) const {
+    if (!has_code(button))
+      return false;
+    const Record &record = records_[button - FIRST_BUTTON];
+    if (record.count != 68)
+      return false;
+    if (record.pulses[0] < 400 || record.pulses[0] > 500)
+      return false;
+    if (record.pulses[1] > -400 || record.pulses[1] < -500)
+      return false;
+    uint32_t value = 0;
+    for (size_t bit = 0; bit < 32; bit++) {
+      const int16_t space = record.pulses[3 + 2 * bit];
+      if (space >= 0)
+        return false;
+      value = (value << 1) | (-space > 100 ? 1U : 0U);
+    }
+    data = value;
+    return true;
+  }
+
   // Counts successful captures only. A re-record of the same remote button
   // often keeps the pulse count, so a watcher cannot tell from the slot row
   // alone that a new code landed.

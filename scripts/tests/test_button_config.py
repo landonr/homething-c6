@@ -246,6 +246,35 @@ class PageTest(unittest.TestCase):
         calls = re.findall(r'fetch\("([^"]+)"', PAGE)
         self.assertEqual(sorted(set(calls)), ["/buttons/api/action", "/buttons/api/state"])
 
+    def test_the_page_details_the_action_of_a_slot(self) -> None:
+        """A pulse count alone does not say what the button sends."""
+        body = section(PAGE, "function detail(s){", 'return h+"</dl>"}')
+        self.assertIn('k.push(["Type","IR"])', body)
+        self.assertIn('k.push(["Protocol",r.code?"Samsung 32-bit":"Raw capture"])', body)
+        self.assertIn('if(r.code)k.push(["Target",r.code])', body)
+        self.assertIn('k.push(["Pulses",String(r.pulses)])', body)
+        self.assertIn('if(r.us)k.push(["Frame",ms(r.us)])', body)
+        self.assertIn('k.push(["Carrier","38 kHz at 50% duty"])', body)
+        self.assertIn('k.push(["Type","Voice"])', body)
+        self.assertIn('k.push(["Type","Unassigned"])', body)
+        self.assertIn('function ms(u){return (u/1000).toFixed(1)+" ms"}', PAGE)
+        self.assertIn('esc(words(sel))+"</p>"+detail(sel)', PAGE)
+
+    def test_the_state_row_reports_the_frame_length_and_the_code(self) -> None:
+        """Nine slots hold 68 pulses of the same length, so only the data word
+        separates them."""
+        state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
+        self.assertIn('"pulses":%u,"us":%u,"code":"%s"', state)
+        self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
+        self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
+        self.assertIn(R'std::snprintf(code, sizeof(code), "0x%08X"', state)
+        length = section(STORE, "uint32_t code_duration_us(uint8_t button) const {", "\n  }")
+        self.assertIn("* 10U", length)
+        decode = section(STORE, "bool code_samsung_data(uint8_t button, uint32_t &data) const {", "\n  }")
+        self.assertIn("if (record.count != 68)", decode)
+        self.assertIn("const int16_t space = record.pulses[3 + 2 * bit];", decode)
+        self.assertIn("value = (value << 1) | (-space > 100 ? 1U : 0U);", decode)
+
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)
         self.assertNotIn("st.saves>", PAGE)

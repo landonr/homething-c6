@@ -45,6 +45,11 @@ text-align:left;cursor:pointer;display:block;width:100%}
 border-radius:8px;padding:8px 14px;cursor:pointer}
 .act button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
 .act button[disabled]{opacity:.5;cursor:not-allowed}
+dl.info{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;
+margin:0 0 12px;font-size:13px}
+dl.info dt{color:var(--mut);text-transform:uppercase;letter-spacing:.06em;
+font-size:11px;padding-top:2px}
+dl.info dd{margin:0;overflow-wrap:anywhere}
 .note{border-left:4px solid var(--line);padding:8px 12px;margin:12px 0;
 background:var(--bg);border-radius:0 6px 6px 0}
 .note.ok{border-color:var(--ok)}.note.bad{border-color:var(--bad)}
@@ -85,7 +90,29 @@ function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 function words(s){var r=row(s);if(!r)return "Unknown";
 if(r.action==="voice")return "Voice assistant";
-if(r.action==="ir")return "IR ("+r.pulses+" pulses)";return "Clear"}
+if(r.action==="ir")return r.code?"IR "+r.code:"IR ("+r.pulses+" pulses)";return "Clear"}
+
+function ms(u){return (u/1000).toFixed(1)+" ms"}
+
+// The tile holds one line only, so the editor carries the transport, the
+// command, and the identifier that the remote actually sends.
+function detail(s){var r=row(s);if(!r)return "";var k=[],i;
+if(r.action==="ir"){
+k.push(["Type","IR"]);
+k.push(["Action","Transmit the stored code"]);
+k.push(["Protocol",r.code?"Samsung 32-bit":"Raw capture"]);
+if(r.code)k.push(["Target",r.code]);
+k.push(["Pulses",String(r.pulses)]);
+if(r.us)k.push(["Frame",ms(r.us)]);
+k.push(["Carrier","38 kHz at 50% duty"])}
+else if(r.action==="voice"){
+k.push(["Type","Voice"]);
+k.push(["Action","Start the voice assistant"]);
+k.push(["Target","Home Assistant over the native API"])}
+else{k.push(["Type","Unassigned"]);k.push(["Action","None"])}
+var h="<dl class=info>";
+for(i=0;i<k.length;i++)h+="<dt>"+esc(k[i][0])+"</dt><dd>"+esc(k[i][1])+"</dd>";
+return h+"</dl>"}
 
 function build(){
 for(var i=0;i<S.length;i++){var d=S[i];
@@ -109,7 +136,7 @@ var e=document.getElementById("ed");
 if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
 "<p class=sub>Select an input on the left to change what it does.</p>";return}
 var d=info(sel);
-var h="<h2>"+esc(d.l)+"</h2><p class=sub>Now: "+esc(words(sel))+"</p>";
+var h="<h2>"+esc(d.l)+"</h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
 if(mode==="rec"&&rec===sel){
 h+="<p>Point the source remote at the front of the board and press its button.</p>"+
 "<div class=bar><i></i></div><div class=act>"+

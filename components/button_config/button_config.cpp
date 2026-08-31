@@ -116,9 +116,15 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
     const char *action = ::ir_code_store.is_voice(info.slot) ? "voice"
                          : ::ir_code_store.has_code(info.slot) ? "ir"
                                                                : "none";
-    stream->printf(R"(%s{"slot":%u,"action":"%s","pulses":%u})", first ? "" : ",",
-                   static_cast<unsigned>(info.slot), action,
-                   static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)));
+    // Hex only, so it needs no JSON escape.
+    char code[12] = "";
+    uint32_t samsung = 0;
+    if (::ir_code_store.code_samsung_data(info.slot, samsung))
+      std::snprintf(code, sizeof(code), "0x%08X", static_cast<unsigned>(samsung));
+    stream->printf(R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s"})",
+                   first ? "" : ",", static_cast<unsigned>(info.slot), action,
+                   static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
+                   static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code);
     first = false;
   }
   stream->print("]}");

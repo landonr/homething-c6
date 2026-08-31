@@ -19,6 +19,14 @@ on:
   workflow_dispatch:
 
 jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python regression tests
+        run: python3 -m unittest discover -s scripts/tests -t .
+
   design-checks:
     runs-on: ubuntu-latest
     container:

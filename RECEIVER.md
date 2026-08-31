@@ -102,17 +102,45 @@ input accepts.
 The page is an alternative to the tap cycle, not a replacement. Both routes write
 the same flash records.
 
-The page cannot train a Zigbee group. Use the tap cycle for Zigbee training.
+### Assign a Zigbee target from the page
+
+The page can assign a Zigbee Toggle target. It does not need a state transition,
+because you name the target instead.
+
+1. Select an input, then select **Zigbee**.
+2. Select a group or a device in the list.
+3. Or type a group ID, an IEEE address, or a friendly name.
+4. Select **Assign**.
+
+A typed target wins over the list selection. The list comes from
+`GET /buttons/api/zigbee_targets`.
+
+The remote fills that list from the retained `bridge/groups` and `bridge/devices`
+topics. It keeps the first 64 devices and skips the coordinator.
+
+If the list reports that it is not ready, the page shows "Waiting for
+Zigbee2MQTT". Wait for MQTT and for both retained topics.
+
+A group target is stored at once. A device target needs the same Zigbee2MQTT
+group requests as the tap cycle, so the page shows a progress bar.
+
+Select **Cancel** during that wait. The remote then rolls the group membership
+back, as it does for a cancelled tap-cycle training.
+
+Read [ZIGBEE.md](ZIGBEE.md) for the accepted target formats.
 
 ### Capability matrix
 
-| Input | Slots | Record IR | Voice assistant | Clear |
-| --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Yes | Yes |
-| `SW2` | 19 | Yes | No | Yes |
-| `SW3` to `SW11` | 3 to 11 | Yes | Yes | Yes |
-| Wheel directions | 12 to 16 | Yes | Yes | Yes |
-| Wheel rotation | 17 and 18 | Yes | No | Yes |
+| Input | Slots | Record IR | Zigbee target | Voice assistant | Clear |
+| --- | --- | --- | --- | --- | --- |
+| `SW1` | 20 | Yes | Yes | Yes | Yes |
+| `SW2` | 19 | Yes | Yes | No | Yes |
+| `SW3` to `SW11` | 3 to 11 | Yes | Yes | Yes | Yes |
+| Wheel directions | 12 to 16 | Yes | Yes | Yes | Yes |
+| Wheel rotation | 17 and 18 | Yes | Yes | No | Yes |
+
+Every slot accepts a Zigbee target. Toggle playback uses the same press handler
+as IR playback, so a wheel detent can send it.
 
 `SW2` has no voice action because the hold gesture owns its press edge.
 
@@ -137,6 +165,9 @@ already running."
 
 A request that arrives during an operation gets HTTP 409. The remote keeps its
 current operation.
+
+A Zigbee assignment holds the same lock. The tap cycle refuses a Zigbee training
+while a page assignment runs, and the page refuses the reverse.
 
 A web operation looks like a local one on the remote. `D3` and `D4` show the same
 ready state and IR training state.
@@ -185,7 +216,7 @@ The board transmits at 38 kHz with 50 percent duty, so it ignores the `frequency
 
 ### Trusted-LAN warning
 
-The `/buttons` page and its two endpoints have no authentication. The
+The `/buttons` page and its three endpoints have no authentication. The
 `web_server`, `api`, and `ota` components on this device have none either.
 
 This is a deliberate choice for a trusted home network. Any device on that

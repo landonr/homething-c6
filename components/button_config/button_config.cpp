@@ -4,6 +4,7 @@
 #include "esphome/core/log.h"
 
 #include "ir_learning.h"
+#include "zigbee_learning.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -231,9 +232,36 @@ static const char *result_name(uint8_t result) {
   }
 }
 
+// Escapes a Zigbee2MQTT name into a JSON string body. The names come from the
+// bridge, so they can hold a quote, a backslash, or a control character.
+static void print_json_text(AsyncResponseStream *stream, const char *text) {
+  char buffer[8];
+  for (const char *cursor = text; *cursor != '\0'; cursor++) {
+    const unsigned char value = static_cast<unsigned char>(*cursor);
+    if (value == '"' || value == '\\') {
+      buffer[0] = '\\';
+      buffer[1] = static_cast<char>(value);
+      buffer[2] = '\0';
+    } else if (value < 0x20) {
+      std::snprintf(buffer, sizeof(buffer), "\\u%04X", static_cast<unsigned>(value));
+    } else {
+      buffer[0] = static_cast<char>(value);
+      buffer[1] = '\0';
+    }
+    stream->print(buffer);
+  }
+}
+
 void ButtonConfig::setup() {
   this->base_->init();
   this->base_->add_handler(this);
+  // The manager answers a device target only after Zigbee2MQTT confirms the
+  // group requests, so the action stays open until this callback runs.
+  ::zigbee_assignments.set_web_result_callback([this](bool ok) {
+    const uint32_t id = this->zigbee_action_id_.exchange(0, std::memory_order_acq_rel);
+    if (id != 0)
+      this->complete_action_(id, ok);
+  });
 }
 
 void ButtonConfig::dump_config() { ESP_LOGCONFIG(TAG, "Button config page at /buttons"); }
@@ -247,7 +275,8 @@ bool ButtonConfig::canHandle(AsyncWebServerRequest *request) const {
   const StringRef url = request->url_to(url_buf);
   const http_method method = request->method();
   if (method == HTTP_GET)
-    return url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
+    return url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code" ||
+           url == "/buttons/api/zigbee_targets";
   if (method == HTTP_POST)
     return url == "/buttons/api/action";
   return false;
@@ -260,6 +289,8 @@ void ButtonConfig::handleRequest(AsyncWebServerRequest *request) {
     this->handle_state_(request);
   } else if (url == "/buttons/api/code") {
     this->handle_code_(request);
+  } else if (url == "/buttons/api/zigbee_targets") {
+    this->handle_targets_(request);
   } else if (url == "/buttons/api/action") {
     this->handle_action_(request);
   } else {
@@ -274,8 +305,10 @@ void ButtonConfig::handle_page_(AsyncWebServerRequest *request) {
 // Reads only, so it runs on the httpd task without a defer.
 void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   const bool action_pending = this->action_pending_.load(std::memory_order_acquire);
-  const bool busy = action_pending || ::ir_ui.state != IrUi::OFF;
-  const char *owner = !busy ? "none" : (::ir_ui.web_owner() ? "web" : "device");
+  const bool busy = action_pending || ::ir_ui.state != IrUi::OFF || ::zigbee_assignments.busy();
+  // A web Zigbee assignment keeps the receiver mode closed, so the reserved
+  // action, not the LED state machine, marks the page as the owner.
+  const char *owner = !busy ? "none" : ((action_pending || ::ir_ui.web_owner()) ? "web" : "device");
   const uint32_t completed_id = this->completed_action_id_.load(std::memory_order_acquire);
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
@@ -287,10 +320,13 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false");
   bool first = true;
   for (const auto &info : SLOTS) {
-    const char *action = ::ir_code_store.is_voice(info.slot) ? "voice"
+    const auto zigbee = ::zigbee_assignments.assignment(info.slot);
+    const char *action = zigbee.assigned                      ? "zigbee"
+                         : ::ir_code_store.is_voice(info.slot)  ? "voice"
                          : ::ir_code_store.has_code(info.slot) ? "ir"
                                                                : "none";
-    // Hex only, so it needs no JSON escape. set_name() keeps a name printable.
+    // Hex only, so it needs no JSON escape. A Zigbee slot shows its target name,
+    // and an IR slot shows the code name that set_name() cleaned.
     char code[12] = "";
     char fields[8] = "";
     uint32_t samsung = 0;
@@ -300,11 +336,39 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       std::snprintf(code, sizeof(code), "0x%08X", static_cast<unsigned>(samsung));
     if (::ir_code_store.code_samsung_fields(info.slot, address, command))
       std::snprintf(fields, sizeof(fields), "%02X %02X", address, command);
-    stream->printf(R"(%s{"slot":%u,"action":"%s","name":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s"})",
+    stream->printf(R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","name":")",
                    first ? "" : ",", static_cast<unsigned>(info.slot), action,
-                   ::ir_code_store.name(info.slot),
                    static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
                    static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields);
+    print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
+    stream->print("\"}");
+    first = false;
+  }
+  stream->print("]}");
+  request->send(stream);
+}
+
+// Reads a snapshot copy of the caches, so it runs on the httpd task without a
+// defer. The picker needs the names, not a live view.
+void ButtonConfig::handle_targets_(AsyncWebServerRequest *request) {
+  const auto targets = ::zigbee_assignments.targets();
+  AsyncResponseStream *stream = request->beginResponseStream("application/json");
+  stream->printf(R"({"ready":%s,"groups":[)", targets.ready ? "true" : "false");
+  bool first = true;
+  for (const auto &group : targets.groups) {
+    stream->printf(R"(%s{"id":%u,"name":")", first ? "" : ",", static_cast<unsigned>(group.first));
+    print_json_text(stream, group.second.c_str());
+    stream->print("\"}");
+    first = false;
+  }
+  stream->print(R"(],"devices":[)");
+  first = true;
+  for (const auto &device : targets.devices) {
+    stream->printf(R"(%s{"ieee":")", first ? "" : ",");
+    print_json_text(stream, device.ieee.c_str());
+    stream->print(R"(","name":")");
+    print_json_text(stream, device.name.c_str());
+    stream->print("\"}");
     first = false;
   }
   stream->print("]}");
@@ -360,14 +424,19 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   }
 
   if (action == "cancel") {
-    if (this->action_pending_.load(std::memory_order_acquire) || ::ir_ui.state != IrUi::OFF)
-      this->defer([]() { ::ir_ui.close(); });
+    if (this->action_pending_.load(std::memory_order_acquire) || ::ir_ui.state != IrUi::OFF ||
+        ::zigbee_assignments.busy())
+      this->defer([]() {
+        ::zigbee_assignments.cancel_training();
+        ::ir_ui.close();
+      });
     ESP_LOGI(TAG, "Web cancelled the assignment operation");
     request->send(200, "application/json", R"({"ok":true})");
     return;
   }
 
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
+                     action == "set_zigbee" ||
                      action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
@@ -393,8 +462,19 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
+  // Every slot accepts a Zigbee target, because playback rides the same path as
+  // IR. The target is read here because the request dies before the defer runs.
+  std::string target;
+  if (action == "set_zigbee") {
+    target = request->arg("target");
+    if (target.empty() || target.size() > 64) {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid target"})");
+      return;
+    }
+  }
+
   bool expected = false;
-  if (::ir_ui.state != IrUi::OFF ||
+  if (::ir_ui.state != IrUi::OFF || ::zigbee_assignments.busy() ||
       !this->action_pending_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
     request->send(409, "application/json", R"({"ok":false,"error":"busy"})");
     return;
@@ -420,6 +500,16 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     this->defer([this, button, action_id, timings, name]() {
       const bool saved = ::ir_code_store.save(button, timings);
       this->complete_action_(action_id, saved && ::ir_code_store.set_name(button, name.c_str()));
+    });
+  } else if (action == "set_zigbee") {
+    // The callback can already fire inside assign_from_web for a group target,
+    // which clears the id. Only a refused request completes here.
+    this->zigbee_action_id_.store(action_id, std::memory_order_release);
+    this->defer([this, button, action_id, target]() {
+      if (::zigbee_assignments.assign_from_web(button, target))
+        return;
+      this->zigbee_action_id_.store(0, std::memory_order_release);
+      this->complete_action_(action_id, false);
     });
   } else {
     this->defer([this, button, action_id]() {

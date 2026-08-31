@@ -30,6 +30,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void handle_page_(AsyncWebServerRequest *request);
   void handle_state_(AsyncWebServerRequest *request);
   void handle_code_(AsyncWebServerRequest *request);
+  void handle_targets_(AsyncWebServerRequest *request);
   void handle_action_(AsyncWebServerRequest *request);
   void complete_action_(uint32_t id, bool ok);
 
@@ -38,6 +39,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> next_action_id_{0};
   std::atomic<uint32_t> completed_action_id_{0};
   std::atomic<bool> completed_action_ok_{false};
+  // A Zigbee assignment finishes on an MQTT round trip, so the manager reports
+  // it back later. Zero means that no Zigbee action waits for a result.
+  std::atomic<uint32_t> zigbee_action_id_{0};
 };
 
 }  // namespace esphome::button_config

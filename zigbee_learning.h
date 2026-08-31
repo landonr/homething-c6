@@ -11,12 +11,16 @@
 
 #include <ArduinoJson.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <functional>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 class ZigbeeAssignmentManager {
@@ -28,6 +32,26 @@ class ZigbeeAssignmentManager {
   // A wall switch target needs a walk to the switch, so 30 s expired first.
   static constexpr uint32_t TRAINING_TIMEOUT_MS = 60000;
   static constexpr uint32_t REQUEST_TIMEOUT_MS = 10000;
+  // The bridge inventory of a large network does not fit in RAM, so the cache
+  // keeps the first entries only. The free-text field covers the rest.
+  static constexpr size_t MAX_DEVICES = 64;
+
+  struct Device {
+    std::string name;
+    std::string ieee;
+  };
+
+  struct Targets {
+    bool ready{false};
+    std::vector<std::pair<uint16_t, std::string>> groups;
+    std::vector<Device> devices;
+  };
+
+  struct Assignment {
+    bool assigned{false};
+    uint16_t group_id{0};
+    std::string name;
+  };
 
   void setup(const std::string &base_topic, const std::string &device_name, uint16_t group_base,
              const std::vector<std::string> &allowed_targets) {
@@ -60,6 +84,7 @@ class ZigbeeAssignmentManager {
     for (const auto &target : allowed_targets_)
       esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/" + target, handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/groups", handler, 1);
+    esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/devices", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/add", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/members/add", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/members/remove", handler, 1);
@@ -75,6 +100,13 @@ class ZigbeeAssignmentManager {
     }
     if (!groups_ready_) {
       ESP_LOGW("zigbee_learn", "Cannot train button %u before the Zigbee2MQTT group snapshot", slot);
+      ir_ui.zigbee_result(false);
+      return;
+    }
+    // A web assignment leaves the receiver mode closed, so its operation is the
+    // only thing that can already own the candidate fields here.
+    if (operation_ != Operation::IDLE) {
+      ESP_LOGW("zigbee_learn", "Cannot train button %u during another Zigbee operation", slot);
       ir_ui.zigbee_result(false);
       return;
     }
@@ -115,6 +147,98 @@ class ZigbeeAssignmentManager {
     ESP_LOGI("zigbee_learn", "Cancelling Zigbee training after the pending request");
   }
 
+  bool busy() const { return operation_ != Operation::IDLE; }
+
+  void set_web_result_callback(std::function<void(bool)> callback) {
+    web_result_callback_ = std::move(callback);
+  }
+
+  // The /buttons page names its target instead of waiting for a state
+  // transition. This runs on the main loop from a deferred web action.
+  //
+  // A false result means that nothing started, so the caller reports the
+  // failure itself. A true result reports through the web result callback,
+  // which can fire before this call returns for a direct group target.
+  bool assign_from_web(uint8_t slot, const std::string &target) {
+    if (!slot_valid_(slot) || operation_ != Operation::IDLE)
+      return false;
+    const std::string name = trimmed_(target);
+    if (name.empty() || name.size() >= TARGET_SIZE)
+      return false;
+
+    pending_slot_ = slot;
+    clear_candidate_();
+    candidate_name_ = name;
+
+    uint16_t group_id = 0;
+    if (parse_group_id_(name, group_id)) {
+      candidate_kind_ = TargetKind::GROUP;
+      candidate_group_id_ = group_id;
+    } else {
+      const auto group = groups_by_name_.find(name);
+      if (group != groups_by_name_.end()) {
+        candidate_kind_ = TargetKind::GROUP;
+        candidate_group_id_ = group->second;
+      } else {
+        candidate_kind_ = TargetKind::DEVICE;
+      }
+    }
+
+    // A device target needs the private group. An old device target needs a
+    // member removal. A plain group target needs neither, so it can be stored
+    // while MQTT is down.
+    const bool old_is_device = has_assignment_(slot) && kind_(entry_(slot)) == TargetKind::DEVICE;
+    const bool needs_mqtt = candidate_kind_ == TargetKind::DEVICE || old_is_device;
+    if (needs_mqtt && !esphome::mqtt::global_mqtt_client->is_connected()) {
+      ESP_LOGW("zigbee_learn", "Cannot assign button %u to %s without MQTT", slot, name.c_str());
+      clear_candidate_();
+      return false;
+    }
+    if (candidate_kind_ == TargetKind::DEVICE && !groups_ready_) {
+      ESP_LOGW("zigbee_learn", "Cannot assign button %u before the Zigbee2MQTT group snapshot", slot);
+      clear_candidate_();
+      return false;
+    }
+
+    web_pending_ = true;
+    deadline_ = esphome::millis() + REQUEST_TIMEOUT_MS;
+    ESP_LOGI("zigbee_learn", "Web assigns button %u to %s", slot, name.c_str());
+    if (candidate_kind_ == TargetKind::GROUP)
+      continue_after_private_group_();
+    else
+      start_device_candidate_();
+    return true;
+  }
+
+  // The HTTP task reads this while the main loop can write it.
+  Targets targets() const {
+    Targets snapshot;
+    const std::lock_guard<std::mutex> lock(cache_mutex_);
+    snapshot.ready =
+        groups_ready_ && devices_ready_ && esphome::mqtt::global_mqtt_client->is_connected();
+    snapshot.groups.reserve(groups_by_name_.size());
+    for (const auto &group : groups_by_name_)
+      snapshot.groups.emplace_back(group.second, group.first);
+    std::sort(snapshot.groups.begin(), snapshot.groups.end(),
+              [](const std::pair<uint16_t, std::string> &left,
+                 const std::pair<uint16_t, std::string> &right) { return left.second < right.second; });
+    snapshot.devices = devices_;
+    return snapshot;
+  }
+
+  // The HTTP task reads this while the main loop can write it.
+  Assignment assignment(uint8_t slot) const {
+    Assignment result;
+    const std::lock_guard<std::mutex> lock(cache_mutex_);
+    if (!has_assignment_(slot))
+      return result;
+    const Entry &entry = record_.entries[slot - FIRST_SLOT];
+    result.assigned = true;
+    result.group_id = entry.group_id;
+    result.name = entry.friendly_name;
+    return result;
+  }
+
   bool toggle(uint8_t slot) const {
     if (!has_assignment_(slot))
       return false;
@@ -147,7 +271,10 @@ class ZigbeeAssignmentManager {
     next.checksum = checksum_(next);
 
     // Disable playback before flash or MQTT work.
-    record_ = next;
+    {
+      const std::lock_guard<std::mutex> lock(cache_mutex_);
+      record_ = next;
+    }
     if (!preference_.save(&record_))
       ESP_LOGE("zigbee_learn", "Failed to save cleared Zigbee button %u", slot);
 
@@ -230,6 +357,13 @@ class ZigbeeAssignmentManager {
       return;
     const std::string relative = topic.substr(prefix.size());
 
+    // The retained device inventory carries a full definition for each device,
+    // so it is parsed with a filter before any full document exists.
+    if (relative == "bridge/devices") {
+      cache_devices_(payload);
+      return;
+    }
+
     JsonDocument document;
     if (deserializeJson(document, payload) != DeserializationError::Ok)
       return;
@@ -267,6 +401,7 @@ class ZigbeeAssignmentManager {
   void cache_groups_(JsonVariantConst root) {
     if (!root.is<JsonArrayConst>())
       return;
+    const std::lock_guard<std::mutex> lock(cache_mutex_);
     groups_by_name_.clear();
     group_names_by_id_.clear();
     for (JsonObjectConst group : root.as<JsonArrayConst>()) {
@@ -282,6 +417,48 @@ class ZigbeeAssignmentManager {
     groups_ready_ = true;
   }
 
+  // The bridge device list feeds the /buttons target picker only. Training from
+  // the remote still resolves a device through its state transition.
+  //
+  // The filter keeps three fields for each device. Without it the definition and
+  // exposes blocks of a real network exhaust the heap.
+  void cache_devices_(const std::string &payload) {
+    JsonDocument filter;
+    JsonObject fields = filter.add<JsonObject>();
+    fields["friendly_name"] = true;
+    fields["ieee_address"] = true;
+    fields["type"] = true;
+
+    JsonDocument document;
+    if (deserializeJson(document, payload, DeserializationOption::Filter(filter)) !=
+        DeserializationError::Ok)
+      return;
+    const JsonVariantConst root = document.as<JsonVariantConst>();
+    if (!root.is<JsonArrayConst>())
+      return;
+    std::vector<Device> devices;
+    for (JsonObjectConst device : root.as<JsonArrayConst>()) {
+      if (devices.size() >= MAX_DEVICES)
+        break;
+      if (!device["friendly_name"].is<const char *>() || !device["ieee_address"].is<const char *>())
+        continue;
+      const char *type = device["type"] | "";
+      if (std::strcmp(type, "Coordinator") == 0)
+        continue;
+      Device entry;
+      entry.name = device["friendly_name"].as<const char *>();
+      entry.ieee = device["ieee_address"].as<const char *>();
+      if (entry.name.empty() || entry.ieee.empty() || entry.name.size() >= TARGET_SIZE)
+        continue;
+      devices.push_back(std::move(entry));
+    }
+    std::sort(devices.begin(), devices.end(),
+              [](const Device &left, const Device &right) { return left.name < right.name; });
+    const std::lock_guard<std::mutex> lock(cache_mutex_);
+    devices_ = std::move(devices);
+    devices_ready_ = true;
+  }
+
   void resolve_candidate_(const std::string &target) {
     candidate_name_ = target;
     const auto group = groups_by_name_.find(target);
@@ -291,7 +468,12 @@ class ZigbeeAssignmentManager {
       continue_after_private_group_();
       return;
     }
+    start_device_candidate_();
+  }
 
+  // Puts the candidate device in the slot's reserved group. The caller has
+  // already stored the device name or IEEE address in candidate_name_.
+  void start_device_candidate_() {
     candidate_kind_ = TargetKind::DEVICE;
     candidate_group_id_ = private_group_id_(pending_slot_);
     const std::string private_name = private_group_name_(pending_slot_);
@@ -379,14 +561,19 @@ class ZigbeeAssignmentManager {
     }
 
     switch (operation_) {
-      case Operation::WAIT_PRIVATE_GROUP_ADD:
-        groups_by_name_[private_group_name_(pending_slot_)] = candidate_group_id_;
-        group_names_by_id_[candidate_group_id_] = private_group_name_(pending_slot_);
+      case Operation::WAIT_PRIVATE_GROUP_ADD: {
+        const std::string private_name = private_group_name_(pending_slot_);
+        {
+          const std::lock_guard<std::mutex> lock(cache_mutex_);
+          groups_by_name_[private_name] = candidate_group_id_;
+          group_names_by_id_[candidate_group_id_] = private_name;
+        }
         if (cancel_requested_)
           finish_error_();
         else
           continue_after_private_group_();
         break;
+      }
       case Operation::WAIT_OLD_DEVICE_REMOVE:
         old_member_removed_ = true;
         if (cancel_requested_)
@@ -439,12 +626,15 @@ class ZigbeeAssignmentManager {
       begin_rollback_();
       return;
     }
-    record_ = next;
+    {
+      const std::lock_guard<std::mutex> lock(cache_mutex_);
+      record_ = next;
+    }
     ESP_LOGI("zigbee_learn", "Button %u assigned to %s as Zigbee Toggle group 0x%04X", pending_slot_,
              candidate_name_.c_str(), candidate_group_id_);
     operation_ = Operation::IDLE;
     clear_candidate_();
-    ir_ui.zigbee_result(true);
+    report_result_(true);
   }
 
   void begin_rollback_() {
@@ -475,7 +665,52 @@ class ZigbeeAssignmentManager {
   void finish_error_() {
     operation_ = Operation::IDLE;
     clear_candidate_();
-    ir_ui.zigbee_result(false);
+    report_result_(false);
+  }
+
+  // The remote gesture reads the result from the LED state machine. A web
+  // assignment has no receiver mode open, so it answers the pending HTTP action.
+  void report_result_(bool saved) {
+    if (web_pending_) {
+      web_pending_ = false;
+      if (web_result_callback_)
+        web_result_callback_(saved);
+      return;
+    }
+    ir_ui.zigbee_result(saved);
+  }
+
+  static std::string trimmed_(const std::string &value) {
+    const size_t begin = value.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos)
+      return {};
+    return value.substr(begin, value.find_last_not_of(" \t\r\n") - begin + 1);
+  }
+
+  // Accepts a decimal group ID, or "0x" and up to four hex digits. A longer hex
+  // string is an IEEE address, so it stays a device target.
+  static bool parse_group_id_(const std::string &target, uint16_t &group_id) {
+    const bool hex = target.size() > 2 && target[0] == '0' && (target[1] == 'x' || target[1] == 'X');
+    const std::string digits = hex ? target.substr(2) : target;
+    if (digits.empty() || digits.size() > (hex ? 4u : 5u))
+      return false;
+    uint32_t value = 0;
+    for (const char character : digits) {
+      uint32_t digit;
+      if (character >= '0' && character <= '9')
+        digit = static_cast<uint32_t>(character - '0');
+      else if (hex && character >= 'a' && character <= 'f')
+        digit = static_cast<uint32_t>(character - 'a') + 10;
+      else if (hex && character >= 'A' && character <= 'F')
+        digit = static_cast<uint32_t>(character - 'A') + 10;
+      else
+        return false;
+      value = value * (hex ? 16u : 10u) + digit;
+    }
+    if (value == 0 || value > UINT16_MAX)
+      return false;
+    group_id = static_cast<uint16_t>(value);
+    return true;
   }
 
   void clear_candidate_() {
@@ -553,6 +788,11 @@ class ZigbeeAssignmentManager {
   std::unordered_map<std::string, bool> target_states_;
   std::unordered_map<std::string, uint16_t> groups_by_name_;
   std::unordered_map<uint16_t, std::string> group_names_by_id_;
+  std::vector<Device> devices_;
+  // The main loop owns every write. The HTTP task of the /buttons page reads the
+  // caches and the record, so both sides hold this lock.
+  mutable std::mutex cache_mutex_;
+  std::function<void(bool)> web_result_callback_{};
   Operation operation_{Operation::IDLE};
   TargetKind candidate_kind_{TargetKind::NONE};
   uint8_t pending_slot_{0};
@@ -562,9 +802,11 @@ class ZigbeeAssignmentManager {
   uint32_t transaction_{0};
   uint32_t transaction_counter_{1000};
   bool groups_ready_{false};
+  bool devices_ready_{false};
   bool candidate_member_added_{false};
   bool old_member_removed_{false};
   bool cancel_requested_{false};
+  bool web_pending_{false};
 };
 
 inline ZigbeeAssignmentManager zigbee_assignments;

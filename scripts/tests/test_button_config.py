@@ -13,6 +13,7 @@ PAGE = (COMPONENT / "button_config_page.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
+ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
 
 # Slots that cannot start the voice assistant. 19 is SW2, whose press edge is
 # already owned by the receiver-mode hold gesture. 17 and 18 are the wheel
@@ -62,7 +63,13 @@ def page_group(name: str) -> list:
 
 class RoutingTest(unittest.TestCase):
     def test_the_component_claims_all_four_paths(self) -> None:
-        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code", "/buttons/api/action"):
+        for path in (
+            "/buttons",
+            "/buttons/api/state",
+            "/buttons/api/code",
+            "/buttons/api/zigbee_targets",
+            "/buttons/api/action",
+        ):
             self.assertIn(f'"{path}"', CPP)
 
     def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
@@ -70,7 +77,7 @@ class RoutingTest(unittest.TestCase):
         handler = section(CPP, "bool ButtonConfig::canHandle", "void ButtonConfig::handleRequest")
         self.assertIn(
             'if (method == HTTP_GET)\n    return url == "/buttons" || url == "/buttons/api/state"'
-            ' || url == "/buttons/api/code";',
+            ' || url == "/buttons/api/code" ||\n           url == "/buttons/api/zigbee_targets";',
             handler,
         )
         self.assertIn(
@@ -182,22 +189,68 @@ class EnforcementTest(unittest.TestCase):
         self.assertIn('"error":"slot has no voice action"', CPP)
         self.assertIn("bool voice;", HEADER)
 
+    def test_the_firmware_accepts_a_zigbee_target_on_every_slot(self) -> None:
+        """Zigbee playback rides the IR path, so the wheel detents accept it too."""
+        self.assertIn('action == "set_zigbee"', CPP)
+        self.assertIn('"error":"invalid target"', CPP)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertNotIn('set_zigbee" && !info->', action)
+
     def test_every_store_and_state_mutation_runs_on_a_defer(self) -> None:
         """HTTP handlers run on the httpd task. An NVS write from there races."""
-        for call in ("ir_code_store.set_voice(", "ir_code_store.clear(", "ir_ui.open_from_web("):
+        for call in (
+            "ir_code_store.set_voice(",
+            "ir_code_store.clear(",
+            "ir_ui.open_from_web(",
+            "zigbee_assignments.assign_from_web(",
+            "zigbee_assignments.cancel_training(",
+        ):
             total = CPP.count(call)
             self.assertEqual(total, 1, call)
             deferred = re.findall(r"defer\(\[[^\]]*\]\(\)\s*\{[^}]*" + re.escape(call), CPP)
             self.assertEqual(len(deferred), total, call)
 
     def test_the_cancel_action_also_closes_on_the_main_loop(self) -> None:
-        self.assertIn("this->defer([]() { ::ir_ui.close(); });", CPP)
+        self.assertIn("::zigbee_assignments.cancel_training();\n        ::ir_ui.close();", CPP)
         self.assertEqual(CPP.count("ir_ui.close("), 1)
 
-    def test_the_state_endpoint_only_reads(self) -> None:
+    def test_the_state_and_target_endpoints_only_read(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_action_")
-        for call in ("set_voice(", ".clear(", "open_from_web(", ".save(", "defer("):
+        for call in (
+            "set_voice(",
+            ".clear(",
+            "open_from_web(",
+            ".save(",
+            "defer(",
+            "assign_from_web(",
+            "cancel_training(",
+        ):
             self.assertNotIn(call, state)
+        self.assertIn("void ButtonConfig::handle_targets_", state)
+        self.assertIn("::zigbee_assignments.targets()", state)
+
+    def test_the_state_row_reports_the_zigbee_target_first(self) -> None:
+        """A slot holds one action, and a Zigbee target hides an old IR code."""
+        state = section(CPP, "void ButtonConfig::handle_state_", "// Reads a snapshot copy")
+        self.assertRegex(
+            state,
+            r'zigbee\.assigned\s+\? "zigbee"[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"'
+            r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
+        )
+        self.assertIn('"fields":"%s","name":"', state)
+        self.assertIn(
+            "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
+            ": ::ir_code_store.name(info.slot));",
+            state,
+        )
+
+    def test_a_zigbee_action_completes_from_the_manager_callback(self) -> None:
+        """A device target answers only after the Zigbee2MQTT group requests."""
+        self.assertIn("::zigbee_assignments.set_web_result_callback(", CPP)
+        self.assertIn("this->complete_action_(id, ok);", CPP)
+        self.assertIn("std::atomic<uint32_t> zigbee_action_id_{0};", HEADER)
+        self.assertIn("void set_web_result_callback(std::function<void(bool)> callback)", ZIGBEE)
+        self.assertIn("web_result_callback_(saved)", ZIGBEE)
 
     def test_an_action_is_reserved_before_its_deferred_mutation(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
@@ -237,6 +290,55 @@ class StorageTest(unittest.TestCase):
         self.assertIn("if (!voice_pref_.save(&next_mask))", STORE)
 
 
+class ZigbeeTargetTest(unittest.TestCase):
+    def test_the_manager_caches_the_bridge_device_list(self) -> None:
+        self.assertIn('subscribe(base_topic_ + "/bridge/devices", handler, 1)', ZIGBEE)
+        self.assertIn('if (relative == "bridge/devices") {', ZIGBEE)
+        self.assertIn('device["ieee_address"].is<const char *>()', ZIGBEE)
+        self.assertIn('std::strcmp(type, "Coordinator") == 0', ZIGBEE)
+        self.assertIn("DeserializationOption::Filter(filter)", ZIGBEE)
+        self.assertIn("MAX_DEVICES = 64", ZIGBEE)
+        self.assertIn("if (devices.size() >= MAX_DEVICES)", ZIGBEE)
+
+    def test_the_shared_caches_and_record_use_one_lock(self) -> None:
+        """The httpd task reads them while the main loop writes them."""
+        self.assertIn("mutable std::mutex cache_mutex_;", ZIGBEE)
+        for body in ("Targets targets() const {", "Assignment assignment(uint8_t slot) const {"):
+            reader = section(ZIGBEE, body, "\n  }")
+            self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
+        writer = section(ZIGBEE, "void cache_groups_(JsonVariantConst root) {", "\n  }")
+        self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", writer)
+        self.assertEqual(ZIGBEE.count("lock_guard<std::mutex> lock(cache_mutex_)"), 7)
+
+    def test_a_short_number_is_a_group_and_a_long_hex_string_is_a_device(self) -> None:
+        """An IEEE address is 0x plus sixteen hex digits, so it is not a group."""
+        parser = section(ZIGBEE, "static bool parse_group_id_", "\n  }")
+        self.assertIn("digits.size() > (hex ? 4u : 5u)", parser)
+        self.assertIn("value == 0 || value > UINT16_MAX", parser)
+
+    def test_a_web_assignment_reuses_the_training_state_machine(self) -> None:
+        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, const std::string &target) {", "\n  }")
+        self.assertIn("if (!slot_valid_(slot) || operation_ != Operation::IDLE)", body)
+        self.assertIn("continue_after_private_group_();", body)
+        self.assertIn("start_device_candidate_();", body)
+        self.assertIn("web_pending_ = true;", body)
+        self.assertIn("global_mqtt_client->is_connected()", body)
+
+    def test_the_gesture_refuses_to_train_over_a_web_operation(self) -> None:
+        body = section(ZIGBEE, "void start_training(uint8_t slot) {", "\n  }")
+        self.assertIn("if (operation_ != Operation::IDLE) {", body)
+        self.assertIn("ir_ui.zigbee_result(false);", body)
+
+    def test_a_cancelled_web_operation_reports_through_the_callback(self) -> None:
+        report = section(ZIGBEE, "void report_result_(bool saved) {", "\n  }")
+        self.assertIn("if (web_pending_) {", report)
+        self.assertIn("web_pending_ = false;", report)
+        self.assertIn("ir_ui.zigbee_result(saved);", report)
+        for finish in ("void commit_assignment_() {", "void finish_error_() {"):
+            self.assertIn("report_result_(", section(ZIGBEE, finish, "\n  }"))
+        self.assertNotIn("ir_ui.zigbee_result(true)", ZIGBEE)
+
+
 class PageTest(unittest.TestCase):
     def test_the_page_loads_nothing_from_outside_the_device(self) -> None:
         """The remote often sits on a LAN with no route to the internet."""
@@ -253,7 +355,12 @@ class PageTest(unittest.TestCase):
         calls = re.findall(r'fetch\("([^"?]+)', PAGE)
         self.assertEqual(
             sorted(set(calls)),
-            ["/buttons/api/action", "/buttons/api/code", "/buttons/api/state"],
+            [
+                "/buttons/api/action",
+                "/buttons/api/code",
+                "/buttons/api/state",
+                "/buttons/api/zigbee_targets",
+            ],
         )
 
     def test_the_tile_shows_the_code_name(self) -> None:
@@ -287,7 +394,7 @@ class PageTest(unittest.TestCase):
         """Nine slots hold 68 pulses of the same length, so only the data word
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
-        self.assertIn('"name":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s"', state)
+        self.assertIn('"pulses":%u,"us":%u,"code":"%s","fields":"%s","name":"', state)
         self.assertIn("::ir_code_store.name(info.slot)", state)
         self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
         self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
@@ -317,7 +424,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
         self.assertIn('cd=j.text||""', PAGE)
         # The block is line based, so the newlines have to survive the encode.
-        self.assertIn('"&code="+encodeURIComponent(c)', PAGE)
+        self.assertIn('"&code=")+encodeURIComponent(v)', PAGE)
         self.assertNotIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
 
     def test_the_code_endpoint_prints_a_flipper_signal_block(self) -> None:
@@ -371,6 +478,30 @@ class PageTest(unittest.TestCase):
         self.assertIn('field.substr(0, 2).c_str(), &end, 16', byte)
         # The default 1024 byte cap truncates a long frame.
         self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
+    def test_the_page_offers_a_zigbee_target_picker_on_every_slot(self) -> None:
+        """The Zigbee button sits outside the d.v capability branch."""
+        editor = section(PAGE, "function editor(){", "\nfunction pick(")
+        zigbee = editor.index('id=b4"')
+        voice = editor.index("if(d.v)h+=")
+        self.assertLess(zigbee, voice)
+        self.assertIn('<select id=zs>', PAGE)
+        self.assertIn('<input id=zt type=text', PAGE)
+        self.assertIn("<optgroup label='Groups'>", PAGE)
+        self.assertIn("<optgroup label='Devices'>", PAGE)
+        self.assertIn('post("set_zigbee",s,v)', PAGE)
+
+    def test_the_page_waits_for_the_zigbee_result_and_can_cancel_it(self) -> None:
+        self.assertIn("waitAction(r.body.id,400)", PAGE)
+        wait = section(PAGE, 'if(mode==="zbwait"&&rec===sel){', "return}")
+        self.assertIn("<div class=bar><i></i></div>", wait)
+        self.assertIn('document.getElementById("bc").onclick=cancel', wait)
+
+    def test_the_page_reports_a_zigbee_assignment_and_its_target_name(self) -> None:
+        self.assertIn('if(r.action==="zigbee")return r.name?"Zigbee: "+r.name:"Zigbee toggle"', PAGE)
+
+    def test_the_page_reports_an_unready_bridge_instead_of_an_empty_list(self) -> None:
+        self.assertIn("if(!tg.ready)return", PAGE)
+        self.assertIn("Waiting for Zigbee2MQTT.", PAGE)
 
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)

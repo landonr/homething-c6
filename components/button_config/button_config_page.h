@@ -40,6 +40,8 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .code>p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
+select,input[type=text]{font:inherit;color:inherit;background:var(--card);
+border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
 text-align:left;cursor:pointer;display:block;width:100%}
 .k:hover{border-color:var(--acc)}
@@ -90,7 +92,7 @@ var S=[
 {s:3,l:"SW3",v:1,g:"pad"},{s:6,l:"SW6",v:1,g:"pad"},{s:11,l:"SW11",v:1,g:"pad"},
 {s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
 {s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
-var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
+var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={},tg=null;
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
 
@@ -100,6 +102,7 @@ if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
 function codeName(r){return r.name?r.name:"Slot"+r.slot}
 function words(s){var r=row(s);if(!r)return "Unknown";
+if(r.action==="zigbee")return r.name?"Zigbee: "+r.name:"Zigbee toggle";
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
 
@@ -134,6 +137,31 @@ b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
 editor()}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
+// esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.
+function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
+
+// The picker lists what the bridge published. The text field covers a target
+// that the cache dropped, and any group ID that has no name.
+function zbForm(){
+if(!tg)return "<p>Loading the Zigbee2MQTT targets.</p><div class=act>"+
+"<button type=button class=sec id=zx>Back</button></div>";
+if(!tg.ready)return "<div class='note bad'>Waiting for Zigbee2MQTT. The remote "+
+"needs MQTT, the bridge group list, and the bridge device list.</div>"+
+"<div class=act><button type=button class=sec id=zx>Back</button></div>";
+var h="<p class=sub>Pick a group or a device, or type a target.</p>"+
+"<select id=zs><option value=''>Select a target</option>",i;
+if(tg.groups.length){h+="<optgroup label='Groups'>";
+for(i=0;i<tg.groups.length;i++)h+="<option value='"+att(String(tg.groups[i].id))+"'>"+
+esc(tg.groups[i].name)+"</option>";h+="</optgroup>"}
+if(tg.devices.length){h+="<optgroup label='Devices'>";
+for(i=0;i<tg.devices.length;i++)h+="<option value='"+att(tg.devices[i].ieee)+"'>"+
+esc(tg.devices[i].name)+"</option>";h+="</optgroup>"}
+h+="</select><p class=sub>A typed target wins. Use a group ID, an IEEE address, "+
+"or a friendly name.</p>"+
+"<input id=zt type=text autocomplete=off placeholder='0x1234 or Kitchen Light'>"+
+"<div class=act><button type=button id=za>Assign</button>"+
+"<button type=button class=sec id=zx>Back</button></div>";
+return h}
 
 // The box stays available on an empty slot, so a code can be pasted in without
 // pointing a source remote at the board.
@@ -182,6 +210,16 @@ h+="<p>Point the source remote at the front of the board and press its button.</
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
 e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
+if(mode==="zbwait"&&rec===sel){
+h+="<p>The remote is asking Zigbee2MQTT for the group membership.</p>"+
+"<div class=bar><i></i></div><div class=act>"+
+"<button type=button class=sec id=bc>Cancel</button></div>";
+e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
+if(mode==="zb"&&rec===sel){
+if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
+h+=zbForm();e.innerHTML=h;
+if(tg&&tg.ready)document.getElementById("za").onclick=assign;
+document.getElementById("zx").onclick=function(){mode="idle";tg=null;paint()};return}
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 var lock=st&&st.busy;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
@@ -190,6 +228,7 @@ h+="<div class=note>Assignment in progress on the remote.</div>";
 else if(lock)h+="<div class=note>Another assignment is already running.</div>";
 h+="<div class=act>";
 h+="<button type=button id=b1"+(lock?" disabled":"")+">Record IR</button>";
+h+="<button type=button id=b4"+(lock?" disabled":"")+">Zigbee</button>";
 if(d.v)h+="<button type=button id=b2"+(lock?" disabled":"")+">Voice assistant</button>";
 h+="<button type=button class=sec id=b3"+(lock?" disabled":"")+">Clear</button></div>";
 h+=codeBox();
@@ -200,20 +239,27 @@ document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
 if(lock)return;
 document.getElementById("b1").onclick=function(){go("record_ir")};
+document.getElementById("b4").onclick=openZigbee;
 if(d.v)document.getElementById("b2").onclick=function(){go("set_voice")};
 document.getElementById("b3").onclick=function(){go("clear")}}
 
-function pick(s){sel=s;if(mode!=="rec"){msg="";bad=false}paint();
+function pick(s){sel=s;if(mode==="zb"){mode="idle";tg=null}
+if(mode!=="rec"&&mode!=="zbwait"){msg="";bad=false}paint();
 if(cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}
 
-// The block keeps its newlines, because the parser reads it a line at a time.
+function loadTargets(){return fetch("/buttons/api/zigbee_targets",{cache:"no-store"})
+.then(function(r){return r.json()})
+.catch(function(){return{ready:false,groups:[],devices:[]}})
+.then(function(j){tg=j;if(mode==="zb")paint()})}
+
+// A code block keeps its newlines, because the parser reads it a line at a time.
 // ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
 // raw frame.
-function post(a,s,c){var b="action="+a+(s?"&slot="+s:"")+
-(c?"&code="+encodeURIComponent(c):"");
+function post(a,s,v){var b="action="+a+(s?"&slot="+s:"")+
+(v?(a==="set_zigbee"?"&target=":"&code=")+encodeURIComponent(v):"");
 return fetch("/buttons/api/action",{method:"POST",
 headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
 .then(function(r){return r.text().then(function(t){
@@ -238,9 +284,30 @@ else{msg=a==="set_ir_code"?"The remote refused that code.":
 return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
-function waitAction(id){return load().then(function(j){
+function openZigbee(){mode="zb";rec=sel;msg="";bad=false;tg=null;paint();loadTargets()}
+
+// A device target runs two or three Zigbee2MQTT round trips, so this waits on
+// the same action id as the flash-only actions but polls more slowly.
+function assign(){
+var v=document.getElementById("zt").value.replace(/^\s+|\s+$/g,"");
+if(!v)v=document.getElementById("zs").value;
+if(!v){msg="Select a target or type one.";bad=true;paint();return}
+var s=sel;
+post("set_zigbee",s,v).then(function(r){
+if(r.code!==200){msg=fail(r);bad=true;mode="idle";tg=null;return load().then(paint)}
+mode="zbwait";rec=s;msg="";bad=false;tg=null;paint();
+return waitAction(r.body.id,400).then(function(ok){
+var was=mode;mode="idle";
+if(ok){msg="Assigned to the Zigbee target.";bad=false}
+else if(was==="cancel"){msg="Zigbee assignment cancelled.";bad=true}
+else{msg="The remote could not assign that Zigbee target.";bad=true}
+return load().then(paint)})})
+.catch(function(){msg="The remote did not answer.";bad=true;mode="idle";paint()})}
+
+function waitAction(id,ms){return load().then(function(j){
 if(j.action_id>=id)return j.action_id===id&&j.action_ok;
-return new Promise(function(done){setTimeout(done,100)}).then(function(){return waitAction(id)})})}
+return new Promise(function(done){setTimeout(done,ms||100)})
+.then(function(){return waitAction(id,ms)})})}
 
 // The close runs on the main loop, so the watcher keeps polling until it lands.
 function cancel(){mode="cancel";paint();

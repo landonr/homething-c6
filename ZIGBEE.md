@@ -69,6 +69,41 @@ If the target is a device, the remote adds it to a private button group.
 The remote saves a device assignment only after Zigbee2MQTT confirms the group
 requests. The remote does not change an existing target group.
 
+## Assign a button from the web page
+
+The `/buttons` page assigns a Zigbee target without a state transition. The
+target allowlist does not apply on this route, because you name the target.
+
+1. Open `http://homething-c6.local/buttons`.
+2. Select an input, then select **Zigbee**.
+3. Select a target in the list, or type one.
+4. Select **Assign**.
+
+The page reads `GET /buttons/api/zigbee_targets`. That endpoint reports a group
+list, a device list, and a `ready` flag.
+
+`ready` is false until MQTT is connected and both retained bridge topics have
+arrived. The remote keeps the first 64 devices and skips the coordinator.
+
+The remote accepts these target formats:
+
+| Format | Example | Result |
+| --- | --- | --- |
+| Decimal group ID | `1234` | Stored as that group. |
+| Hex group ID, up to four digits | `0x4D2` | Stored as that group. |
+| IEEE address | `0x00124b0022a1b2c3` | Added to the private button group. |
+| Known group name | `Bedroom Lights` | Stored as that group ID. |
+| Any other name | `Kitchen Lamp` | Added to the private button group. |
+
+A group ID is stored at once and needs no MQTT. A device target needs MQTT,
+because Zigbee2MQTT must confirm the group membership.
+
+The remote also needs MQTT to replace an old device target on the same slot. It
+must remove the old member first.
+
+A web assignment uses the same rollback path as the tap cycle. Cancel it from
+the page while the progress bar runs.
+
 ## Groups
 
 Individual-device assignments use one reserved group for each slot. The group
@@ -133,9 +168,11 @@ The remote uses QoS 1 subscriptions:
 
 - One exact topic for each allowed target receives states for training.
 - `<base topic>/bridge/groups` caches known groups.
+- `<base topic>/bridge/devices` caches device names for the web target picker.
 - Exact group-add and member-add or member-remove response topics match requests.
 
-The narrow subscriptions exclude large retained bridge inventory messages.
+The narrow subscriptions exclude every other retained bridge message. The device
+cache keeps only a name and an IEEE address for each of the first 64 devices.
 
 The remote ignores all non-allowed target topics. It also ignores subtopics,
 invalid JSON, messages without `state`, and states other than `ON` or `OFF`.

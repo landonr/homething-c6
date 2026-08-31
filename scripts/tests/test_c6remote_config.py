@@ -67,12 +67,12 @@ class ProductionConfigTest(unittest.TestCase):
             r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
         )
 
-    def test_sw2_is_push_to_talk_for_home_assistant_assist(self) -> None:
+    def test_assignable_input_starts_and_stops_home_assistant_assist(self) -> None:
         config = CONFIG.read_text()
         self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: none")
         self.assertRegex(
             config,
-            r"esphome:[\s\S]*?\n  on_boot:\n    - script.execute: show_idle_status"
+            r"esphome:[\s\S]*?\n  on_boot:[\s\S]*?\n    - script.execute: show_idle_status"
             r"[\s\S]*?wifi:[\s\S]*?\n  on_connect:\n    - script.execute: show_idle_status"
             r"[\s\S]*?\n  on_disconnect:\n    - script.execute: show_idle_status",
         )
@@ -86,34 +86,38 @@ class ProductionConfigTest(unittest.TestCase):
         )
         self.assertRegex(
             config,
-            r"name: Button 2\n    pin:\n      <<: \*button_1\n      number: 1"
-            r"\n    on_press:\n      - voice_assistant.start:[\s\S]*?"
-            r"\n          silence_detection: false"
-            r"\n      - lambda: id\(mic_meter_active\) = true;"
-            r"\n      - light.turn_on:"
-            r"\n          id: status_light"
-            r"\n          effect: Voice Listening"
-            r"\n    on_release:\n      - voice_assistant.stop:"
-            r"\n      - script.execute: stop_voice_listening",
+            r"name: Button 1[\s\S]*?"
+            r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
+            r"id\(voice_led_state\) = 1;[\s\S]*?"
+            r"id\(mic_meter_active\) = true;[\s\S]*?"
+            r"effect: Status Indicators[\s\S]*?"
+            r"voice_assistant\.start:",
+        )
+        self.assertRegex(
+            config,
+            r"on_release: &assignable_release[\s\S]*?"
+            r"lambda: return ir_ui\.release\(\);[\s\S]*?"
+            r"voice_assistant\.stop:",
         )
 
-    def test_voice_listening_meter_and_cleanup(self) -> None:
+    def test_voice_status_indicators_and_cleanup(self) -> None:
         """Catches missing PTT feedback or LEDs left powered after Assist ends."""
         config = CONFIG.read_text()
         self.assertRegex(
             status_light_entry(config),
             r"effects:"
             r"\n      - addressable_lambda:"
-            r"\n          name: Voice Listening"
-            r"\n          update_interval: 50ms"
+            r"\n          name: Status Indicators"
+            r"\n          update_interval: 250ms"
             r"\n          lambda: \|-"
             r"\n            if \(initial_run\) \{"
             r"\n              id\(mic_level\) = 0\.0f;"
             r"\n            \}"
             r"\n            it\.all\(\) = Color::BLACK;"
-            r"\n            const int lit = std::min\(4, std::max\(0, static_cast<int>\(ceilf\(id\(mic_level\) \* 4\.0f\)\)\)\);"
-            r"\n            for \(int i = 0; i < lit; i\+\+\)"
-            r"\n              it\[i\] = Color\(0, 0, 255\);",
+            r"[\s\S]*?id\(voice_led_state\) == 1[\s\S]*?Color\(192, 48, 0\)"
+            r"[\s\S]*?id\(voice_led_state\) == 2[\s\S]*?Color\(0, 48, 255\)"
+            r"[\s\S]*?id\(voice_led_state\) == 3[\s\S]*?Color\(96, 0, 96\)"
+            r"[\s\S]*?id\(voice_led_state\) == 4[\s\S]*?Color\(255, 0, 0\)",
         )
         self.assertRegex(
             config,
@@ -136,15 +140,10 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
-    def test_microphone_test_uses_voice_listening_meter(self) -> None:
+    def test_stop_microphone_test_cleans_up(self) -> None:
         config = CONFIG.read_text()
-        self.assertRegex(
-            config,
-            r"name: Start Microphone Test\n    on_press:"
-            r"\n      - lambda: id\(mic_level\) = 0\.0f;[\s\S]*?"
-            r"\n      - microphone.capture:[\s\S]*?"
-            r"\n      - light.turn_on:\n          id: status_light\n          effect: Voice Listening",
-        )
+        self.assertNotIn("name: Start Microphone Test", config)
+        self.assertNotIn("microphone.capture:", config)
         self.assertRegex(
             config,
             r"name: Stop Microphone Test\n    on_press:"
@@ -152,24 +151,17 @@ class ProductionConfigTest(unittest.TestCase):
             r"\n      - script.execute: stop_voice_listening",
         )
 
-    def test_idle_wifi_status_defers_to_the_microphone_meter(self) -> None:
+    def test_idle_status_does_not_interrupt_active_microphone(self) -> None:
         config = CONFIG.read_text()
         self.assertRegex(
             config,
             r"id: show_idle_status[\s\S]*?"
             r"lambda: return !id\(mic_meter_active\);[\s\S]*?"
-            r"wifi.connected:[\s\S]*?"
-            r"red: 100%\s+green: 35%\s+blue: 0%\s+brightness: 15%",
+            r"id\(voice_led_state\) = 0;[\s\S]*?"
+            r"effect: Status Indicators[\s\S]*?"
+            r"brightness: 50%",
         )
-        self.assertRegex(
-            config,
-            r"id: show_idle_status[\s\S]*?wifi.connected:[\s\S]*?"
-            r"effect: WiFi Connecting",
-        )
-        self.assertRegex(
-            status_light_entry(config),
-            r"name: WiFi Connecting\n          update_interval: 1s",
-        )
+        self.assertNotIn("WiFi Connecting", config)
         self.assertRegex(
             config,
             r"id: stop_voice_listening[\s\S]*?"

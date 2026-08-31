@@ -67,7 +67,8 @@ class ProductionConfigTest(unittest.TestCase):
             r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
         )
 
-    def test_assignable_input_starts_and_stops_home_assistant_assist(self) -> None:
+    def test_sw1_is_push_to_talk_for_home_assistant_assist(self) -> None:
+        """SW2 owns the receiver-mode hold, so SW1 carries push to talk."""
         config = CONFIG.read_text()
         self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: none")
         self.assertRegex(
@@ -84,41 +85,50 @@ class ProductionConfigTest(unittest.TestCase):
             config,
             r"id: board_microphone[\s\S]*?sample_rate: 16000",
         )
+        # The voice stage is a shared anchor, so it is defined on Button 1.
         self.assertRegex(
             config,
-            r"name: Button 1[\s\S]*?"
+            r"name: Button 1\n    pin: &button_1[\s\S]*?"
+            r"\n      - lambda: ir_ui\.tap\(20, IrUi::Tap::FULL\);[\s\S]*?"
+            r"\n      - if: &start_learned_voice",
+        )
+        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
+        self.assertRegex(
+            start_voice,
             r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
             r"id\(voice_led_state\) = 1;[\s\S]*?"
             r"id\(mic_meter_active\) = true;[\s\S]*?"
             r"effect: Status Indicators[\s\S]*?"
             r"voice_assistant\.start:",
         )
+        release = config.split("on_release: &assignable_release", 1)[1].split("- platform:", 1)[0]
         self.assertRegex(
-            config,
-            r"on_release: &assignable_release[\s\S]*?"
-            r"lambda: return ir_ui\.release\(\);[\s\S]*?"
-            r"voice_assistant\.stop:",
+            release,
+            r"lambda: return ir_ui\.release\(\);[\s\S]*?voice_assistant\.stop:",
         )
 
-    def test_voice_status_indicators_and_cleanup(self) -> None:
+    def test_voice_state_reaches_the_top_leds_and_cleans_up(self) -> None:
         """Catches missing PTT feedback or LEDs left powered after Assist ends."""
         config = CONFIG.read_text()
-        self.assertRegex(
-            status_light_entry(config),
-            r"effects:"
-            r"\n      - addressable_lambda:"
-            r"\n          name: Status Indicators"
-            r"\n          update_interval: 250ms"
-            r"\n          lambda: \|-"
-            r"\n            if \(initial_run\) \{"
-            r"\n              id\(mic_level\) = 0\.0f;"
-            r"\n            \}"
-            r"\n            it\.all\(\) = Color::BLACK;"
-            r"[\s\S]*?id\(voice_led_state\) == 1[\s\S]*?Color\(192, 48, 0\)"
-            r"[\s\S]*?id\(voice_led_state\) == 2[\s\S]*?Color\(0, 48, 255\)"
-            r"[\s\S]*?id\(voice_led_state\) == 3[\s\S]*?Color\(96, 0, 96\)"
-            r"[\s\S]*?id\(voice_led_state\) == 4[\s\S]*?Color\(255, 0, 0\)",
-        )
+        # D3 and D4 are the top pair. D2 and D5 keep Wi-Fi and API state, so the
+        # voice stages cannot take the whole strip.
+        effect = status_light_entry(config).split("name: Status Indicators", 1)[1]
+        effect = effect.split("- addressable_lambda:", 1)[0]
+        for value in (1, 2, 3, 4):
+            self.assertIn(f"id(voice_led_state) == {value}", effect)
+        self.assertIn("it[1] =", effect)
+        self.assertIn("it[2] =", effect)
+        self.assertIn("wifi::global_wifi_component->is_connected()", effect)
+        self.assertIn("api::global_api_server->is_connected()", effect)
+        self.assertIn("id(mic_level) = 0.0f;", effect)
+        for value, color in ((1, "Color(192, 48, 0)"), (2, "Color(0, 48, 255)"),
+                             (3, "Color(96, 0, 96)"), (4, "Color(255, 0, 0)")):
+            state = effect.split(f"id(voice_led_state) == {value}", 1)[1]
+            self.assertIn(color, state)
+        # The stages are set by the pipeline callbacks, not by the button.
+        for trigger, value in (("on_listening", 2), ("on_stt_vad_end", 3), ("on_error", 4)):
+            block = config.split(f"  {trigger}:", 1)[1].split("\n  on_", 1)[0]
+            self.assertIn(f"id(voice_led_state) = {value};", block)
         self.assertRegex(
             config,
             r"voice_assistant:[\s\S]*?\n  on_end:\n    - script.execute: stop_voice_listening",
@@ -140,9 +150,12 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
-    def test_stop_microphone_test_cleans_up(self) -> None:
+    def test_only_the_stop_microphone_button_remains(self) -> None:
+        """The bench buttons were dropped: the microphone now runs from Assist,
+        and the IR burst duplicated a learned slot."""
         config = CONFIG.read_text()
         self.assertNotIn("name: Start Microphone Test", config)
+        self.assertNotIn("name: Send Short IR Test Burst", config)
         self.assertNotIn("microphone.capture:", config)
         self.assertRegex(
             config,
@@ -151,17 +164,18 @@ class ProductionConfigTest(unittest.TestCase):
             r"\n      - script.execute: stop_voice_listening",
         )
 
-    def test_idle_status_does_not_interrupt_active_microphone(self) -> None:
+    def test_idle_status_defers_to_the_microphone_meter(self) -> None:
+        """A meter run must survive a Wi-Fi event, which also calls this script."""
         config = CONFIG.read_text()
-        self.assertRegex(
-            config,
-            r"id: show_idle_status[\s\S]*?"
-            r"lambda: return !id\(mic_meter_active\);[\s\S]*?"
-            r"id\(voice_led_state\) = 0;[\s\S]*?"
-            r"effect: Status Indicators[\s\S]*?"
-            r"brightness: 50%",
-        )
-        self.assertNotIn("WiFi Connecting", config)
+        idle = config.split("- id: show_idle_status", 1)[1].split("\n  - id: ", 1)[0]
+        self.assertIn("lambda: return !id(mic_meter_active);", idle)
+        self.assertIn("id(voice_led_state) = 0;", idle)
+        self.assertIn("effect: Status Indicators", idle)
+        self.assertIn("brightness: 50%", idle)
+        # One effect now carries the Wi-Fi state, so there is no second effect to
+        # switch to and no colour choice left in the script.
+        self.assertNotIn("effect: WiFi Connecting", config)
+        self.assertNotIn("name: WiFi Connecting", config)
         self.assertRegex(
             config,
             r"id: stop_voice_listening[\s\S]*?"

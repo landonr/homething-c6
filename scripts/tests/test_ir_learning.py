@@ -23,25 +23,45 @@ class IrLearningTest(unittest.TestCase):
         self.assertNotIn("voice_assistant", sw2)
 
     def test_receiver_states_drive_all_leds(self) -> None:
-        self.assertIn("name: IR Receiver", CONFIG)
+        """IrUi owns the state, so the effect reads the singleton, not a global."""
+        effect = CONFIG.split("name: IR Receiver", 1)[1].split("on_turn_on:", 1)[0]
         for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
-            self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
+            self.assertIn(f"ir_ui.state == IrUi::{state}", effect)
+        self.assertNotIn("ir_learn_state", CONFIG)
 
-    def test_receiver_state_deadlines_return_to_ready_or_off(self) -> None:
-        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;", HEADER)
-        self.assertIn("state = READY;", HEADER)
-        self.assertIn("if (state == READY)", HEADER)
-        self.assertIn("if (elapsed < 3000)", HEADER)
-        self.assertIn("close();", HEADER)
-        sw2 = CONFIG.split("name: Button 2", 1)[1].split("name: Button 3", 1)[0]
-        self.assertIn("lambda: return ir_ui.state != IrUi::OFF;", sw2)
-        self.assertIn("- script.execute: exit_receiver_hold", sw2)
-        self.assertIn("ir_ui.close();", CONFIG)
+    def test_a_result_holds_briefly_and_idle_closes_the_mode(self) -> None:
+        """A save must stay visible, and an abandoned mode must not hold the
+        LEDs and the rail for ever."""
+        tick = HEADER.split("bool tick() {", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("if (elapsed < 3000)", tick)
+        self.assertIn("close();", tick)
+        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;", tick)
+        self.assertIn("if (elapsed >= hold) {", tick)
+        self.assertIn("state = READY;", tick)
+        self.assertIn("if (state == READY)", tick)
+        # SW2 still leaves the mode on a hold, without waiting for the timeout.
+        self.assertIn("id: exit_receiver_hold", CONFIG)
+        exit_hold = CONFIG.split("id: exit_receiver_hold", 1)[1].split("- id: ", 1)[0]
+        self.assertIn("ir_ui.close();", exit_hold)
+        self.assertIn("ir_ui.sw2_consumed = true;", exit_hold)
 
-    def test_all_assignable_inputs_share_the_generic_playback_path(self) -> None:
+    def test_all_assignable_buttons_have_playback_paths(self) -> None:
+        """Playback rides the tap, so every input needs its own slot number."""
+        for button in range(3, 12):
+            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL)", CONFIG)
+        # 12..16 are the wheel directions. 17 and 18 are the rotation detents,
+        # which have no release edge and so never reach the voice stage.
+        for button in range(12, 17):
+            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL)", CONFIG)
+        for button in (17, 18):
+            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::ARM_ONLY)", CONFIG)
+        self.assertIn("ir_ui.tap(19, IrUi::Tap::NO_VOICE)", CONFIG)
+        self.assertIn("ir_ui.tap(20, IrUi::Tap::FULL)", CONFIG)
+        send = CONFIG.split("- if: &send_learned_code", 1)[1].split("- if:", 1)[0]
+        self.assertIn("lambda: return ir_ui.take_transmit();", send)
+        self.assertIn("code: !lambda return ir_ui.code();", send)
+        self.assertIn("ir_code_store.save(target, raw)", HEADER)
         self.assertIn("pending_transmit_ = ir_code_store.load(button, code_);", HEADER)
-        self.assertIn("code: !lambda return ir_ui.code();", CONFIG)
-        self.assertIn("- if: &send_learned_code", CONFIG)
         self.assertEqual(17, CONFIG.count("- if: *send_learned_code"))
         for button in range(3, 12):
             entry = CONFIG.split(f"name: Button {button}", 1)[1].split(f"name: Button {button + 1}", 1)[0]

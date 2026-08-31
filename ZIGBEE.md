@@ -76,14 +76,20 @@ target allowlist does not apply on this route, because you name the target.
 
 1. Open `http://homething-c6.local/buttons`.
 2. Select an input, then select **Zigbee**.
-3. Select a target in the list, or type one.
+3. Select a group in the list, or type a target.
 4. Select **Assign**.
 
-The page reads `GET /buttons/api/zigbee_targets`. That endpoint reports a group
-list, a device list, and a `ready` flag.
+The list shows groups only. You must type a device target as an IEEE address or
+a friendly name.
 
-`ready` is false until MQTT is connected and both retained bridge topics have
-arrived. The remote keeps the first 64 devices and skips the coordinator.
+The retained `bridge/devices` payload is too large for the device memory, so the
+remote does not subscribe to it.
+
+The page reads `GET /buttons/api/zigbee_targets`. That endpoint reports a group
+list, an empty device list, and a `ready` flag.
+
+`ready` is false until MQTT is connected and the retained `bridge/groups` topic
+has arrived.
 
 The remote accepts these target formats:
 
@@ -168,11 +174,15 @@ The remote uses QoS 1 subscriptions:
 
 - One exact topic for each allowed target receives states for training.
 - `<base topic>/bridge/groups` caches known groups.
-- `<base topic>/bridge/devices` caches device names for the web target picker.
 - Exact group-add and member-add or member-remove response topics match requests.
 
-The narrow subscriptions exclude every other retained bridge message. The device
-cache keeps only a name and an IEEE address for each of the first 64 devices.
+The narrow subscriptions exclude every other retained bridge message.
+
+The remote does not subscribe to `<base topic>/bridge/devices`. ESPHome buffers a
+whole MQTT payload before it delivers the message.
+
+The retained device inventory of a real network is larger than the free heap, so
+that subscription crashes the remote.
 
 The remote ignores all non-allowed target topics. It also ignores subtopics,
 invalid JSON, messages without `state`, and states other than `ON` or `OFF`.

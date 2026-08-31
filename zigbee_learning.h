@@ -32,19 +32,10 @@ class ZigbeeAssignmentManager {
   // A wall switch target needs a walk to the switch, so 30 s expired first.
   static constexpr uint32_t TRAINING_TIMEOUT_MS = 60000;
   static constexpr uint32_t REQUEST_TIMEOUT_MS = 10000;
-  // The bridge inventory of a large network does not fit in RAM, so the cache
-  // keeps the first entries only. The free-text field covers the rest.
-  static constexpr size_t MAX_DEVICES = 64;
-
-  struct Device {
-    std::string name;
-    std::string ieee;
-  };
 
   struct Targets {
     bool ready{false};
     std::vector<std::pair<uint16_t, std::string>> groups;
-    std::vector<Device> devices;
   };
 
   struct Assignment {
@@ -83,8 +74,9 @@ class ZigbeeAssignmentManager {
         [this](const std::string &topic, const std::string &payload) { this->on_mqtt_message_(topic, payload); };
     for (const auto &target : allowed_targets_)
       esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/" + target, handler, 1);
+    // The remote never subscribes to bridge/devices. ESPHome buffers a whole
+    // MQTT payload, and the retained device inventory exhausts the heap.
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/groups", handler, 1);
-    esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/devices", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/add", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/members/add", handler, 1);
     esphome::mqtt::global_mqtt_client->subscribe(base_topic_ + "/bridge/response/group/members/remove", handler, 1);
@@ -214,15 +206,13 @@ class ZigbeeAssignmentManager {
   Targets targets() const {
     Targets snapshot;
     const std::lock_guard<std::mutex> lock(cache_mutex_);
-    snapshot.ready =
-        groups_ready_ && devices_ready_ && esphome::mqtt::global_mqtt_client->is_connected();
+    snapshot.ready = groups_ready_ && esphome::mqtt::global_mqtt_client->is_connected();
     snapshot.groups.reserve(groups_by_name_.size());
     for (const auto &group : groups_by_name_)
       snapshot.groups.emplace_back(group.second, group.first);
     std::sort(snapshot.groups.begin(), snapshot.groups.end(),
               [](const std::pair<uint16_t, std::string> &left,
                  const std::pair<uint16_t, std::string> &right) { return left.second < right.second; });
-    snapshot.devices = devices_;
     return snapshot;
   }
 
@@ -357,13 +347,6 @@ class ZigbeeAssignmentManager {
       return;
     const std::string relative = topic.substr(prefix.size());
 
-    // The retained device inventory carries a full definition for each device,
-    // so it is parsed with a filter before any full document exists.
-    if (relative == "bridge/devices") {
-      cache_devices_(payload);
-      return;
-    }
-
     JsonDocument document;
     if (deserializeJson(document, payload) != DeserializationError::Ok)
       return;
@@ -415,48 +398,6 @@ class ZigbeeAssignmentManager {
       group_names_by_id_[static_cast<uint16_t>(id)] = name;
     }
     groups_ready_ = true;
-  }
-
-  // The bridge device list feeds the /buttons target picker only. Training from
-  // the remote still resolves a device through its state transition.
-  //
-  // The filter keeps three fields for each device. Without it the definition and
-  // exposes blocks of a real network exhaust the heap.
-  void cache_devices_(const std::string &payload) {
-    JsonDocument filter;
-    JsonObject fields = filter.add<JsonObject>();
-    fields["friendly_name"] = true;
-    fields["ieee_address"] = true;
-    fields["type"] = true;
-
-    JsonDocument document;
-    if (deserializeJson(document, payload, DeserializationOption::Filter(filter)) !=
-        DeserializationError::Ok)
-      return;
-    const JsonVariantConst root = document.as<JsonVariantConst>();
-    if (!root.is<JsonArrayConst>())
-      return;
-    std::vector<Device> devices;
-    for (JsonObjectConst device : root.as<JsonArrayConst>()) {
-      if (devices.size() >= MAX_DEVICES)
-        break;
-      if (!device["friendly_name"].is<const char *>() || !device["ieee_address"].is<const char *>())
-        continue;
-      const char *type = device["type"] | "";
-      if (std::strcmp(type, "Coordinator") == 0)
-        continue;
-      Device entry;
-      entry.name = device["friendly_name"].as<const char *>();
-      entry.ieee = device["ieee_address"].as<const char *>();
-      if (entry.name.empty() || entry.ieee.empty() || entry.name.size() >= TARGET_SIZE)
-        continue;
-      devices.push_back(std::move(entry));
-    }
-    std::sort(devices.begin(), devices.end(),
-              [](const Device &left, const Device &right) { return left.name < right.name; });
-    const std::lock_guard<std::mutex> lock(cache_mutex_);
-    devices_ = std::move(devices);
-    devices_ready_ = true;
   }
 
   void resolve_candidate_(const std::string &target) {
@@ -788,7 +729,6 @@ class ZigbeeAssignmentManager {
   std::unordered_map<std::string, bool> target_states_;
   std::unordered_map<std::string, uint16_t> groups_by_name_;
   std::unordered_map<uint16_t, std::string> group_names_by_id_;
-  std::vector<Device> devices_;
   // The main loop owns every write. The HTTP task of the /buttons page reads the
   // caches and the record, so both sides hold this lock.
   mutable std::mutex cache_mutex_;
@@ -802,7 +742,6 @@ class ZigbeeAssignmentManager {
   uint32_t transaction_{0};
   uint32_t transaction_counter_{1000};
   bool groups_ready_{false};
-  bool devices_ready_{false};
   bool candidate_member_added_{false};
   bool old_member_removed_{false};
   bool cancel_requested_{false};

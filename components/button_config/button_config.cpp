@@ -361,17 +361,9 @@ void ButtonConfig::handle_targets_(AsyncWebServerRequest *request) {
     stream->print("\"}");
     first = false;
   }
-  stream->print(R"(],"devices":[)");
-  first = true;
-  for (const auto &device : targets.devices) {
-    stream->printf(R"(%s{"ieee":")", first ? "" : ",");
-    print_json_text(stream, device.ieee.c_str());
-    stream->print(R"(","name":")");
-    print_json_text(stream, device.name.c_str());
-    stream->print("\"}");
-    first = false;
-  }
-  stream->print("]}");
+  // The device list stays empty. The remote does not subscribe to the retained
+  // bridge/devices topic, so a device target must be typed.
+  stream->print(R"(],"devices":[]})");
   request->send(stream);
 }
 

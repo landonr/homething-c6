@@ -291,14 +291,22 @@ class StorageTest(unittest.TestCase):
 
 
 class ZigbeeTargetTest(unittest.TestCase):
-    def test_the_manager_caches_the_bridge_device_list(self) -> None:
-        self.assertIn('subscribe(base_topic_ + "/bridge/devices", handler, 1)', ZIGBEE)
-        self.assertIn('if (relative == "bridge/devices") {', ZIGBEE)
-        self.assertIn('device["ieee_address"].is<const char *>()', ZIGBEE)
-        self.assertIn('std::strcmp(type, "Coordinator") == 0', ZIGBEE)
-        self.assertIn("DeserializationOption::Filter(filter)", ZIGBEE)
-        self.assertIn("MAX_DEVICES = 64", ZIGBEE)
-        self.assertIn("if (devices.size() >= MAX_DEVICES)", ZIGBEE)
+    def test_the_manager_never_subscribes_to_the_bridge_device_list(self) -> None:
+        """The retained device inventory is larger than the C6 heap. ESPHome
+        buffers a whole MQTT payload into a std::string before it delivers the
+        message, so the subscription aborts the loop task with bad_alloc."""
+        self.assertNotIn('subscribe(base_topic_ + "/bridge/devices", handler, 1)', ZIGBEE)
+        self.assertNotIn('if (relative == "bridge/devices") {', ZIGBEE)
+        self.assertNotIn("cache_devices_", ZIGBEE)
+        self.assertNotIn("MAX_DEVICES", ZIGBEE)
+        self.assertNotIn("devices_ready_", ZIGBEE)
+        self.assertIn('subscribe(base_topic_ + "/bridge/groups", handler, 1)', ZIGBEE)
+
+    def test_the_target_endpoint_reports_groups_and_an_empty_device_list(self) -> None:
+        """The page JS keeps its Devices branch, so the shape must not change."""
+        body = section(CPP, "void ButtonConfig::handle_targets_", "\n}")
+        self.assertIn(R'stream->print(R"(],"devices":[]})");', body)
+        self.assertNotIn("targets.devices", body)
 
     def test_the_shared_caches_and_record_use_one_lock(self) -> None:
         """The httpd task reads them while the main loop writes them."""
@@ -308,7 +316,7 @@ class ZigbeeTargetTest(unittest.TestCase):
             self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
         writer = section(ZIGBEE, "void cache_groups_(JsonVariantConst root) {", "\n  }")
         self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", writer)
-        self.assertEqual(ZIGBEE.count("lock_guard<std::mutex> lock(cache_mutex_)"), 7)
+        self.assertEqual(ZIGBEE.count("lock_guard<std::mutex> lock(cache_mutex_)"), 6)
 
     def test_a_short_number_is_a_group_and_a_long_hex_string_is_a_device(self) -> None:
         """An IEEE address is 0x plus sixteen hex digits, so it is not a group."""

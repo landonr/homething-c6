@@ -148,7 +148,7 @@ if(!tg)return "<p>Loading the Zigbee2MQTT targets.</p><div class=act>"+
 if(!tg.ready)return "<div class='note bad'>Waiting for Zigbee2MQTT. The remote "+
 "needs MQTT, the bridge group list, and the bridge device list.</div>"+
 "<div class=act><button type=button class=sec id=zx>Back</button></div>";
-var h="<p class=sub>Pick a group or a device, or type a target.</p>"+
+var h="<p class=sub>Pick a group, or type a target.</p>"+
 "<select id=zs><option value=''>Select a target</option>",i;
 if(tg.groups.length){h+="<optgroup label='Groups'>";
 for(i=0;i<tg.groups.length;i++)h+="<option value='"+att(String(tg.groups[i].id))+"'>"+

@@ -108,18 +108,23 @@ The page can assign a Zigbee Toggle target. It does not need a state transition,
 because you name the target instead.
 
 1. Select an input, then select **Zigbee**.
-2. Select a group or a device in the list.
+2. Select a group in the list.
 3. Or type a group ID, an IEEE address, or a friendly name.
 4. Select **Assign**.
+
+The list shows groups only. You must type a device target as an IEEE address or
+a friendly name.
+
+The retained `bridge/devices` payload is too large for the device memory, so the
+remote does not subscribe to it.
 
 A typed target wins over the list selection. The list comes from
 `GET /buttons/api/zigbee_targets`.
 
-The remote fills that list from the retained `bridge/groups` and `bridge/devices`
-topics. It keeps the first 64 devices and skips the coordinator.
+The remote fills that list from the retained `bridge/groups` topic.
 
 If the list reports that it is not ready, the page shows "Waiting for
-Zigbee2MQTT". Wait for MQTT and for both retained topics.
+Zigbee2MQTT". Wait for MQTT and for the retained group topic.
 
 A group target is stored at once. A device target needs the same Zigbee2MQTT
 group requests as the tap cycle, so the page shows a progress bar.

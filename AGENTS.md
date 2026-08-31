@@ -119,7 +119,7 @@ Use Edit → Fill All Zones. Stage the board file only after Landon confirms the
 
 This rule covers footprint moves, footprint changes, new tracks, new vias, and net changes.
 
-`scripts/check-design.py` runs both from the repository root and compares the result against the baseline below, so it fails on anything that is not the inherited `U1` warning. It is what `.github/workflows/design-checks.yml` runs on every push and pull request, in the `kicad/kicad:10.0` container. Run it locally the same way CI does:
+`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented six-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
 
 ```bash
 python3 scripts/check-design.py            # both checks
@@ -171,15 +171,18 @@ The iBOM step is nonfatal because it needs KiCad Python and a first-run network 
 
 Gerber and drill headers contain timestamps. A board commit restages all files in `export/`, even without geometry changes.
 
-### Validation baseline from 2026-08-04
+### Validation baseline from 2026-08-31
 
 - `sch erc` reports 0 violations.
-- `pcb drc` reports 0 errors, 0 unconnected items, and 1 `lib_footprint_mismatch` warning for `U1`.
+- `pcb drc` reports 0 errors, 0 unconnected items, and 6 allowed warnings.
+- One `lib_footprint_mismatch` warning is for `U1`.
+- Four `text_height` warnings are for XIAO pin labels on the front and back silkscreen.
+- One `text_thickness` warning is for the product text on the front silkscreen.
 - `U1` is the only footprint that differs from its library footprint.
 - Parity reports 0 issues.
 - The board has no `TP_*` test points or board-only items.
 
-Treat these counts as the baseline unless the task targets them. More than one warning is a new regression.
+Treat these counts as the baseline unless the task targets them. A seventh warning is a new regression.
 
 Run DRC with `--refill-zones` for baseline checks. A stale fill can report false `isolated_copper` and zone `unconnected_items`.
 

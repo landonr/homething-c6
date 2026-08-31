@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run ERC and DRC and compare the result against the documented baseline.
 
-The baseline in AGENTS.md has no ERC violations and six allowed DRC warnings.
+The baseline in AGENTS.md has no ERC violations and one allowed DRC warning.
 It has no unconnected items or schematic parity issues. Anything else is a
 regression from the change under test.
 
@@ -33,30 +33,9 @@ PCB = PROJECT / "c6remote.kicad_pcb"
 DEFAULT_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
 # (type, first item description) pairs that predate current work. U1 has an
-# edited board footprint. The XIAO labels use a small text height. The product
-# label uses TrueType characters with insufficient stroke weight.
+# edited board footprint.
 ALLOWED_DRC = {
     ("lib_footprint_mismatch", "Footprint U1"),
-    (
-        "text_height",
-        "PCB text '8\n\n9\n\n10\n\n11\n\n12\n\ngnd\n\nvcc' on F.Silkscreen",
-    ),
-    (
-        "text_height",
-        "PCB text '7\n\n6\n\n5\n\n4\n\n3\n\n2\n\n1' on F.Silkscreen",
-    ),
-    (
-        "text_height",
-        "PCB text '8\n\n9\n\n10\n\n11\n\n12\n\ngnd\n\nvcc' on B.Silkscreen",
-    ),
-    (
-        "text_height",
-        "PCB text '7\n\n6\n\n5\n\n4\n\n3\n\n2\n\n1' on B.Silkscreen",
-    ),
-    (
-        "text_thickness",
-        "PCB text 'homeThing-c6 v1.3\n2026.8.1' on F.Silkscreen",
-    ),
 }
 
 
@@ -117,7 +96,7 @@ def check_drc(cli, tmp):
     print(
         f"DRC: {len(found)} violations ({len(unexpected)} unexpected), "
         f"{len(unconnected)} unconnected, {len(parity)} parity "
-        f"(baseline 6 allowed warnings, 0, 0)"
+        f"(baseline {len(ALLOWED_DRC)} allowed warnings, 0, 0)"
     )
     if unexpected:
         show("unexpected violations", unexpected)

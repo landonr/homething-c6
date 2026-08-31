@@ -174,15 +174,19 @@ Gerber and drill headers contain timestamps. A board commit restages all files i
 ### Validation baseline from 2026-08-31
 
 - `sch erc` reports 0 violations.
-- `pcb drc` reports 0 errors, 0 unconnected items, and 6 allowed warnings.
-- One `lib_footprint_mismatch` warning is for `U1`.
-- Four `text_height` warnings are for XIAO pin labels on the front and back silkscreen.
-- One `text_thickness` warning is for the product text on the front silkscreen.
+- `pcb drc` reports 0 errors, 0 unconnected items, and 1 allowed warning.
+- The `lib_footprint_mismatch` warning is for `U1`.
 - `U1` is the only footprint that differs from its library footprint.
 - Parity reports 0 issues.
 - The board has no `TP_*` test points or board-only items.
 
-Treat these counts as the baseline unless the task targets them. A seventh warning is a new regression.
+Treat these counts as the baseline unless the task targets them. A second warning is a new regression.
+
+Two choices keep the silkscreen text checks quiet. `min_text_height` is 0.8mm, because the XIAO pin labels need it.
+
+The two brand texts use the `Iosevka Bold` face. For a TrueType font, KiCad measures the glyph outlines and ignores the `thickness` property.
+
+Do not select the `Iosevka` family with the bold attribute. Only the `Iosevka Bold` family passes the `text_thickness` check.
 
 Run DRC with `--refill-zones` for baseline checks. A stale fill can report false `isolated_copper` and zone `unconnected_items`.
 
@@ -228,7 +232,7 @@ Do not use `v0.1` release URLs. The `2026.6.0` tag replaced `v0.1`.
 
 Do not use old `2026.7.0` asset URLs. The tag rename removed its unversioned BOM and position asset URLs.
 
-The PCB front silkscreen revision must equal the release version. It currently reads `2026.8.1`.
+The PCB front silkscreen revision must equal the release version. It currently reads `2026.9`.
 
 Every copper or silkscreen change creates a different board. The patch value changes for artwork changes.
 

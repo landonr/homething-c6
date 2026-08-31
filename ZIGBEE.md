@@ -4,28 +4,24 @@
 
 The remote is an always-on Zigbee end device. It is not a router.
 
-The remote uses endpoint 1 as an On/Off client. Each trained button sends a
-Zigbee Toggle command to its assigned group.
+The remote uses endpoint 1 as an On/Off client. Each assigned button sends a
+Zigbee Toggle command to its stored group.
 
-The firmware uses Wi-Fi and MQTT only to train or change a Zigbee assignment.
-The remote sends Toggle commands directly after training. It does not need MQTT,
-Wi-Fi, Home Assistant, or Zigbee2MQTT during normal button playback.
+The firmware holds no MQTT client. The `/buttons` page reads the Zigbee2MQTT
+group list in the browser and posts only the group ID to the remote.
+
+The remote does not need MQTT, Wi-Fi, Home Assistant, or Zigbee2MQTT for button
+playback. It needs Wi-Fi only while you configure it from the page.
 
 ## Requirements
 
-Install Zigbee2MQTT and an MQTT broker. Configure the firmware secrets for the
-broker, user name, and password.
-
-Set `zigbee2mqtt_base_topic` to the Zigbee2MQTT base topic. The default is
-`zigbee2mqtt`.
+Install Zigbee2MQTT and enable its frontend. The browser connects to the
+frontend websocket, so the remote needs no broker credentials.
 
 Use the pinned `luar123/zigbee_esphome` external component in `c6remote.yaml`.
 Do not change its revision without validation.
 
-The firmware disables MQTT discovery and MQTT log topics. MQTT is a training
-transport only.
-
-ZHA does not supply this training interface. Use Zigbee2MQTT for this firmware.
+ZHA does not supply the group list this page reads. Use Zigbee2MQTT.
 
 ## Pair the remote
 
@@ -40,166 +36,123 @@ while the coordinator forms or repairs the network.
 If `D5` pulses red, the Zigbee stack has started but has no network connection.
 Permit joining again, then restart the remote.
 
-## Train a button
+## Groups and devices
 
-Training makes one remote input control one allowed Zigbee2MQTT target. The
-target must publish an `ON` or `OFF` state transition during training.
+Group membership lives in the group table of the light, not in the remote. Only
+Zigbee2MQTT can write it.
 
-The target name must match one of these values:
+The remote sends a groupcast and nothing else, so a button always points at a
+group. To control one device, that device needs a group of its own.
 
-- `office_lights`
-- `Bedroom Lights`
-- `Hallway Lights`
-- `Kitchen Light Switch`
-- `Downstairs Lights`
+The page can build that group for you. It can also use a group that you made in
+Zigbee2MQTT for more than one light.
 
-1. Confirm that `D2` is solid green. Green needs Wi-Fi, the API, and MQTT.
-2. Hold `SW2` for two seconds to enter receiver mode.
-3. Tap the input once. The remote waits for an IR code.
-4. Tap the same input again. `D5` pulses yellow for Zigbee training.
-5. Within 60 seconds, change the target lamp from `ON` to `OFF`, or from `OFF` to `ON`.
-6. Wait for four green LEDs. The assignment is complete.
-
-The remote ignores the first retained target state. It accepts only a later
-root-topic state transition. A repeated state does not train a button.
-
-If the target is a Zigbee2MQTT group, the remote stores its existing group ID.
-If the target is a device, the remote adds it to a private button group.
-
-The remote saves a device assignment only after Zigbee2MQTT confirms the group
-requests. The remote does not change an existing target group.
+One group can serve more than one button. A button reads only the ID, so a later
+membership change in Zigbee2MQTT needs no change on the remote.
 
 ## Assign a button from the web page
 
-The `/buttons` page assigns a Zigbee target without a state transition. The
-target allowlist does not apply on this route, because you name the target.
-
 1. Open `http://homething-c6.local/buttons`.
 2. Select an input, then select **Zigbee**.
-3. Select a group in the list, or type a target.
-4. Select **Assign**.
+3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
+   `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.
+4. Select **Connect**.
+5. Select one of these three routes:
+   - Select a group, then select **Assign group**.
+   - Select a device, then select **Assign device**.
+   - Type a group ID, then select **Assign typed ID**.
 
-The list shows groups only. You must type a device target as an IEEE address or
-a friendly name.
+The browser keeps the address and the token in `localStorage`. Neither value
+reaches the remote, so each browser enters them once.
 
-The retained `bridge/devices` payload is too large for the device memory, so the
-remote does not subscribe to it.
+The page accepts a decimal group ID, such as `4609`, or a hex group ID, such as
+`0x1201`. The remote refuses `0` and every value above `0xFFF7`, because
+`0xFFF8` and above are the reserved Zigbee broadcast addresses.
 
-The page reads `GET /buttons/api/zigbee_targets`. That endpoint reports a group
-list, an empty device list, and a `ready` flag.
+A typed ID wins over the list selection. Use a typed ID when the browser cannot
+reach the frontend.
 
-`ready` is false until MQTT is connected and the retained `bridge/groups` topic
-has arrived.
+The remote stores the group ID and the name. It writes the record to flash at
+once, because a group target needs no network confirmation.
 
-The remote accepts these target formats:
+### Assign device
 
-| Format | Example | Result |
-| --- | --- | --- |
-| Decimal group ID | `1234` | Stored as that group. |
-| Hex group ID, up to four digits | `0x4D2` | Stored as that group. |
-| IEEE address | `0x00124b0022a1b2c3` | Added to the private button group. |
-| Known group name | `Bedroom Lights` | Stored as that group ID. |
-| Any other name | `Kitchen Lamp` | Added to the private button group. |
+**Assign device** makes a group that holds only the selected device.
 
-A group ID is stored at once and needs no MQTT. A device target needs MQTT,
-because Zigbee2MQTT must confirm the group membership.
+1. The browser looks for a group whose only member is that device. If it finds
+   one, it uses that group and creates nothing.
+2. If it finds none, it publishes `bridge/request/group/add` with the name
+   `c6 <device name>` and reads the new ID from the response.
+3. It publishes `bridge/request/group/members/add` for the device.
+4. It sends the group ID to the remote.
 
-The remote also needs MQTT to replace an old device target on the same slot. It
-must remove the old member first.
+Step 1 keeps a repeated assignment from leaving a new group behind each time.
 
-A web assignment uses the same rollback path as the tap cycle. Cancel it from
-the page while the progress bar runs.
+If the group is created but the member add fails, the page reports the new group
+ID and assigns nothing. Remove that group in Zigbee2MQTT, or add the member by
+hand and assign the ID with **Assign typed ID**.
 
-## Groups
+Each request carries a transaction, because the bridge answers all requests on a
+shared response topic. A request that gets no answer in ten seconds fails.
 
-Individual-device assignments use one reserved group for each slot. The group
-ID is deterministic. Existing Zigbee2MQTT target groups keep their configured IDs.
+The assignment replaces any IR code or voice action on that input.
 
-| Slot | Input | Group ID | Group name |
-| --- | --- | --- | --- |
-| 3-11 | `SW3`-`SW11` | `0xC600`-`0xC608` | `homething-c6-button-<slot>` |
-| 12-16 | Wheel right, up, press, down, left | `0xC609`-`0xC60D` | `homething-c6-button-<slot>` |
-| 17-18 | Reserved for IR-only rotation slots | `0xC60E`-`0xC60F` | Not created by this firmware |
-| 19-20 | `SW2`, `SW1` | `0xC610`, `0xC611` | `homething-c6-button-<slot>` |
+## How the browser reads the group list
 
-Reserve `0xC600` through `0xC611` for this remote. Do not use these group IDs
-for another device. Change `zigbee_group_id_base` only before any training.
+The Zigbee2MQTT frontend relays every MQTT message on its websocket as a
+`{topic, payload}` object, with the base topic already removed. The page keeps
+the `bridge/groups` message and ignores the rest.
 
-The private group name uses the configured `device_name`. The firmware does not
-delete or rename legacy `homething-c6-button-*` groups.
+A websocket needs no CORS grant. A `fetch` to the same host would need one,
+because the page comes from the remote.
+
+The remote never subscribes to `bridge/devices`. ESPHome buffers a whole MQTT
+payload before it delivers the message, and the retained device inventory of a
+real network is larger than the free heap.
 
 ## Toggle playback
 
-Outside receiver mode, a trained input sends an On/Off Toggle command to its
-assigned group. The command leaves endpoint 1 and uses group broadcast delivery.
+An assigned input sends an On/Off Toggle command to its group. The command
+leaves endpoint 1 and uses group broadcast delivery.
 
-The command does not wait for a coordinator, MQTT broker, or target state report.
-It works when the remote and target are on the same Zigbee network but Wi-Fi is
-unavailable.
+The command does not wait for a coordinator, a broker, or a target state report.
+The mesh routes it, so the button works while Zigbee2MQTT and Home Assistant are
+both down.
 
 Toggle does not mean "set on" or "set off." Each target changes its current
-On/Off state. Train one button only with targets that must toggle together.
+On/Off state. Assign one button only to lights that must toggle together.
 
-## Training failures and retraining
+## Clear a button
 
-Training fails if MQTT is disconnected or the group snapshot is unavailable.
-It also fails if no valid state transition arrives in 60 seconds. A failed or
-timed-out Zigbee2MQTT request also stops training.
+Clear a button from the `/buttons` page, or with the last tap of the assignment
+cycle on the remote.
 
-On a training failure, all LEDs flash red. The old local assignment remains.
-If the remote removed the old target first, it asks Zigbee2MQTT to add it back.
+Clearing removes the local record only. The group and its membership stay in
+Zigbee2MQTT, so another button can still use that group.
 
-A failure keeps the cycle at the Zigbee stage. The next tap moves to the voice
-stage or the clear stage. A tap during training also stops the wait.
+## Storage
 
-The training timeout belongs to the Zigbee manager alone. A device target needs
-a group request after the transition, and that request has its own deadline.
+The remote stores one record for each of the 18 assignable slots. A record holds
+the group ID and the target name.
 
-Retraining a button removes its old target from that button group, then adds the
-new target. The remote keeps the old assignment until the new group membership
-and flash write succeed.
-
-Clear a button with the fourth tap in the full assignment cycle. `SW2` uses its
-third tap because it has no voice stage. Clearing disables local playback first.
-For a device assignment, the remote also requests member removal when MQTT is
-connected. Clearing an existing group assignment does not change that group.
-
-If MQTT is offline during clearing, the button stays locally clear. Remove the
-old target from its Zigbee2MQTT group before you reuse that group outside this
-firmware.
-
-## MQTT input filters
-
-The remote uses QoS 1 subscriptions:
-
-- One exact topic for each allowed target receives states for training.
-- `<base topic>/bridge/groups` caches known groups.
-- Exact group-add and member-add or member-remove response topics match requests.
-
-The narrow subscriptions exclude every other retained bridge message.
-
-The remote does not subscribe to `<base topic>/bridge/devices`. ESPHome buffers a
-whole MQTT payload before it delivers the message.
-
-The retained device inventory of a real network is larger than the free heap, so
-that subscription crashes the remote.
-
-The remote ignores all non-allowed target topics. It also ignores subtopics,
-invalid JSON, messages without `state`, and states other than `ON` or `OFF`.
+The record format is version 3. Version 2 held a target kind for the private
+device groups, so an older record does not load and the slots start clear.
 
 ## LED meanings
 
 `D5` shows Zigbee state at all times. It is off before the Zigbee stack starts,
 solid green when connected, and pulsing red when disconnected.
 
-Receiver mode uses `D3` and `D4` only, so `D5` stays readable during training.
+`D2` shows Wi-Fi and the API. Wi-Fi serves the `/buttons` page only, so a dark
+`D2` does not stop a button.
+
+Assignment mode uses `D3` and `D4` only, so `D5` stays readable.
 
 | LEDs | Meaning |
 | --- | --- |
-| `D3` and `D4` solid blue | Receiver mode waits for an input. |
+| `D3` and `D4` solid blue | Assignment mode waits for an input. |
 | `D3` and `D4` blue chase | The selected input waits for an IR code. |
-| `D3` and `D4` pulsing yellow | The selected input waits for a Zigbee2MQTT state transition. |
-| `D3` and `D4` solid green | IR or Zigbee assignment saved. |
-| `D3` and `D4` flash red | IR, MQTT, Zigbee2MQTT, or flash operation failed. |
+| `D3` and `D4` solid green | IR assignment saved. |
+| `D3` and `D4` flash red | An IR or flash operation failed. |
 | `D3` and `D4` pulsing blue | The selected input now starts Assist. |
 | `D3` and `D4` amber | The selected input is clear. |

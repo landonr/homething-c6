@@ -1,8 +1,6 @@
 substitutions:
   device_name: homething-c6
   friendly_name: homeThing C6
-  zigbee2mqtt_base_topic: zigbee2mqtt
-  zigbee_group_id_base: "0xC600"
 
 esphome:
   name: ${device_name}
@@ -12,14 +10,7 @@ esphome:
     - zigbee_learning.h
   on_boot:
     - lambda: ir_code_store.setup();
-    - lambda: |-
-        zigbee_assignments.setup("${zigbee2mqtt_base_topic}", "${device_name}", ${zigbee_group_id_base}, {
-          "office_lights",
-          "Bedroom Lights",
-          "Hallway Lights",
-          "Kitchen Light Switch",
-          "Downstairs Lights",
-        });
+    - lambda: zigbee_assignments.setup();
     - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
@@ -66,13 +57,6 @@ wifi:
     - script.execute: show_idle_status
   on_disconnect:
     - script.execute: show_idle_status
-
-mqtt:
-  broker: !secret mqtt_broker
-  username: !secret mqtt_username
-  password: !secret mqtt_password
-  discovery: false
-  log_topic: null
 
 zigbee:
   id: zigbee_radio
@@ -392,25 +376,17 @@ light:
             }
             it.all() = Color::BLACK;
 
-            // D2 pulses red offline, orange on Wi-Fi alone, and cyan when the API
-            // is up but MQTT is down. Solid green needs both, because Zigbee
-            // training needs MQTT and green used to promise a training the
-            // remote could not run.
+            // D2 pulses red offline and orange on Wi-Fi alone, then holds green
+            // on the API. Wi-Fi only serves the /buttons page, so a dark D2 does
+            // not stop a button: playback is Zigbee groupcast or IR.
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
-            const bool mqtt_connected = mqtt::global_mqtt_client->is_connected();
-            if (!api_connected || !mqtt_connected) {
+            if (!api_connected) {
               const float phase = (millis() % 2400) / 2400.0f;
               // Input 98 produces 3/255 after 50% brightness and gamma correction.
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              if (!wifi_connected) {
-                it[0] = Color(level, 0, 0);
-              } else if (!api_connected) {
-                it[0] = Color(level, level / 4, 0);
-              } else {
-                it[0] = Color(0, level, level);
-              }
+              it[0] = wifi_connected ? Color(level, level / 4, 0) : Color(level, 0, 0);
             } else {
               it[0] = Color(0, 96, 24);
             }
@@ -429,12 +405,10 @@ light:
                 Color mode = Color::BLACK;
                 if (ir_ui.state == IrUi::READY) {
                   mode = Color(0, 0, 160);
-                } else if (ir_ui.state == IrUi::SAVED || ir_ui.state == IrUi::ZIGBEE_SAVED) {
+                } else if (ir_ui.state == IrUi::SAVED) {
                   mode = Color(0, 180, 0);
                 } else if (ir_ui.state == IrUi::ERROR && ((millis() / 150) % 2) == 0) {
                   mode = Color(200, 0, 0);
-                } else if (ir_ui.state == IrUi::ZIGBEE_WAIT) {
-                  mode = Color(mode_level, mode_level, 0);
                 } else if (ir_ui.state == IrUi::VOICE) {
                   mode = Color(0, 0, mode_level);
                 } else if (ir_ui.state == IrUi::CLEARED) {
@@ -620,7 +594,6 @@ script:
       - lambda: |-
           if (ir_ui.state == IrUi::OFF)
             return;
-          zigbee_assignments.cancel_training();
           ir_ui.close();
           ir_ui.sw2_consumed = true;
   - id: show_idle_status
@@ -725,7 +698,6 @@ interval:
   - interval: 250ms
     then:
       - lambda: |-
-          zigbee_assignments.tick();
           if (ir_ui.take_open_request()) {
             id(ir_rail).turn_on();
             id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();

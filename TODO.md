@@ -1,31 +1,19 @@
 # Open tasks
 
-## Remove the stale `homething-c6-button-9` group member
+## Remove the leftover `homething-c6-button-*` groups
 
-Zigbee2MQTT group `homething-c6-button-9`, ID `0xC606`, still contains
-`Kitchen Light Switch`, IEEE `0x54ef4410003ecd4c`. No button uses that group.
+The old training flow created one private Zigbee2MQTT group for each device
+target. `homething-c6-button-9`, ID `0xC606`, still contains
+`Kitchen Light Switch`, IEEE `0x54ef4410003ecd4c`.
 
-The remote reported the Zigbee assignment mask `0x00024` at boot on 2026-08-30.
-Bit 2 is slot 5 and bit 5 is slot 8, so only `SW5` and `SW8` hold an assignment.
-Slot 9 has no assignment, so the member is a leftover.
-
-Three private groups held this member after failed training runs. The
+Three private groups held that member after failed training runs. The
 `homething-c6-button-3` and `homething-c6-button-8` members were removed on
 2026-08-30. The `homething-c6-button-9` member was not.
 
-Remove it with this MQTT request:
+The firmware no longer creates, joins, or reads these groups. A button now
+stores a group ID that you pick in Zigbee2MQTT, so a leftover group cannot be
+reached by accident. Removal is housekeeping, not a fix.
 
-```json
-{"group": "homething-c6-button-9", "device": "Kitchen Light Switch", "transaction": 1}
-```
-
-Publish the request to `zigbee2mqtt/bridge/request/group/members/remove`. Then
-read `zigbee2mqtt/bridge/response/group/members/remove` for `"status": "ok"`.
-
-If a later training run assigns slot 9 to a device, do not remove the member
-first. Read the assignment mask again before you remove it.
-
-A stale member is not dangerous today, because the remote sends a Toggle command
-only to the group in its own record. It becomes dangerous if slot 9 is trained
-to a different device. That new device joins a group that already contains the
-kitchen switch, so one button then toggles both.
+Delete each `homething-c6-button-*` group in the Zigbee2MQTT frontend. Confirm
+first that no button on the `/buttons` page reports one of their IDs, `0xC600`
+through `0xC611`.

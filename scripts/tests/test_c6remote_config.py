@@ -69,18 +69,6 @@ class ProductionConfigTest(unittest.TestCase):
             r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
         )
 
-    def test_connectivity_led_pulses_until_api_and_mqtt_connect(self) -> None:
-        entry = status_light_entry(CONFIG.read_text())
-        self.assertRegex(
-            entry,
-            r"const bool api_connected = api::global_api_server->is_connected\(\);"
-            r"\n            const bool mqtt_connected = mqtt::global_mqtt_client->is_connected\(\);"
-            r"\n            if \(!api_connected \|\| !mqtt_connected\) \{[\s\S]*?millis\(\) % 2400"
-            r"[\s\S]*?const uint8_t level = 98 \+",
-        )
-        self.assertIn("it[0] = Color(level, 0, 0);", entry)
-        self.assertIn("it[0] = Color(level, level / 4, 0);", entry)
-
     def test_sw1_is_push_to_talk_for_home_assistant_assist(self) -> None:
         """SW2 owns the receiver-mode hold, so SW1 carries push to talk."""
         config = CONFIG.read_text()
@@ -232,136 +220,31 @@ class ProductionConfigTest(unittest.TestCase):
             r"\n          role: CLIENT",
         )
 
-    def test_mqtt_is_training_only_and_has_no_discovery_or_logs(self) -> None:
-        config = CONFIG.read_text()
-        self.assertRegex(
-            config,
-            r"mqtt:\n  broker: !secret mqtt_broker"
-            r"[\s\S]*?discovery: false\n  log_topic: null",
-        )
-        self.assertNotRegex(config, r"(?m)^  ap:")
-        self.assertNotRegex(config, r"(?m)^captive_portal:")
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn('base_topic_ + "/bridge/groups"', header)
-        self.assertIn('base_topic_ + "/bridge/response/group/add"', header)
-        self.assertIn('base_topic_ + "/bridge/response/group/members/add"', header)
-        self.assertIn('base_topic_ + "/bridge/response/group/members/remove"', header)
-        self.assertNotIn('base_topic_ + "/+"', header)
-        self.assertNotIn('base_topic_ + "/#"', header)
-
-    def test_only_exact_allowlisted_targets_are_subscribed(self) -> None:
-        config = CONFIG.read_text()
-        allowlist = [
-            "office_lights",
-            "Bedroom Lights",
-            "Hallway Lights",
-            "Kitchen Light Switch",
-            "Downstairs Lights",
-        ]
-        setup = re.search(
-            r"zigbee_assignments\.setup\([\s\S]*?\n        \}\);", config
-        )
-        if setup is None:
-            raise AssertionError("Zigbee setup allowlist not found")
-        self.assertEqual(re.findall(r'"([^"]+)"', setup.group(0))[2:], allowlist)
-
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn(
-            'subscribe(base_topic_ + "/" + target, handler, 1)', header
-        )
-        self.assertIn("allowed_targets_.count(relative) == 0", header)
-
-    def test_assignment_cycles_are_zigbee_primary(self) -> None:
+    def test_the_device_cycle_has_no_zigbee_stage(self) -> None:
+        """A Zigbee target is resolved against Zigbee2MQTT by the browser, so the
+        remote has nothing to train and the cycle skips straight to voice."""
         header = IR_LEARNING.read_text()
-        self.assertIn("FULL cycles IR, Zigbee, voice, clear", header)
+        self.assertIn("FULL cycles IR, voice, clear", header)
         self.assertRegex(
             header,
-            r"if \(stage == 1 && mode != Tap::ARM_ONLY\)[\s\S]*?state = ZIGBEE_WAIT;",
+            r"if \(stage == 1 && mode == Tap::FULL\)[\s\S]*?ir_code_store\.set_voice",
         )
-        self.assertRegex(
-            header,
-            r"if \(stage == 2 && mode == Tap::FULL\)[\s\S]*?ir_code_store\.set_voice",
-        )
+        for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_"):
+            self.assertNotIn(gone, header)
         self.assertIn("ir_ui.tap(19, IrUi::Tap::NO_VOICE);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
 
-    def test_on_and_off_transitions_learn_toggle(self) -> None:
+    def test_nvs_v3_stores_group_name_mask_and_checksum(self) -> None:
+        """Version 3 dropped the target kind, so an old record must not load as
+        a valid one."""
         header = ZIGBEE_LEARNING.read_text()
-        self.assertIn('value != "ON" && value != "OFF"', header)
-        self.assertIn('const bool state = value == "ON";', header)
-        self.assertIn("previous->second == state", header)
-        self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", header)
-
-    def test_group_ids_are_unique_and_deterministic(self) -> None:
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("group_base_ + (slot - FIRST_SLOT)", header)
-        self.assertIn('"%s-button-%u"', header)
-        self.assertIn("FIRST_SLOT = 3", header)
-        self.assertIn("LAST_SLOT = 20", header)
-        self.assertIn('zigbee_group_id_base: "0xC600"', CONFIG.read_text())
-
-    def test_training_filters_retained_state_repeats_and_subtopics(self) -> None:
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("allowed_targets_.count(relative) == 0", header)
-        self.assertIn("relative.find('/') != std::string::npos", header)
-        self.assertRegex(
-            header,
-            r"if \(previous == target_states_\.end\(\)\) \{"
-            r"\n      target_states_\[relative\] = state;"
-            r"\n      return;",
-        )
-        self.assertIn("if (previous->second == state)", header)
-
-    def test_group_snapshot_selects_existing_group_or_private_device_group(self) -> None:
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn('group["friendly_name"].is<const char *>()', header)
-        self.assertIn('group["id"].is<uint32_t>()', header)
-        self.assertRegex(
-            header,
-            r"const auto group = groups_by_name_\.find\(target\);[\s\S]*?"
-            r"candidate_kind_ = TargetKind::GROUP;[\s\S]*?"
-            r"candidate_group_id_ = group->second;",
-        )
-        self.assertRegex(
-            header,
-            r"candidate_kind_ = TargetKind::DEVICE;\n"
-            r"    candidate_group_id_ = private_group_id_\(pending_slot_\);",
-        )
-        self.assertIn("request.cmd_ctrl.dst_addr.u.group_addr.group = entry.group_id", header)
-
-    def test_assignment_persists_only_after_group_responses(self) -> None:
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("PREFERENCE_KEY = 0x5A424731U", header)
-        self.assertRegex(
-            header,
-            r"case Operation::WAIT_NEW_DEVICE_ADD:[\s\S]*?commit_assignment_\(\);",
-        )
-        self.assertRegex(
-            header,
-            r"if \(!preference_\.save\(&next\)\)[\s\S]*?"
-            r"ir_code_store\.clear_for_zigbee[\s\S]*?record_ = next;",
-        )
-        self.assertIn("begin_rollback_", header)
-        self.assertIn("WAIT_NEW_DEVICE_CLEANUP", header)
-        self.assertIn("WAIT_OLD_DEVICE_RESTORE", header)
-        self.assertRegex(
-            header,
-            r"void cancel_training\(\)[\s\S]*?cancel_requested_ = true;",
-        )
-        self.assertRegex(
-            header,
-            r"case Operation::WAIT_NEW_DEVICE_ADD:[\s\S]*?"
-            r"if \(cancel_requested_\)\n          begin_rollback_\(\);",
-        )
-
-    def test_nvs_v2_stores_kind_name_destination_mask_and_checksum(self) -> None:
-        header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("static constexpr uint16_t VERSION = 2;", header)
+        self.assertIn("static constexpr uint16_t VERSION = 3;", header)
+        self.assertNotIn("TargetKind", header)
         self.assertRegex(
             header,
             r"struct Entry \{\n"
-            r"    uint8_t kind;[\s\S]*?uint16_t group_id;[\s\S]*?"
+            r"    uint16_t group_id;[\s\S]*?"
             r"char friendly_name\[TARGET_SIZE\];",
         )
         self.assertRegex(
@@ -375,7 +258,9 @@ class ProductionConfigTest(unittest.TestCase):
             r"reset_record_\(record_\);[\s\S]*?preference_\.save\(&record_\)",
         )
 
-    def test_clear_disables_playback_and_only_removes_device_membership(self) -> None:
+    def test_clear_only_drops_the_local_record(self) -> None:
+        """Group membership lives in the light, so the remote cannot and must not
+        try to undo it."""
         header = ZIGBEE_LEARNING.read_text()
         clear = re.search(
             r"void clear\(uint8_t slot\) \{(?P<body>[\s\S]*?)\n  \}\n\n private:",
@@ -385,8 +270,41 @@ class ProductionConfigTest(unittest.TestCase):
             raise AssertionError("Zigbee clear method not found")
         body = clear.group("body")
         self.assertLess(body.index("record_ = next;"), body.index("preference_.save(&record_)"))
-        self.assertIn("kind_(old) == TargetKind::DEVICE", body)
-        self.assertNotIn("TargetKind::GROUP &&", body)
+        self.assertNotIn("publish", body)
+
+    def test_the_firmware_carries_no_mqtt_client(self) -> None:
+        """The browser reads Zigbee2MQTT over the frontend websocket. An MQTT
+        client on the remote buffered whole retained payloads and exhausted the
+        heap, and it made playback depend on a broker that a groupcast does not
+        need."""
+        config = CONFIG.read_text()
+        self.assertNotRegex(config, r"(?m)^mqtt:")
+        self.assertNotIn("mqtt::global_mqtt_client", config)
+        self.assertNotIn("mqtt_broker", config)
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertNotIn("mqtt", header)
+        self.assertNotIn("ArduinoJson", header)
+        self.assertNotIn("subscribe(", header)
+        # Nothing is left to time out, so the training clocks went with it.
+        for gone in ("TRAINING_TIMEOUT_MS", "REQUEST_TIMEOUT_MS", "allowed_targets_", "tick()"):
+            self.assertNotIn(gone, header)
+
+    def test_playback_is_a_groupcast_that_needs_no_broker(self) -> None:
+        """Membership lives in the light's group table, so a button keeps working
+        with Zigbee2MQTT and Home Assistant both down."""
+        header = ZIGBEE_LEARNING.read_text()
+        toggle = header.split("bool toggle(uint8_t slot) const {", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("request.cmd_ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;", toggle)
+        self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", toggle)
+        self.assertIn("entry.group_id", toggle)
+
+    def test_a_stored_group_id_is_bounded_below_the_broadcast_range(self) -> None:
+        """0xFFF8 and above are the reserved Zigbee broadcast addresses."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("static constexpr uint16_t MAX_GROUP_ID = 0xFFF7;", header)
+        assign = header.split("bool assign_from_web(", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("group_id == 0 || group_id > MAX_GROUP_ID", assign)
+        self.assertIn("ir_code_store.clear_for_zigbee(slot)", assign)
 
     def test_d5_is_reserved_for_zigbee_status_alone(self) -> None:
         # Zigbee training used to pulse D5, which hid the radio state for the
@@ -395,7 +313,6 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("if (!id(zigbee_radio).is_started())", entry)
         self.assertIn("else if (id(zigbee_radio).is_connected())", entry)
         self.assertIn("it[3] = Color(0, 128, 0);", entry)
-        self.assertIn("mode = Color(mode_level, mode_level, 0);", entry)
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
         self.assertNotIn("it[3]", before_d5.split("// D3 and D4", 1)[1])
 

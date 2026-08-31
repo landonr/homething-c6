@@ -19,6 +19,13 @@ font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .wrap{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:16px;
 grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:720px){.wrap{grid-template-columns:1fr}}
+.full{grid-column:1/-1}
+.fields{display:grid;gap:8px;align-items:center;
+grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
+@media (max-width:720px){.fields{grid-template-columns:1fr}}
+.fields button{background:var(--acc);color:#fff;border:1px solid var(--acc);
+border-radius:8px;padding:8px 14px;cursor:pointer}
+.st{margin:8px 0 0}.st.bad{color:var(--bad)}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -70,6 +77,7 @@ animation:sweep 1.4s ease-in-out infinite}
 </head>
 <body>
 <div class="wrap">
+<section class="card full" id="z2m"></section>
 <section class="card">
 <h1>Remote buttons</h1>
 <p class="sub">Select an input to see or change what it does.</p>
@@ -92,7 +100,12 @@ var S=[
 {s:3,l:"SW3",v:1,g:"pad"},{s:6,l:"SW6",v:1,g:"pad"},{s:11,l:"SW11",v:1,g:"pad"},
 {s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
 {s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
-var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={},tg=null;
+var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
+// tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
+// reason it has none. The remote never sees either.
+var tg=null,td=null,zerr="",ws=null,zbusy=false;
+// A Zigbee2MQTT request answers on a response topic that echoes its transaction.
+var zreq={},zseq=0;
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
 
@@ -102,7 +115,7 @@ if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
 function codeName(r){return r.name?r.name:"Slot"+r.slot}
 function words(s){var r=row(s);if(!r)return "Unknown";
-if(r.action==="zigbee")return r.name?"Zigbee: "+r.name:"Zigbee toggle";
+if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:"group "+r.group);
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
 
@@ -129,7 +142,48 @@ b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById(d.g).appendChild(b)}}
 
+// Built once. A repaint only rewrites the status line, because rebuilding the
+// inputs would discard an address that is still being typed.
+function z2mBar(){
+var e=document.getElementById("z2m");
+var u="",k="";
+try{u=localStorage.getItem("c6.z2m.url")||"";k=localStorage.getItem("c6.z2m.token")||""}catch(x){}
+e.innerHTML="<h2>Zigbee2MQTT</h2>"+
+"<p class=sub>This browser reads the group list from the bridge. The address "+
+"and the token stay in this browser and never reach the remote.</p>"+
+"<div class=fields>"+
+"<input id=zu type=text autocomplete=off placeholder='ws://zigbee2mqtt.local:8080/api'>"+
+"<input id=zk type=text autocomplete=off placeholder='Frontend token, if set'>"+
+"<button type=button id=zc>Connect</button></div>"+
+"<p class='sub st' id=zst></p>";
+document.getElementById("zu").value=u;
+document.getElementById("zk").value=k;
+document.getElementById("zc").onclick=z2mSave;
+z2mStatus();
+if(u)z2mConnect(u,k)}
+
+function z2mStatus(){
+var e=document.getElementById("zst");
+if(!e)return;
+e.className="sub st"+(zerr?" bad":"");
+if(zerr){e.textContent=zerr;return}
+if(!tg&&!td){e.textContent="Not connected. A group ID can still be typed by hand.";return}
+e.textContent="Connected. "+(tg?tg.length:0)+" groups, "+(td?td.length:0)+" devices."}
+
+function byName(a,b){return a.name<b.name?-1:a.name>b.name?1:0}
+
+// Sends one Zigbee2MQTT request and calls back with its response payload. The
+// bridge answers on a response topic, so the transaction is the only link back.
+function zpub(topic,payload,cb){
+if(!ws||ws.readyState!==1){cb({status:"error",error:"Not connected to Zigbee2MQTT."});return}
+var t="c6-"+(++zseq);
+payload.transaction=t;zreq[t]=cb;
+setTimeout(function(){if(zreq[t]){delete zreq[t];
+cb({status:"error",error:"Zigbee2MQTT did not answer."})}},10000);
+ws.send(JSON.stringify({topic:topic,payload:payload}))}
+
 function paint(){
+z2mStatus();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -142,26 +196,83 @@ function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
 
 // The picker lists what the bridge published. The text field covers a target
 // that the cache dropped, and any group ID that has no name.
+// The browser talks to Zigbee2MQTT, not the remote. A group id is all the
+// remote stores, so this form only has to resolve a name to that id.
 function zbForm(){
-if(!tg)return "<p>Loading the Zigbee2MQTT targets.</p><div class=act>"+
-"<button type=button class=sec id=zx>Back</button></div>";
-if(!tg.ready)return "<div class='note bad'>Waiting for Zigbee2MQTT. The remote "+
-"needs MQTT, the bridge group list, and the bridge device list.</div>"+
-"<div class=act><button type=button class=sec id=zx>Back</button></div>";
-var h="<p class=sub>Pick a group, or type a target.</p>"+
-"<select id=zs><option value=''>Select a target</option>",i;
-if(tg.groups.length){h+="<optgroup label='Groups'>";
-for(i=0;i<tg.groups.length;i++)h+="<option value='"+att(String(tg.groups[i].id))+"'>"+
-esc(tg.groups[i].name)+"</option>";h+="</optgroup>"}
-if(tg.devices.length){h+="<optgroup label='Devices'>";
-for(i=0;i<tg.devices.length;i++)h+="<option value='"+att(tg.devices[i].ieee)+"'>"+
-esc(tg.devices[i].name)+"</option>";h+="</optgroup>"}
-h+="</select><p class=sub>A typed target wins. Use a group ID, an IEEE address, "+
-"or a friendly name.</p>"+
-"<input id=zt type=text autocomplete=off placeholder='0x1234 or Kitchen Light'>"+
-"<div class=act><button type=button id=za>Assign</button>"+
+var h="",i;
+if(zbusy)h+="<div class=note>Working with Zigbee2MQTT.</div>";
+if(tg&&tg.length){
+h+="<p class=sub>Pick a group.</p>"+
+"<select id=zs><option value=''>Select a group</option>";
+for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'>"+
+esc(tg[i].name)+"</option>";
+h+="</select><div class=act><button type=button id=za"+(zbusy?" disabled":"")+
+">Assign group</button></div>"}
+if(td&&td.length){
+h+="<p class=sub>Or pick one device. A groupcast is the only thing the remote "+
+"can send, so this browser puts the device in a group of its own first.</p>"+
+"<select id=zd><option value=''>Select a device</option>";
+for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'>"+
+esc(td[i].name)+"</option>";
+h+="</select><div class=act><button type=button id=zw"+(zbusy?" disabled":"")+
+">Assign device</button></div>"}
+if(!tg&&!td)h+="<p class=sub>No lists. Connect to Zigbee2MQTT at the top of the "+
+"page, or type a group ID below.</p>";
+h+="<p class=sub>A typed ID wins over both pickers. Membership lives in the "+
+"light, so a group only works once the light has joined it.</p>"+
+"<input id=zt type=text autocomplete=off placeholder='0x1234 or 4609'>"+
+"<div class=act><button type=button id=zi"+(zbusy?" disabled":"")+
+">Assign typed ID</button>"+
 "<button type=button class=sec id=zx>Back</button></div>";
 return h}
+
+// The frontend websocket relays every MQTT message as {topic,payload} with the
+// base topic already stripped, so bridge/groups arrives without a subscribe.
+// A websocket needs no CORS grant, which a fetch to the same host would.
+function z2mConnect(url,token){
+if(ws){try{ws.close()}catch(x){}ws=null}
+zerr="";tg=null;td=null;
+var full=url+(token?(url.indexOf("?")<0?"?":"&")+"token="+encodeURIComponent(token):"");
+try{ws=new WebSocket(full)}catch(x){zerr="That address is not a websocket URL.";paint();return}
+var done=false;
+// The socket stays open, because a group request answers on it.
+ws.onmessage=function(ev){
+var m,i;try{m=JSON.parse(ev.data)}catch(x){return}
+if(m.topic==="bridge/groups"&&Array.isArray(m.payload)){
+var out=[];
+for(i=0;i<m.payload.length;i++){
+var g=m.payload[i];
+if(typeof g.id!=="number"||g.id<1||g.id>65527)continue;
+var mem=[],j,list=Array.isArray(g.members)?g.members:[];
+for(j=0;j<list.length;j++)if(list[j].ieee_address)mem.push(list[j].ieee_address);
+out.push({id:g.id,name:String(g.friendly_name||g.id),members:mem})}
+out.sort(byName);
+done=true;tg=out;zerr="";
+z2mStatus();if(mode==="zb")paint();return}
+if(m.topic==="bridge/devices"&&Array.isArray(m.payload)){
+var devs=[];
+for(i=0;i<m.payload.length;i++){
+var d=m.payload[i];
+if(!d.ieee_address||d.type==="Coordinator")continue;
+devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address)})}
+devs.sort(byName);
+done=true;td=devs;zerr="";
+z2mStatus();if(mode==="zb")paint();return}
+// A response echoes the transaction of the request that caused it.
+if(m.topic&&m.topic.indexOf("bridge/response/")===0&&m.payload){
+var t=m.payload.transaction,cb=t?zreq[t]:null;
+if(cb){delete zreq[t];cb(m.payload)}}};
+ws.onerror=function(){if(!done){zerr="Could not reach Zigbee2MQTT at that address.";
+z2mStatus();if(mode==="zb")paint()}};
+ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
+z2mStatus();if(mode==="zb")paint()}}}
+
+function z2mSave(){
+var u=document.getElementById("zu").value.replace(/^\s+|\s+$/g,"");
+var k=document.getElementById("zk").value.replace(/^\s+|\s+$/g,"");
+if(!u){zerr="Enter the Zigbee2MQTT websocket address.";z2mStatus();return}
+try{localStorage.setItem("c6.z2m.url",u);localStorage.setItem("c6.z2m.token",k)}catch(x){}
+z2mConnect(u,k);z2mStatus()}
 
 // The box stays available on an empty slot, so a code can be pasted in without
 // pointing a source remote at the board.
@@ -210,16 +321,13 @@ h+="<p>Point the source remote at the front of the board and press its button.</
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
 e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
-if(mode==="zbwait"&&rec===sel){
-h+="<p>The remote is asking Zigbee2MQTT for the group membership.</p>"+
-"<div class=bar><i></i></div><div class=act>"+
-"<button type=button class=sec id=bc>Cancel</button></div>";
-e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
 if(mode==="zb"&&rec===sel){
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 h+=zbForm();e.innerHTML=h;
-if(tg&&tg.ready)document.getElementById("za").onclick=assign;
-document.getElementById("zx").onclick=function(){mode="idle";tg=null;paint()};return}
+if(document.getElementById("za"))document.getElementById("za").onclick=assignGroup;
+if(document.getElementById("zw"))document.getElementById("zw").onclick=assignDevice;
+document.getElementById("zi").onclick=assignTyped;
+document.getElementById("zx").onclick=function(){mode="idle";paint()};return}
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 var lock=st&&st.busy;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
@@ -243,23 +351,19 @@ document.getElementById("b4").onclick=openZigbee;
 if(d.v)document.getElementById("b2").onclick=function(){go("set_voice")};
 document.getElementById("b3").onclick=function(){go("clear")}}
 
-function pick(s){sel=s;if(mode==="zb"){mode="idle";tg=null}
-if(mode!=="rec"&&mode!=="zbwait"){msg="";bad=false}paint();
+function pick(s){sel=s;if(mode==="zb")mode="idle";
+if(mode!=="rec"){msg="";bad=false}paint();
 if(cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}
 
-function loadTargets(){return fetch("/buttons/api/zigbee_targets",{cache:"no-store"})
-.then(function(r){return r.json()})
-.catch(function(){return{ready:false,groups:[],devices:[]}})
-.then(function(j){tg=j;if(mode==="zb")paint()})}
-
 // A code block keeps its newlines, because the parser reads it a line at a time.
 // ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
 // raw frame.
-function post(a,s,v){var b="action="+a+(s?"&slot="+s:"")+
-(v?(a==="set_zigbee"?"&target=":"&code=")+encodeURIComponent(v):"");
+function post(a,s,v,n){var b="action="+a+(s?"&slot="+s:"")+
+(v?(a==="set_zigbee"?"&group=":"&code=")+encodeURIComponent(v):"")+
+(n===undefined?"":"&name="+encodeURIComponent(n));
 return fetch("/buttons/api/action",{method:"POST",
 headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
 .then(function(r){return r.text().then(function(t){
@@ -284,25 +388,53 @@ else{msg=a==="set_ir_code"?"The remote refused that code.":
 return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
-function openZigbee(){mode="zb";rec=sel;msg="";bad=false;tg=null;paint();loadTargets()}
+function openZigbee(){mode="zb";rec=sel;msg="";bad=false;paint()}
 
-// A device target runs two or three Zigbee2MQTT round trips, so this waits on
-// the same action id as the flash-only actions but polls more slowly.
-function assign(){
+function assignTyped(){
 var v=document.getElementById("zt").value.replace(/^\s+|\s+$/g,"");
-if(!v)v=document.getElementById("zs").value;
-if(!v){msg="Select a target or type one.";bad=true;paint();return}
+if(!v){msg="Type a group ID first.";bad=true;paint();return}
+sendGroup(v,"")}
+
+function assignGroup(){
+var v=document.getElementById("zs").value,name="",i;
+if(!v){msg="Select a group first.";bad=true;paint();return}
+if(tg)for(i=0;i<tg.length;i++)if(String(tg[i].id)===v)name=tg[i].name;
+sendGroup(v,name)}
+
+// The remote can only send a groupcast, so a single device needs a group that
+// holds only that device. An existing one is reused, because a repeat assign
+// would otherwise leave a new group behind every time.
+function assignDevice(){
+var ieee=document.getElementById("zd").value,dev=null,i;
+if(!ieee){msg="Select a device first.";bad=true;paint();return}
+for(i=0;i<td.length;i++)if(td[i].ieee===ieee)dev=td[i];
+if(!dev)return;
+if(tg)for(i=0;i<tg.length;i++)
+if(tg[i].members.length===1&&tg[i].members[0]===ieee){sendGroup(String(tg[i].id),dev.name);return}
+zbusy=true;msg="Creating a group for "+dev.name+".";bad=false;paint();
+zpub("bridge/request/group/add",{friendly_name:"c6 "+dev.name},function(r){
+if(r.status!=="ok"||!r.data||typeof r.data.id!=="number"){
+zbusy=false;msg="Zigbee2MQTT refused the group. "+(r.error||"");bad=true;paint();return}
+var gid=r.data.id;
+zpub("bridge/request/group/members/add",{group:String(gid),device:ieee},function(r2){
+zbusy=false;
+if(r2.status!=="ok"){
+msg="Group "+gid+" was created, but the device was not added. "+(r2.error||"");
+bad=true;paint();return}
+sendGroup(String(gid),dev.name)})})}
+
+function sendGroup(v,name){
 var s=sel;
-post("set_zigbee",s,v).then(function(r){
-if(r.code!==200){msg=fail(r);bad=true;mode="idle";tg=null;return load().then(paint)}
-mode="zbwait";rec=s;msg="";bad=false;tg=null;paint();
-return waitAction(r.body.id,400).then(function(ok){
-var was=mode;mode="idle";
-if(ok){msg="Assigned to the Zigbee target.";bad=false}
-else if(was==="cancel"){msg="Zigbee assignment cancelled.";bad=true}
-else{msg="The remote could not assign that Zigbee target.";bad=true}
+zbusy=true;paint();
+post("set_zigbee",s,v,name).then(function(r){
+zbusy=false;
+if(r.code!==200){msg=fail(r);bad=true;mode="idle";return load().then(paint)}
+return waitAction(r.body.id).then(function(ok){
+mode="idle";
+if(ok){msg="Assigned to the Zigbee group.";bad=false}
+else{msg="The remote could not store that group.";bad=true}
 return load().then(paint)})})
-.catch(function(){msg="The remote did not answer.";bad=true;mode="idle";paint()})}
+.catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;mode="idle";paint()})}
 
 function waitAction(id,ms){return load().then(function(j){
 if(j.action_id>=id)return j.action_id===id&&j.action_ok;
@@ -332,6 +464,7 @@ else{msg="No code received.";bad=true}
 paint();if(sel!==null)loadCode(sel)}
 
 build();
+z2mBar();
 load().then(function(j){
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}

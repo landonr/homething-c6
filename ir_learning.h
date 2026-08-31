@@ -309,6 +309,9 @@ class IrCodeStore {
     if (!button_valid_(button))
       return false;
     erase_code_(button);
+    // The name belongs to the erased code. Leaving it orphans a label on a slot
+    // that the Zigbee record later stops describing.
+    write_name_(button, "");
     voice_mask_ &= ~slot_bit_(button);
     return voice_pref_.save(&voice_mask_);
   }
@@ -523,11 +526,9 @@ class IrUi {
     ERROR = 4,
     VOICE = 5,
     CLEARED = 6,
-    ZIGBEE_WAIT = 7,
-    ZIGBEE_SAVED = 8,
   };
 
-  // FULL cycles IR, Zigbee, voice, clear. NO_VOICE omits voice. ARM_ONLY always
+  // FULL cycles IR, voice, clear. NO_VOICE omits voice. ARM_ONLY always
   // arms IR capture for wheel rotation, which has no release edge.
   enum class Tap : uint8_t { FULL, NO_VOICE, ARM_ONLY };
 
@@ -581,31 +582,13 @@ class IrUi {
       play_(button);
       return;
     }
-    // A tap abandons a pending transition wait so the cycle can reach the voice
-    // and clear stages without waiting out the whole training timeout. Leaving
-    // ZIGBEE_WAIT first makes the manager's late result a no-op.
-    if (state == ZIGBEE_WAIT) {
-      state = READY;
-      if (zigbee_cancel_callback_)
-        zigbee_cancel_callback_();
-    }
     if (button != target || mode == Tap::ARM_ONLY || stage == 0) {
       arm_(button);
       return;
     }
-    if (stage == 1 && mode != Tap::ARM_ONLY) {
-      stage = 2;
-      state = ZIGBEE_WAIT;
-      mark_();
-      if (zigbee_learn_callback_)
-        zigbee_learn_callback_(button);
-      else
-        zigbee_result(false);
-      return;
-    }
-    if (stage == 2 && mode == Tap::FULL) {
+    if (stage == 1 && mode == Tap::FULL) {
       ir_code_store.set_voice(button);
-      stage = 3;
+      stage = 2;
       state = VOICE;
       mark_();
       return;
@@ -614,16 +597,6 @@ class IrUi {
     target = 0;
     stage = 0;
     state = CLEARED;
-    mark_();
-  }
-
-  // The stage stays at the Zigbee step on a failure. Rewinding it to the IR step
-  // made the next tap start another training wait, so a button that kept failing
-  // could never reach its voice or clear stage.
-  void zigbee_result(bool saved) {
-    if (state != ZIGBEE_WAIT)
-      return;
-    state = saved ? ZIGBEE_SAVED : ERROR;
     mark_();
   }
 
@@ -658,11 +631,6 @@ class IrUi {
       closed_ = false;
       return true;
     }
-    // The Zigbee manager owns this timeout. It can leave the transition wait for
-    // a Zigbee2MQTT request phase that has its own deadline, so a second timer
-    // here fired mid-request, flashed red, and then dropped the real result.
-    if (state == ZIGBEE_WAIT)
-      return false;
     const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;
     if (elapsed >= hold) {
       // Keep target and stage so the next tap on the same button still advances.
@@ -695,11 +663,8 @@ class IrUi {
 
   const std::vector<int32_t> &code() const { return code_; }
 
-  void set_zigbee_callbacks(std::function<void(uint8_t)> learn, std::function<bool(uint8_t)> play,
-                            std::function<void()> cancel) {
-    zigbee_learn_callback_ = std::move(learn);
+  void set_zigbee_play_callback(std::function<bool(uint8_t)> play) {
     zigbee_play_callback_ = std::move(play);
-    zigbee_cancel_callback_ = std::move(cancel);
   }
 
  private:
@@ -736,9 +701,7 @@ class IrUi {
   bool open_requested_ = false;
   bool closed_ = false;
   uint8_t voice_active_ = 0;
-  std::function<void(uint8_t)> zigbee_learn_callback_{};
   std::function<bool(uint8_t)> zigbee_play_callback_{};
-  std::function<void()> zigbee_cancel_callback_{};
 };
 
 inline IrUi ir_ui;

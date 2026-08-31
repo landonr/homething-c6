@@ -35,8 +35,7 @@ class IrLearningTest(unittest.TestCase):
         self.assertNotIn("voice_assistant", sw2)
 
     def test_receiver_states_drive_only_d3_and_d4(self) -> None:
-        for state in ("READY", "READING", "SAVED", "ERROR", "ZIGBEE_WAIT",
-                      "ZIGBEE_SAVED", "VOICE", "CLEARED"):
+        for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
             self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
         # D2 is Wi-Fi and D5 is Zigbee. Assignment mode must not hide either, so
         # its branch writes no it[0], no it[3], and no whole-strip colour.
@@ -53,16 +52,15 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn("id(zigbee_radio).is_connected()", status)
         self.assertIn("it[3] = Color(0, 128, 0);", status)
 
-    def test_d2_green_requires_mqtt_because_training_needs_it(self) -> None:
-        # Green used to mean API only, so it promised a training that the remote
-        # could not run while MQTT was down.
+    def test_d2_reports_wifi_and_api_only(self) -> None:
+        # Wi-Fi only serves the /buttons page. Playback is Zigbee groupcast or
+        # IR, so a dark D2 must not read as a dead button.
         status = CONFIG.split("name: Status Indicators", 1)[1].split("// D3 and D4", 1)[0]
-        self.assertIn("mqtt::global_mqtt_client->is_connected()", status)
-        self.assertIn("if (!api_connected || !mqtt_connected)", status)
-        # Cyan is the API-up, MQTT-down pulse.
-        self.assertIn("it[0] = Color(0, level, level);", status)
+        self.assertNotIn("mqtt", status)
+        self.assertIn("if (!api_connected) {", status)
+        self.assertIn("it[0] = wifi_connected ? Color(level, level / 4, 0) : Color(level, 0, 0);", status)
         green = status.index("it[0] = Color(0, 96, 24);")
-        self.assertLess(status.index("!api_connected || !mqtt_connected"), green)
+        self.assertLess(status.index("if (!api_connected) {"), green)
 
     def test_successful_save_returns_to_ready_until_sw2(self) -> None:
         self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)
@@ -77,29 +75,6 @@ class IrLearningTest(unittest.TestCase):
         exit_hold = CONFIG.split("id: exit_receiver_hold", 1)[1].split("- id: ", 1)[0]
         self.assertIn("ir_ui.close();", exit_hold)
         self.assertIn("ir_ui.sw2_consumed = true;", exit_hold)
-
-    def test_zigbee_manager_owns_the_training_timeout(self) -> None:
-        # A second timeout here expired mid-request, flashed red, and then made
-        # zigbee_result() drop the success that the manager had already saved.
-        self.assertIn("if (state == ZIGBEE_WAIT)\n      return false;", HEADER)
-        self.assertNotIn("elapsed < 30000", HEADER)
-        zigbee = (ROOT / "zigbee_learning.h").read_text()
-        self.assertIn("TRAINING_TIMEOUT_MS = 60000", zigbee)
-
-    def test_zigbee_failure_keeps_the_cycle_position(self) -> None:
-        # Rewinding to the IR stage trapped the button: every tap started another
-        # training wait, so voice and clear were unreachable.
-        result = HEADER.split("void zigbee_result(bool saved)", 1)[1].split("}", 1)[0]
-        self.assertNotIn("stage = 1", result)
-        self.assertIn("state = saved ? ZIGBEE_SAVED : ERROR;", result)
-
-    def test_tap_cancels_a_pending_zigbee_wait(self) -> None:
-        self.assertIn("zigbee_cancel_callback_()", HEADER)
-        tap = HEADER.split("void tap(uint8_t button, Tap mode)", 1)[1]
-        cancel = tap.index("zigbee_cancel_callback_()")
-        self.assertLess(cancel, tap.index("arm_(button)"))
-        zigbee = (ROOT / "zigbee_learning.h").read_text()
-        self.assertIn("[this]() { this->cancel_training(); }", zigbee)
 
     def test_all_assignable_buttons_have_playback_paths(self) -> None:
         """Playback rides the tap, so every input needs its own slot number."""

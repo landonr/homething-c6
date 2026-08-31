@@ -63,13 +63,7 @@ def page_group(name: str) -> list:
 
 class RoutingTest(unittest.TestCase):
     def test_the_component_claims_all_four_paths(self) -> None:
-        for path in (
-            "/buttons",
-            "/buttons/api/state",
-            "/buttons/api/code",
-            "/buttons/api/zigbee_targets",
-            "/buttons/api/action",
-        ):
+        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code", "/buttons/api/action"):
             self.assertIn(f'"{path}"', CPP)
 
     def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
@@ -77,7 +71,7 @@ class RoutingTest(unittest.TestCase):
         handler = section(CPP, "bool ButtonConfig::canHandle", "void ButtonConfig::handleRequest")
         self.assertIn(
             'if (method == HTTP_GET)\n    return url == "/buttons" || url == "/buttons/api/state"'
-            ' || url == "/buttons/api/code" ||\n           url == "/buttons/api/zigbee_targets";',
+            ' || url == "/buttons/api/code";',
             handler,
         )
         self.assertIn(
@@ -192,7 +186,7 @@ class EnforcementTest(unittest.TestCase):
     def test_the_firmware_accepts_a_zigbee_target_on_every_slot(self) -> None:
         """Zigbee playback rides the IR path, so the wheel detents accept it too."""
         self.assertIn('action == "set_zigbee"', CPP)
-        self.assertIn('"error":"invalid target"', CPP)
+        self.assertIn('"error":"a group is 1 to 65527, in decimal or 0x hex"', CPP)
         action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
         self.assertNotIn('set_zigbee" && !info->', action)
 
@@ -203,7 +197,6 @@ class EnforcementTest(unittest.TestCase):
             "ir_code_store.clear(",
             "ir_ui.open_from_web(",
             "zigbee_assignments.assign_from_web(",
-            "zigbee_assignments.cancel_training(",
         ):
             total = CPP.count(call)
             self.assertEqual(total, 1, call)
@@ -211,11 +204,11 @@ class EnforcementTest(unittest.TestCase):
             self.assertEqual(len(deferred), total, call)
 
     def test_the_cancel_action_also_closes_on_the_main_loop(self) -> None:
-        self.assertIn("::zigbee_assignments.cancel_training();\n        ::ir_ui.close();", CPP)
+        self.assertIn("this->defer([]() { ::ir_ui.close(); });", CPP)
         self.assertEqual(CPP.count("ir_ui.close("), 1)
 
-    def test_the_state_and_target_endpoints_only_read(self) -> None:
-        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_action_")
+    def test_the_state_endpoint_only_reads(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         for call in (
             "set_voice(",
             ".clear(",
@@ -223,34 +216,24 @@ class EnforcementTest(unittest.TestCase):
             ".save(",
             "defer(",
             "assign_from_web(",
-            "cancel_training(",
         ):
             self.assertNotIn(call, state)
-        self.assertIn("void ButtonConfig::handle_targets_", state)
-        self.assertIn("::zigbee_assignments.targets()", state)
+        self.assertIn("::zigbee_assignments.assignment(info.slot)", state)
 
     def test_the_state_row_reports_the_zigbee_target_first(self) -> None:
         """A slot holds one action, and a Zigbee target hides an old IR code."""
-        state = section(CPP, "void ButtonConfig::handle_state_", "// Reads a snapshot copy")
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         self.assertRegex(
             state,
             r'zigbee\.assigned\s+\? "zigbee"[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"'
             r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"fields":"%s","name":"', state)
+        self.assertIn('"fields":"%s","group":%u,"name":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
             state,
         )
-
-    def test_a_zigbee_action_completes_from_the_manager_callback(self) -> None:
-        """A device target answers only after the Zigbee2MQTT group requests."""
-        self.assertIn("::zigbee_assignments.set_web_result_callback(", CPP)
-        self.assertIn("this->complete_action_(id, ok);", CPP)
-        self.assertIn("std::atomic<uint32_t> zigbee_action_id_{0};", HEADER)
-        self.assertIn("void set_web_result_callback(std::function<void(bool)> callback)", ZIGBEE)
-        self.assertIn("web_result_callback_(saved)", ZIGBEE)
 
     def test_an_action_is_reserved_before_its_deferred_mutation(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
@@ -291,60 +274,43 @@ class StorageTest(unittest.TestCase):
 
 
 class ZigbeeTargetTest(unittest.TestCase):
-    def test_the_manager_never_subscribes_to_the_bridge_device_list(self) -> None:
-        """The retained device inventory is larger than the C6 heap. ESPHome
+    def test_the_manager_holds_no_mqtt_client_at_all(self) -> None:
+        """The retained device inventory is larger than the C6 heap, and ESPHome
         buffers a whole MQTT payload into a std::string before it delivers the
-        message, so the subscription aborts the loop task with bad_alloc."""
-        self.assertNotIn('subscribe(base_topic_ + "/bridge/devices", handler, 1)', ZIGBEE)
-        self.assertNotIn('if (relative == "bridge/devices") {', ZIGBEE)
-        self.assertNotIn("cache_devices_", ZIGBEE)
-        self.assertNotIn("MAX_DEVICES", ZIGBEE)
-        self.assertNotIn("devices_ready_", ZIGBEE)
-        self.assertIn('subscribe(base_topic_ + "/bridge/groups", handler, 1)', ZIGBEE)
+        message. The browser reads the inventory over the Zigbee2MQTT frontend
+        websocket instead, so the remote stores only the resolved group id."""
+        for gone in ("mqtt", "subscribe(", "ArduinoJson", "JsonDocument", "base_topic_",
+                     "bridge/", "allowed_targets_", "target_states_", "Operation",
+                     "start_training", "cancel_training", "TargetKind"):
+            self.assertNotIn(gone, ZIGBEE)
 
-    def test_the_target_endpoint_reports_groups_and_an_empty_device_list(self) -> None:
-        """The page JS keeps its Devices branch, so the shape must not change."""
-        body = section(CPP, "void ButtonConfig::handle_targets_", "\n}")
-        self.assertIn(R'stream->print(R"(],"devices":[]})");', body)
-        self.assertNotIn("targets.devices", body)
-
-    def test_the_shared_caches_and_record_use_one_lock(self) -> None:
-        """The httpd task reads them while the main loop writes them."""
+    def test_the_record_and_its_reader_use_one_lock(self) -> None:
+        """The httpd task reads the record while the main loop writes it."""
         self.assertIn("mutable std::mutex cache_mutex_;", ZIGBEE)
-        for body in ("Targets targets() const {", "Assignment assignment(uint8_t slot) const {"):
-            reader = section(ZIGBEE, body, "\n  }")
-            self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
-        writer = section(ZIGBEE, "void cache_groups_(JsonVariantConst root) {", "\n  }")
-        self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", writer)
-        self.assertEqual(ZIGBEE.count("lock_guard<std::mutex> lock(cache_mutex_)"), 6)
+        reader = section(ZIGBEE, "Assignment assignment(uint8_t slot) const {", "\n  }")
+        self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
+        for writer in ("bool assign_from_web(", "void clear(uint8_t slot) {"):
+            self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);",
+                          section(ZIGBEE, writer, "\n  }"))
 
-    def test_a_short_number_is_a_group_and_a_long_hex_string_is_a_device(self) -> None:
-        """An IEEE address is 0x plus sixteen hex digits, so it is not a group."""
-        parser = section(ZIGBEE, "static bool parse_group_id_", "\n  }")
-        self.assertIn("digits.size() > (hex ? 4u : 5u)", parser)
-        self.assertIn("value == 0 || value > UINT16_MAX", parser)
+    def test_a_web_assignment_lands_in_flash_without_a_round_trip(self) -> None:
+        """A group target needs no network confirmation, so the action result is
+        known before assign_from_web returns and nothing has to stay open."""
+        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, uint16_t group_id,", "\n  }")
+        self.assertIn("if (!slot_valid_(slot) || group_id == 0 || group_id > MAX_GROUP_ID)", body)
+        self.assertIn("preference_.save(&record_)", body)
+        self.assertNotIn("deadline_", body)
+        self.assertNotIn("web_result_callback_", ZIGBEE)
 
-    def test_a_web_assignment_reuses_the_training_state_machine(self) -> None:
-        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, const std::string &target) {", "\n  }")
-        self.assertIn("if (!slot_valid_(slot) || operation_ != Operation::IDLE)", body)
-        self.assertIn("continue_after_private_group_();", body)
-        self.assertIn("start_device_candidate_();", body)
-        self.assertIn("web_pending_ = true;", body)
-        self.assertIn("global_mqtt_client->is_connected()", body)
-
-    def test_the_gesture_refuses_to_train_over_a_web_operation(self) -> None:
-        body = section(ZIGBEE, "void start_training(uint8_t slot) {", "\n  }")
-        self.assertIn("if (operation_ != Operation::IDLE) {", body)
-        self.assertIn("ir_ui.zigbee_result(false);", body)
-
-    def test_a_cancelled_web_operation_reports_through_the_callback(self) -> None:
-        report = section(ZIGBEE, "void report_result_(bool saved) {", "\n  }")
-        self.assertIn("if (web_pending_) {", report)
-        self.assertIn("web_pending_ = false;", report)
-        self.assertIn("ir_ui.zigbee_result(saved);", report)
-        for finish in ("void commit_assignment_() {", "void finish_error_() {"):
-            self.assertIn("report_result_(", section(ZIGBEE, finish, "\n  }"))
-        self.assertNotIn("ir_ui.zigbee_result(true)", ZIGBEE)
+    def test_an_assignment_replaces_the_old_action_on_the_slot(self) -> None:
+        """A slot holds one action, so a stale IR code must not survive."""
+        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, uint16_t group_id,", "\n  }")
+        self.assertIn("ir_code_store.clear_for_zigbee(slot)", body)
+        # The name belongs to the erased code, so it goes with it.
+        clear = section(STORE, "bool clear_for_zigbee(uint8_t button) {", "\n  }")
+        self.assertIn('write_name_(button, "")', clear)
+        # The reverse direction is the store's callback, set up in setup().
+        self.assertIn("ir_code_store.set_assignment_clear_callback(", ZIGBEE)
 
 
 class PageTest(unittest.TestCase):
@@ -363,12 +329,7 @@ class PageTest(unittest.TestCase):
         calls = re.findall(r'fetch\("([^"?]+)', PAGE)
         self.assertEqual(
             sorted(set(calls)),
-            [
-                "/buttons/api/action",
-                "/buttons/api/code",
-                "/buttons/api/state",
-                "/buttons/api/zigbee_targets",
-            ],
+            ["/buttons/api/action", "/buttons/api/code", "/buttons/api/state"],
         )
 
     def test_the_tile_shows_the_code_name(self) -> None:
@@ -402,7 +363,7 @@ class PageTest(unittest.TestCase):
         """Nine slots hold 68 pulses of the same length, so only the data word
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
-        self.assertIn('"pulses":%u,"us":%u,"code":"%s","fields":"%s","name":"', state)
+        self.assertIn('"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"name":"', state)
         self.assertIn("::ir_code_store.name(info.slot)", state)
         self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
         self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
@@ -492,24 +453,64 @@ class PageTest(unittest.TestCase):
         zigbee = editor.index('id=b4"')
         voice = editor.index("if(d.v)h+=")
         self.assertLess(zigbee, voice)
-        self.assertIn('<select id=zs>', PAGE)
-        self.assertIn('<input id=zt type=text', PAGE)
-        self.assertIn("<optgroup label='Groups'>", PAGE)
-        self.assertIn("<optgroup label='Devices'>", PAGE)
-        self.assertIn('post("set_zigbee",s,v)', PAGE)
+        self.assertIn("<select id=zs>", PAGE)
+        self.assertIn("<select id=zd>", PAGE)
+        self.assertIn("<input id=zt type=text", PAGE)
+        self.assertIn('post("set_zigbee",s,v,name)', PAGE)
 
-    def test_the_page_waits_for_the_zigbee_result_and_can_cancel_it(self) -> None:
-        self.assertIn("waitAction(r.body.id,400)", PAGE)
-        wait = section(PAGE, 'if(mode==="zbwait"&&rec===sel){', "return}")
-        self.assertIn("<div class=bar><i></i></div>", wait)
-        self.assertIn('document.getElementById("bc").onclick=cancel', wait)
+    def test_a_device_gets_a_group_of_its_own(self) -> None:
+        """The remote can only send a groupcast, so a single device needs a group
+        that holds only that device. The browser creates it, because the remote
+        has no MQTT client to ask with."""
+        body = section(PAGE, "function assignDevice(){", "\n\nfunction sendGroup(")
+        self.assertIn('zpub("bridge/request/group/add"', body)
+        self.assertIn('zpub("bridge/request/group/members/add"', body)
+        # The member add must not run on a refused group add.
+        self.assertIn('if(r.status!=="ok"||!r.data||typeof r.data.id!=="number"){', body)
+        # A repeat assign must not leave a new group behind every time.
+        self.assertIn("tg[i].members.length===1&&tg[i].members[0]===ieee", body)
+
+    def test_a_bridge_request_is_matched_by_its_transaction(self) -> None:
+        """Responses arrive on a shared topic, so only the transaction links one
+        back to its request. A lost response must not wedge the page."""
+        body = section(PAGE, "function zpub(topic,payload,cb){", "\n\nfunction ")
+        self.assertIn("payload.transaction=t;zreq[t]=cb;", body)
+        self.assertIn('cb({status:"error",error:"Zigbee2MQTT did not answer."})', body)
+        self.assertIn("if(!ws||ws.readyState!==1)", body)
+        self.assertIn('m.topic.indexOf("bridge/response/")===0', PAGE)
+
+    def test_the_browser_reads_the_group_list_from_zigbee2mqtt(self) -> None:
+        """The remote holds no MQTT client, so the picker is filled by this
+        browser over the Zigbee2MQTT frontend websocket. A websocket needs no
+        CORS grant, which a fetch to the same host would."""
+        self.assertIn("new WebSocket(full)", PAGE)
+        self.assertIn('m.topic==="bridge/groups"&&Array.isArray(m.payload)', PAGE)
+        self.assertIn('m.topic==="bridge/devices"&&Array.isArray(m.payload)', PAGE)
+        # The frontend relays MQTT with the base topic already stripped.
+        self.assertNotIn("zigbee2mqtt/", PAGE)
+        self.assertIn('g.id<1||g.id>65527', PAGE)
+        # The coordinator cannot be a toggle target.
+        self.assertIn('d.type==="Coordinator"', PAGE)
+
+    def test_the_broker_address_and_token_stay_in_the_browser(self) -> None:
+        """They are this browser's credentials, so they must not reach the flash
+        of a remote that has no use for them."""
+        self.assertIn('localStorage.setItem("c6.z2m.url",u)', PAGE)
+        self.assertIn('localStorage.setItem("c6.z2m.token",k)', PAGE)
+        self.assertNotIn("token", section(PAGE, "function post(", "\nfunction fail("))
+        # A private window throws on the accessor itself.
+        save = section(PAGE, "function z2mSave(){", "\n\nfunction ")
+        self.assertIn("try{localStorage.setItem", save)
+
+    def test_the_page_explains_that_membership_lives_in_the_light(self) -> None:
+        """A group id alone does nothing until the light joins the group, and
+        only Zigbee2MQTT can write that."""
+        self.assertIn("Membership lives in the", PAGE)
+        self.assertIn("light, so a group only works once the light has joined it.", PAGE)
 
     def test_the_page_reports_a_zigbee_assignment_and_its_target_name(self) -> None:
-        self.assertIn('if(r.action==="zigbee")return r.name?"Zigbee: "+r.name:"Zigbee toggle"', PAGE)
-
-    def test_the_page_reports_an_unready_bridge_instead_of_an_empty_list(self) -> None:
-        self.assertIn("if(!tg.ready)return", PAGE)
-        self.assertIn("Waiting for Zigbee2MQTT.", PAGE)
+        """An unnamed group still has to say which group it is."""
+        self.assertIn('if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:"group "+r.group)', PAGE)
 
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)

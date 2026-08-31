@@ -60,9 +60,9 @@ Use `docs/mic-v2-debugging.md` as the repository reference. It complies with the
 
 ## Repository layout
 
-This repository contains a KiCad hardware project. It is not a software application.
+This repository contains a KiCad hardware project and the ESPHome firmware for the same board.
 
-The source files are in `c6remote-kicad/`:
+The hardware source files are in `c6remote-kicad/`:
 
 - `c6remote.kicad_sch` is the single-sheet schematic.
 - `c6remote.kicad_pcb` is the board layout.
@@ -72,6 +72,14 @@ The source files are in `c6remote-kicad/`:
 - `../kicad lib/Library.pretty/` contains the custom board footprints.
 - `3dmodels/` contains models that use `${KIPRJMOD}`.
 - `export/` contains generated Gerber and drill files.
+
+The firmware files are in the repository root:
+
+- `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
+- `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
+- `components/button_config/` is a local ESPHome component. It serves the `/buttons` assignment page from `web_server`.
+- `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
+- `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
 
 Read `ROADMAP.md` first. It records the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
 

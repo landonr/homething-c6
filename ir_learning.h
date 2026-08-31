@@ -62,26 +62,42 @@ class IrCodeStore {
     return button_valid_(button) && valid_(records_[button - FIRST_BUTTON]);
   }
 
+  uint16_t code_pulses(uint8_t button) const {
+    if (!has_code(button))
+      return 0;
+    return records_[button - FIRST_BUTTON].count;
+  }
+
+  // Counts successful captures only. A re-record of the same remote button
+  // often keeps the pulse count, so a watcher cannot tell from the slot row
+  // alone that a new code landed.
+  uint32_t saves() const { return saves_; }
+
   // The voice assignment replaces whatever the button held, so drop the code.
   bool set_voice(uint8_t button) {
     if (!button_valid_(button))
       return false;
-    erase_code_(button);
-    voice_mask_ |= slot_bit_(button);
-    const bool written = voice_pref_.save(&voice_mask_);
+    const bool erased = erase_code_(button);
+    const uint32_t next_mask = voice_mask_ | slot_bit_(button);
+    const bool written = voice_pref_.save(&next_mask);
+    if (written)
+      voice_mask_ = next_mask;
     ESP_LOGI("ir_learn", "Button %u assigned to the voice assistant%s", button,
-             written ? "" : " (flash write failed)");
-    return written;
+             erased && written ? "" : " (flash write failed)");
+    return erased && written;
   }
 
   bool clear(uint8_t button) {
     if (!button_valid_(button))
       return false;
-    erase_code_(button);
-    voice_mask_ &= ~slot_bit_(button);
-    const bool written = voice_pref_.save(&voice_mask_);
-    ESP_LOGI("ir_learn", "Button %u cleared%s", button, written ? "" : " (flash write failed)");
-    return written;
+    const bool erased = erase_code_(button);
+    const uint32_t next_mask = voice_mask_ & ~slot_bit_(button);
+    const bool written = voice_pref_.save(&next_mask);
+    if (written)
+      voice_mask_ = next_mask;
+    ESP_LOGI("ir_learn", "Button %u cleared%s", button,
+             erased && written ? "" : " (flash write failed)");
+    return erased && written;
   }
 
   bool save(uint8_t button, const std::vector<int32_t> &raw) {
@@ -135,11 +151,16 @@ class IrCodeStore {
       ESP_LOGE("ir_learn", "Flash write failed for button %u", button);
       return false;
     }
-    records_[slot] = next;
     if ((voice_mask_ & slot_bit_(button)) != 0) {
-      voice_mask_ &= ~slot_bit_(button);
-      voice_pref_.save(&voice_mask_);
+      const uint32_t next_mask = voice_mask_ & ~slot_bit_(button);
+      if (!voice_pref_.save(&next_mask)) {
+        ESP_LOGE("ir_learn", "Flash write failed while removing voice from button %u", button);
+        return false;
+      }
+      voice_mask_ = next_mask;
     }
+    records_[slot] = next;
+    saves_++;
     ESP_LOGI("ir_learn", "Saved button %u: %u pulses, %u us", button,
              static_cast<unsigned>(next.count), static_cast<unsigned>(total_us));
     return true;
@@ -215,11 +236,13 @@ class IrCodeStore {
   static uint32_t slot_bit_(uint8_t button) { return 1UL << (button - FIRST_BUTTON); }
 
   // A zeroed record fails valid_(), so the slot reads as unassigned after a reboot.
-  void erase_code_(uint8_t button) {
+  bool erase_code_(uint8_t button) {
     const size_t slot = button - FIRST_BUTTON;
     Record empty{};
-    prefs_[slot].save(&empty);
+    if (!prefs_[slot].save(&empty))
+      return false;
     records_[slot] = empty;
+    return true;
   }
 
   static bool in_range_(int32_t value, int32_t low, int32_t high) {
@@ -307,6 +330,7 @@ class IrCodeStore {
   std::array<esphome::ESPPreferenceObject, SLOT_COUNT> prefs_{};
   esphome::ESPPreferenceObject voice_pref_{};
   uint32_t voice_mask_ = 0;
+  uint32_t saves_ = 0;
 };
 
 inline IrCodeStore ir_code_store;
@@ -331,6 +355,9 @@ class IrUi {
     state = READY;
     target = 0;
     stage = 0;
+    web_owner_ = false;
+    web_result_ = OFF;
+    web_result_slot_ = 0;
     mark_();
     ESP_LOGI("ir_learn", "Receiver mode READY; hold SW2 or wait 3 s to leave");
   }
@@ -339,8 +366,29 @@ class IrUi {
     state = OFF;
     target = 0;
     stage = 0;
+    web_owner_ = false;
+    closed_ = true;
     mark_();
     ESP_LOGI("ir_learn", "Receiver mode OFF; passive IR logging remains active");
+  }
+
+  bool web_owner() const { return web_owner_; }
+  uint8_t web_result() const { return web_result_; }
+  uint8_t web_result_slot() const { return web_result_slot_; }
+
+  // Opens receiver mode from the web page and arms the slot in one step. The
+  // rail and LED work needs YAML ids, so it is flagged for the 250 ms interval.
+  void open_from_web(uint8_t button) {
+    open();
+    web_owner_ = true;
+    open_requested_ = true;
+    tap(button, Tap::ARM_ONLY);
+  }
+
+  bool take_open_request() {
+    const bool pending = open_requested_;
+    open_requested_ = false;
+    return pending;
   }
 
   void tap(uint8_t button, Tap mode) {
@@ -373,19 +421,28 @@ class IrUi {
              static_cast<unsigned>(raw.size()));
     const bool saved = ir_code_store.save(target, raw);
     state = saved ? SAVED : ERROR;
+    if (web_owner_) {
+      web_result_ = state;
+      web_result_slot_ = target;
+    }
     mark_();
   }
 
-  // True when the mode closed on this tick, so the caller restores idle status.
+  // True when the mode closed since the last tick, so the caller restores idle
+  // status. A close from the web page reports here too, not only a timeout.
   bool tick() {
-    if (state == OFF)
-      return false;
+    if (state == OFF) {
+      const bool restore = closed_;
+      closed_ = false;
+      return restore;
+    }
     const uint32_t elapsed = esphome::millis() - since_;
     if (state == READY) {
       if (elapsed < 3000)
         return false;
       ESP_LOGI("ir_learn", "Receiver mode OFF after 3 s idle");
       close();
+      closed_ = false;
       return true;
     }
     const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;
@@ -446,6 +503,11 @@ class IrUi {
   uint32_t since_ = 0;
   bool pending_transmit_ = false;
   bool pending_voice_ = false;
+  bool web_owner_ = false;
+  uint8_t web_result_ = OFF;
+  uint8_t web_result_slot_ = 0;
+  bool open_requested_ = false;
+  bool closed_ = false;
   uint8_t voice_active_ = 0;
 };
 

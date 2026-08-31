@@ -26,6 +26,11 @@ esp32:
   framework:
     type: esp-idf
 
+external_components:
+  - source:
+      type: local
+      path: components
+
 logger:
 
 api:
@@ -50,6 +55,9 @@ captive_portal:
 web_server:
   port: 80
   version: 3
+
+# Serves the button assignment page at /buttons on the same server.
+button_config:
 
 i2c:
   sda: GPIO22
@@ -545,7 +553,6 @@ script:
             return;
           ir_ui.close();
           ir_ui.sw2_consumed = true;
-          id(show_idle_status).execute();
   - id: show_idle_status
     then:
       - if:
@@ -648,6 +655,10 @@ interval:
   - interval: 250ms
     then:
       - lambda: |-
+          if (ir_ui.take_open_request()) {
+            id(ir_rail).turn_on();
+            id(status_light).turn_on().set_effect("IR Receiver").perform();
+          }
           if (ir_ui.tick())
             id(show_idle_status).execute();
   - interval: 1s

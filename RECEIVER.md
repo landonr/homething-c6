@@ -79,6 +79,66 @@ In `READING`, ignore assignable button presses. Let a hold of `SW2` cancel the o
 
 In `OFF`, send the stored code on the assignable button press. Ignore button release for IR playback.
 
+## Web configurator
+
+The device serves a button page at `http://homething-c6.local/buttons`. It uses the same `web_server` as the ESPHome dashboard on port 80.
+
+The page draws the remote layout: the two top buttons, the wheel, and the nine keypad buttons.
+
+Select an input. The page shows the current assignment and the actions that the input accepts.
+
+The page is an alternative to the three-tap gesture, not a replacement. Both routes write the same flash records.
+
+### Capability matrix
+
+| Input | Slots | Record IR | Voice assistant | Clear |
+| --- | --- | --- | --- | --- |
+| `SW1` | 20 | Yes | Yes | Yes |
+| `SW2` | 19 | Yes | No | Yes |
+| `SW3` to `SW11` | 3 to 11 | Yes | Yes | Yes |
+| Wheel directions | 12 to 16 | Yes | Yes | Yes |
+| Wheel rotation | 17 and 18 | Yes | No | Yes |
+
+`SW2` has no voice action because the hold gesture owns its press edge.
+
+Wheel rotation has no voice action because a detent has no release edge to end push-to-talk.
+
+The page hides the voice button on those three slots. The firmware checks the same rule again on each request.
+
+A voice request for slot 17, 18, or 19 gets HTTP 400 and changes nothing.
+
+### One operation at a time
+
+The remote runs one assignment operation at a time. The page polls `/buttons/api/state` for the current owner.
+
+If the remote owns the operation, the page disables its action buttons. The notice reads "Assignment in progress on the remote."
+
+If a second browser owns the operation, the notice reads "Another assignment is already running."
+
+A request that arrives during an operation gets HTTP 409. The remote keeps its current operation.
+
+A web operation looks like a local one on the remote. The LEDs show the same ready and read states.
+
+The remote gesture stays active during a web operation. A tap on the remote can move the capture to another input.
+
+### A failed or cancelled capture
+
+The store keeps the previous assignment after a failed capture. A rejected frame writes nothing to flash.
+
+Cancel gives the same result. The page sends the `cancel` action and the remote closes receiver mode.
+
+If no frame arrives, the capture times out. The page then reports "No code received" and the old assignment remains.
+
+To replace an assignment, record again or select a different action.
+
+### Trusted-LAN warning
+
+The `/buttons` page and its two endpoints have no authentication. The `web_server`, `api`, and `ota` components on this device have none either.
+
+This is a deliberate choice for a trusted home network. Any device on that network can change an assignment.
+
+Do not expose port 80 of the remote to the internet. If the network is not trusted, add `web_server` authentication.
+
 ## Capture rules
 
 Disable the current unrestricted `dump: all` log in production. Route received frames to one learning handler.

@@ -39,7 +39,10 @@ This repo contains the KiCad hardware and ESPHome bring-up configuration for a p
 - Drive music playback over Wi-Fi and BLE
 - Switch lights over Zigbee, Thread, or Matter
 - Map Home Assistant actions to physical buttons instead of app screens
+- Assign every button from a web page on the remote itself
 - Run for a long time between charges
+
+Open `http://homething-c6.local/buttons` in a browser on the same network. The page draws the remote layout. Select an input, then record an IR code, assign the voice assistant, or clear the input. The on-device gesture does the same job: hold `SW2` for two seconds. [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it on a trusted network only.
 
 ## Hardware
 

@@ -9,6 +9,17 @@ CONFIG = (ROOT / "c6remote.yaml").read_text()
 HEADER = (ROOT / "ir_learning.h").read_text()
 
 
+def section(text: str, start: str, end: str) -> str:
+    """Return the text between the first start marker and the next end marker."""
+    head = text.split(start, 1)
+    if len(head) != 2:
+        raise AssertionError(f"{start!r} not found")
+    tail = head[1].split(end, 1)
+    if len(tail) != 2:
+        raise AssertionError(f"{end!r} not found after {start!r}")
+    return tail[0]
+
+
 class IrLearningTest(unittest.TestCase):
     def test_sw2_hold_enters_receiver_mode(self) -> None:
         self.assertIn("id: detect_receiver_hold", CONFIG)
@@ -77,9 +88,44 @@ class IrLearningTest(unittest.TestCase):
 
     def test_samsung_capture_uses_canonical_timings(self) -> None:
         self.assertIn("normalize_samsung_(raw, normalized, samsung_data)", HEADER)
-        self.assertIn("normalized.push_back(4500)", HEADER)
+        self.assertIn("samsung_frame_(data, normalized)", HEADER)
+        self.assertIn("frame.push_back(4500)", HEADER)
         self.assertIn("? -1690 : -560", HEADER)
         self.assertIn("Canonicalized Samsung button", HEADER)
+
+    def test_a_samsung_word_reads_back_as_an_address_and_a_command(self) -> None:
+        """Samsung32 sends the address twice and the command with its inverse,
+        each byte least significant bit first."""
+        fields = section(
+            HEADER,
+            "bool code_samsung_fields(uint8_t button, uint8_t &address, uint8_t &command) const {",
+            "\n  }",
+        )
+        self.assertIn("reverse_bits_((data >> 24) & 0xFFU)", fields)
+        self.assertIn("reverse_bits_((data >> 8) & 0xFFU)", fields)
+        self.assertIn("if (first != second || value != static_cast<uint8_t>(~inverse))", fields)
+        builder = section(
+            HEADER,
+            "static void samsung_timings(uint8_t address, uint8_t command, std::vector<int32_t> &raw) {",
+            "\n  }",
+        )
+        self.assertIn("reverse_bits_(static_cast<uint8_t>(~command))", builder)
+        self.assertIn("samsung_frame_(data, raw)", builder)
+
+    def test_a_code_name_persists_beside_the_frame(self) -> None:
+        """The name has its own record, so it cannot shift the Record layout that
+        every stored code is read back with."""
+        self.assertIn("static constexpr uint32_t NAME_KEY = 0x4952434EU;", HEADER)
+        self.assertIn("make_preference<NameBook>(NAME_KEY, true)", HEADER)
+        self.assertIn("char names[SLOT_COUNT][NAME_LEN];", HEADER)
+        clean = section(HEADER, "bool set_name(uint8_t button, const char *text) {", "\n  }")
+        self.assertIn("value < 0x20 || value > 0x7E", clean)
+        self.assertIn("value == '\"' || value == '\\\\'", clean)
+        # A cleared slot must not keep the name of the code it held.
+        self.assertEqual(HEADER.count('erase_code_(button) && write_name_(button, "")'), 2)
+        # Nor may a slot keep the old name after a capture writes a new code.
+        save = section(HEADER, "bool save(uint8_t button, const std::vector<int32_t> &raw) {", "\n  }")
+        self.assertIn("if (names_.names[slot][0] != '\\0')\n      write_name_(button, \"\");", save)
 
     def test_playback_logs_actual_output_pulses(self) -> None:
         self.assertIn("log_output_(button, raw)", HEADER)

@@ -23,6 +23,8 @@ class IrCodeStore {
   static constexpr uint8_t VOICE_BUTTON = 20;
   static constexpr size_t SLOT_COUNT = LAST_BUTTON - FIRST_BUTTON + 1;
   static constexpr size_t MAX_PULSES = 512;
+  // Flipper .ir names are short words such as Power or Vol_up.
+  static constexpr size_t NAME_LEN = 24;
 
   void setup() {
     size_t loaded_count = 0;
@@ -36,6 +38,14 @@ class IrCodeStore {
                  static_cast<unsigned>(loaded.count));
       }
     }
+
+    // Names live in their own record, so adding them leaves every stored code
+    // readable by the unchanged Record layout.
+    name_pref_ = esphome::global_preferences->make_preference<NameBook>(NAME_KEY, true);
+    NameBook book{};
+    if (name_pref_.load(&book) && book.magic == NAME_MAGIC && book.version == VERSION &&
+        book.checksum == checksum_of_(&book, sizeof(book) - sizeof(book.checksum)))
+      names_ = book;
 
     voice_pref_ = esphome::global_preferences->make_preference<uint32_t>(VOICE_KEY, true);
     uint32_t mask = 0;
@@ -116,6 +126,55 @@ class IrCodeStore {
     return true;
   }
 
+  // Samsung32 carries the address twice and the command with its inverse, both
+  // LSB first. A frame that breaks either rule is raw to every decoder.
+  bool code_samsung_fields(uint8_t button, uint8_t &address, uint8_t &command) const {
+    uint32_t data = 0;
+    if (!code_samsung_data(button, data))
+      return false;
+    const uint8_t first = reverse_bits_((data >> 24) & 0xFFU);
+    const uint8_t second = reverse_bits_((data >> 16) & 0xFFU);
+    const uint8_t value = reverse_bits_((data >> 8) & 0xFFU);
+    const uint8_t inverse = reverse_bits_(data & 0xFFU);
+    if (first != second || value != static_cast<uint8_t>(~inverse))
+      return false;
+    address = first;
+    command = value;
+    return true;
+  }
+
+  // The 68 pulse frame that code_samsung_fields() reads back.
+  static void samsung_timings(uint8_t address, uint8_t command, std::vector<int32_t> &raw) {
+    const uint32_t data = (static_cast<uint32_t>(reverse_bits_(address)) << 24) |
+                          (static_cast<uint32_t>(reverse_bits_(address)) << 16) |
+                          (static_cast<uint32_t>(reverse_bits_(command)) << 8) |
+                          static_cast<uint32_t>(reverse_bits_(static_cast<uint8_t>(~command)));
+    samsung_frame_(data, raw);
+  }
+
+  const char *name(uint8_t button) const {
+    if (!button_valid_(button))
+      return "";
+    return names_.names[button - FIRST_BUTTON];
+  }
+
+  // Only printable ASCII is kept, so a name needs no JSON escape on the page.
+  bool set_name(uint8_t button, const char *text) {
+    if (!button_valid_(button))
+      return false;
+    char clean[NAME_LEN] = "";
+    size_t used = 0;
+    for (const char *cursor = text; *cursor != '\0' && used + 1 < NAME_LEN; cursor++) {
+      const char value = *cursor;
+      if (value < 0x20 || value > 0x7E || value == '"' || value == '\\')
+        continue;
+      clean[used++] = value;
+    }
+    while (used > 0 && clean[used - 1] == ' ')
+      clean[--used] = '\0';
+    return write_name_(button, clean);
+  }
+
   // Counts successful captures only. A re-record of the same remote button
   // often keeps the pulse count, so a watcher cannot tell from the slot row
   // alone that a new code landed.
@@ -125,7 +184,7 @@ class IrCodeStore {
   bool set_voice(uint8_t button) {
     if (!button_valid_(button))
       return false;
-    const bool erased = erase_code_(button);
+    const bool erased = erase_code_(button) && write_name_(button, "");
     const uint32_t next_mask = voice_mask_ | slot_bit_(button);
     const bool written = voice_pref_.save(&next_mask);
     if (written)
@@ -138,7 +197,7 @@ class IrCodeStore {
   bool clear(uint8_t button) {
     if (!button_valid_(button))
       return false;
-    const bool erased = erase_code_(button);
+    const bool erased = erase_code_(button) && write_name_(button, "");
     const uint32_t next_mask = voice_mask_ & ~slot_bit_(button);
     const bool written = voice_pref_.save(&next_mask);
     if (written)
@@ -209,6 +268,10 @@ class IrCodeStore {
     }
     records_[slot] = next;
     saves_++;
+    // A capture replaces the code, so the name of the old code no longer fits.
+    // A paste names the slot again after this call.
+    if (names_.names[slot][0] != '\0')
+      write_name_(button, "");
     ESP_LOGI("ir_learn", "Saved button %u: %u pulses, %u us", button,
              static_cast<unsigned>(next.count), static_cast<unsigned>(total_us));
     return true;
@@ -269,6 +332,8 @@ class IrCodeStore {
  private:
   static constexpr uint32_t MAGIC = 0x49524336U;
   static constexpr uint32_t VOICE_KEY = 0x49524356U;
+  static constexpr uint32_t NAME_KEY = 0x4952434EU;
+  static constexpr uint32_t NAME_MAGIC = 0x4952434FU;
   static constexpr uint16_t VERSION = 1;
 
   struct Record {
@@ -276,6 +341,14 @@ class IrCodeStore {
     uint16_t version;
     uint16_t count;
     int16_t pulses[MAX_PULSES];
+    uint32_t checksum;
+  };
+
+  struct NameBook {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    char names[SLOT_COUNT][NAME_LEN];
     uint32_t checksum;
   };
 
@@ -290,6 +363,32 @@ class IrCodeStore {
     if (!prefs_[slot].save(&empty))
       return false;
     records_[slot] = empty;
+    return true;
+  }
+
+  static uint8_t reverse_bits_(uint8_t value) {
+    uint8_t out = 0;
+    for (size_t bit = 0; bit < 8; bit++)
+      out = static_cast<uint8_t>((out << 1) | ((value >> bit) & 1U));
+    return out;
+  }
+
+  bool write_name_(uint8_t button, const char *clean) {
+    NameBook book = names_;
+    book.magic = NAME_MAGIC;
+    book.version = VERSION;
+    book.reserved = 0;
+    char *row = book.names[button - FIRST_BUTTON];
+    // snprintf leaves the tail bytes alone, and stale bytes would move the checksum.
+    for (size_t i = 0; i < NAME_LEN; i++)
+      row[i] = '\0';
+    std::snprintf(row, NAME_LEN, "%s", clean);
+    book.checksum = checksum_of_(&book, sizeof(book) - sizeof(book.checksum));
+    if (!name_pref_.save(&book)) {
+      ESP_LOGE("ir_learn", "Flash write failed for the name of button %u", button);
+      return false;
+    }
+    names_ = book;
     return true;
   }
 
@@ -315,17 +414,21 @@ class IrCodeStore {
     if (raw[66] <= 0 || !in_range_(raw[66], 350, 800))
       return false;
 
-    normalized.clear();
-    normalized.reserve(68);
-    normalized.push_back(4500);
-    normalized.push_back(-4500);
-    for (int bit = 31; bit >= 0; bit--) {
-      normalized.push_back(560);
-      normalized.push_back((data & (1UL << bit)) != 0 ? -1690 : -560);
-    }
-    normalized.push_back(560);
-    normalized.push_back(-560);
+    samsung_frame_(data, normalized);
     return true;
+  }
+
+  static void samsung_frame_(uint32_t data, std::vector<int32_t> &frame) {
+    frame.clear();
+    frame.reserve(68);
+    frame.push_back(4500);
+    frame.push_back(-4500);
+    for (int bit = 31; bit >= 0; bit--) {
+      frame.push_back(560);
+      frame.push_back((data & (1UL << bit)) != 0 ? -1690 : -560);
+    }
+    frame.push_back(560);
+    frame.push_back(-560);
   }
 
   static void log_output_(uint8_t button, const std::vector<int32_t> &raw) {
@@ -358,15 +461,18 @@ class IrCodeStore {
     }
   }
 
-  static uint32_t checksum_(const Record &record) {
+  static uint32_t checksum_of_(const void *data, size_t length) {
     uint32_t hash = 2166136261U;
-    const auto *bytes = reinterpret_cast<const uint8_t *>(&record);
-    const size_t length = sizeof(Record) - sizeof(record.checksum);
+    const auto *bytes = static_cast<const uint8_t *>(data);
     for (size_t i = 0; i < length; i++) {
       hash ^= bytes[i];
       hash *= 16777619U;
     }
     return hash;
+  }
+
+  static uint32_t checksum_(const Record &record) {
+    return checksum_of_(&record, sizeof(Record) - sizeof(record.checksum));
   }
 
   static bool valid_(const Record &record) {
@@ -376,6 +482,8 @@ class IrCodeStore {
 
   std::array<Record, SLOT_COUNT> records_{};
   std::array<esphome::ESPPreferenceObject, SLOT_COUNT> prefs_{};
+  NameBook names_{};
+  esphome::ESPPreferenceObject name_pref_{};
   esphome::ESPPreferenceObject voice_pref_{};
   uint32_t voice_mask_ = 0;
   uint32_t saves_ = 0;

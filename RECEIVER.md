@@ -131,6 +131,32 @@ If no frame arrives, the capture times out. The page then reports "No code recei
 
 To replace an assignment, record again or select a different action.
 
+### Copy a code by text
+
+Each input has an "IR code" box on the page. The box holds one Flipper `.ir` signal block.
+
+`GET /buttons/api/code?slot=<n>` returns that block. The Apply button posts it back as the `code` field.
+
+A Samsung32 frame prints as a parsed block:
+
+```
+name: Power
+type: parsed
+protocol: Samsung32
+address: 07 00 00 00
+command: E6 00 00 00
+```
+
+Every other frame prints as a raw block with `frequency`, `duty_cycle`, and a `data` line of durations in microseconds.
+
+The `name` line names the code. The page shows that name on the input tile.
+
+A paste can hold a whole Flipper-IRDB file. The parser reads the first signal and ignores the rest.
+
+The parser also accepts a bare list of signed microsecond values, which is the format that earlier builds copied out.
+
+The board transmits at 38 kHz with 50 percent duty, so it ignores the `frequency` and `duty_cycle` lines of a pasted block.
+
 ### Trusted-LAN warning
 
 The `/buttons` page and its two endpoints have no authentication. The `web_server`, `api`, and `ota` components on this device have none either.

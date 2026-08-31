@@ -229,7 +229,7 @@ class StorageTest(unittest.TestCase):
         for line in STORE.splitlines():
             if "make_preference" in line:
                 self.assertNotIn("saves", line)
-        self.assertEqual(STORE.count("make_preference"), 2)
+        self.assertEqual(STORE.count("make_preference"), 3)
 
     def test_assignment_writes_report_code_and_voice_failures(self) -> None:
         self.assertIn("bool erase_code_(uint8_t button)", STORE)
@@ -240,8 +240,14 @@ class StorageTest(unittest.TestCase):
 class PageTest(unittest.TestCase):
     def test_the_page_loads_nothing_from_outside_the_device(self) -> None:
         """The remote often sits on a LAN with no route to the internet."""
-        for marker in ("http://", "https://", "<script src", "<link", "@import", "//cdn"):
+        for marker in ("http://", "<script src", "<link", "@import", "//cdn", 'src="http'):
             self.assertNotIn(marker, PAGE)
+        # One outbound anchor names the code library. A link loads nothing until
+        # the reader follows it, so it cannot stall the page on an offline LAN.
+        self.assertEqual(
+            re.findall(r"https://[^\s\"'>]+", PAGE),
+            ["https://github.com/Lucaslhm/Flipper-IRDB"],
+        )
 
     def test_the_page_only_calls_its_own_endpoints(self) -> None:
         calls = re.findall(r'fetch\("([^"?]+)', PAGE)
@@ -250,17 +256,30 @@ class PageTest(unittest.TestCase):
             ["/buttons/api/action", "/buttons/api/code", "/buttons/api/state"],
         )
 
+    def test_the_tile_shows_the_code_name(self) -> None:
+        """A tile holds one line, and the name says more than the protocol does."""
+        label = section(PAGE, "function words(s){", "return \"Clear\"}")
+        self.assertIn('return "IR: "+codeName(r)', label)
+        self.assertIn('function codeName(r){return r.name?r.name:"Slot"+r.slot}', PAGE)
+        self.assertNotIn("Samsung32", label)
+        # The code endpoint prints the same fallback into the name line.
+        self.assertIn(R'stream->printf("name: Slot%u\\n"', CPP)
+
     def test_the_page_details_the_action_of_a_slot(self) -> None:
-        """A pulse count alone does not say what the button sends."""
+        """A pulse count alone does not say what the button sends. Only the rows
+        that separate one code from another belong here, because the heading
+        already names the action."""
         body = section(PAGE, "function detail(s){", 'return h+"</dl>"}')
-        self.assertIn('k.push(["Type","IR"])', body)
-        self.assertIn('k.push(["Protocol",r.code?"Samsung 32-bit":"Raw capture"])', body)
-        self.assertIn('if(r.code)k.push(["Target",r.code])', body)
+        self.assertIn('if(!r||r.action!=="ir")return ""', body)
+        self.assertIn('k.push(["Protocol","Samsung32"])', body)
+        self.assertIn('k.push(["Address",r.fields.split(" ")[0]])', body)
+        self.assertIn('k.push(["Command",r.fields.split(" ")[1]])', body)
+        self.assertIn('k.push(["Protocol","Raw capture"])', body)
         self.assertIn('k.push(["Pulses",String(r.pulses)])', body)
         self.assertIn('if(r.us)k.push(["Frame",ms(r.us)])', body)
-        self.assertIn('k.push(["Carrier","38 kHz at 50% duty"])', body)
-        self.assertIn('k.push(["Type","Voice"])', body)
-        self.assertIn('k.push(["Type","Unassigned"])', body)
+        # A constant row says nothing. Every frame goes out at 38 kHz.
+        self.assertNotIn("Carrier", body)
+        self.assertNotIn('"Type"', body)
         self.assertIn('function ms(u){return (u/1000).toFixed(1)+" ms"}', PAGE)
         self.assertIn('esc(words(sel))+"</p>"+detail(sel)', PAGE)
 
@@ -268,10 +287,13 @@ class PageTest(unittest.TestCase):
         """Nine slots hold 68 pulses of the same length, so only the data word
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
-        self.assertIn('"pulses":%u,"us":%u,"code":"%s"', state)
+        self.assertIn('"name":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s"', state)
+        self.assertIn("::ir_code_store.name(info.slot)", state)
         self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
         self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
+        self.assertIn("::ir_code_store.code_samsung_fields(info.slot, address, command)", state)
         self.assertIn(R'std::snprintf(code, sizeof(code), "0x%08X"', state)
+        self.assertIn(R'std::snprintf(fields, sizeof(fields), "%02X %02X"', state)
         length = section(STORE, "uint32_t code_duration_us(uint8_t button) const {", "\n  }")
         self.assertIn("* 10U", length)
         decode = section(STORE, "bool code_samsung_data(uint8_t button, uint32_t &data) const {", "\n  }")
@@ -284,6 +306,8 @@ class PageTest(unittest.TestCase):
         missing and execCommand has to carry the copy."""
         box = section(PAGE, "function codeBox(){", 'return h}')
         self.assertIn("<textarea id=ct", box)
+        # The box carries the only copy of a code, so it never hides behind a toggle.
+        self.assertNotIn("<details", PAGE)
         self.assertIn('id=cc>Copy</button>', box)
         self.assertIn('id=ca>Apply to this input</button>', box)
         copy = section(PAGE, "function copyCode(){", "bad=!ok;paint()}")
@@ -291,14 +315,22 @@ class PageTest(unittest.TestCase):
         self.assertIn("if(!ok&&navigator.clipboard)", copy)
         self.assertIn('go("set_ir_code",text)', PAGE)
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
-        # The body carries commas only, so the separators of a pasted list are
-        # normalised before the request is encoded.
-        self.assertIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
+        self.assertIn('cd=j.text||""', PAGE)
+        # The block is line based, so the newlines have to survive the encode.
+        self.assertIn('"&code="+encodeURIComponent(c)', PAGE)
+        self.assertNotIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
 
-    def test_the_code_endpoint_returns_the_stored_timings(self) -> None:
+    def test_the_code_endpoint_prints_a_flipper_signal_block(self) -> None:
+        """The .ir syntax moves a code between this board, a Flipper, and the
+        Flipper-IRDB files without a converter."""
         body = section(CPP, "void ButtonConfig::handle_code_", "\n}")
         self.assertIn("::ir_code_store.code_timings(info->slot, raw)", body)
-        self.assertIn(R'"present":%s,"timings":[', body)
+        self.assertIn(R'"present":%s,"text":"', body)
+        self.assertIn(R'stream->printf("name: %s\\n", name)', body)
+        self.assertIn(R'stream->print("type: parsed\\nprotocol: Samsung32\\n")', body)
+        self.assertIn(R'"address: %02X 00 00 00\\ncommand: %02X 00 00 00"', body)
+        self.assertIn(R'"type: raw\\nfrequency: 38000\\nduty_cycle: 0.500000\\ndata:"', body)
+        self.assertIn("::ir_code_store.code_samsung_fields(info->slot, address, command)", body)
         self.assertIn('url == "/buttons/api/code"', CPP)
         self.assertIn("void handle_code_(AsyncWebServerRequest *request);", HEADER)
         # code_timings() exists because load() logs the whole frame.
@@ -314,8 +346,29 @@ class PageTest(unittest.TestCase):
         self.assertIn("return raw.size() >= 4 && raw.size() % 2 == 0;", parser)
         action = section(CPP, "void ButtonConfig::handle_action_", "\n}")
         self.assertIn('action == "set_ir_code"', action)
-        self.assertIn('!parse_timings(request->arg("code"), timings)', action)
+        self.assertIn('!parse_ir_text(request->arg("code"), name, timings)', action)
         self.assertIn("::ir_code_store.save(button, timings)", action)
+        self.assertIn("::ir_code_store.set_name(button, name.c_str())", action)
+
+    def test_a_pasted_flipper_block_is_read_a_line_at_a_time(self) -> None:
+        """A Flipper-IRDB file holds many signals, and only the first one lands."""
+        parser = section(CPP, "static bool parse_ir_text", "\n}")
+        self.assertIn('lower_equals(key, "filetype") || lower_equals(key, "version")', parser)
+        self.assertIn("if (named)\n        break;", parser)
+        self.assertIn('lower_equals(type, "parsed")', parser)
+        self.assertIn('!lower_equals(protocol, "samsung32") || !have_address || !have_command', parser)
+        self.assertIn("IrCodeStore::samsung_timings(address, command, raw)", parser)
+        self.assertIn('lower_equals(type, "raw")', parser)
+        self.assertIn("return parse_raw_data(data, raw);", parser)
+        # A code copied out of an older build is a bare list of signed values.
+        self.assertIn("if (!keyed)\n    return parse_timings(text, raw);", parser)
+        raw = section(CPP, "static bool parse_raw_data", "\n}")
+        self.assertIn("if (value < 1 || value > 327670)", raw)
+        self.assertIn("raw.size() % 2 == 0 ? static_cast<int32_t>(value) : -static_cast<int32_t>(value)", raw)
+        # A Flipper raw frame ends on a mark, so its value count is odd.
+        self.assertIn("return raw.size() >= 4;", raw)
+        byte = section(CPP, "static bool parse_leading_byte", "\n}")
+        self.assertIn('field.substr(0, 2).c_str(), &end, 16', byte)
         # The default 1024 byte cap truncates a long frame.
         self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
 

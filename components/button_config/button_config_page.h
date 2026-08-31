@@ -23,6 +23,7 @@ h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
+a{color:var(--acc)}
 .grp{margin:0 0 14px}
 .grp>p{color:var(--mut);font-size:12px;margin:0 0 6px;text-transform:uppercase;
 letter-spacing:.06em}
@@ -36,8 +37,8 @@ button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
 padding:8px;width:100%;margin:2px 0;resize:vertical}
-details.code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-details.code summary{cursor:pointer;color:var(--mut);font-size:12px;
+.code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.code>p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
 text-align:left;cursor:pointer;display:block;width:100%}
@@ -90,35 +91,29 @@ var S=[
 {s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
 {s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
-// cd holds the editable code text for cdSlot. cdOpen keeps the box unfolded
-// across the repaints that every action triggers.
-var cd="",cdSlot=null,cdOpen=false;
+// cd holds the editable code text for cdSlot.
+var cd="",cdSlot=null;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
+// The code block prints the same fallback, so a copy and a tile agree.
+function codeName(r){return r.name?r.name:"Slot"+r.slot}
 function words(s){var r=row(s);if(!r)return "Unknown";
 if(r.action==="voice")return "Voice assistant";
-if(r.action==="ir")return r.code?"IR "+r.code:"IR ("+r.pulses+" pulses)";return "Clear"}
+if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
 
 function ms(u){return (u/1000).toFixed(1)+" ms"}
 
-// The tile holds one line only, so the editor carries the transport, the
-// command, and the identifier that the remote actually sends.
-function detail(s){var r=row(s);if(!r)return "";var k=[],i;
-if(r.action==="ir"){
-k.push(["Type","IR"]);
-k.push(["Action","Transmit the stored code"]);
-k.push(["Protocol",r.code?"Samsung 32-bit":"Raw capture"]);
-if(r.code)k.push(["Target",r.code]);
+// Only what separates one code from another. The heading already names the
+// action, and every frame goes out at 38 kHz with 50 percent duty.
+function detail(s){var r=row(s);if(!r||r.action!=="ir")return "";var k=[],i;
+if(r.fields){k.push(["Protocol","Samsung32"]);
+k.push(["Address",r.fields.split(" ")[0]]);
+k.push(["Command",r.fields.split(" ")[1]])}
+else{k.push(["Protocol","Raw capture"]);
 k.push(["Pulses",String(r.pulses)]);
-if(r.us)k.push(["Frame",ms(r.us)]);
-k.push(["Carrier","38 kHz at 50% duty"])}
-else if(r.action==="voice"){
-k.push(["Type","Voice"]);
-k.push(["Action","Start the voice assistant"]);
-k.push(["Target","Home Assistant over the native API"])}
-else{k.push(["Type","Unassigned"]);k.push(["Action","None"])}
+if(r.us)k.push(["Frame",ms(r.us)])}
 var h="<dl class=info>";
 for(i=0;i<k.length;i++)h+="<dt>"+esc(k[i][0])+"</dt><dd>"+esc(k[i][1])+"</dd>";
 return h+"</dl>"}
@@ -143,21 +138,20 @@ function esc(t){var e=document.createElement("div");e.textContent=t;return e.inn
 // The box stays available on an empty slot, so a code can be pasted in without
 // pointing a source remote at the board.
 function codeBox(){
-var h="<details class=code"+(cdOpen?" open":"")+" id=cx>"+
-"<summary>Raw code</summary>"+
-"<p class=sub>Timings in microseconds, mark first. A positive value is a mark "+
-"and a negative value is a space. Copy it to another board, or paste one in.</p>"+
-"<textarea id=ct rows=6 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
+var h="<div class=code><p class=hd>IR code</p>"+
+"<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
+"rel=noreferrer>Flipper-IRDB</a></p>"+
+"<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
 if(cdSlot!==sel)h+="<p class=sub>Loading the stored code.</p>";
 h+="<div class=act><button type=button class=sec id=cc>Copy</button>"+
-"<button type=button id=ca>Apply to this input</button></div></details>";
+"<button type=button id=ca>Apply to this input</button></div></div>";
 return h}
 
 function loadCode(s){cdSlot=null;cd="";
 return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
 .then(function(r){return r.json()})
 .then(function(j){if(j.slot!==s)return;
-cd=(j.timings||[]).join(", ");cdSlot=s;if(sel===s)paint()})
+cd=j.text||"";cdSlot=s;if(sel===s)paint()})
 .catch(function(){})}
 
 // The page is served over plain HTTP, so navigator.clipboard is undefined in
@@ -202,8 +196,6 @@ h+=codeBox();
 e.innerHTML=h;
 var box=document.getElementById("ct");
 box.oninput=function(){cd=box.value};
-document.getElementById("cx").ontoggle=function(){
-cdOpen=document.getElementById("cx").open};
 document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
 if(lock)return;
@@ -217,11 +209,11 @@ if(cdSlot!==s)loadCode(s)}
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}
 
-// A pasted code can carry newlines and a bracket, so the separators collapse to
-// commas before the body is built. ESPHome caps a POST body, and the sdkconfig
-// raises that cap for a full length frame.
+// The block keeps its newlines, because the parser reads it a line at a time.
+// ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
+// raw frame.
 function post(a,s,c){var b="action="+a+(s?"&slot="+s:"")+
-(c?"&code="+encodeURIComponent(c.replace(/[^0-9+\-]+/g,",")):"");
+(c?"&code="+encodeURIComponent(c):"");
 return fetch("/buttons/api/action",{method:"POST",
 headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
 .then(function(r){return r.text().then(function(t){

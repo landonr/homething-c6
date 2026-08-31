@@ -59,7 +59,9 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  power_save_mode: none
+  # The Zigbee radio shares the antenna. Coexistence needs modem power save, or
+  # the STA misses beacons and the connection flaps.
+  power_save_mode: light
   on_connect:
     - script.execute: show_idle_status
   on_disconnect:

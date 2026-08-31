@@ -84,7 +84,9 @@ class ProductionConfigTest(unittest.TestCase):
     def test_sw1_is_push_to_talk_for_home_assistant_assist(self) -> None:
         """SW2 owns the receiver-mode hold, so SW1 carries push to talk."""
         config = CONFIG.read_text()
-        self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: none")
+        # Zigbee and Wi-Fi share the C6 radio. Coexistence needs modem power
+        # save, or the STA misses beacons and the association flaps.
+        self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: light")
         self.assertRegex(
             config,
             r"esphome:[\s\S]*?\n  on_boot:[\s\S]*?\n    - script.execute: show_idle_status"

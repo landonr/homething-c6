@@ -81,6 +81,18 @@ class IrCodeStore {
     return total;
   }
 
+  // load() logs the whole frame, which is too loud for a page view.
+  bool code_timings(uint8_t button, std::vector<int32_t> &raw) const {
+    raw.clear();
+    if (!has_code(button))
+      return false;
+    const Record &record = records_[button - FIRST_BUTTON];
+    raw.reserve(record.count);
+    for (size_t i = 0; i < record.count; i++)
+      raw.push_back(static_cast<int32_t>(record.pulses[i]) * 10);
+    return true;
+  }
+
   // save() canonicalizes a Samsung frame, so the 32 data bits read back out of
   // the record. Ticks are 10 us: a 4.5 ms header is 450, a one space is 169.
   bool code_samsung_data(uint8_t button, uint32_t &data) const {

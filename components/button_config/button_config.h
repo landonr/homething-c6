@@ -29,6 +29,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
  protected:
   void handle_page_(AsyncWebServerRequest *request);
   void handle_state_(AsyncWebServerRequest *request);
+  void handle_code_(AsyncWebServerRequest *request);
   void handle_action_(AsyncWebServerRequest *request);
   void complete_action_(uint32_t id, bool ok);
 

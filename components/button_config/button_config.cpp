@@ -7,6 +7,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace esphome::button_config {
 
@@ -27,6 +29,41 @@ static const SlotInfo *find_slot(long slot) {
       return &info;
   }
   return nullptr;
+}
+
+static const SlotInfo *parse_slot(const std::string &text) {
+  char *end = nullptr;
+  const long slot = std::strtol(text.c_str(), &end, 10);
+  if (text.empty() || end == text.c_str() || *end != '\0')
+    return nullptr;
+  return find_slot(slot);
+}
+
+// Accepts the text that /buttons/api/code prints: signed microsecond values in
+// any bracket or separator style. A mark is positive and a space is negative,
+// and the two must alternate from a mark, which rejects a truncated paste.
+static bool parse_timings(const std::string &text, std::vector<int32_t> &raw) {
+  raw.clear();
+  const char *cursor = text.c_str();
+  while (*cursor != '\0') {
+    while (*cursor != '\0' && *cursor != '-' && *cursor != '+' && (*cursor < '0' || *cursor > '9'))
+      cursor++;
+    if (*cursor == '\0')
+      break;
+    char *end = nullptr;
+    const long value = std::strtol(cursor, &end, 10);
+    if (end == cursor)
+      return false;
+    cursor = end;
+    if (value == 0 || value < -327670 || value > 327670)
+      return false;
+    if (raw.size() >= IrCodeStore::MAX_PULSES)
+      return false;
+    if ((raw.size() % 2 == 0) != (value > 0))
+      return false;
+    raw.push_back(static_cast<int32_t>(value));
+  }
+  return raw.size() >= 4 && raw.size() % 2 == 0;
 }
 
 static const char *state_name(uint8_t state) {
@@ -75,7 +112,7 @@ bool ButtonConfig::canHandle(AsyncWebServerRequest *request) const {
   const StringRef url = request->url_to(url_buf);
   const http_method method = request->method();
   if (method == HTTP_GET)
-    return url == "/buttons" || url == "/buttons/api/state";
+    return url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
   if (method == HTTP_POST)
     return url == "/buttons/api/action";
   return false;
@@ -86,6 +123,8 @@ void ButtonConfig::handleRequest(AsyncWebServerRequest *request) {
   const StringRef url = request->url_to(url_buf);
   if (url == "/buttons/api/state") {
     this->handle_state_(request);
+  } else if (url == "/buttons/api/code") {
+    this->handle_code_(request);
   } else if (url == "/buttons/api/action") {
     this->handle_action_(request);
   } else {
@@ -131,6 +170,25 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   request->send(stream);
 }
 
+// Reads only, so it runs on the httpd task without a defer. The page prints
+// these timings so a code can be copied to another board or edited by hand.
+void ButtonConfig::handle_code_(AsyncWebServerRequest *request) {
+  const SlotInfo *info = parse_slot(request->arg("slot"));
+  if (info == nullptr) {
+    request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
+    return;
+  }
+  std::vector<int32_t> raw;
+  const bool present = ::ir_code_store.code_timings(info->slot, raw);
+  AsyncResponseStream *stream = request->beginResponseStream("application/json");
+  stream->printf(R"({"slot":%u,"present":%s,"timings":[)", static_cast<unsigned>(info->slot),
+                 present ? "true" : "false");
+  for (size_t i = 0; i < raw.size(); i++)
+    stream->printf(i == 0 ? "%d" : ",%d", static_cast<int>(raw[i]));
+  stream->print("]}");
+  request->send(stream);
+}
+
 // The store and the state machine are main-loop owned, so every mutation is
 // deferred off the httpd task. NVS writes from the httpd task would race.
 void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
@@ -148,22 +206,28 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
-  const bool known = action == "record_ir" || action == "set_voice" || action == "clear";
+  const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
+                     action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
   }
 
-  const std::string slot_arg = request->arg("slot");
-  char *end = nullptr;
-  const long slot = std::strtol(slot_arg.c_str(), &end, 10);
-  const SlotInfo *info = (slot_arg.empty() || end == slot_arg.c_str() || *end != '\0') ? nullptr : find_slot(slot);
+  const SlotInfo *info = parse_slot(request->arg("slot"));
   if (info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
     return;
   }
   if (action == "set_voice" && !info->voice) {
     request->send(400, "application/json", R"({"ok":false,"error":"slot has no voice action"})");
+    return;
+  }
+
+  // The request dies before the defer runs, so the pasted text is parsed here.
+  std::vector<int32_t> timings;
+  if (action == "set_ir_code" && !parse_timings(request->arg("code"), timings)) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"a code is 4 to 512 alternating values in us, from a positive mark"})");
     return;
   }
 
@@ -179,7 +243,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
-  const uint8_t button = static_cast<uint8_t>(slot);
+  const uint8_t button = info->slot;
   const uint32_t action_id = this->next_action_id_.fetch_add(1, std::memory_order_relaxed) + 1;
   if (action == "record_ir") {
     this->defer([this, button, action_id]() {
@@ -189,6 +253,10 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "set_voice") {
     this->defer([this, button, action_id]() {
       this->complete_action_(action_id, ::ir_code_store.set_voice(button));
+    });
+  } else if (action == "set_ir_code") {
+    this->defer([this, button, action_id, timings]() {
+      this->complete_action_(action_id, ::ir_code_store.save(button, timings));
     });
   } else {
     this->defer([this, button, action_id]() {

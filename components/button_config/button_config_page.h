@@ -33,6 +33,12 @@ letter-spacing:.06em}
 .plus .l{grid-area:2/1}.plus .c{grid-area:2/2}.plus .r{grid-area:2/3}
 .plus .d{grid-area:3/2}
 button{font:inherit;color:inherit}
+textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
+padding:8px;width:100%;margin:2px 0;resize:vertical}
+details.code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+details.code summary{cursor:pointer;color:var(--mut);font-size:12px;
+text-transform:uppercase;letter-spacing:.06em}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
 text-align:left;cursor:pointer;display:block;width:100%}
 .k:hover{border-color:var(--acc)}
@@ -84,6 +90,9 @@ var S=[
 {s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
 {s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
+// cd holds the editable code text for cdSlot. cdOpen keeps the box unfolded
+// across the repaints that every action triggers.
+var cd="",cdSlot=null,cdOpen=false;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
@@ -131,6 +140,43 @@ editor()}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
 
+// The box stays available on an empty slot, so a code can be pasted in without
+// pointing a source remote at the board.
+function codeBox(){
+var h="<details class=code"+(cdOpen?" open":"")+" id=cx>"+
+"<summary>Raw code</summary>"+
+"<p class=sub>Timings in microseconds, mark first. A positive value is a mark "+
+"and a negative value is a space. Copy it to another board, or paste one in.</p>"+
+"<textarea id=ct rows=6 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
+if(cdSlot!==sel)h+="<p class=sub>Loading the stored code.</p>";
+h+="<div class=act><button type=button class=sec id=cc>Copy</button>"+
+"<button type=button id=ca>Apply to this input</button></div></details>";
+return h}
+
+function loadCode(s){cdSlot=null;cd="";
+return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
+.then(function(r){return r.json()})
+.then(function(j){if(j.slot!==s)return;
+cd=(j.timings||[]).join(", ");cdSlot=s;if(sel===s)paint()})
+.catch(function(){})}
+
+// The page is served over plain HTTP, so navigator.clipboard is undefined in
+// most browsers. execCommand still works there.
+function copyCode(){var t=document.getElementById("ct");
+if(!t.value){msg="This input has no code to copy.";bad=true;paint();return}
+t.focus();t.select();
+var ok=false;
+try{ok=document.execCommand("copy")}catch(x){}
+if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}
+msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
+bad=!ok;paint()}
+
+function applyCode(){
+var text=document.getElementById("ct").value;
+cd=text;
+if(!text.replace(/\s+/g,"")){msg="Paste a code first.";bad=true;paint();return}
+go("set_ir_code",text)}
+
 function editor(){
 var e=document.getElementById("ed");
 if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
@@ -152,18 +198,30 @@ h+="<div class=act>";
 h+="<button type=button id=b1"+(lock?" disabled":"")+">Record IR</button>";
 if(d.v)h+="<button type=button id=b2"+(lock?" disabled":"")+">Voice assistant</button>";
 h+="<button type=button class=sec id=b3"+(lock?" disabled":"")+">Clear</button></div>";
+h+=codeBox();
 e.innerHTML=h;
+var box=document.getElementById("ct");
+box.oninput=function(){cd=box.value};
+document.getElementById("cx").ontoggle=function(){
+cdOpen=document.getElementById("cx").open};
+document.getElementById("cc").onclick=copyCode;
+document.getElementById("ca").onclick=applyCode;
 if(lock)return;
 document.getElementById("b1").onclick=function(){go("record_ir")};
 if(d.v)document.getElementById("b2").onclick=function(){go("set_voice")};
 document.getElementById("b3").onclick=function(){go("clear")}}
 
-function pick(s){sel=s;if(mode!=="rec"){msg="";bad=false}paint()}
+function pick(s){sel=s;if(mode!=="rec"){msg="";bad=false}paint();
+if(cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}
 
-function post(a,s){var b="action="+a+(s?"&slot="+s:"");
+// A pasted code can carry newlines and a bracket, so the separators collapse to
+// commas before the body is built. ESPHome caps a POST body, and the sdkconfig
+// raises that cap for a full length frame.
+function post(a,s,c){var b="action="+a+(s?"&slot="+s:"")+
+(c?"&code="+encodeURIComponent(c.replace(/[^0-9+\-]+/g,",")):"");
 return fetch("/buttons/api/action",{method:"POST",
 headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
 .then(function(r){return r.text().then(function(t){
@@ -174,16 +232,18 @@ if(r.code===409)return "Another assignment is already running";
 if(r.body&&r.body.error)return r.body.error;
 return "Request failed ("+r.code+")"}
 
-function go(a){
+function go(a,c){
 var s=sel;
-post(a,s).then(function(r){
+post(a,s,c).then(function(r){
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 if(a==="record_ir"){mode="rec";rec=s;seen=false;msg="";bad=false;
 return load().then(function(){paint();watch()})}
 return waitAction(r.body.id).then(function(ok){
-if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":"Cleared.";bad=false}
-else{msg="Flash write failed. The assignment was not saved.";bad=true}
-return load().then(paint)})})
+if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
+a==="set_ir_code"?"Code applied.":"Cleared.";bad=false}
+else{msg=a==="set_ir_code"?"The remote refused that code.":
+"Flash write failed. The assignment was not saved.";bad=true}
+return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
 function waitAction(id){return load().then(function(j){
@@ -210,13 +270,13 @@ var was=mode;mode="idle";
 if(was==="cancel"){msg="Recording cancelled.";bad=true}
 else if(seen){msg="Code saved.";bad=false}
 else{msg="No code received.";bad=true}
-paint()}
+paint();if(sel!==null)loadCode(sel)}
 
 build();
 load().then(function(j){
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}
-paint()}).catch(function(){
+paint();if(sel!==null)loadCode(sel)}).catch(function(){
 document.getElementById("ed").textContent="The remote did not answer."});
 </script>
 </body>

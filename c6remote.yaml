@@ -25,6 +25,11 @@ esp32:
   board: seeed_xiao_esp32c6
   framework:
     type: esp-idf
+    sdkconfig_options:
+      # A pasted IR code posts up to 512 signed values, and ESPHome rejects a
+      # POST body larger than this. The httpd scratch buffer grows on demand and
+      # is freed with the request, so idle RAM is unchanged.
+      CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"
 
 external_components:
   - source:

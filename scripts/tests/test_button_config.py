@@ -61,15 +61,16 @@ def page_group(name: str) -> list:
 
 
 class RoutingTest(unittest.TestCase):
-    def test_the_component_claims_all_three_paths(self) -> None:
-        for path in ("/buttons", "/buttons/api/state", "/buttons/api/action"):
+    def test_the_component_claims_all_four_paths(self) -> None:
+        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code", "/buttons/api/action"):
             self.assertIn(f'"{path}"', CPP)
 
     def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
         """Catches a method change that would hide an endpoint or open a new one."""
         handler = section(CPP, "bool ButtonConfig::canHandle", "void ButtonConfig::handleRequest")
         self.assertIn(
-            'if (method == HTTP_GET)\n    return url == "/buttons" || url == "/buttons/api/state";',
+            'if (method == HTTP_GET)\n    return url == "/buttons" || url == "/buttons/api/state"'
+            ' || url == "/buttons/api/code";',
             handler,
         )
         self.assertIn(
@@ -208,7 +209,7 @@ class EnforcementTest(unittest.TestCase):
     def test_preference_results_complete_the_deferred_action(self) -> None:
         self.assertIn("complete_action_(action_id, ::ir_code_store.set_voice(button))", CPP)
         self.assertIn("complete_action_(action_id, ::ir_code_store.clear(button))", CPP)
-        self.assertIn('msg="Flash write failed. The assignment was not saved."', PAGE)
+        self.assertIn('"Flash write failed. The assignment was not saved."', PAGE)
         self.assertIn("waitAction(r.body.id)", PAGE)
 
 
@@ -243,8 +244,11 @@ class PageTest(unittest.TestCase):
             self.assertNotIn(marker, PAGE)
 
     def test_the_page_only_calls_its_own_endpoints(self) -> None:
-        calls = re.findall(r'fetch\("([^"]+)"', PAGE)
-        self.assertEqual(sorted(set(calls)), ["/buttons/api/action", "/buttons/api/state"])
+        calls = re.findall(r'fetch\("([^"?]+)', PAGE)
+        self.assertEqual(
+            sorted(set(calls)),
+            ["/buttons/api/action", "/buttons/api/code", "/buttons/api/state"],
+        )
 
     def test_the_page_details_the_action_of_a_slot(self) -> None:
         """A pulse count alone does not say what the button sends."""
@@ -274,6 +278,46 @@ class PageTest(unittest.TestCase):
         self.assertIn("if (record.count != 68)", decode)
         self.assertIn("const int16_t space = record.pulses[3 + 2 * bit];", decode)
         self.assertIn("value = (value << 1) | (-space > 100 ? 1U : 0U);", decode)
+
+    def test_the_page_can_copy_a_code_out_and_paste_one_in(self) -> None:
+        """Plain HTTP is not a secure context, so navigator.clipboard is often
+        missing and execCommand has to carry the copy."""
+        box = section(PAGE, "function codeBox(){", 'return h}')
+        self.assertIn("<textarea id=ct", box)
+        self.assertIn('id=cc>Copy</button>', box)
+        self.assertIn('id=ca>Apply to this input</button>', box)
+        copy = section(PAGE, "function copyCode(){", "bad=!ok;paint()}")
+        self.assertIn('document.execCommand("copy")', copy)
+        self.assertIn("if(!ok&&navigator.clipboard)", copy)
+        self.assertIn('go("set_ir_code",text)', PAGE)
+        self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
+        # The body carries commas only, so the separators of a pasted list are
+        # normalised before the request is encoded.
+        self.assertIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
+
+    def test_the_code_endpoint_returns_the_stored_timings(self) -> None:
+        body = section(CPP, "void ButtonConfig::handle_code_", "\n}")
+        self.assertIn("::ir_code_store.code_timings(info->slot, raw)", body)
+        self.assertIn(R'"present":%s,"timings":[', body)
+        self.assertIn('url == "/buttons/api/code"', CPP)
+        self.assertIn("void handle_code_(AsyncWebServerRequest *request);", HEADER)
+        # code_timings() exists because load() logs the whole frame.
+        reader = section(STORE, "bool code_timings(uint8_t button, std::vector<int32_t> &raw) const {", "\n  }")
+        self.assertIn("* 10)", reader)
+
+    def test_a_pasted_code_is_validated_before_the_flash_write(self) -> None:
+        """A truncated paste would otherwise reach the store as a valid frame."""
+        parser = section(CPP, "static bool parse_timings", "\n}")
+        self.assertIn("value < -327670 || value > 327670", parser)
+        self.assertIn("raw.size() >= IrCodeStore::MAX_PULSES", parser)
+        self.assertIn("if ((raw.size() % 2 == 0) != (value > 0))", parser)
+        self.assertIn("return raw.size() >= 4 && raw.size() % 2 == 0;", parser)
+        action = section(CPP, "void ButtonConfig::handle_action_", "\n}")
+        self.assertIn('action == "set_ir_code"', action)
+        self.assertIn('!parse_timings(request->arg("code"), timings)', action)
+        self.assertIn("::ir_code_store.save(button, timings)", action)
+        # The default 1024 byte cap truncates a long frame.
+        self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
 
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)

@@ -677,38 +677,8 @@ interval:
 
 button:
   - platform: template
-    name: Start Microphone Test
-    on_press:
-      - lambda: id(mic_level) = 0.0f;
-      - lambda: id(mic_meter_active) = true;
-      - lambda: id(voice_led_state) = 2;
-      - microphone.capture:
-          id: board_microphone
-      # The I2S driver claims GPIO21 on capture start, so reassert whatever the
-      # pulldown switch is set to after the mic is up, not before.
-      - delay: 100ms
-      - if:
-          condition:
-            switch.is_on: sd_pulldown
-          then:
-            - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);
-          else:
-            - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_FLOATING);
-      - light.turn_on:
-          id: status_light
-          effect: Status Indicators
-          brightness: 50%
-
-  - platform: template
     name: Stop Microphone Test
     on_press:
       - microphone.stop_capture:
           id: board_microphone
       - script.execute: stop_voice_listening
-
-  - platform: template
-    name: Send Short IR Test Burst
-    on_press:
-      - remote_transmitter.transmit_raw:
-          carrier_frequency: 36kHz
-          code: [560, -560]

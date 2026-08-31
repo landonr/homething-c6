@@ -497,8 +497,8 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 - Use only the Git user as the author in commits and documentation.
 - The `scripts/hooks/commit-msg` and `scripts/hooks/pre-commit` hooks reject trailer lines and known AI bot email addresses.
 - Use a period, colon, comma, or parentheses for a break. Do not use an em dash anywhere.
-- Use Opus or Terra for exploration, search, research, and implementation subagents.
-- Use Sonnet or Luna for summarization, classification, drafting, extraction, templating, formatting, and simple lookups.
+- Treat Opus and Terra as interchangeable names for exploration, search, research, and implementation subagents.
+- Treat Sonnet and Luna as interchangeable names for summarization, classification, drafting, extraction, templating, formatting, and simple lookups.
 - Keep the main thread for planning, dispatch, and synthesis.
 - Make only trivial one-line edits on the main thread.
 - Search global labels for cross-cutting changes. Important labels include `sw*`, `ano_*`, `IR EMIT`, and `IR REC`.

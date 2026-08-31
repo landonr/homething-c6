@@ -80,6 +80,7 @@ The firmware files are in the repository root:
 - `components/button_config/` is a local ESPHome component. It serves the `/buttons` assignment page from `web_server`.
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
+- `scripts/tests/page_dom_stub.js` runs the `/buttons` page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
 
 Read `ROADMAP.md` when the task needs the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
 

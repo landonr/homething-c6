@@ -24,23 +24,29 @@ class IrLearningTest(unittest.TestCase):
 
     def test_receiver_states_drive_all_leds(self) -> None:
         self.assertIn("name: IR Receiver", CONFIG)
-        self.assertIn("id(ir_learn_state) == 1", CONFIG)
-        self.assertIn("id(ir_learn_state) == 2", CONFIG)
-        self.assertIn("id(ir_learn_state) == 3", CONFIG)
-        self.assertIn("id(ir_learn_state) == 4", CONFIG)
+        for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
+            self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
 
-    def test_successful_save_returns_to_ready_until_sw2(self) -> None:
-        self.assertIn("id(ir_learn_state) == 3 && elapsed >= 1000", CONFIG)
-        self.assertIn("press SW2 to leave", CONFIG)
-        self.assertNotIn("elapsed >= 30000", CONFIG)
+    def test_receiver_state_deadlines_return_to_ready_or_off(self) -> None:
+        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;", HEADER)
+        self.assertIn("state = READY;", HEADER)
+        self.assertIn("if (state == READY)", HEADER)
+        self.assertIn("if (elapsed < 3000)", HEADER)
+        self.assertIn("close();", HEADER)
         sw2 = CONFIG.split("name: Button 2", 1)[1].split("name: Button 3", 1)[0]
-        self.assertIn("lambda: return id(ir_learn_state) != 0;", sw2)
-        self.assertIn("id(ir_learn_state) = 0;", sw2)
+        self.assertIn("lambda: return ir_ui.state != IrUi::OFF;", sw2)
+        self.assertIn("- script.execute: exit_receiver_hold", sw2)
+        self.assertIn("ir_ui.close();", CONFIG)
 
-    def test_all_assignable_buttons_have_playback_paths(self) -> None:
+    def test_all_assignable_inputs_share_the_generic_playback_path(self) -> None:
+        self.assertIn("pending_transmit_ = ir_code_store.load(button, code_);", HEADER)
+        self.assertIn("code: !lambda return ir_ui.code();", CONFIG)
+        self.assertIn("- if: &send_learned_code", CONFIG)
+        self.assertEqual(17, CONFIG.count("- if: *send_learned_code"))
         for button in range(3, 12):
-            self.assertIn(f"ir_code_store.load({button}, id(ir_tx_code))", CONFIG)
-        self.assertIn("ir_code_store.save(id(ir_target_button), x)", CONFIG)
+            entry = CONFIG.split(f"name: Button {button}", 1)[1].split(f"name: Button {button + 1}", 1)[0]
+            self.assertIn("- if: *send_learned_code", entry)
+        self.assertIn("FIRST_BUTTON = 3", HEADER)
         self.assertNotIn("remote_transmitter.transmit_samsung:", CONFIG)
 
     def test_capture_is_bounded_and_checksummed(self) -> None:

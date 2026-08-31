@@ -701,8 +701,8 @@ class DeltaOutputTests(unittest.TestCase):
             self.assertIn(expected, text)
 
 
-class LiveSounderTopologyTests(unittest.TestCase):
-    def test_live_analyzer_preserves_sounder_membership(self):
+class LiveReceiverRailTopologyTests(unittest.TestCase):
+    def test_live_analyzer_preserves_receiver_rail_membership(self):
         try:
             analyzer = hw.probe_analyzer(hw.resolve_analyzer_root())["script"]
         except hw.ConfigError as exc:
@@ -726,17 +726,23 @@ class LiveSounderTopologyTests(unittest.TestCase):
                 )
             state = hw.canonicalize_analysis(json.loads(output.read_text()))
 
-        for reference in ("BZ1", "Q4", "D6", "R12"):
+        for reference in ("Q3", "R11", "R6", "C3", "U2"):
             self.assertIn(reference, state["components"])
         named_nets = {item["name"] for item in state["nets"]}
-        self.assertTrue({"buzzer_pwm", "+3.3V", "GND"}.issubset(named_nets))
+        self.assertTrue({"ir_en", "ir_vdd", "+3.3V", "GND"}.issubset(named_nets))
+        named_members = {
+            item["name"]: {member[0] for member in item["members"]}
+            for item in state["nets"]
+        }
+        self.assertTrue({"Q3", "R11", "U1"}.issubset(named_members["ir_en"]))
+        self.assertTrue({"Q3", "R6"}.issubset(named_members["ir_vdd"]))
         unnamed_member_refs = [
             {member[0] for member in item["members"]}
             for item in state["nets"]
             if item["name"] == ""
         ]
         self.assertTrue(
-            any({"BZ1", "Q4", "D6"}.issubset(refs) for refs in unnamed_member_refs),
+            any({"R6", "C3", "U2"}.issubset(refs) for refs in unnamed_member_refs),
             unnamed_member_refs,
         )
 

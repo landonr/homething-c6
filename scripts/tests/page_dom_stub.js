@@ -38,7 +38,8 @@ function mk(tag) {
     focus() {}, select() {},
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m"]) els[id] = mk("section");
+for (const id of ["top", "plus", "pad", "ed", "z2m", "cfg", "cfgb", "cfgio", "cxo", "cxs", "cxz"])
+  els[id] = mk("section");
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
@@ -46,7 +47,7 @@ const STATE = {
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
-    {slot: 19, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
+    {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, name: ""},
     {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, name: "Office Lamp"},
   ],
@@ -56,10 +57,12 @@ global.document = { getElementById: (id) => els[id] || null, createElement: (t) 
 global.localStorage = { getItem: () => null, setItem: () => {} };
 global.navigator = {};
 global.WebSocket = function () { this.readyState = 0; this.close = () => {}; this.send = () => {}; };
-global.fetch = () => Promise.resolve({
+const CODE = {slot: 6, present: true, text: "name: Home\ntype: raw\nfrequency: 38000\ndata: 100 200 300 400"};
+
+global.fetch = (url) => Promise.resolve({
   status: 200,
-  json: () => Promise.resolve(STATE),
-  text: () => Promise.resolve("{}"),
+  json: () => Promise.resolve(String(url).indexOf("/api/code") >= 0 ? CODE : STATE),
+  text: () => Promise.resolve('{"ok":true,"id":1}'),
 });
 
 let failed = 0;
@@ -86,7 +89,7 @@ setTimeout(() => {
     }
   });
   step("words covers every action", () => {
-    for (const slot of [3, 5, 6, 19, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
+    for (const slot of [3, 4, 5, 6, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
@@ -241,13 +244,24 @@ setTimeout(() => {
     z2mStatus();
     const st = document.getElementById("zst");
     if (st.innerHTML.indexOf("class=dot") < 0) throw new Error("no green dot: " + st.innerHTML);
-    if (st.innerHTML.indexOf("1 groups, 1 devices") < 0) throw new Error("no counts: " + st.innerHTML);
+    if (st.innerHTML.indexOf("1 group, 1 device") < 0) throw new Error("no counts: " + st.innerHTML);
+    // The heading repeats the link, so a collapsed card still reports it.
+    const zt = document.getElementById("cxz");
+    if (zt.innerHTML.indexOf("class=dot></span>Zigbee2MQTT: 1 group, 1 device") < 0)
+      throw new Error("no title status: " + zt.innerHTML);
     const zc = document.getElementById("zc");
     if (zc.textContent !== "Disconnect") throw new Error("button stayed on Connect: " + zc.textContent);
     zc.onclick();
     if (tg !== null || td !== null) throw new Error("disconnect kept the lists");
     if (zc.textContent !== "Connect") throw new Error("button stayed on Disconnect: " + zc.textContent);
     if (st.textContent.indexOf("Not connected.") < 0) throw new Error("no idle line: " + st.textContent);
+    if (zt.innerHTML.indexOf("dot off") < 0 || zt.innerHTML.indexOf("not connected") < 0)
+      throw new Error("the title kept a live status: " + zt.innerHTML);
+    global.zerr = "Could not reach Zigbee2MQTT at that address.";
+    z2mStatus();
+    if (zt.innerHTML.indexOf("dot bad") < 0 || zt.innerHTML.indexOf("unreachable") < 0)
+      throw new Error("a failure did not reach the title: " + zt.innerHTML);
+    global.zerr = "";
     const hp = document.getElementById("zhp");
     if (hp.textContent.indexOf("8099/tcp") < 0) throw new Error("no port hint: " + hp.textContent);
     global.tg = [{id: 1, name: "all_light", members: []}];
@@ -256,12 +270,151 @@ setTimeout(() => {
     global.tg = null; global.td = null;
   });
 
+  global.cfgOpen = true;
+
+  step("plural drops the s on one", () => {
+    if (plural(1, "group") !== "1 group") throw new Error(plural(1, "group"));
+    if (plural(0, "device") !== "0 devices") throw new Error(plural(0, "device"));
+    if (plural(2, "group") !== "2 groups") throw new Error(plural(2, "group"));
+  });
+  step("the export box holds one entry per input and the IR code with it", () => {
+    global.cfgAll = {6: CODE.text};
+    const blob = JSON.parse(cfgBlob());
+    if (blob.slots.length !== S.length) throw new Error("wrong entry count: " + blob.slots.length);
+    const by = {};
+    for (const e of blob.slots) by[e.slot] = e;
+    if (by[3].action !== "none") throw new Error("an empty input is not none: " + by[3].action);
+    if (by[4].action !== "voice") throw new Error("a voice input is not voice: " + by[4].action);
+    if (by[6].action !== "ir" || by[6].code !== CODE.text)
+      throw new Error("an IR input lost its code: " + JSON.stringify(by[6]));
+    if (by[5].kind !== "device" || by[5].ieee !== "0x94deb8fffe9db81e" || by[5].ep !== 1)
+      throw new Error("a device target did not survive: " + JSON.stringify(by[5]));
+    if (by[20].kind !== "group" || by[20].group !== 4609 || by[20].name !== "Office Lamp")
+      throw new Error("a group target did not survive: " + JSON.stringify(by[20]));
+  });
+  step("an export reads back in without a change", () => {
+    global.cfgAll = {6: CODE.text};
+    for (const e of JSON.parse(cfgBlob()).slots) {
+      const why = cfgCheck(e);
+      if (why) throw new Error("slot " + e.slot + ": " + why);
+    }
+  });
+  step("a bad entry is refused before any write", () => {
+    if (!cfgCheck({slot: 99, action: "none"})) throw new Error("an unknown slot passed");
+    if (cfgCheck({slot: 4, action: "voice"})) throw new Error("voice was refused on slot 4");
+    if (!cfgCheck({slot: 17, action: "voice"})) throw new Error("voice passed on slot 17");
+    if (!cfgCheck({slot: 6, action: "ir", code: "  "})) throw new Error("an empty code passed");
+    if (!cfgCheck({slot: 6, action: "zigbee", kind: "device", ieee: "0x94deb8"}))
+      throw new Error("a short address passed");
+    if (!cfgCheck({slot: 6, action: "zigbee", kind: "device", ieee: "0x94deb8fffe9db81e", ep: 0}))
+      throw new Error("endpoint 0 passed");
+    if (!cfgCheck({slot: 6, action: "zigbee", kind: "group", group: 0}))
+      throw new Error("group 0 passed");
+    if (!cfgCheck({slot: 6, action: "wipe"})) throw new Error("an unknown action passed");
+    if (cfgCheck({slot: 6, action: "zigbee", kind: "device", ieee: "94deb8fffe9db81e"}))
+      throw new Error("a bare hex address was refused");
+  });
+  step("an import posts one action per entry and skips a clear that changes nothing", () => {
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    global.cfgIn = JSON.stringify({c6remote: 1, slots: [
+      {slot: 3, action: "none"},
+      {slot: 6, action: "ir", code: CODE.text},
+      {slot: 4, action: "voice"},
+      {slot: 5, action: "zigbee", kind: "device", ieee: "94DEB8FFFE9DB81E", ep: 2, name: "Lamp"},
+      {slot: 20, action: "zigbee", kind: "group", group: 4609, name: "Office Lamp"},
+    ]});
+    cfgApply();
+    global.fetch = realFetch;
+    if (cfgBad) throw new Error("a valid config was refused: " + cfgMsg);
+    // Slot 3 already holds nothing, so its clear is dropped.
+    if (bodies.length !== 1) throw new Error("expected one first post, got " + bodies.length);
+    if (bodies[0].indexOf("action=set_ir_code&slot=6") < 0)
+      throw new Error("the import started on the wrong entry: " + bodies[0]);
+    const dev = cfgSend({slot: 5, action: "zigbee", kind: "device", ieee: "94DEB8FFFE9DB81E", ep: 2, name: "Lamp"});
+    if (!dev) throw new Error("a device entry sent nothing");
+  });
+  step("an invalid paste never reaches the remote", () => {
+    const realFetch = global.fetch;
+    let calls = 0;
+    global.fetch = (u, o) => { calls++; return realFetch(u, o); };
+    global.cfgIn = "{not json";
+    cfgApply();
+    global.cfgIn = JSON.stringify({c6remote: 1});
+    cfgApply();
+    global.fetch = realFetch;
+    if (calls !== 0) throw new Error("a bad paste was still sent");
+    if (!cfgBad) throw new Error("no refusal was reported");
+  });
+  step("the card starts closed and reads no code until it is opened", () => {
+    let codeReads = 0;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { if (String(u).indexOf("/api/code") >= 0) codeReads++; return realFetch(u, o); };
+    global.cfgOpen = false;
+    global.cfgBusy = false;
+    global.cfgAll = {};
+    cfgPaint();
+    if (!document.getElementById("cxo")) throw new Error("no toggle on a closed card");
+    if (document.getElementById("cx")) throw new Error("the box showed on a closed card");
+    if (els.cfgb.hidden !== true) throw new Error("the closed card left its body on screen");
+    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
+    if (codeReads !== 0) throw new Error("a closed card still read a code");
+    document.getElementById("cxo").onclick();
+    global.fetch = realFetch;
+    if (!cfgOpen) throw new Error("the card did not open");
+    if (!document.getElementById("cx")) throw new Error("the open card has no box");
+    // The reads run off a promise, so the flag is the synchronous evidence that
+    // opening on the export side starts them.
+    if (!cfgBusy) throw new Error("opening the card started no read");
+    if (els.cxs.textContent !== "Hide") throw new Error("the open heading says " + els.cxs.textContent);
+    if (els.cfgb.hidden !== false) throw new Error("the open card kept its body hidden");
+    global.cfgBusy = false;
+    cfgPaint();
+    document.getElementById("cxo").onclick();
+    if (cfgOpen) throw new Error("the heading did not close the card");
+    if (document.getElementById("cx")) throw new Error("the box survived the close");
+    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
+    global.cfgOpen = true;
+  });
+  step("the direction selector switches the box and its buttons", () => {
+    global.cfgBusy = false;
+    global.cfgMode = "ex";
+    global.cfgOpen = true;
+    cfgPaint();
+    if (!document.getElementById("cxc")) throw new Error("export has no copy button");
+    if (document.getElementById("cxa")) throw new Error("apply showed on the export side");
+    const cs = document.getElementById("cs");
+    cs.value = "im";
+    cs.onchange.call(cs);
+    if (cfgMode !== "im") throw new Error("the direction did not follow the selector");
+    if (!document.getElementById("cxa")) throw new Error("import has no apply button");
+    if (document.getElementById("cxr")) throw new Error("read showed on the import side");
+    const box = document.getElementById("cx");
+    box.value = "typed";
+    box.oninput.call(box);
+    if (cfgIn !== "typed") throw new Error("the box did not keep the paste: " + cfgIn);
+    cfgPaint();
+    if (cfgIn !== "typed") throw new Error("a repaint lost the paste: " + cfgIn);
+  });
+
   step("the address box prefills the default and carries the browser clear control", () => {
     const zu = document.getElementById("zu");
     if (zu.value !== Z2MDEF) throw new Error("the box did not prefill: " + zu.value);
     // The x comes from the browser, so only the input type can be checked here.
     if (document.getElementById("z2m").innerHTML.indexOf("id=zu type=search") < 0)
       throw new Error("the address box is not a search field");
+  });
+
+  step("the connection block sits in the card and survives a repaint", () => {
+    const before = document.getElementById("z2m").innerHTML;
+    document.getElementById("zu").value = "ws://typed.local:8099/api";
+    global.cfgOpen = true;
+    paint();
+    if (document.getElementById("z2m").innerHTML !== before)
+      throw new Error("a repaint rebuilt the connection block");
+    if (document.getElementById("zu").value !== "ws://typed.local:8099/api")
+      throw new Error("a repaint dropped a typed address");
   });
 
   setTimeout(() => process.exit(failed ? 1 : 0), 200);

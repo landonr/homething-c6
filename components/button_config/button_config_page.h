@@ -27,6 +27,7 @@ grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
 border-radius:8px;padding:8px 14px;cursor:pointer}
 .st{margin:8px 0 0}.st.bad{color:var(--bad)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:baseline}
+.dot.off{background:var(--line)}.dot.bad{background:var(--bad)}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -46,11 +47,16 @@ textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
 padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-.code>p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
+.sep{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
 h3{font-size:15px;margin:14px 0 8px}
+h2>button.tog{background:none;border:0;padding:0;margin:0;width:100%;cursor:pointer;
+display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+h2>button.tog span{color:var(--acc);font-size:13px;font-weight:400}
+h2>button.tog span#cxz{color:var(--mut);margin:0 auto 0 12px}
 select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
@@ -84,7 +90,6 @@ animation:sweep 1.4s ease-in-out infinite}
 </head>
 <body>
 <div class="wrap">
-<section class="card full" id="z2m"></section>
 <section class="card">
 <h1>Remote buttons</h1>
 <p class="sub">Select an input to see or change what it does.</p>
@@ -93,6 +98,11 @@ animation:sweep 1.4s ease-in-out infinite}
 <div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
 </section>
 <section class="card" id="ed" aria-live="polite"></section>
+<section class="card full" id="cfg">
+<h2><button type="button" class="tog" id="cxo" aria-expanded="false">Config<span
+id="cxz"></span><span id="cxs">Show</span></button></h2>
+<div id="cfgb" hidden><div id="z2m"></div><div class="sep" id="cfgio"></div></div>
+</section>
 </div>
 <script>
 var S=[
@@ -120,6 +130,12 @@ var cd="",cdSlot=null;
 // and a device get one box each, and zkv says which kind is on screen, so only
 // one target can ever be filled in.
 var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="";
+// The config card. cfgAll caches one code text per slot, so an export needs no
+// second read of a code the editor already fetched.
+var cfgMode="ex",cfgOut="",cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
+// Closed on arrival, because an export reads the code of every IR input and
+// most visits change one input instead.
+var cfgOpen=false;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
@@ -164,7 +180,7 @@ try{u=localStorage.getItem("c6.z2m.url")||"";k=localStorage.getItem("c6.z2m.toke
 // that one click connects, but a guess must not report itself as a failure.
 var saved=!!u;
 if(!u)u=Z2MDEF;
-e.innerHTML="<h2>Zigbee2MQTT</h2>"+
+e.innerHTML="<p class=hd>Zigbee2MQTT</p>"+
 "<p class=sub>This browser reads the group list from the bridge. The address "+
 "and the token stay in this browser and never reach the remote.</p>"+
 "<div class=fields>"+
@@ -182,7 +198,18 @@ if(saved)z2mConnect(u,k)}
 // whether the button offers Connect or Disconnect.
 function z2mUp(){return !!(tg||td)}
 
+function z2mCounts(){return plural(tg?tg.length:0,"group")+", "+
+plural(td?td.length:0,"device")}
+
+function z2mTitle(){
+var e=document.getElementById("cxz");
+if(!e)return;
+if(z2mUp()){e.innerHTML="<span class=dot></span>Zigbee2MQTT: "+z2mCounts();return}
+e.innerHTML="<span class='dot "+(zerr?"bad":"off")+"'></span>Zigbee2MQTT "+
+(zerr?"unreachable":"not connected")}
+
 function z2mStatus(){
+z2mTitle();
 var b=document.getElementById("zc");
 if(b)b.textContent=z2mUp()?"Disconnect":"Connect";
 // The Home Assistant add-on serves the frontend through Ingress, which no
@@ -197,8 +224,9 @@ if(!e)return;
 e.className="sub st"+(zerr?" bad":"");
 if(zerr){e.textContent=zerr;return}
 if(!z2mUp()){e.textContent="Not connected. A group ID can still be typed by hand.";return}
-e.innerHTML="<span class=dot></span>Connected. "+(tg?tg.length:0)+" groups, "+
-(td?td.length:0)+" devices."}
+e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+"."}
+
+function plural(n,word){return n+" "+word+(n===1?"":"s")}
 
 function byName(a,b){return a.name<b.name?-1:a.name>b.name?1:0}
 
@@ -223,7 +251,7 @@ for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
-editor()}
+editor();cfgPaint()}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
 // esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.
@@ -250,8 +278,8 @@ h+="<p class=sub>Pick a device to fill the boxes below. The remote sends "+
 for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
 (zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
 h+="</select>"}
-else h+="<p class=sub>No device list. Connect to Zigbee2MQTT at the top of the "+
-"page, or type an address below.</p>";
+else h+="<p class=sub>No device list. Connect to Zigbee2MQTT in the Config card "+
+"at the bottom of the page, or type an address below.</p>";
 h+="<label class=hd2 for=zh>IEEE address</label>"+
 "<input id=zh type=text autocomplete=off placeholder='0x94deb8fffe9db81e' "+
 "value='"+att(zhv)+"'>"+
@@ -265,8 +293,8 @@ h+="<p class=sub>Pick a group to fill the box below.</p>"+
 for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
 (zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
 h+="</select>"}
-else h+="<p class=sub>No group list. Connect to Zigbee2MQTT at the top of the "+
-"page, or type an ID below.</p>";
+else h+="<p class=sub>No group list. Connect to Zigbee2MQTT in the Config card "+
+"at the bottom of the page, or type an ID below.</p>";
 h+="<label class=hd2 for=zg>Group ID</label>"+
 "<input id=zg type=text autocomplete=off placeholder='0x1201 or 4609' "+
 "value='"+att(zgv)+"'>"+
@@ -364,17 +392,21 @@ function loadCode(s){cdSlot=null;cd="";
 return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
 .then(function(r){return r.json()})
 .then(function(j){if(j.slot!==s)return;
-cd=j.text||"";cdSlot=s;if(sel===s)paint()})
+cd=j.text||"";cfgAll[s]=cd;cdSlot=s;if(sel===s)paint()})
 .catch(function(){})}
 
 // The page is served over plain HTTP, so navigator.clipboard is undefined in
 // most browsers. execCommand still works there.
-function copyCode(){var t=document.getElementById("ct");
-if(!t.value){msg="This input has no code to copy.";bad=true;paint();return}
+function copyBox(t){
 t.focus();t.select();
 var ok=false;
 try{ok=document.execCommand("copy")}catch(x){}
 if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}
+return ok}
+
+function copyCode(){var t=document.getElementById("ct");
+if(!t.value){msg="This input has no code to copy.";bad=true;paint();return}
+var ok=copyBox(t);
 msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
 bad=!ok;paint()}
 
@@ -383,6 +415,165 @@ var text=document.getElementById("ct").value;
 cd=text;
 if(!text.replace(/\s+/g,"")){msg="Paste a code first.";bad=true;paint();return}
 go("set_ir_code",text)}
+
+// One entry per input, in the render order of the page. label is for the reader,
+// because an import applies the slot number.
+function cfgBlob(){
+var lines=[],i;
+for(i=0;i<S.length;i++){
+var s=S[i].s,r=row(s),e={slot:s,label:S[i].l,action:"none"};
+if(r&&r.action==="zigbee"){e.action="zigbee";
+if(r.ieee){e.kind="device";e.ieee=r.ieee;e.ep=r.ep||1}
+else{e.kind="group";e.group=r.group}
+if(r.name)e.name=r.name}
+else if(r&&r.action==="voice")e.action="voice";
+else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
+lines.push(JSON.stringify(e))}
+// One line for each input, because an indented block runs past 100 lines and a
+// single line hides which input an entry belongs to.
+return '{"c6remote":1,"slots":[\n'+lines.join(",\n")+"\n]}"}
+
+// Reads the code of every IR input, one request at a time, because a burst of 18
+// would outrun the connection limit of the remote.
+function cfgRefresh(){
+var need=[],i,s,r;
+for(i=0;i<S.length;i++){s=S[i].s;r=row(s);
+if(r&&r.action==="ir"&&cfgAll[s]===undefined)need.push(s)}
+if(!need.length){cfgOut=cfgBlob();cfgPaint();return Promise.resolve()}
+cfgBusy=true;cfgPaint();
+return need.reduce(function(p,slot){return p.then(function(){
+return fetch("/buttons/api/code?slot="+slot,{cache:"no-store"})
+.then(function(x){return x.json()})
+.then(function(j){cfgAll[slot]=j.text||""})
+.catch(function(){cfgAll[slot]=""})})},Promise.resolve())
+.then(function(){cfgBusy=false;cfgOut=cfgBlob();cfgPaint()})}
+
+function cfgNote(text,isBad){cfgMsg=text;cfgBad=!!isBad;cfgPaint()}
+
+function cfgHex(v){return String(v===undefined?"":v)
+.replace(/^\s+|\s+$/g,"").replace(/^0[xX]/,"")}
+
+// Every entry is read before the first write, so a bad one cannot leave half of
+// the inputs on the old config and half on the new one.
+function cfgCheck(e){
+if(!e||typeof e.slot!=="number"||!info(e.slot))
+return "A slot number is missing or unknown.";
+var a=e.action,ep,g;
+if(a==="voice"&&!info(e.slot).v)return "Slot "+e.slot+" has no voice action.";
+if(a==="ir"&&(typeof e.code!=="string"||!e.code.replace(/\s+/g,"")))
+return "Slot "+e.slot+" carries no IR code.";
+if(a==="zigbee"&&e.kind==="device"){
+if(!/^[0-9a-fA-F]{16}$/.test(cfgHex(e.ieee)))
+return "Slot "+e.slot+" needs an IEEE address of 16 hex digits.";
+ep=e.ep===undefined?1:parseInt(e.ep,10);
+if(!(ep>=1&&ep<=240))return "Slot "+e.slot+" has an endpoint outside 1 to 240."}
+else if(a==="zigbee"){
+g=parseInt(e.group,10);
+if(!(g>=1&&g<=65527))return "Slot "+e.slot+" has a group outside 1 to 65527."}
+else if(a!=="ir"&&a!=="voice"&&a!=="none")
+return "Slot "+e.slot+" carries the unknown action "+a+".";
+return ""}
+
+// A clear on an input that already holds nothing writes flash for no gain, so it
+// is the one entry an import skips.
+function cfgNeeded(e){if(e.action!=="none")return true;
+var r=row(e.slot);return !!(r&&r.action!=="none")}
+
+function cfgSend(e){
+if(e.action==="voice")return post("set_voice",e.slot);
+if(e.action==="ir")return post("set_ir_code",e.slot,e.code);
+if(e.action==="zigbee"&&e.kind==="device")
+return post("set_zigbee_device",e.slot,null,e.name||"",
+"&ieee=0x"+cfgHex(e.ieee).toLowerCase()+
+"&ep="+(e.ep===undefined?1:parseInt(e.ep,10)));
+if(e.action==="zigbee")
+return post("set_zigbee",e.slot,String(parseInt(e.group,10)),e.name||"");
+return post("clear",e.slot)}
+
+// One input at a time, because the remote reserves one action at a time and a
+// second POST would take the 409.
+function cfgRun(list,i){
+if(i>=list.length)return Promise.resolve();
+cfgMsg="Writing input "+(i+1)+" of "+list.length+".";cfgBad=false;cfgPaint();
+return cfgSend(list[i]).then(function(r){
+if(r.code!==200)throw new Error("Slot "+list[i].slot+": "+fail(r));
+return waitAction(r.body.id)}).then(function(ok){
+if(!ok)throw new Error("Slot "+list[i].slot+": the remote refused it.");
+return cfgRun(list,i+1)})}
+
+function cfgApply(){
+var j,i,why,list=[];
+try{j=JSON.parse(cfgIn)}catch(x){cfgNote("That text is not valid JSON.",true);return}
+if(!j||!Array.isArray(j.slots)){cfgNote("A config holds a slots list.",true);return}
+for(i=0;i<j.slots.length;i++){
+why=cfgCheck(j.slots[i]);
+if(why){cfgNote(why,true);return}
+if(cfgNeeded(j.slots[i]))list.push(j.slots[i])}
+if(!list.length){cfgNote("Every input already matches this config.",false);return}
+cfgBusy=true;cfgBad=false;
+var total=j.slots.length;
+return cfgRun(list,0).then(function(){
+cfgBusy=false;cfgAll={};cdSlot=null;
+cfgNote("Applied "+list.length+" of "+total+" inputs.",false);
+return load().then(function(){paint();cfgRefresh();
+if(sel!==null)loadCode(sel)})})
+.catch(function(err){cfgBusy=false;
+cfgNote(err&&err.message?err.message:"The remote did not answer.",true);
+return load().then(paint)})}
+
+function cfgCopy(){var t=document.getElementById("cx");
+if(!t.value){cfgNote("There is nothing to copy yet.",true);return}
+var ok=copyBox(t);
+cfgNote(ok?"Config copied.":"Copy is blocked. Select the text and copy it by hand.",!ok)}
+
+// The box reads cfgOut or cfgIn, so a repaint during an import keeps the pasted
+// text and never shows an export beside it.
+// The heading is the toggle, so the card needs no control of its own.
+function cfgToggle(){cfgOpen=!cfgOpen;cfgMsg="";cfgBad=false;cfgPaint();
+if(cfgOpen&&cfgMode==="ex")cfgRefresh()}
+
+function cfgPaint(){
+var e=document.getElementById("cfgio"),b=document.getElementById("cfgb"),
+s=document.getElementById("cxs"),o=document.getElementById("cxo");
+if(!e||!b)return;
+if(s)s.textContent=cfgOpen?"Hide":"Show";
+if(o){o.setAttribute("aria-expanded",cfgOpen?"true":"false");o.onclick=cfgToggle}
+b.hidden=!cfgOpen;
+if(!cfgOpen){e.innerHTML="";return}
+var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy))?" disabled":"";
+var h="<p class=hd>Import and export</p>"+
+"<p class=sub>Copy every assignment out as one block of text, or paste a saved "+
+"block back in. An export holds the IR codes themselves, so it restores a "+
+"remote without a source remote.</p>"+
+"<label class=hd2 for=cs>Direction</label>"+
+"<select id=cs"+rd+">"+
+"<option value=ex"+(cfgMode==="ex"?" selected":"")+">Export</option>"+
+"<option value=im"+(cfgMode==="im"?" selected":"")+">Import</option>"+
+"</select>";
+if(cfgMsg)h+="<div class='note "+(cfgBad?"bad":"ok")+"'>"+esc(cfgMsg)+"</div>";
+if(cfgBusy)h+="<div class=bar><i></i></div>";
+h+="<textarea id=cx rows=12 spellcheck=false autocomplete=off"+
+(cfgMode==="ex"?" readonly":"")+">"+esc(cfgMode==="ex"?cfgOut:cfgIn)+"</textarea>";
+h+="<div class=act>";
+h+=cfgMode==="ex"
+?"<button type=button class=sec id=cxc>Copy</button>"+
+"<button type=button class=sec id=cxr"+rd+">Read the remote</button>"
+:"<button type=button id=cxa"+wr+">Apply to the remote</button>";
+h+="</div>";
+if(cfgMode==="im")h+="<p class=sub>An import writes one input at a time. It "+
+"stops on the first entry the remote refuses, and it leaves an input the block "+
+"does not name alone.</p>";
+e.innerHTML=h;
+document.getElementById("cs").onchange=function(){cfgMode=this.value;
+cfgMsg="";cfgBad=false;cfgPaint();if(cfgMode==="ex")cfgRefresh()};
+if(cfgMode==="ex"){
+document.getElementById("cxc").onclick=cfgCopy;
+if(!cfgBusy)document.getElementById("cxr").onclick=function(){cfgAll={};cfgMsg="";
+cfgBad=false;cfgRefresh()}}
+else{
+var box=document.getElementById("cx");
+box.oninput=function(){cfgIn=box.value};
+if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}}
 
 function editor(){
 var e=document.getElementById("ed");

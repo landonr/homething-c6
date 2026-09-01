@@ -93,8 +93,9 @@ the same flash records.
 The page can assign a Zigbee Toggle target. It does not need a state transition,
 because you name the target instead.
 
-1. Select an input, then select **Zigbee group** in the Action selector.
-2. Enter the Zigbee2MQTT frontend websocket address on the first use.
+1. Select an input, then select **Zigbee target** in the Action selector.
+2. On the first use, open the **Config** card and enter the Zigbee2MQTT frontend
+   websocket address.
 3. Select a group, select a device, or type a group ID.
 4. Select the matching **Assign** button.
 
@@ -199,6 +200,59 @@ A paste can hold a whole Flipper-IRDB file. The parser reads the first signal an
 The parser also accepts a bare list of signed microsecond values, which is the format that earlier builds copied out.
 
 The board transmits at 38 kHz with 50 percent duty, so it ignores the `frequency` and `duty_cycle` lines of a pasted block.
+
+### The Config card
+
+The **Config** card at the bottom of the page holds two blocks, with a rule
+between them.
+
+The first block is the Zigbee2MQTT connection. The second block moves every
+assignment as one block of text.
+
+The card is closed on arrival. The **Config** heading is the toggle. It reads
+**Show** when the card is closed and **Hide** when the card is open.
+
+The heading also reports the Zigbee2MQTT link with a circle, so a closed card
+still shows it:
+
+- A green circle and the group and device counts mean a live link.
+- A grey circle means no connection.
+- A red circle means that the last connection failed.
+
+The connection inputs are built one time, so a repaint keeps an address that is
+still being typed.
+
+### Copy the whole config
+
+The **Import and export** block holds a **Direction** selector, which holds
+Export and Import.
+
+The page reads no IR code until the card opens on the Export side. Export reads
+the remote and fills the box.
+
+The block holds one entry for each input, with its slot number, its label, and
+its action.
+
+An IR entry carries the Flipper `.ir` block itself, so an export restores a
+remote without a source remote.
+
+A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
+`group`. A device entry holds `ieee` and `ep`.
+
+The page reads one code at a time from `GET /buttons/api/code`. Select **Read the
+remote** to build the block again after a change.
+
+Import checks every entry before the first flash write. If one entry is bad, the
+page names the slot and writes nothing.
+
+A valid block writes one input at a time through `POST /buttons/api/action`. The
+remote reserves one action at a time, so a burst would take the 409.
+
+An import leaves an input that the block does not name alone. A `none` entry
+clears an input, but only if the input holds an action.
+
+The import needs no new endpoint. Both directions use the same three endpoints as
+the rest of the page.
 
 ### Trusted-LAN warning
 

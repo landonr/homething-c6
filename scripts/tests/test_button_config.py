@@ -396,9 +396,12 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("<details", PAGE)
         self.assertIn('id=cc"+dis+">Copy</button>', box)
         self.assertIn('id=ca"+dis+">Apply to this input</button>', box)
-        copy = section(PAGE, "function copyCode(){", "bad=!ok;paint()}")
+        # One helper carries both boxes, so the code box and the config box
+        # cannot drift apart on the browsers that lack navigator.clipboard.
+        copy = section(PAGE, "function copyBox(t){", "return ok}")
         self.assertIn('document.execCommand("copy")', copy)
         self.assertIn("if(!ok&&navigator.clipboard)", copy)
+        self.assertIn("var ok=copyBox(t);", section(PAGE, "function copyCode(){", "bad=!ok;paint()}"))
         self.assertIn('go("set_ir_code",text)', PAGE)
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
         self.assertIn('cd=j.text||""', PAGE)
@@ -637,6 +640,117 @@ class PageTest(unittest.TestCase):
             '+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
             PAGE,
         )
+
+    def test_the_page_carries_one_import_and_export_card(self) -> None:
+        """The whole assignment set moves as one block of text, so a remote can
+        be restored without a source remote in hand."""
+        # The Zigbee2MQTT block and the import block share the card, so the
+        # markup is static and only the block below the rule is rebuilt.
+        self.assertIn('<section class="card full" id="cfg">', PAGE)
+        self.assertIn('<div id="cfgb" hidden><div id="z2m"></div>'
+                      '<div class="sep" id="cfgio"></div></div>', PAGE)
+        self.assertIn(".sep{margin-top:16px;border-top:1px solid var(--line)", PAGE)
+        self.assertNotIn('id="z2m"></section>', PAGE)
+        card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
+        # Closed on arrival, because an export reads the code of every IR input.
+        self.assertIn("var cfgOpen=false;", PAGE)
+        # The heading is the toggle, so a closed card is one row and no separate
+        # control competes with it.
+        self.assertIn('<h2><button type="button" class="tog" id="cxo" aria-expanded="false">'
+                      'Config<span\nid="cxz"></span><span id="cxs">Show</span></button></h2>', PAGE)
+        # A collapsed card still reports the Zigbee2MQTT link, so the heading
+        # carries the same dot as the status line inside it.
+        title = section(PAGE, "function z2mTitle(){", "\n\n")
+        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>Zigbee2MQTT: "+z2mCounts()', title)
+        self.assertIn('e.innerHTML="<span class=\'dot "+(zerr?"bad":"off")+"\'></span>', title)
+        self.assertIn('(zerr?"unreachable":"not connected")}', title)
+        self.assertIn("z2mStatus(){\nz2mTitle();", PAGE)
+        self.assertIn(".dot.off{background:var(--line)}.dot.bad{background:var(--bad)}", PAGE)
+        self.assertIn("h2>button.tog span#cxz{color:var(--mut)", PAGE)
+        # One counts helper, so the heading and the line cannot disagree.
+        self.assertIn('e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+"."}', PAGE)
+        self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
+        self.assertIn("b.hidden=!cfgOpen;", card)
+        self.assertIn('o.onclick=cfgToggle}', card)
+        self.assertIn("h2>button.tog{", PAGE)
+        # The connection inputs are built once, so the repaint owns cfgio alone.
+        self.assertIn('var e=document.getElementById("cfgio")', card)
+        toggle = section(PAGE, "function cfgToggle(){", "\n\n")
+        self.assertIn("cfgOpen=!cfgOpen", toggle)
+        self.assertIn('if(cfgOpen&&cfgMode==="ex")cfgRefresh()}', toggle)
+        # The startup path reads the state and the open code box, nothing more.
+        start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
+        self.assertNotIn("cfgRefresh", start)
+        self.assertIn('<option value=ex', card)
+        self.assertIn('<option value=im', card)
+        self.assertIn('<textarea id=cx', card)
+        self.assertIn('<p class=hd>Import and export</p>', card)
+        # The export box is read only, because the remote is the source of it.
+        self.assertIn('(cfgMode==="ex"?" readonly":"")', card)
+        self.assertIn('id=cxc>Copy</button>', card)
+        self.assertIn('id=cxr"+rd+">Read the remote</button>', card)
+        self.assertIn('id=cxa"+wr+">Apply to the remote</button>', card)
+        # The two directions keep separate text, so a repaint cannot drop a
+        # paste and cannot show an export beside it.
+        self.assertIn('esc(cfgMode==="ex"?cfgOut:cfgIn)', card)
+        self.assertIn("box.oninput=function(){cfgIn=box.value}", card)
+        # An import writes flash, so it stays disabled while the remote is busy.
+        self.assertIn('wr=(cfgBusy||(st&&st.busy))?" disabled":""', card)
+        self.assertIn("editor();cfgPaint()}", PAGE)
+
+    def test_an_export_holds_the_action_and_the_payload_of_every_input(self) -> None:
+        """An export that named the action alone would restore nothing, because
+        the group ID, the address, and the code are the assignment."""
+        blob = section(PAGE, "function cfgBlob(){", "\n\n")
+        self.assertIn("""return '{"c6remote":1,"slots":[""", blob)
+        # One line for each input, so an entry stays readable in the box.
+        self.assertIn(R'lines.join(",\n")', blob)
+        self.assertIn("for(i=0;i<S.length;i++){", blob)
+        self.assertIn('e={slot:s,label:S[i].l,action:"none"}', blob)
+        self.assertIn('e.kind="device";e.ieee=r.ieee;e.ep=r.ep||1', blob)
+        self.assertIn('e.kind="group";e.group=r.group', blob)
+        self.assertIn('e.action="ir";e.code=cfgAll[s]||""', blob)
+        # The codes come from the endpoint that already serves the editor box,
+        # one request at a time, and the editor read fills the same cache.
+        self.assertIn('cfgAll[s]=cd;cdSlot=s', PAGE)
+        refresh = section(PAGE, "function cfgRefresh(){", "\n\n")
+        self.assertIn('fetch("/buttons/api/code?slot="+slot', refresh)
+        self.assertIn("return need.reduce(function(p,slot){", refresh)
+
+    def test_an_import_is_read_in_full_before_the_first_flash_write(self) -> None:
+        """A refusal in the middle would leave half of the inputs on the old
+        config, so every entry is checked before any of them is sent."""
+        check = section(PAGE, "function cfgCheck(e){", '\nreturn ""}')
+        self.assertIn('return "A slot number is missing or unknown."', check)
+        self.assertIn('if(a==="voice"&&!info(e.slot).v)', check)
+        self.assertIn('/^[0-9a-fA-F]{16}$/.test(cfgHex(e.ieee))', check)
+        self.assertIn("if(!(ep>=1&&ep<=240))", check)
+        self.assertIn("if(!(g>=1&&g<=65527))", check)
+        apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
+        self.assertIn("why=cfgCheck(j.slots[i]);", apply_)
+        self.assertIn("if(why){cfgNote(why,true);return}", apply_)
+        self.assertLess(apply_.index("cfgCheck"), apply_.index("cfgRun("))
+        # A clear on an input that holds nothing is the one skipped write.
+        self.assertIn("if(cfgNeeded(j.slots[i]))list.push(j.slots[i])}", apply_)
+        needed = section(PAGE, "function cfgNeeded(e){", "\n\n")
+        self.assertIn('if(e.action!=="none")return true', needed)
+
+    def test_an_import_reuses_the_action_endpoint_one_input_at_a_time(self) -> None:
+        """The remote reserves one action at a time, so a burst would take the
+        409. Nothing new is added to the firmware for an import."""
+        send = section(PAGE, "function cfgSend(e){", '\nreturn post("clear",e.slot)}')
+        self.assertIn('return post("set_voice",e.slot)', send)
+        self.assertIn('return post("set_ir_code",e.slot,e.code)', send)
+        self.assertIn('return post("set_zigbee_device",e.slot,null,e.name||""', send)
+        self.assertIn('return post("set_zigbee",e.slot,String(parseInt(e.group,10))', send)
+        run = section(PAGE, "function cfgRun(list,i){", "return cfgRun(list,i+1)})}")
+        self.assertIn("return waitAction(r.body.id)", run)
+        self.assertIn('throw new Error("Slot "+list[i].slot+": "+fail(r))', run)
+        # The import adds no endpoint, so canHandle still claims four paths.
+        self.assertNotIn("/buttons/api/export", PAGE)
+        self.assertNotIn("/buttons/api/import", PAGE)
+        self.assertNotIn("api/export", CPP)
+        self.assertNotIn("api/import", CPP)
 
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)

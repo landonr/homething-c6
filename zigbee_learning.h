@@ -28,10 +28,17 @@ class ZigbeeAssignmentManager {
   static constexpr uint8_t CLIENT_ENDPOINT = 1;
   // 0xFFF8 and above are the reserved broadcast addresses.
   static constexpr uint16_t MAX_GROUP_ID = 0xFFF7;
+  static constexpr uint8_t MIN_ENDPOINT = 1;
+  static constexpr uint8_t MAX_ENDPOINT = 240;
+
+  enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };
 
   struct Assignment {
     bool assigned{false};
+    Kind kind{KIND_GROUP};
     uint16_t group_id{0};
+    uint8_t endpoint{0};
+    uint8_t ieee[8]{};
     std::string name;
   };
 
@@ -41,6 +48,12 @@ class ZigbeeAssignmentManager {
     Record loaded{};
     if (preference_.load(&loaded) && valid_(loaded)) {
       record_ = loaded;
+    } else if (load_version_3_(record_)) {
+      if (preference_.save(&record_)) {
+        ESP_LOGI("zigbee_learn", "Migrated the Zigbee assignments from record version 3");
+      } else {
+        ESP_LOGE("zigbee_learn", "Failed to save the migrated Zigbee assignments");
+      }
     } else {
       reset_record_(record_);
       if (!preference_.save(&record_))
@@ -71,6 +84,7 @@ class ZigbeeAssignmentManager {
     next.mask |= 1UL << index;
     Entry &entry = next.entries[index];
     std::memset(&entry, 0, sizeof(entry));
+    entry.kind = KIND_GROUP;
     entry.group_id = group_id;
     std::strncpy(entry.friendly_name, name.c_str(), TARGET_SIZE - 1);
     next.checksum = checksum_(next);
@@ -96,7 +110,10 @@ class ZigbeeAssignmentManager {
       return result;
     const Entry &entry = record_.entries[slot - FIRST_SLOT];
     result.assigned = true;
+    result.kind = static_cast<Kind>(entry.kind);
     result.group_id = entry.group_id;
+    result.endpoint = entry.endpoint;
+    std::memcpy(result.ieee, entry.ieee, sizeof(result.ieee));
     result.name = entry.friendly_name;
     return result;
   }
@@ -144,14 +161,18 @@ class ZigbeeAssignmentManager {
 
  private:
   static constexpr uint32_t MAGIC = 0x5A424731U;
-  // Version 3 dropped the target kind, because every target is now a group.
-  static constexpr uint16_t VERSION = 3;
+  // Version 4 returned the target kind, because a direct device target needs an
+  // IEEE address and an endpoint that a group id cannot carry.
+  static constexpr uint16_t VERSION = 4;
+  static constexpr uint16_t VERSION_V3 = 3;
   static constexpr uint32_t PREFERENCE_KEY = 0x5A424731U;
   static constexpr size_t TARGET_SIZE = 65;
 
   struct Entry {
+    uint8_t kind;
+    uint8_t endpoint;
     uint16_t group_id;
-    uint16_t reserved;
+    uint8_t ieee[8];
     char friendly_name[TARGET_SIZE];
   };
 
@@ -164,6 +185,25 @@ class ZigbeeAssignmentManager {
     uint32_t checksum;
   };
 
+  struct EntryV3 {
+    uint16_t group_id;
+    uint16_t reserved;
+    char friendly_name[TARGET_SIZE];
+  };
+
+  struct RecordV3 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint32_t mask;
+    EntryV3 entries[SLOT_COUNT];
+    uint32_t checksum;
+  };
+
+  // The two records differ in length, so the version 4 load fails on the NVS
+  // length check before this runs. A version 3 target is always a group.
+  static_assert(sizeof(Record) != sizeof(RecordV3), "The version 4 record must not match version 3");
+
   static bool slot_valid_(uint8_t slot) { return slot >= FIRST_SLOT && slot <= LAST_SLOT; }
 
   bool has_assignment_(uint8_t slot) const {
@@ -172,7 +212,9 @@ class ZigbeeAssignmentManager {
 
   const Entry &entry_(uint8_t slot) const { return record_.entries[slot - FIRST_SLOT]; }
 
-  static uint32_t checksum_(const Record &record) {
+  // Hashes the padding too, so every writer must memset a record or an entry
+  // before it fills the fields.
+  template<typename T> static uint32_t checksum_(const T &record) {
     uint32_t hash = 2166136261U;
     const auto *bytes = reinterpret_cast<const uint8_t *>(&record);
     for (size_t i = 0; i < sizeof(record) - sizeof(record.checksum); i++) {
@@ -180,6 +222,26 @@ class ZigbeeAssignmentManager {
       hash *= 16777619U;
     }
     return hash;
+  }
+
+  static bool ieee_all_zero_(const uint8_t (&ieee)[8]) {
+    for (uint8_t byte : ieee) {
+      if (byte != 0)
+        return false;
+    }
+    return true;
+  }
+
+  // All zeros and all ones are the two reserved EUI-64 values.
+  static bool ieee_valid_(const uint8_t (&ieee)[8]) {
+    bool all_ones = true;
+    for (uint8_t byte : ieee) {
+      if (byte != 0xFF) {
+        all_ones = false;
+        break;
+      }
+    }
+    return !all_ones && !ieee_all_zero_(ieee);
   }
 
   static bool valid_(const Record &record) {
@@ -190,10 +252,55 @@ class ZigbeeAssignmentManager {
       if ((record.mask & (1UL << index)) == 0)
         continue;
       const Entry &entry = record.entries[index];
+      if (std::memchr(entry.friendly_name, '\0', TARGET_SIZE) == nullptr)
+        return false;
+      if (entry.kind == KIND_GROUP) {
+        if (entry.group_id == 0 || entry.group_id > MAX_GROUP_ID || entry.endpoint != 0 ||
+            !ieee_all_zero_(entry.ieee))
+          return false;
+      } else if (entry.kind == KIND_DEVICE) {
+        if (entry.group_id != 0 || entry.endpoint < MIN_ENDPOINT || entry.endpoint > MAX_ENDPOINT ||
+            !ieee_valid_(entry.ieee))
+          return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool valid_v3_(const RecordV3 &record) {
+    if (record.magic != MAGIC || record.version != VERSION_V3 ||
+        (record.mask & ~((1UL << SLOT_COUNT) - 1)) != 0 || record.checksum != checksum_(record))
+      return false;
+    for (size_t index = 0; index < SLOT_COUNT; index++) {
+      if ((record.mask & (1UL << index)) == 0)
+        continue;
+      const EntryV3 &entry = record.entries[index];
       if (entry.group_id == 0 || entry.group_id > MAX_GROUP_ID ||
           std::memchr(entry.friendly_name, '\0', TARGET_SIZE) == nullptr)
         return false;
     }
+    return true;
+  }
+
+  static bool load_version_3_(Record &out) {
+    auto old_preference = esphome::global_preferences->make_preference<RecordV3>(PREFERENCE_KEY, true);
+    RecordV3 old{};
+    if (!old_preference.load(&old) || !valid_v3_(old))
+      return false;
+
+    reset_record_(out);
+    out.mask = old.mask;
+    for (size_t index = 0; index < SLOT_COUNT; index++) {
+      if ((old.mask & (1UL << index)) == 0)
+        continue;
+      Entry &entry = out.entries[index];
+      entry.kind = KIND_GROUP;
+      entry.group_id = old.entries[index].group_id;
+      std::memcpy(entry.friendly_name, old.entries[index].friendly_name, TARGET_SIZE);
+    }
+    out.checksum = checksum_(out);
     return true;
   }
 

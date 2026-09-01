@@ -133,10 +133,17 @@ Zigbee2MQTT, so another button can still use that group.
 ## Storage
 
 The remote stores one record for each of the 18 assignable slots. A record holds
-the group ID and the target name.
+a target kind, the target name, and the address for that kind.
 
-The record format is version 3. Version 2 held a target kind for the private
-device groups, so an older record does not load and the slots start clear.
+A group record holds the group ID. A device record holds the IEEE address and
+the endpoint of one device.
+
+The record format is version 4. The remote reads a version 3 record and writes
+it back as version 4, so the group assignments survive the update.
+
+The two formats have different lengths, so the version 4 load fails first and
+the migration runs. Version 2 and earlier do not load, and those slots start
+clear.
 
 ## LED meanings
 

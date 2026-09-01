@@ -235,28 +235,77 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
 
-    def test_nvs_v3_stores_group_name_mask_and_checksum(self) -> None:
-        """Version 3 dropped the target kind, so an old record must not load as
-        a valid one."""
+    def test_nvs_v4_stores_kind_address_name_mask_and_checksum(self) -> None:
+        """Version 4 carries a target kind, so a group entry and a device entry
+        share one record."""
         header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("static constexpr uint16_t VERSION = 3;", header)
-        self.assertNotIn("TargetKind", header)
+        self.assertIn("static constexpr uint16_t VERSION = 4;", header)
+        self.assertIn("enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };", header)
         self.assertRegex(
             header,
             r"struct Entry \{\n"
-            r"    uint16_t group_id;[\s\S]*?"
-            r"char friendly_name\[TARGET_SIZE\];",
+            r"    uint8_t kind;\n"
+            r"    uint8_t endpoint;\n"
+            r"    uint16_t group_id;\n"
+            r"    uint8_t ieee\[8\];\n"
+            r"    char friendly_name\[TARGET_SIZE\];",
         )
         self.assertRegex(
             header,
             r"struct Record \{[\s\S]*?uint32_t mask;[\s\S]*?"
             r"Entry entries\[SLOT_COUNT\];[\s\S]*?uint32_t checksum;",
         )
+
+    def test_a_version_4_entry_validates_only_the_fields_of_its_kind(self) -> None:
+        """A group entry with an IEEE address, or a device entry with a group id,
+        is a half written record and must not load."""
+        header = ZIGBEE_LEARNING.read_text()
+        valid = re.search(
+            r"static bool valid_\(const Record &record\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if valid is None:
+            raise AssertionError("Zigbee valid_ method not found")
+        body = valid.group("body")
+        self.assertRegex(
+            body,
+            r"if \(entry\.kind == KIND_GROUP\) \{[\s\S]*?entry\.endpoint != 0[\s\S]*?"
+            r"!ieee_all_zero_\(entry\.ieee\)",
+        )
+        self.assertRegex(
+            body,
+            r"\} else if \(entry\.kind == KIND_DEVICE\) \{[\s\S]*?entry\.group_id != 0[\s\S]*?"
+            r"entry\.endpoint < MIN_ENDPOINT[\s\S]*?entry\.endpoint > MAX_ENDPOINT[\s\S]*?"
+            r"!ieee_valid_\(entry\.ieee\)",
+        )
+        # An unknown kind is a future format, not a group.
+        self.assertRegex(body, r"\} else \{\n        return false;")
+
+    def test_a_version_3_record_migrates_instead_of_clearing_the_slots(self) -> None:
+        """The blob lengths differ, so the version 4 load fails first and the old
+        group assignments survive the update."""
+        header = ZIGBEE_LEARNING.read_text()
         self.assertRegex(
             header,
             r"if \(preference_\.load\(&loaded\) && valid_\(loaded\)\)[\s\S]*?"
-            r"reset_record_\(record_\);[\s\S]*?preference_\.save\(&record_\)",
+            r"\} else if \(load_version_3_\(record_\)\) \{[\s\S]*?preference_\.save\(&record_\)"
+            r"[\s\S]*?\} else \{[\s\S]*?reset_record_\(record_\);",
         )
+        self.assertIn(
+            'static_assert(sizeof(Record) != sizeof(RecordV3),',
+            header,
+        )
+        migrate = re.search(
+            r"static bool load_version_3_\(Record &out\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if migrate is None:
+            raise AssertionError("Zigbee load_version_3_ method not found")
+        body = migrate.group("body")
+        self.assertIn("make_preference<RecordV3>(PREFERENCE_KEY, true)", body)
+        self.assertIn("!valid_v3_(old)", body)
+        self.assertIn("entry.kind = KIND_GROUP;", body)
+        self.assertIn("out.checksum = checksum_(out);", body)
 
     def test_clear_only_drops_the_local_record(self) -> None:
         """Group membership lives in the light, so the remote cannot and must not

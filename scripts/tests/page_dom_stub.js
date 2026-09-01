@@ -13,15 +13,20 @@ const fs = require("fs");
 const els = {};
 function mk(tag) {
   return {
-    tagName: tag, children: [], _text: "", _html: "", attrs: {}, style: {},
+    tagName: tag, children: [], _text: "", _html: "", _ids: [], attrs: {}, style: {},
     value: "", className: "", onclick: null, oninput: null,
     set innerHTML(v) {
       this._html = v;
       this.children = [];
-      // Register ids the markup declares, so a later getElementById finds them.
+      // Drop the ids the previous markup declared before registering the new
+      // ones. Without this a field that a repaint stopped rendering is still
+      // found by getElementById, and a panel that hides a field looks the same
+      // as one that still shows it.
+      for (const id of this._ids) delete els[id];
+      this._ids = [];
       const re = /id=['"]?([A-Za-z0-9_-]+)['"]?/g;
       let m;
-      while ((m = re.exec(v))) els[m[1]] = mk("stub");
+      while ((m = re.exec(v))) { els[m[1]] = mk("stub"); this._ids.push(m[1]); }
     },
     get innerHTML() { return this._html; },
     set textContent(v) { this._text = String(v); },

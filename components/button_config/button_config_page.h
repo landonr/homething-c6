@@ -47,6 +47,8 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .code>p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
+p.hd2{color:var(--mut);font-size:12px;margin:14px 0 6px;
+text-transform:uppercase;letter-spacing:.06em}
 select,input[type=text]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
@@ -108,6 +110,9 @@ var tg=null,td=null,zerr="",ws=null,zbusy=false;
 var zreq={},zseq=0;
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
+// act is the open action panel. The Zigbee field values live here too, because
+// a late bridge/devices message repaints and would otherwise wipe them.
+var act="ir",zsv="",zdv="",ztv="";
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
@@ -198,33 +203,48 @@ function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
 // that the cache dropped, and any group ID that has no name.
 // The browser talks to Zigbee2MQTT, not the remote. A group id is all the
 // remote stores, so this form only has to resolve a name to that id.
-function zbForm(){
-var h="",i;
+function zbForm(lock){
+var h="",i,dis=(lock||zbusy)?" disabled":"";
 if(zbusy)h+="<div class=note>Working with Zigbee2MQTT.</div>";
 if(tg&&tg.length){
 h+="<p class=sub>Pick a group.</p>"+
-"<select id=zs><option value=''>Select a group</option>";
-for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'>"+
-esc(tg[i].name)+"</option>";
-h+="</select><div class=act><button type=button id=za"+(zbusy?" disabled":"")+
-">Assign group</button></div>"}
+"<select id=zs"+dis+"><option value=''>Select a group</option>";
+for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
+(zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
+h+="</select><div class=act><button type=button id=za"+dis+">Assign group</button></div>"}
 if(td&&td.length){
 h+="<p class=sub>Or pick one device. A groupcast is the only thing the remote "+
 "can send, so this browser puts the device in a group of its own first.</p>"+
-"<select id=zd><option value=''>Select a device</option>";
-for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'>"+
-esc(td[i].name)+"</option>";
-h+="</select><div class=act><button type=button id=zw"+(zbusy?" disabled":"")+
-">Assign device</button></div>"}
+"<select id=zd"+dis+"><option value=''>Select a device</option>";
+for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
+(zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
+h+="</select><div class=act><button type=button id=zw"+dis+">Assign device</button></div>"}
 if(!tg&&!td)h+="<p class=sub>No lists. Connect to Zigbee2MQTT at the top of the "+
 "page, or type a group ID below.</p>";
 h+="<p class=sub>A typed ID wins over both pickers. Membership lives in the "+
 "light, so a group only works once the light has joined it.</p>"+
-"<input id=zt type=text autocomplete=off placeholder='0x1234 or 4609'>"+
-"<div class=act><button type=button id=zi"+(zbusy?" disabled":"")+
-">Assign typed ID</button>"+
-"<button type=button class=sec id=zx>Back</button></div>";
+"<input id=zt type=text autocomplete=off placeholder='0x1234 or 4609' value='"+
+att(ztv)+"'>"+
+"<div class=act><button type=button id=zi"+dis+">Assign typed ID</button></div>";
 return h}
+
+// IR owns the code box, because a pasted code and a captured one fill the same
+// slot and reading one without the other tells you nothing.
+function irPanel(lock){
+var dis=lock?" disabled":"";
+return "<p class=sub>Capture from a source remote, or paste a code.</p>"+
+"<div class=act><button type=button id=b1"+dis+">Record IR</button></div>"+
+codeBox(lock)}
+
+function vaPanel(lock){
+return "<p class=sub>The press starts Assist and the release ends it.</p>"+
+"<div class=act><button type=button id=b2"+(lock?" disabled":"")+
+">Assign voice assistant</button></div>"}
+
+function clearPanel(lock){
+return "<p class=sub>The input sends nothing until it is assigned again.</p>"+
+"<div class=act><button type=button class=sec id=b3"+(lock?" disabled":"")+
+">Clear this input</button></div>"}
 
 // The frontend websocket relays every MQTT message as {topic,payload} with the
 // base topic already stripped, so bridge/groups arrives without a subscribe.
@@ -248,7 +268,7 @@ for(j=0;j<list.length;j++)if(list[j].ieee_address)mem.push(list[j].ieee_address)
 out.push({id:g.id,name:String(g.friendly_name||g.id),members:mem})}
 out.sort(byName);
 done=true;tg=out;zerr="";
-z2mStatus();if(mode==="zb")paint();return}
+z2mStatus();if(act==="zb")paint();return}
 if(m.topic==="bridge/devices"&&Array.isArray(m.payload)){
 var devs=[];
 for(i=0;i<m.payload.length;i++){
@@ -257,15 +277,15 @@ if(!d.ieee_address||d.type==="Coordinator")continue;
 devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address)})}
 devs.sort(byName);
 done=true;td=devs;zerr="";
-z2mStatus();if(mode==="zb")paint();return}
+z2mStatus();if(act==="zb")paint();return}
 // A response echoes the transaction of the request that caused it.
 if(m.topic&&m.topic.indexOf("bridge/response/")===0&&m.payload){
 var t=m.payload.transaction,cb=t?zreq[t]:null;
 if(cb){delete zreq[t];cb(m.payload)}}};
 ws.onerror=function(){if(!done){zerr="Could not reach Zigbee2MQTT at that address.";
-z2mStatus();if(mode==="zb")paint()}};
+z2mStatus();if(act==="zb")paint()}};
 ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
-z2mStatus();if(mode==="zb")paint()}}}
+z2mStatus();if(act==="zb")paint()}}}
 
 function z2mSave(){
 var u=document.getElementById("zu").value.replace(/^\s+|\s+$/g,"");
@@ -276,14 +296,15 @@ z2mConnect(u,k);z2mStatus()}
 
 // The box stays available on an empty slot, so a code can be pasted in without
 // pointing a source remote at the board.
-function codeBox(){
+function codeBox(lock){
+var dis=lock?" disabled":"";
 var h="<div class=code><p class=hd>IR code</p>"+
 "<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
 "rel=noreferrer>Flipper-IRDB</a></p>"+
 "<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
 if(cdSlot!==sel)h+="<p class=sub>Loading the stored code.</p>";
-h+="<div class=act><button type=button class=sec id=cc>Copy</button>"+
-"<button type=button id=ca>Apply to this input</button></div></div>";
+h+="<div class=act><button type=button class=sec id=cc"+dis+">Copy</button>"+
+"<button type=button id=ca"+dis+">Apply to this input</button></div></div>";
 return h}
 
 function loadCode(s){cdSlot=null;cd="";
@@ -321,38 +342,57 @@ h+="<p>Point the source remote at the front of the board and press its button.</
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
 e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
-if(mode==="zb"&&rec===sel){
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
-h+=zbForm();e.innerHTML=h;
-if(document.getElementById("za"))document.getElementById("za").onclick=assignGroup;
-if(document.getElementById("zw"))document.getElementById("zw").onclick=assignDevice;
-document.getElementById("zi").onclick=assignTyped;
-document.getElementById("zx").onclick=function(){mode="idle";paint()};return}
-if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
-var lock=st&&st.busy;
+var lock=(st&&st.busy)||zbusy;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
-else if(lock&&st.owner==="device")
+else if(st&&st.busy&&st.owner==="device")
 h+="<div class=note>Assignment in progress on the remote.</div>";
-else if(lock)h+="<div class=note>Another assignment is already running.</div>";
-h+="<div class=act>";
-h+="<button type=button id=b1"+(lock?" disabled":"")+">Record IR</button>";
-h+="<button type=button id=b4"+(lock?" disabled":"")+">Zigbee</button>";
-if(d.v)h+="<button type=button id=b2"+(lock?" disabled":"")+">Voice assistant</button>";
-h+="<button type=button class=sec id=b3"+(lock?" disabled":"")+">Clear</button></div>";
-h+=codeBox();
+else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</div>";
+
+// One selector, because a slot holds one action. The panel below it carries
+// everything that action needs, so nothing from another action is on screen.
+var opts=[["ir","IR code"],["zb","Zigbee group"]];
+if(d.v)opts.push(["va","Voice assistant"]);
+opts.push(["cl","Clear"]);
+if(!d.v&&act==="va")act="ir";
+h+="<p class=hd2>Action</p><select id=as"+(lock?" disabled":"")+">";
+for(var i=0;i<opts.length;i++)h+="<option value="+opts[i][0]+
+(act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
+h+="</select>";
+h+=act==="zb"?zbForm(st&&st.busy):act==="va"?vaPanel(lock):
+act==="cl"?clearPanel(lock):irPanel(lock);
 e.innerHTML=h;
+
+document.getElementById("as").onchange=function(){act=this.value;msg="";bad=false;paint()};
+if(act==="ir"){
 var box=document.getElementById("ct");
 box.oninput=function(){cd=box.value};
 document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
-if(lock)return;
-document.getElementById("b1").onclick=function(){go("record_ir")};
-document.getElementById("b4").onclick=openZigbee;
-if(d.v)document.getElementById("b2").onclick=function(){go("set_voice")};
-document.getElementById("b3").onclick=function(){go("clear")}}
+if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
+if(act==="zb"){
+var gs=document.getElementById("zs"),ds=document.getElementById("zd"),
+ti=document.getElementById("zt");
+if(gs)gs.onchange=function(){zsv=this.value};
+if(ds)ds.onchange=function(){zdv=this.value};
+ti.oninput=function(){ztv=ti.value};
+if(gs)gs.onclick=null;
+if(document.getElementById("za"))document.getElementById("za").onclick=assignGroup;
+if(document.getElementById("zw"))document.getElementById("zw").onclick=assignDevice;
+document.getElementById("zi").onclick=assignTyped}
+if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
+if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
 
-function pick(s){sel=s;if(mode==="zb")mode="idle";
-if(mode!=="rec"){msg="";bad=false}paint();
+function actFor(s){var r=row(s);
+if(!r||r.action==="none")return "ir";
+if(r.action==="zigbee")return "zb";
+if(r.action==="voice")return "va";
+return "ir"}
+
+function pick(s){sel=s;
+if(mode!=="rec"){msg="";bad=false}
+act=actFor(s);zsv="";zdv="";ztv="";
+paint();
 if(cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
@@ -388,15 +428,13 @@ else{msg=a==="set_ir_code"?"The remote refused that code.":
 return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
-function openZigbee(){mode="zb";rec=sel;msg="";bad=false;paint()}
-
 function assignTyped(){
-var v=document.getElementById("zt").value.replace(/^\s+|\s+$/g,"");
+var v=ztv.replace(/^\s+|\s+$/g,"");
 if(!v){msg="Type a group ID first.";bad=true;paint();return}
 sendGroup(v,"")}
 
 function assignGroup(){
-var v=document.getElementById("zs").value,name="",i;
+var v=zsv,name="",i;
 if(!v){msg="Select a group first.";bad=true;paint();return}
 if(tg)for(i=0;i<tg.length;i++)if(String(tg[i].id)===v)name=tg[i].name;
 sendGroup(v,name)}
@@ -405,7 +443,7 @@ sendGroup(v,name)}
 // holds only that device. An existing one is reused, because a repeat assign
 // would otherwise leave a new group behind every time.
 function assignDevice(){
-var ieee=document.getElementById("zd").value,dev=null,i;
+var ieee=zdv,dev=null,i;
 if(!ieee){msg="Select a device first.";bad=true;paint();return}
 for(i=0;i<td.length;i++)if(td[i].ieee===ieee)dev=td[i];
 if(!dev)return;
@@ -428,13 +466,12 @@ var s=sel;
 zbusy=true;paint();
 post("set_zigbee",s,v,name).then(function(r){
 zbusy=false;
-if(r.code!==200){msg=fail(r);bad=true;mode="idle";return load().then(paint)}
+if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
-mode="idle";
 if(ok){msg="Assigned to the Zigbee group.";bad=false}
 else{msg="The remote could not store that group.";bad=true}
 return load().then(paint)})})
-.catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;mode="idle";paint()})}
+.catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function waitAction(id,ms){return load().then(function(j){
 if(j.action_id>=id)return j.action_id===id&&j.action_ok;

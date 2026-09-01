@@ -53,7 +53,7 @@ membership change in Zigbee2MQTT needs no change on the remote.
 ## Assign a button from the web page
 
 1. Open `http://homething-c6.local/buttons`.
-2. Select an input, then select **Zigbee**.
+2. Select an input, then select **Zigbee group** in the Action selector.
 3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
    `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.
 4. Select **Connect**.

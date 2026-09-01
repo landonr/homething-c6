@@ -99,6 +99,30 @@ setTimeout(() => {
     global.tg = g; global.td = d;
     if (!h) throw new Error("empty form");
   });
+  step("every action panel paints on a voice capable slot", () => {
+    global.sel = 20;
+    for (const a of ["ir", "zb", "va", "cl"]) {
+      global.act = a;
+      paint();
+      if (!document.getElementById("as")) throw new Error(a + " painted no selector");
+    }
+  });
+  step("the voice panel is not offered on a slot without it", () => {
+    global.sel = 19;  // SW2 owns the hold gesture, so it has no voice action.
+    global.act = "va";
+    paint();
+    if (act === "va") throw new Error("voice stayed selected on a slot without it");
+  });
+  step("switching the selector repaints", () => {
+    global.sel = 20;
+    global.act = "ir";
+    paint();
+    const sw = document.getElementById("as");
+    if (typeof sw.onchange !== "function") throw new Error("no onchange handler");
+    sw.value = "zb";
+    sw.onchange.call(sw);
+    if (act !== "zb") throw new Error("act did not follow the selector");
+  });
   step("a request without a socket calls back an error", () => {
     let got = null;
     zpub("bridge/request/group/add", {}, (r) => { got = r; });

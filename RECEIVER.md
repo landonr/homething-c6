@@ -76,8 +76,14 @@ the same `web_server` as the ESPHome dashboard on port 80.
 The page draws the remote layout: the two top buttons, the wheel, and the nine
 keypad buttons.
 
-Select an input. The page shows the current assignment and the actions that the
-input accepts.
+Select an input. The page shows the current assignment, then an **Action**
+selector with the actions that the input accepts.
+
+The selector holds IR code, Zigbee group, Voice assistant, and Clear. It opens
+on the action that the input already holds.
+
+One panel shows at a time, because an input holds one action. The IR panel owns
+the **Record IR** button and the code box.
 
 The page is an alternative to the tap cycle, not a replacement. Both routes write
 the same flash records.
@@ -87,7 +93,7 @@ the same flash records.
 The page can assign a Zigbee Toggle target. It does not need a state transition,
 because you name the target instead.
 
-1. Select an input, then select **Zigbee**.
+1. Select an input, then select **Zigbee group** in the Action selector.
 2. Enter the Zigbee2MQTT frontend websocket address on the first use.
 3. Select a group, select a device, or type a group ID.
 4. Select the matching **Assign** button.

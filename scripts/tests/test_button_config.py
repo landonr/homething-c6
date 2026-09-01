@@ -380,12 +380,12 @@ class PageTest(unittest.TestCase):
     def test_the_page_can_copy_a_code_out_and_paste_one_in(self) -> None:
         """Plain HTTP is not a secure context, so navigator.clipboard is often
         missing and execCommand has to carry the copy."""
-        box = section(PAGE, "function codeBox(){", 'return h}')
+        box = section(PAGE, "function codeBox(lock){", 'return h}')
         self.assertIn("<textarea id=ct", box)
         # The box carries the only copy of a code, so it never hides behind a toggle.
         self.assertNotIn("<details", PAGE)
-        self.assertIn('id=cc>Copy</button>', box)
-        self.assertIn('id=ca>Apply to this input</button>', box)
+        self.assertIn('id=cc"+dis+">Copy</button>', box)
+        self.assertIn('id=ca"+dis+">Apply to this input</button>', box)
         copy = section(PAGE, "function copyCode(){", "bad=!ok;paint()}")
         self.assertIn('document.execCommand("copy")', copy)
         self.assertIn("if(!ok&&navigator.clipboard)", copy)
@@ -447,14 +447,46 @@ class PageTest(unittest.TestCase):
         self.assertIn('field.substr(0, 2).c_str(), &end, 16', byte)
         # The default 1024 byte cap truncates a long frame.
         self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
+    def test_one_selector_carries_the_four_actions(self) -> None:
+        """A slot holds one action, so the panel shows one action at a time and
+        the IR code box cannot sit under a Zigbee assignment."""
+        editor = section(PAGE, "function editor(){", "\nfunction actFor(")
+        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee group"]];', editor)
+        self.assertIn('if(d.v)opts.push(["va","Voice assistant"]);', editor)
+        self.assertIn('opts.push(["cl","Clear"]);', editor)
+        # Zigbee is offered everywhere, so it must sit outside the d.v branch.
+        self.assertLess(editor.index('"Zigbee group"'), editor.index("if(d.v)opts.push"))
+        # A slot that lost its voice action must not stay on a voice panel.
+        self.assertIn('if(!d.v&&act==="va")act="ir";', editor)
+        self.assertIn('document.getElementById("as").onchange=', editor)
+        # Record IR and the code box belong to the IR panel alone.
+        ir = section(PAGE, "function irPanel(lock){", "\n\nfunction ")
+        self.assertIn('id=b1', ir)
+        self.assertIn("codeBox(lock)", ir)
+        self.assertNotIn("codeBox(", editor)
+
+    def test_the_open_panel_follows_the_stored_action(self) -> None:
+        """Opening a slot on its own action saves a hunt through the selector."""
+        body = section(PAGE, "function actFor(s){", "\n\nfunction pick(")
+        self.assertIn('if(r.action==="zigbee")return "zb";', body)
+        self.assertIn('if(r.action==="voice")return "va";', body)
+        self.assertIn('if(!r||r.action==="none")return "ir";', body)
+        self.assertIn("act=actFor(s);", PAGE)
+
+    def test_the_zigbee_fields_survive_a_repaint(self) -> None:
+        """A late bridge/devices message repaints the panel, and a half typed
+        group ID must not vanish with it."""
+        self.assertIn("var act=", PAGE)
+        self.assertIn('zsv=this.value', PAGE)
+        self.assertIn('zdv=this.value', PAGE)
+        self.assertIn("ztv=ti.value", PAGE)
+        self.assertIn("var v=ztv.replace", PAGE)
+        self.assertIn("var v=zsv,name=", PAGE)
+        self.assertIn("var ieee=zdv,dev=null", PAGE)
+
     def test_the_page_offers_a_zigbee_target_picker_on_every_slot(self) -> None:
-        """The Zigbee button sits outside the d.v capability branch."""
-        editor = section(PAGE, "function editor(){", "\nfunction pick(")
-        zigbee = editor.index('id=b4"')
-        voice = editor.index("if(d.v)h+=")
-        self.assertLess(zigbee, voice)
-        self.assertIn("<select id=zs>", PAGE)
-        self.assertIn("<select id=zd>", PAGE)
+        self.assertIn("<select id=zs", PAGE)
+        self.assertIn("<select id=zd", PAGE)
         self.assertIn("<input id=zt type=text", PAGE)
         self.assertIn('post("set_zigbee",s,v,name)', PAGE)
 

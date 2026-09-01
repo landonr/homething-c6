@@ -59,31 +59,50 @@ repeated assignment leaves no group behind.
 3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
    `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.
 4. Select **Connect**.
-5. Select one of these three routes:
-   - Select a group, then select **Assign group**.
-   - Select a device, then select **Assign device**.
-   - Type a group ID, then select **Assign typed ID**.
+5. Select **Group** or **Device** in the Target kind selector.
+6. Select a group or a device. The picker fills the boxes below it.
+7. Select **Assign**.
 
 The device list holds only a device with an On/Off input cluster, because On/Off
 Toggle is the one command the remote sends.
 
+The Target kind selector decides which fields the panel shows. **Group** shows
+the group picker and a **Group ID** box. **Device** shows the device picker, an
+**IEEE address** box, and an **Endpoint** box.
+
+The panel therefore holds one target at a time, and **Assign** sends what is on
+screen. Changing the kind clears every field, so a value the panel stopped
+showing can never be assigned.
+
+Opening a slot that already holds a device target opens the panel on
+**Device**.
+
 The browser keeps the address and the token in `localStorage`. Neither value
 reaches the remote, so each browser enters them once.
 
-The page accepts a decimal group ID, such as `4609`, or a hex group ID, such as
-`0x1201`. The remote refuses `0` and every value above `0xFFF7`, because
-`0xFFF8` and above are the reserved Zigbee broadcast addresses.
+You can also type into a box. A picker does not appear without its bridge list,
+so typing is the only route when this browser cannot reach the frontend.
 
-A typed ID wins over the list selection. Use a typed ID when the browser cannot
-reach the frontend.
+A group ID is a decimal value, such as `4609`, or a hex value, such as `0x1201`.
+The remote refuses `0` and every value above `0xFFF7`, because `0xFFF8` and
+above are the reserved Zigbee broadcast addresses.
 
-The remote stores the group ID and the name. It writes the record to flash at
-once, because a group target needs no network confirmation.
+An IEEE address is 16 hex digits, such as `0x94deb8fffe9db81e`. The `0x` prefix
+is optional. The page refuses a shorter value before it reaches the remote.
 
-### Assign device
+A device uses the value in the **Endpoint** box, and endpoint 1 when that box is
+empty.
 
-**Assign device** sends the IEEE address and the endpoint of the device to the
-remote. The browser publishes nothing to Zigbee2MQTT.
+The page reads the target name from the bridge lists when it sends, not when you
+pick. An edited box therefore cannot keep the name of the target it replaced.
+
+The remote stores the address and the name. It writes the record to flash at
+once, because no target needs a network confirmation to be stored.
+
+### A device target
+
+**Assign** sends the IEEE address and the endpoint of the device to the remote.
+The browser publishes nothing to Zigbee2MQTT.
 
 The page picks the lowest endpoint that has a `genOnOff` input cluster. If the
 bridge publishes no endpoint list, the page uses endpoint 1.

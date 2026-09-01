@@ -468,12 +468,47 @@ class PageTest(unittest.TestCase):
         self.assertLess(editor.index('"Zigbee target"'), editor.index("if(d.v)opts.push"))
         # A slot that lost its voice action must not stay on a voice panel.
         self.assertIn('if(!d.v&&act==="va")act="ir";', editor)
+        # The panel below the selector repeats the selected action as a heading,
+        # so the fields under it are never read out of context.
+        self.assertIn('if(act===opts[i][0])title=opts[i][1]}', editor)
+        self.assertIn('h+="</select><h3>"+esc(title)+"</h3>";', editor)
         self.assertIn('document.getElementById("as").onchange=', editor)
         # Record IR and the code box belong to the IR panel alone.
         ir = section(PAGE, "function irPanel(lock){", "\n\nfunction ")
         self.assertIn('id=b1', ir)
         self.assertIn("codeBox(lock)", ir)
         self.assertNotIn("codeBox(", editor)
+
+    def test_the_kind_selector_shows_one_target_at_a_time(self) -> None:
+        """Holding a group ID and an IEEE address on screen at once let the panel
+        describe two targets, which Assign then had to choose between. The kind
+        selector removes the choice instead of resolving it."""
+        form = section(PAGE, "function zbForm(lock){", "\nreturn h}")
+        self.assertIn("<label class=hd2 for=zn>Target kind</label>", form)
+        device = form.split('if(zkv==="d"){', 1)[1].split("\nelse{", 1)[0]
+        group = form.split("\nelse{", 1)[1]
+        # Each branch renders its own picker and its own fields, and no others.
+        self.assertIn("<label class=hd2 for=zh>IEEE address</label>", device)
+        self.assertIn("<label class=hd2 for=zp>Endpoint</label>", device)
+        self.assertIn("<select id=zd", device)
+        self.assertNotIn("id=zg", device)
+        self.assertNotIn("id=zs", device)
+        self.assertIn("<label class=hd2 for=zg>Group ID</label>", group)
+        self.assertIn("<select id=zs", group)
+        self.assertNotIn("id=zh", group)
+        self.assertNotIn("id=zp", group)
+        # A label must render like the other headings and take its own line.
+        self.assertIn("p.hd2,label.hd2{display:block;", PAGE)
+        # One box per kind, so nothing has to guess from the digit count.
+        self.assertNotIn("ztv", PAGE)
+
+    def test_switching_kind_drops_the_other_kind_of_target(self) -> None:
+        """A hidden field must not still be assignable, and a slot that holds a
+        device should open on the device fields rather than on an empty group."""
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="va"')
+        self.assertIn('document.getElementById("zn").onchange=function(){zkv=this.value;\n'
+                      'zsv="";zdv="";zgv="";zhv="";zpv="";', wiring)
+        self.assertIn('var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";', PAGE)
 
     def test_the_open_panel_follows_the_stored_action(self) -> None:
         """Opening a slot on its own action saves a hunt through the selector."""
@@ -487,27 +522,66 @@ class PageTest(unittest.TestCase):
         """A late bridge/devices message repaints the panel, and a half typed
         group ID must not vanish with it."""
         self.assertIn("var act=", PAGE)
-        self.assertIn('zsv=this.value', PAGE)
-        self.assertIn('zdv=this.value', PAGE)
-        self.assertIn("ztv=ti.value", PAGE)
-        self.assertIn("var v=ztv.replace", PAGE)
-        self.assertIn("var v=zsv,name=", PAGE)
-        self.assertIn("var ieee=zdv,dev=null", PAGE)
+        self.assertIn("zgv=gi.value", PAGE)
+        self.assertIn("zhv=hi.value", PAGE)
+        self.assertIn("zpv=pi.value", PAGE)
+        self.assertIn("zsv=this.value", PAGE)
+        self.assertIn("zdv=this.value", PAGE)
+        # The panel is rebuilt from these vars, so each field re-renders its value.
+        for field in ("value='\"+att(zgv)+\"'", "value='\"+att(zhv)+\"'",
+                      "value='\"+att(zpv)+\"'"):
+            self.assertIn(field, PAGE)
+        # None of it may follow the selection to the next slot.
+        self.assertIn('act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";', PAGE)
+        self.assertIn("(zsv===String(tg[i].id)?\" selected\":\"\")", PAGE)
+        self.assertIn("(zdv===td[i].ieee?\" selected\":\"\")", PAGE)
 
     def test_the_page_offers_a_zigbee_target_picker_on_every_slot(self) -> None:
         self.assertIn("<select id=zs", PAGE)
         self.assertIn("<select id=zd", PAGE)
-        self.assertIn("<input id=zt type=text", PAGE)
+        self.assertIn("<input id=zg type=text", PAGE)
+        self.assertIn("<input id=zh type=text", PAGE)
+        self.assertIn("<input id=zp type=text", PAGE)
         self.assertIn('post("set_zigbee",s,v,name)', PAGE)
+
+    def test_one_button_assigns_whatever_the_target_box_holds(self) -> None:
+        """The page once had three assign buttons and claimed a typed ID won over
+        the pickers, which nothing implemented. A picker now fills the box and
+        one button sends it, so there is no second route to disagree."""
+        self.assertNotIn("wins over", PAGE)
+        for gone in ('id=za', 'id=zw', 'assignGroup', 'assignDevice', 'assignTyped',
+                     'Assign group', 'Assign device', 'Assign typed'):
+            self.assertNotIn(gone, PAGE)
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="va"')
+        self.assertIn('document.getElementById("zi").onclick=assignTarget', wiring)
+        # A picker only fills the fields of the kind already on screen.
+        self.assertIn('if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};',
+                      wiring)
+        self.assertIn('if(zdv){zhv=zdv;zpv=String(deviceEp(zdv))}', wiring)
+
+    def test_the_one_button_reaches_a_device_and_a_group(self) -> None:
+        """Neither picker renders without the bridge lists, so the box is the only
+        disconnected route and it has to carry both kinds of target."""
+        body = section(PAGE, "function assignTarget(){", "\nfunction ")
+        self.assertIn("sendDevice(ieee,ep||\"1\",name)", body)
+        self.assertIn("sendGroup(g,name)", body)
+        # The kind selector already decided, so nothing reads the digit count.
+        self.assertIn('if(zkv==="d"){', body)
+        # A malformed address is caught here rather than by the remote.
+        self.assertIn("if(!/^[0-9a-fA-F]{16}$/.test(hex)){", body)
+        # 0x1201 and 4609 are the same group, so the name lookup reads the value.
+        self.assertIn('parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10)', body)
+        # The name is re-derived, so an edited box cannot keep the old label.
+        self.assertIn('var name="",i;', body)
 
     def test_a_device_target_is_assigned_without_writing_to_the_bridge(self) -> None:
         """The remote unicasts to the device now, so the page sends the IEEE
         address and the endpoint and creates no group. A group per device left
         one behind on every repeat assign."""
-        body = section(PAGE, "function assignDevice(){", "\n\nfunction sendGroup(")
-        self.assertIn('post("set_zigbee_device",s,null,dev.name,', body)
-        self.assertIn('"&ieee="+encodeURIComponent(dev.ieee)', body)
-        self.assertIn('"&ep="+encodeURIComponent(String(dev.ep))', body)
+        body = section(PAGE, "function sendDevice(ieee,ep,name){", "\n\nfunction sendGroup(")
+        self.assertIn('post("set_zigbee_device",s,null,name,', body)
+        self.assertIn('"&ieee="+encodeURIComponent(ieee)', body)
+        self.assertIn('"&ep="+encodeURIComponent(ep)', body)
 
     def test_the_page_writes_nothing_to_zigbee2mqtt(self) -> None:
         """The websocket is read only now. Nothing is published, so the request

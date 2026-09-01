@@ -47,8 +47,9 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .code>p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
-p.hd2{color:var(--mut);font-size:12px;margin:14px 0 6px;
+p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
+h3{font-size:15px;margin:14px 0 8px}
 select,input[type=text]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
@@ -109,8 +110,10 @@ var tg=null,td=null,zerr="",ws=null,zbusy=false;
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
 // act is the open action panel. The Zigbee field values live here too, because
-// a late bridge/devices message repaints and would otherwise wipe them.
-var act="ir",zsv="",zdv="",ztv="";
+// a late bridge/devices message repaints and would otherwise wipe them. A group
+// and a device get one box each, and zkv says which kind is on screen, so only
+// one target can ever be filled in.
+var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="";
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
@@ -202,35 +205,50 @@ function esc(t){var e=document.createElement("div");e.textContent=t;return e.inn
 // esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.
 function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
 
-// The picker lists what the bridge published. The text field covers a target
-// that the cache dropped, and any group ID that has no name.
-// The browser talks to Zigbee2MQTT, not the remote. The remote stores a group
-// id, or an IEEE address and an endpoint, so this form only resolves a name to
-// one of those.
+// The browser talks to Zigbee2MQTT, not the remote. The kind selector shows one
+// target's fields at a time, so the panel cannot hold a group and a device at
+// once and Assign never has to choose between two. A picker fills the fields of
+// its own kind, and the fields also cover a target the bridge never published.
 function zbForm(lock){
 var h="",i,dis=(lock||zbusy)?" disabled":"";
 if(zbusy)h+="<div class=note>Working with Zigbee2MQTT.</div>";
-if(tg&&tg.length){
-h+="<p class=sub>Pick a group.</p>"+
-"<select id=zs"+dis+"><option value=''>Select a group</option>";
-for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
-(zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
-h+="</select><div class=act><button type=button id=za"+dis+">Assign group</button></div>"}
+h+="<label class=hd2 for=zn>Target kind</label>"+
+"<select id=zn"+dis+">"+
+"<option value=g"+(zkv==="g"?" selected":"")+">Group</option>"+
+"<option value=d"+(zkv==="d"?" selected":"")+">Device</option>"+
+"</select>";
+if(zkv==="d"){
 if(td&&td.length){
-h+="<p class=sub>Or pick one device. The remote sends straight to it and "+
-"Zigbee2MQTT keeps no group for it. Only a device with an On/Off cluster is "+
-"listed.</p>"+
+h+="<p class=sub>Pick a device to fill the boxes below. The remote sends "+
+"straight to it and Zigbee2MQTT keeps no group for it. Only a device with an "+
+"On/Off cluster is listed.</p>"+
 "<select id=zd"+dis+"><option value=''>Select a device</option>";
 for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
 (zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
-h+="</select><div class=act><button type=button id=zw"+dis+">Assign device</button></div>"}
-if(!tg&&!td)h+="<p class=sub>No lists. Connect to Zigbee2MQTT at the top of the "+
-"page, or type a group ID below.</p>";
-h+="<p class=sub>A typed ID wins over both pickers. Membership lives in the "+
-"light, so a group only works once the light has joined it.</p>"+
-"<input id=zt type=text autocomplete=off placeholder='0x1234 or 4609' value='"+
-att(ztv)+"'>"+
-"<div class=act><button type=button id=zi"+dis+">Assign typed ID</button></div>";
+h+="</select>"}
+else h+="<p class=sub>No device list. Connect to Zigbee2MQTT at the top of the "+
+"page, or type an address below.</p>";
+h+="<label class=hd2 for=zh>IEEE address</label>"+
+"<input id=zh type=text autocomplete=off placeholder='0x94deb8fffe9db81e' "+
+"value='"+att(zhv)+"'>"+
+"<label class=hd2 for=zp>Endpoint</label>"+
+"<input id=zp type=text autocomplete=off placeholder='1 when empty' "+
+"value='"+att(zpv)+"'>"}
+else{
+if(tg&&tg.length){
+h+="<p class=sub>Pick a group to fill the box below.</p>"+
+"<select id=zs"+dis+"><option value=''>Select a group</option>";
+for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
+(zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
+h+="</select>"}
+else h+="<p class=sub>No group list. Connect to Zigbee2MQTT at the top of the "+
+"page, or type an ID below.</p>";
+h+="<label class=hd2 for=zg>Group ID</label>"+
+"<input id=zg type=text autocomplete=off placeholder='0x1201 or 4609' "+
+"value='"+att(zgv)+"'>"+
+"<p class=sub>Membership lives in the "+
+"light, so a group only works once the light has joined it.</p>"}
+h+="<div class=act><button type=button id=zi"+dis+">Assign</button></div>";
 return h}
 
 // IR owns the code box, because a pasted code and a captured one fill the same
@@ -359,9 +377,11 @@ if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
 h+="<p class=hd2>Action</p><select id=as"+(lock?" disabled":"")+">";
-for(var i=0;i<opts.length;i++)h+="<option value="+opts[i][0]+
+var title="";
+for(var i=0;i<opts.length;i++){h+="<option value="+opts[i][0]+
 (act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
-h+="</select>";
+if(act===opts[i][0])title=opts[i][1]}
+h+="</select><h3>"+esc(title)+"</h3>";
 h+=act==="zb"?zbForm(st&&st.busy):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock);
 e.innerHTML=h;
@@ -375,14 +395,20 @@ document.getElementById("ca").onclick=applyCode;
 if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
 if(act==="zb"){
 var gs=document.getElementById("zs"),ds=document.getElementById("zd"),
-ti=document.getElementById("zt");
-if(gs)gs.onchange=function(){zsv=this.value};
-if(ds)ds.onchange=function(){zdv=this.value};
-ti.oninput=function(){ztv=ti.value};
+gi=document.getElementById("zg"),hi=document.getElementById("zh"),
+pi=document.getElementById("zp");
+// Switching kind drops the other kind's values, so nothing the panel stopped
+// showing can still be sent.
+document.getElementById("zn").onchange=function(){zkv=this.value;
+zsv="";zdv="";zgv="";zhv="";zpv="";msg="";bad=false;paint()};
+if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};
+if(ds)ds.onchange=function(){zdv=this.value;
+if(zdv){zhv=zdv;zpv=String(deviceEp(zdv))}paint()};
+if(gi)gi.oninput=function(){zgv=gi.value};
+if(hi)hi.oninput=function(){zhv=hi.value};
+if(pi)pi.oninput=function(){zpv=pi.value};
 if(gs)gs.onclick=null;
-if(document.getElementById("za"))document.getElementById("za").onclick=assignGroup;
-if(document.getElementById("zw"))document.getElementById("zw").onclick=assignDevice;
-document.getElementById("zi").onclick=assignTyped}
+document.getElementById("zi").onclick=assignTarget}
 if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
 if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
 
@@ -394,7 +420,10 @@ return "ir"}
 
 function pick(s){sel=s;
 if(mode!=="rec"){msg="";bad=false}
-act=actFor(s);zsv="";zdv="";ztv="";
+// Every Zigbee field belongs to the slot that was open, so none of it may
+// follow the selection to the next one.
+act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";
+var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
 paint();
 if(cdSlot!==s)loadCode(s)}
 
@@ -431,34 +460,43 @@ else{msg=a==="set_ir_code"?"The remote refused that code.":
 return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
-function assignTyped(){
-var v=ztv.replace(/^\s+|\s+$/g,"");
-if(!v){msg="Type a group ID first.";bad=true;paint();return}
-sendGroup(v,"")}
+function deviceEp(ieee){
+var i;
+if(td)for(i=0;i<td.length;i++)if(td[i].ieee===ieee)return td[i].ep;
+return 1}
 
-function assignGroup(){
-var v=zsv,name="",i;
-if(!v){msg="Select a group first.";bad=true;paint();return}
-if(tg)for(i=0;i<tg.length;i++)if(String(tg[i].id)===v)name=tg[i].name;
-sendGroup(v,name)}
+// The kind selector already said which target this is, so nothing here has to
+// infer it from the format. The name is looked up fresh rather than remembered,
+// so an edited box cannot keep a label from the target it replaced.
+function assignTarget(){
+var name="",i;
+if(zkv==="d"){
+var a=zhv.replace(/^\s+|\s+$/g,""),hex=a.replace(/^0[xX]/,"");
+if(!a){msg="Pick a device, or type an IEEE address.";bad=true;paint();return}
+if(!/^[0-9a-fA-F]{16}$/.test(hex)){
+msg="An IEEE address is 16 hex digits.";bad=true;paint();return}
+var ieee="0x"+hex.toLowerCase(),ep=zpv.replace(/^\s+|\s+$/g,"");
+if(td)for(i=0;i<td.length;i++)if(td[i].ieee.toLowerCase()===ieee){
+name=td[i].name;if(!ep)ep=String(td[i].ep)}
+sendDevice(ieee,ep||"1",name);
+return}
+var g=zgv.replace(/^\s+|\s+$/g,"");
+if(!g){msg="Pick a group, or type a group ID.";bad=true;paint();return}
+var n=parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10);
+if(tg)for(i=0;i<tg.length;i++)if(tg[i].id===n)name=tg[i].name;
+sendGroup(g,name)}
 
-// The remote unicasts to the device, so Zigbee2MQTT writes nothing here and no
-// group is left behind by a repeat assign. The remote stores the IEEE address
-// and resolves the network address behind it on the mesh.
-function assignDevice(){
-var ieee=zdv,dev=null,i;
-if(!ieee){msg="Select a device first.";bad=true;paint();return}
-for(i=0;i<td.length;i++)if(td[i].ieee===ieee)dev=td[i];
-if(!dev)return;
+// The picker and the typed box both land here, so one path builds the request.
+function sendDevice(ieee,ep,name){
 var s=sel;
 zbusy=true;paint();
-post("set_zigbee_device",s,null,dev.name,
-"&ieee="+encodeURIComponent(dev.ieee)+"&ep="+encodeURIComponent(String(dev.ep)))
+post("set_zigbee_device",s,null,name,
+"&ieee="+encodeURIComponent(ieee)+"&ep="+encodeURIComponent(ep))
 .then(function(r){
 zbusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
-if(ok){msg="Assigned to "+dev.name+".";bad=false}
+if(ok){msg="Assigned to "+(name?name:ieee)+".";bad=false}
 else{msg="The remote could not store that device.";bad=true}
 return load().then(paint)})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}

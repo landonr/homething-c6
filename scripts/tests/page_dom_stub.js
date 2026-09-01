@@ -141,19 +141,97 @@ setTimeout(() => {
     }};
     if (onOffEndpoint(d) !== 2) throw new Error("expected endpoint 2, got " + onOffEndpoint(d));
   });
-  step("assignDevice posts the address and endpoint and writes nothing to the bridge", () => {
+  step("the one button posts the address and endpoint, writing nothing to the bridge", () => {
     let body = null, sent = 0;
     const realFetch = global.fetch;
     global.ws = {readyState: 1, send: () => { sent++; }};
     global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
     global.sel = 20;
-    global.zdv = "0x94deb8fffe9db81e";
-    assignDevice();
+    global.zkv = "d";
+    global.zhv = "0x94deb8fffe9db81e";
+    global.zpv = "1";
+    assignTarget();
     global.fetch = realFetch;
     if (sent !== 0) throw new Error("the page wrote to Zigbee2MQTT");
     if (!body || body.indexOf("action=set_zigbee_device") < 0) throw new Error("wrong action: " + body);
     if (body.indexOf("ieee=0x94deb8fffe9db81e") < 0) throw new Error("no IEEE address: " + body);
     if (body.indexOf("ep=1") < 0) throw new Error("no endpoint: " + body);
+    // The name comes from the device list, not from a remembered selection.
+    if (body.indexOf("name=Office%20Lamp") < 0) throw new Error("no looked-up name: " + body);
+  });
+  step("the target box reaches a device and a group", () => {
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
+    global.sel = 20;
+    global.zpv = "";
+    global.zkv = "d";
+    global.zhv = "94deb8fffe9db81e";  // the 0x prefix is optional
+    assignTarget();
+    if (!body || body.indexOf("action=set_zigbee_device") < 0)
+      throw new Error("16 hex digits did not assign a device: " + body);
+    if (body.indexOf("ep=1") < 0) throw new Error("an empty endpoint box must mean 1: " + body);
+    body = null;
+    global.zkv = "g";
+    global.zgv = "0x1201";
+    assignTarget();
+    if (!body || body.indexOf("action=set_zigbee&") < 0)
+      throw new Error("a short ID must still assign a group: " + body);
+    if (body.indexOf("group=0x1201") < 0) throw new Error("no group id: " + body);
+    global.fetch = realFetch;
+  });
+  step("a picker fills the target box and drops the other picker", () => {
+    global.sel = 20;
+    global.act = "zb";
+    global.zsv = ""; global.zdv = ""; global.zgv = ""; global.zhv = ""; global.zpv = "";
+    global.zkv = "d";
+    paint();
+    const ds = document.getElementById("zd");
+    if (typeof ds.onchange !== "function") throw new Error("the device picker has no handler");
+    ds.value = "0x94deb8fffe9db81e";
+    ds.onchange.call(ds);
+    if (zhv !== "0x94deb8fffe9db81e") throw new Error("the device did not fill its box: " + zhv);
+    if (zpv !== "1") throw new Error("the device did not fill the endpoint: " + zpv);
+    if (document.getElementById("zg")) throw new Error("the group box showed on the device kind");
+    // Switching kind must drop everything the panel stopped showing.
+    const kn = document.getElementById("zn");
+    kn.value = "g";
+    kn.onchange.call(kn);
+    if (zkv !== "g") throw new Error("the kind did not switch: " + zkv);
+    if (zhv !== "" || zpv !== "" || zdv !== "")
+      throw new Error("device fields survived the switch: " + [zhv, zpv, zdv].join(","));
+    const gs = document.getElementById("zs");
+    gs.value = "9";
+    gs.onchange.call(gs);
+    if (zgv !== "9") throw new Error("the group did not fill its box: " + zgv);
+    if (document.getElementById("zh")) throw new Error("the address box showed on the group kind");
+  });
+
+  step("a hidden field cannot be assigned", () => {
+    const realFetch = global.fetch;
+    let body = null, calls = 0;
+    global.fetch = (u, o) => { calls++; body = o && o.body; return realFetch(u, o); };
+    global.sel = 20;
+    // A stale address from a device pick must not ride along on a group assign.
+    global.zkv = "g";
+    global.zgv = "4609";
+    global.zhv = "0x94deb8fffe9db81e";
+    assignTarget();
+    global.fetch = realFetch;
+    if (calls !== 1) throw new Error("expected exactly one request, got " + calls);
+    if (body.indexOf("action=set_zigbee&") < 0) throw new Error("the hidden kind won: " + body);
+    if (body.indexOf("ieee=") >= 0) throw new Error("a hidden address was sent: " + body);
+  });
+  step("a malformed address is refused before it reaches the remote", () => {
+    const realFetch = global.fetch;
+    let calls = 0;
+    global.fetch = (u, o) => { calls++; return realFetch(u, o); };
+    global.zkv = "d";
+    global.zhv = "0x94deb8";
+    assignTarget();
+    global.fetch = realFetch;
+    if (calls !== 0) throw new Error("a short address was still sent");
+    if (!bad || msg.indexOf("16 hex digits") < 0) throw new Error("no clear refusal: " + msg);
   });
 
   setTimeout(() => process.exit(failed ? 1 : 0), 200);

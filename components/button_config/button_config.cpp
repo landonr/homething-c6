@@ -7,8 +7,11 @@
 #include "zigbee_learning.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -104,6 +107,37 @@ static bool parse_group_id(const std::string &text, uint16_t &group_id) {
       value > ZigbeeAssignmentManager::MAX_GROUP_ID)
     return false;
   group_id = static_cast<uint16_t>(value);
+  return true;
+}
+
+// Zigbee2MQTT prints an IEEE address with the most significant nibble first. The
+// radio holds an EUI-64 as little endian bytes, so the parsed value copies whole
+// and needs no swap on the way to flash.
+static bool parse_ieee(const std::string &text, uint8_t (&ieee)[8]) {
+  std::string digits = trim(text);
+  if (digits.size() > 2 && digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X'))
+    digits = digits.substr(2);
+  if (digits.size() != 16)
+    return false;
+  for (const char digit : digits) {
+    if (std::isxdigit(static_cast<unsigned char>(digit)) == 0)
+      return false;
+  }
+  const uint64_t value = std::strtoull(digits.c_str(), nullptr, 16);
+  std::memcpy(ieee, &value, sizeof(ieee));
+  return true;
+}
+
+// Endpoint 0 is the ZDO and 0xF1 and above are reserved.
+static bool parse_endpoint(const std::string &text, uint8_t &endpoint) {
+  if (text.empty() || text.size() > 3)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value < ZigbeeAssignmentManager::MIN_ENDPOINT ||
+      value > ZigbeeAssignmentManager::MAX_ENDPOINT)
+    return false;
+  endpoint = static_cast<uint8_t>(value);
   return true;
 }
 
@@ -336,12 +370,22 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       std::snprintf(code, sizeof(code), "0x%08X", static_cast<unsigned>(samsung));
     if (::ir_code_store.code_samsung_fields(info.slot, address, command))
       std::snprintf(fields, sizeof(fields), "%02X %02X", address, command);
+    // The stored bytes are the little endian EUI-64, so this prints the value
+    // that Zigbee2MQTT shows rather than the byte order on the wire.
+    char ieee_text[20] = "";
+    if (zigbee.assigned && zigbee.kind == ZigbeeAssignmentManager::KIND_DEVICE) {
+      uint64_t value = 0;
+      std::memcpy(&value, zigbee.ieee, sizeof(value));
+      std::snprintf(ieee_text, sizeof(ieee_text), "0x%016llx",
+                    static_cast<unsigned long long>(value));
+    }
     stream->printf(
-        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"name":")",
+        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":")",
         first ? "" : ",", static_cast<unsigned>(info.slot), action,
         static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
         static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields,
-        static_cast<unsigned>(zigbee.group_id));
+        static_cast<unsigned>(zigbee.group_id), ieee_text,
+        static_cast<unsigned>(zigbee.endpoint));
     print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
     stream->print("\"}");
     first = false;
@@ -407,7 +451,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   }
 
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
-                     action == "set_zigbee" ||
+                     action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
@@ -437,15 +481,26 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   // IR. The page resolves the name to a group id against Zigbee2MQTT, so the
   // remote stores the id and never needs the broker itself.
   uint16_t group_id = 0;
-  std::string group_name;
-  if (action == "set_zigbee") {
-    if (!parse_group_id(request->arg("group"), group_id)) {
+  uint8_t ieee[8] = {};
+  uint8_t endpoint = 0;
+  std::string target_name;
+  if (action == "set_zigbee" || action == "set_zigbee_device") {
+    if (action == "set_zigbee" && !parse_group_id(request->arg("group"), group_id)) {
       request->send(400, "application/json",
                     R"({"ok":false,"error":"a group is 1 to 65527, in decimal or 0x hex"})");
       return;
     }
-    group_name = request->arg("name");
-    if (group_name.size() > 64) {
+    if (action == "set_zigbee_device" && !parse_ieee(request->arg("ieee"), ieee)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"an IEEE address is 16 hex digits"})");
+      return;
+    }
+    if (action == "set_zigbee_device" && !parse_endpoint(request->arg("ep"), endpoint)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"an endpoint is 1 to 240"})");
+      return;
+    }
+    target_name = request->arg("name");
+    if (target_name.size() > 64) {
       request->send(400, "application/json", R"({"ok":false,"error":"target name too long"})");
       return;
     }
@@ -480,9 +535,19 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       this->complete_action_(action_id, saved && ::ir_code_store.set_name(button, name.c_str()));
     });
   } else if (action == "set_zigbee") {
-    this->defer([this, button, action_id, group_id, group_name]() {
+    this->defer([this, button, action_id, group_id, target_name]() {
       this->complete_action_(action_id,
-                             ::zigbee_assignments.assign_from_web(button, group_id, group_name));
+                             ::zigbee_assignments.assign_from_web(button, group_id, target_name));
+    });
+  } else if (action == "set_zigbee_device") {
+    // The array decays in a lambda capture, so it rides along as a struct.
+    struct Target {
+      uint8_t ieee[8];
+    } target{};
+    std::memcpy(target.ieee, ieee, sizeof(target.ieee));
+    this->defer([this, button, action_id, target, endpoint, target_name]() {
+      this->complete_action_(action_id, ::zigbee_assignments.assign_device_from_web(
+                                            button, target.ieee, endpoint, target_name));
     });
   } else {
     this->defer([this, button, action_id]() {

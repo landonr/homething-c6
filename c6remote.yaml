@@ -72,6 +72,7 @@ zigbee:
           role: CLIENT
   on_join:
     then:
+      - lambda: zigbee_assignments.on_network_up();
       - script.execute: show_idle_status
 
 web_server:
@@ -704,6 +705,7 @@ interval:
           }
           if (ir_ui.tick())
             id(show_idle_status).execute();
+          zigbee_assignments.tick();
   - interval: 1s
     then:
       - if:

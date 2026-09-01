@@ -42,7 +42,8 @@ const STATE = {
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
     {slot: 19, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
-    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, name: "Office Lamp"},
+    {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, name: ""},
+    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, name: "Office Lamp"},
   ],
 };
 
@@ -80,14 +81,16 @@ setTimeout(() => {
     }
   });
   step("words covers every action", () => {
-    for (const slot of [3, 6, 19, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
+    for (const slot of [3, 5, 6, 19, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
+    // A device slot with no friendly name still has to name its target.
+    if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
 
   global.tg = [
     {id: 1, name: "all_light", members: ["0xaaa", "0xbbb"]},
     {id: 9, name: "c6 Office Lamp", members: ["0x94deb8fffe9db81e"]},
   ];
-  global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp"}];
+  global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp", ep: 1}];
   global.sel = 20;
 
   step("paint with both lists", () => paint());
@@ -123,10 +126,29 @@ setTimeout(() => {
     sw.onchange.call(sw);
     if (act !== "zb") throw new Error("act did not follow the selector");
   });
-  step("a request without a socket calls back an error", () => {
-    let got = null;
-    zpub("bridge/request/group/add", {}, (r) => { got = r; });
-    if (!got || !got.error) throw new Error("expected an error callback");
+  step("onOffEndpoint picks the lowest On/Off endpoint", () => {
+    if (onOffEndpoint({endpoints: {}}) !== 0) throw new Error("a device with no On/Off must be dropped");
+    if (onOffEndpoint({}) !== 1) throw new Error("a missing endpoint list must fall back to 1");
+    const d = {endpoints: {
+      "3": {clusters: {input: ["genOnOff"]}},
+      "1": {clusters: {input: ["genBasic"]}},
+      "2": {clusters: {input: ["genOnOff"]}},
+    }};
+    if (onOffEndpoint(d) !== 2) throw new Error("expected endpoint 2, got " + onOffEndpoint(d));
+  });
+  step("assignDevice posts the address and endpoint and writes nothing to the bridge", () => {
+    let body = null, sent = 0;
+    const realFetch = global.fetch;
+    global.ws = {readyState: 1, send: () => { sent++; }};
+    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
+    global.sel = 20;
+    global.zdv = "0x94deb8fffe9db81e";
+    assignDevice();
+    global.fetch = realFetch;
+    if (sent !== 0) throw new Error("the page wrote to Zigbee2MQTT");
+    if (!body || body.indexOf("action=set_zigbee_device") < 0) throw new Error("wrong action: " + body);
+    if (body.indexOf("ieee=0x94deb8fffe9db81e") < 0) throw new Error("no IEEE address: " + body);
+    if (body.indexOf("ep=1") < 0) throw new Error("no endpoint: " + body);
   });
 
   setTimeout(() => process.exit(failed ? 1 : 0), 200);

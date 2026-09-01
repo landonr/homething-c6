@@ -228,7 +228,7 @@ class EnforcementTest(unittest.TestCase):
             r'zigbee\.assigned\s+\? "zigbee"[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"'
             r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"fields":"%s","group":%u,"name":"', state)
+        self.assertIn('"fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
@@ -289,7 +289,8 @@ class ZigbeeTargetTest(unittest.TestCase):
         self.assertIn("mutable std::mutex cache_mutex_;", ZIGBEE)
         reader = section(ZIGBEE, "Assignment assignment(uint8_t slot) const {", "\n  }")
         self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
-        for writer in ("bool assign_from_web(", "void clear(uint8_t slot) {"):
+        for writer in ("bool store_(uint8_t slot, const Entry &entry) {",
+                       "void clear(uint8_t slot) {"):
             self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);",
                           section(ZIGBEE, writer, "\n  }"))
 
@@ -298,14 +299,20 @@ class ZigbeeTargetTest(unittest.TestCase):
         known before assign_from_web returns and nothing has to stay open."""
         body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, uint16_t group_id,", "\n  }")
         self.assertIn("if (!slot_valid_(slot) || group_id == 0 || group_id > MAX_GROUP_ID)", body)
-        self.assertIn("preference_.save(&record_)", body)
+        self.assertIn("if (!store_(slot, entry))", body)
+        self.assertIn("preference_.save(&record_)",
+                      section(ZIGBEE, "bool store_(uint8_t slot, const Entry &entry) {", "\n  }"))
         self.assertNotIn("deadline_", body)
         self.assertNotIn("web_result_callback_", ZIGBEE)
 
     def test_an_assignment_replaces_the_old_action_on_the_slot(self) -> None:
         """A slot holds one action, so a stale IR code must not survive."""
-        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, uint16_t group_id,", "\n  }")
+        body = section(ZIGBEE, "bool store_(uint8_t slot, const Entry &entry) {", "\n  }")
         self.assertIn("ir_code_store.clear_for_zigbee(slot)", body)
+        # Both kinds of target commit through store_, so neither can skip it.
+        for assign in ("bool assign_from_web(uint8_t slot, uint16_t group_id,",
+                       "bool assign_device_from_web("):
+            self.assertIn("store_(slot, entry)", section(ZIGBEE, assign, "\n  }"))
         # The name belongs to the erased code, so it goes with it.
         clear = section(STORE, "bool clear_for_zigbee(uint8_t button) {", "\n  }")
         self.assertIn('write_name_(button, "")', clear)
@@ -363,7 +370,10 @@ class PageTest(unittest.TestCase):
         """Nine slots hold 68 pulses of the same length, so only the data word
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
-        self.assertIn('"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"name":"', state)
+        self.assertIn(
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":"',
+            state,
+        )
         self.assertIn("::ir_code_store.name(info.slot)", state)
         self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
         self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
@@ -451,11 +461,11 @@ class PageTest(unittest.TestCase):
         """A slot holds one action, so the panel shows one action at a time and
         the IR code box cannot sit under a Zigbee assignment."""
         editor = section(PAGE, "function editor(){", "\nfunction actFor(")
-        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee group"]];', editor)
+        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee target"]];', editor)
         self.assertIn('if(d.v)opts.push(["va","Voice assistant"]);', editor)
         self.assertIn('opts.push(["cl","Clear"]);', editor)
         # Zigbee is offered everywhere, so it must sit outside the d.v branch.
-        self.assertLess(editor.index('"Zigbee group"'), editor.index("if(d.v)opts.push"))
+        self.assertLess(editor.index('"Zigbee target"'), editor.index("if(d.v)opts.push"))
         # A slot that lost its voice action must not stay on a voice panel.
         self.assertIn('if(!d.v&&act==="va")act="ir";', editor)
         self.assertIn('document.getElementById("as").onchange=', editor)
@@ -490,26 +500,32 @@ class PageTest(unittest.TestCase):
         self.assertIn("<input id=zt type=text", PAGE)
         self.assertIn('post("set_zigbee",s,v,name)', PAGE)
 
-    def test_a_device_gets_a_group_of_its_own(self) -> None:
-        """The remote can only send a groupcast, so a single device needs a group
-        that holds only that device. The browser creates it, because the remote
-        has no MQTT client to ask with."""
+    def test_a_device_target_is_assigned_without_writing_to_the_bridge(self) -> None:
+        """The remote unicasts to the device now, so the page sends the IEEE
+        address and the endpoint and creates no group. A group per device left
+        one behind on every repeat assign."""
         body = section(PAGE, "function assignDevice(){", "\n\nfunction sendGroup(")
-        self.assertIn('zpub("bridge/request/group/add"', body)
-        self.assertIn('zpub("bridge/request/group/members/add"', body)
-        # The member add must not run on a refused group add.
-        self.assertIn('if(r.status!=="ok"||!r.data||typeof r.data.id!=="number"){', body)
-        # A repeat assign must not leave a new group behind every time.
-        self.assertIn("tg[i].members.length===1&&tg[i].members[0]===ieee", body)
+        self.assertIn('post("set_zigbee_device",s,null,dev.name,', body)
+        self.assertIn('"&ieee="+encodeURIComponent(dev.ieee)', body)
+        self.assertIn('"&ep="+encodeURIComponent(String(dev.ep))', body)
 
-    def test_a_bridge_request_is_matched_by_its_transaction(self) -> None:
-        """Responses arrive on a shared topic, so only the transaction links one
-        back to its request. A lost response must not wedge the page."""
-        body = section(PAGE, "function zpub(topic,payload,cb){", "\n\nfunction ")
-        self.assertIn("payload.transaction=t;zreq[t]=cb;", body)
-        self.assertIn('cb({status:"error",error:"Zigbee2MQTT did not answer."})', body)
-        self.assertIn("if(!ws||ws.readyState!==1)", body)
-        self.assertIn('m.topic.indexOf("bridge/response/")===0', PAGE)
+    def test_the_page_writes_nothing_to_zigbee2mqtt(self) -> None:
+        """The websocket is read only now. Nothing is published, so the request
+        transaction, its response topic and its timeout are all gone."""
+        for gone in ("zpub", "zreq", "bridge/request/", "bridge/response/", "transaction"):
+            self.assertNotIn(gone, PAGE)
+        self.assertNotIn("ws.send(", PAGE)
+
+    def test_a_device_target_carries_an_on_off_endpoint(self) -> None:
+        """A groupcast needs no endpoint but a unicast does, and only a device
+        with a genOnOff server can answer the Toggle."""
+        body = section(PAGE, "function onOffEndpoint(d){", "\n\nfunction ")
+        self.assertIn('cl.indexOf("genOnOff")<0', body)
+        self.assertIn("if(!best||n<best)best=n", body)
+        # An older bridge publishes no endpoint list, so the picker still works.
+        self.assertIn("if(!eps)return 1;", body)
+        # A device with no On/Off server is dropped from the picker.
+        self.assertIn("if(!ep)continue;", PAGE)
 
     def test_the_browser_reads_the_group_list_from_zigbee2mqtt(self) -> None:
         """The remote holds no MQTT client, so the picker is filled by this
@@ -542,7 +558,11 @@ class PageTest(unittest.TestCase):
 
     def test_the_page_reports_a_zigbee_assignment_and_its_target_name(self) -> None:
         """An unnamed group still has to say which group it is."""
-        self.assertIn('if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:"group "+r.group)', PAGE)
+        self.assertIn(
+            'if(r.action==="zigbee")return "Zigbee: "'
+            '+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
+            PAGE,
+        )
 
     def test_capture_success_matches_the_recorded_slot(self) -> None:
         self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)

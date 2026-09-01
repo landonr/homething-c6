@@ -307,6 +307,86 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("entry.kind = KIND_GROUP;", body)
         self.assertIn("out.checksum = checksum_(out);", body)
 
+    def test_a_device_target_unicasts_to_the_stored_endpoint(self) -> None:
+        """A groupcast carries no endpoint, so a device target has to name one and
+        address the short form the mesh routes."""
+        header = ZIGBEE_LEARNING.read_text()
+        send = re.search(
+            r"void send_device_toggle_\(uint8_t slot, const Entry &entry, uint16_t nwk\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if send is None:
+            raise AssertionError("Zigbee send_device_toggle_ method not found")
+        body = send.group("body")
+        self.assertIn("addr_mode = EZB_ADDR_MODE_SHORT", body)
+        self.assertIn("u.short_addr = nwk", body)
+        self.assertIn("dst_ep = entry.endpoint", body)
+        self.assertIn("cnf_ctx.cb = on_confirm_", body)
+
+    def test_a_short_address_never_reaches_flash(self) -> None:
+        """A device takes a new short address when it rejoins, so a stored one
+        would send every press to the wrong device after a rejoin."""
+        header = ZIGBEE_LEARNING.read_text()
+        record = re.search(r"struct Entry \{(?P<body>[\s\S]*?)\n  \};", header)
+        if record is None:
+            raise AssertionError("Zigbee Entry struct not found")
+        self.assertNotIn("nwk", record.group("body"))
+        self.assertIn("std::atomic<uint16_t> nwk_cache_[SLOT_COUNT];", header)
+
+    def test_a_radio_callback_parks_work_for_the_loop(self) -> None:
+        """The Zigbee task must not block on the flash or the record mutex, so a
+        failed confirm only sets state that tick() acts on."""
+        header = ZIGBEE_LEARNING.read_text()
+        confirm = re.search(
+            r"static void on_confirm_\(ezb_af_user_cnf_t \*cnf, void \*user_ctx\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if confirm is None:
+            raise AssertionError("Zigbee on_confirm_ method not found")
+        body = confirm.group("body")
+        for gone in ("preference_", "cache_mutex_", "cmd_req", "esp_zigbee_lock_acquire"):
+            self.assertNotIn(gone, body)
+        self.assertIn("request_resolve_", body)
+        # A press earns one resend, so a second failure stops instead of looping.
+        self.assertIn("retry_armed_.exchange(false", body)
+
+    def test_a_resolve_is_rate_limited_and_times_out(self) -> None:
+        """NWK_addr_req floods the mesh, so a stuck button must not repeat it and
+        a lost answer must not wedge the state machine."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("RESOLVE_BROADCAST = 0xFFFD", header)
+        self.assertRegex(
+            header,
+            r"start_resolve_\(uint8_t slot, const Entry &entry, bool send_after, uint32_t now\) \{"
+            r"[\s\S]*?now - last_resolve_ms_\[index\] < RESOLVE_GAP_MS[\s\S]*?return;",
+        )
+        self.assertRegex(
+            header,
+            r"void tick\(\) \{[\s\S]*?resolve_in_flight_[\s\S]*?"
+            r"now - resolve_started_ms_ < RESOLVE_TIMEOUT_MS",
+        )
+
+    def test_a_late_resolve_answer_cannot_toggle_the_wrong_light(self) -> None:
+        """A warm resolve and a press resolve share one slot of state. An answer
+        that outlived its timeout must be dropped, or it resends a Toggle that
+        the press no longer wants, to whichever device the warm walk reached."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("if (seq != resolve_seq_.load(std::memory_order_acquire))", header)
+        # Only the in-flight request owns the resend intent, so a queued request
+        # cannot hand it to the resolve already on the air.
+        request = header.split("void request_resolve_(uint8_t slot) {", 1)[1]
+        self.assertNotIn("resolve_send_", request.split("\n  }", 1)[0])
+        self.assertRegex(header, r"void tick\(\) \{[\s\S]*?resolve_seq_\.fetch_add\(1")
+
+    def test_the_loop_and_the_join_drive_the_resolve_machine(self) -> None:
+        """Nothing else calls tick() or on_network_up(), so a missing hook leaves
+        every device button waiting on a resolve that never starts."""
+        config = CONFIG.read_text()
+        self.assertIn("zigbee_assignments.tick();", config)
+        self.assertIn("zigbee_assignments.on_network_up();", config)
+
     def test_clear_only_drops_the_local_record(self) -> None:
         """Group membership lives in the light, so the remote cannot and must not
         try to undo it."""
@@ -334,18 +414,23 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertNotIn("mqtt", header)
         self.assertNotIn("ArduinoJson", header)
         self.assertNotIn("subscribe(", header)
-        # Nothing is left to time out, so the training clocks went with it.
-        for gone in ("TRAINING_TIMEOUT_MS", "REQUEST_TIMEOUT_MS", "allowed_targets_", "tick()"):
+        # Nothing is left to train, so the training clocks went with it. tick()
+        # came back for the address resolve, which is not a training clock.
+        for gone in ("TRAINING_TIMEOUT_MS", "REQUEST_TIMEOUT_MS", "allowed_targets_"):
             self.assertNotIn(gone, header)
 
     def test_playback_is_a_groupcast_that_needs_no_broker(self) -> None:
         """Membership lives in the light's group table, so a button keeps working
         with Zigbee2MQTT and Home Assistant both down."""
         header = ZIGBEE_LEARNING.read_text()
-        toggle = header.split("bool toggle(uint8_t slot) const {", 1)[1].split("\n  }", 1)[0]
+        toggle = header.split(
+            "void toggle_group_(uint8_t slot, const Entry &entry) {", 1
+        )[1].split("\n  }", 1)[0]
         self.assertIn("request.cmd_ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;", toggle)
         self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", toggle)
         self.assertIn("entry.group_id", toggle)
+        # A groupcast is unacknowledged, so it asks for no confirm and no retry.
+        self.assertNotIn("cnf_ctx", toggle)
 
     def test_a_stored_group_id_is_bounded_below_the_broadcast_range(self) -> None:
         """0xFFF8 and above are the reserved Zigbee broadcast addresses."""
@@ -353,7 +438,9 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("static constexpr uint16_t MAX_GROUP_ID = 0xFFF7;", header)
         assign = header.split("bool assign_from_web(", 1)[1].split("\n  }", 1)[0]
         self.assertIn("group_id == 0 || group_id > MAX_GROUP_ID", assign)
-        self.assertIn("ir_code_store.clear_for_zigbee(slot)", assign)
+        # Both assign paths commit through store_, which drops the old action.
+        store = header.split("bool store_(uint8_t slot, const Entry &entry) {", 1)[1]
+        self.assertIn("ir_code_store.clear_for_zigbee(slot)", store.split("\n  }", 1)[0])
 
     def test_d5_is_reserved_for_zigbee_status_alone(self) -> None:
         # Zigbee training used to pulse D5, which hid the radio state for the

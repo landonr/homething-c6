@@ -106,8 +106,6 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
-// A Zigbee2MQTT request answers on a response topic that echoes its transaction.
-var zreq={},zseq=0;
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
 // act is the open action panel. The Zigbee field values live here too, because
@@ -120,7 +118,7 @@ if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
 function codeName(r){return r.name?r.name:"Slot"+r.slot}
 function words(s){var r=row(s);if(!r)return "Unknown";
-if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:"group "+r.group);
+if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group));
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
 
@@ -177,15 +175,20 @@ e.textContent="Connected. "+(tg?tg.length:0)+" groups, "+(td?td.length:0)+" devi
 
 function byName(a,b){return a.name<b.name?-1:a.name>b.name?1:0}
 
-// Sends one Zigbee2MQTT request and calls back with its response payload. The
-// bridge answers on a response topic, so the transaction is the only link back.
-function zpub(topic,payload,cb){
-if(!ws||ws.readyState!==1){cb({status:"error",error:"Not connected to Zigbee2MQTT."});return}
-var t="c6-"+(++zseq);
-payload.transaction=t;zreq[t]=cb;
-setTimeout(function(){if(zreq[t]){delete zreq[t];
-cb({status:"error",error:"Zigbee2MQTT did not answer."})}},10000);
-ws.send(JSON.stringify({topic:topic,payload:payload}))}
+// The remote sends On/Off only, so a device target needs a genOnOff server. The
+// lowest endpoint wins when a device has more than one. An older bridge that
+// publishes no endpoint list falls back to endpoint 1.
+function onOffEndpoint(d){
+var eps=d.endpoints,best=0,k,n,cl;
+if(!eps)return 1;
+for(k in eps){
+if(!Object.prototype.hasOwnProperty.call(eps,k))continue;
+n=parseInt(k,10);
+if(!(n>=1&&n<=240))continue;
+cl=eps[k]&&eps[k].clusters&&eps[k].clusters.input;
+if(!Array.isArray(cl)||cl.indexOf("genOnOff")<0)continue;
+if(!best||n<best)best=n}
+return best}
 
 function paint(){
 z2mStatus();
@@ -201,8 +204,9 @@ function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
 
 // The picker lists what the bridge published. The text field covers a target
 // that the cache dropped, and any group ID that has no name.
-// The browser talks to Zigbee2MQTT, not the remote. A group id is all the
-// remote stores, so this form only has to resolve a name to that id.
+// The browser talks to Zigbee2MQTT, not the remote. The remote stores a group
+// id, or an IEEE address and an endpoint, so this form only resolves a name to
+// one of those.
 function zbForm(lock){
 var h="",i,dis=(lock||zbusy)?" disabled":"";
 if(zbusy)h+="<div class=note>Working with Zigbee2MQTT.</div>";
@@ -213,8 +217,9 @@ for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
 (zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
 h+="</select><div class=act><button type=button id=za"+dis+">Assign group</button></div>"}
 if(td&&td.length){
-h+="<p class=sub>Or pick one device. A groupcast is the only thing the remote "+
-"can send, so this browser puts the device in a group of its own first.</p>"+
+h+="<p class=sub>Or pick one device. The remote sends straight to it and "+
+"Zigbee2MQTT keeps no group for it. Only a device with an On/Off cluster is "+
+"listed.</p>"+
 "<select id=zd"+dis+"><option value=''>Select a device</option>";
 for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
 (zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
@@ -274,14 +279,12 @@ var devs=[];
 for(i=0;i<m.payload.length;i++){
 var d=m.payload[i];
 if(!d.ieee_address||d.type==="Coordinator")continue;
-devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address)})}
+var ep=onOffEndpoint(d);
+if(!ep)continue;
+devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address),ep:ep})}
 devs.sort(byName);
 done=true;td=devs;zerr="";
-z2mStatus();if(act==="zb")paint();return}
-// A response echoes the transaction of the request that caused it.
-if(m.topic&&m.topic.indexOf("bridge/response/")===0&&m.payload){
-var t=m.payload.transaction,cb=t?zreq[t]:null;
-if(cb){delete zreq[t];cb(m.payload)}}};
+z2mStatus();if(act==="zb")paint();return}};
 ws.onerror=function(){if(!done){zerr="Could not reach Zigbee2MQTT at that address.";
 z2mStatus();if(act==="zb")paint()}};
 ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
@@ -351,7 +354,7 @@ else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</
 
 // One selector, because a slot holds one action. The panel below it carries
 // everything that action needs, so nothing from another action is on screen.
-var opts=[["ir","IR code"],["zb","Zigbee group"]];
+var opts=[["ir","IR code"],["zb","Zigbee target"]];
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
@@ -401,9 +404,9 @@ function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 // A code block keeps its newlines, because the parser reads it a line at a time.
 // ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
 // raw frame.
-function post(a,s,v,n){var b="action="+a+(s?"&slot="+s:"")+
+function post(a,s,v,n,x){var b="action="+a+(s?"&slot="+s:"")+
 (v?(a==="set_zigbee"?"&group=":"&code=")+encodeURIComponent(v):"")+
-(n===undefined?"":"&name="+encodeURIComponent(n));
+(n===undefined?"":"&name="+encodeURIComponent(n))+(x===undefined?"":x);
 return fetch("/buttons/api/action",{method:"POST",
 headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
 .then(function(r){return r.text().then(function(t){
@@ -439,27 +442,26 @@ if(!v){msg="Select a group first.";bad=true;paint();return}
 if(tg)for(i=0;i<tg.length;i++)if(String(tg[i].id)===v)name=tg[i].name;
 sendGroup(v,name)}
 
-// The remote can only send a groupcast, so a single device needs a group that
-// holds only that device. An existing one is reused, because a repeat assign
-// would otherwise leave a new group behind every time.
+// The remote unicasts to the device, so Zigbee2MQTT writes nothing here and no
+// group is left behind by a repeat assign. The remote stores the IEEE address
+// and resolves the network address behind it on the mesh.
 function assignDevice(){
 var ieee=zdv,dev=null,i;
 if(!ieee){msg="Select a device first.";bad=true;paint();return}
 for(i=0;i<td.length;i++)if(td[i].ieee===ieee)dev=td[i];
 if(!dev)return;
-if(tg)for(i=0;i<tg.length;i++)
-if(tg[i].members.length===1&&tg[i].members[0]===ieee){sendGroup(String(tg[i].id),dev.name);return}
-zbusy=true;msg="Creating a group for "+dev.name+".";bad=false;paint();
-zpub("bridge/request/group/add",{friendly_name:"c6 "+dev.name},function(r){
-if(r.status!=="ok"||!r.data||typeof r.data.id!=="number"){
-zbusy=false;msg="Zigbee2MQTT refused the group. "+(r.error||"");bad=true;paint();return}
-var gid=r.data.id;
-zpub("bridge/request/group/members/add",{group:String(gid),device:ieee},function(r2){
+var s=sel;
+zbusy=true;paint();
+post("set_zigbee_device",s,null,dev.name,
+"&ieee="+encodeURIComponent(dev.ieee)+"&ep="+encodeURIComponent(String(dev.ep)))
+.then(function(r){
 zbusy=false;
-if(r2.status!=="ok"){
-msg="Group "+gid+" was created, but the device was not added. "+(r2.error||"");
-bad=true;paint();return}
-sendGroup(String(gid),dev.name)})})}
+if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
+return waitAction(r.body.id).then(function(ok){
+if(ok){msg="Assigned to "+dev.name+".";bad=false}
+else{msg="The remote could not store that device.";bad=true}
+return load().then(paint)})})
+.catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function sendGroup(v,name){
 var s=sel;

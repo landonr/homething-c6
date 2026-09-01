@@ -5,10 +5,10 @@
 The remote is an always-on Zigbee end device. It is not a router.
 
 The remote uses endpoint 1 as an On/Off client. Each assigned button sends a
-Zigbee Toggle command to its stored group.
+Zigbee Toggle command to its stored target, which is a group or one device.
 
 The firmware holds no MQTT client. The `/buttons` page reads the Zigbee2MQTT
-group list in the browser and posts only the group ID to the remote.
+inventory in the browser and posts only the resolved address to the remote.
 
 The remote does not need MQTT, Wi-Fi, Home Assistant, or Zigbee2MQTT for button
 playback. It needs Wi-Fi only while you configure it from the page.
@@ -21,7 +21,8 @@ frontend websocket, so the remote needs no broker credentials.
 Use the pinned `luar123/zigbee_esphome` external component in `c6remote.yaml`.
 Do not change its revision without validation.
 
-ZHA does not supply the group list this page reads. Use Zigbee2MQTT.
+ZHA does not supply the group and device lists this page reads. Use
+Zigbee2MQTT.
 
 ## Pair the remote
 
@@ -38,22 +39,23 @@ Permit joining again, then restart the remote.
 
 ## Groups and devices
 
-Group membership lives in the group table of the light, not in the remote. Only
+A button holds one of two target kinds. A group target sends a groupcast. A
+device target sends a unicast to one device.
+
+Use a group when one button must switch more than one light together. Group
+membership lives in the group table of the light, not in the remote, and only
 Zigbee2MQTT can write it.
-
-The remote sends a groupcast and nothing else, so a button always points at a
-group. To control one device, that device needs a group of its own.
-
-The page can build that group for you. It can also use a group that you made in
-Zigbee2MQTT for more than one light.
 
 One group can serve more than one button. A button reads only the ID, so a later
 membership change in Zigbee2MQTT needs no change on the remote.
 
+Use a device target for one light. Zigbee2MQTT writes nothing for it, so a
+repeated assignment leaves no group behind.
+
 ## Assign a button from the web page
 
 1. Open `http://homething-c6.local/buttons`.
-2. Select an input, then select **Zigbee group** in the Action selector.
+2. Select an input, then select **Zigbee target** in the Action selector.
 3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
    `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.
 4. Select **Connect**.
@@ -61,6 +63,9 @@ membership change in Zigbee2MQTT needs no change on the remote.
    - Select a group, then select **Assign group**.
    - Select a device, then select **Assign device**.
    - Type a group ID, then select **Assign typed ID**.
+
+The device list holds only a device with an On/Off input cluster, because On/Off
+Toggle is the one command the remote sends.
 
 The browser keeps the address and the token in `localStorage`. Neither value
 reaches the remote, so each browser enters them once.
@@ -77,25 +82,46 @@ once, because a group target needs no network confirmation.
 
 ### Assign device
 
-**Assign device** makes a group that holds only the selected device.
+**Assign device** sends the IEEE address and the endpoint of the device to the
+remote. The browser publishes nothing to Zigbee2MQTT.
 
-1. The browser looks for a group whose only member is that device. If it finds
-   one, it uses that group and creates nothing.
-2. If it finds none, it publishes `bridge/request/group/add` with the name
-   `c6 <device name>` and reads the new ID from the response.
-3. It publishes `bridge/request/group/members/add` for the device.
-4. It sends the group ID to the remote.
+The page picks the lowest endpoint that has a `genOnOff` input cluster. If the
+bridge publishes no endpoint list, the page uses endpoint 1.
 
-Step 1 keeps a repeated assignment from leaving a new group behind each time.
+The remote stores the address and writes the record to flash at once. It looks
+up the network address later, on the first press.
 
-If the group is created but the member add fails, the page reports the new group
-ID and assigns nothing. Remove that group in Zigbee2MQTT, or add the member by
-hand and assign the ID with **Assign typed ID**.
-
-Each request carries a transaction, because the bridge answers all requests on a
-shared response topic. A request that gets no answer in ten seconds fails.
+Use a mains device for a device target. A battery device keeps its radio off, so
+the unicast waits at its parent until the device polls.
 
 The assignment replaces any IR code or voice action on that input.
+
+## How the remote finds a device
+
+A Zigbee unicast needs the 16-bit network address, but the remote stores the
+64-bit IEEE address. The network address is a lease that ends when the device
+rejoins, so the remote never writes one to flash.
+
+The remote resolves the address in this order:
+
+1. It reads its own address map. This costs no radio traffic.
+2. If the map has no entry, it broadcasts `NWK_addr_req` and caches the answer.
+3. It sends the Toggle to the cached address.
+
+The APS confirm reports whether the device received the unicast. If the confirm
+fails, the remote drops the cached address, resolves it again, and resends the
+Toggle one time. A second failure stops there, and the next press starts again.
+
+A slot broadcasts `NWK_addr_req` at most once every 10 seconds, because the
+request reaches the whole mesh. A request that gets no answer in 5 seconds
+fails.
+
+After the remote joins, it warms the cache for each device slot. It reads the
+address map first, and asks the mesh only for a slot the map does not hold. Each
+slot is warmed at most once for each join, at one slot per second.
+
+A warm cache only saves time on the first press. Correctness comes from the
+confirm and the resend, so a cold or stale cache still works.
 
 ## How the browser reads the group list
 
@@ -112,8 +138,9 @@ real network is larger than the free heap.
 
 ## Toggle playback
 
-An assigned input sends an On/Off Toggle command to its group. The command
-leaves endpoint 1 and uses group broadcast delivery.
+An assigned input sends an On/Off Toggle command to its target. The command
+leaves endpoint 1. A group target uses group broadcast delivery, and a device
+target uses unicast delivery to the endpoint the page found.
 
 The command does not wait for a coordinator, a broker, or a target state report.
 The mesh routes it, so the button works while Zigbee2MQTT and Home Assistant are
@@ -127,8 +154,9 @@ On/Off state. Assign one button only to lights that must toggle together.
 Clear a button from the `/buttons` page, or with the last tap of the assignment
 cycle on the remote.
 
-Clearing removes the local record only. The group and its membership stay in
-Zigbee2MQTT, so another button can still use that group.
+Clearing removes the local record only. A group and its membership stay in
+Zigbee2MQTT, so another button can still use that group. A device target leaves
+nothing behind, because the assignment wrote nothing to Zigbee2MQTT.
 
 ## Storage
 

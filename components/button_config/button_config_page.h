@@ -26,6 +26,7 @@ grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
 .fields button{background:var(--acc);color:#fff;border:1px solid var(--acc);
 border-radius:8px;padding:8px 14px;cursor:pointer}
 .st{margin:8px 0 0}.st.bad{color:var(--bad)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:baseline}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
@@ -50,8 +51,11 @@ text-transform:uppercase;letter-spacing:.06em}
 p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
 h3{font-size:15px;margin:14px 0 8px}
-select,input[type=text]{font:inherit;color:inherit;background:var(--card);
+select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
+input[type=search]::-webkit-search-cancel-button{cursor:pointer}
+@media (prefers-color-scheme:dark){
+input[type=search]::-webkit-search-cancel-button{filter:invert(1)}}
 .k{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;
 text-align:left;cursor:pointer;display:block;width:100%}
 .k:hover{border-color:var(--acc)}
@@ -107,6 +111,8 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
+// The Home Assistant add-on address, because Ingress cannot carry a websocket.
+var Z2MDEF="ws://homeassistant.local:8099/api";
 // cd holds the editable code text for cdSlot.
 var cd="",cdSlot=null;
 // act is the open action panel. The Zigbee field values live here too, because
@@ -154,27 +160,45 @@ function z2mBar(){
 var e=document.getElementById("z2m");
 var u="",k="";
 try{u=localStorage.getItem("c6.z2m.url")||"";k=localStorage.getItem("c6.z2m.token")||""}catch(x){}
+// Only a stored address opens a socket by itself. The default fills the box so
+// that one click connects, but a guess must not report itself as a failure.
+var saved=!!u;
+if(!u)u=Z2MDEF;
 e.innerHTML="<h2>Zigbee2MQTT</h2>"+
 "<p class=sub>This browser reads the group list from the bridge. The address "+
 "and the token stay in this browser and never reach the remote.</p>"+
 "<div class=fields>"+
-"<input id=zu type=text autocomplete=off placeholder='ws://zigbee2mqtt.local:8080/api'>"+
+"<input id=zu type=search autocomplete=off placeholder='"+Z2MDEF+"'>"+
 "<input id=zk type=text autocomplete=off placeholder='Frontend token, if set'>"+
 "<button type=button id=zc>Connect</button></div>"+
-"<p class='sub st' id=zst></p>";
+"<p class='sub st' id=zst></p>"+"<p class='sub st' id=zhp></p>";
 document.getElementById("zu").value=u;
 document.getElementById("zk").value=k;
 document.getElementById("zc").onclick=z2mSave;
 z2mStatus();
-if(u)z2mConnect(u,k)}
+if(saved)z2mConnect(u,k)}
+
+// A list in hand is the only proof the socket answered, so it also decides
+// whether the button offers Connect or Disconnect.
+function z2mUp(){return !!(tg||td)}
 
 function z2mStatus(){
+var b=document.getElementById("zc");
+if(b)b.textContent=z2mUp()?"Disconnect":"Connect";
+// The Home Assistant add-on serves the frontend through Ingress, which no
+// other page can open a websocket to. The port has to be published first.
+var h=document.getElementById("zhp");
+if(h)h.textContent=z2mUp()?"":
+"Home Assistant add-on: open Settings, Add-ons, Zigbee2MQTT, Configuration, "+
+"Network, and set the host port for 8099/tcp to 8099. Then use "+
+"ws://<home-assistant-host>:8099/api.";
 var e=document.getElementById("zst");
 if(!e)return;
 e.className="sub st"+(zerr?" bad":"");
 if(zerr){e.textContent=zerr;return}
-if(!tg&&!td){e.textContent="Not connected. A group ID can still be typed by hand.";return}
-e.textContent="Connected. "+(tg?tg.length:0)+" groups, "+(td?td.length:0)+" devices."}
+if(!z2mUp()){e.textContent="Not connected. A group ID can still be typed by hand.";return}
+e.innerHTML="<span class=dot></span>Connected. "+(tg?tg.length:0)+" groups, "+
+(td?td.length:0)+" devices."}
 
 function byName(a,b){return a.name<b.name?-1:a.name>b.name?1:0}
 
@@ -308,7 +332,15 @@ z2mStatus();if(act==="zb")paint()}};
 ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
 z2mStatus();if(act==="zb")paint()}}}
 
+// The close handlers go first, because an intentional close must not report
+// itself as a broker that dropped the connection.
+function z2mDisconnect(){
+if(ws){try{ws.onmessage=null;ws.onerror=null;ws.onclose=null;ws.close()}catch(x){}ws=null}
+tg=null;td=null;zerr="";
+z2mStatus();if(act==="zb")paint()}
+
 function z2mSave(){
+if(z2mUp()){z2mDisconnect();return}
 var u=document.getElementById("zu").value.replace(/^\s+|\s+$/g,"");
 var k=document.getElementById("zk").value.replace(/^\s+|\s+$/g,"");
 if(!u){zerr="Enter the Zigbee2MQTT websocket address.";z2mStatus();return}

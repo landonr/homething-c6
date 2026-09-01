@@ -234,5 +234,35 @@ setTimeout(() => {
     if (!bad || msg.indexOf("16 hex digits") < 0) throw new Error("no clear refusal: " + msg);
   });
 
+  step("the status line marks a live connection and the button offers Disconnect", () => {
+    global.tg = [{id: 1, name: "all_light", members: []}];
+    global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp", ep: 1}];
+    global.zerr = "";
+    z2mStatus();
+    const st = document.getElementById("zst");
+    if (st.innerHTML.indexOf("class=dot") < 0) throw new Error("no green dot: " + st.innerHTML);
+    if (st.innerHTML.indexOf("1 groups, 1 devices") < 0) throw new Error("no counts: " + st.innerHTML);
+    const zc = document.getElementById("zc");
+    if (zc.textContent !== "Disconnect") throw new Error("button stayed on Connect: " + zc.textContent);
+    zc.onclick();
+    if (tg !== null || td !== null) throw new Error("disconnect kept the lists");
+    if (zc.textContent !== "Connect") throw new Error("button stayed on Disconnect: " + zc.textContent);
+    if (st.textContent.indexOf("Not connected.") < 0) throw new Error("no idle line: " + st.textContent);
+    const hp = document.getElementById("zhp");
+    if (hp.textContent.indexOf("8099/tcp") < 0) throw new Error("no port hint: " + hp.textContent);
+    global.tg = [{id: 1, name: "all_light", members: []}];
+    z2mStatus();
+    if (hp.textContent !== "") throw new Error("the hint stayed up while connected: " + hp.textContent);
+    global.tg = null; global.td = null;
+  });
+
+  step("the address box prefills the default and carries the browser clear control", () => {
+    const zu = document.getElementById("zu");
+    if (zu.value !== Z2MDEF) throw new Error("the box did not prefill: " + zu.value);
+    // The x comes from the browser, so only the input type can be checked here.
+    if (document.getElementById("z2m").innerHTML.indexOf("id=zu type=search") < 0)
+      throw new Error("the address box is not a search field");
+  });
+
   setTimeout(() => process.exit(failed ? 1 : 0), 200);
 }, 300);

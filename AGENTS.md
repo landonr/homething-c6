@@ -205,7 +205,7 @@ Five `silk_over_copper` cases are intentional ENC1 wheel-outline crossings.
 
 ## Branches and releases
 
-Do all work on `develop`. Keep `main` for released snapshots only.
+Do all work on a non-`main` branch. Keep `main` for released snapshots only.
 
 Do not commit to `main` or push it as a shortcut. A push to `main` creates a release.
 

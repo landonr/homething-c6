@@ -664,6 +664,30 @@ class PageTest(unittest.TestCase):
             PAGE,
         )
 
+    def test_the_selected_input_title_copies_and_pastes_ir_and_zigbee_configs(self) -> None:
+        """The page-local clipboard moves an assignment without a second device
+        read for Zigbee. IR reads its full signal before it enables Paste."""
+        self.assertIn(".edtitle .clip{display:flex", PAGE)
+        editor = section(PAGE, "function editor(){", "\n\nfunction actFor(")
+        self.assertIn('<h2 class=edtitle><span>', editor)
+        self.assertIn('id=bcopy', editor)
+        self.assertIn('id=bpaste', editor)
+        self.assertIn('document.getElementById("bcopy").onclick=copyAssignment', editor)
+        self.assertIn('document.getElementById("bpaste").onclick=pasteAssignment', editor)
+        self.assertIn('!clip||clip.source===sel||locked', editor)
+        clip = section(PAGE, "function clipConfig(r){", "\n\nfunction clipName(")
+        self.assertIn('if(r.action==="ir")return {kind:"ir",source:r.slot}', clip)
+        self.assertIn('if(r.action!=="zigbee")return null;', clip)
+        copy = section(PAGE, "function copyAssignment(){", "\n\nfunction pasteAssignment(")
+        self.assertIn('fetch("/buttons/api/code?slot="+source', copy)
+        self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
+        self.assertIn('clip=c;', copy)
+        paste = section(PAGE, "function pasteAssignment(){", "\n\nfunction applyCode(")
+        self.assertIn('post("set_ir_code",target,c.code)', paste)
+        self.assertIn('post("set_zigbee_device",target,null,c.name,', paste)
+        self.assertIn('post("set_zigbee",target,String(c.group),c.name,', paste)
+        self.assertIn('return waitAction(r.body.id)', paste)
+
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can
         be restored without a source remote in hand."""

@@ -82,6 +82,12 @@ selector with the actions that the input accepts.
 The selector holds IR code, Zigbee group, Voice assistant, and Clear. It opens
 on the action that the input already holds.
 
+The right side of the selected-input title has **Copy** and **Paste** buttons.
+Use them to copy an IR code or Zigbee target configuration between inputs.
+
+Select the source input and select **Copy**. Then select the target input and
+select **Paste**. Paste replaces the active assignment on the target input.
+
 One panel shows at a time, because an input holds one action. The IR panel owns
 the **Record IR** button and the code box.
 

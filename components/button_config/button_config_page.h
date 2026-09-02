@@ -30,6 +30,11 @@ border-radius:8px;padding:8px 14px;cursor:pointer}
 .dot.off{background:var(--line)}.dot.bad{background:var(--bad)}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
+.edtitle{display:flex;align-items:center;gap:8px}
+.edtitle .clip{display:flex;gap:6px;margin-left:auto}
+.edtitle .clip button{font-size:13px;background:transparent;color:var(--fg);
+border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
+.edtitle .clip button[disabled]{opacity:.5;cursor:not-allowed}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
 a{color:var(--acc)}
@@ -159,6 +164,9 @@ var cfgMode="ex",cfgOut="",cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll=
 // Closed on arrival, because an export reads the code of every IR input and
 // most visits change one input instead.
 var cfgOpen=false;
+// clip holds one selected IR or Zigbee assignment in this browser only. It
+// cannot include Voice or Clear, because those are actions and not configs.
+var clip=null,clipBusy=false;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
@@ -541,6 +549,50 @@ var ok=copyBox(t);
 msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
 bad=!ok;paint()}
 
+function clipConfig(r){
+if(!r)return null;
+if(r.action==="ir")return {kind:"ir",source:r.slot};
+if(r.action!=="zigbee")return null;
+return r.ieee?{kind:"zigbee",source:r.slot,device:true,ieee:r.ieee,ep:r.ep||1,
+act:r.act||0,val:r.val||0,name:r.name||""}:
+{kind:"zigbee",source:r.slot,device:false,group:r.group,act:r.act||0,
+val:r.val||0,name:r.name||""}}
+
+function clipName(c){var d=info(c.source);return d?d.l:"that input"}
+
+function copyAssignment(){
+var c=clipConfig(row(sel)),source=sel;
+if(!c){msg="Only an IR code or Zigbee target can be copied.";bad=true;paint();return}
+if(c.kind==="zigbee"){clip=c;msg="Copied Zigbee config from "+clipName(c)+".";bad=false;paint();return}
+clipBusy=true;paint();
+fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
+.then(function(r){return r.json()}).then(function(j){
+if(j.slot!==source||!j.present||!j.text)throw new Error();
+c.code=j.text;clip=c;cfgAll[source]=j.text;
+msg="Copied IR config from "+clipName(c)+".";bad=false})
+.catch(function(){msg="Could not read that IR code.";bad=true})
+.then(function(){clipBusy=false;paint()})}
+
+function pasteAssignment(){
+var c=clip,target=sel,request;
+if(!c){msg="Copy an IR code or Zigbee target first.";bad=true;paint();return}
+if(c.source===target){msg="Select another input to paste this config.";bad=true;paint();return}
+clipBusy=true;paint();
+if(c.kind==="ir")request=post("set_ir_code",target,c.code);
+else if(c.device)request=post("set_zigbee_device",target,null,c.name,
+"&ieee="+encodeURIComponent(c.ieee)+"&ep="+encodeURIComponent(c.ep)+
+"&act="+Number(c.act)+"&val="+encodeURIComponent(c.val));
+else request=post("set_zigbee",target,String(c.group),c.name,
+"&act="+Number(c.act)+"&val="+encodeURIComponent(c.val));
+request.then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id)}).then(function(ok){
+if(!ok)throw new Error("The remote refused the config.");
+msg="Pasted "+(c.kind==="ir"?"IR":"Zigbee")+" config from "+clipName(c)+".";
+bad=false;return load().then(function(){if(c.kind==="ir")return loadCode(target)})})
+.catch(function(err){msg=err&&err.message?err.message:"The remote did not answer.";bad=true})
+.then(function(){clipBusy=false;paint()})}
+
 function applyCode(){
 var text=document.getElementById("ct").value;
 cd=text;
@@ -730,14 +782,19 @@ var e=document.getElementById("ed");
 if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
 "<p class=sub>Select an input on the left to change what it does.</p>";return}
 var d=info(sel);
-var h="<h2>"+esc(d.l)+"</h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
+var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
+var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
+"<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
+"<button type=button id=bpaste"+(!clip||clip.source===sel||locked?" disabled":"")+
+" title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
+"</span></h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
 if(mode==="rec"&&rec===sel){
 h+="<p>Point the source remote at the front of the board and press its button.</p>"+
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
 e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
-var lock=(st&&st.busy)||zbusy;
+var lock=locked;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
 else if(st&&st.busy&&st.owner==="device")
 h+="<div class=note>Assignment in progress on the remote.</div>";
@@ -759,6 +816,8 @@ h+=act==="zb"?zbForm(st&&st.busy):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock);
 e.innerHTML=h;
 
+if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
+if(!locked&&clip&&clip.source!==sel)document.getElementById("bpaste").onclick=pasteAssignment;
 document.getElementById("as").onchange=function(){act=this.value;msg="";bad=false;paint()};
 if(act==="ir"){
 var box=document.getElementById("ct");
@@ -798,7 +857,11 @@ if(r.action==="zigbee")return "zb";
 if(r.action==="voice")return "va";
 return "ir"}
 
-function pick(s){sel=s;
+function pick(s){
+// Clear the previous input's code before paint, so its text cannot show while
+// the selected input's request is still in flight.
+if(sel!==s){cdSlot=null;cd=""}
+sel=s;
 if(mode!=="rec"){msg="";bad=false}
 // Every Zigbee field belongs to the slot that was open, so none of it may
 // follow the selection to the next one.

@@ -93,6 +93,94 @@ setTimeout(() => {
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
+  step("switching inputs clears stale IR code before its request finishes", () => {
+    const realFetch = global.fetch;
+    let finishCode = null;
+    global.fetch = (u, o) => {
+      if (String(u).indexOf("/api/code") >= 0)
+        return new Promise((resolve) => { finishCode = resolve; });
+      return realFetch(u, o);
+    };
+    global.sel = 6;
+    global.cd = CODE.text;
+    global.cdSlot = 6;
+    global.act = "ir";
+    paint();
+    pick(3);
+    const html = document.getElementById("ed").innerHTML;
+    if (html.indexOf(CODE.text) >= 0) throw new Error("the previous input's code stayed visible");
+    if (html.indexOf("Loading the stored code.") < 0) throw new Error("the loading state disappeared");
+    if (cd !== "" || cdSlot !== null) throw new Error("the previous input's code stayed cached");
+    global.fetch = realFetch;
+    finishCode({json: () => Promise.resolve({slot: 3, present: false, text: ""})});
+  });
+  step("the title copies a Zigbee config and enables Paste elsewhere", () => {
+    global.sel = 5;
+    global.clip = null;
+    global.clipBusy = false;
+    paint();
+    const copy = document.getElementById("bcopy");
+    if (typeof copy.onclick !== "function") throw new Error("a Zigbee input has no Copy handler");
+    copy.onclick();
+    if (!clip || clip.kind !== "zigbee" || !clip.device || clip.act !== 3 || clip.val !== 32)
+      throw new Error("the Zigbee assignment was not copied: " + JSON.stringify(clip));
+    global.sel = 3;
+    paint();
+    const paste = document.getElementById("bpaste");
+    if (typeof paste.onclick !== "function")
+      throw new Error("another input has no Paste handler");
+    let body = null;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    paste.onclick();
+    global.fetch = realFetch;
+    if (!body || body.indexOf("action=set_zigbee_device&slot=3") < 0 ||
+        body.indexOf("ieee=0x94deb8fffe9db81e") < 0 || body.indexOf("act=3") < 0 ||
+        body.indexOf("val=32") < 0)
+      throw new Error("the device paste sent the wrong payload: " + body);
+    // The request above still waits for the remote response. Clear the visual
+    // lock here so the group path can exercise its own title control.
+    global.clipBusy = false;
+    global.clip = clipConfig(row(20));
+    global.sel = 3;
+    paint();
+    body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("bpaste").onclick();
+    global.fetch = realFetch;
+    if (!body || body.indexOf("action=set_zigbee&slot=3") < 0 ||
+        body.indexOf("group=4609") < 0 || body.indexOf("act=0") < 0 ||
+        body.indexOf("name=Office%20Lamp") < 0)
+      throw new Error("the group paste sent the wrong payload: " + body);
+    global.clipBusy = false;
+  });
+  step("the title starts a full IR config copy", () => {
+    global.sel = 6;
+    global.clip = null;
+    global.clipBusy = false;
+    paint();
+    const copy = document.getElementById("bcopy");
+    if (typeof copy.onclick !== "function") throw new Error("an IR input has no Copy handler");
+    copy.onclick();
+    if (!clipBusy) throw new Error("IR Copy did not wait for the full code");
+  });
+  setTimeout(() => step("the title keeps the copied IR config", () => {
+    if (!clip || clip.kind !== "ir" || clip.code !== CODE.text)
+      throw new Error("the full IR code was not copied: " + JSON.stringify(clip));
+    global.sel = 3;
+    paint();
+    const paste = document.getElementById("bpaste");
+    if (typeof paste.onclick !== "function")
+      throw new Error("an IR copy did not enable Paste elsewhere");
+    let body = null;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    paste.onclick();
+    global.fetch = realFetch;
+    if (!body || body.indexOf("action=set_ir_code&slot=3") < 0 ||
+        body.indexOf("code=name%3A%20Home") < 0)
+      throw new Error("the IR paste sent the wrong payload: " + body);
+  }), 0);
 
   global.tg = [
     {id: 1, name: "all_light", members: ["0xaaa", "0xbbb"]},

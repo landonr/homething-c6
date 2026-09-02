@@ -78,7 +78,9 @@ The firmware files are in the repository root:
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
 - `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
 - `components/button_config/` is a local ESPHome component. It serves the `/buttons` assignment page from `web_server`.
+- `zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
+- `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
 - `scripts/tests/page_dom_stub.js` runs the `/buttons` page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
 

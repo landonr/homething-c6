@@ -4,8 +4,9 @@
 
 The remote is an always-on Zigbee end device. It is not a router.
 
-The remote uses endpoint 1 as an On/Off client. Each assigned button sends a
-Zigbee Toggle command to its stored target, which is a group or one device.
+The remote uses endpoint 1 as a client of every cluster it can command. Each
+assigned button sends one ZCL command to its stored target, which is a group or
+one device.
 
 The firmware holds no MQTT client. The `/buttons` page reads the Zigbee2MQTT
 inventory in the browser and posts only the resolved address to the remote.
@@ -61,10 +62,13 @@ repeated assignment leaves no group behind.
 4. Select **Connect**.
 5. Select **Group** or **Device** in the Target kind selector.
 6. Select a group or a device. The picker fills the boxes below it.
-7. Select **Assign**.
+7. Select the command in the **Action** selector, then fill its value box if it
+   shows one.
+8. Select **Assign**.
 
-The device list holds only a device with an On/Off input cluster, because On/Off
-Toggle is the one command the remote sends.
+The device list holds only a device that accepts at least one of the actions. A
+device the bridge published no endpoint list for stays in the list, because that
+says nothing about what it accepts.
 
 The Target kind selector decides which fields the panel shows. **Group** shows
 the group picker and a **Group ID** box. **Device** shows the device picker, an
@@ -101,11 +105,13 @@ once, because no target needs a network confirmation to be stored.
 
 ### A device target
 
-**Assign** sends the IEEE address and the endpoint of the device to the remote.
-The browser publishes nothing to Zigbee2MQTT.
+**Assign** sends the IEEE address, the endpoint, the action and its value to
+the remote. The browser publishes nothing to Zigbee2MQTT.
 
-The page picks the lowest endpoint that has a `genOnOff` input cluster. If the
-bridge publishes no endpoint list, the page uses endpoint 1.
+The page picks the lowest endpoint that has the input cluster of the action. A
+device can carry `genOnOff` on one endpoint and `hvacThermostat` on another, so
+the endpoint follows the action. If the bridge publishes no endpoint list, the
+page uses endpoint 1.
 
 The remote stores the address and writes the record to flash at once. It looks
 up the network address later, on the first press.
@@ -125,11 +131,12 @@ The remote resolves the address in this order:
 
 1. It reads its own address map. This costs no radio traffic.
 2. If the map has no entry, it broadcasts `NWK_addr_req` and caches the answer.
-3. It sends the Toggle to the cached address.
+3. It sends the command to the cached address.
 
 The APS confirm reports whether the device received the unicast. If the confirm
 fails, the remote drops the cached address, resolves it again, and resends the
-Toggle one time. A second failure stops there, and the next press starts again.
+command one time. A second failure stops there, and the next press starts
+again.
 
 A slot broadcasts `NWK_addr_req` at most once every 10 seconds, because the
 request reaches the whole mesh. A request that gets no answer in 5 seconds
@@ -146,7 +153,11 @@ confirm and the resend, so a cold or stale cache still works.
 
 The Zigbee2MQTT frontend relays every MQTT message on its websocket as a
 `{topic, payload}` object, with the base topic already removed. The page keeps
-the `bridge/groups` message and ignores the rest.
+the `bridge/groups` and `bridge/devices` messages and ignores the rest.
+
+`bridge/devices` carries the endpoint list of each device, and each endpoint
+carries its input cluster list. That list decides which actions the panel
+offers and which endpoint an action goes to.
 
 A websocket needs no CORS grant. A `fetch` to the same host would need one,
 because the page comes from the remote.
@@ -155,18 +166,125 @@ The remote never subscribes to `bridge/devices`. ESPHome buffers a whole MQTT
 payload before it delivers the message, and the retained device inventory of a
 real network is larger than the free heap.
 
-## Toggle playback
+## Actions
 
-An assigned input sends an On/Off Toggle command to its target. The command
-leaves endpoint 1. A group target uses group broadcast delivery, and a device
-target uses unicast delivery to the endpoint the page found.
+A slot holds one target and one action. The action is one press, so a pair such
+as brighter and dimmer costs two inputs. The wheel is the usual home for a pair,
+because the up and down directions are two assignable slots.
+
+| Action | Cluster | Value |
+| --- | --- | --- |
+| Toggle, On, Off | `genOnOff` | none |
+| Brighter, Dimmer | `genLevelCtrl` | step size, 1 to 254 |
+| Warmer white, Cooler white | `lightingColorCtrl` | step in mireds, 1 to 2000 |
+| Recall scene | `genScenes` | scene ID, 0 to 255 |
+| Open, Close, Stop | `closuresWindowCovering` | none |
+| Warmer, Cooler | `hvacThermostat` | step in tenths of a degree, 1 to 127 |
+| Lock, Unlock | `closuresDoorLock` | none |
+| Alarm | `ssIasWd` | seconds, 1 to 600 |
+| Squawk | `ssIasWd` | none |
+
+The **Action** selector lists only the actions the target accepts. The page
+reads the input cluster list of the device from Zigbee2MQTT, and a group offers
+what every member of it accepts. A typed address describes nothing, so it offers
+every action.
+
+An action with a value shows a box for it. An empty box means the value the
+placeholder names, so the panel always sends what it shows. The remote bounds
+the value again, because an imported block reaches it without a picker.
 
 The command does not wait for a coordinator, a broker, or a target state report.
 The mesh routes it, so the button works while Zigbee2MQTT and Home Assistant are
 both down.
 
 Toggle does not mean "set on" or "set off." Each target changes its current
-On/Off state. Assign one button only to lights that must toggle together.
+On/Off state. Use On or Off for a group whose members can fall out of step.
+
+Brighter and Dimmer use StepWithOnOff, so a step up wakes a light that is off.
+
+Warmer and Cooler send a relative setpoint change, which needs no attribute
+read. A Tuya thermostat answers no standard command, so it needs Home Assistant.
+
+A lock refuses a frame the remote is not bound for, so Lock and Unlock only work
+on a lock that has this remote in its access list.
+
+## Send path
+
+`zigbee_learning.h` holds the send path. The SDK is `esp-zigbee-lib` 2.0.4, which
+uses the `ezb_*` API.
+
+A press calls `play()`. A group target goes straight to `send_command_()`. A
+device target goes through `play_device_()`, which resolves the network address
+first.
+
+`send_command_()` fills one `ezb_zcl_cluster_cmd_ctrl_t` and hands it to
+`dispatch_()`. Only `dispatch_()` knows the action, so it picks the payload
+struct and the request function.
+
+A group request uses `EZB_ADDR_MODE_GROUP` and the group ID. A device request
+uses `EZB_ADDR_MODE_SHORT` and the resolved network address.
+
+`src_ep` is always `CLIENT_ENDPOINT`, which is endpoint 1. A device request also
+sets `dst_ep` from the record.
+
+Every SDK call must run between `esp_zigbee_lock_acquire()` and
+`esp_zigbee_lock_release()`. The main loop sends, and the Zigbee task runs the
+confirm and resolve callbacks.
+
+A device request sets `cmd_ctrl.cnf_ctx.cb` to `on_confirm_`. A group request
+sets no callback, because a groupcast returns no acknowledgement.
+
+A callback must not block on flash or on the record mutex. It parks the slot in
+`pending_state_`, and the next main loop tick does the work.
+
+`dispatch_()` reads no attribute, so a press stays one frame with no round trip.
+
+### Where the numbers come from
+
+The `Action` enum in `zigbee_learning.h` and the `ZA` table in
+`components/button_config/button_config_page.h` hold the same numbers. A new
+action needs a row in both, or the page names a command the remote does not
+know.
+
+`action_valid_()` bounds the value of each action. The page bounds it too, but
+an import block reaches the manager without passing a picker.
+
+The cluster of an action must also appear as a `role: CLIENT` cluster on
+endpoint 1 in `c6remote.yaml`.
+
+### Other commands the SDK can send
+
+The library compiles the full ZCL client command set, and the remote uses part
+of it. The headers are in
+`managed_components/espressif__esp-zigbee-lib/include/ezbee/zcl/cluster/`.
+
+These commands are compiled but unused:
+
+| Cluster | Commands |
+| --- | --- |
+| On/Off `0x0006` | `off_with_effect`, `on_with_timed_off` |
+| Level `0x0008` | `move_to_level_with_on_off`, `move`, `stop` |
+| Color control `0x0300` | `move_to_color_temperature`, `move_to_hue_and_saturation`, `color_loop_set` |
+| Scenes `0x0005` | `store_scene` |
+| Identify `0x0003` | `identify` |
+| Thermostat `0x0201` | the weekly schedule commands |
+| Any cluster | `read_attr`, `write_attr`, `config_report`, `custom_cluster_cmd` |
+
+`ezb_zcl_write_attr_cmd_req()` and `ezb_zcl_custom_cluster_cmd_req()` reach an
+attribute or a manufacturer cluster that has no named command.
+
+`move` and `stop` need a press edge and a release edge, so they need an input
+that reports both. Every action the remote sends today is one press.
+
+An absolute setpoint needs a write to cluster `0x0201`. Attribute `0x0012` is
+the heating setpoint, and `0x0011` is the cooling setpoint. Both are `int16` in
+0.01 C.
+
+Attribute `0x001C` is the system mode. Its values include off `0x00`, auto
+`0x01`, cool `0x03`, and heat `0x04`.
+
+A Tuya thermostat does not answer cluster `0x0201`. It uses manufacturer cluster
+`0xEF00` and a datapoint payload for each model.
 
 ## Clear a button
 
@@ -180,16 +298,18 @@ nothing behind, because the assignment wrote nothing to Zigbee2MQTT.
 ## Storage
 
 The remote stores one record for each of the 18 assignable slots. A record holds
-a target kind, the target name, and the address for that kind.
+a target kind, the target name, the address for that kind, the action, and the
+value of the action.
 
 A group record holds the group ID. A device record holds the IEEE address and
 the endpoint of one device.
 
-The record format is version 4. The remote reads a version 3 record and writes
-it back as version 4, so the group assignments survive the update.
+The record format is version 5. The remote reads a version 4 or a version 3
+record and writes it back as version 5, so the assignments survive the update.
+An older record names no action, so the migration gives it Toggle.
 
-The two formats have different lengths, so the version 4 load fails first and
-the migration runs. Version 2 and earlier do not load, and those slots start
+Each format has a different length, so a newer load fails first and the
+migration runs. Version 2 and earlier do not load, and those slots start
 clear.
 
 ## LED meanings

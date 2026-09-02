@@ -128,6 +128,38 @@ static bool parse_ieee(const std::string &text, uint8_t (&ieee)[8]) {
   return true;
 }
 
+// The page names an action by its number, so the two tables have to agree. The
+// manager bounds the value that goes with it.
+static bool parse_action(const std::string &text, uint8_t &action) {
+  if (text.empty()) {
+    action = ZigbeeAssignmentManager::ACT_TOGGLE;
+    return true;
+  }
+  if (text.size() > 3)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value >= ZigbeeAssignmentManager::ACTION_COUNT)
+    return false;
+  action = static_cast<uint8_t>(value);
+  return true;
+}
+
+static bool parse_param(const std::string &text, int16_t &param) {
+  if (text.empty()) {
+    param = 0;
+    return true;
+  }
+  if (text.size() > 6)
+    return false;
+  char *end = nullptr;
+  const long value = std::strtol(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value < 0 || value > 32767)
+    return false;
+  param = static_cast<int16_t>(value);
+  return true;
+}
+
 // Endpoint 0 is the ZDO and 0xF1 and above are reserved.
 static bool parse_endpoint(const std::string &text, uint8_t &endpoint) {
   if (text.empty() || text.size() > 3)
@@ -380,12 +412,13 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
                     static_cast<unsigned long long>(value));
     }
     stream->printf(
-        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":")",
+        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":")",
         first ? "" : ",", static_cast<unsigned>(info.slot), action,
         static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
         static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields,
         static_cast<unsigned>(zigbee.group_id), ieee_text,
-        static_cast<unsigned>(zigbee.endpoint));
+        static_cast<unsigned>(zigbee.endpoint), static_cast<unsigned>(zigbee.action),
+        static_cast<int>(zigbee.param));
     print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
     stream->print("\"}");
     first = false;
@@ -483,6 +516,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   uint16_t group_id = 0;
   uint8_t ieee[8] = {};
   uint8_t endpoint = 0;
+  uint8_t zb_action = ZigbeeAssignmentManager::ACT_TOGGLE;
+  int16_t zb_param = 0;
   std::string target_name;
   if (action == "set_zigbee" || action == "set_zigbee_device") {
     if (action == "set_zigbee" && !parse_group_id(request->arg("group"), group_id)) {
@@ -497,6 +532,15 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     }
     if (action == "set_zigbee_device" && !parse_endpoint(request->arg("ep"), endpoint)) {
       request->send(400, "application/json", R"({"ok":false,"error":"an endpoint is 1 to 240"})");
+      return;
+    }
+    if (!parse_action(request->arg("act"), zb_action)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"unknown Zigbee action"})");
+      return;
+    }
+    if (!parse_param(request->arg("val"), zb_param)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"an action value is 0 to 32767"})");
       return;
     }
     target_name = request->arg("name");
@@ -535,9 +579,9 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       this->complete_action_(action_id, saved && ::ir_code_store.set_name(button, name.c_str()));
     });
   } else if (action == "set_zigbee") {
-    this->defer([this, button, action_id, group_id, target_name]() {
-      this->complete_action_(action_id,
-                             ::zigbee_assignments.assign_from_web(button, group_id, target_name));
+    this->defer([this, button, action_id, group_id, zb_action, zb_param, target_name]() {
+      this->complete_action_(action_id, ::zigbee_assignments.assign_from_web(
+                                            button, group_id, zb_action, zb_param, target_name));
     });
   } else if (action == "set_zigbee_device") {
     // The array decays in a lambda capture, so it rides along as a struct.
@@ -545,9 +589,10 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       uint8_t ieee[8];
     } target{};
     std::memcpy(target.ieee, ieee, sizeof(target.ieee));
-    this->defer([this, button, action_id, target, endpoint, target_name]() {
-      this->complete_action_(action_id, ::zigbee_assignments.assign_device_from_web(
-                                            button, target.ieee, endpoint, target_name));
+    this->defer([this, button, action_id, target, endpoint, zb_action, zb_param, target_name]() {
+      this->complete_action_(action_id,
+                             ::zigbee_assignments.assign_device_from_web(
+                                 button, target.ieee, endpoint, zb_action, zb_param, target_name));
     });
   } else {
     this->defer([this, button, action_id]() {

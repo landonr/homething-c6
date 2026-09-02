@@ -235,11 +235,11 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
 
-    def test_nvs_v4_stores_kind_address_name_mask_and_checksum(self) -> None:
-        """Version 4 carries a target kind, so a group entry and a device entry
-        share one record."""
+    def test_nvs_v5_stores_kind_address_action_name_mask_and_checksum(self) -> None:
+        """Version 5 carries a target kind and the command, so a group entry, a
+        device entry and every action share one record."""
         header = ZIGBEE_LEARNING.read_text()
-        self.assertIn("static constexpr uint16_t VERSION = 4;", header)
+        self.assertIn("static constexpr uint16_t VERSION = 5;", header)
         self.assertIn("enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };", header)
         self.assertRegex(
             header,
@@ -247,6 +247,9 @@ class ProductionConfigTest(unittest.TestCase):
             r"    uint8_t kind;\n"
             r"    uint8_t endpoint;\n"
             r"    uint16_t group_id;\n"
+            r"    uint8_t action;\n"
+            r"    uint8_t reserved;\n"
+            r"    int16_t param;\n"
             r"    uint8_t ieee\[8\];\n"
             r"    char friendly_name\[TARGET_SIZE\];",
         )
@@ -255,6 +258,30 @@ class ProductionConfigTest(unittest.TestCase):
             r"struct Record \{[\s\S]*?uint32_t mask;[\s\S]*?"
             r"Entry entries\[SLOT_COUNT\];[\s\S]*?uint32_t checksum;",
         )
+
+    def test_a_stored_action_value_is_bounded_by_its_action(self) -> None:
+        """An import block reaches the manager without passing a picker, so the
+        step, the scene and the duration are bounded here or nowhere."""
+        header = ZIGBEE_LEARNING.read_text()
+        bounds = re.search(
+            r"static bool action_valid_\(uint8_t action, int16_t param\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if bounds is None:
+            raise AssertionError("Zigbee action_valid_ method not found")
+        body = bounds.group("body")
+        self.assertIn("param >= 1 && param <= MAX_LEVEL_STEP", body)
+        self.assertIn("param >= 0 && param <= MAX_SCENE_ID", body)
+        self.assertIn("param >= 1 && param <= MAX_TENTH_DEGREES", body)
+        # An action that takes no value must carry none, or a later format would
+        # read a field this one never set.
+        self.assertRegex(body, r"case ACT_TOGGLE:[\s\S]*?return param == 0;")
+        # An unknown action is a future format, not a toggle.
+        self.assertRegex(body, r"default:\n        return false;")
+        for path in ("bool assign_from_web(", "bool assign_device_from_web("):
+            assign = header.split(path, 1)[1].split("\n  }", 1)[0]
+            self.assertIn("action_valid_(action, param)", assign)
 
     def test_a_version_4_entry_validates_only_the_fields_of_its_kind(self) -> None:
         """A group entry with an IEEE address, or a device entry with a group id,
@@ -281,48 +308,110 @@ class ProductionConfigTest(unittest.TestCase):
         # An unknown kind is a future format, not a group.
         self.assertRegex(body, r"\} else \{\n        return false;")
 
-    def test_a_version_3_record_migrates_instead_of_clearing_the_slots(self) -> None:
-        """The blob lengths differ, so the version 4 load fails first and the old
-        group assignments survive the update."""
+    def test_an_older_record_migrates_instead_of_clearing_the_slots(self) -> None:
+        """The blob lengths differ, so the version 5 load fails first and the old
+        assignments survive the update. A version 4 target toggled, so that is
+        the action it carries forward."""
         header = ZIGBEE_LEARNING.read_text()
         self.assertRegex(
             header,
             r"if \(preference_\.load\(&loaded\) && valid_\(loaded\)\)[\s\S]*?"
-            r"\} else if \(load_version_3_\(record_\)\) \{[\s\S]*?preference_\.save\(&record_\)"
+            r"\} else if \(load_version_4_\(record_\) \|\| load_version_3_\(record_\)\) \{"
+            r"[\s\S]*?preference_\.save\(&record_\)"
             r"[\s\S]*?\} else \{[\s\S]*?reset_record_\(record_\);",
         )
-        self.assertIn(
-            'static_assert(sizeof(Record) != sizeof(RecordV3),',
-            header,
-        )
-        migrate = re.search(
-            r"static bool load_version_3_\(Record &out\) \{(?P<body>[\s\S]*?)\n  \}\n",
-            header,
-        )
-        if migrate is None:
-            raise AssertionError("Zigbee load_version_3_ method not found")
-        body = migrate.group("body")
-        self.assertIn("make_preference<RecordV3>(PREFERENCE_KEY, true)", body)
-        self.assertIn("!valid_v3_(old)", body)
-        self.assertIn("entry.kind = KIND_GROUP;", body)
-        self.assertIn("out.checksum = checksum_(out);", body)
+        for older in ("RecordV4", "RecordV3"):
+            self.assertIn(f"static_assert(sizeof(Record) != sizeof({older}),", header)
+        self.assertIn("static_assert(sizeof(RecordV4) != sizeof(RecordV3),", header)
+        for version, kind in (("4", "old.entries[index].kind"), ("3", "KIND_GROUP")):
+            migrate = re.search(
+                rf"static bool load_version_{version}_\(Record &out\) \{{(?P<body>[\s\S]*?)\n  \}}\n",
+                header,
+            )
+            if migrate is None:
+                raise AssertionError(f"Zigbee load_version_{version}_ method not found")
+            body = migrate.group("body")
+            self.assertIn(f"make_preference<RecordV{version}>(PREFERENCE_KEY, true)", body)
+            self.assertIn(f"!valid_v{version}_(old)", body)
+            self.assertIn(f"entry.kind = {kind};", body)
+            self.assertIn("entry.action = ACT_TOGGLE;", body)
+            self.assertIn("out.checksum = checksum_(out);", body)
 
     def test_a_device_target_unicasts_to_the_stored_endpoint(self) -> None:
         """A groupcast carries no endpoint, so a device target has to name one and
         address the short form the mesh routes."""
         header = ZIGBEE_LEARNING.read_text()
         send = re.search(
-            r"void send_device_toggle_\(uint8_t slot, const Entry &entry, uint16_t nwk\) \{"
+            r"void send_command_\(uint8_t slot, const Entry &entry, bool device, uint16_t nwk\) \{"
             r"(?P<body>[\s\S]*?)\n  \}\n",
             header,
         )
         if send is None:
-            raise AssertionError("Zigbee send_device_toggle_ method not found")
+            raise AssertionError("Zigbee send_command_ method not found")
         body = send.group("body")
-        self.assertIn("addr_mode = EZB_ADDR_MODE_SHORT", body)
-        self.assertIn("u.short_addr = nwk", body)
-        self.assertIn("dst_ep = entry.endpoint", body)
-        self.assertIn("cnf_ctx.cb = on_confirm_", body)
+        device = body.split("if (device) {", 1)[1].split("} else {", 1)[0]
+        self.assertIn("addr_mode = EZB_ADDR_MODE_SHORT", device)
+        self.assertIn("u.short_addr = nwk", device)
+        self.assertIn("dst_ep = entry.endpoint", device)
+        self.assertIn("cnf_ctx.cb = on_confirm_", device)
+
+    def test_one_command_table_covers_every_action(self) -> None:
+        """The control block is built once, so an action only picks its payload
+        and its request function. A press reads no target state, which keeps it
+        to one frame and no round trip."""
+        header = ZIGBEE_LEARNING.read_text()
+        send = re.search(
+            r"static ezb_err_t dispatch_\(const ezb_zcl_cluster_cmd_ctrl_t &ctrl, "
+            r"const Entry &entry\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if send is None:
+            raise AssertionError("Zigbee dispatch_ method not found")
+        body = send.group("body")
+        for request in (
+            "ezb_zcl_on_off_toggle_cmd_req",
+            "ezb_zcl_on_off_on_cmd_req",
+            "ezb_zcl_on_off_off_cmd_req",
+            "ezb_zcl_level_step_with_on_off_cmd_req",
+            "ezb_zcl_color_control_step_color_temperature_cmd_req",
+            "ezb_zcl_scenes_recall_scene_cmd_req",
+            "ezb_zcl_window_covering_movement_cmd_req",
+            "ezb_zcl_thermostat_setpoint_raise_or_lower_cmd_req",
+            "ezb_zcl_door_lock_lock_door_cmd_req",
+            "ezb_zcl_door_lock_unlock_door_cmd_req",
+            "ezb_zcl_ias_wd_start_warning_cmd_req",
+            "ezb_zcl_ias_wd_squawk_cmd_req",
+        ):
+            self.assertIn(request, body)
+        # Nothing here reads an attribute, so no press waits for an answer.
+        for gone in ("read_attr", "esp_zigbee_lock_acquire"):
+            self.assertNotIn(gone, body)
+        # A cooler step is the same command with the sign flipped, not a second
+        # action id the remote has to store.
+        self.assertIn("static_cast<int8_t>(-entry.param)", body)
+        # Every action the enum names has to reach a request here.
+        actions = re.search(r"enum Action : uint8_t \{(?P<body>[\s\S]*?)\n  \};", header)
+        if actions is None:
+            raise AssertionError("Zigbee Action enum not found")
+        for name in re.findall(r"(ACT_[A-Z_]+) =", actions.group("body")):
+            self.assertIn(f"case {name}:", body)
+
+    def test_the_endpoint_declares_a_client_cluster_for_every_action(self) -> None:
+        """A command from a cluster the simple descriptor omits leaves the remote
+        looking like an On/Off switch that sends something else."""
+        config = CONFIG.read_text()
+        block = config.split("endpoints:", 1)[1].split("\n  on_join:", 1)[0]
+        for cluster in (
+            "ON_OFF",
+            "LEVEL",
+            "COLOR_CONTROL",
+            "SCENES",
+            "WINDOW_COVERING",
+            "THERMOSTAT",
+            "DOOR_LOCK",
+            "IAS_WD",
+        ):
+            self.assertRegex(block, rf"- id: {cluster}\n          role: CLIENT")
 
     def test_a_short_address_never_reaches_flash(self) -> None:
         """A device takes a new short address when it rejoins, so a stored one
@@ -423,14 +512,15 @@ class ProductionConfigTest(unittest.TestCase):
         """Membership lives in the light's group table, so a button keeps working
         with Zigbee2MQTT and Home Assistant both down."""
         header = ZIGBEE_LEARNING.read_text()
-        toggle = header.split(
-            "void toggle_group_(uint8_t slot, const Entry &entry) {", 1
+        send = header.split(
+            "void send_command_(uint8_t slot, const Entry &entry, bool device, uint16_t nwk) {", 1
         )[1].split("\n  }", 1)[0]
-        self.assertIn("request.cmd_ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;", toggle)
-        self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", toggle)
-        self.assertIn("entry.group_id", toggle)
+        group = send.split("} else {", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;", group)
+        self.assertIn("entry.group_id", group)
         # A groupcast is unacknowledged, so it asks for no confirm and no retry.
-        self.assertNotIn("cnf_ctx", toggle)
+        self.assertNotIn("cnf_ctx", group)
+        self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", header)
 
     def test_a_stored_group_id_is_bounded_below_the_broadcast_range(self) -> None:
         """0xFFF8 and above are the reserved Zigbee broadcast addresses."""

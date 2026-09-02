@@ -14,15 +14,16 @@
 #include <mutex>
 #include <string>
 
-// Stores one Zigbee target per assignable input and toggles it from the radio.
+// Stores one Zigbee target and one command per assignable input, and sends that
+// command from the radio.
 //
 // A target is a group or one device. The remote holds no MQTT client. The
 // /buttons page reads the Zigbee2MQTT inventory over the frontend websocket in
 // the browser and posts only the resolved address here, so a button keeps
 // working with Zigbee2MQTT and Home Assistant both down.
 //
-// A group toggle is an unacknowledged groupcast, and group membership lives in
-// the group table of the light. A device toggle is a unicast to the 16-bit
+// A group command is an unacknowledged groupcast, and group membership lives in
+// the group table of the light. A device command is a unicast to the 16-bit
 // network address behind the stored IEEE address. That address is a lease the
 // device gives up when it rejoins, so it never reaches flash, and the APS
 // confirm drives one NWK_addr_req and one resend when it goes stale.
@@ -39,11 +40,37 @@ class ZigbeeAssignmentManager {
 
   enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };
 
+  // One press sends one ZCL command. The /buttons page reads the cluster list of
+  // the target from Zigbee2MQTT and offers only the actions that list carries,
+  // so a pair such as brighter and dimmer costs two inputs.
+  enum Action : uint8_t {
+    ACT_TOGGLE = 0,
+    ACT_ON = 1,
+    ACT_OFF = 2,
+    ACT_LEVEL_UP = 3,
+    ACT_LEVEL_DOWN = 4,
+    ACT_WHITE_WARMER = 5,
+    ACT_WHITE_COOLER = 6,
+    ACT_SCENE = 7,
+    ACT_COVER_OPEN = 8,
+    ACT_COVER_CLOSE = 9,
+    ACT_COVER_STOP = 10,
+    ACT_TEMP_UP = 11,
+    ACT_TEMP_DOWN = 12,
+    ACT_LOCK = 13,
+    ACT_UNLOCK = 14,
+    ACT_ALARM = 15,
+    ACT_SQUAWK = 16,
+    ACTION_COUNT,
+  };
+
   struct Assignment {
     bool assigned{false};
     Kind kind{KIND_GROUP};
     uint16_t group_id{0};
     uint8_t endpoint{0};
+    uint8_t action{ACT_TOGGLE};
+    int16_t param{0};
     uint8_t ieee[8]{};
     std::string name;
   };
@@ -59,9 +86,9 @@ class ZigbeeAssignmentManager {
     Record loaded{};
     if (preference_.load(&loaded) && valid_(loaded)) {
       record_ = loaded;
-    } else if (load_version_3_(record_)) {
+    } else if (load_version_4_(record_) || load_version_3_(record_)) {
       if (preference_.save(&record_)) {
-        ESP_LOGI("zigbee_learn", "Migrated the Zigbee assignments from record version 3");
+        ESP_LOGI("zigbee_learn", "Migrated the Zigbee assignments to record version 5");
       } else {
         ESP_LOGE("zigbee_learn", "Failed to save the migrated Zigbee assignments");
       }
@@ -72,7 +99,7 @@ class ZigbeeAssignmentManager {
     }
 
     ir_code_store.set_assignment_clear_callback([this](uint8_t slot) { this->clear(slot); });
-    ir_ui.set_zigbee_play_callback([this](uint8_t slot) { return this->toggle(slot); });
+    ir_ui.set_zigbee_play_callback([this](uint8_t slot) { return this->play(slot); });
     ESP_LOGI("zigbee_learn", "Loaded Zigbee assignment mask 0x%05X",
              static_cast<unsigned>(record_.mask));
   }
@@ -80,39 +107,44 @@ class ZigbeeAssignmentManager {
   // Runs on the main loop from a deferred web action, so the flash write cannot
   // block the httpd task. A group target needs no network round trip, so the
   // result is known before this returns.
-  bool assign_from_web(uint8_t slot, uint16_t group_id, const std::string &name) {
+  bool assign_from_web(uint8_t slot, uint16_t group_id, uint8_t action, int16_t param,
+                       const std::string &name) {
     if (!slot_valid_(slot) || group_id == 0 || group_id > MAX_GROUP_ID)
       return false;
-    if (name.size() >= TARGET_SIZE)
+    if (!action_valid_(action, param) || name.size() >= TARGET_SIZE)
       return false;
 
     Entry entry;
     std::memset(&entry, 0, sizeof(entry));
     entry.kind = KIND_GROUP;
     entry.group_id = group_id;
+    entry.action = action;
+    entry.param = param;
     std::strncpy(entry.friendly_name, name.c_str(), TARGET_SIZE - 1);
     if (!store_(slot, entry))
       return false;
 
     nwk_cache_[slot - FIRST_SLOT].store(EZB_NWK_ADDR_UNKNOWN, std::memory_order_relaxed);
-    ESP_LOGI("zigbee_learn", "Button %u toggles group 0x%04X (%s)", slot,
-             static_cast<unsigned>(group_id), entry.friendly_name);
+    ESP_LOGI("zigbee_learn", "Button %u sends action %u to group 0x%04X (%s)", slot,
+             static_cast<unsigned>(action), static_cast<unsigned>(group_id), entry.friendly_name);
     return true;
   }
 
   // The IEEE address arrives as the little endian bytes of the EUI-64, which is
   // the order the radio wants, so it goes to flash without a swap.
   bool assign_device_from_web(uint8_t slot, const uint8_t (&ieee)[8], uint8_t endpoint,
-                              const std::string &name) {
+                              uint8_t action, int16_t param, const std::string &name) {
     if (!slot_valid_(slot) || endpoint < MIN_ENDPOINT || endpoint > MAX_ENDPOINT)
       return false;
-    if (!ieee_valid_(ieee) || name.size() >= TARGET_SIZE)
+    if (!ieee_valid_(ieee) || !action_valid_(action, param) || name.size() >= TARGET_SIZE)
       return false;
 
     Entry entry;
     std::memset(&entry, 0, sizeof(entry));
     entry.kind = KIND_DEVICE;
     entry.endpoint = endpoint;
+    entry.action = action;
+    entry.param = param;
     std::memcpy(entry.ieee, ieee, sizeof(entry.ieee));
     std::strncpy(entry.friendly_name, name.c_str(), TARGET_SIZE - 1);
     if (!store_(slot, entry))
@@ -122,8 +154,8 @@ class ZigbeeAssignmentManager {
     nwk_cache_[index].store(EZB_NWK_ADDR_UNKNOWN, std::memory_order_relaxed);
     last_resolve_ms_[index] = 0;
     warm_mask_ |= 1UL << index;
-    ESP_LOGI("zigbee_learn", "Button %u toggles device %s endpoint %u", slot, entry.friendly_name,
-             static_cast<unsigned>(endpoint));
+    ESP_LOGI("zigbee_learn", "Button %u sends action %u to device %s endpoint %u", slot,
+             static_cast<unsigned>(action), entry.friendly_name, static_cast<unsigned>(endpoint));
     return true;
   }
 
@@ -138,19 +170,21 @@ class ZigbeeAssignmentManager {
     result.kind = static_cast<Kind>(entry.kind);
     result.group_id = entry.group_id;
     result.endpoint = entry.endpoint;
+    result.action = entry.action;
+    result.param = entry.param;
     std::memcpy(result.ieee, entry.ieee, sizeof(result.ieee));
     result.name = entry.friendly_name;
     return result;
   }
 
-  bool toggle(uint8_t slot) {
+  bool play(uint8_t slot) {
     if (!has_assignment_(slot))
       return false;
     const Entry &entry = entry_(slot);
     if (entry.kind == KIND_DEVICE)
-      toggle_device_(slot, entry);
+      play_device_(slot, entry);
     else
-      toggle_group_(slot, entry);
+      send_command_(slot, entry, false, 0);
     return true;
   }
 
@@ -186,7 +220,7 @@ class ZigbeeAssignmentManager {
     if (state == PENDING_RESEND) {
       // The one resend a press gets, so a second failure stops here.
       retry_armed_.store(false, std::memory_order_relaxed);
-      send_device_toggle_(slot, entry, nwk_cache_[slot - FIRST_SLOT].load(std::memory_order_relaxed));
+      send_command_(slot, entry, true, nwk_cache_[slot - FIRST_SLOT].load(std::memory_order_relaxed));
       return;
     }
     start_resolve_(slot, entry, true, now);
@@ -229,9 +263,10 @@ class ZigbeeAssignmentManager {
 
  private:
   static constexpr uint32_t MAGIC = 0x5A424731U;
-  // Version 4 returned the target kind, because a direct device target needs an
-  // IEEE address and an endpoint that a group id cannot carry.
-  static constexpr uint16_t VERSION = 4;
+  // Version 5 carries the action and its value, because the target alone no
+  // longer says what a press sends.
+  static constexpr uint16_t VERSION = 5;
+  static constexpr uint16_t VERSION_V4 = 4;
   static constexpr uint16_t VERSION_V3 = 3;
   static constexpr uint32_t PREFERENCE_KEY = 0x5A424731U;
   static constexpr size_t TARGET_SIZE = 65;
@@ -241,6 +276,16 @@ class ZigbeeAssignmentManager {
   // A NWK_addr_req floods the mesh, so a stuck button cannot repeat it faster.
   static constexpr uint32_t RESOLVE_GAP_MS = 10000;
   static constexpr uint32_t WARM_GAP_MS = 1000;
+  // Tenths of a second. A step that lands instantly reads as a jump, and one
+  // that takes longer than the next press queues behind it.
+  static constexpr uint16_t STEP_TRANSITION_DS = 3;
+  static constexpr uint8_t STROBE_DUTY_PERCENT = 40;
+  static constexpr uint8_t MAX_LEVEL_STEP = 254;
+  static constexpr int16_t MAX_MIRED_STEP = 2000;
+  static constexpr int16_t MAX_SCENE_ID = 255;
+  // The ZCL amount field is a signed 0.1 C step, so a press moves 12.7 C at most.
+  static constexpr int16_t MAX_TENTH_DEGREES = 127;
+  static constexpr int16_t MAX_ALARM_SECONDS = 600;
 
   enum Pending : uint8_t { PENDING_NONE = 0, PENDING_RESOLVE = 1, PENDING_RESEND = 2 };
 
@@ -248,6 +293,9 @@ class ZigbeeAssignmentManager {
     uint8_t kind;
     uint8_t endpoint;
     uint16_t group_id;
+    uint8_t action;
+    uint8_t reserved;
+    int16_t param;
     uint8_t ieee[8];
     char friendly_name[TARGET_SIZE];
   };
@@ -258,6 +306,23 @@ class ZigbeeAssignmentManager {
     uint16_t reserved;
     uint32_t mask;
     Entry entries[SLOT_COUNT];
+    uint32_t checksum;
+  };
+
+  struct EntryV4 {
+    uint8_t kind;
+    uint8_t endpoint;
+    uint16_t group_id;
+    uint8_t ieee[8];
+    char friendly_name[TARGET_SIZE];
+  };
+
+  struct RecordV4 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint32_t mask;
+    EntryV4 entries[SLOT_COUNT];
     uint32_t checksum;
   };
 
@@ -276,9 +341,13 @@ class ZigbeeAssignmentManager {
     uint32_t checksum;
   };
 
-  // The two records differ in length, so the version 4 load fails on the NVS
-  // length check before this runs. A version 3 target is always a group.
-  static_assert(sizeof(Record) != sizeof(RecordV3), "The version 4 record must not match version 3");
+  // Each record differs in length, so a newer load fails on the NVS length check
+  // before the older one runs. A version 3 target is always a group, and a
+  // version 4 target always toggles.
+  static_assert(sizeof(Record) != sizeof(RecordV4), "The version 5 record must not match version 4");
+  static_assert(sizeof(Record) != sizeof(RecordV3), "The version 5 record must not match version 3");
+  static_assert(sizeof(RecordV4) != sizeof(RecordV3),
+                "The version 4 record must not match version 3");
 
   static bool slot_valid_(uint8_t slot) { return slot >= FIRST_SLOT && slot <= LAST_SLOT; }
 
@@ -312,25 +381,7 @@ class ZigbeeAssignmentManager {
     return true;
   }
 
-  void toggle_group_(uint8_t slot, const Entry &entry) {
-    ezb_zcl_on_off_cmd_t request{};
-    request.cmd_ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;
-    request.cmd_ctrl.dst_addr.u.group_addr.group = entry.group_id;
-    request.cmd_ctrl.dst_addr.u.group_addr.bcast = RESOLVE_BROADCAST;
-    request.cmd_ctrl.src_ep = CLIENT_ENDPOINT;
-
-    esp_zigbee_lock_acquire(portMAX_DELAY);
-    const ezb_err_t result = ezb_zcl_on_off_toggle_cmd_req(&request);
-    esp_zigbee_lock_release();
-    if (result != EZB_ERR_NONE) {
-      ESP_LOGE("zigbee_tx", "Toggle failed for button %u, group 0x%04X: %d", slot, entry.group_id,
-               result);
-      return;
-    }
-    ESP_LOGI("zigbee_tx", "Toggle button %u, group 0x%04X", slot, entry.group_id);
-  }
-
-  void toggle_device_(uint8_t slot, const Entry &entry) {
+  void play_device_(uint8_t slot, const Entry &entry) {
     const size_t index = slot - FIRST_SLOT;
     uint16_t nwk = nwk_cache_[index].load(std::memory_order_relaxed);
     if (nwk == EZB_NWK_ADDR_UNKNOWN)
@@ -343,30 +394,153 @@ class ZigbeeAssignmentManager {
     nwk_cache_[index].store(nwk, std::memory_order_relaxed);
     // A fresh press earns one retry. The resend clears this before it sends.
     retry_armed_.store(true, std::memory_order_relaxed);
-    send_device_toggle_(slot, entry, nwk);
+    send_command_(slot, entry, true, nwk);
   }
 
-  void send_device_toggle_(uint8_t slot, const Entry &entry, uint16_t nwk) {
-    if (nwk == EZB_NWK_ADDR_UNKNOWN)
-      return;
-    ezb_zcl_on_off_cmd_t request{};
-    request.cmd_ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_SHORT;
-    request.cmd_ctrl.dst_addr.u.short_addr = nwk;
-    request.cmd_ctrl.dst_ep = entry.endpoint;
-    request.cmd_ctrl.src_ep = CLIENT_ENDPOINT;
-    request.cmd_ctrl.cnf_ctx.cb = on_confirm_;
-    request.cmd_ctrl.cnf_ctx.user_ctx = slot_context_(slot);
+  // Every action shares this control block, so only the payload and the request
+  // function below change. A groupcast carries no confirm callback, because it
+  // gets no acknowledgement to drive one.
+  void send_command_(uint8_t slot, const Entry &entry, bool device, uint16_t nwk) {
+    ezb_zcl_cluster_cmd_ctrl_t ctrl{};
+    if (device) {
+      if (nwk == EZB_NWK_ADDR_UNKNOWN)
+        return;
+      ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_SHORT;
+      ctrl.dst_addr.u.short_addr = nwk;
+      ctrl.dst_ep = entry.endpoint;
+      ctrl.cnf_ctx.cb = on_confirm_;
+      ctrl.cnf_ctx.user_ctx = slot_context_(slot);
+    } else {
+      ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;
+      ctrl.dst_addr.u.group_addr.group = entry.group_id;
+      ctrl.dst_addr.u.group_addr.bcast = RESOLVE_BROADCAST;
+    }
+    ctrl.src_ep = CLIENT_ENDPOINT;
 
     esp_zigbee_lock_acquire(portMAX_DELAY);
-    const ezb_err_t result = ezb_zcl_on_off_toggle_cmd_req(&request);
+    const ezb_err_t result = dispatch_(ctrl, entry);
     esp_zigbee_lock_release();
     if (result != EZB_ERR_NONE) {
-      ESP_LOGE("zigbee_tx", "Toggle failed for button %u, device 0x%04X: %d", slot,
-               static_cast<unsigned>(nwk), result);
+      ESP_LOGE("zigbee_tx", "Action %u failed for button %u, target 0x%04X: %d",
+               static_cast<unsigned>(entry.action), slot,
+               static_cast<unsigned>(device ? nwk : entry.group_id), result);
       return;
     }
-    ESP_LOGI("zigbee_tx", "Toggle button %u, device 0x%04X endpoint %u", slot,
-             static_cast<unsigned>(nwk), static_cast<unsigned>(entry.endpoint));
+    ESP_LOGI("zigbee_tx", "Action %u from button %u to target 0x%04X endpoint %u",
+             static_cast<unsigned>(entry.action), slot,
+             static_cast<unsigned>(device ? nwk : entry.group_id),
+             static_cast<unsigned>(entry.endpoint));
+  }
+
+  // The SDK gives each cluster its own request function and payload, so the
+  // action picks both. Nothing here reads a target state, which keeps a press
+  // to one frame with no round trip.
+  static ezb_err_t dispatch_(const ezb_zcl_cluster_cmd_ctrl_t &ctrl, const Entry &entry) {
+    switch (entry.action) {
+      case ACT_TOGGLE:
+      case ACT_ON:
+      case ACT_OFF: {
+        ezb_zcl_on_off_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        if (entry.action == ACT_ON)
+          return ezb_zcl_on_off_on_cmd_req(&request);
+        if (entry.action == ACT_OFF)
+          return ezb_zcl_on_off_off_cmd_req(&request);
+        return ezb_zcl_on_off_toggle_cmd_req(&request);
+      }
+      case ACT_LEVEL_UP:
+      case ACT_LEVEL_DOWN: {
+        // WithOnOff, so a step up wakes a light that is off and a step to zero
+        // turns it off, which is what a dimmer pair has to do.
+        ezb_zcl_level_step_with_on_off_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.step_mode = entry.action == ACT_LEVEL_UP ? EZB_ZCL_LEVEL_FADE_MODE_UP
+                                                                 : EZB_ZCL_LEVEL_FADE_MODE_DOWN;
+        request.payload.step_size = static_cast<uint8_t>(entry.param);
+        request.payload.transition_time = STEP_TRANSITION_DS;
+        return ezb_zcl_level_step_with_on_off_cmd_req(&request);
+      }
+      case ACT_WHITE_WARMER:
+      case ACT_WHITE_COOLER: {
+        // Mireds rise as the white gets warmer, so warmer steps up.
+        ezb_zcl_color_control_step_color_temperature_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.step_mode = entry.action == ACT_WHITE_WARMER
+                                        ? EZB_ZCL_COLOR_CONTROL_STEP_MODE_UP
+                                        : EZB_ZCL_COLOR_CONTROL_STEP_MODE_DOWN;
+        request.payload.step_size = static_cast<uint16_t>(entry.param);
+        request.payload.color_temperature_min_mireds =
+            EZB_ZCL_COLOR_CONTROL_COLOR_TEMP_PHYSICAL_MIN_MIREDS_DEFAULT_VALUE;
+        request.payload.color_temperature_max_mireds =
+            EZB_ZCL_COLOR_CONTROL_COLOR_TEMP_PHYSICAL_MAX_MIREDS_DEFAULT_VALUE;
+        request.payload.transition_time = STEP_TRANSITION_DS;
+        return ezb_zcl_color_control_step_color_temperature_cmd_req(&request);
+      }
+      case ACT_SCENE: {
+        // RecallScene carries its own group id. A device target stores 0 there,
+        // which is the group Zigbee2MQTT uses for a scene on one device.
+        ezb_zcl_scenes_recall_scene_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.group_id = entry.group_id;
+        request.payload.scene_id = static_cast<uint8_t>(entry.param);
+        return ezb_zcl_scenes_recall_scene_cmd_req(&request);
+      }
+      case ACT_COVER_OPEN:
+      case ACT_COVER_CLOSE:
+      case ACT_COVER_STOP: {
+        ezb_zcl_window_covering_movement_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.cmd_id = entry.action == ACT_COVER_OPEN
+                             ? EZB_ZCL_CMD_WINDOW_COVERING_UP_OPEN_ID
+                             : (entry.action == ACT_COVER_CLOSE
+                                    ? EZB_ZCL_CMD_WINDOW_COVERING_DOWN_CLOSE_ID
+                                    : EZB_ZCL_CMD_WINDOW_COVERING_STOP_ID);
+        return ezb_zcl_window_covering_movement_cmd_req(&request);
+      }
+      case ACT_TEMP_UP:
+      case ACT_TEMP_DOWN: {
+        // A relative change needs no attribute read, so a press stays one frame.
+        // BOTH moves the heating and the cooling setpoint together.
+        ezb_zcl_thermostat_setpoint_raise_or_lower_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.mode = EZB_ZCL_THERMOSTAT_SETPOINT_MODE_BOTH;
+        request.payload.amount = entry.action == ACT_TEMP_UP
+                                     ? static_cast<int8_t>(entry.param)
+                                     : static_cast<int8_t>(-entry.param);
+        return ezb_zcl_thermostat_setpoint_raise_or_lower_cmd_req(&request);
+      }
+      case ACT_LOCK:
+      case ACT_UNLOCK: {
+        // A lock refuses an unsecured frame, so this asks for APS security. A
+        // lock that was never bound to this remote still refuses it.
+        ezb_zcl_door_lock_lock_door_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.aps_secur_enabled = true;
+        return entry.action == ACT_LOCK ? ezb_zcl_door_lock_lock_door_cmd_req(&request)
+                                        : ezb_zcl_door_lock_unlock_door_cmd_req(&request);
+      }
+      case ACT_ALARM: {
+        ezb_zcl_ias_wd_start_warning_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.warning_mode = EZB_ZCL_IAS_WD_WARNING_MODE_BURGLAR;
+        request.payload.strobe = 1;
+        request.payload.siren_level = EZB_ZCL_IAS_WD_SIREN_LEVEL_HIGH;
+        request.payload.duration = static_cast<uint16_t>(entry.param);
+        request.payload.strobe_duty_cycle = STROBE_DUTY_PERCENT;
+        request.payload.strobe_level = 1;
+        return ezb_zcl_ias_wd_start_warning_cmd_req(&request);
+      }
+      case ACT_SQUAWK: {
+        ezb_zcl_ias_wd_squawk_cmd_t request{};
+        request.cmd_ctrl = ctrl;
+        request.payload.squawk_mode = EZB_ZCL_IAS_WD_SQUAWK_MODE_ARMED;
+        request.payload.strobe = EZB_ZCL_IAS_WD_SQUAWK_STROBE_USE_STROBE;
+        request.payload.squawk_level = EZB_ZCL_IAS_WD_SQUAWK_LEVEL_HIGH;
+        return ezb_zcl_ias_wd_squawk_cmd_req(&request);
+      }
+      default:
+        return EZB_ERR_INV_ARG;
+    }
   }
 
   // Runs on the Zigbee task. It parks the slot for the next tick instead of
@@ -527,6 +701,38 @@ class ZigbeeAssignmentManager {
     return !all_ones && !ieee_all_zero_(ieee);
   }
 
+  // The value an action carries is the one field the page cannot be trusted to
+  // bound, because an import block reaches this path unread by any picker.
+  static bool action_valid_(uint8_t action, int16_t param) {
+    switch (action) {
+      case ACT_LEVEL_UP:
+      case ACT_LEVEL_DOWN:
+        return param >= 1 && param <= MAX_LEVEL_STEP;
+      case ACT_WHITE_WARMER:
+      case ACT_WHITE_COOLER:
+        return param >= 1 && param <= MAX_MIRED_STEP;
+      case ACT_SCENE:
+        return param >= 0 && param <= MAX_SCENE_ID;
+      case ACT_TEMP_UP:
+      case ACT_TEMP_DOWN:
+        return param >= 1 && param <= MAX_TENTH_DEGREES;
+      case ACT_ALARM:
+        return param >= 1 && param <= MAX_ALARM_SECONDS;
+      case ACT_TOGGLE:
+      case ACT_ON:
+      case ACT_OFF:
+      case ACT_COVER_OPEN:
+      case ACT_COVER_CLOSE:
+      case ACT_COVER_STOP:
+      case ACT_LOCK:
+      case ACT_UNLOCK:
+      case ACT_SQUAWK:
+        return param == 0;
+      default:
+        return false;
+    }
+  }
+
   static bool valid_(const Record &record) {
     if (record.magic != MAGIC || record.version != VERSION ||
         (record.mask & ~((1UL << SLOT_COUNT) - 1)) != 0 || record.checksum != checksum_(record))
@@ -535,6 +741,33 @@ class ZigbeeAssignmentManager {
       if ((record.mask & (1UL << index)) == 0)
         continue;
       const Entry &entry = record.entries[index];
+      if (std::memchr(entry.friendly_name, '\0', TARGET_SIZE) == nullptr)
+        return false;
+      if (entry.reserved != 0 || !action_valid_(entry.action, entry.param))
+        return false;
+      if (entry.kind == KIND_GROUP) {
+        if (entry.group_id == 0 || entry.group_id > MAX_GROUP_ID || entry.endpoint != 0 ||
+            !ieee_all_zero_(entry.ieee))
+          return false;
+      } else if (entry.kind == KIND_DEVICE) {
+        if (entry.group_id != 0 || entry.endpoint < MIN_ENDPOINT || entry.endpoint > MAX_ENDPOINT ||
+            !ieee_valid_(entry.ieee))
+          return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool valid_v4_(const RecordV4 &record) {
+    if (record.magic != MAGIC || record.version != VERSION_V4 ||
+        (record.mask & ~((1UL << SLOT_COUNT) - 1)) != 0 || record.checksum != checksum_(record))
+      return false;
+    for (size_t index = 0; index < SLOT_COUNT; index++) {
+      if ((record.mask & (1UL << index)) == 0)
+        continue;
+      const EntryV4 &entry = record.entries[index];
       if (std::memchr(entry.friendly_name, '\0', TARGET_SIZE) == nullptr)
         return false;
       if (entry.kind == KIND_GROUP) {
@@ -567,6 +800,29 @@ class ZigbeeAssignmentManager {
     return true;
   }
 
+  static bool load_version_4_(Record &out) {
+    auto old_preference = esphome::global_preferences->make_preference<RecordV4>(PREFERENCE_KEY, true);
+    RecordV4 old{};
+    if (!old_preference.load(&old) || !valid_v4_(old))
+      return false;
+
+    reset_record_(out);
+    out.mask = old.mask;
+    for (size_t index = 0; index < SLOT_COUNT; index++) {
+      if ((old.mask & (1UL << index)) == 0)
+        continue;
+      Entry &entry = out.entries[index];
+      entry.kind = old.entries[index].kind;
+      entry.endpoint = old.entries[index].endpoint;
+      entry.group_id = old.entries[index].group_id;
+      entry.action = ACT_TOGGLE;
+      std::memcpy(entry.ieee, old.entries[index].ieee, sizeof(entry.ieee));
+      std::memcpy(entry.friendly_name, old.entries[index].friendly_name, TARGET_SIZE);
+    }
+    out.checksum = checksum_(out);
+    return true;
+  }
+
   static bool load_version_3_(Record &out) {
     auto old_preference = esphome::global_preferences->make_preference<RecordV3>(PREFERENCE_KEY, true);
     RecordV3 old{};
@@ -581,6 +837,7 @@ class ZigbeeAssignmentManager {
       Entry &entry = out.entries[index];
       entry.kind = KIND_GROUP;
       entry.group_id = old.entries[index].group_id;
+      entry.action = ACT_TOGGLE;
       std::memcpy(entry.friendly_name, old.entries[index].friendly_name, TARGET_SIZE);
     }
     out.checksum = checksum_(out);

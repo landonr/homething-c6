@@ -3,7 +3,7 @@
 ## Goal
 
 Assignment mode gives each supported input one active action. An action can be
-an IR code, a Zigbee Toggle group, the voice assistant, or no action.
+an IR code, a Zigbee command, the voice assistant, or no action.
 
 Store assignments in flash. Outside assignment mode, an input replays its active
 action.
@@ -33,7 +33,7 @@ For `SW2`, tap the same input in this order:
 
 `SW2` has no voice stage because its hold gesture controls assignment mode.
 
-The cycle has no Zigbee stage. A Zigbee group ID comes from Zigbee2MQTT, which
+The cycle has no Zigbee stage. A Zigbee target comes from Zigbee2MQTT, which
 the remote cannot read, so only the web page assigns one.
 
 Clockwise and anticlockwise wheel rotation are IR-only. Each detent starts IR
@@ -52,11 +52,11 @@ capture does not replace the old assignment.
 
 ## Zigbee assignment
 
-Assign a Zigbee group from the web page. Read [ZIGBEE.md](ZIGBEE.md) first,
-because you must create the group in Zigbee2MQTT before the remote can use it.
+Assign a Zigbee target from the web page. Read [ZIGBEE.md](ZIGBEE.md) first,
+because you must create a group in Zigbee2MQTT before the remote can use it.
 
-Outside assignment mode, an assigned input sends a direct Zigbee Toggle command
-to its group. Playback needs no MQTT and no Wi-Fi.
+Outside assignment mode, an assigned input sends its one Zigbee command to its
+target. Playback needs no MQTT and no Wi-Fi.
 
 ## Clear and replace an assignment
 
@@ -90,25 +90,31 @@ the same flash records.
 
 ### Assign a Zigbee target from the page
 
-The page can assign a Zigbee Toggle target. It does not need a state transition,
-because you name the target instead.
+The page can assign a Zigbee target and the command that goes to it. It does
+not need a state transition, because you name both instead.
 
 1. Select an input, then select **Zigbee target** in the Action selector.
 2. On the first use, open the **Config** card and enter the Zigbee2MQTT frontend
    websocket address.
-3. Select a group, select a device, or type a group ID.
-4. Select the matching **Assign** button.
+3. Select **Group** or **Device**, then pick a target or type its address.
+4. Select the command in the **Action** selector, then fill its value box if it
+   shows one.
+5. Select **Assign**.
 
-The browser reads the group list from Zigbee2MQTT and sends only the group ID to
-the remote. The address and the token stay in browser storage.
+The browser reads the group and device lists from Zigbee2MQTT and sends only the
+address, the action and its value to the remote. The address of the frontend and
+the token stay in browser storage.
 
 The remote holds no MQTT client, so the retained `bridge/devices` payload that
 once exhausted its heap never reaches it.
 
-A device gets a group of its own, because the remote can send only a groupcast.
-The browser creates that group and reuses it on a later assignment.
+The **Action** selector lists only the commands the target accepts, which the
+page reads from the cluster list of the target. A typed address describes
+nothing, so it offers every command.
 
-Use a typed group ID when the browser cannot reach the frontend.
+A device target unicasts to the device, so the browser writes no group for it.
+
+Use a typed address when the browser cannot reach the frontend.
 
 The browser fills the list from the `bridge/groups` message on the Zigbee2MQTT
 frontend websocket. If it cannot connect, the page reports the reason and keeps
@@ -121,7 +127,7 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 
 ### Capability matrix
 
-| Input | Slots | Record IR | Zigbee group | Voice assistant | Clear |
+| Input | Slots | Record IR | Zigbee target | Voice assistant | Clear |
 | --- | --- | --- | --- | --- | --- |
 | `SW1` | 20 | Yes | Page only | Yes | Yes |
 | `SW2` | 19 | Yes | Page only | No | Yes |
@@ -129,8 +135,10 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 | Wheel directions | 12 to 16 | Yes | Page only | Yes | Yes |
 | Wheel rotation | 17 and 18 | Yes | Page only | No | Yes |
 
-Every slot accepts a Zigbee group from the page. Toggle playback uses the same press handler
-as IR playback, so a wheel detent can send it.
+Every slot accepts a Zigbee target from the page. Zigbee playback uses the same
+press handler as IR playback, so a wheel detent can send it. A command that only
+makes sense as a pair, such as brighter and dimmer, costs two slots, and the
+wheel directions are the natural home for one.
 
 `SW2` has no voice action because the hold gesture owns its press edge.
 
@@ -298,7 +306,7 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 Outside assignment mode, an input uses its one active assignment in this order:
 
 1. Voice assistant, if assigned.
-2. Zigbee Toggle, if assigned.
+2. The Zigbee command, if assigned.
 3. IR playback, if assigned.
 
 An input without an assignment does not transmit a command.

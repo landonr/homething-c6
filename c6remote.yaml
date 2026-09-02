@@ -67,8 +67,25 @@ zigbee:
   endpoints:
     - num: 1
       device_type: ON_OFF_SWITCH
+      # One client cluster for each action the /buttons page can assign. A
+      # cluster the simple descriptor omits still leaves the remote a valid
+      # On/Off switch, but Zigbee2MQTT then reports no route for that command.
       clusters:
         - id: ON_OFF
+          role: CLIENT
+        - id: LEVEL
+          role: CLIENT
+        - id: COLOR_CONTROL
+          role: CLIENT
+        - id: SCENES
+          role: CLIENT
+        - id: WINDOW_COVERING
+          role: CLIENT
+        - id: THERMOSTAT
+          role: CLIENT
+        - id: DOOR_LOCK
+          role: CLIENT
+        - id: IAS_WD
           role: CLIENT
   on_join:
     then:

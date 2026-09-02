@@ -228,7 +228,7 @@ class EnforcementTest(unittest.TestCase):
             r'zigbee\.assigned\s+\? "zigbee"[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"'
             r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":"', state)
+        self.assertIn('"fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
@@ -371,7 +371,7 @@ class PageTest(unittest.TestCase):
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
         self.assertIn(
-            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"name":"',
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":"',
             state,
         )
         self.assertIn("::ir_code_store.name(info.slot)", state)
@@ -545,7 +545,8 @@ class PageTest(unittest.TestCase):
         self.assertIn("<input id=zg type=text", PAGE)
         self.assertIn("<input id=zh type=text", PAGE)
         self.assertIn("<input id=zp type=text", PAGE)
-        self.assertIn('post("set_zigbee",s,v,name)', PAGE)
+        self.assertIn("<select id=zt", PAGE)
+        self.assertIn('post("set_zigbee",s,v,name,', PAGE)
 
     def test_one_button_assigns_whatever_the_target_box_holds(self) -> None:
         """The page once had three assign buttons and claimed a typed ID won over
@@ -560,14 +561,14 @@ class PageTest(unittest.TestCase):
         # A picker only fills the fields of the kind already on screen.
         self.assertIn('if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};',
                       wiring)
-        self.assertIn('if(zdv){zhv=zdv;zpv=String(deviceEp(zdv))}', wiring)
+        self.assertIn('if(zdv){zhv=zdv;zpv=String(deviceEp(zdv,zav))}', wiring)
 
     def test_the_one_button_reaches_a_device_and_a_group(self) -> None:
         """Neither picker renders without the bridge lists, so the box is the only
         disconnected route and it has to carry both kinds of target."""
         body = section(PAGE, "function assignTarget(){", "\nfunction ")
-        self.assertIn("sendDevice(ieee,ep||\"1\",name)", body)
-        self.assertIn("sendGroup(g,name)", body)
+        self.assertIn("sendDevice(ieee,ep||\"1\",name,val)", body)
+        self.assertIn("sendGroup(g,name,val)", body)
         # The kind selector already decided, so nothing reads the digit count.
         self.assertIn('if(zkv==="d"){', body)
         # A malformed address is caught here rather than by the remote.
@@ -575,13 +576,13 @@ class PageTest(unittest.TestCase):
         # 0x1201 and 4609 are the same group, so the name lookup reads the value.
         self.assertIn('parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10)', body)
         # The name is re-derived, so an edited box cannot keep the old label.
-        self.assertIn('var name="",i;', body)
+        self.assertIn('var name="",i,val=actionValue();', body)
 
     def test_a_device_target_is_assigned_without_writing_to_the_bridge(self) -> None:
         """The remote unicasts to the device now, so the page sends the IEEE
         address and the endpoint and creates no group. A group per device left
         one behind on every repeat assign."""
-        body = section(PAGE, "function sendDevice(ieee,ep,name){", "\n\nfunction sendGroup(")
+        body = section(PAGE, "function sendDevice(ieee,ep,name,val){", "\n\nfunction sendGroup(")
         self.assertIn('post("set_zigbee_device",s,null,name,', body)
         self.assertIn('"&ieee="+encodeURIComponent(ieee)', body)
         self.assertIn('"&ep="+encodeURIComponent(ep)', body)
@@ -593,16 +594,38 @@ class PageTest(unittest.TestCase):
             self.assertNotIn(gone, PAGE)
         self.assertNotIn("ws.send(", PAGE)
 
-    def test_a_device_target_carries_an_on_off_endpoint(self) -> None:
-        """A groupcast needs no endpoint but a unicast does, and only a device
-        with a genOnOff server can answer the Toggle."""
-        body = section(PAGE, "function onOffEndpoint(d){", "\n\nfunction ")
-        self.assertIn('cl.indexOf("genOnOff")<0', body)
+    def test_a_device_target_carries_the_endpoint_of_its_action(self) -> None:
+        """A groupcast needs no endpoint but a unicast does, and the endpoint that
+        answers depends on the action. A thermostat cluster and an On/Off cluster
+        on one device do not have to share an endpoint."""
+        body = section(PAGE, "function epForCluster(eps,cluster){", "\n\nfunction ")
+        self.assertIn("if(eps[k].indexOf(cluster)<0)continue;", body)
         self.assertIn("if(!best||n<best)best=n", body)
+        pick = section(PAGE, "function deviceEp(ieee,action){", "\n\n")
+        self.assertIn('epForCluster(td[i].eps,A?A.c:"genOnOff")||1', pick)
         # An older bridge publishes no endpoint list, so the picker still works.
-        self.assertIn("if(!eps)return 1;", body)
-        # A device with no On/Off server is dropped from the picker.
-        self.assertIn("if(!ep)continue;", PAGE)
+        self.assertIn("return 1}", pick)
+        # A device that answers none of the actions is dropped from the picker.
+        self.assertIn("if(eps&&!commandable(eps))continue;", PAGE)
+
+    def test_the_action_list_follows_the_clusters_of_the_target(self) -> None:
+        """Zigbee2MQTT publishes the cluster list of every device, so the page can
+        offer only the commands the target accepts. A group accepts what every
+        member accepts, and a typed address describes nothing, so it offers all."""
+        catalogue = section(PAGE, "var ZA=[", "];")
+        for cluster in ("genOnOff", "genLevelCtrl", "lightingColorCtrl", "genScenes",
+                        "closuresWindowCovering", "hvacThermostat", "closuresDoorLock",
+                        "ssIasWd"):
+            self.assertIn(f'c:"{cluster}"', catalogue)
+        offer = section(PAGE, "function zActions(){", "\n\n")
+        self.assertIn("if(!have)return ZA.slice(0);", offer)
+        self.assertIn("if(have[ZA[i].c])out.push(ZA[i]);", offer)
+        # A group only accepts what every member accepts.
+        group = section(PAGE, "function grpClusters(g){", "\n\nfunction ")
+        self.assertIn("if(Object.prototype.hasOwnProperty.call(have,j))keep[j]=true;", group)
+        # An action the target dropped cannot stay selected, or Assign sends it.
+        form = section(PAGE, "function actionForm(dis){", "\n\n")
+        self.assertIn('if(!found){zav=list[0].a;zvv=""}', form)
 
     def test_the_browser_reads_the_group_list_from_zigbee2mqtt(self) -> None:
         """The remote holds no MQTT client, so the picker is filled by this
@@ -636,8 +659,8 @@ class PageTest(unittest.TestCase):
     def test_the_page_reports_a_zigbee_assignment_and_its_target_name(self) -> None:
         """An unnamed group still has to say which group it is."""
         self.assertIn(
-            'if(r.action==="zigbee")return "Zigbee: "'
-            '+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
+            'return "Zigbee "+(A?A.n:"action "+r.act)+": "+\n'
+            '(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
             PAGE,
         )
 

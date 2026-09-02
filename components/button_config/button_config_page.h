@@ -117,6 +117,28 @@ var S=[
 {s:3,l:"SW3",v:1,g:"pad"},{s:6,l:"SW6",v:1,g:"pad"},{s:11,l:"SW11",v:1,g:"pad"},
 {s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
 {s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
+// One press, one Zigbee command. a is the number the remote stores, c is the
+// Zigbee2MQTT input cluster a target must carry to accept it, and p names the
+// value the command needs. The numbers match the Action enum in
+// zigbee_learning.h, so the two tables have to move together.
+var ZA=[
+{a:0,n:"Toggle",c:"genOnOff"},
+{a:1,n:"On",c:"genOnOff"},
+{a:2,n:"Off",c:"genOnOff"},
+{a:3,n:"Brighter",c:"genLevelCtrl",p:"Step size",d:32,lo:1,hi:254},
+{a:4,n:"Dimmer",c:"genLevelCtrl",p:"Step size",d:32,lo:1,hi:254},
+{a:5,n:"Warmer white",c:"lightingColorCtrl",p:"Step in mireds",d:50,lo:1,hi:2000},
+{a:6,n:"Cooler white",c:"lightingColorCtrl",p:"Step in mireds",d:50,lo:1,hi:2000},
+{a:7,n:"Recall scene",c:"genScenes",p:"Scene ID",d:1,lo:0,hi:255},
+{a:8,n:"Open",c:"closuresWindowCovering"},
+{a:9,n:"Close",c:"closuresWindowCovering"},
+{a:10,n:"Stop",c:"closuresWindowCovering"},
+{a:11,n:"Warmer",c:"hvacThermostat",p:"Step in tenths of a degree",d:5,lo:1,hi:127},
+{a:12,n:"Cooler",c:"hvacThermostat",p:"Step in tenths of a degree",d:5,lo:1,hi:127},
+{a:13,n:"Lock",c:"closuresDoorLock"},
+{a:14,n:"Unlock",c:"closuresDoorLock"},
+{a:15,n:"Alarm",c:"ssIasWd",p:"Seconds",d:30,lo:1,hi:600},
+{a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
@@ -129,7 +151,8 @@ var cd="",cdSlot=null;
 // a late bridge/devices message repaints and would otherwise wipe them. A group
 // and a device get one box each, and zkv says which kind is on screen, so only
 // one target can ever be filled in.
-var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="";
+// zav is the chosen action number and zvv the value it carries.
+var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="",zav=0,zvv="";
 // The config card. cfgAll caches one code text per slot, so an export needs no
 // second read of a code the editor already fetched.
 var cfgMode="ex",cfgOut="",cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
@@ -143,7 +166,9 @@ if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
 function codeName(r){return r.name?r.name:"Slot"+r.slot}
 function words(s){var r=row(s);if(!r)return "Unknown";
-if(r.action==="zigbee")return "Zigbee: "+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group));
+if(r.action==="zigbee"){var A=za(r.act);
+return "Zigbee "+(A?A.n:"action "+r.act)+": "+
+(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))}
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
 
@@ -230,20 +255,101 @@ function plural(n,word){return n+" "+word+(n===1?"":"s")}
 
 function byName(a,b){return a.name<b.name?-1:a.name>b.name?1:0}
 
-// The remote sends On/Off only, so a device target needs a genOnOff server. The
-// lowest endpoint wins when a device has more than one. An older bridge that
-// publishes no endpoint list falls back to endpoint 1.
-function onOffEndpoint(d){
-var eps=d.endpoints,best=0,k,n,cl;
-if(!eps)return 1;
+function za(a){var i,n=Number(a)||0;
+for(i=0;i<ZA.length;i++)if(ZA[i].a===n)return ZA[i];return null}
+
+// Reduces the endpoint list Zigbee2MQTT publishes to {endpoint:[cluster]}. An
+// older bridge that publishes no list gets endpoint 1 with no clusters, which
+// reads as unknown rather than as a device that supports nothing.
+function epMap(d){
+var eps=d.endpoints,out={},k,n,cl;
+if(!eps)return null;
 for(k in eps){
 if(!Object.prototype.hasOwnProperty.call(eps,k))continue;
 n=parseInt(k,10);
 if(!(n>=1&&n<=240))continue;
 cl=eps[k]&&eps[k].clusters&&eps[k].clusters.input;
-if(!Array.isArray(cl)||cl.indexOf("genOnOff")<0)continue;
+out[n]=Array.isArray(cl)?cl:[]}
+return out}
+
+// The lowest endpoint that carries the cluster wins, because a device that
+// repeats a cluster gives the same command to every endpoint.
+function epForCluster(eps,cluster){
+var best=0,k,n;
+if(!eps)return 0;
+for(k in eps){
+if(!Object.prototype.hasOwnProperty.call(eps,k))continue;
+n=parseInt(k,10);
+if(eps[k].indexOf(cluster)<0)continue;
 if(!best||n<best)best=n}
 return best}
+
+// Every cluster the device carries on any endpoint. null means the bridge said
+// nothing, so no action can be ruled out.
+function devClusters(eps){
+var out=null,k,i;
+if(!eps)return null;
+out={};
+for(k in eps){
+if(!Object.prototype.hasOwnProperty.call(eps,k))continue;
+for(i=0;i<eps[k].length;i++)out[eps[k][i]]=true}
+return out}
+
+// A group only accepts what every member accepts, so this intersects them. A
+// member the device list does not hold is skipped, and a group with no known
+// member returns null, which offers every action.
+function grpClusters(g){
+var out=null,i,j,d,have,keep;
+if(!td||!g||!g.members)return null;
+for(i=0;i<g.members.length;i++){
+d=null;
+for(j=0;j<td.length;j++)if(td[j].ieee===g.members[i])d=td[j];
+if(!d)continue;
+have=devClusters(d.eps);
+if(!have)continue;
+if(!out){out=have;continue}
+keep={};
+for(j in out)if(Object.prototype.hasOwnProperty.call(have,j))keep[j]=true;
+out=keep}
+return out}
+
+function commandable(eps){
+var have=devClusters(eps),i;
+if(!have)return true;
+for(i=0;i<ZA.length;i++)if(have[ZA[i].c])return true;
+return false}
+
+// The cluster set of whatever the panel currently points at, or null when the
+// bridge published nothing about it.
+function targetClusters(){
+var i,g;
+if(zkv==="d"){
+var a=String(zhv).replace(/^\s+|\s+$/g,"").replace(/^0[xX]/,"").toLowerCase();
+if(!td||!a)return null;
+for(i=0;i<td.length;i++)
+if(td[i].ieee.replace(/^0[xX]/,"").toLowerCase()===a)return devClusters(td[i].eps);
+return null}
+var n=parseInt(zgv,String(zgv).slice(0,2).toLowerCase()==="0x"?16:10);
+if(!tg||!(n>=1))return null;
+for(i=0;i<tg.length;i++)if(tg[i].id===n)g=tg[i];
+return g?grpClusters(g):null}
+
+// A target the bridge never described offers everything, because a typed
+// address is the one route left when this browser cannot reach Zigbee2MQTT.
+function zActions(){
+var have=targetClusters(),out=[],i;
+if(!have)return ZA.slice(0);
+for(i=0;i<ZA.length;i++)if(have[ZA[i].c])out.push(ZA[i]);
+return out.length?out:ZA.slice(0)}
+
+// The endpoint the action needs on the picked device, and 1 when the bridge
+// named none.
+function deviceEp(ieee,action){
+var i,A=za(action),a=String(ieee).replace(/^0[xX]/,"").toLowerCase();
+if(td)for(i=0;i<td.length;i++)
+if(td[i].ieee.replace(/^0[xX]/,"").toLowerCase()===a)
+return epForCluster(td[i].eps,A?A.c:"genOnOff")||1;
+return 1}
 
 function paint(){
 z2mStatus();
@@ -272,8 +378,8 @@ h+="<label class=hd2 for=zn>Target kind</label>"+
 if(zkv==="d"){
 if(td&&td.length){
 h+="<p class=sub>Pick a device to fill the boxes below. The remote sends "+
-"straight to it and Zigbee2MQTT keeps no group for it. Only a device with an "+
-"On/Off cluster is listed.</p>"+
+"straight to it and Zigbee2MQTT keeps no group for it. A device that accepts "+
+"none of the commands below is not listed.</p>"+
 "<select id=zd"+dis+"><option value=''>Select a device</option>";
 for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
 (zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
@@ -300,7 +406,27 @@ h+="<label class=hd2 for=zg>Group ID</label>"+
 "value='"+att(zgv)+"'>"+
 "<p class=sub>Membership lives in the "+
 "light, so a group only works once the light has joined it.</p>"}
+h+=actionForm(dis);
 h+="<div class=act><button type=button id=zi"+dis+">Assign</button></div>";
+return h}
+
+// The target decides the list, so this runs after the picker above it. An
+// action the target dropped cannot stay selected, or Assign would send it.
+function actionForm(dis){
+var list=zActions(),h="",i,found=false;
+for(i=0;i<list.length;i++)if(list[i].a===Number(zav))found=true;
+if(!found){zav=list[0].a;zvv=""}
+h+="<label class=hd2 for=zt>Action</label>"+
+"<select id=zt"+dis+">";
+for(i=0;i<list.length;i++)h+="<option value="+list[i].a+
+(Number(zav)===list[i].a?" selected":"")+">"+esc(list[i].n)+"</option>";
+h+="</select>";
+if(list.length<ZA.length)h+="<p class=sub>Zigbee2MQTT lists the clusters of "+
+"this target, so only the commands it accepts are offered.</p>";
+var A=za(zav);
+if(A&&A.p)h+="<label class=hd2 for=zv>"+esc(A.p)+"</label>"+
+"<input id=zv type=text autocomplete=off placeholder='"+A.d+" when empty' "+
+"value='"+att(zvv)+"'>";
 return h}
 
 // IR owns the code box, because a pasted code and a captured one fill the same
@@ -338,6 +464,8 @@ var out=[];
 for(i=0;i<m.payload.length;i++){
 var g=m.payload[i];
 if(typeof g.id!=="number"||g.id<1||g.id>65527)continue;
+// Only the addresses, because the member list is read to look each device up
+// in the device list and intersect what they all accept.
 var mem=[],j,list=Array.isArray(g.members)?g.members:[];
 for(j=0;j<list.length;j++)if(list[j].ieee_address)mem.push(list[j].ieee_address);
 out.push({id:g.id,name:String(g.friendly_name||g.id),members:mem})}
@@ -349,9 +477,12 @@ var devs=[];
 for(i=0;i<m.payload.length;i++){
 var d=m.payload[i];
 if(!d.ieee_address||d.type==="Coordinator")continue;
-var ep=onOffEndpoint(d);
-if(!ep)continue;
-devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address),ep:ep})}
+var eps=epMap(d);
+// A device the remote can send nothing to is not worth listing. A device
+// the bridge published no endpoints for stays, because that says nothing
+// about what it accepts.
+if(eps&&!commandable(eps))continue;
+devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address),eps:eps})}
 devs.sort(byName);
 done=true;td=devs;zerr="";
 z2mStatus();if(act==="zb")paint();return}};
@@ -425,6 +556,8 @@ var s=S[i].s,r=row(s),e={slot:s,label:S[i].l,action:"none"};
 if(r&&r.action==="zigbee"){e.action="zigbee";
 if(r.ieee){e.kind="device";e.ieee=r.ieee;e.ep=r.ep||1}
 else{e.kind="group";e.group=r.group}
+e.act=r.act||0;
+if(r.val)e.val=r.val;
 if(r.name)e.name=r.name}
 else if(r&&r.action==="voice")e.action="voice";
 else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
@@ -472,7 +605,22 @@ g=parseInt(e.group,10);
 if(!(g>=1&&g<=65527))return "Slot "+e.slot+" has a group outside 1 to 65527."}
 else if(a!=="ir"&&a!=="voice"&&a!=="none")
 return "Slot "+e.slot+" carries the unknown action "+a+".";
+if(a==="zigbee"){
+var A=za(e.act===undefined?0:e.act);
+if(!A)return "Slot "+e.slot+" names the unknown Zigbee action "+e.act+".";
+if(A.p){
+var v=e.val===undefined?A.d:parseInt(e.val,10);
+if(!(v>=A.lo&&v<=A.hi))
+return "Slot "+e.slot+" needs "+A.p.toLowerCase()+" of "+A.lo+" to "+A.hi+"."}
+else if(e.val!==undefined&&parseInt(e.val,10)!==0)
+return "Slot "+e.slot+" gives a value to "+A.n+", which takes none."}
 return ""}
+
+// An action with no value sends 0, and one with a value falls back to its
+// default, so a hand written block can leave the field out.
+function cfgVal(e){var A=za(e.act===undefined?0:e.act);
+if(!A||!A.p)return 0;
+return e.val===undefined?A.d:parseInt(e.val,10)}
 
 // A clear on an input that already holds nothing writes flash for no gain, so it
 // is the one entry an import skips.
@@ -485,9 +633,11 @@ if(e.action==="ir")return post("set_ir_code",e.slot,e.code);
 if(e.action==="zigbee"&&e.kind==="device")
 return post("set_zigbee_device",e.slot,null,e.name||"",
 "&ieee=0x"+cfgHex(e.ieee).toLowerCase()+
-"&ep="+(e.ep===undefined?1:parseInt(e.ep,10)));
+"&ep="+(e.ep===undefined?1:parseInt(e.ep,10))+
+"&act="+(e.act===undefined?0:parseInt(e.act,10))+"&val="+cfgVal(e));
 if(e.action==="zigbee")
-return post("set_zigbee",e.slot,String(parseInt(e.group,10)),e.name||"");
+return post("set_zigbee",e.slot,String(parseInt(e.group,10)),e.name||"",
+"&act="+(e.act===undefined?0:parseInt(e.act,10))+"&val="+cfgVal(e));
 return post("clear",e.slot)}
 
 // One input at a time, because the remote reserves one action at a time and a
@@ -626,11 +776,18 @@ document.getElementById("zn").onchange=function(){zkv=this.value;
 zsv="";zdv="";zgv="";zhv="";zpv="";msg="";bad=false;paint()};
 if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};
 if(ds)ds.onchange=function(){zdv=this.value;
-if(zdv){zhv=zdv;zpv=String(deviceEp(zdv))}paint()};
+if(zdv){zhv=zdv;zpv=String(deviceEp(zdv,zav))}paint()};
 if(gi)gi.oninput=function(){zgv=gi.value};
 if(hi)hi.oninput=function(){zhv=hi.value};
 if(pi)pi.oninput=function(){zpv=pi.value};
 if(gs)gs.onclick=null;
+var ai=document.getElementById("zt"),vi=document.getElementById("zv");
+// The value belongs to the action that asked for it, and the endpoint follows
+// the cluster the new action needs.
+if(ai)ai.onchange=function(){zav=parseInt(this.value,10);zvv="";
+if(zkv==="d"&&zhv)zpv=String(deviceEp(zhv,zav));
+msg="";bad=false;paint()};
+if(vi)vi.oninput=function(){zvv=vi.value};
 document.getElementById("zi").onclick=assignTarget}
 if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
 if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
@@ -647,6 +804,8 @@ if(mode!=="rec"){msg="";bad=false}
 // follow the selection to the next one.
 act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";
 var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
+zav=(pr&&pr.action==="zigbee")?(pr.act||0):0;
+zvv=(pr&&pr.action==="zigbee"&&pr.val)?String(pr.val):"";
 paint();
 if(cdSlot!==s)loadCode(s)}
 
@@ -683,16 +842,24 @@ else{msg=a==="set_ir_code"?"The remote refused that code.":
 return load().then(function(){paint();return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
-function deviceEp(ieee){
-var i;
-if(td)for(i=0;i<td.length;i++)if(td[i].ieee===ieee)return td[i].ep;
-return 1}
-
 // The kind selector already said which target this is, so nothing here has to
 // infer it from the format. The name is looked up fresh rather than remembered,
 // so an edited box cannot keep a label from the target it replaced.
+// Empty means the placeholder, so the value the box shows is the value sent.
+// The remote bounds it again, because an import never passes through here.
+function actionValue(){
+var A=za(zav);
+if(!A)return null;
+if(!A.p)return "0";
+var raw=String(zvv).replace(/^\s+|\s+$/g,"");
+var n=raw===""?A.d:parseInt(raw,10);
+if(!(n>=A.lo&&n<=A.hi)){
+msg=A.p+" is "+A.lo+" to "+A.hi+".";bad=true;paint();return null}
+return String(n)}
+
 function assignTarget(){
-var name="",i;
+var name="",i,val=actionValue();
+if(val===null)return;
 if(zkv==="d"){
 var a=zhv.replace(/^\s+|\s+$/g,""),hex=a.replace(/^0[xX]/,"");
 if(!a){msg="Pick a device, or type an IEEE address.";bad=true;paint();return}
@@ -700,38 +867,42 @@ if(!/^[0-9a-fA-F]{16}$/.test(hex)){
 msg="An IEEE address is 16 hex digits.";bad=true;paint();return}
 var ieee="0x"+hex.toLowerCase(),ep=zpv.replace(/^\s+|\s+$/g,"");
 if(td)for(i=0;i<td.length;i++)if(td[i].ieee.toLowerCase()===ieee){
-name=td[i].name;if(!ep)ep=String(td[i].ep)}
-sendDevice(ieee,ep||"1",name);
+name=td[i].name;if(!ep)ep=String(deviceEp(ieee,zav))}
+sendDevice(ieee,ep||"1",name,val);
 return}
 var g=zgv.replace(/^\s+|\s+$/g,"");
 if(!g){msg="Pick a group, or type a group ID.";bad=true;paint();return}
 var n=parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10);
 if(tg)for(i=0;i<tg.length;i++)if(tg[i].id===n)name=tg[i].name;
-sendGroup(g,name)}
+sendGroup(g,name,val)}
 
 // The picker and the typed box both land here, so one path builds the request.
-function sendDevice(ieee,ep,name){
+function sendDevice(ieee,ep,name,val){
 var s=sel;
 zbusy=true;paint();
 post("set_zigbee_device",s,null,name,
-"&ieee="+encodeURIComponent(ieee)+"&ep="+encodeURIComponent(ep))
+"&ieee="+encodeURIComponent(ieee)+"&ep="+encodeURIComponent(ep)+
+"&act="+Number(zav)+"&val="+encodeURIComponent(val))
 .then(function(r){
 zbusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
-if(ok){msg="Assigned to "+(name?name:ieee)+".";bad=false}
+var A=za(zav);
+if(ok){msg=(A?A.n:"That action")+" assigned to "+(name?name:ieee)+".";bad=false}
 else{msg="The remote could not store that device.";bad=true}
 return load().then(paint)})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
-function sendGroup(v,name){
+function sendGroup(v,name,val){
 var s=sel;
 zbusy=true;paint();
-post("set_zigbee",s,v,name).then(function(r){
+post("set_zigbee",s,v,name,"&act="+Number(zav)+"&val="+encodeURIComponent(val))
+.then(function(r){
 zbusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
-if(ok){msg="Assigned to the Zigbee group.";bad=false}
+var A=za(zav);
+if(ok){msg=(A?A.n:"That action")+" assigned to the Zigbee group.";bad=false}
 else{msg="The remote could not store that group.";bad=true}
 return load().then(paint)})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}

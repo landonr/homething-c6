@@ -48,8 +48,8 @@ const STATE = {
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
     {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
-    {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, name: ""},
-    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, name: "Office Lamp"},
+    {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: ""},
+    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, act: 0, val: 0, name: "Office Lamp"},
   ],
 };
 
@@ -98,7 +98,8 @@ setTimeout(() => {
     {id: 1, name: "all_light", members: ["0xaaa", "0xbbb"]},
     {id: 9, name: "c6 Office Lamp", members: ["0x94deb8fffe9db81e"]},
   ];
-  global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp", ep: 1}];
+  global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp",
+                eps: {1: ["genOnOff", "genLevelCtrl"], 3: ["hvacThermostat"]}}];
   global.sel = 20;
 
   step("paint with both lists", () => paint());
@@ -134,15 +135,41 @@ setTimeout(() => {
     sw.onchange.call(sw);
     if (act !== "zb") throw new Error("act did not follow the selector");
   });
-  step("onOffEndpoint picks the lowest On/Off endpoint", () => {
-    if (onOffEndpoint({endpoints: {}}) !== 0) throw new Error("a device with no On/Off must be dropped");
-    if (onOffEndpoint({}) !== 1) throw new Error("a missing endpoint list must fall back to 1");
+  step("the endpoint follows the cluster the action needs", () => {
     const d = {endpoints: {
       "3": {clusters: {input: ["genOnOff"]}},
       "1": {clusters: {input: ["genBasic"]}},
-      "2": {clusters: {input: ["genOnOff"]}},
+      "2": {clusters: {input: ["genOnOff", "hvacThermostat"]}},
     }};
-    if (onOffEndpoint(d) !== 2) throw new Error("expected endpoint 2, got " + onOffEndpoint(d));
+    const eps = epMap(d);
+    if (epMap({}) !== null) throw new Error("a missing endpoint list must read as unknown");
+    if (epForCluster(eps, "genOnOff") !== 2) throw new Error("expected 2, got " + epForCluster(eps, "genOnOff"));
+    if (epForCluster(eps, "hvacThermostat") !== 2) throw new Error("the thermostat endpoint was missed");
+    if (epForCluster(eps, "genScenes") !== 0) throw new Error("a cluster the device lacks returned an endpoint");
+    if (commandable(epMap({endpoints: {"1": {clusters: {input: ["genBasic"]}}}})))
+      throw new Error("a device that answers nothing stayed in the list");
+    if (!commandable(eps)) throw new Error("a light was dropped from the list");
+    // The picked device carries genLevelCtrl on 1 and hvacThermostat on 3.
+    if (deviceEp("0x94deb8fffe9db81e", 3) !== 1) throw new Error("Brighter left endpoint 1");
+    if (deviceEp("0x94deb8fffe9db81e", 11) !== 3) throw new Error("Warmer did not follow the thermostat");
+    if (deviceEp("0xdeadbeefdeadbeef", 0) !== 1) throw new Error("an unknown device must fall back to 1");
+  });
+  step("the action list is the intersection of what the target accepts", () => {
+    global.zkv = "d";
+    global.zhv = "0x94deb8fffe9db81e";
+    const names = zActions().map((x) => x.n).join(",");
+    if (names.indexOf("Brighter") < 0) throw new Error("a dimmable light lost Brighter: " + names);
+    if (names.indexOf("Recall scene") >= 0) throw new Error("a device with no scenes was offered one: " + names);
+    global.zhv = "";
+    if (zActions().length !== ZA.length) throw new Error("a typed address must offer every action");
+    global.zkv = "g";
+    global.zgv = "9";
+    const grp = zActions().map((x) => x.n).join(",");
+    if (grp.indexOf("Brighter") < 0) throw new Error("the group lost its member's actions: " + grp);
+    global.zgv = "1";
+    if (zActions().length !== ZA.length)
+      throw new Error("a group with no known member must offer every action");
+    global.zgv = "";
   });
   step("the one button posts the address and endpoint, writing nothing to the bridge", () => {
     let body = null, sent = 0;
@@ -153,6 +180,8 @@ setTimeout(() => {
     global.zkv = "d";
     global.zhv = "0x94deb8fffe9db81e";
     global.zpv = "1";
+    global.zav = 0;
+    global.zvv = "";
     assignTarget();
     global.fetch = realFetch;
     if (sent !== 0) throw new Error("the page wrote to Zigbee2MQTT");
@@ -208,6 +237,72 @@ setTimeout(() => {
     gs.onchange.call(gs);
     if (zgv !== "9") throw new Error("the group did not fill its box: " + zgv);
     if (document.getElementById("zh")) throw new Error("the address box showed on the group kind");
+  });
+
+  step("the action and its value ride along with the target", () => {
+    let body = null;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
+    global.sel = 20;
+    global.zkv = "d";
+    global.zhv = "0x94deb8fffe9db81e";
+    global.zpv = "";
+    global.zav = 3;   // Brighter
+    global.zvv = "48";
+    assignTarget();
+    if (body.indexOf("act=3") < 0 || body.indexOf("val=48") < 0)
+      throw new Error("the action did not reach the remote: " + body);
+    // An empty box means the placeholder the panel showed.
+    global.zvv = "";
+    assignTarget();
+    if (body.indexOf("val=32") < 0) throw new Error("the default value was not sent: " + body);
+    // An action that takes no value sends none.
+    global.zav = 0;
+    assignTarget();
+    if (body.indexOf("act=0&val=0") < 0) throw new Error("Toggle sent a value: " + body);
+    global.zkv = "g";
+    global.zgv = "4609";
+    global.zav = 11;  // Warmer
+    global.zvv = "5";
+    assignTarget();
+    if (body.indexOf("action=set_zigbee&") < 0 || body.indexOf("act=11") < 0)
+      throw new Error("a group assign lost its action: " + body);
+    global.fetch = realFetch;
+  });
+  step("a value outside the range of its action never reaches the remote", () => {
+    let calls = 0;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { calls++; return realFetch(u, o); };
+    global.zkv = "d";
+    global.zhv = "0x94deb8fffe9db81e";
+    global.zav = 3;
+    global.zvv = "900";
+    assignTarget();
+    global.fetch = realFetch;
+    if (calls !== 0) throw new Error("a step of 900 was still sent");
+    if (!bad || msg.indexOf("1 to 254") < 0) throw new Error("no clear refusal: " + msg);
+    global.zav = 0;
+    global.zvv = "";
+  });
+  step("the action selector rewires the endpoint and clears the old value", () => {
+    global.sel = 20;
+    global.act = "zb";
+    global.zkv = "d";
+    global.zhv = "0x94deb8fffe9db81e";
+    global.zav = 3;
+    global.zvv = "48";
+    paint();
+    const sw = document.getElementById("zt");
+    if (!sw) throw new Error("no action selector");
+    if (!document.getElementById("zv")) throw new Error("Brighter showed no value box");
+    sw.value = "11";  // Warmer, which lives on another endpoint of this device.
+    sw.onchange.call(sw);
+    if (zav !== 11) throw new Error("the action did not follow the selector: " + zav);
+    if (zvv !== "") throw new Error("the old value survived the switch: " + zvv);
+    if (zpv !== "3") throw new Error("the endpoint did not follow the cluster: " + zpv);
+    global.zav = 0;
+    global.zvv = "";
+    global.zpv = "";
   });
 
   step("a hidden field cannot be assigned", () => {

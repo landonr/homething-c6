@@ -105,10 +105,10 @@ class ProductionConfigTest(unittest.TestCase):
             r"effect: Status Indicators[\s\S]*?"
             r"voice_assistant\.start:",
         )
-        release = config.split("on_release: &assignable_release", 1)[1].split("- platform:", 1)[0]
+        release = config.split("  - id: release_assignment", 1)[1].split("  - id: detect_receiver_hold", 1)[0]
         self.assertRegex(
             release,
-            r"lambda: return ir_ui\.release\(\);[\s\S]*?voice_assistant\.stop:",
+            r"lambda: return ir_ui\.release\(static_cast<uint8_t>\(slot\)\);[\s\S]*?voice_assistant\.stop:",
         )
 
     def test_voice_state_reaches_the_top_leds_and_cleans_up(self) -> None:

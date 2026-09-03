@@ -1,10 +1,10 @@
 #include "button_config.h"
-#include "button_config_page.h"
 
 #include "esphome/core/log.h"
 
 #include "ir_learning.h"
 #include "zigbee_learning.h"
+#include "esphome/components/ble_hid/ble_hid.h"
 
 #include <algorithm>
 #include <cctype>
@@ -158,6 +158,41 @@ static bool parse_param(const std::string &text, int16_t &param) {
     return false;
   param = static_cast<int16_t>(value);
   return true;
+}
+
+static bool parse_hid_kind(const std::string &text, esphome::ble_hid::BleHid::Kind &kind) {
+  if (text == "keyboard")
+    kind = esphome::ble_hid::BleHid::KEYBOARD;
+  else if (text == "consumer")
+    kind = esphome::ble_hid::BleHid::CONSUMER;
+  else if (text == "gamepad_button")
+    kind = esphome::ble_hid::BleHid::GAMEPAD_BUTTON;
+  else if (text == "gamepad_dpad")
+    kind = esphome::ble_hid::BleHid::GAMEPAD_DPAD;
+  else
+    return false;
+  return true;
+}
+
+static bool parse_hid_number(const std::string &text, uint16_t max, uint16_t &value) {
+  if (text.empty() || text.size() > 6)
+    return false;
+  char *end = nullptr;
+  const unsigned long parsed = std::strtoul(text.c_str(), &end, 0);
+  if (end == text.c_str() || *end != '\0' || parsed > max)
+    return false;
+  value = static_cast<uint16_t>(parsed);
+  return true;
+}
+
+static const char *hid_kind_name(esphome::ble_hid::BleHid::Kind kind) {
+  switch (kind) {
+    case esphome::ble_hid::BleHid::KEYBOARD: return "keyboard";
+    case esphome::ble_hid::BleHid::CONSUMER: return "consumer";
+    case esphome::ble_hid::BleHid::GAMEPAD_BUTTON: return "gamepad_button";
+    case esphome::ble_hid::BleHid::GAMEPAD_DPAD: return "gamepad_dpad";
+    default: return "none";
+  }
 }
 
 // Endpoint 0 is the ZDO and 0xF1 and above are reserved.
@@ -365,7 +400,10 @@ void ButtonConfig::handleRequest(AsyncWebServerRequest *request) {
 }
 
 void ButtonConfig::handle_page_(AsyncWebServerRequest *request) {
-  request->send(200, "text/html; charset=utf-8", PAGE_HTML);
+  AsyncWebServerResponse *response =
+      request->beginResponse(200, "text/html; charset=utf-8", this->page_, this->page_size_);
+  response->addHeader("Content-Encoding", "gzip");
+  request->send(response);
 }
 
 // Reads only, so it runs on the httpd task without a defer.
@@ -379,15 +417,22 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"slots":[)",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
-      static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false");
+      static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->connected() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->bonded() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->pairing() ? "true" : "false");
+  print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name().c_str());
+  stream->print(R"("},"slots":[)");
   bool first = true;
   for (const auto &info : SLOTS) {
     const auto zigbee = ::zigbee_assignments.assignment(info.slot);
-    const char *action = zigbee.assigned                      ? "zigbee"
+    const auto hid = esphome::ble_hid::BleHid::instance()->assignment(info.slot);
+    const char *action = hid.assigned                           ? "hid"
+                         : zigbee.assigned                      ? "zigbee"
                          : ::ir_code_store.is_voice(info.slot)  ? "voice"
                          : ::ir_code_store.has_code(info.slot) ? "ir"
                                                                : "none";
@@ -412,13 +457,14 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
                     static_cast<unsigned long long>(value));
     }
     stream->printf(
-        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":")",
+        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":")",
         first ? "" : ",", static_cast<unsigned>(info.slot), action,
         static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
         static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields,
         static_cast<unsigned>(zigbee.group_id), ieee_text,
         static_cast<unsigned>(zigbee.endpoint), static_cast<unsigned>(zigbee.action),
-        static_cast<int>(zigbee.param));
+        static_cast<int>(zigbee.param), hid_kind_name(hid.kind), static_cast<unsigned>(hid.usage),
+        static_cast<unsigned>(hid.modifiers));
     print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
     stream->print("\"}");
     first = false;
@@ -485,14 +531,15 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
 
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
-                     action == "clear";
+                     action == "set_hid" || action == "forget_ble" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
   }
 
-  const SlotInfo *info = parse_slot(request->arg("slot"));
-  if (info == nullptr) {
+  const bool needs_slot = action != "forget_ble";
+  const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
+  if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
     return;
   }
@@ -550,6 +597,28 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     }
   }
 
+  esphome::ble_hid::BleHid::Kind hid_kind = esphome::ble_hid::BleHid::NONE;
+  uint16_t hid_usage = 0;
+  uint16_t hid_mod = 0;
+  if (action == "set_hid") {
+    if (!parse_hid_kind(request->arg("kind"), hid_kind) ||
+        !parse_hid_number(request->arg("usage"), 0x03FF, hid_usage) ||
+        !parse_hid_number(request->arg("mod"), 0x00FF, hid_mod)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid HID assignment"})");
+      return;
+    }
+    const bool valid = (hid_kind == esphome::ble_hid::BleHid::KEYBOARD && hid_usage <= 0xE7 &&
+                        (hid_usage != 0 || hid_mod != 0)) ||
+                       (hid_kind == esphome::ble_hid::BleHid::CONSUMER && hid_usage > 0 && hid_mod == 0) ||
+                       (hid_kind == esphome::ble_hid::BleHid::GAMEPAD_BUTTON && hid_usage >= 1 &&
+                        hid_usage <= 16 && hid_mod == 0) ||
+                       (hid_kind == esphome::ble_hid::BleHid::GAMEPAD_DPAD && hid_usage <= 7 && hid_mod == 0);
+    if (!valid) {
+      request->send(400, "application/json", R"({"ok":false,"error":"HID value is outside its range"})");
+      return;
+    }
+  }
+
   bool expected = false;
   if (::ir_ui.state != IrUi::OFF ||
       !this->action_pending_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -562,7 +631,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
-  const uint8_t button = info->slot;
+  const uint8_t button = info == nullptr ? 0 : info->slot;
   const uint32_t action_id = this->next_action_id_.fetch_add(1, std::memory_order_relaxed) + 1;
   if (action == "record_ir") {
     this->defer([this, button, action_id]() {
@@ -594,12 +663,24 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
                              ::zigbee_assignments.assign_device_from_web(
                                  button, target.ieee, endpoint, zb_action, zb_param, target_name));
     });
+  } else if (action == "set_hid") {
+    this->defer([this, button, action_id, hid_kind, hid_usage, hid_mod]() {
+      this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->assign(
+                                            button, hid_kind, hid_usage, static_cast<uint8_t>(hid_mod)));
+    });
+  } else if (action == "forget_ble") {
+    this->defer([this, action_id]() {
+      this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond());
+    });
   } else {
     this->defer([this, button, action_id]() {
       this->complete_action_(action_id, ::ir_code_store.clear(button));
     });
   }
-  ESP_LOGI(TAG, "Web action %s on slot %u", action.c_str(), static_cast<unsigned>(button));
+  if (needs_slot)
+    ESP_LOGI(TAG, "Web action %s on slot %u", action.c_str(), static_cast<unsigned>(button));
+  else
+    ESP_LOGI(TAG, "Web action %s", action.c_str());
   char response[32];
   std::snprintf(response, sizeof(response), R"({"ok":true,"id":%u})", static_cast<unsigned>(action_id));
   request->send(200, "application/json", response);

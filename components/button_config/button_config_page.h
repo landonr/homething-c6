@@ -52,7 +52,13 @@ textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
 padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-.sep{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+header.full .sub{margin:0}
+.grp:last-child{margin:0}
+.conn{display:grid;gap:16px;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.conn>div+div{border-left:1px solid var(--line);padding-left:16px}
+@media (max-width:720px){.conn{grid-template-columns:1fr}
+.conn>div+div{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:14px}}
+.conn .act{margin-bottom:0}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 .code .load{color:var(--mut);font-size:13px;margin:8px 0 0}
@@ -62,7 +68,6 @@ h3{font-size:15px;margin:14px 0 8px}
 h2>button.tog{background:none;border:0;padding:0;margin:0;width:100%;cursor:pointer;
 display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
 h2>button.tog span{color:var(--acc);font-size:13px;font-weight:400}
-h2>button.tog span#cxz{color:var(--mut);margin:0 auto 0 12px}
 select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
@@ -96,18 +101,33 @@ animation:sweep 1.4s ease-in-out infinite}
 </head>
 <body>
 <div class="wrap">
-<section class="card">
+<header class="full">
 <h1>Remote buttons</h1>
 <p class="sub">Select an input to see or change what it does.</p>
+</header>
+<section class="card full conn">
+<div id="zbcfg">
+<h2>Zigbee2MQTT</h2>
+<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
+<div id="z2m"></div>
+</div>
+<div id="blecfg">
+<h2>Bluetooth</h2>
+<p class="sub st" id="bst">BLE HID status is loading.</p>
+<p class="sub">Forget the saved host before you pair this remote with a different host.</p>
+<div class="act"><button type="button" class="sec" id="bfr" hidden>Forget Bluetooth host</button></div>
+</div>
+</section>
+<section class="card">
 <div class="grp"><p>Top</p><div class="row" id="top"></div></div>
 <div class="grp"><p>Wheel</p><div class="plus" id="plus"></div></div>
 <div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
 </section>
 <section class="card" id="ed" aria-live="polite"></section>
 <section class="card full" id="cfg">
-<h2><button type="button" class="tog" id="cxo" aria-expanded="false">Config<span
-id="cxz"></span><span id="cxs">Show</span></button></h2>
-<div id="cfgb" hidden><div id="z2m"></div><div class="sep" id="cfgio"></div></div>
+<h2><button type="button" class="tog" id="cxo" aria-expanded="false">Import and export<span
+id="cxs">Show</span></button></h2>
+<div id="cfgb" hidden><div id="cfgio"></div></div>
 </section>
 </div>
 <script>
@@ -146,6 +166,7 @@ var ZA=[
 {a:15,n:"Alarm",c:"ssIasWd",p:"Seconds",d:30,lo:1,hi:600},
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
+var bleTimer=0,bleBusy=false,bleForgetBusy=false,bleError="";
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
@@ -160,11 +181,11 @@ var cd="",cdSlot=null,codeLoad=0;
 // one target can ever be filled in.
 // zav is the chosen action number and zvv the value it carries.
 var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="",zav=0,zvv="";
-// The config card. cfgAll caches one code text per slot, so an export needs no
-// second read of a code the editor already fetched.
-var cfgMode="ex",cfgOut="",cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
-// Closed on arrival, because an export reads the code of every IR input and
-// most visits change one input instead.
+var hkv="keyboard",huv="",hmv="0",hcust=false;
+// The config card. cfgAll caches one code text per slot, so a remote read needs
+// no second read of a code the editor already fetched.
+var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
+// Closed on arrival, because most visits change one input instead.
 var cfgOpen=false;
 // clip holds one selected IR or Zigbee assignment in this browser only. It
 // cannot include Voice or Clear, because those are actions and not configs.
@@ -180,7 +201,48 @@ if(r.action==="zigbee"){var A=za(r.act);
 return "Zigbee "+(A?A.n:"action "+r.act)+": "+
 (r.name?r.name:(r.ieee?r.ieee:"group "+r.group))}
 if(r.action==="voice")return "Voice assistant";
+if(r.action==="hid")return "BLE HID: "+hidWords(r.hid_kind,r.hid_usage,r.hid_mod);
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
+
+// The named usages the two paged reports send most often. The Usage box stays
+// for everything else, because the page cannot carry the full HID tables.
+var KB=null;
+var CN=[["0x00CD","Play/Pause"],["0x00B0","Play"],["0x00B1","Pause"],
+["0x00B7","Stop"],["0x00B5","Next track"],["0x00B6","Previous track"],
+["0x00B3","Fast forward"],["0x00B4","Rewind"],["0x00E9","Volume up"],
+["0x00EA","Volume down"],["0x00E2","Mute"],["0x009C","Channel up"],
+["0x009D","Channel down"],["0x0030","Power"],["0x0040","Menu"],
+["0x0223","Home"],["0x0224","Back"],["0x0221","Search"],
+["0x006F","Brightness up"],["0x0070","Brightness down"]];
+function hx(n){return "0x"+(n<16?"0":"")+n.toString(16).toUpperCase()}
+function kbList(){if(KB)return KB;
+KB=[["0x28","Enter"],["0x29","Escape"],["0x2A","Backspace"],["0x2B","Tab"],
+["0x2C","Space"],["0x52","Arrow up"],["0x51","Arrow down"],["0x50","Arrow left"],
+["0x4F","Arrow right"],["0x4A","Home"],["0x4D","End"],["0x4B","Page up"],
+["0x4E","Page down"],["0x4C","Delete"]];
+var i;
+for(i=0;i<26;i++)KB.push([hx(4+i),String.fromCharCode(65+i)]);
+for(i=1;i<=9;i++)KB.push([hx(29+i),String(i)]);
+KB.push([hx(39),"0"]);
+for(i=1;i<=12;i++)KB.push([hx(57+i),"F"+i]);
+// A keyboard report can carry a modifier alone, so the list needs an empty key.
+KB.push(["0x00","No key, modifiers only"]);
+return KB}
+function hidList(k){return k==="keyboard"?kbList():k==="consumer"?CN:null}
+function hidName(k,u){var L=hidList(k),i;if(!L)return "";
+for(i=0;i<L.length;i++)if(parseInt(L[i][0],16)===Number(u))return L[i][1];return ""}
+// A stored usage that no list names has to reopen the box it was typed in.
+function hidCustom(k,u){var s=String(u===undefined?"":u);
+return s!==""&&!!hidList(k)&&!hidName(k,parseInt(s,0))}
+
+function hidWords(kind,usage,mod){
+var n=hidName(kind,usage);
+if(kind==="keyboard")return Number(usage)?"keyboard "+(n?n:"usage "+usage)+(mod?", modifiers "+mod:""):
+"keyboard modifiers "+mod;
+if(kind==="consumer")return n?"media "+n:"consumer usage "+usage;
+if(kind==="gamepad_button")return "gamepad button "+usage;
+if(kind==="gamepad_dpad")return "D-pad "+["up","up-right","right","down-right","down","down-left","left","up-left"][usage];
+return "unknown"}
 
 function ms(u){return (u/1000).toFixed(1)+" ms"}
 
@@ -203,7 +265,8 @@ var b=document.createElement("button");
 b.type="button";b.className="k"+(d.c?" "+d.c:"");b.setAttribute("aria-pressed","false");
 b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
-keys[d.s]=b;document.getElementById(d.g).appendChild(b)}}
+keys[d.s]=b;document.getElementById(d.g).appendChild(b)}
+document.getElementById("bfr").onclick=forgetBle}
 
 // Built once. A repaint only rewrites the status line, because rebuilding the
 // inputs would discard an address that is still being typed.
@@ -215,14 +278,13 @@ try{u=localStorage.getItem("c6.z2m.url")||"";k=localStorage.getItem("c6.z2m.toke
 // that one click connects, but a guess must not report itself as a failure.
 var saved=!!u;
 if(!u)u=Z2MDEF;
-e.innerHTML="<p class=hd>Zigbee2MQTT</p>"+
-"<p class=sub>This browser reads the group list from the bridge. The address "+
+e.innerHTML="<p class=sub>This browser reads the group list from the bridge. The address "+
 "and the token stay in this browser and never reach the remote.</p>"+
 "<div class=fields>"+
 "<input id=zu type=search autocomplete=off placeholder='"+Z2MDEF+"'>"+
 "<input id=zk type=text autocomplete=off placeholder='Frontend token, if set'>"+
 "<button type=button id=zc>Connect</button></div>"+
-"<p class='sub st' id=zst></p>"+"<p class='sub st' id=zhp></p>";
+"<p class='sub st' id=zhp></p>";
 document.getElementById("zu").value=u;
 document.getElementById("zk").value=k;
 document.getElementById("zc").onclick=z2mSave;
@@ -236,15 +298,9 @@ function z2mUp(){return !!(tg||td)}
 function z2mCounts(){return plural(tg?tg.length:0,"group")+", "+
 plural(td?td.length:0,"device")}
 
-function z2mTitle(){
-var e=document.getElementById("cxz");
-if(!e)return;
-if(z2mUp()){e.innerHTML="<span class=dot></span>Zigbee2MQTT: "+z2mCounts();return}
-e.innerHTML="<span class='dot "+(zerr?"bad":"off")+"'></span>Zigbee2MQTT "+
-(zerr?"unreachable":"not connected")}
-
+// One line under the heading carries the whole link state, because the card
+// holds the connection and nothing else reports it.
 function z2mStatus(){
-z2mTitle();
 var b=document.getElementById("zc");
 if(b)b.textContent=z2mUp()?"Disconnect":"Connect";
 // The Home Assistant add-on serves the frontend through Ingress, which no
@@ -254,12 +310,13 @@ if(h)h.textContent=z2mUp()?"":
 "Home Assistant add-on: open Settings, Add-ons, Zigbee2MQTT, Configuration, "+
 "Network, and set the host port for 8099/tcp to 8099. Then use "+
 "ws://<home-assistant-host>:8099/api.";
-var e=document.getElementById("zst");
+var e=document.getElementById("zsum");
 if(!e)return;
 e.className="sub st"+(zerr?" bad":"");
-if(zerr){e.textContent=zerr;return}
-if(!z2mUp()){e.textContent="Not connected. A group ID can still be typed by hand.";return}
-e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+"."}
+if(z2mUp()){e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+".";return}
+if(zerr){e.innerHTML="<span class='dot bad'></span>"+esc(zerr);return}
+e.innerHTML="<span class='dot off'></span>Not connected. A group ID can still be "+
+"typed by hand."}
 
 function plural(n,word){return n+" "+word+(n===1?"":"s")}
 
@@ -361,8 +418,37 @@ if(td[i].ieee.replace(/^0[xX]/,"").toLowerCase()===a)
 return epForCluster(td[i].eps,A?A.c:"genOnOff")||1;
 return 1}
 
+function bleStatus(){
+var be=document.getElementById("bst"),bf=document.getElementById("bfr");
+if(be&&st&&st.ble){be.innerHTML="<span class='dot "+(st.ble.connected?"":"off")+
+"'></span>BLE HID: "+(st.ble.connected?(st.ble.host?"connected to "+esc(st.ble.host):
+"connected"):st.ble.pairing?"pairing":
+st.ble.bonded?"bonded, waiting for host":"ready to pair")+
+(bleError?". "+bleError:"")}
+if(bf&&st&&st.ble){bf.hidden=!st.ble.bonded;bf.disabled=bleForgetBusy;
+bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth host"}}
+
+function forgetBle(){
+if(bleForgetBusy)return;
+bleForgetBusy=true;bleError="";bleStatus();
+post("forget_ble").then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not forget the host.")})})
+.then(function(){bleForgetBusy=false;bleRefresh()},function(e){
+bleForgetBusy=false;bleError=e&&e.message?e.message:"The remote did not answer.";bleStatus()})}
+
+function bleRefresh(){
+if(bleBusy)return;
+bleBusy=true;
+fetch("/buttons/api/state",{cache:"no-store"})
+.then(function(r){return r.json()})
+.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;bleStatus()}},function(){})
+.then(function(){bleBusy=false},function(){bleBusy=false})}
+
+function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}
+
 function paint(){
-z2mStatus();
+z2mStatus();bleStatus();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -394,8 +480,8 @@ h+="<p class=sub>Pick a device to fill the boxes below. The remote sends "+
 for(i=0;i<td.length;i++)h+="<option value='"+att(td[i].ieee)+"'"+
 (zdv===td[i].ieee?" selected":"")+">"+esc(td[i].name)+"</option>";
 h+="</select>"}
-else h+="<p class=sub>No device list. Connect to Zigbee2MQTT in the Config card "+
-"at the bottom of the page, or type an address below.</p>";
+else h+="<p class=sub>No device list. Connect to Zigbee2MQTT in the card at the "+
+"top of the page, or type an address below.</p>";
 h+="<label class=hd2 for=zh>IEEE address</label>"+
 "<input id=zh type=text autocomplete=off placeholder='0x94deb8fffe9db81e' "+
 "value='"+att(zhv)+"'>"+
@@ -409,8 +495,8 @@ h+="<p class=sub>Pick a group to fill the box below.</p>"+
 for(i=0;i<tg.length;i++)h+="<option value='"+att(String(tg[i].id))+"'"+
 (zsv===String(tg[i].id)?" selected":"")+">"+esc(tg[i].name)+"</option>";
 h+="</select>"}
-else h+="<p class=sub>No group list. Connect to Zigbee2MQTT in the Config card "+
-"at the bottom of the page, or type an ID below.</p>";
+else h+="<p class=sub>No group list. Connect to Zigbee2MQTT in the card at the "+
+"top of the page, or type an ID below.</p>";
 h+="<label class=hd2 for=zg>Group ID</label>"+
 "<input id=zg type=text autocomplete=off placeholder='0x1201 or 4609' "+
 "value='"+att(zgv)+"'>"+
@@ -451,6 +537,36 @@ function vaPanel(lock){
 return "<p class=sub>The press starts Assist and the release ends it.</p>"+
 "<div class=act><button type=button id=b2"+(lock?" disabled":"")+
 ">Assign voice assistant</button></div>"}
+
+function hidPanel(lock){
+var dis=lock?" disabled":"";
+var names=["Up","Up-right","Right","Down-right","Down","Down-left","Left","Up-left"];
+var h="<p class=sub>Send one encrypted keyboard, media, or gamepad report.</p>"+
+"<label class=hd2 for=hk>Report</label><select id=hk"+dis+">"+
+"<option value=keyboard"+(hkv==="keyboard"?" selected":"")+">Keyboard</option>"+
+"<option value=consumer"+(hkv==="consumer"?" selected":"")+">Consumer and media</option>"+
+"<option value=gamepad_button"+(hkv==="gamepad_button"?" selected":"")+">Gamepad button</option>"+
+"<option value=gamepad_dpad"+(hkv==="gamepad_dpad"?" selected":"")+">Gamepad D-pad</option></select>";
+if(hkv==="gamepad_dpad"){
+h+="<label class=hd2 for=hu>Direction</label><select id=hu"+dis+">";
+for(var i=0;i<names.length;i++)h+="<option value="+i+(String(i)===String(huv)?" selected":"")+">"+names[i]+"</option>";
+h+="</select>"}
+else if(hidList(hkv)){
+var L=hidList(hkv),sl="",j;
+if(!hcust)for(j=0;j<L.length;j++)if(parseInt(L[j][0],16)===parseInt(huv,0)){sl=L[j][0];break}
+h+="<label class=hd2 for=hp>"+(hkv==="keyboard"?"Key":"Media key")+"</label><select id=hp"+dis+">"+
+"<option value=''"+(sl||hcust?"":" selected")+">Choose one</option>";
+for(j=0;j<L.length;j++)h+="<option value="+L[j][0]+(L[j][0]===sl?" selected":"")+">"+L[j][1]+"</option>";
+h+="<option value=custom"+(hcust?" selected":"")+">Custom usage</option></select>";
+if(hcust)h+="<label class=hd2 for=hu>Usage</label><input id=hu type=text autocomplete=off "+
+"placeholder='"+(hkv==="keyboard"?"0x04 for A":"0x00CD for Play/Pause")+"' value='"+att(huv)+"'>"}
+else h+="<label class=hd2 for=hu>Usage</label><input id=hu type=text autocomplete=off "+
+"placeholder='1 to 16' value='"+att(huv)+"'>";
+if(hkv==="keyboard")h+="<label class=hd2 for=hm>Modifier mask</label>"+
+"<input id=hm type=text autocomplete=off placeholder='0, or 0x01 for left Control' value='"+att(hmv)+"'>"+
+"<p class=sub>Bits are left Control, Shift, Alt, GUI, then right Control, Shift, Alt, GUI.</p>";
+h+="<div class=act><button type=button id=hi"+dis+">Assign BLE HID</button></div>";
+return h}
 
 function clearPanel(lock){
 return "<p class=sub>The input sends nothing until it is assigned again.</p>"+
@@ -556,6 +672,8 @@ bad=!ok;paint()}
 function clipConfig(r){
 if(!r)return null;
 if(r.action==="ir")return {kind:"ir",source:r.slot};
+if(r.action==="hid")return {kind:"hid",source:r.slot,hid_kind:r.hid_kind,
+usage:r.hid_usage,mod:r.hid_mod};
 if(r.action!=="zigbee")return null;
 return r.ieee?{kind:"zigbee",source:r.slot,device:true,ieee:r.ieee,ep:r.ep||1,
 act:r.act||0,val:r.val||0,name:r.name||""}:
@@ -566,8 +684,9 @@ function clipName(c){var d=info(c.source);return d?d.l:"that input"}
 
 function copyAssignment(){
 var c=clipConfig(row(sel)),source=sel;
-if(!c){msg="Only an IR code or Zigbee target can be copied.";bad=true;paint();return}
-if(c.kind==="zigbee"){clip=c;msg="Copied Zigbee config from "+clipName(c)+".";bad=false;paint();return}
+if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint();return}
+if(c.kind!=="ir"){clip=c;msg="Copied "+(c.kind==="hid"?"BLE HID":"Zigbee")+
+" config from "+clipName(c)+".";bad=false;paint();return}
 clipBusy=true;paint();
 fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){
@@ -579,16 +698,18 @@ msg="Copied IR config from "+clipName(c)+".";bad=false})
 
 function pasteAssignment(){
 var c=clip,target=sel;
-if(!c){msg="Copy an IR code or Zigbee target first.";bad=true;paint();return}
+if(!c){msg="Copy an IR, Zigbee, or BLE HID config first.";bad=true;paint();return}
 if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}
+else if(c.kind==="hid"){act="hid";hkv=c.hid_kind;huv=String(c.usage);hmv=String(c.mod||0);
+hcust=hidCustom(hkv,huv)}
 else{
 act="zb";zkv=c.device?"d":"g";
 zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";
 zgv=c.device?"":String(c.group);zhv=c.device?c.ieee:"";
 zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;
 zvv=za(zav)&&za(zav).p?String(c.val):""}
-msg="Pasted "+(c.kind==="ir"?"IR":"Zigbee")+" config from "+clipName(c)+
-". Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it.";
+msg="Pasted "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
+" config from "+clipName(c)+". Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it.";
 bad=false;paint()}
 
 function applyCode(){
@@ -610,6 +731,8 @@ e.act=r.act||0;
 if(r.val)e.val=r.val;
 if(r.name)e.name=r.name}
 else if(r&&r.action==="voice")e.action="voice";
+else if(r&&r.action==="hid"){e.action="hid";e.kind=r.hid_kind;
+e.usage=r.hid_usage;e.mod=r.hid_mod||0}
 else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
 lines.push(JSON.stringify(e))}
 // One line for each input, because an indented block runs past 100 lines and a
@@ -622,14 +745,14 @@ function cfgRefresh(){
 var need=[],i,s,r;
 for(i=0;i<S.length;i++){s=S[i].s;r=row(s);
 if(r&&r.action==="ir"&&cfgAll[s]===undefined)need.push(s)}
-if(!need.length){cfgOut=cfgBlob();cfgPaint();return Promise.resolve()}
+if(!need.length){cfgIn=cfgBlob();cfgPaint();return Promise.resolve()}
 cfgBusy=true;cfgPaint();
 return need.reduce(function(p,slot){return p.then(function(){
 return fetch("/buttons/api/code?slot="+slot,{cache:"no-store"})
 .then(function(x){return x.json()})
 .then(function(j){cfgAll[slot]=j.text||""})
 .catch(function(){cfgAll[slot]=""})})},Promise.resolve())
-.then(function(){cfgBusy=false;cfgOut=cfgBlob();cfgPaint()})}
+.then(function(){cfgBusy=false;cfgIn=cfgBlob();cfgPaint()})}
 
 function cfgNote(text,isBad){cfgMsg=text;cfgBad=!!isBad;cfgPaint()}
 
@@ -641,7 +764,7 @@ function cfgHex(v){return String(v===undefined?"":v)
 function cfgCheck(e){
 if(!e||typeof e.slot!=="number"||!info(e.slot))
 return "A slot number is missing or unknown.";
-var a=e.action,ep,g;
+var a=e.action,ep,g,u,m;
 if(a==="voice"&&!info(e.slot).v)return "Slot "+e.slot+" has no voice action.";
 if(a==="ir"&&(typeof e.code!=="string"||!e.code.replace(/\s+/g,"")))
 return "Slot "+e.slot+" carries no IR code.";
@@ -653,6 +776,18 @@ if(!(ep>=1&&ep<=240))return "Slot "+e.slot+" has an endpoint outside 1 to 240."}
 else if(a==="zigbee"){
 g=parseInt(e.group,10);
 if(!(g>=1&&g<=65527))return "Slot "+e.slot+" has a group outside 1 to 65527."}
+else if(a==="hid"){
+u=parseInt(e.usage,0);m=e.mod===undefined?0:parseInt(e.mod,0);
+if(e.kind==="keyboard"&&!(u>=0&&u<=231&&m>=0&&m<=255&&(u||m)))
+return "Slot "+e.slot+" has an invalid keyboard usage or modifier.";
+if(e.kind==="consumer"&&!(u>=1&&u<=1023&&m===0))
+return "Slot "+e.slot+" has an invalid consumer usage.";
+if(e.kind==="gamepad_button"&&!(u>=1&&u<=16&&m===0))
+return "Slot "+e.slot+" needs gamepad button 1 to 16.";
+if(e.kind==="gamepad_dpad"&&!(u>=0&&u<=7&&m===0))
+return "Slot "+e.slot+" needs D-pad direction 0 to 7.";
+if(["keyboard","consumer","gamepad_button","gamepad_dpad"].indexOf(e.kind)<0)
+return "Slot "+e.slot+" has an unknown HID report."}
 else if(a!=="ir"&&a!=="voice"&&a!=="none")
 return "Slot "+e.slot+" carries the unknown action "+a+".";
 if(a==="zigbee"){
@@ -690,6 +825,9 @@ var r=row(e.slot);return !!(r&&r.action!=="none")}
 function cfgSend(e){
 if(e.action==="voice")return post("set_voice",e.slot);
 if(e.action==="ir")return post("set_ir_code",e.slot,e.code);
+if(e.action==="hid")return post("set_hid",e.slot,null,undefined,
+"&kind="+encodeURIComponent(e.kind)+"&usage="+encodeURIComponent(e.usage)+
+"&mod="+encodeURIComponent(e.mod||0));
 if(e.action==="zigbee"&&e.kind==="device")
 return post("set_zigbee_device",e.slot,null,e.name||"",
 "&ieee=0x"+cfgHex(e.ieee).toLowerCase()+
@@ -734,8 +872,8 @@ var ok=copyBox(t);
 cfgNote(ok?"Config copied.":"Copy is blocked. Select the text and copy it by hand.",!ok)}
 
 function cfgDownload(){
-if(!cfgOut){cfgNote("Read the remote before download.",true);return}
-var url=URL.createObjectURL(new Blob([cfgOut],{type:"application/json"}));
+if(!cfgIn){cfgNote("Read the remote before download.",true);return}
+var url=URL.createObjectURL(new Blob([cfgIn],{type:"application/json"}));
 var a=document.createElement("a");
 a.href=url;a.download="c6remote-config.json";a.click();
 setTimeout(function(){URL.revokeObjectURL(url)},0)}
@@ -757,11 +895,9 @@ if(parsed.error){cfgNote(parsed.error,true);return}
 cfgIn=text;cfgMsg="Loaded "+name+".";cfgBad=false;cfgPaint()};
 reader.readAsText(file)}
 
-// The box reads cfgOut or cfgIn, so a repaint during an import keeps the pasted
-// text and never shows an export beside it.
+// The box holds the current text, so a repaint keeps a pasted file or edit.
 // The heading is the toggle, so the card needs no control of its own.
-function cfgToggle(){cfgOpen=!cfgOpen;cfgMsg="";cfgBad=false;cfgPaint();
-if(cfgOpen&&cfgMode==="ex")cfgRefresh()}
+function cfgToggle(){cfgOpen=!cfgOpen;cfgMsg="";cfgBad=false;cfgPaint()}
 
 function cfgPaint(){
 var e=document.getElementById("cfgio"),b=document.getElementById("cfgb"),
@@ -772,43 +908,30 @@ if(o){o.setAttribute("aria-expanded",cfgOpen?"true":"false");o.onclick=cfgToggle
 b.hidden=!cfgOpen;
 if(!cfgOpen){e.innerHTML="";return}
 var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy))?" disabled":"";
-var h="<p class=hd>Import and export</p>"+
-"<p class=sub>Copy every assignment out as one block of text, or paste a saved "+
-"block back in. An export holds the IR codes themselves, so it restores a "+
-"remote without a source remote.</p>"+
-"<label class=hd2 for=cs>Direction</label>"+
-"<select id=cs"+rd+">"+
-"<option value=ex"+(cfgMode==="ex"?" selected":"")+">Export</option>"+
-"<option value=im"+(cfgMode==="im"?" selected":"")+">Import</option>"+
-"</select>";
+var h="<p class=sub>Read the remote or choose a saved JSON file. Copy, download, or "+
+"edit the text, then apply it when ready.</p>"+
+"<div class=act><button type=button class=sec id=cxr"+rd+">Read Current Config</button>"+
+"<button type=button class=sec id=cxfp"+rd+">Choose File</button>"+
+"<input id=cxf type=file accept='.json,application/json' hidden></div>";
 if(cfgMsg)h+="<div class='note "+(cfgBad?"bad":"ok")+"'>"+esc(cfgMsg)+"</div>";
 if(cfgBusy)h+="<div class=bar><i></i></div>";
 h+="<textarea id=cx rows=12 spellcheck=false autocomplete=off"+
-(cfgMode==="ex"?" readonly":"")+">"+esc(cfgMode==="ex"?cfgOut:cfgIn)+"</textarea>";
-h+="<div class=act>";
-h+=cfgMode==="ex"
-?"<button type=button class=sec id=cxc>Copy</button>"+
-"<button type=button class=sec id=cxd"+rd+">Download JSON</button>"+
-"<button type=button class=sec id=cxr"+rd+">Read Current Config</button>"
-:"<input id=cxf type=file accept='.json,application/json'"+rd+">"+
-"<button type=button id=cxa"+wr+">Apply to the remote</button>";
-h+="</div>";
-if(cfgMode==="im")h+="<p class=sub>An import writes one input at a time. It "+
-"stops on the first entry the remote refuses, and it leaves an input the block "+
-"does not name alone.</p>";
+(cfgBusy?" disabled":"")+">"+esc(cfgIn)+"</textarea>";
+h+="<div class=act><button type=button class=sec id=cxc"+rd+">Copy</button>"+
+"<button type=button class=sec id=cxd"+rd+">Download JSON</button></div>"+
+"<p class=sub>An apply writes one input at a time. It stops on the first input "+
+"the remote refuses, and it leaves an input the text does not name alone.</p>"+
+"<div class=act><button type=button id=cxa"+wr+">Apply to the remote</button></div>";
 e.innerHTML=h;
-document.getElementById("cs").onchange=function(){cfgMode=this.value;
-cfgMsg="";cfgBad=false;cfgPaint();if(cfgMode==="ex")cfgRefresh()};
-if(cfgMode==="ex"){
-document.getElementById("cxc").onclick=cfgCopy;
-if(!cfgBusy)document.getElementById("cxd").onclick=cfgDownload;
-if(!cfgBusy)document.getElementById("cxr").onclick=function(){cfgAll={};cfgMsg="";
-cfgBad=false;cfgRefresh()}}
-else{
 var box=document.getElementById("cx");
 box.oninput=function(){cfgIn=box.value};
-if(!cfgBusy)document.getElementById("cxf").onchange=cfgLoadFile;
-if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}}
+if(!cfgBusy){
+document.getElementById("cxc").onclick=cfgCopy;
+document.getElementById("cxd").onclick=cfgDownload;
+document.getElementById("cxr").onclick=function(){cfgAll={};cfgMsg="";cfgBad=false;cfgRefresh()};
+document.getElementById("cxfp").onclick=function(){document.getElementById("cxf").click()};
+document.getElementById("cxf").onchange=cfgLoadFile}
+if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}
 
 function editor(){
 var e=document.getElementById("ed");
@@ -835,7 +958,7 @@ else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</
 
 // One selector, because a slot holds one action. The panel below it carries
 // everything that action needs, so nothing from another action is on screen.
-var opts=[["ir","IR code"],["zb","Zigbee target"]];
+var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
@@ -845,7 +968,7 @@ for(var i=0;i<opts.length;i++){h+="<option value="+opts[i][0]+
 (act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
 if(act===opts[i][0])title=opts[i][1]}
 h+="</select><h2>"+esc(title)+"</h2>";
-h+=act==="zb"?zbForm(st&&st.busy):act==="va"?vaPanel(lock):
+h+=act==="zb"?zbForm(st&&st.busy):act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock);
 e.innerHTML=h;
 
@@ -884,12 +1007,24 @@ if(zkv==="d"&&zhv)zpv=String(deviceEp(zhv,zav));
 msg="";bad=false;paint()};
 if(vi)vi.oninput=function(){zvv=vi.value};
 document.getElementById("zi").onclick=assignTarget}
+if(act==="hid"){
+var hk=document.getElementById("hk"),hu=document.getElementById("hu"),hm=document.getElementById("hm");
+var hp=document.getElementById("hp");
+hk.onchange=function(){hkv=this.value;huv=hkv==="gamepad_dpad"?"0":"";hmv="0";hcust=false;msg="";bad=false;paint()};
+// Only the Custom switch changes the panel, so a named key keeps the list open.
+if(hp)hp.onchange=function(){var c=this.value==="custom";
+if(c===hcust){huv=this.value;return}
+hcust=c;huv=c?"":this.value;msg="";bad=false;paint()};
+if(hu)hu.oninput=function(){huv=this.value};
+if(hm)hm.oninput=function(){hmv=this.value};
+if(!lock)document.getElementById("hi").onclick=assignHid}
 if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
 if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
 
 function actFor(s){var r=row(s);
 if(!r||r.action==="none")return "ir";
 if(r.action==="zigbee")return "zb";
+if(r.action==="hid")return "hid";
 if(r.action==="voice")return "va";
 return "ir"}
 
@@ -905,6 +1040,10 @@ act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";
 var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
 zav=(pr&&pr.action==="zigbee")?(pr.act||0):0;
 zvv=(pr&&pr.action==="zigbee"&&pr.val)?String(pr.val):"";
+hkv=(pr&&pr.action==="hid")?pr.hid_kind:"keyboard";
+huv=(pr&&pr.action==="hid")?String(pr.hid_usage):"";
+hmv=(pr&&pr.action==="hid")?String(pr.hid_mod||0):"0";
+hcust=hidCustom(hkv,huv);
 // Only IR assignments have stored code. Empty and Clear slots show a ready
 // code box, so they do not wait for a request that can only return empty text.
 if(!pr||pr.action!=="ir")cdSlot=s;
@@ -913,6 +1052,16 @@ if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}
+
+function assignHid(){
+var usage=parseInt(String(huv).replace(/^\s+|\s+$/g,""),0);
+var mod=hkv==="keyboard"?parseInt(String(hmv).replace(/^\s+|\s+$/g,""),0):0;
+var good=(hkv==="keyboard"&&usage>=0&&usage<=231&&mod>=0&&mod<=255&&(usage||mod))||
+(hkv==="consumer"&&usage>=1&&usage<=1023)||(hkv==="gamepad_button"&&usage>=1&&usage<=16)||
+(hkv==="gamepad_dpad"&&usage>=0&&usage<=7);
+if(!good){msg=(hidList(hkv)&&!hcust)?"Choose a key, or select Custom usage.":
+"Enter a value inside the selected HID report range.";bad=true;paint();return}
+go("set_hid",null,"&kind="+hkv+"&usage="+usage+"&mod="+mod)}
 
 // A code block keeps its newlines, because the parser reads it a line at a time.
 // ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
@@ -930,15 +1079,15 @@ if(r.code===409)return "Another assignment is already running";
 if(r.body&&r.body.error)return r.body.error;
 return "Request failed ("+r.code+")"}
 
-function go(a,c){
+function go(a,c,x){
 var s=sel;
-post(a,s,c).then(function(r){
+post(a,s,c,undefined,x).then(function(r){
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 if(a==="record_ir"){mode="rec";rec=s;seen=false;msg="";bad=false;
 return load().then(function(){paint();watch()})}
 return waitAction(r.body.id).then(function(ok){
 if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
-a==="set_ir_code"?"Code applied.":"Cleared.";bad=false}
+a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":"Cleared.";bad=false}
 else{msg=a==="set_ir_code"?"The remote refused that code.":
 "Flash write failed. The assignment was not saved.";bad=true}
 return load().then(function(){paint();return loadCode(s)})})})
@@ -1038,6 +1187,7 @@ paint();if(sel!==null)loadCode(sel)}
 
 build();
 z2mBar();
+bleWatch();
 load().then(function(j){
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}

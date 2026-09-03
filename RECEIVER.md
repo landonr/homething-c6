@@ -3,7 +3,7 @@
 ## Goal
 
 Assignment mode gives each supported input one active action. An action can be
-an IR code, a Zigbee command, the voice assistant, or no action.
+an IR code, a Zigbee command, a BLE HID control, the voice assistant, or no action.
 
 Store assignments in flash. Outside assignment mode, an input replays its active
 action.
@@ -60,7 +60,7 @@ target. Playback needs no MQTT and no Wi-Fi.
 
 ## Clear and replace an assignment
 
-An IR, Zigbee, or voice assignment replaces the previous action for that input.
+An IR, Zigbee, BLE HID, or voice assignment replaces the previous action for that input.
 The remote never keeps two active actions on one input.
 
 The clear tap removes the local assignment. Group membership stays in
@@ -79,18 +79,18 @@ keypad buttons.
 Select an input. The page shows the current assignment, then an **Action**
 selector with the actions that the input accepts.
 
-The selector holds IR code, Zigbee group, Voice assistant, and Clear. It opens
+The selector holds IR code, Zigbee target, BLE HID, Voice assistant, and Clear. It opens
 on the action that the input already holds.
 
 The right side of the selected-input title has **Copy** and **Paste** buttons.
-Use them to copy an IR code or Zigbee target configuration between inputs.
+Use them to copy an IR code, Zigbee target, or BLE HID configuration between inputs.
 
 Select the source input and select **Copy**. Then select the target input and
 select **Paste**. Paste opens the IR or Zigbee panel and fills its configuration
 form. Paste does not write an assignment to the remote.
 
 Paste stays available for a Clear or empty input when copied configuration exists.
-Select **Apply** for IR or **Assign** for Zigbee to write the configuration.
+Select **Apply** for IR or **Assign** for Zigbee and BLE HID to write the configuration.
 
 One panel shows at a time, because an input holds one action. The IR panel owns
 the **Record IR** button and the code box.
@@ -104,8 +104,8 @@ The page can assign a Zigbee target and the command that goes to it. It does
 not need a state transition, because you name both instead.
 
 1. Select an input, then select **Zigbee target** in the Action selector.
-2. On the first use, open the **Config** card and enter the Zigbee2MQTT frontend
-   websocket address.
+2. On the first use, enter the Zigbee2MQTT frontend websocket address in the
+   connection card at the top of the page.
 3. Select **Group** or **Device**, then pick a target or type its address.
 4. Select the command in the **Action** selector, then fill its value box if it
    shows one.
@@ -135,15 +135,45 @@ from the network.
 
 Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 
+### Assign a BLE HID control from the page
+
+1. Pair the host with `homeThing C6` in its Bluetooth settings.
+2. Select an input, then select **BLE HID** in the Action selector.
+3. Select Keyboard, Consumer, Gamepad button, or Gamepad D-pad.
+4. Select the key from the list. Keyboard and Consumer list the common usages by name.
+5. If the usage is not in the list, select **Custom usage** and enter the number.
+6. Enter the keyboard modifier mask when applicable.
+7. Select **Assign**.
+
+A gamepad button still takes a number. A D-pad still takes a direction.
+
+The remote supports one bonded host. Pairing uses encrypted Secure Connections with Just Works authentication.
+
+The firmware uses the NimBLE host. After the link is encrypted, the remote reads
+the host device name from the GAP service, `0x1800`, characteristic `0x2A00`.
+
+The page then names the host. A host that hides that characteristic keeps the
+plain connected state.
+
+Flash the first BLE HID build through USB because this build changes the partition table. Later builds can use OTA.
+
+The page shows the connection, bond, and pairing states above the input layout.
+
+The remote sends no HID action while the host is disconnected. It does not queue missed actions.
+
+The remote combines held keyboard keys, keyboard modifiers, and gamepad buttons in their reports.
+
+Each wheel detent sends one short HID press and release.
+
 ### Capability matrix
 
-| Input | Slots | Record IR | Zigbee target | Voice assistant | Clear |
-| --- | --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Page only | Yes | Yes |
-| `SW2` | 19 | Yes | Page only | No | Yes |
-| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Yes | Yes |
-| Wheel directions | 12 to 16 | Yes | Page only | Yes | Yes |
-| Wheel rotation | 17 and 18 | Yes | Page only | No | Yes |
+| Input | Slots | Record IR | Zigbee target | BLE HID | Voice assistant | Clear |
+| --- | --- | --- | --- | --- | --- | --- |
+| `SW1` | 20 | Yes | Page only | Page only | Yes | Yes |
+| `SW2` | 19 | Yes | Page only | Page only | No | Yes |
+| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Yes | Yes |
+| Wheel directions | 12 to 16 | Yes | Page only | Page only | Yes | Yes |
+| Wheel rotation | 17 and 18 | Yes | Page only | Page only | No | Yes |
 
 Every slot accepts a Zigbee target from the page. Zigbee playback uses the same
 press handler as IR playback, so a wheel detent can send it. A command that only
@@ -219,26 +249,34 @@ The parser also accepts a bare list of signed microsecond values, which is the f
 
 The board transmits at 38 kHz with 50 percent duty, so it ignores the `frequency` and `duty_cycle` lines of a pasted block.
 
-### The Config card
+### The connection card
 
-The **Config** card at the bottom of the page holds two blocks, with a rule
-between them.
+The page opens with one connection card. It holds both radio links, side by side
+with a rule between them. It sits above the input grid, separate from the import
+block. On a narrow screen the two blocks stack.
 
-The first block is the Zigbee2MQTT connection. The second block moves every
-assignment as one block of text.
-
-The card is closed on arrival. The **Config** heading is the toggle. It reads
-**Show** when the card is closed and **Hide** when the card is open.
-
-The heading also reports the Zigbee2MQTT link with a circle, so a closed card
-still shows it:
+The **Zigbee2MQTT** block holds the address, the token, and the **Connect**
+button. One line under the heading reports the link with a circle:
 
 - A green circle and the group and device counts mean a live link.
 - A grey circle means no connection.
 - A red circle means that the last connection failed.
 
-The connection inputs are built one time, so a repaint keeps an address that is
+The **Bluetooth** block reports the host state the same way. A connected line
+reads **connected to** and the host name when the remote could read it. The
+block holds the **Forget Bluetooth host** button, which shows only when a bond
+exists.
+
+The Zigbee2MQTT inputs are built one time, so a repaint keeps an address that is
 still being typed.
+
+### The Import and export card
+
+The **Import and export** card at the bottom of the page moves every assignment
+as one block of text.
+
+The card is closed on arrival. The heading is the toggle. It reads **Show** when
+the card is closed and **Hide** when the card is open.
 
 ### Copy the whole config
 
@@ -256,6 +294,8 @@ remote without a source remote.
 
 A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 `group`. A device entry holds `ieee` and `ep`.
+
+A BLE HID entry carries `kind`, `usage`, and `mod`. Only keyboard entries use `mod`.
 
 The page reads one code at a time from `GET /buttons/api/code`. Select **Read the
 remote** to build the block again after a change.
@@ -316,7 +356,8 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 Outside assignment mode, an input uses its one active assignment in this order:
 
 1. Voice assistant, if assigned.
-2. The Zigbee command, if assigned.
-3. IR playback, if assigned.
+2. BLE HID, if assigned.
+3. The Zigbee command, if assigned.
+4. IR playback, if assigned.
 
 An input without an assignment does not transmit a command.

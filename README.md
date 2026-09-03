@@ -42,7 +42,10 @@ This repo contains the KiCad hardware and ESPHome bring-up configuration for a p
 - Assign every button from a web page on the remote itself
 - Run for a long time between charges
 
-Open `http://homething-c6.local/buttons` in a browser on the same network. The page draws the remote layout. Select an input, then record an IR code, assign the voice assistant, or clear the input. The on-device gesture does the same job: hold `SW2` for two seconds. [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it on a trusted network only.
+Open `http://homething-c6.local/buttons` in a browser on the same network.
+The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
+You can also clear the input. Hold `SW2` for two seconds to use the on-device assignment mode.
+[`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
 
 ## Hardware
 
@@ -197,3 +200,23 @@ The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus 
 ## Relationship to homeThing
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.
+
+# Includes
+- <a href="https://esphome.io/">ESPHome</a>
+- <a href="https://github.com/be5invis/Iosevka">Iosevka Font</a>, used for the board silkscreen brand text
+- [@luar123](https://github.com/luar123)'s <a href="https://github.com/luar123/zigbee_esphome">Zigbee ESPHome component</a>
+- <a href="https://www.kicad.org/">KiCad</a>
+- <a href="https://github.com/landonr/homeThing">homeThing</a>
+
+# Sponsorship
+
+<img src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" data-caption="PCBWay Logo" data-no-zoom="">
+
+## [PCBWay](https://pcbway.com/g/Xymq6O "PCBWay") sponsors 3D Printing and PCB assembly costs on this project during the prototyping phase! 
+If you are interested in their awesome fabrication services please check them out.&nbsp; They offer 
+
+3D prototyping,&nbsp;PCB design and assembly, as well as CNC metal fabrication.&nbsp; Costs are reasonable and the quality is as good as it gets.&nbsp; Thank you PCBWay for sponsoring us and other fun projects!<br><br>
+
+## [cargo](https://cargo.site/ "cargo.site") sponsors our website!
+
+They make it super easy to keep things pretty and up to date! It’s honestly so much easier than managing our own site, highly recommended!

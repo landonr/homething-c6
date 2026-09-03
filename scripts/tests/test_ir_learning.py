@@ -31,7 +31,8 @@ class IrLearningTest(unittest.TestCase):
         sw1 = CONFIG.split("name: Button 1", 1)[1].split("name: Button 2", 1)[0]
         sw2 = CONFIG.split("name: Button 2", 1)[1].split("name: Button 3", 1)[0]
         self.assertIn("voice_assistant.start:", sw1)
-        self.assertIn("voice_assistant.stop:", sw1)
+        release = CONFIG.split("id: release_assignment", 1)[1].split("id: detect_receiver_hold", 1)[0]
+        self.assertIn("voice_assistant.stop:", release)
         self.assertNotIn("voice_assistant", sw2)
 
     def test_receiver_states_drive_only_d3_and_d4(self) -> None:

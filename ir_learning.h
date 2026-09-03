@@ -580,6 +580,8 @@ class IrUi {
   void tap(uint8_t button, Tap mode) {
     if (state == OFF) {
       play_(button);
+      if (mode == Tap::ARM_ONLY && hid_play_callback_)
+        hid_play_callback_(button, false);
       return;
     }
     if (button != target || mode == Tap::ARM_ONLY || stage == 0) {
@@ -652,10 +654,11 @@ class IrUi {
     return pending;
   }
 
-  // The press that started Assist records itself, so every release handler can
-  // share one condition instead of naming its own button.
-  bool release() {
-    if (voice_active_ == 0)
+  // Stop Assist only when the released input started it.
+  bool release(uint8_t button) {
+    if (hid_play_callback_)
+      hid_play_callback_(button, false);
+    if (voice_active_ != button)
       return false;
     voice_active_ = 0;
     return true;
@@ -665,6 +668,10 @@ class IrUi {
 
   void set_zigbee_play_callback(std::function<bool(uint8_t)> play) {
     zigbee_play_callback_ = std::move(play);
+  }
+
+  void set_hid_play_callback(std::function<bool(uint8_t, bool)> play) {
+    hid_play_callback_ = std::move(play);
   }
 
  private:
@@ -686,6 +693,8 @@ class IrUi {
       voice_active_ = button;
       return;
     }
+    if (hid_play_callback_ && hid_play_callback_(button, true))
+      return;
     if (zigbee_play_callback_ && zigbee_play_callback_(button))
       return;
     pending_transmit_ = ir_code_store.load(button, code_);
@@ -702,6 +711,7 @@ class IrUi {
   bool closed_ = false;
   uint8_t voice_active_ = 0;
   std::function<bool(uint8_t)> zigbee_play_callback_{};
+  std::function<bool(uint8_t, bool)> hid_play_callback_{};
 };
 
 inline IrUi ir_ui;

@@ -35,27 +35,34 @@ function mk(tag) {
       }
     },
     get innerHTML() { return this._html; },
-    set textContent(v) { this._text = String(v); },
+    // A browser serialises the text node back out of innerHTML, and esc() reads
+    // it that way to escape a bridge or host name.
+    set textContent(v) {
+      this._text = String(v);
+      this._html = this._text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    },
     get textContent() { return this._text; },
     get firstChild() { if (!this.children[0]) this.children[0] = mk("b"); return this.children[0]; },
     get lastChild() { if (!this.children[1]) this.children[1] = mk("span"); return this.children[1]; },
     setAttribute(k, v) { this.attrs[k] = v; },
     appendChild(c) { this.children.push(c); return c; },
     focus() {}, select() {},
-    click() { if (tag === "a") lastDownload = this; },
+    click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m", "cfg", "cfgb", "cfgio", "cxo", "cxs", "cxz"])
+for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs", "zsum"])
   els[id] = mk("section");
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
+  ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
     {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: ""},
+    {slot: 7, action: "hid", pulses: 0, us: 0, code: "", fields: "", group: 0, hid_kind: "keyboard", hid_usage: 4, hid_mod: 2, name: ""},
     {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, act: 0, val: 0, name: "Office Lamp"},
   ],
 };
@@ -106,7 +113,7 @@ setTimeout(() => {
     }
   });
   step("words covers every action", () => {
-    for (const slot of [3, 4, 5, 6, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
+    for (const slot of [3, 4, 5, 6, 7, 20]) if (!words(slot)) throw new Error("slot " + slot + " has no words");
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
@@ -496,30 +503,55 @@ setTimeout(() => {
     if (!bad || msg.indexOf("16 hex digits") < 0) throw new Error("no clear refusal: " + msg);
   });
 
+  step("a named keyboard usage opens the list, and Custom opens the box", () => {
+    pick(7);
+    if (hcust) throw new Error("a named usage opened the custom box");
+    const hp = document.getElementById("hp");
+    if (!hp) throw new Error("no key list");
+    if (document.getElementById("hu")) throw new Error("a named usage left the box open");
+    if (els.ed.innerHTML.indexOf("<option value=0x04 selected>A</option>") < 0)
+      throw new Error("the stored key was not selected: " + els.ed.innerHTML);
+    hp.value = "custom";
+    hp.onchange.call(hp);
+    if (!hcust || !document.getElementById("hu")) throw new Error("Custom opened no usage box");
+    const back = document.getElementById("hp");
+    back.value = "0x28";
+    back.onchange.call(back);
+    if (hcust || huv !== "0x28") throw new Error("the named key did not win: " + huv);
+    if (document.getElementById("hu")) throw new Error("the box survived the named key");
+  });
+  step("an unlisted usage reopens the custom box", () => {
+    global.sel = 7;
+    global.act = "hid";
+    global.hkv = "consumer";
+    global.huv = "0x0201";
+    global.hcust = hidCustom(hkv, huv);
+    paint();
+    if (!hcust || !document.getElementById("hu")) throw new Error("an unlisted usage lost its box");
+    const hu = document.getElementById("hu");
+    if (!hu) throw new Error("no usage box");
+  });
+
   step("the status line marks a live connection and the button offers Disconnect", () => {
     global.tg = [{id: 1, name: "all_light", members: []}];
     global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp", ep: 1}];
     global.zerr = "";
     z2mStatus();
-    const st = document.getElementById("zst");
-    if (st.innerHTML.indexOf("class=dot") < 0) throw new Error("no green dot: " + st.innerHTML);
-    if (st.innerHTML.indexOf("1 group, 1 device") < 0) throw new Error("no counts: " + st.innerHTML);
-    // The heading repeats the link, so a collapsed card still reports it.
-    const zt = document.getElementById("cxz");
-    if (zt.innerHTML.indexOf("class=dot></span>Zigbee2MQTT: 1 group, 1 device") < 0)
-      throw new Error("no title status: " + zt.innerHTML);
+    // One line under the card heading carries the whole link state.
+    const zt = document.getElementById("zsum");
+    if (zt.innerHTML.indexOf("class=dot></span>Connected. 1 group, 1 device.") < 0)
+      throw new Error("no live status: " + zt.innerHTML);
     const zc = document.getElementById("zc");
     if (zc.textContent !== "Disconnect") throw new Error("button stayed on Connect: " + zc.textContent);
     zc.onclick();
     if (tg !== null || td !== null) throw new Error("disconnect kept the lists");
     if (zc.textContent !== "Connect") throw new Error("button stayed on Disconnect: " + zc.textContent);
-    if (st.textContent.indexOf("Not connected.") < 0) throw new Error("no idle line: " + st.textContent);
-    if (zt.innerHTML.indexOf("dot off") < 0 || zt.innerHTML.indexOf("not connected") < 0)
-      throw new Error("the title kept a live status: " + zt.innerHTML);
+    if (zt.innerHTML.indexOf("dot off") < 0 || zt.innerHTML.indexOf("Not connected.") < 0)
+      throw new Error("the line kept a live status: " + zt.innerHTML);
     global.zerr = "Could not reach Zigbee2MQTT at that address.";
     z2mStatus();
-    if (zt.innerHTML.indexOf("dot bad") < 0 || zt.innerHTML.indexOf("unreachable") < 0)
-      throw new Error("a failure did not reach the title: " + zt.innerHTML);
+    if (zt.innerHTML.indexOf("dot bad") < 0 || zt.className.indexOf("bad") < 0)
+      throw new Error("a failure did not reach the line: " + zt.innerHTML);
     global.zerr = "";
     const hp = document.getElementById("zhp");
     if (hp.textContent.indexOf("8099/tcp") < 0) throw new Error("no port hint: " + hp.textContent);
@@ -623,9 +655,8 @@ setTimeout(() => {
     global.fetch = realFetch;
     if (!cfgOpen) throw new Error("the card did not open");
     if (!document.getElementById("cx")) throw new Error("the open card has no box");
-    // The reads run off a promise, so the flag is the synchronous evidence that
-    // opening on the export side starts them.
-    if (!cfgBusy) throw new Error("opening the card started no read");
+    if (cfgBusy) throw new Error("opening the card read the remote");
+    if (codeReads) throw new Error("opening the card requested a stored code");
     if (els.cxs.textContent !== "Hide") throw new Error("the open heading says " + els.cxs.textContent);
     if (els.cfgb.hidden !== false) throw new Error("the open card kept its body hidden");
     global.cfgBusy = false;
@@ -636,31 +667,28 @@ setTimeout(() => {
     if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
     global.cfgOpen = true;
   });
-  step("the direction selector switches the box and its buttons", () => {
+  step("the card keeps one config box and all actions", () => {
     global.cfgBusy = false;
-    global.cfgMode = "ex";
     global.cfgOpen = true;
+    global.cfgIn = "";
     cfgPaint();
-    if (!document.getElementById("cxc")) throw new Error("export has no copy button");
-    if (document.getElementById("cxa")) throw new Error("apply showed on the export side");
-    const cs = document.getElementById("cs");
-    cs.value = "im";
-    cs.onchange.call(cs);
-    if (cfgMode !== "im") throw new Error("the direction did not follow the selector");
-    if (!document.getElementById("cxa")) throw new Error("import has no apply button");
-    if (document.getElementById("cxr")) throw new Error("read showed on the import side");
+    if (document.getElementById("cs")) throw new Error("the direction selector stayed");
+    for (const id of ["cxr", "cxfp", "cxf", "cxc", "cxd", "cxa"])
+      if (!document.getElementById(id)) throw new Error("the card has no " + id);
+    document.getElementById("cxfp").onclick();
+    if (!document.getElementById("cxf").clicked) throw new Error("Choose File did not open the picker");
     const box = document.getElementById("cx");
-    box.value = "typed";
+    box.value = cfgBlob();
     box.oninput.call(box);
-    if (cfgIn !== "typed") throw new Error("the box did not keep the paste: " + cfgIn);
+    if (cfgIn !== box.value) throw new Error("the box did not keep its text");
     cfgPaint();
-    if (cfgIn !== "typed") throw new Error("a repaint lost the paste: " + cfgIn);
+    if (cfgIn !== box.value) throw new Error("a repaint lost the text");
   });
   step("export downloads the current JSON config", () => {
     global.cfgBusy = false;
-    global.cfgMode = "ex";
     global.cfgOpen = true;
-    global.cfgOut = cfgBlob();
+    global.cfgAll = {6: CODE.text};
+    global.cfgIn = cfgBlob();
     lastDownload = null; downloadedBlob = null; revokedUrl = null;
     cfgPaint();
     const button = document.getElementById("cxd");
@@ -669,13 +697,12 @@ setTimeout(() => {
     if (!lastDownload || lastDownload.download !== "c6remote-config.json" ||
         lastDownload.href !== "blob:config") throw new Error("download link is wrong");
     if (!downloadedBlob || downloadedBlob.type !== "application/json" ||
-        downloadedBlob.parts[0] !== cfgOut) throw new Error("download body is wrong");
+        downloadedBlob.parts[0] !== cfgIn) throw new Error("download body is wrong");
   });
   step("a JSON file picker validates and fills the import box", () => {
     global.cfgAll = {6: CODE.text};
     const valid = cfgBlob();
     global.cfgBusy = false;
-    global.cfgMode = "im";
     global.cfgOpen = true;
     global.cfgIn = "";
     cfgPaint();
@@ -719,6 +746,21 @@ setTimeout(() => {
       throw new Error("a repaint rebuilt the connection block");
     if (document.getElementById("zu").value !== "ws://typed.local:8099/api")
       throw new Error("a repaint dropped a typed address");
+  });
+
+  step("the Bluetooth line names the host and falls back without one", () => {
+    global.st = STATE;
+    bleStatus();
+    const named = document.getElementById("bst").innerHTML;
+    if (named.indexOf("connected to Landon&#39;s Mac") < 0 &&
+        named.indexOf("connected to Landon's Mac") < 0)
+      throw new Error("the host name is missing: " + named);
+    STATE.ble.host = "";
+    bleStatus();
+    const plain = document.getElementById("bst").innerHTML;
+    if (plain.indexOf("BLE HID: connected") < 0 || plain.indexOf("connected to") >= 0)
+      throw new Error("an unread host name broke the line: " + plain);
+    STATE.ble.host = "Landon's Mac";
   });
 
   setTimeout(() => process.exit(failed ? 1 : 0), 200);

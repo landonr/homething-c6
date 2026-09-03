@@ -11,6 +11,7 @@ esphome:
   on_boot:
     - lambda: ir_code_store.setup();
     - lambda: zigbee_assignments.setup();
+    - lambda: id(ble_hid_remote).setup_assignments();
     - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
@@ -25,6 +26,7 @@ esphome:
 
 esp32:
   board: seeed_xiao_esp32c6
+  partitions: partitions.csv
   framework:
     type: esp-idf
     sdkconfig_options:
@@ -57,6 +59,9 @@ wifi:
     - script.execute: show_idle_status
   on_disconnect:
     - script.execute: show_idle_status
+
+ble_hid:
+  id: ble_hid_remote
 
 zigbee:
   id: zigbee_radio
@@ -142,12 +147,10 @@ binary_sensor:
                 brightness: 50%
             # Home Assistant VAD ends the stream, so there is no stop on a timer.
             - voice_assistant.start:
-    on_release: &assignable_release
-      - if:
-          condition:
-            lambda: return ir_ui.release();
-          then:
-            - voice_assistant.stop:
+    on_release:
+      - script.execute:
+          id: release_assignment
+          slot: 20
   - platform: gpio
     name: Button 2
     id: button_2
@@ -156,10 +159,12 @@ binary_sensor:
       number: 1
     # SW2 carries the receiver-mode gesture as well as its own assignment. A hold
     # of two seconds opens the mode from OFF and closes it from any learn state.
-    # A tap runs IR, Zigbee, then clear. The consumed flag keeps the release that
-    # ends a hold from also counting as a tap.
+    # A tap runs its assignment. The consumed flag stops a hold release from
+    # counting as a tap. A HID assignment uses the physical press edge.
     on_press:
-      - lambda: ir_ui.sw2_consumed = false;
+      - lambda: |-
+          ir_ui.sw2_consumed = false;
+          id(ble_hid_remote).set_pressed(19, true);
       - if:
           condition:
             lambda: return ir_ui.state != IrUi::OFF;
@@ -172,10 +177,13 @@ binary_sensor:
       - script.stop: exit_receiver_hold
       - if:
           condition:
-            lambda: return !ir_ui.sw2_consumed;
+            lambda: |-
+              return !ir_ui.sw2_consumed &&
+                     !id(ble_hid_remote).assignment(19).assigned;
           then:
             - lambda: ir_ui.tap(19, IrUi::Tap::NO_VOICE);
             - if: *send_learned_code
+      - lambda: id(ble_hid_remote).set_pressed(19, false);
   - platform: gpio
     name: Button 3
     pin:
@@ -185,7 +193,8 @@ binary_sensor:
       - lambda: ir_ui.tap(3, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 3}
   - platform: gpio
     name: Button 4
     pin:
@@ -195,7 +204,8 @@ binary_sensor:
       - lambda: ir_ui.tap(4, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 4}
   - platform: gpio
     name: Button 5
     pin:
@@ -205,7 +215,8 @@ binary_sensor:
       - lambda: ir_ui.tap(5, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 5}
   - platform: gpio
     name: Button 6
     pin:
@@ -215,7 +226,8 @@ binary_sensor:
       - lambda: ir_ui.tap(6, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 6}
   - platform: gpio
     name: Button 7
     pin:
@@ -225,7 +237,8 @@ binary_sensor:
       - lambda: ir_ui.tap(7, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 7}
   - platform: gpio
     name: Button 8
     pin:
@@ -235,7 +248,8 @@ binary_sensor:
       - lambda: ir_ui.tap(8, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 8}
   - platform: gpio
     name: Button 9
     pin:
@@ -245,7 +259,8 @@ binary_sensor:
       - lambda: ir_ui.tap(9, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 9}
   - platform: gpio
     name: Button 10
     pin:
@@ -255,7 +270,8 @@ binary_sensor:
       - lambda: ir_ui.tap(10, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 10}
   - platform: gpio
     name: Button 11
     pin:
@@ -265,7 +281,8 @@ binary_sensor:
       - lambda: ir_ui.tap(11, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 11}
   # ANO wheel on PCF8575 P13..P17. Directions verified on unit 1 2026-07-27 by
   # logging expander edges per press; they match the ENC1 symbol pin names, so
   # the part is mounted as drawn and there is no rotation to compensate for.
@@ -278,7 +295,8 @@ binary_sensor:
       - lambda: ir_ui.tap(12, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 12}
   - platform: gpio
     name: Encoder Up
     pin:
@@ -288,7 +306,8 @@ binary_sensor:
       - lambda: ir_ui.tap(13, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 13}
   - platform: gpio
     name: Encoder Press
     pin:
@@ -298,7 +317,8 @@ binary_sensor:
       - lambda: ir_ui.tap(14, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 14}
   - platform: gpio
     name: Encoder Down
     pin:
@@ -308,7 +328,8 @@ binary_sensor:
       - lambda: ir_ui.tap(15, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 15}
   - platform: gpio
     name: Encoder Left
     pin:
@@ -318,7 +339,8 @@ binary_sensor:
       - lambda: ir_ui.tap(16, IrUi::Tap::FULL);
       - if: *send_learned_code
       - if: *start_learned_voice
-    on_release: *assignable_release
+    on_release:
+      - script.execute: {id: release_assignment, slot: 16}
 
   # PCF8575 nINT, R9 100k pull-up on board. ESPHome polls the expander, so this
   # is visibility only: it does not make button reads interrupt-driven. Useful
@@ -594,6 +616,16 @@ microphone:
           id(mic_level) = std::max(level, id(mic_level) * 0.82f);
 
 script:
+  - id: release_assignment
+    mode: parallel
+    parameters:
+      slot: int
+    then:
+      - if:
+          condition:
+            lambda: return ir_ui.release(static_cast<uint8_t>(slot));
+          then:
+            - voice_assistant.stop:
   - id: detect_receiver_hold
     mode: restart
     then:

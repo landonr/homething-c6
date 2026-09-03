@@ -14,6 +14,7 @@ INIT = (COMPONENT / "__init__.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
 ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
+BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 
 # Slots that cannot start the voice assistant. 19 is SW2, whose press edge is
 # already owned by the receiver-mode hold gesture. 17 and 18 are the wheel
@@ -197,6 +198,7 @@ class EnforcementTest(unittest.TestCase):
             "ir_code_store.clear(",
             "ir_ui.open_from_web(",
             "zigbee_assignments.assign_from_web(",
+            "BleHid::instance()->assign(",
         ):
             total = CPP.count(call)
             self.assertEqual(total, 1, call)
@@ -225,10 +227,10 @@ class EnforcementTest(unittest.TestCase):
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         self.assertRegex(
             state,
-            r'zigbee\.assigned\s+\? "zigbee"[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"'
-            r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
+            r'hid\.assigned\s+\? "hid"[\s\S]*?zigbee\.assigned\s+\? "zigbee"'
+            r'[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":"', state)
+        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
@@ -245,6 +247,7 @@ class EnforcementTest(unittest.TestCase):
     def test_preference_results_complete_the_deferred_action(self) -> None:
         self.assertIn("complete_action_(action_id, ::ir_code_store.set_voice(button))", CPP)
         self.assertIn("complete_action_(action_id, ::ir_code_store.clear(button))", CPP)
+        self.assertIn("complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond())", CPP)
         self.assertIn('"Flash write failed. The assignment was not saved."', PAGE)
         self.assertIn("waitAction(r.body.id)", PAGE)
 
@@ -371,7 +374,7 @@ class PageTest(unittest.TestCase):
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
         self.assertIn(
-            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"name":"',
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"',
             state,
         )
         self.assertIn("::ir_code_store.name(info.slot)", state)
@@ -467,11 +470,11 @@ class PageTest(unittest.TestCase):
         self.assertIn('field.substr(0, 2).c_str(), &end, 16', byte)
         # The default 1024 byte cap truncates a long frame.
         self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
-    def test_one_selector_carries_the_four_actions(self) -> None:
+    def test_one_selector_carries_all_actions(self) -> None:
         """A slot holds one action, so the panel shows one action at a time and
         the IR code box cannot sit under a Zigbee assignment."""
         editor = section(PAGE, "function editor(){", "\nfunction actFor(")
-        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee target"]];', editor)
+        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];', editor)
         self.assertIn('if(d.v)opts.push(["va","Voice assistant"]);', editor)
         self.assertIn('opts.push(["cl","Clear"]);', editor)
         # Zigbee is offered everywhere, so it must sit outside the d.v branch.
@@ -713,31 +716,55 @@ class PageTest(unittest.TestCase):
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can
         be restored without a source remote in hand."""
-        # The Zigbee2MQTT block and the import block share the card, so the
-        # markup is static and only the block below the rule is rebuilt.
+        # Both radios share one card at the top of the page, so the import block
+        # is the only thing the Config card holds.
+        self.assertIn('<section class="card full conn">\n'
+                      '<div id="zbcfg">\n<h2>Zigbee2MQTT</h2>\n'
+                      '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
+                      '<div id="z2m"></div>\n</div>\n'
+                      '<div id="blecfg">\n<h2>Bluetooth</h2>\n'
+                      '<p class="sub st" id="bst">BLE HID status is loading.</p>', PAGE)
+        # A rule separates the two, and the pair stacks on a narrow screen.
+        self.assertIn(".conn>div+div{border-left:1px solid var(--line)", PAGE)
+        self.assertIn("@media (max-width:720px){.conn{grid-template-columns:1fr}", PAGE)
         self.assertIn('<section class="card full" id="cfg">', PAGE)
-        self.assertIn('<div id="cfgb" hidden><div id="z2m"></div>'
-                      '<div class="sep" id="cfgio"></div></div>', PAGE)
-        self.assertIn(".sep{margin-top:16px;border-top:1px solid var(--line)", PAGE)
-        self.assertNotIn('id="z2m"></section>', PAGE)
+        self.assertIn('<div id="cfgb" hidden><div id="cfgio"></div></div>', PAGE)
+        # A connection card cannot sit inside the collapsed import card.
+        self.assertNotIn('id="cfgb" hidden><div id="z2m">', PAGE)
+        self.assertNotIn('class="sep"', PAGE)
+        self.assertNotIn("cfg-status", PAGE)
+        self.assertNotIn('id="cxz"', PAGE)
+        # The page title leads, so neither radio card pushes it down.
+        self.assertIn('<header class="full">\n<h1>Remote buttons</h1>\n'
+                      '<p class="sub">Select an input to see or change what it does.</p>\n'
+                      '</header>', PAGE)
         card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
-        # Closed on arrival, because an export reads the code of every IR input.
+        # Closed on arrival, because most visits change one input instead.
         self.assertIn("var cfgOpen=false;", PAGE)
-        # The heading is the toggle, so a closed card is one row and no separate
-        # control competes with it.
         self.assertIn('<h2><button type="button" class="tog" id="cxo" aria-expanded="false">'
-                      'Config<span\nid="cxz"></span><span id="cxs">Show</span></button></h2>', PAGE)
-        # A collapsed card still reports the Zigbee2MQTT link, so the heading
-        # carries the same dot as the status line inside it.
-        title = section(PAGE, "function z2mTitle(){", "\n\n")
-        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>Zigbee2MQTT: "+z2mCounts()', title)
-        self.assertIn('e.innerHTML="<span class=\'dot "+(zerr?"bad":"off")+"\'></span>', title)
-        self.assertIn('(zerr?"unreachable":"not connected")}', title)
-        self.assertIn("z2mStatus(){\nz2mTitle();", PAGE)
+                      'Import and export<span\nid="cxs">Show</span></button></h2>', PAGE)
+        self.assertIn('id="bfr" hidden>Forget Bluetooth host</button>', PAGE)
+        self.assertIn('post("forget_ble")', PAGE)
+        # The host name is free text from the peer, so it is escaped both ways.
+        self.assertIn('"pairing":%s,"host":"', CPP)
+        self.assertIn("print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name()", CPP)
+        self.assertIn('st.ble.host?"connected to "+esc(st.ble.host):', PAGE)
+        # One line under the heading reports the link, so no second line can
+        # disagree with it.
+        status = section(PAGE, "function z2mStatus(){", "\n\nfunction plural(")
+        self.assertIn('var e=document.getElementById("zsum");', status)
+        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+".";return}',
+                      status)
+        self.assertIn('if(zerr){e.innerHTML="<span class=\'dot bad\'></span>"+esc(zerr);return}', status)
+        self.assertIn('e.innerHTML="<span class=\'dot off\'></span>Not connected.', status)
+        self.assertNotIn("z2mTitle", PAGE)
+        self.assertNotIn("id=zst", PAGE)
         self.assertIn(".dot.off{background:var(--line)}.dot.bad{background:var(--bad)}", PAGE)
-        self.assertIn("h2>button.tog span#cxz{color:var(--mut)", PAGE)
-        # One counts helper, so the heading and the line cannot disagree.
-        self.assertIn('e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+"."}', PAGE)
+        self.assertIn("function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}", PAGE)
+        refresh = section(PAGE, "function bleRefresh(){", "\n\nfunction bleWatch()")
+        self.assertIn('fetch("/buttons/api/state",{cache:"no-store"})', refresh)
+        self.assertIn("st.ble=j.ble;bleStatus()", refresh)
+        self.assertNotIn("paint()", refresh)
         self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
         self.assertIn("b.hidden=!cfgOpen;", card)
         self.assertIn('o.onclick=cfgToggle}', card)
@@ -746,26 +773,28 @@ class PageTest(unittest.TestCase):
         self.assertIn('var e=document.getElementById("cfgio")', card)
         toggle = section(PAGE, "function cfgToggle(){", "\n\n")
         self.assertIn("cfgOpen=!cfgOpen", toggle)
-        self.assertIn('if(cfgOpen&&cfgMode==="ex")cfgRefresh()}', toggle)
+        self.assertNotIn("cfgRefresh", toggle)
         # The startup path reads the state and the open code box, nothing more.
         start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
         self.assertNotIn("cfgRefresh", start)
-        self.assertIn('<option value=ex', card)
-        self.assertIn('<option value=im', card)
         self.assertIn('<textarea id=cx', card)
-        self.assertIn('<p class=hd>Import and export</p>', card)
-        # The export box is read only, because the remote is the source of it.
-        self.assertIn('(cfgMode==="ex"?" readonly":"")', card)
-        self.assertIn('id=cxc>Copy</button>', card)
-        self.assertIn('id=cxd"+rd+">Download JSON</button>', card)
+        # The card heading names the block, so the body repeats no title.
+        self.assertNotIn('Import and export</p>', card)
+        self.assertNotIn("cfgMode", PAGE)
+        self.assertNotIn("cfgOut", PAGE)
+        self.assertNotIn('id=cs', card)
         self.assertIn('id=cxr"+rd+">Read Current Config</button>', card)
+        self.assertIn('id=cxfp"+rd+">Choose File</button>', card)
+        self.assertIn('id=cxd"+rd+">Download JSON</button>', card)
         self.assertIn("id=cxf type=file accept='.json,application/json'", card)
+        self.assertIn('id=cxc"+rd+">Copy</button>', card)
         self.assertIn('id=cxa"+wr+">Apply to the remote</button>', card)
-        # The two directions keep separate text, so a repaint cannot drop a
-        # paste and cannot show an export beside it.
-        self.assertIn('esc(cfgMode==="ex"?cfgOut:cfgIn)', card)
+        # One buffer keeps a pasted file and manual edits through a repaint.
+        self.assertIn('esc(cfgIn)', card)
         self.assertIn("box.oninput=function(){cfgIn=box.value}", card)
         self.assertIn('document.getElementById("cxd").onclick=cfgDownload', card)
+        self.assertIn('document.getElementById("cxr").onclick=', card)
+        self.assertIn('document.getElementById("cxfp").onclick=', card)
         self.assertIn('document.getElementById("cxf").onchange=cfgLoadFile', card)
         # An import writes flash, so it stays disabled while the remote is busy.
         self.assertIn('wr=(cfgBusy||(st&&st.busy))?" disabled":""', card)
@@ -773,7 +802,7 @@ class PageTest(unittest.TestCase):
 
     def test_the_config_card_can_download_and_load_a_local_json_file(self) -> None:
         download = section(PAGE, "function cfgDownload(){", "\n\nfunction cfgJsonFile")
-        self.assertIn('new Blob([cfgOut],{type:"application/json"})', download)
+        self.assertIn('new Blob([cfgIn],{type:"application/json"})', download)
         self.assertIn('a.download="c6remote-config.json"', download)
         self.assertIn("URL.createObjectURL", download)
         self.assertIn("URL.revokeObjectURL", download)
@@ -803,6 +832,7 @@ class PageTest(unittest.TestCase):
         refresh = section(PAGE, "function cfgRefresh(){", "\n\n")
         self.assertIn('fetch("/buttons/api/code?slot="+slot', refresh)
         self.assertIn("return need.reduce(function(p,slot){", refresh)
+        self.assertIn("cfgIn=cfgBlob()", refresh)
 
     def test_an_import_is_read_in_full_before_the_first_flash_write(self) -> None:
         """A refusal in the middle would leave half of the inputs on the old
@@ -909,6 +939,12 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn('AUTO_LOAD = ["web_server_base"]', INIT)
         self.assertIn("CONF_WEB_SERVER_BASE_ID", INIT)
         self.assertIn("cv.use_id(web_server_base.WebServerBase)", INIT)
+
+    def test_the_page_is_stored_as_gzip_data(self) -> None:
+        self.assertIn("gzip.compress", INIT)
+        self.assertIn("cg.progmem_array", INIT)
+        self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
+        self.assertNotIn('#include "button_config_page.h"', CPP)
 
 
 if __name__ == "__main__":

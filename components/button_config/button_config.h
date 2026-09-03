@@ -25,6 +25,10 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
 
   bool canHandle(AsyncWebServerRequest *request) const override;
   void handleRequest(AsyncWebServerRequest *request) override;
+  void set_page(const uint8_t *page, size_t size) {
+    this->page_ = page;
+    this->page_size_ = size;
+  }
 
  protected:
   void handle_page_(AsyncWebServerRequest *request);
@@ -34,6 +38,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void complete_action_(uint32_t id, bool ok);
 
   web_server_base::WebServerBase *base_;
+  const uint8_t *page_{nullptr};
+  size_t page_size_{0};
   std::atomic<bool> action_pending_{false};
   std::atomic<uint32_t> next_action_id_{0};
   std::atomic<uint32_t> completed_action_id_{0};

@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <mutex>
 #include <string>
 
@@ -128,6 +129,10 @@ class ZigbeeAssignmentManager {
     ESP_LOGI("zigbee_learn", "Button %u sends action %u to group 0x%04X (%s)", slot,
              static_cast<unsigned>(action), static_cast<unsigned>(group_id), entry.friendly_name);
     return true;
+  }
+
+  void set_assignment_store_callback(std::function<void(uint8_t)> callback) {
+    assignment_store_callback_ = std::move(callback);
   }
 
   // The IEEE address arrives as the little endian bytes of the EUI-64, which is
@@ -363,6 +368,8 @@ class ZigbeeAssignmentManager {
       ESP_LOGE("zigbee_learn", "Failed to clear the old action on button %u", slot);
       return false;
     }
+    if (assignment_store_callback_)
+      assignment_store_callback_(slot);
 
     Record next = record_;
     const size_t index = slot - FIRST_SLOT;
@@ -862,6 +869,7 @@ class ZigbeeAssignmentManager {
   std::atomic<uint16_t> nwk_cache_[SLOT_COUNT];
   std::atomic<uint8_t> pending_state_{PENDING_NONE};
   std::atomic<uint8_t> pending_slot_{0};
+  std::function<void(uint8_t)> assignment_store_callback_{};
   std::atomic<bool> resolve_in_flight_{false};
   std::atomic<bool> resolve_send_{false};
   std::atomic<uint32_t> resolve_seq_{0};

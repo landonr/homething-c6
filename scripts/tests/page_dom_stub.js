@@ -11,6 +11,7 @@
 const fs = require("fs");
 
 const els = {};
+let lastDownload = null;
 function mk(tag) {
   return {
     tagName: tag, children: [], _text: "", _html: "", _ids: [], attrs: {}, style: {},
@@ -41,6 +42,7 @@ function mk(tag) {
     setAttribute(k, v) { this.attrs[k] = v; },
     appendChild(c) { this.children.push(c); return c; },
     focus() {}, select() {},
+    click() { if (tag === "a") lastDownload = this; },
   };
 }
 for (const id of ["top", "plus", "pad", "ed", "z2m", "cfg", "cfgb", "cfgio", "cxo", "cxs", "cxz"])
@@ -62,6 +64,16 @@ global.document = { getElementById: (id) => els[id] || null, createElement: (t) 
 global.localStorage = { getItem: () => null, setItem: () => {} };
 global.navigator = {};
 global.WebSocket = function () { this.readyState = 0; this.close = () => {}; this.send = () => {}; };
+let downloadedBlob = null, revokedUrl = null;
+global.Blob = function (parts, options) { this.parts = parts; this.type = options.type; };
+global.URL = {
+  createObjectURL: (blob) => { downloadedBlob = blob; return "blob:config"; },
+  revokeObjectURL: (url) => { revokedUrl = url; },
+};
+global.FileReader = function () {
+  this.result = "";
+  this.readAsText = (file) => { this.result = file.text; this.onload(); };
+};
 const CODE = {slot: 6, present: true, text: "name: Home\ntype: raw\nfrequency: 38000\ndata: 100 200 300 400"};
 
 global.fetch = (url) => Promise.resolve({
@@ -643,6 +655,51 @@ setTimeout(() => {
     if (cfgIn !== "typed") throw new Error("the box did not keep the paste: " + cfgIn);
     cfgPaint();
     if (cfgIn !== "typed") throw new Error("a repaint lost the paste: " + cfgIn);
+  });
+  step("export downloads the current JSON config", () => {
+    global.cfgBusy = false;
+    global.cfgMode = "ex";
+    global.cfgOpen = true;
+    global.cfgOut = cfgBlob();
+    lastDownload = null; downloadedBlob = null; revokedUrl = null;
+    cfgPaint();
+    const button = document.getElementById("cxd");
+    if (typeof button.onclick !== "function") throw new Error("export has no download handler");
+    button.onclick();
+    if (!lastDownload || lastDownload.download !== "c6remote-config.json" ||
+        lastDownload.href !== "blob:config") throw new Error("download link is wrong");
+    if (!downloadedBlob || downloadedBlob.type !== "application/json" ||
+        downloadedBlob.parts[0] !== cfgOut) throw new Error("download body is wrong");
+  });
+  step("a JSON file picker validates and fills the import box", () => {
+    global.cfgAll = {6: CODE.text};
+    const valid = cfgBlob();
+    global.cfgBusy = false;
+    global.cfgMode = "im";
+    global.cfgOpen = true;
+    global.cfgIn = "";
+    cfgPaint();
+    const picker = document.getElementById("cxf");
+    if (typeof picker.onchange !== "function") throw new Error("import has no file handler");
+    const realFetch = global.fetch;
+    let writes = 0;
+    global.fetch = (u, o) => { if (o && o.body) writes++; return realFetch(u, o); };
+    picker.files = [{name: "remote.json", type: "application/json", size: valid.length, text: valid}];
+    picker.onchange();
+    global.fetch = realFetch;
+    if (cfgIn !== valid || cfgBad || cfgMsg !== "Loaded remote.json.")
+      throw new Error("valid JSON file was not loaded");
+    if (writes) throw new Error("loading a file applied config automatically");
+    cfgPaint();
+    const wrongType = document.getElementById("cxf");
+    wrongType.files = [{name: "remote.txt", type: "text/plain", size: valid.length, text: valid}];
+    wrongType.onchange();
+    if (!cfgBad || cfgIn !== valid) throw new Error("a non-JSON file changed the import");
+    cfgPaint();
+    const badJson = document.getElementById("cxf");
+    badJson.files = [{name: "remote.json", type: "application/json", size: 9, text: "{not json"}];
+    badJson.onchange();
+    if (!cfgBad || cfgIn !== valid) throw new Error("invalid JSON changed the import");
   });
 
   step("the address box prefills the default and carries the browser clear control", () => {

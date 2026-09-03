@@ -757,15 +757,33 @@ class PageTest(unittest.TestCase):
         # The export box is read only, because the remote is the source of it.
         self.assertIn('(cfgMode==="ex"?" readonly":"")', card)
         self.assertIn('id=cxc>Copy</button>', card)
-        self.assertIn('id=cxr"+rd+">Read the remote</button>', card)
+        self.assertIn('id=cxd"+rd+">Download JSON</button>', card)
+        self.assertIn('id=cxr"+rd+">Read Current Config</button>', card)
+        self.assertIn("id=cxf type=file accept='.json,application/json'", card)
         self.assertIn('id=cxa"+wr+">Apply to the remote</button>', card)
         # The two directions keep separate text, so a repaint cannot drop a
         # paste and cannot show an export beside it.
         self.assertIn('esc(cfgMode==="ex"?cfgOut:cfgIn)', card)
         self.assertIn("box.oninput=function(){cfgIn=box.value}", card)
+        self.assertIn('document.getElementById("cxd").onclick=cfgDownload', card)
+        self.assertIn('document.getElementById("cxf").onchange=cfgLoadFile', card)
         # An import writes flash, so it stays disabled while the remote is busy.
         self.assertIn('wr=(cfgBusy||(st&&st.busy))?" disabled":""', card)
         self.assertIn("editor();cfgPaint()}", PAGE)
+
+    def test_the_config_card_can_download_and_load_a_local_json_file(self) -> None:
+        download = section(PAGE, "function cfgDownload(){", "\n\nfunction cfgJsonFile")
+        self.assertIn('new Blob([cfgOut],{type:"application/json"})', download)
+        self.assertIn('a.download="c6remote-config.json"', download)
+        self.assertIn("URL.createObjectURL", download)
+        self.assertIn("URL.revokeObjectURL", download)
+        load = section(PAGE, "function cfgLoadFile(){", "\n\n// The box")
+        self.assertIn('document.getElementById("cxf")', load)
+        self.assertIn("cfgJsonFile(file)", load)
+        self.assertIn("file.size>262144", load)
+        self.assertIn("new FileReader()", load)
+        self.assertIn("cfgParse(text)", load)
+        self.assertIn('cfgMsg="Loaded "+name+"."', load)
 
     def test_an_export_holds_the_action_and_the_payload_of_every_input(self) -> None:
         """An export that named the action alone would restore nothing, because
@@ -796,11 +814,14 @@ class PageTest(unittest.TestCase):
         self.assertIn("if(!(ep>=1&&ep<=240))", check)
         self.assertIn("if(!(g>=1&&g<=65527))", check)
         apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
-        self.assertIn("why=cfgCheck(j.slots[i]);", apply_)
-        self.assertIn("if(why){cfgNote(why,true);return}", apply_)
-        self.assertLess(apply_.index("cfgCheck"), apply_.index("cfgRun("))
+        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[];", apply_)
+        self.assertIn("if(parsed.error){cfgNote(parsed.error,true);return}", apply_)
+        self.assertLess(apply_.index("cfgParse"), apply_.index("cfgRun("))
+        parse = section(PAGE, "function cfgParse(text){", "\n\n// An action")
+        self.assertIn("why=cfgCheck(j.slots[i]);", parse)
+        self.assertIn('j.c6remote!==1', parse)
         # A clear on an input that holds nothing is the one skipped write.
-        self.assertIn("if(cfgNeeded(j.slots[i]))list.push(j.slots[i])}", apply_)
+        self.assertIn("for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);", apply_)
         needed = section(PAGE, "function cfgNeeded(e){", "\n\n")
         self.assertIn('if(e.action!=="none")return true', needed)
 

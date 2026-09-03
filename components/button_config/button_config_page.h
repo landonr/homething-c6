@@ -666,6 +666,16 @@ else if(e.val!==undefined&&parseInt(e.val,10)!==0)
 return "Slot "+e.slot+" gives a value to "+A.n+", which takes none."}
 return ""}
 
+function cfgParse(text){
+var j,i,why;
+try{j=JSON.parse(text)}catch(x){return {error:"That text is not valid JSON."}}
+if(!j||j.c6remote!==1||!Array.isArray(j.slots))
+return {error:"A config file holds a c6remote version and a slots list."};
+for(i=0;i<j.slots.length;i++){
+why=cfgCheck(j.slots[i]);
+if(why)return {error:why}}
+return {config:j}}
+
 // An action with no value sends 0, and one with a value falls back to its
 // default, so a hand written block can leave the field out.
 function cfgVal(e){var A=za(e.act===undefined?0:e.act);
@@ -702,13 +712,10 @@ if(!ok)throw new Error("Slot "+list[i].slot+": the remote refused it.");
 return cfgRun(list,i+1)})}
 
 function cfgApply(){
-var j,i,why,list=[];
-try{j=JSON.parse(cfgIn)}catch(x){cfgNote("That text is not valid JSON.",true);return}
-if(!j||!Array.isArray(j.slots)){cfgNote("A config holds a slots list.",true);return}
-for(i=0;i<j.slots.length;i++){
-why=cfgCheck(j.slots[i]);
-if(why){cfgNote(why,true);return}
-if(cfgNeeded(j.slots[i]))list.push(j.slots[i])}
+var parsed=cfgParse(cfgIn),j,i,list=[];
+if(parsed.error){cfgNote(parsed.error,true);return}
+j=parsed.config;
+for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);
 if(!list.length){cfgNote("Every input already matches this config.",false);return}
 cfgBusy=true;cfgBad=false;
 var total=j.slots.length;
@@ -725,6 +732,30 @@ function cfgCopy(){var t=document.getElementById("cx");
 if(!t.value){cfgNote("There is nothing to copy yet.",true);return}
 var ok=copyBox(t);
 cfgNote(ok?"Config copied.":"Copy is blocked. Select the text and copy it by hand.",!ok)}
+
+function cfgDownload(){
+if(!cfgOut){cfgNote("Read the remote before download.",true);return}
+var url=URL.createObjectURL(new Blob([cfgOut],{type:"application/json"}));
+var a=document.createElement("a");
+a.href=url;a.download="c6remote-config.json";a.click();
+setTimeout(function(){URL.revokeObjectURL(url)},0)}
+
+function cfgJsonFile(file){
+var name=String(file.name||""),type=String(file.type||"").toLowerCase();
+return /\.json$/i.test(name)||type==="application/json"||type==="text/json"||/\+json$/.test(type)}
+
+function cfgLoadFile(){
+var input=document.getElementById("cxf"),file=input&&input.files&&input.files[0];
+if(!file)return;
+if(!cfgJsonFile(file)){cfgNote("Select a JSON config file.",true);return}
+if(file.size>262144){cfgNote("That config file is larger than 256 KiB.",true);return}
+var reader=new FileReader(),name=file.name||"config file";
+reader.onerror=function(){cfgNote("Could not read "+name+".",true)};
+reader.onload=function(){
+var text=typeof reader.result==="string"?reader.result:"",parsed=cfgParse(text);
+if(parsed.error){cfgNote(parsed.error,true);return}
+cfgIn=text;cfgMsg="Loaded "+name+".";cfgBad=false;cfgPaint()};
+reader.readAsText(file)}
 
 // The box reads cfgOut or cfgIn, so a repaint during an import keeps the pasted
 // text and never shows an export beside it.
@@ -757,8 +788,10 @@ h+="<textarea id=cx rows=12 spellcheck=false autocomplete=off"+
 h+="<div class=act>";
 h+=cfgMode==="ex"
 ?"<button type=button class=sec id=cxc>Copy</button>"+
-"<button type=button class=sec id=cxr"+rd+">Read the remote</button>"
-:"<button type=button id=cxa"+wr+">Apply to the remote</button>";
+"<button type=button class=sec id=cxd"+rd+">Download JSON</button>"+
+"<button type=button class=sec id=cxr"+rd+">Read Current Config</button>"
+:"<input id=cxf type=file accept='.json,application/json'"+rd+">"+
+"<button type=button id=cxa"+wr+">Apply to the remote</button>";
 h+="</div>";
 if(cfgMode==="im")h+="<p class=sub>An import writes one input at a time. It "+
 "stops on the first entry the remote refuses, and it leaves an input the block "+
@@ -768,11 +801,13 @@ document.getElementById("cs").onchange=function(){cfgMode=this.value;
 cfgMsg="";cfgBad=false;cfgPaint();if(cfgMode==="ex")cfgRefresh()};
 if(cfgMode==="ex"){
 document.getElementById("cxc").onclick=cfgCopy;
+if(!cfgBusy)document.getElementById("cxd").onclick=cfgDownload;
 if(!cfgBusy)document.getElementById("cxr").onclick=function(){cfgAll={};cfgMsg="";
 cfgBad=false;cfgRefresh()}}
 else{
 var box=document.getElementById("cx");
 box.oninput=function(){cfgIn=box.value};
+if(!cfgBusy)document.getElementById("cxf").onchange=cfgLoadFile;
 if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}}
 
 function editor(){

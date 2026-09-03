@@ -55,6 +55,7 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .sep{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
+.code .load{color:var(--mut);font-size:13px;margin:8px 0 0}
 p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
 h3{font-size:15px;margin:14px 0 8px}
@@ -150,8 +151,9 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
 // The Home Assistant add-on address, because Ingress cannot carry a websocket.
 var Z2MDEF="ws://homeassistant.local:8099/api";
-// cd holds the editable code text for cdSlot.
-var cd="",cdSlot=null;
+// cd holds the editable code text for cdSlot. codeLoad rejects an old read
+// after the user selects or pastes a newer code.
+var cd="",cdSlot=null,codeLoad=0;
 // act is the open action panel. The Zigbee field values live here too, because
 // a late bridge/devices message repaints and would otherwise wipe them. A group
 // and a device get one box each, and zkv says which kind is on screen, so only
@@ -516,21 +518,23 @@ z2mConnect(u,k);z2mStatus()}
 
 // The box stays available on an empty slot, so a code can be pasted in without
 // pointing a source remote at the board.
+function hasCode(text){return !!String(text||"").replace(/\s+/g,"")}
+
 function codeBox(lock){
-var dis=lock?" disabled":"";
+var dis=lock?" disabled":"",codeDis=dis||(!hasCode(cd)?" disabled":"");
 var h="<div class=code><p class=hd>IR code</p>"+
 "<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
 "rel=noreferrer>Flipper-IRDB</a></p>"+
 "<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
-if(cdSlot!==sel)h+="<p class=sub>Loading the stored code.</p>";
-h+="<div class=act><button type=button class=sec id=cc"+dis+">Copy</button>"+
-"<button type=button id=ca"+dis+">Apply to this input</button></div></div>";
+h+="<div class=act><button type=button class=sec id=cc"+codeDis+">Copy</button>"+
+"<button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
+(cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")+"</div>";
 return h}
 
-function loadCode(s){cdSlot=null;cd="";
+function loadCode(s){var loadId=++codeLoad;cdSlot=null;cd="";
 return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j.slot!==s)return;
+.then(function(j){if(loadId!==codeLoad||j.slot!==s)return;
 cd=j.text||"";cfgAll[s]=cd;cdSlot=s;if(sel===s)paint()})
 .catch(function(){})}
 
@@ -544,7 +548,7 @@ if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}
 return ok}
 
 function copyCode(){var t=document.getElementById("ct");
-if(!t.value){msg="This input has no code to copy.";bad=true;paint();return}
+if(!hasCode(t.value)){msg="This input has no code to copy.";bad=true;paint();return}
 var ok=copyBox(t);
 msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
 bad=!ok;paint()}
@@ -574,29 +578,23 @@ msg="Copied IR config from "+clipName(c)+".";bad=false})
 .then(function(){clipBusy=false;paint()})}
 
 function pasteAssignment(){
-var c=clip,target=sel,request;
+var c=clip,target=sel;
 if(!c){msg="Copy an IR code or Zigbee target first.";bad=true;paint();return}
-if(c.source===target){msg="Select another input to paste this config.";bad=true;paint();return}
-clipBusy=true;paint();
-if(c.kind==="ir")request=post("set_ir_code",target,c.code);
-else if(c.device)request=post("set_zigbee_device",target,null,c.name,
-"&ieee="+encodeURIComponent(c.ieee)+"&ep="+encodeURIComponent(c.ep)+
-"&act="+Number(c.act)+"&val="+encodeURIComponent(c.val));
-else request=post("set_zigbee",target,String(c.group),c.name,
-"&act="+Number(c.act)+"&val="+encodeURIComponent(c.val));
-request.then(function(r){
-if(r.code!==200)throw new Error(fail(r));
-return waitAction(r.body.id)}).then(function(ok){
-if(!ok)throw new Error("The remote refused the config.");
-msg="Pasted "+(c.kind==="ir"?"IR":"Zigbee")+" config from "+clipName(c)+".";
-bad=false;return load().then(function(){if(c.kind==="ir")return loadCode(target)})})
-.catch(function(err){msg=err&&err.message?err.message:"The remote did not answer.";bad=true})
-.then(function(){clipBusy=false;paint()})}
+if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}
+else{
+act="zb";zkv=c.device?"d":"g";
+zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";
+zgv=c.device?"":String(c.group);zhv=c.device?c.ieee:"";
+zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;
+zvv=za(zav)&&za(zav).p?String(c.val):""}
+msg="Pasted "+(c.kind==="ir"?"IR":"Zigbee")+" config from "+clipName(c)+
+". Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it.";
+bad=false;paint()}
 
 function applyCode(){
 var text=document.getElementById("ct").value;
 cd=text;
-if(!text.replace(/\s+/g,"")){msg="Paste a code first.";bad=true;paint();return}
+if(!hasCode(text)){msg="Paste a code first.";bad=true;paint();return}
 go("set_ir_code",text)}
 
 // One entry per input, in the render order of the page. label is for the reader,
@@ -785,7 +783,7 @@ var d=info(sel);
 var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
 var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
 "<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
-"<button type=button id=bpaste"+(!clip||clip.source===sel||locked?" disabled":"")+
+"<button type=button id=bpaste"+(!clip||locked?" disabled":"")+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
 "</span></h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
 if(mode==="rec"&&rec===sel){
@@ -811,17 +809,20 @@ var title="";
 for(var i=0;i<opts.length;i++){h+="<option value="+opts[i][0]+
 (act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
 if(act===opts[i][0])title=opts[i][1]}
-h+="</select><h3>"+esc(title)+"</h3>";
+h+="</select><h2>"+esc(title)+"</h2>";
 h+=act==="zb"?zbForm(st&&st.busy):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock);
 e.innerHTML=h;
 
 if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
-if(!locked&&clip&&clip.source!==sel)document.getElementById("bpaste").onclick=pasteAssignment;
+if(!locked&&clip)document.getElementById("bpaste").onclick=pasteAssignment;
 document.getElementById("as").onchange=function(){act=this.value;msg="";bad=false;paint()};
 if(act==="ir"){
 var box=document.getElementById("ct");
-box.oninput=function(){cd=box.value};
+box.oninput=function(){cd=box.value;
+var disabled=lock||!hasCode(cd);
+document.getElementById("cc").disabled=disabled;
+document.getElementById("ca").disabled=disabled};
 document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
 if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
@@ -869,8 +870,11 @@ act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";
 var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
 zav=(pr&&pr.action==="zigbee")?(pr.act||0):0;
 zvv=(pr&&pr.action==="zigbee"&&pr.val)?String(pr.val):"";
+// Only IR assignments have stored code. Empty and Clear slots show a ready
+// code box, so they do not wait for a request that can only return empty text.
+if(!pr||pr.action!=="ir")cdSlot=s;
 paint();
-if(cdSlot!==s)loadCode(s)}
+if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
 
 function load(){return fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){st=j;return j})}

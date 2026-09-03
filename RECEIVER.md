@@ -86,7 +86,11 @@ The right side of the selected-input title has **Copy** and **Paste** buttons.
 Use them to copy an IR code or Zigbee target configuration between inputs.
 
 Select the source input and select **Copy**. Then select the target input and
-select **Paste**. Paste replaces the active assignment on the target input.
+select **Paste**. Paste opens the IR or Zigbee panel and fills its configuration
+form. Paste does not write an assignment to the remote.
+
+Paste stays available for a Clear or empty input when copied configuration exists.
+Select **Apply** for IR or **Assign** for Zigbee to write the configuration.
 
 One panel shows at a time, because an input holds one action. The IR panel owns
 the **Record IR** button and the code box.

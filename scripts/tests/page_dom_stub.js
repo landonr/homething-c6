@@ -14,7 +14,7 @@ const els = {};
 function mk(tag) {
   return {
     tagName: tag, children: [], _text: "", _html: "", _ids: [], attrs: {}, style: {},
-    value: "", className: "", onclick: null, oninput: null,
+    value: "", className: "", disabled: false, onclick: null, oninput: null,
     set innerHTML(v) {
       this._html = v;
       this.children = [];
@@ -24,9 +24,14 @@ function mk(tag) {
       // as one that still shows it.
       for (const id of this._ids) delete els[id];
       this._ids = [];
-      const re = /id=['"]?([A-Za-z0-9_-]+)['"]?/g;
+      const re = /<[^>]*\bid=['"]?([A-Za-z0-9_-]+)['"]?[^>]*>/g;
       let m;
-      while ((m = re.exec(v))) { els[m[1]] = mk("stub"); this._ids.push(m[1]); }
+      while ((m = re.exec(v))) {
+        const child = mk("stub");
+        child.disabled = /\sdisabled(?:\s|=|>)/.test(m[0]);
+        els[m[1]] = child;
+        this._ids.push(m[1]);
+      }
     },
     get innerHTML() { return this._html; },
     set textContent(v) { this._text = String(v); },
@@ -93,12 +98,11 @@ setTimeout(() => {
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
-  step("switching inputs clears stale IR code before its request finishes", () => {
+  step("switching to an empty input clears stale IR code without loading", () => {
     const realFetch = global.fetch;
-    let finishCode = null;
+    let codeRequests = 0;
     global.fetch = (u, o) => {
-      if (String(u).indexOf("/api/code") >= 0)
-        return new Promise((resolve) => { finishCode = resolve; });
+      if (String(u).indexOf("/api/code") >= 0) codeRequests++;
       return realFetch(u, o);
     };
     global.sel = 6;
@@ -109,12 +113,57 @@ setTimeout(() => {
     pick(3);
     const html = document.getElementById("ed").innerHTML;
     if (html.indexOf(CODE.text) >= 0) throw new Error("the previous input's code stayed visible");
-    if (html.indexOf("Loading the stored code.") < 0) throw new Error("the loading state disappeared");
-    if (cd !== "" || cdSlot !== null) throw new Error("the previous input's code stayed cached");
+    if (html.indexOf("Loading the stored code.") >= 0)
+      throw new Error("an empty input showed a loading state");
+    if (codeRequests) throw new Error("an empty input requested stored IR code");
+    if (cd !== "" || cdSlot !== 3) throw new Error("the empty code box was not ready");
     global.fetch = realFetch;
-    finishCode({json: () => Promise.resolve({slot: 3, present: false, text: ""})});
   });
-  step("the title copies a Zigbee config and enables Paste elsewhere", () => {
+  step("the IR loading state stays below the code actions", () => {
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => {
+      if (String(u).indexOf("/api/code") >= 0) return new Promise(() => {});
+      return realFetch(u, o);
+    };
+    global.sel = 3;
+    global.cd = "";
+    global.cdSlot = 3;
+    global.act = "ir";
+    paint();
+    pick(6);
+    const html = document.getElementById("ed").innerHTML;
+    const status = html.indexOf("Loading the stored code.");
+    const actions = html.indexOf('<div class=act><button type=button class=sec id=cc');
+    const actionsEnd = html.indexOf("</div>", actions);
+    if (actions < 0 || actionsEnd < 0 || status <= actionsEnd)
+      throw new Error("the loading state is not below the code actions");
+    global.fetch = realFetch;
+  });
+  step("empty IR code disables Copy and Apply until text arrives", () => {
+    global.sel = 3;
+    global.cd = " \t\n";
+    global.cdSlot = 3;
+    global.act = "ir";
+    paint();
+    const box = document.getElementById("ct");
+    const copy = document.getElementById("cc");
+    const apply = document.getElementById("ca");
+    if (!copy.disabled || !apply.disabled)
+      throw new Error("empty code enabled a code action");
+    box.value = " \t\n";
+    box.oninput();
+    if (!copy.disabled || !apply.disabled)
+      throw new Error("whitespace enabled a code action");
+    box.value = "name: Home";
+    box.oninput();
+    if (copy.disabled || apply.disabled)
+      throw new Error("typed code did not enable its actions");
+    box.value = "";
+    box.oninput();
+    if (!copy.disabled || !apply.disabled)
+      throw new Error("cleared code left an action enabled");
+  });
+  step("Paste fills a cleared input before it assigns a Zigbee device", () => {
     global.sel = 5;
     global.clip = null;
     global.clipBusy = false;
@@ -124,35 +173,46 @@ setTimeout(() => {
     copy.onclick();
     if (!clip || clip.kind !== "zigbee" || !clip.device || clip.act !== 3 || clip.val !== 32)
       throw new Error("the Zigbee assignment was not copied: " + JSON.stringify(clip));
-    global.sel = 3;
-    paint();
+    pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
-      throw new Error("another input has no Paste handler");
-    let body = null;
+      throw new Error("a cleared input has no Paste handler");
+    const bodies = [];
     const realFetch = global.fetch;
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     paste.onclick();
+    if (bodies.length) throw new Error("Paste wrote before Assign: " + bodies[0]);
+    if (act !== "zb" || zkv !== "d" || zhv !== "0x94deb8fffe9db81e" ||
+        zpv !== "1" || zav !== 3 || zvv !== "32")
+      throw new Error("Paste did not fill the device form");
+    if (typeof document.getElementById("zi").onclick !== "function")
+      throw new Error("Paste did not open the Zigbee panel");
+    document.getElementById("zi").onclick();
+    if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee_device&slot=3") < 0 ||
+        bodies[0].indexOf("ieee=0x94deb8fffe9db81e") < 0 || bodies[0].indexOf("act=3") < 0 ||
+        bodies[0].indexOf("val=32") < 0)
+      throw new Error("Assign sent the wrong device payload: " + bodies[0]);
     global.fetch = realFetch;
-    if (!body || body.indexOf("action=set_zigbee_device&slot=3") < 0 ||
-        body.indexOf("ieee=0x94deb8fffe9db81e") < 0 || body.indexOf("act=3") < 0 ||
-        body.indexOf("val=32") < 0)
-      throw new Error("the device paste sent the wrong payload: " + body);
-    // The request above still waits for the remote response. Clear the visual
-    // lock here so the group path can exercise its own title control.
-    global.clipBusy = false;
+    global.zbusy = false;
+  });
+  step("Paste fills a Zigbee group before it assigns", () => {
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.tg = [{id: 4609, name: "Office Lamp", members: []}];
     global.clip = clipConfig(row(20));
-    global.sel = 3;
-    paint();
-    body = null;
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    pick(3);
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     document.getElementById("bpaste").onclick();
+    if (bodies.length) throw new Error("Paste wrote before Assign: " + bodies[0]);
+    if (act !== "zb" || zkv !== "g" || zsv !== "4609" || zgv !== "4609" || zav !== 0 || zvv !== "")
+      throw new Error("Paste did not fill the group form");
+    document.getElementById("zi").onclick();
     global.fetch = realFetch;
-    if (!body || body.indexOf("action=set_zigbee&slot=3") < 0 ||
-        body.indexOf("group=4609") < 0 || body.indexOf("act=0") < 0 ||
-        body.indexOf("name=Office%20Lamp") < 0)
-      throw new Error("the group paste sent the wrong payload: " + body);
-    global.clipBusy = false;
+    if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee&slot=3") < 0 ||
+        bodies[0].indexOf("group=4609") < 0 || bodies[0].indexOf("act=0") < 0 ||
+        bodies[0].indexOf("name=Office%20Lamp") < 0)
+      throw new Error("Assign sent the wrong group payload: " + bodies[0]);
+    global.zbusy = false;
   });
   step("the title starts a full IR config copy", () => {
     global.sel = 6;
@@ -164,24 +224,28 @@ setTimeout(() => {
     copy.onclick();
     if (!clipBusy) throw new Error("IR Copy did not wait for the full code");
   });
-  setTimeout(() => step("the title keeps the copied IR config", () => {
+  setTimeout(() => step("Paste fills an IR box before it applies", () => {
     if (!clip || clip.kind !== "ir" || clip.code !== CODE.text)
       throw new Error("the full IR code was not copied: " + JSON.stringify(clip));
-    global.sel = 3;
-    paint();
+    pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
-      throw new Error("an IR copy did not enable Paste elsewhere");
-    let body = null;
+      throw new Error("an IR copy did not enable Paste on a cleared input");
+    const bodies = [];
     const realFetch = global.fetch;
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     paste.onclick();
+    if (bodies.length) throw new Error("Paste wrote before Apply: " + bodies[0]);
+    if (act !== "ir" || cd !== CODE.text || cdSlot !== 3)
+      throw new Error("Paste did not fill the IR code box");
+    const code = document.getElementById("ct");
+    code.value = CODE.text;
+    document.getElementById("ca").onclick();
     global.fetch = realFetch;
-    if (!body || body.indexOf("action=set_ir_code&slot=3") < 0 ||
-        body.indexOf("code=name%3A%20Home") < 0)
-      throw new Error("the IR paste sent the wrong payload: " + body);
+    if (bodies.length !== 1 || bodies[0].indexOf("action=set_ir_code&slot=3") < 0 ||
+        bodies[0].indexOf("code=name%3A%20Home") < 0)
+      throw new Error("Apply sent the wrong IR payload: " + bodies[0]);
   }), 0);
-
   global.tg = [
     {id: 1, name: "all_light", members: ["0xaaa", "0xbbb"]},
     {id: 9, name: "c6 Office Lamp", members: ["0x94deb8fffe9db81e"]},

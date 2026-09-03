@@ -394,8 +394,15 @@ class PageTest(unittest.TestCase):
         self.assertIn("<textarea id=ct", box)
         # The box carries the only copy of a code, so it never hides behind a toggle.
         self.assertNotIn("<details", PAGE)
-        self.assertIn('id=cc"+dis+">Copy</button>', box)
-        self.assertIn('id=ca"+dis+">Apply to this input</button>', box)
+        self.assertIn('function hasCode(text){return !!String(text||"").replace(/\\s+/g,"")}', PAGE)
+        self.assertIn('var dis=lock?" disabled":"",codeDis=dis||(!hasCode(cd)?" disabled":"");', box)
+        self.assertIn('id=cc"+codeDis+">Copy</button>', box)
+        self.assertIn('id=ca"+codeDis+">Apply to this input</button>', box)
+        # Loading follows the code actions, so it cannot move them.
+        self.assertIn(".code .load{color:var(--mut);font-size:13px;margin:8px 0 0}", PAGE)
+        self.assertIn('"<button type=button id=ca"+codeDis+">Apply to this input</button></div>"+', box)
+        self.assertIn('"<p class=load>Loading the stored code.</p>"', box)
+        self.assertIn('var disabled=lock||!hasCode(cd);', PAGE)
         # One helper carries both boxes, so the code box and the config box
         # cannot drift apart on the browsers that lack navigator.clipboard.
         copy = section(PAGE, "function copyBox(t){", "return ok}")
@@ -474,7 +481,7 @@ class PageTest(unittest.TestCase):
         # The panel below the selector repeats the selected action as a heading,
         # so the fields under it are never read out of context.
         self.assertIn('if(act===opts[i][0])title=opts[i][1]}', editor)
-        self.assertIn('h+="</select><h3>"+esc(title)+"</h3>";', editor)
+        self.assertIn('h+="</select><h2>"+esc(title)+"</h2>";', editor)
         self.assertIn('document.getElementById("as").onchange=', editor)
         # Record IR and the code box belong to the IR panel alone.
         ir = section(PAGE, "function irPanel(lock){", "\n\nfunction ")
@@ -520,6 +527,13 @@ class PageTest(unittest.TestCase):
         self.assertIn('if(r.action==="voice")return "va";', body)
         self.assertIn('if(!r||r.action==="none")return "ir";', body)
         self.assertIn("act=actFor(s);", PAGE)
+
+    def test_only_an_ir_assignment_loads_stored_code_on_selection(self) -> None:
+        """An empty slot has no IR code, so its ready code box must not show a
+        loading state while the endpoint returns an empty response."""
+        pick = section(PAGE, "function pick(s){", "\n\nfunction load()")
+        self.assertIn('if(!pr||pr.action!=="ir")cdSlot=s;', pick)
+        self.assertIn('if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)', pick)
 
     def test_the_zigbee_fields_survive_a_repaint(self) -> None:
         """A late bridge/devices message repaints the panel, and a half typed
@@ -665,8 +679,8 @@ class PageTest(unittest.TestCase):
         )
 
     def test_the_selected_input_title_copies_and_pastes_ir_and_zigbee_configs(self) -> None:
-        """The page-local clipboard moves an assignment without a second device
-        read for Zigbee. IR reads its full signal before it enables Paste."""
+        """Paste opens the matching editor and fills it. Apply or Assign writes
+        the copied config to the selected input."""
         self.assertIn(".edtitle .clip{display:flex", PAGE)
         editor = section(PAGE, "function editor(){", "\n\nfunction actFor(")
         self.assertIn('<h2 class=edtitle><span>', editor)
@@ -674,7 +688,8 @@ class PageTest(unittest.TestCase):
         self.assertIn('id=bpaste', editor)
         self.assertIn('document.getElementById("bcopy").onclick=copyAssignment', editor)
         self.assertIn('document.getElementById("bpaste").onclick=pasteAssignment', editor)
-        self.assertIn('!clip||clip.source===sel||locked', editor)
+        self.assertIn('!clip||locked', editor)
+        self.assertNotIn('clip.source===sel', editor)
         clip = section(PAGE, "function clipConfig(r){", "\n\nfunction clipName(")
         self.assertIn('if(r.action==="ir")return {kind:"ir",source:r.slot}', clip)
         self.assertIn('if(r.action!=="zigbee")return null;', clip)
@@ -683,10 +698,17 @@ class PageTest(unittest.TestCase):
         self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
         self.assertIn('clip=c;', copy)
         paste = section(PAGE, "function pasteAssignment(){", "\n\nfunction applyCode(")
-        self.assertIn('post("set_ir_code",target,c.code)', paste)
-        self.assertIn('post("set_zigbee_device",target,null,c.name,', paste)
-        self.assertIn('post("set_zigbee",target,String(c.group),c.name,', paste)
-        self.assertIn('return waitAction(r.body.id)', paste)
+        self.assertIn('if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}', paste)
+        self.assertIn('act="zb";zkv=c.device?"d":"g";', paste)
+        self.assertIn('zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";', paste)
+        self.assertIn('zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;', paste)
+        self.assertIn('zvv=za(zav)&&za(zav).p?String(c.val):""}', paste)
+        self.assertIn('Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it."', paste)
+        self.assertNotIn('post("set_', paste)
+        self.assertNotIn('waitAction(', paste)
+        load = section(PAGE, "function loadCode(s){", "\n\n// The page")
+        self.assertIn("var loadId=++codeLoad", load)
+        self.assertIn("if(loadId!==codeLoad||j.slot!==s)return;", load)
 
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can

@@ -917,14 +917,17 @@ if(cfgMsg)h+="<div class='note "+(cfgBad?"bad":"ok")+"'>"+esc(cfgMsg)+"</div>";
 if(cfgBusy)h+="<div class=bar><i></i></div>";
 h+="<textarea id=cx rows=12 spellcheck=false autocomplete=off"+
 (cfgBusy?" disabled":"")+">"+esc(cfgIn)+"</textarea>";
-h+="<div class=act><button type=button class=sec id=cxc"+rd+">Copy</button>"+
-"<button type=button class=sec id=cxd"+rd+">Download JSON</button></div>"+
+var em=rd||(String(cfgIn).trim()?"":" disabled");
+h+="<div class=act><button type=button class=sec id=cxc"+em+">Copy</button>"+
+"<button type=button class=sec id=cxd"+em+">Download JSON</button></div>"+
 "<p class=sub>An apply writes one input at a time. It stops on the first input "+
 "the remote refuses, and it leaves an input the text does not name alone.</p>"+
 "<div class=act><button type=button id=cxa"+wr+">Apply to the remote</button></div>";
 e.innerHTML=h;
 var box=document.getElementById("cx");
-box.oninput=function(){cfgIn=box.value};
+box.oninput=function(){cfgIn=box.value;
+var off=cfgBusy||!String(cfgIn).trim(),c=document.getElementById("cxc"),d=document.getElementById("cxd");
+if(c)c.disabled=off;if(d)d.disabled=off};
 if(!cfgBusy){
 document.getElementById("cxc").onclick=cfgCopy;
 document.getElementById("cxd").onclick=cfgDownload;

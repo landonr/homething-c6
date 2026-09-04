@@ -684,6 +684,27 @@ setTimeout(() => {
     cfgPaint();
     if (cfgIn !== box.value) throw new Error("a repaint lost the text");
   });
+  step("copy and download need text in the box", () => {
+    global.cfgBusy = false;
+    global.cfgOpen = true;
+    global.cfgIn = "";
+    cfgPaint();
+    if (!document.getElementById("cxc").disabled ||
+        !document.getElementById("cxd").disabled)
+      throw new Error("an empty box left copy or download enabled");
+    const box = document.getElementById("cx");
+    box.value = cfgBlob();
+    box.oninput.call(box);
+    if (document.getElementById("cxc").disabled ||
+        document.getElementById("cxd").disabled)
+      throw new Error("typed text did not enable copy or download");
+    box.value = "   ";
+    box.oninput.call(box);
+    if (!document.getElementById("cxc").disabled ||
+        !document.getElementById("cxd").disabled)
+      throw new Error("blank text left copy or download enabled");
+    global.cfgIn = "";
+  });
   step("export downloads the current JSON config", () => {
     global.cfgBusy = false;
     global.cfgOpen = true;

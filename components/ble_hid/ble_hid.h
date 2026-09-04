@@ -52,6 +52,9 @@ class BleHid final : public Component {
   bool set_pressed(uint8_t slot, bool pressed);
   bool forget_bond();
 
+  bool radio_enabled() const { return radio_on_.load(std::memory_order_acquire); }
+  bool set_radio_enabled(bool enabled);
+
   bool connected() const { return connected_.load(std::memory_order_acquire); }
   bool bonded() const { return bonded_.load(std::memory_order_acquire); }
   bool pairing() const { return pairing_.load(std::memory_order_acquire); }
@@ -66,10 +69,15 @@ class BleHid final : public Component {
     uint16_t usage;
   };
 
+  // flags bit 0 holds the radio switch. An old record has the byte at zero, so
+  // it loads with the radio on and the layout stays the same length.
+  static constexpr uint8_t FLAG_RADIO_OFF = 0x01;
+
   struct Record {
     uint32_t magic;
     uint8_t version;
-    uint8_t reserved[3];
+    uint8_t flags;
+    uint8_t reserved[2];
     Entry entries[SLOT_COUNT];
     uint32_t checksum;
   };
@@ -89,6 +97,7 @@ class BleHid final : public Component {
   void start_advertising_();
   void read_host_name_();
   void set_host_name_(const char *name);
+  void save_host_name_();
   int handle_gap_event_(ble_gap_event *event);
   static int gap_event_(ble_gap_event *event, void *arg);
   static int host_name_read_(uint16_t connection, const ble_gatt_error *error, ble_gatt_attr *attr,
@@ -97,6 +106,11 @@ class BleHid final : public Component {
 
   esp_hidd_dev_t *device_{nullptr};
   esphome::ESPPreferenceObject pref_{};
+  // The host name is read from the host over GATT, so it survives the link and
+  // a reboot only in its own record. The page names the bonded host with it
+  // while the radio is off.
+  esphome::ESPPreferenceObject host_pref_{};
+  std::atomic<bool> host_save_pending_{false};
   Record record_{};
   std::array<bool, SLOT_COUNT> active_{};
   std::atomic<bool> connected_{false};
@@ -106,7 +120,9 @@ class BleHid final : public Component {
   std::atomic<bool> disconnect_pending_{false};
   std::atomic<bool> report_sync_pending_{false};
   std::atomic<bool> advertising_{false};
+  std::atomic<bool> radio_on_{true};
   bool assignments_ready_{false};
+  bool stack_ready_{false};
   std::atomic<bool> hid_started_{false};
   mutable std::mutex record_mutex_;
   mutable std::mutex host_name_mutex_;

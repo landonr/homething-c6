@@ -7,12 +7,14 @@ static const char PAGE_HTML[] = R"=====(<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Remote buttons</title>
+<link rel=icon href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20805.333%20795.107%22%3E%3Cstyle%3Epath%7Bfill:%2316181d%7D@media(prefers-color-scheme:dark)%7Bpath%7Bfill:%23e7eaef%7D%7D%3C/style%3E%3Cpath%20d=%22M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z%22/%3E%3Cpath%20d=%22M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z%22/%3E%3Cpath%20d=%22M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z%22/%3E%3C/svg%3E">
+<title>homeThing c6</title>
 <style>
 :root{--bg:#f3f4f7;--fg:#16181d;--card:#fff;--line:#c6cad3;--mut:#565b66;
---acc:#14428f;--sel:#dae5fb;--ok:#0f5c31;--bad:#9c2114}
+--acc:#14428f;--sel:#dae5fb;--ok:#0f5c31;--warn:#8a5300;--bad:#9c2114}
 @media (prefers-color-scheme:dark){:root{--bg:#15171c;--fg:#e7eaef;--card:#1e2128;
---line:#3b404b;--mut:#a3a9b5;--acc:#7aa9ff;--sel:#26324a;--ok:#5cc98c;--bad:#ff8c7c}}
+--line:#3b404b;--mut:#a3a9b5;--acc:#7aa9ff;--sel:#26324a;--ok:#5cc98c;
+--warn:#e0a44a;--bad:#ff8c7c}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
 font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -26,10 +28,26 @@ grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
 .fields button{background:var(--acc);color:#fff;border:1px solid var(--acc);
 border-radius:8px;padding:8px 14px;cursor:pointer}
 .st{margin:8px 0 0}.st.bad{color:var(--bad)}
+hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:baseline}
-.dot.off{background:var(--line)}.dot.bad{background:var(--bad)}
+.dot.off{background:var(--line)}.dot.warn{background:var(--warn)}
+.dot.bad{background:var(--bad)}
+header.full{display:flex;align-items:center;gap:12px}
+.logo{width:34px;height:34px;flex:none}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
+h2.ttl{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sw{position:relative;display:inline-block;width:38px;height:22px;flex:none}
+.sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.sw input[disabled]{cursor:not-allowed}
+.sw span{position:absolute;inset:0;border-radius:11px;background:var(--line);
+pointer-events:none;transition:background .15s}
+.sw span:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+border-radius:50%;background:var(--card);transition:left .15s}
+.sw input:checked+span{background:var(--acc)}
+.sw input:checked+span:after{left:19px}
+.sw input[disabled]+span{opacity:.5}
+.sw input:focus-visible+span{outline:3px solid var(--acc);outline-offset:2px}
 .edtitle{display:flex;align-items:center;gap:8px}
 .edtitle .clip{display:flex;gap:6px;margin-left:auto}
 .edtitle .clip button{font-size:13px;background:transparent;color:var(--fg);
@@ -79,6 +97,11 @@ text-align:left;cursor:pointer;display:block;width:100%}
 .k[aria-pressed=true]{background:var(--sel);border-color:var(--acc)}
 .k b{display:block;font-weight:600;font-size:14px}
 .k span{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+/* The assignment stays readable, because the input keeps it once the radio
+   comes back. The dot says the press reaches nothing until then. */
+.k.rf span{opacity:.55}
+.k.rf b:after{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;
+background:var(--bad);margin-left:6px;vertical-align:middle}
 :focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 .act{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .act button{background:var(--acc);color:#fff;border:1px solid var(--acc);
@@ -102,20 +125,31 @@ animation:sweep 1.4s ease-in-out infinite}
 <body>
 <div class="wrap">
 <header class="full">
-<h1>Remote buttons</h1>
+<svg class=logo viewBox="0 0 805.333 795.107" fill=currentColor aria-hidden=true><path d="M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z"/><path d="M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z"/><path d="M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z"/></svg>
+<div>
+<h1>homeThing c6</h1>
 <p class="sub">Select an input to see or change what it does.</p>
+</div>
 </header>
 <section class="card full conn">
 <div id="zbcfg">
-<h2>Zigbee2MQTT</h2>
+<h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
+aria-label="Zigbee radio"><span></span></label></h2>
+<p class="sub st" id="zrs">Zigbee radio state is loading.</p>
+<p class="sub st" id="zpjs">Pairing state is loading.</p>
+<div class="act"><button type="button" class="sec" id="zpj">Enable pairing for 3 minutes</button></div>
+<hr class="rule">
+<h3>Zigbee2MQTT</h3>
 <p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
 <div id="z2m"></div>
 </div>
 <div id="blecfg">
-<h2>Bluetooth</h2>
-<p class="sub st" id="bst">BLE HID status is loading.</p>
+<h2 class="ttl">Bluetooth<label class="sw" id="brw"><input type="checkbox" id="brb"
+aria-label="Bluetooth radio"><span></span></label></h2>
+<p class="sub st" id="bst">BLE HID state is loading.</p>
+<p class="sub st" id="bhs">Bluetooth host state is loading.</p>
 <p class="sub">Forget the saved host before you pair this remote with a different host.</p>
-<div class="act"><button type="button" class="sec" id="bfr" hidden>Forget Bluetooth host</button></div>
+<div class="act"><button type="button" class="sec" id="bfr">Forget Bluetooth host</button></div>
 </div>
 </section>
 <section class="card">
@@ -167,9 +201,19 @@ var ZA=[
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var bleTimer=0,bleBusy=false,bleForgetBusy=false,bleError="";
+// One switch for each radio. The remote holds the state, so a reload and a
+// second browser both show the switch the remote is actually running with.
+// radioWant holds the position the switch was moved to, so a repaint during the
+// write keeps it there instead of snapping back to the old state.
+var radioBusy={zigbee:false,ble:false},radioError={zigbee:"",ble:""},
+radioWant={zigbee:true,ble:true};
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
+// Permit join lives on the coordinator, so this browser asks Zigbee2MQTT for it
+// over the same socket. bridge/info carries the state and what is left of it.
+var zpjOn=false,zpjLeft=0,zpjBusy=false,zpjErr="",zpjTimer=0;
+var ZPJ_SECONDS=180;
 // The Home Assistant add-on address, because Ingress cannot carry a websocket.
 var Z2MDEF="ws://homeassistant.local:8099/api";
 // cd holds the editable code text for cdSlot. codeLoad rejects an old read
@@ -192,6 +236,11 @@ var cfgOpen=false;
 var clip=null,clipBusy=false;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
+// An old remote sends no radio block, so an unknown switch reads as on.
+function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
+// Only these two actions leave the board over a radio. IR and voice do not.
+function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
+function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
@@ -266,7 +315,10 @@ b.type="button";b.className="k"+(d.c?" "+d.c:"");b.setAttribute("aria-pressed","
 b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById(d.g).appendChild(b)}
-document.getElementById("bfr").onclick=forgetBle}
+document.getElementById("bfr").onclick=forgetBle;
+document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
+document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
+document.getElementById("brb").onchange=function(){setRadio("ble")}}
 
 // Built once. A repaint only rewrites the status line, because rebuilding the
 // inputs would discard an address that is still being typed.
@@ -300,7 +352,7 @@ plural(td?td.length:0,"device")}
 
 // One line under the heading carries the whole link state, because the card
 // holds the connection and nothing else reports it.
-function z2mStatus(){
+function z2mLine(){
 var b=document.getElementById("zc");
 if(b)b.textContent=z2mUp()?"Disconnect":"Connect";
 // The Home Assistant add-on serves the frontend through Ingress, which no
@@ -313,10 +365,17 @@ if(h)h.textContent=z2mUp()?"":
 var e=document.getElementById("zsum");
 if(!e)return;
 e.className="sub st"+(zerr?" bad":"");
-if(z2mUp()){e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+".";return}
-if(zerr){e.innerHTML="<span class='dot bad'></span>"+esc(zerr);return}
-e.innerHTML="<span class='dot off'></span>Not connected. A group ID can still be "+
-"typed by hand."}
+// This link belongs to the browser, not to the remote, so it says so. The
+// remote can send with the browser offline, and the reverse is also true.
+if(z2mUp()){e.innerHTML="<span class=dot></span>This browser is connected to "+
+"Zigbee2MQTT. "+z2mCounts()+".";return}
+if(zerr){e.innerHTML="<span class='dot bad'></span>This browser is not connected to "+
+"Zigbee2MQTT. "+esc(zerr);return}
+e.innerHTML="<span class='dot off'></span>This browser is not connected to "+
+"Zigbee2MQTT. A group ID can still be typed by hand."}
+
+// The pairing control follows the same link, so every caller repaints both.
+function z2mStatus(){z2mLine();zpjPaint()}
 
 function plural(n,word){return n+" "+word+(n===1?"":"s")}
 
@@ -418,14 +477,74 @@ if(td[i].ieee.replace(/^0[xX]/,"").toLowerCase()===a)
 return epForCluster(td[i].eps,A?A.c:"genOnOff")||1;
 return 1}
 
+// Every line and control stays on the page at all times. A line that hides
+// moves the text and the buttons under it, so a state is written out instead.
+function radioSwitch(kind,box){
+var b=document.getElementById(box);
+if(!b)return;
+b.checked=radioBusy[kind]?radioWant[kind]:radioOn(kind);
+b.disabled=radioBusy[kind]||!(st&&st.radios)}
+
+// The remote radio and the browser link are two different things, so this line
+// names the radio and the line under it names the browser.
+function radioStatus(){
+radioSwitch("zigbee","zrb");
+radioSwitch("ble","brb");
+var e=document.getElementById("zrs");
+if(!e)return;
+var err=radioError.zigbee,on=radioOn("zigbee"),known=!!(st&&st.radios);
+e.className="sub st"+(err||(known&&!on)?" bad":"");
+e.innerHTML=!known?"<span class='dot off'></span>Zigbee radio state is loading.":
+"<span class='dot "+(on?(zbPaired()?"":"warn"):"bad")+"'></span>Zigbee radio is "+
+(on?"on. "+zbLink():"off. Zigbee buttons are disabled.")+(err?" "+esc(err):"")}
+
+function zbPaired(){return !!(st&&st.zigbee&&st.zigbee.paired)}
+
+// The remote knows all three states, so the line names the one it is in. The
+// stack latches its joined flag, so a network that goes away later still reads
+// as paired here.
+function zbLink(){
+var z=st&&st.zigbee;
+if(!z)return "";
+// The stack cannot start later, so this asks for the one thing that works.
+if(z.gated)return "The stack is down. Reboot the remote to start it.";
+if(!z.started)return "The stack has not started.";
+if(z.paired)return "Paired to a Zigbee network.";
+return z["new"]?"Not paired.":
+"Not on the network yet. The remote is rejoining."}
+
+function setRadio(kind){
+if(radioBusy[kind])return;
+var next=radioOn(kind)?"0":"1";
+radioBusy[kind]=true;radioWant[kind]=next==="1";radioError[kind]="";radioStatus();
+post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next).then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){
+if(!ok)throw new Error("The remote could not change the radio.")})})
+.then(function(){radioBusy[kind]=false;return load().then(paint)},function(e){
+radioBusy[kind]=false;
+radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus()})}
+
+// One line carries the radio and the host, so an off radio can never read as
+// connected. The bond lives in flash, so its name survives the link and a
+// reboot, and Forget drops it with the radio off as well.
+function bleHost(){return st.ble.host?esc(st.ble.host):"a saved host"}
+
 function bleStatus(){
-var be=document.getElementById("bst"),bf=document.getElementById("bfr");
-if(be&&st&&st.ble){be.innerHTML="<span class='dot "+(st.ble.connected?"":"off")+
-"'></span>BLE HID: "+(st.ble.connected?(st.ble.host?"connected to "+esc(st.ble.host):
-"connected"):st.ble.pairing?"pairing":
-st.ble.bonded?"bonded, waiting for host":"ready to pair")+
-(bleError?". "+bleError:"")}
-if(bf&&st&&st.ble){bf.hidden=!st.ble.bonded;bf.disabled=bleForgetBusy;
+var be=document.getElementById("bst"),bh=document.getElementById("bhs"),
+bf=document.getElementById("bfr");
+if(!st||!st.ble)return;
+var off=!radioOn("ble"),live=!off&&st.ble.connected;
+if(be){be.className="sub st"+(off||bleError?" bad":"");
+be.innerHTML="<span class='dot "+(off?"bad":"")+"'></span>BLE HID: radio "+
+(off?"off. BLE buttons are disabled.":"on.")+(bleError?" "+esc(bleError):"")}
+// The bond and the link are the host, so they share the line above Forget.
+if(bh){bh.className="sub st";
+bh.innerHTML="<span class='dot "+(live?"":"off")+"'></span>"+
+(!st.ble.bonded?("No host bond."+(off?"":st.ble.pairing?" Pairing.":" Ready to pair.")):
+live?"Connected to "+bleHost()+".":
+"Bonded to "+bleHost()+"."+(off?"":" Waiting for the host."))}
+if(bf){bf.disabled=bleForgetBusy||!st.ble.bonded;
 bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth host"}}
 
 function forgetBle(){
@@ -442,16 +561,18 @@ if(bleBusy)return;
 bleBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;bleStatus()}},function(){})
+.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;st.radios=j.radios;
+radioStatus();bleStatus()}},function(){})
 .then(function(){bleBusy=false},function(){bleBusy=false})}
 
 function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}
 
 function paint(){
-z2mStatus();bleStatus();
+z2mStatus();radioStatus();bleStatus();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
+b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
 editor();cfgPaint()}
 
@@ -611,7 +732,20 @@ if(eps&&!commandable(eps))continue;
 devs.push({ieee:d.ieee_address,name:String(d.friendly_name||d.ieee_address),eps:eps})}
 devs.sort(byName);
 done=true;td=devs;zerr="";
-z2mStatus();if(act==="zb")paint();return}};
+z2mStatus();if(act==="zb")paint();return}
+// Retained, so the state arrives on connect and again on every change.
+if(m.topic==="bridge/info"&&m.payload){
+zpjOn=!!m.payload.permit_join;
+var left=Number(m.payload.permit_join_timeout),
+end=Number(m.payload.permit_join_end);
+zpjLeft=!zpjOn?0:left>0?left:
+end>0?Math.max(0,Math.round((end-Date.now())/1000)):ZPJ_SECONDS;
+zpjTick();return}
+if(m.topic==="bridge/response/permit_join"){
+zpjBusy=false;
+zpjErr=(m.payload&&m.payload.status==="error")?
+String(m.payload.error||"Zigbee2MQTT refused the request."):"";
+zpjPaint();return}};
 ws.onerror=function(){if(!done){zerr="Could not reach Zigbee2MQTT at that address.";
 z2mStatus();if(act==="zb")paint()}};
 ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
@@ -622,7 +756,46 @@ z2mStatus();if(act==="zb")paint()}}}
 function z2mDisconnect(){
 if(ws){try{ws.onmessage=null;ws.onerror=null;ws.onclose=null;ws.close()}catch(x){}ws=null}
 tg=null;td=null;zerr="";
+// The coordinator keeps its own timer, so a closed socket only means that this
+// browser stopped watching it.
+zpjOn=false;zpjLeft=0;zpjBusy=false;zpjErr="";zpjTick();
 z2mStatus();if(act==="zb")paint()}
+
+function mmss(s){var m=Math.floor(s/60),r=s%60;return m+":"+(r<10?"0":"")+r}
+
+// The button and its line stay on the page at all times, so nothing under them
+// moves. The button locks while the socket is down or a request is open.
+function zpjPaint(){
+var b=document.getElementById("zpj"),e=document.getElementById("zpjs"),up=z2mUp();
+if(b){b.disabled=zpjBusy||!up;
+b.textContent=zpjBusy?"Working...":zpjOn?"Stop pairing":"Enable pairing for 3 minutes"}
+if(e){e.className="sub st"+(zpjErr?" bad":"");
+e.innerHTML="<span class='dot "+(zpjOn?"":"off")+"'></span>"+
+(!up?"Pairing needs the Zigbee2MQTT link.":
+zpjOn?"Pairing is open on the coordinator for "+mmss(zpjLeft)+".":
+"Pairing is closed on the coordinator.")+(zpjErr?" "+esc(zpjErr):"")}}
+
+// Zigbee2MQTT reports the state, not a tick, so the countdown runs here and the
+// next bridge/info corrects it.
+function zpjTick(){
+if(zpjTimer){clearInterval(zpjTimer);zpjTimer=0}
+zpjPaint();
+if(!zpjOn||!(zpjLeft>0))return;
+zpjTimer=setInterval(function(){
+zpjLeft--;
+if(zpjLeft<=0){zpjLeft=0;zpjOn=false;clearInterval(zpjTimer);zpjTimer=0}
+zpjPaint()},1000)}
+
+// Zigbee2MQTT before 1.35 reads value, and later releases read time alone, so
+// the request carries both. time 0 closes the window early.
+function zpjSet(open){
+if(zpjBusy||!z2mUp())return;
+zpjBusy=true;zpjErr="";zpjPaint();
+try{ws.send(JSON.stringify({topic:"bridge/request/permit_join",
+payload:{value:!!open,time:open?ZPJ_SECONDS:0}}))}
+catch(x){zpjBusy=false;zpjErr="Zigbee2MQTT did not take the request.";zpjPaint();return}
+setTimeout(function(){if(zpjBusy){zpjBusy=false;
+zpjErr="Zigbee2MQTT did not answer the request.";zpjPaint()}},5000)}
 
 function z2mSave(){
 if(z2mUp()){z2mDisconnect();return}
@@ -947,6 +1120,10 @@ var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
 "<button type=button id=bpaste"+(!clip||locked?" disabled":"")+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
 "</span></h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
+// The assignment is intact, so this says why the press reaches nothing.
+if(slotRadioOff(sel))h+="<div class='note bad'>The "+
+(slotRadio(row(sel))==="zigbee"?"Zigbee":"Bluetooth")+
+" radio is off, so this input is disabled. The assignment is kept.</div>";
 if(mode==="rec"&&rec===sel){
 h+="<p>Point the source remote at the front of the board and press its button.</p>"+
 "<div class=bar><i></i></div><div class=act>"+

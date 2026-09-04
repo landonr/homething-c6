@@ -417,11 +417,17 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"radios":{"zigbee":%s,"ble":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
+      ::zigbee_assignments.radio_enabled() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
+      ::zigbee_assignments.link_started() ? "true" : "false",
+      ::zigbee_assignments.link_paired() ? "true" : "false",
+      ::zigbee_assignments.link_factory_new() ? "true" : "false",
+      ::zigbee_assignments.boot_gated() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->connected() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->bonded() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->pairing() ? "true" : "false");
@@ -531,13 +537,27 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
 
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
-                     action == "set_hid" || action == "forget_ble" || action == "clear";
+                     action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
+                     action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
   }
 
-  const bool needs_slot = action != "forget_ble";
+  // The switch covers every button at once, so it carries a radio name and a
+  // state instead of a slot.
+  const std::string radio = request->arg("radio");
+  bool radio_on = false;
+  if (action == "set_radio") {
+    const std::string on = request->arg("on");
+    if ((radio != "zigbee" && radio != "ble") || (on != "0" && on != "1")) {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid radio switch"})");
+      return;
+    }
+    radio_on = on == "1";
+  }
+
+  const bool needs_slot = action != "forget_ble" && action != "set_radio";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
@@ -671,6 +691,13 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "forget_ble") {
     this->defer([this, action_id]() {
       this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond());
+    });
+  } else if (action == "set_radio") {
+    const bool zigbee = radio == "zigbee";
+    this->defer([this, action_id, zigbee, radio_on]() {
+      this->complete_action_(action_id,
+                             zigbee ? ::zigbee_assignments.set_radio_enabled(radio_on)
+                                    : esphome::ble_hid::BleHid::instance()->set_radio_enabled(radio_on));
     });
   } else {
     this->defer([this, button, action_id]() {

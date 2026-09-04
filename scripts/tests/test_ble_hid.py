@@ -93,9 +93,15 @@ class BleHidTest(unittest.TestCase):
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", True', INIT)
         self.assertIn("std::string host_name() const;", HEADER)
         self.assertIn('ESP_LOGI(TAG, "Connected to %s", name)', CPP)
-        # A dropped link must not leave the old host named on the page.
+        # The name belongs to the bond, so it survives a dropped link and a
+        # reboot. The page reads connected() to say which of the two it shows.
         disconnect = CPP[CPP.index("case BLE_GAP_EVENT_DISCONNECT:") :]
-        self.assertIn("this->set_host_name_(nullptr);", disconnect)
+        self.assertNotIn("this->set_host_name_(nullptr);", disconnect)
+        self.assertIn("self->host_save_pending_.store(true, std::memory_order_release);", CPP)
+        self.assertIn("make_preference<std::array<char, HOST_NAME_SIZE>>(HOST_STORE_KEY, true)", CPP)
+        # Only a forget drops the stored name, with the radio on or off.
+        forget = CPP[CPP.index("bool BleHid::forget_bond() {") :]
+        self.assertIn("this->set_host_name_(nullptr);", forget)
 
     def test_wheels_tap_and_buttons_release_by_slot(self) -> None:
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)

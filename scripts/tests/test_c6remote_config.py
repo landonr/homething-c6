@@ -77,7 +77,8 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: light")
         self.assertRegex(
             config,
-            r"esphome:[\s\S]*?\n  on_boot:[\s\S]*?\n    - script.execute: show_idle_status"
+            # on_boot is a list of triggers now, so the action sits deeper.
+            r"esphome:[\s\S]*?\n  on_boot:[\s\S]*?\n +- script.execute: show_idle_status"
             r"[\s\S]*?wifi:[\s\S]*?\n  on_connect:\n    - script.execute: show_idle_status"
             r"[\s\S]*?\n  on_disconnect:\n    - script.execute: show_idle_status",
         )
@@ -536,7 +537,9 @@ class ProductionConfigTest(unittest.TestCase):
         # Zigbee training used to pulse D5, which hid the radio state for the
         # whole training window. It now pulses D3 and D4 instead.
         entry = status_light_entry(CONFIG.read_text())
-        self.assertIn("if (!id(zigbee_radio).is_started())", entry)
+        # A radio the switch holds off sends nothing, so D5 stays dark for it too.
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
+                      entry)
         self.assertIn("else if (id(zigbee_radio).is_connected())", entry)
         self.assertIn("it[3] = Color(0, 128, 0);", entry)
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]

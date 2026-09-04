@@ -99,10 +99,74 @@ class ZigbeeAssignmentManager {
         ESP_LOGE("zigbee_learn", "Failed to invalidate old Zigbee assignments");
     }
 
+    radio_on_.store((record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
+
     ir_code_store.set_assignment_clear_callback([this](uint8_t slot) { this->clear(slot); });
     ir_ui.set_zigbee_play_callback([this](uint8_t slot) { return this->play(slot); });
     ESP_LOGI("zigbee_learn", "Loaded Zigbee assignment mask 0x%05X",
              static_cast<unsigned>(record_.mask));
+  }
+
+  bool radio_enabled() const { return radio_on_.load(std::memory_order_acquire); }
+
+  // Reads the switch before setup() runs, so the boot gate can hold the Zigbee
+  // component down before its own setup. Preferences open in app_main, ahead of
+  // every component, so this works at any boot priority. A record this cannot
+  // read leaves the radio on.
+  static bool radio_enabled_from_flash() {
+    auto preference = esphome::global_preferences->make_preference<Record>(PREFERENCE_KEY, true);
+    Record record{};
+    if (!preference.load(&record) || !valid_(record))
+      return true;
+    return (record.flags & FLAG_RADIO_OFF) == 0;
+  }
+
+  // The Zigbee stack has no restart, so a gate that held it down at boot needs
+  // a reboot to lift. The page says so instead of offering a dead switch.
+  void set_boot_gated(bool gated) { boot_gated_.store(gated, std::memory_order_relaxed); }
+  bool boot_gated() const { return boot_gated_.load(std::memory_order_relaxed); }
+
+  // The Zigbee component keeps its instance file-static, so the YAML pushes the
+  // link state here for the /buttons page. The component latches its connected
+  // flag on the first join, so paired means joined once, not reachable now. A
+  // factory-new stack has no credentials and is looking for a coordinator that
+  // permits a join.
+  void set_link_state(bool started, bool paired, bool factory_new) {
+    link_started_.store(started, std::memory_order_relaxed);
+    link_paired_.store(paired, std::memory_order_relaxed);
+    link_factory_new_.store(factory_new, std::memory_order_relaxed);
+  }
+
+  bool link_started() const { return link_started_.load(std::memory_order_relaxed); }
+  bool link_paired() const { return link_paired_.load(std::memory_order_relaxed); }
+  bool link_factory_new() const { return link_factory_new_.load(std::memory_order_relaxed); }
+
+  // The switch owns every command this remote sends. The stack itself keeps its
+  // place on the network, because the ESP-Zigbee stack has no restart, so a
+  // rejoin would cost the pairing that the buttons still point at.
+  bool set_radio_enabled(bool enabled) {
+    if (radio_enabled() == enabled)
+      return true;
+    radio_on_.store(enabled, std::memory_order_release);
+
+    Record next = record_;
+    next.flags = enabled ? static_cast<uint16_t>(next.flags & ~FLAG_RADIO_OFF)
+                         : static_cast<uint16_t>(next.flags | FLAG_RADIO_OFF);
+    next.checksum = checksum_(next);
+    {
+      const std::lock_guard<std::mutex> lock(cache_mutex_);
+      record_ = next;
+    }
+    if (!enabled) {
+      // A press that is already waiting for an address must not send later.
+      pending_state_.store(PENDING_NONE, std::memory_order_relaxed);
+      retry_armed_.store(false, std::memory_order_relaxed);
+      warm_mask_ = 0;
+    }
+    if (!preference_.save(&record_))
+      ESP_LOGE("zigbee_learn", "Failed to save the Zigbee radio switch");
+    ESP_LOGI("zigbee_learn", "Zigbee radio %s", enabled ? "on" : "off");
+    return true;
   }
 
   // Runs on the main loop from a deferred web action, so the flash write cannot
@@ -183,7 +247,7 @@ class ZigbeeAssignmentManager {
   }
 
   bool play(uint8_t slot) {
-    if (!has_assignment_(slot))
+    if (!has_assignment_(slot) || !radio_enabled())
       return false;
     const Entry &entry = entry_(slot);
     if (entry.kind == KIND_DEVICE)
@@ -196,6 +260,8 @@ class ZigbeeAssignmentManager {
   // Runs on the main loop. Every radio request that a callback asks for starts
   // here, so a Zigbee task callback never sends and never touches flash.
   void tick() {
+    if (!radio_enabled())
+      return;
     const uint32_t now = esphome::millis();
     if (resolve_in_flight_.load(std::memory_order_acquire)) {
       if (now - resolve_started_ms_ < RESOLVE_TIMEOUT_MS)
@@ -305,10 +371,14 @@ class ZigbeeAssignmentManager {
     char friendly_name[TARGET_SIZE];
   };
 
+  // flags bit 0 holds the radio switch. The field was reserved and zero in every
+  // record before it, so an old record loads with the radio on.
+  static constexpr uint16_t FLAG_RADIO_OFF = 0x0001;
+
   struct Record {
     uint32_t magic;
     uint16_t version;
-    uint16_t reserved;
+    uint16_t flags;
     uint32_t mask;
     Entry entries[SLOT_COUNT];
     uint32_t checksum;
@@ -863,6 +933,11 @@ class ZigbeeAssignmentManager {
   mutable std::mutex cache_mutex_;
   esphome::ESPPreferenceObject preference_;
   Record record_{};
+  std::atomic<bool> radio_on_{true};
+  std::atomic<bool> boot_gated_{false};
+  std::atomic<bool> link_started_{false};
+  std::atomic<bool> link_paired_{false};
+  std::atomic<bool> link_factory_new_{false};
 
   // A short address is a lease the device drops when it rejoins, so it stays in
   // RAM. The Zigbee task writes it from a callback while the loop reads it.

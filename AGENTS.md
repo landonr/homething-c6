@@ -83,6 +83,15 @@ The firmware files are in the repository root:
 - `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
 - `scripts/tests/page_dom_stub.js` runs the `/buttons` page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
+- `scripts/preview-buttons-page.py` serves the `/buttons` page with a fake remote behind it. It needs no build and no hardware.
+
+Run `python3 scripts/preview-buttons-page.py [--port 8123]`. Then open `http://127.0.0.1:8123/buttons`.
+
+The script reads the page out of the header for each request, so the preview cannot drift from the source.
+
+The fake state can drift. If you change the page or `ButtonConfig::handle_state_()`, update the state in the script in the same change.
+
+A missing field makes the preview show a state that the firmware never serves.
 
 Read `ROADMAP.md` when the task needs the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
 

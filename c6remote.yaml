@@ -9,10 +9,24 @@ esphome:
     - ir_learning.h
     - zigbee_learning.h
   on_boot:
-    - lambda: ir_code_store.setup();
-    - lambda: zigbee_assignments.setup();
-    - lambda: id(ble_hid_remote).setup_assignments();
-    - script.execute: show_idle_status
+    # Ahead of every component, so the Zigbee component can be held down before
+    # its own setup runs. A failed component never starts, which is the only way
+    # to keep the 802.15.4 stack off: the ESP-Zigbee stack has no stop and no
+    # restart, so the switch cannot lift this until the next boot.
+    - priority: 800
+      then:
+        - lambda: |-
+            if (!ZigbeeAssignmentManager::radio_enabled_from_flash()) {
+              id(zigbee_radio)->mark_failed();
+              zigbee_assignments.set_boot_gated(true);
+              ESP_LOGI("zigbee_learn", "Zigbee radio is off, so the stack stays down");
+            }
+    - priority: 600
+      then:
+        - lambda: ir_code_store.setup();
+        - lambda: zigbee_assignments.setup();
+        - lambda: id(ble_hid_remote).setup_assignments();
+        - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
     # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
@@ -471,8 +485,9 @@ light:
               it[2] = Color(255, 0, 0);
             }
 
-            // D5 is Zigbee status during normal operation.
-            if (!id(zigbee_radio).is_started()) {
+            // D5 is Zigbee status during normal operation. A radio switched off
+            // sends nothing, so it reads the same as a stack that never started.
+            if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started()) {
               it[3] = Color::BLACK;
             } else if (id(zigbee_radio).is_connected()) {
               it[3] = Color(0, 128, 0);
@@ -557,6 +572,35 @@ switch:
       number: GPIO6
       inverted: true
     restore_mode: ALWAYS_ON
+
+  # Both radio switches keep their state in the assignment record of the radio
+  # they gate, so the remote restores them itself and needs no restore_mode. The
+  # /buttons page writes the same two flags.
+  - platform: template
+    name: Zigbee Radio
+    id: zigbee_radio_enable
+    entity_category: config
+    # DISABLED, because the manager owns the state. The template default,
+    # ALWAYS_OFF, fires turn_off_action at every boot and would switch the radio
+    # off before on_boot has read the stored flag.
+    restore_mode: DISABLED
+    lambda: return zigbee_assignments.radio_enabled();
+    turn_on_action:
+      - lambda: zigbee_assignments.set_radio_enabled(true);
+    turn_off_action:
+      - lambda: zigbee_assignments.set_radio_enabled(false);
+
+  # Off skips the NimBLE bring-up at boot, so the first turn-on starts the stack.
+  - platform: template
+    name: Bluetooth Radio
+    id: ble_radio_enable
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: return id(ble_hid_remote).radio_enabled();
+    turn_on_action:
+      - lambda: id(ble_hid_remote).set_radio_enabled(true);
+    turn_off_action:
+      - lambda: id(ble_hid_remote).set_radio_enabled(false);
 
 remote_receiver:
   pin:
@@ -755,6 +799,11 @@ interval:
           if (ir_ui.tick())
             id(show_idle_status).execute();
           zigbee_assignments.tick();
+          // The Zigbee component exports no global instance, so the link state
+          // is pushed from here, where the id is in scope.
+          zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),
+                                            id(zigbee_radio).is_connected(),
+                                            id(zigbee_radio)->factory_new_.load());
   - interval: 1s
     then:
       - if:
@@ -770,6 +819,11 @@ interval:
                 id(mic_peak) = 0;
 
 button:
+  # The Zigbee stack starts only at boot, so turning its switch back on needs
+  # this. Nothing else on the device offers a restart.
+  - platform: restart
+    name: Restart
+
   - platform: template
     name: Stop Microphone Test
     on_press:

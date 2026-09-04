@@ -4,6 +4,8 @@
 
 #include "esp_hid_common.h"
 #include "esp_bt.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -32,6 +34,7 @@ static constexpr uint16_t HID_SERVICE_UUID = 0x1812;
 // whole handle range finds it without a service discovery first.
 static constexpr uint16_t DEVICE_NAME_UUID = 0x2A00;
 static constexpr uint32_t STORE_KEY = 0x424C4831U;
+static constexpr uint32_t HOST_STORE_KEY = 0x424C4832U;
 static constexpr uint32_t STORE_MAGIC = 0x424C4844U;
 static constexpr uint8_t STORE_VERSION = 1;
 
@@ -79,6 +82,33 @@ static int bond_count() {
   return ble_store_util_count(BLE_STORE_OBJ_TYPE_PEER_SEC, &count) == 0 ? count : 0;
 }
 
+// ble_store_config keeps the keys in this NVS namespace of the default
+// partition, so the bond can be read and dropped while the host stack is down.
+static const char *const BOND_NAMESPACE = "nimble_bond";
+
+static bool stored_bond_present() {
+  nvs_iterator_t iterator = nullptr;
+  const esp_err_t result =
+      nvs_entry_find(NVS_DEFAULT_PART_NAME, BOND_NAMESPACE, NVS_TYPE_ANY, &iterator);
+  if (iterator != nullptr)
+    nvs_release_iterator(iterator);
+  return result == ESP_OK;
+}
+
+static bool erase_stored_bonds() {
+  nvs_handle_t handle = 0;
+  esp_err_t result = nvs_open(BOND_NAMESPACE, NVS_READWRITE, &handle);
+  if (result == ESP_ERR_NVS_NOT_FOUND)
+    return true;
+  if (result != ESP_OK)
+    return false;
+  result = nvs_erase_all(handle);
+  if (result == ESP_OK)
+    result = nvs_commit(handle);
+  nvs_close(handle);
+  return result == ESP_OK;
+}
+
 // The build allows one bond, so the saved host is the first and only entry.
 static bool bonded_peer(ble_addr_t *address) {
   int count = 0;
@@ -93,7 +123,16 @@ static void host_task(void *param) {
 
 float BleHid::get_setup_priority() const { return setup_priority::BLUETOOTH - 1.0f; }
 
+// setup_assignments() runs from on_boot, which is ahead of this priority, so the
+// stored switch decides whether the controller comes up at all.
 void BleHid::setup() {
+  if (!this->radio_enabled()) {
+    // The key store answers without the stack, so the page can still show the
+    // bond and drop it.
+    this->bonded_.store(stored_bond_present(), std::memory_order_release);
+    ESP_LOGI(TAG, "Bluetooth radio is off, so the stack stays down");
+    return;
+  }
   if (!this->init_stack_()) {
     this->mark_failed();
     return;
@@ -106,12 +145,26 @@ void BleHid::loop() {
     this->release_all_();
   if (this->report_sync_pending_.exchange(false, std::memory_order_acq_rel))
     this->send_reports_();
+  // The GATT read lands on the NimBLE task, so the flash write waits for here.
+  if (this->host_save_pending_.exchange(false, std::memory_order_acq_rel))
+    this->save_host_name_();
+}
+
+void BleHid::save_host_name_() {
+  std::array<char, HOST_NAME_SIZE> host{};
+  {
+    const std::lock_guard<std::mutex> lock(this->host_name_mutex_);
+    host = this->host_name_;
+  }
+  if (!this->host_pref_.save(&host))
+    ESP_LOGW(TAG, "Could not save the Bluetooth host name");
 }
 
 void BleHid::dump_config() {
   const std::string host = this->host_name();
   ESP_LOGCONFIG(TAG, "BLE HID:");
   ESP_LOGCONFIG(TAG, "  Name: %s", DEVICE_NAME);
+  ESP_LOGCONFIG(TAG, "  Radio: %s", ONOFF(this->radio_enabled()));
   ESP_LOGCONFIG(TAG, "  Connected: %s", YESNO(this->connected()));
   ESP_LOGCONFIG(TAG, "  Connected to: %s", host.empty() ? "unknown" : host.c_str());
   ESP_LOGCONFIG(TAG, "  Bonded: %s", YESNO(this->bonded()));
@@ -140,6 +193,15 @@ void BleHid::setup_assignments() {
     this->record_.checksum = checksum_(this->record_);
   }
   this->assignments_ready_ = true;
+  this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
+
+  this->host_pref_ =
+      esphome::global_preferences->make_preference<std::array<char, HOST_NAME_SIZE>>(HOST_STORE_KEY, true);
+  std::array<char, HOST_NAME_SIZE> host{};
+  if (this->host_pref_.load(&host)) {
+    host[host.size() - 1] = '\0';
+    this->set_host_name_(host.data());
+  }
 
   ::ir_code_store.set_assignment_clear_callback([](uint8_t slot) {
     ::zigbee_assignments.clear(slot);
@@ -207,7 +269,7 @@ void BleHid::clear(uint8_t slot) {
 
 bool BleHid::set_pressed(uint8_t slot, bool pressed) {
   const Assignment value = this->assignment(slot);
-  if (!value.assigned)
+  if (!value.assigned || !this->radio_enabled())
     return false;
   const size_t index = slot - FIRST_SLOT;
   if (!this->connected()) {
@@ -264,11 +326,67 @@ bool BleHid::save_() {
   return this->pref_.save(&this->record_);
 }
 
+// The switch owns the whole radio, so a button that carries a HID assignment
+// sends nothing while it is off. The stack starts on the first enable and stays
+// up after that, because a NimBLE teardown drops the host keys with it.
+bool BleHid::set_radio_enabled(bool enabled) {
+  if (this->radio_enabled() == enabled)
+    return true;
+  this->radio_on_.store(enabled, std::memory_order_release);
+  if (this->assignments_ready_) {
+    const std::lock_guard<std::mutex> lock(this->record_mutex_);
+    this->record_.flags = enabled ? static_cast<uint8_t>(this->record_.flags & ~FLAG_RADIO_OFF)
+                                  : static_cast<uint8_t>(this->record_.flags | FLAG_RADIO_OFF);
+    this->save_();
+  }
+
+  if (enabled) {
+    if (!this->stack_ready_) {
+      if (!this->init_stack_()) {
+        ESP_LOGE(TAG, "Bluetooth radio could not start");
+        return false;
+      }
+      this->bonded_.store(bond_count() > 0, std::memory_order_release);
+    } else {
+      this->start_advertising_();
+    }
+    ESP_LOGI(TAG, "Bluetooth radio on");
+    return true;
+  }
+
+  this->release_all_();
+  if (this->stack_ready_) {
+    ble_gap_adv_stop();
+    this->advertising_.store(false, std::memory_order_release);
+    const uint16_t connection = this->connection_.load(std::memory_order_acquire);
+    if (connection != NO_CONNECTION)
+      ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
+  }
+  ESP_LOGI(TAG, "Bluetooth radio off");
+  return true;
+}
+
 bool BleHid::forget_bond() {
+  // With the stack down there is no link to close and no host to tell, so the
+  // key store is dropped where it lives.
+  if (!this->stack_ready_) {
+    const bool erased = erase_stored_bonds();
+    if (!erased) {
+      ESP_LOGE(TAG, "Could not erase the stored Bluetooth bond");
+      return false;
+    }
+    this->bonded_.store(false, std::memory_order_release);
+    this->set_host_name_(nullptr);
+    this->save_host_name_();
+    ESP_LOGI(TAG, "Stored Bluetooth host bond removed with the radio off");
+    return true;
+  }
   ble_addr_t peer{};
   if (!bonded_peer(&peer)) {
     this->bonded_.store(false, std::memory_order_release);
     this->pairing_.store(false, std::memory_order_release);
+    this->set_host_name_(nullptr);
+    this->save_host_name_();
     this->start_advertising_();
     return true;
   }
@@ -282,6 +400,8 @@ bool BleHid::forget_bond() {
   }
   this->bonded_.store(bond_count() > 0, std::memory_order_release);
   this->pairing_.store(false, std::memory_order_release);
+  this->set_host_name_(nullptr);
+  this->save_host_name_();
   ESP_LOGI(TAG, "Bluetooth host bond removed");
   this->start_advertising_();
   return true;
@@ -334,6 +454,7 @@ bool BleHid::init_stack_() {
     ESP_LOGE(TAG, "NimBLE host task start failed: %s", esp_err_to_name(result));
     return false;
   }
+  this->stack_ready_ = true;
   return true;
 }
 
@@ -348,7 +469,7 @@ void BleHid::init_hid_() {
 }
 
 void BleHid::send_reports_() {
-  if (!this->connected() || this->device_ == nullptr)
+  if (!this->connected() || this->device_ == nullptr || !this->radio_enabled())
     return;
 
   uint8_t keyboard[30]{};
@@ -400,7 +521,7 @@ void BleHid::release_all_() {
 }
 
 void BleHid::start_advertising_() {
-  if (!this->hid_started_.load(std::memory_order_acquire) ||
+  if (!this->radio_enabled() || !this->hid_started_.load(std::memory_order_acquire) ||
       this->advertising_.load(std::memory_order_acquire) ||
       this->link_connected_.load(std::memory_order_acquire))
     return;
@@ -462,6 +583,7 @@ int BleHid::host_name_read_(uint16_t, const ble_gatt_error *error, ble_gatt_attr
     return 0;
   name[length] = '\0';
   self->set_host_name_(name);
+  self->host_save_pending_.store(true, std::memory_order_release);
   ESP_LOGI(TAG, "Connected to %s", name);
   return 0;
 }
@@ -537,7 +659,8 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
       this->pairing_.store(false, std::memory_order_release);
       this->connection_.store(NO_CONNECTION, std::memory_order_release);
       this->disconnect_pending_.store(true, std::memory_order_release);
-      this->set_host_name_(nullptr);
+      // The name belongs to the bond, not to the link, so it stays until the
+      // bond goes. The page reads connected() to say which of the two it is.
       this->start_advertising_();
       return 0;
     default:

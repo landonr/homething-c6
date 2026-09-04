@@ -38,6 +38,31 @@ while the coordinator forms or repairs the network.
 If `D5` pulses red, the Zigbee stack has started but has no network connection.
 Permit joining again, then restart the remote.
 
+A join needs both sides. The remote steers on its own when it is factory new,
+but it can only join while the coordinator permits it.
+
+## Permit joining from the page
+
+The Zigbee2MQTT block on the `/buttons` page can open the pairing window on the
+coordinator, so step 1 of pairing needs no separate Zigbee2MQTT session.
+
+Select **Enable pairing for 3 minutes**. The browser sends
+`{"topic":"bridge/request/permit_join","payload":{"value":true,"time":180}}`
+over the Zigbee2MQTT frontend websocket that this browser already holds. This is
+the only message the page ever publishes to Zigbee2MQTT. Every assignment stays
+read only on that socket.
+
+The line above the button reads "Pairing is closed on the coordinator." or
+"Pairing is open on the coordinator for 2:54." with a live countdown from the
+retained `bridge/info` message.
+
+While the window is open, the button reads **Stop pairing** and sends `time: 0`.
+Zigbee2MQTT closes the window itself when the time expires, so the remote runs
+no timer.
+
+If the socket is down, the button is disabled and the line reads "Pairing needs
+the Zigbee2MQTT link."
+
 ## Groups and devices
 
 A button holds one of two target kinds. A group target sends a groupcast. A
@@ -294,6 +319,58 @@ cycle on the remote.
 Clearing removes the local record only. A group and its membership stay in
 Zigbee2MQTT, so another button can still use that group. A device target leaves
 nothing behind, because the assignment wrote nothing to Zigbee2MQTT.
+
+## The radio switch
+
+One switch turns the Zigbee radio off for the whole remote. The switch is on the
+`/buttons` page, on the heading line of the **Zigbee2MQTT** block, and in Home
+Assistant as **Zigbee Radio**.
+
+If the switch is off, every button that sends Zigbee is disabled and the remote
+asks for no network address. The assignments stay in flash, so the buttons work again when
+the switch goes back on.
+
+The stack keeps its place on the network only until the next reboot, because the
+ESP-Zigbee stack has no restart. A rejoin would cost the pairing that the buttons
+point at.
+
+An `on_boot` trigger at priority 800 reads the stored switch from flash with
+`ZigbeeAssignmentManager::radio_enabled_from_flash()`. If the switch is off, it
+calls `mark_failed()` on the Zigbee component and records the gate with
+`zigbee_assignments.set_boot_gated(true)`. A failed ESPHome component never runs
+its setup, so the 802.15.4 stack never starts.
+
+While the gate holds, turning the switch back on cannot start the stack. Reboot
+the remote to lift the gate. See "Network state on the page" for the line the
+page shows.
+
+Select the **Restart** button entity to reboot the remote from Home Assistant or
+from the `/buttons` page. Nothing else on the device offers a reboot.
+
+`D5` is dark while the switch is off, the same as before the stack starts.
+
+The switch state lives in the Zigbee assignment record, so the remote restores it
+after a reboot.
+
+## Network state on the page
+
+The stack reports three states, and the `/buttons` page names the one it is in
+under the switch:
+
+| Line | Meaning |
+| --- | --- |
+| `Zigbee radio is on. The stack has not started.` | The stack has not answered its start signal yet. |
+| `Zigbee radio is on. Not paired.` | The stack is factory new. It has no credentials and it searches for a coordinator. |
+| `Zigbee radio is on. Not on the network yet. The remote is rejoining.` | The stack holds credentials and it rejoins the network. |
+| `Zigbee radio is on. Paired to a Zigbee network.` | The remote joined a network. |
+| `Zigbee radio is on. The stack is down. Reboot the remote to start it.` | The switch was off at boot, so the stack never started. Reboot to lift the gate. |
+
+The component latches its connected flag on the first join and never clears it,
+so `Paired` means joined once, not reachable now.
+
+The `zigbee` component keeps its instance file-static, so the 250 ms interval in
+`c6remote.yaml` pushes `is_started()`, `is_connected()`, and `factory_new_` into
+`zigbee_assignments`. The `/buttons` state endpoint reads them from there.
 
 ## Storage
 

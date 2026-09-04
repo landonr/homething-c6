@@ -255,20 +255,104 @@ The page opens with one connection card. It holds both radio links, side by side
 with a rule between them. It sits above the input grid, separate from the import
 block. On a narrow screen the two blocks stack.
 
-The **Zigbee2MQTT** block holds the address, the token, and the **Connect**
-button. One line under the heading reports the link with a circle:
+Each block keeps every line and every control on the page at all times. A line
+that hides moves the text and the buttons under it, so a state is written out
+instead. A control that does not apply is disabled, not removed.
+
+The **Zigbee** block starts with the radio switch and its line. The pairing line
+and the pairing button come next. A rule then separates that from the
+**Zigbee2MQTT** heading, because the link below it belongs to this browser.
+
+The **Zigbee2MQTT** part holds its own line, the address, the token, and the
+**Connect** button.
+
+The line under the **Zigbee2MQTT** heading reports the link of this browser, with
+a circle:
 
 - A green circle and the group and device counts mean a live link.
 - A grey circle means no connection.
 - A red circle means that the last connection failed.
 
-The **Bluetooth** block reports the host state the same way. A connected line
-reads **connected to** and the host name when the remote could read it. The
-block holds the **Forget Bluetooth host** button, which shows only when a bond
-exists.
+The two are independent. This browser can hold a live link while the radio of the
+remote is off, so each line says which one it describes.
+
+The block also holds a line and a button for pairing. The line reads "Pairing
+is closed on the coordinator." or "Pairing is open on the coordinator for
+2:54." with a live countdown from the retained `bridge/info` message.
+
+The button reads **Enable pairing for 3 minutes**. Selecting it sends
+`{"topic":"bridge/request/permit_join","payload":{"value":true,"time":180}}` on
+the Zigbee2MQTT frontend websocket. This is the only message the page ever
+publishes to Zigbee2MQTT.
+
+While the window is open, the button reads **Stop pairing** and sends `time:
+0`. Zigbee2MQTT closes the window itself when the time expires, so the remote
+runs no timer.
+
+If the socket is down, the button is disabled and the line reads "Pairing needs
+the Zigbee2MQTT link."
+
+The **Bluetooth** block holds two lines. The first names the radio and starts
+with **BLE HID: radio on.** or **BLE HID: radio off.** The second names the host
+and sits above the Forget text.
+
+An off radio can never read as connected, because the host line drops the link
+state with the radio.
+
+The block holds the **Forget Bluetooth host** button. The button is always on the
+page and is disabled when no bond exists.
 
 The Zigbee2MQTT inputs are built one time, so a repaint keeps an address that is
 still being typed.
+
+### The radio switches
+
+Each block carries an on/off switch on the same line as its heading. The switch
+turns that radio off and on for the whole remote.
+
+The Zigbee line reads **Zigbee radio is on.** or **Zigbee radio is off. Zigbee
+buttons are disabled.** with a circle. A green circle means that the radio is on
+and the remote is on a network. An amber circle means that the radio is on but
+the remote is not on a network. A red circle means that the radio is off.
+
+The Bluetooth radio line reads **BLE HID: radio on.** or **BLE HID: radio off.
+BLE buttons are disabled.**
+
+The host line below it reads **Connected to bench-mac.**, **Bonded to bench-mac.
+Waiting for the host.**, **Bonded to bench-mac.** with the radio off, or **No host
+bond.** with **Ready to pair.** while the radio is on.
+
+The remote holds the state, so a reload and a second browser both show what the
+remote runs with. The switch is disabled until the remote answers with the state.
+Home Assistant holds the same two switches, **Zigbee Radio** and **Bluetooth
+Radio**.
+
+An input that is assigned to a radio that is off keeps its assignment. The tile
+shows the assignment in grey with a red circle after the label, and the editor
+gives the reason. The input sends again when the switch goes back on.
+
+If the Bluetooth switch is off, the remote does not start the NimBLE stack at
+boot, and the first turn-on starts it.
+
+The remote stores the host name that it reads from the host, so the line names
+the bonded host with the radio off and after a reboot. If the remote never read
+the name, the line reads **a saved host**.
+
+**Forget Bluetooth host** works with the radio off. The keys live in flash, in
+the `nimble_bond` NVS namespace, so the remote erases them without the stack. A
+forget also drops the stored host name. The host must then pair again.
+
+If the Zigbee switch is off, the remote sends no commands. The stack itself keeps
+its place on the network only until the next reboot. Read `ZIGBEE.md` for the
+reason.
+
+If the switch was off at boot, the remote gates the stack so it never starts.
+While the gate holds, the Zigbee line reads **Zigbee radio is on. The stack is
+down. Reboot the remote to start it.** Turning the switch back on cannot start
+the stack, because the ESP-Zigbee stack has no restart.
+
+Select **Restart** in Home Assistant or on the page to reboot the remote and
+lift the gate. Nothing else on the device offers a reboot.
 
 ### The Import and export card
 

@@ -50,12 +50,15 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs", "zsum"])
+for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs",
+                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "bhs", "brb", "brw"])
   els[id] = mk("section");
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
+  radios: {zigbee: true, ble: true},
+  zigbee: {started: true, paired: true, "new": false},
   ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
@@ -70,7 +73,12 @@ const STATE = {
 global.document = { getElementById: (id) => els[id] || null, createElement: (t) => mk(t) };
 global.localStorage = { getItem: () => null, setItem: () => {} };
 global.navigator = {};
-global.WebSocket = function () { this.readyState = 0; this.close = () => {}; this.send = () => {}; };
+let wsSent = [];
+global.WebSocket = function () {
+  this.readyState = 0;
+  this.close = () => {};
+  this.send = (text) => { wsSent.push(text); };
+};
 let downloadedBlob = null, revokedUrl = null;
 global.Blob = function (parts, options) { this.parts = parts; this.type = options.type; };
 global.URL = {
@@ -539,14 +547,15 @@ setTimeout(() => {
     z2mStatus();
     // One line under the card heading carries the whole link state.
     const zt = document.getElementById("zsum");
-    if (zt.innerHTML.indexOf("class=dot></span>Connected. 1 group, 1 device.") < 0)
+    if (zt.innerHTML.indexOf("class=dot></span>This browser is connected to Zigbee2MQTT. 1 group, 1 device.") < 0)
       throw new Error("no live status: " + zt.innerHTML);
     const zc = document.getElementById("zc");
     if (zc.textContent !== "Disconnect") throw new Error("button stayed on Connect: " + zc.textContent);
     zc.onclick();
     if (tg !== null || td !== null) throw new Error("disconnect kept the lists");
     if (zc.textContent !== "Connect") throw new Error("button stayed on Disconnect: " + zc.textContent);
-    if (zt.innerHTML.indexOf("dot off") < 0 || zt.innerHTML.indexOf("Not connected.") < 0)
+    if (zt.innerHTML.indexOf("dot off") < 0 ||
+        zt.innerHTML.indexOf("This browser is not connected") < 0)
       throw new Error("the line kept a live status: " + zt.innerHTML);
     global.zerr = "Could not reach Zigbee2MQTT at that address.";
     z2mStatus();
@@ -684,6 +693,187 @@ setTimeout(() => {
     cfgPaint();
     if (cfgIn !== box.value) throw new Error("a repaint lost the text");
   });
+  step("a radio switch marks its inputs and keeps their assignment", () => {
+    global.st.radios = {zigbee: false, ble: true};
+    paint();
+    // Slot 20 sends Zigbee, slot 7 sends HID, and slot 6 is an IR code.
+    if (keys[20].className.indexOf("rf") < 0) throw new Error("a held Zigbee input is not marked");
+    if (keys[7].className.indexOf("rf") >= 0) throw new Error("a live HID input was marked");
+    if (keys[6].className.indexOf("rf") >= 0) throw new Error("an IR input was marked");
+    if (keys[20].lastChild.textContent.indexOf("Office Lamp") < 0)
+      throw new Error("a held input lost its assignment text");
+    if (document.getElementById("zrs").innerHTML.indexOf("Zigbee radio is off") < 0)
+      throw new Error("the Zigbee card does not report the switch");
+    if (document.getElementById("zrb").checked !== false)
+      throw new Error("the Zigbee switch is in the wrong position");
+    if (document.getElementById("brb").checked !== true)
+      throw new Error("the Bluetooth switch is in the wrong position");
+    // A live radio still writes its own line, so nothing on the page moves.
+    if (document.getElementById("bst").innerHTML.indexOf("BLE HID: radio on.") < 0)
+      throw new Error("a live radio wrote no status line");
+    global.sel = 20;
+    paint();
+    if (document.getElementById("ed").innerHTML.indexOf("radio is off, so this input is disabled") < 0)
+      throw new Error("the editor gives no reason for a held input");
+    global.sel = null;
+  });
+  step("a radio switch posts the new state to the remote", () => {
+    global.st.radios = {zigbee: true, ble: true};
+    paint();
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("zrb").onchange();
+    global.fetch = realFetch;
+    if (body.indexOf("action=set_radio") < 0 || body.indexOf("radio=zigbee") < 0 ||
+        body.indexOf("on=0") < 0) throw new Error("the switch posted " + body);
+    if (!document.getElementById("zrb").disabled)
+      throw new Error("the switch stayed live while the remote answered");
+    // The write is still open, so the switch holds where the user left it.
+    if (document.getElementById("zrb").checked !== false)
+      throw new Error("the switch snapped back during the write");
+    global.radioBusy = {zigbee: false, ble: false};
+  });
+  step("an off Bluetooth radio names its bond and never reads as connected", () => {
+    global.st = STATE;
+    STATE.radios = {zigbee: true, ble: false};
+    STATE.ble.connected = true;
+    paint();
+    const line = document.getElementById("bst").innerHTML;
+    const host = document.getElementById("bhs").innerHTML;
+    if (line.indexOf("radio off.") < 0 || line.indexOf("BLE buttons are disabled.") < 0)
+      throw new Error("the off radio does not report itself: " + line);
+    // The host has its own line, above the Forget text.
+    if (host.indexOf("Bonded to Landon") < 0)
+      throw new Error("the host line does not name the bond: " + host);
+    // The stack is down, so a stale connected flag must not reach either line.
+    if (line.indexOf("Connected to") >= 0 || host.indexOf("Connected to") >= 0)
+      throw new Error("an off radio still read as connected: " + line + host);
+    if (document.getElementById("bfr").disabled)
+      throw new Error("an off radio blocked Forget while a bond exists");
+    STATE.ble.bonded = false;
+    paint();
+    if (document.getElementById("bhs").innerHTML.indexOf("No host bond.") < 0)
+      throw new Error("an off radio with no bond says nothing about it");
+    if (document.getElementById("bhs").innerHTML.indexOf("Ready to pair") >= 0)
+      throw new Error("an off radio offered pairing");
+    if (!document.getElementById("bfr").disabled)
+      throw new Error("Forget stayed live with no bond");
+    STATE.ble.bonded = true;
+    STATE.radios = {zigbee: true, ble: true};
+    paint();
+  });
+  step("every line and control keeps its place", () => {
+    global.st = STATE;
+    STATE.radios = {zigbee: false, ble: false};
+    paint();
+    for (const id of ["zrs", "zsum", "bst", "bhs", "bfr", "zrw", "brw"]) {
+      const e = document.getElementById(id);
+      if (e.hidden) throw new Error(id + " left the page");
+      if (id !== "bfr" && id !== "zrw" && id !== "brw" && !e.innerHTML)
+        throw new Error(id + " has no line while the radios are off");
+    }
+    if (document.getElementById("zrs").innerHTML.indexOf("Zigbee radio is off.") < 0)
+      throw new Error("the Zigbee line does not name the radio");
+    if (document.getElementById("zsum").innerHTML.indexOf("This browser is") < 0)
+      throw new Error("the Zigbee2MQTT line does not name the browser");
+    STATE.radios = {zigbee: true, ble: true};
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("Zigbee radio is on.") < 0)
+      throw new Error("a live radio does not say so");
+  });
+  step("the Zigbee line names the network state the stack reports", () => {
+    global.st = STATE;
+    STATE.radios = {zigbee: true, ble: true};
+    STATE.zigbee = {started: true, paired: false, "new": true};
+    paint();
+    let line = document.getElementById("zrs").innerHTML;
+    if (line.indexOf("Zigbee radio is on.") < 0 || line.indexOf("Not paired.") < 0)
+      throw new Error("an unpaired stack does not say so: " + line);
+    STATE.zigbee = {started: true, paired: false, "new": false};
+    paint();
+    line = document.getElementById("zrs").innerHTML;
+    if (line.indexOf("rejoining") < 0)
+      throw new Error("a rejoining stack does not say so: " + line);
+    STATE.zigbee = {started: false, paired: false, "new": false};
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("stack has not started") < 0)
+      throw new Error("a stack that never started does not say so");
+    // The radio switch owns the line first, so an off radio hides none of this.
+    STATE.radios = {zigbee: false, ble: true};
+    paint();
+    line = document.getElementById("zrs").innerHTML;
+    if (line.indexOf("Zigbee buttons are disabled.") < 0 || line.indexOf("stack") >= 0)
+      throw new Error("an off radio reported the stack: " + line);
+    STATE.radios = {zigbee: true, ble: true};
+    STATE.zigbee = {started: true, paired: true, "new": false};
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("Paired to a Zigbee network.") < 0)
+      throw new Error("a paired stack does not say so");
+  });
+  step("the pairing button opens and closes the coordinator window", () => {
+    // The socket is the browser's, so the control locks while it is down.
+    global.ws = null; global.tg = null; global.td = null;
+    zpjPaint();
+    if (!document.getElementById("zpj").disabled)
+      throw new Error("pairing stayed live with no Zigbee2MQTT link");
+    if (document.getElementById("zpjs").innerHTML.indexOf("needs the Zigbee2MQTT link") < 0)
+      throw new Error("the pairing line does not say why it is locked");
+    // z2mConnect installs the handlers, and a group list marks the link up.
+    z2mConnect("ws://bridge/api", "");
+    ws.onmessage({data: JSON.stringify({topic: "bridge/groups",
+                                        payload: [{id: 1, friendly_name: "all_light", members: []}]})});
+    wsSent = [];
+    zpjPaint();
+    if (document.getElementById("zpj").disabled)
+      throw new Error("pairing stayed locked with a live link");
+    document.getElementById("zpj").onclick();
+    if (wsSent.length !== 1) throw new Error("the button sent " + wsSent.length + " messages");
+    const sent = JSON.parse(wsSent[0]);
+    if (sent.topic !== "bridge/request/permit_join" || sent.payload.time !== 180 ||
+        sent.payload.value !== true) throw new Error("wrong request: " + wsSent[0]);
+    if (!document.getElementById("zpj").disabled)
+      throw new Error("the button stayed live while the request was open");
+    // The bridge answers, then reports the open window and what is left of it.
+    ws.onmessage({data: JSON.stringify({topic: "bridge/response/permit_join",
+                                        payload: {status: "ok", data: {time: 180}}})});
+    ws.onmessage({data: JSON.stringify({topic: "bridge/info",
+                                        payload: {permit_join: true, permit_join_timeout: 174}})});
+    const open = document.getElementById("zpjs").innerHTML;
+    if (open.indexOf("Pairing is open on the coordinator for 2:54.") < 0)
+      throw new Error("the countdown is wrong: " + open);
+    if (document.getElementById("zpj").textContent !== "Stop pairing")
+      throw new Error("the button does not offer a stop");
+    wsSent = [];
+    document.getElementById("zpj").onclick();
+    if (JSON.parse(wsSent[0]).payload.time !== 0)
+      throw new Error("stop did not close the window: " + wsSent[0]);
+    ws.onmessage({data: JSON.stringify({topic: "bridge/info", payload: {permit_join: false}})});
+    if (document.getElementById("zpjs").innerHTML.indexOf("Pairing is closed") < 0)
+      throw new Error("the closed window is not reported");
+    // A refusal reaches the line instead of being swallowed.
+    wsSent = [];
+    document.getElementById("zpj").onclick();
+    ws.onmessage({data: JSON.stringify({topic: "bridge/response/permit_join",
+                                        payload: {status: "error", error: "Coordinator is busy"}})});
+    if (document.getElementById("zpjs").innerHTML.indexOf("Coordinator is busy") < 0)
+      throw new Error("a refusal never reached the line");
+    z2mDisconnect();
+    global.ws = null; global.tg = null; global.td = null;
+  });
+  step("an old remote with no radio block leaves every input live", () => {
+    const saved = global.st.radios;
+    delete global.st.radios;
+    paint();
+    if (keys[20].className.indexOf("rf") >= 0) throw new Error("a missing radio block held an input");
+    // The switch keeps its place, so it is only locked while the state is unknown.
+    if (document.getElementById("zrb").disabled !== true)
+      throw new Error("a missing radio block left the switch live");
+    if (document.getElementById("zrw").hidden)
+      throw new Error("a missing radio block hid the switch");
+    global.st.radios = saved;
+    paint();
+  });
   step("copy and download need text in the box", () => {
     global.cfgBusy = false;
     global.cfgOpen = true;
@@ -771,15 +961,20 @@ setTimeout(() => {
 
   step("the Bluetooth line names the host and falls back without one", () => {
     global.st = STATE;
+    STATE.radios = {zigbee: true, ble: true};
+    STATE.ble.connected = true;
     bleStatus();
-    const named = document.getElementById("bst").innerHTML;
-    if (named.indexOf("connected to Landon&#39;s Mac") < 0 &&
-        named.indexOf("connected to Landon's Mac") < 0)
+    STATE.ble.connected = true;
+    const named = document.getElementById("bhs").innerHTML;
+    if (named.indexOf("Connected to Landon&#39;s Mac") < 0 &&
+        named.indexOf("Connected to Landon's Mac") < 0)
       throw new Error("the host name is missing: " + named);
+    if (document.getElementById("bst").innerHTML.indexOf("BLE HID: radio on.") < 0)
+      throw new Error("the radio line lost its own state");
     STATE.ble.host = "";
     bleStatus();
-    const plain = document.getElementById("bst").innerHTML;
-    if (plain.indexOf("BLE HID: connected") < 0 || plain.indexOf("connected to") >= 0)
+    const plain = document.getElementById("bhs").innerHTML;
+    if (plain.indexOf("Connected to a saved host.") < 0)
       throw new Error("an unread host name broke the line: " + plain);
     STATE.ble.host = "Landon's Mac";
   });

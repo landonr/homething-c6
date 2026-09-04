@@ -15,6 +15,7 @@ CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
 ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
+BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
 
 # Slots that cannot start the voice assistant. 19 is SW2, whose press edge is
 # already owned by the receiver-mode hold gesture. 17 and 18 are the wheel
@@ -326,8 +327,14 @@ class ZigbeeTargetTest(unittest.TestCase):
 class PageTest(unittest.TestCase):
     def test_the_page_loads_nothing_from_outside_the_device(self) -> None:
         """The remote often sits on a LAN with no route to the internet."""
-        for marker in ("http://", "<script src", "<link", "@import", "//cdn", 'src="http'):
+        for marker in ("<script src", "@import", "//cdn", 'src="http'):
             self.assertNotIn(marker, PAGE)
+        # The one <link> is the favicon, and it carries the whole image inline.
+        # Its only http:// is the SVG namespace, which no browser fetches.
+        self.assertEqual(PAGE.count("<link"), 1)
+        self.assertIn('<link rel=icon href="data:image/svg+xml,', PAGE)
+        self.assertEqual(re.findall(r"http://[^\s\"'>%]*", PAGE),
+                         ["http://www.w3.org/2000/svg"])
         # One outbound anchor names the code library. A link loads nothing until
         # the reader follows it, so it cannot stall the page on an offline LAN.
         self.assertEqual(
@@ -604,12 +611,45 @@ class PageTest(unittest.TestCase):
         self.assertIn('"&ieee="+encodeURIComponent(ieee)', body)
         self.assertIn('"&ep="+encodeURIComponent(ep)', body)
 
-    def test_the_page_writes_nothing_to_zigbee2mqtt(self) -> None:
-        """The websocket is read only now. Nothing is published, so the request
-        transaction, its response topic and its timeout are all gone."""
-        for gone in ("zpub", "zreq", "bridge/request/", "bridge/response/", "transaction"):
+    def test_the_page_writes_only_the_permit_join_request(self) -> None:
+        """Assignment stays read only on the websocket. A group per device left
+        one behind on every repeat assign, so no assignment publishes. Permit
+        join is the one write, because that window belongs to the coordinator."""
+        for gone in ("zpub", "zreq", "transaction", "bridge/request/group",
+                     "bridge/request/device"):
             self.assertNotIn(gone, PAGE)
-        self.assertNotIn("ws.send(", PAGE)
+        self.assertEqual(PAGE.count("ws.send("), 1)
+        send = section(PAGE, "function zpjSet(open){", "\n\n")
+        self.assertIn('ws.send(JSON.stringify({topic:"bridge/request/permit_join",', send)
+        self.assertIn("payload:{value:!!open,time:open?ZPJ_SECONDS:0}}))", send)
+
+    def test_the_pairing_button_opens_the_coordinator_for_three_minutes(self) -> None:
+        """The remote can only join while the coordinator permits it, so the
+        card offers that window without a second tool."""
+        self.assertIn("var ZPJ_SECONDS=180;", PAGE)
+        # The radio and its pairing window sit above the rule. The browser link
+        # to Zigbee2MQTT is a different subject and sits below it.
+        self.assertIn('<hr class="rule">\n<h3>Zigbee2MQTT</h3>', PAGE)
+        self.assertIn("hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}", PAGE)
+        self.assertIn('<div class="act"><button type="button" class="sec" id="zpj">'
+                      'Enable pairing for 3 minutes</button></div>', PAGE)
+        # The control outlives the browser block, so build() wires it.
+        self.assertNotIn("id=zpj>", PAGE)
+        self.assertIn('document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};', PAGE)
+        paint = section(PAGE, "function zpjPaint(){", "\n\n// Zigbee2MQTT reports")
+        self.assertIn("b.disabled=zpjBusy||!up;", paint)
+        self.assertIn('b.textContent=zpjBusy?"Working...":zpjOn?"Stop pairing":'
+                      '"Enable pairing for 3 minutes"}', paint)
+        self.assertIn('"Pairing is open on the coordinator for "+mmss(zpjLeft)+".":', paint)
+        self.assertIn('"Pairing is closed on the coordinator."', paint)
+        # bridge/info is retained, so the state and the countdown arrive on
+        # connect and again on every change.
+        self.assertIn('if(m.topic==="bridge/info"&&m.payload){', PAGE)
+        self.assertIn("zpjOn=!!m.payload.permit_join;", PAGE)
+        self.assertIn("end>0?Math.max(0,Math.round((end-Date.now())/1000)):ZPJ_SECONDS;", PAGE)
+        self.assertIn('if(m.topic==="bridge/response/permit_join"){', PAGE)
+        # A closed socket only means this browser stopped watching the window.
+        self.assertIn('zpjOn=false;zpjLeft=0;zpjBusy=false;zpjErr="";zpjTick();', PAGE)
 
     def test_a_device_target_carries_the_endpoint_of_its_action(self) -> None:
         """A groupcast needs no endpoint but a unicast does, and the endpoint that
@@ -719,11 +759,23 @@ class PageTest(unittest.TestCase):
         # Both radios share one card at the top of the page, so the import block
         # is the only thing the Config card holds.
         self.assertIn('<section class="card full conn">\n'
-                      '<div id="zbcfg">\n<h2>Zigbee2MQTT</h2>\n'
+                      '<div id="zbcfg">\n'
+                      '<h2 class="ttl">Zigbee<label class="sw" id="zrw">'
+                      '<input type="checkbox" id="zrb"\naria-label="Zigbee radio">'
+                      '<span></span></label></h2>\n'
+                      '<p class="sub st" id="zrs">Zigbee radio state is loading.</p>\n'
+                      '<p class="sub st" id="zpjs">Pairing state is loading.</p>\n'
+                      '<div class="act"><button type="button" class="sec" id="zpj">'
+                      'Enable pairing for 3 minutes</button></div>\n'
+                      '<hr class="rule">\n'
+                      '<h3>Zigbee2MQTT</h3>\n'
                       '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
                       '<div id="z2m"></div>\n</div>\n'
-                      '<div id="blecfg">\n<h2>Bluetooth</h2>\n'
-                      '<p class="sub st" id="bst">BLE HID status is loading.</p>', PAGE)
+                      '<div id="blecfg">\n'
+                      '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
+                      '<input type="checkbox" id="brb"\naria-label="Bluetooth radio">'
+                      '<span></span></label></h2>\n'
+                      '<p class="sub st" id="bst">BLE HID state is loading.</p>', PAGE)
         # A rule separates the two, and the pair stacks on a narrow screen.
         self.assertIn(".conn>div+div{border-left:1px solid var(--line)", PAGE)
         self.assertIn("@media (max-width:720px){.conn{grid-template-columns:1fr}", PAGE)
@@ -735,35 +787,54 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("cfg-status", PAGE)
         self.assertNotIn('id="cxz"', PAGE)
         # The page title leads, so neither radio card pushes it down.
-        self.assertIn('<header class="full">\n<h1>Remote buttons</h1>\n'
+        self.assertIn('<div>\n<h1>homeThing c6</h1>\n'
                       '<p class="sub">Select an input to see or change what it does.</p>\n'
-                      '</header>', PAGE)
+                      '</div>\n</header>', PAGE)
+        # The logo is inline and uncoloured, so one copy follows the theme text
+        # colour instead of shipping a light file and a dark file.
+        self.assertIn('<header class="full">\n<svg class=logo viewBox="0 0 805.333 795.107" '
+                      'fill=currentColor aria-hidden=true><path ', PAGE)
+        self.assertIn(".logo{width:34px;height:34px;flex:none}", PAGE)
+        # The tab icon is the same mark as a data URI. It carries its own
+        # colour rule, because a standalone favicon has no page to inherit from.
+        self.assertIn('<link rel=icon href="data:image/svg+xml,%3Csvg%20'
+                      'xmlns=%22http://www.w3.org/2000/svg%22%20'
+                      'viewBox=%220%200%20805.333%20795.107%22%3E', PAGE)
+        self.assertIn("%3Cstyle%3Epath%7Bfill:%2316181d%7D"
+                      "@media(prefers-color-scheme:dark)%7Bpath%7Bfill:%23e7eaef%7D%7D"
+                      "%3C/style%3E", PAGE)
+        self.assertIn("header.full{display:flex;align-items:center;gap:12px}", PAGE)
         card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
         # Closed on arrival, because most visits change one input instead.
         self.assertIn("var cfgOpen=false;", PAGE)
         self.assertIn('<h2><button type="button" class="tog" id="cxo" aria-expanded="false">'
                       'Import and export<span\nid="cxs">Show</span></button></h2>', PAGE)
-        self.assertIn('id="bfr" hidden>Forget Bluetooth host</button>', PAGE)
+        # The button keeps its place and locks instead, so no line moves.
+        self.assertIn('id="bfr">Forget Bluetooth host</button>', PAGE)
         self.assertIn('post("forget_ble")', PAGE)
         # The host name is free text from the peer, so it is escaped both ways.
         self.assertIn('"pairing":%s,"host":"', CPP)
         self.assertIn("print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name()", CPP)
-        self.assertIn('st.ble.host?"connected to "+esc(st.ble.host):', PAGE)
+        self.assertIn('function bleHost(){return st.ble.host?esc(st.ble.host):"a saved host"}', PAGE)
         # One line under the heading reports the link, so no second line can
         # disagree with it.
-        status = section(PAGE, "function z2mStatus(){", "\n\nfunction plural(")
+        status = section(PAGE, "function z2mLine(){", "\n\n// The pairing control")
         self.assertIn('var e=document.getElementById("zsum");', status)
-        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>Connected. "+z2mCounts()+".";return}',
+        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>This browser is connected to "+\n'
+                      '"Zigbee2MQTT. "+z2mCounts()+".";return}', status)
+        self.assertIn('if(zerr){e.innerHTML="<span class=\'dot bad\'></span>This browser is not '
+                      'connected to "+\n"Zigbee2MQTT. "+esc(zerr);return}', status)
+        self.assertIn('e.innerHTML="<span class=\'dot off\'></span>This browser is not connected to "+',
                       status)
-        self.assertIn('if(zerr){e.innerHTML="<span class=\'dot bad\'></span>"+esc(zerr);return}', status)
-        self.assertIn('e.innerHTML="<span class=\'dot off\'></span>Not connected.', status)
         self.assertNotIn("z2mTitle", PAGE)
         self.assertNotIn("id=zst", PAGE)
-        self.assertIn(".dot.off{background:var(--line)}.dot.bad{background:var(--bad)}", PAGE)
+        self.assertIn(".dot.off{background:var(--line)}.dot.warn{background:var(--warn)}\n"
+                      ".dot.bad{background:var(--bad)}", PAGE)
         self.assertIn("function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}", PAGE)
         refresh = section(PAGE, "function bleRefresh(){", "\n\nfunction bleWatch()")
         self.assertIn('fetch("/buttons/api/state",{cache:"no-store"})', refresh)
-        self.assertIn("st.ble=j.ble;bleStatus()", refresh)
+        self.assertIn("st.ble=j.ble;st.radios=j.radios;", refresh)
+        self.assertIn("radioStatus();bleStatus()", refresh)
         self.assertNotIn("paint()", refresh)
         self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
         self.assertIn("b.hidden=!cfgOpen;", card)
@@ -883,6 +954,174 @@ class PageTest(unittest.TestCase):
     def test_reload_reuses_the_persisted_capture_result(self) -> None:
         startup = section(PAGE, "build();", "</script>")
         self.assertIn('seen=j.result==="saved"&&j.result_slot===rec', startup)
+
+
+class RadioSwitchTest(unittest.TestCase):
+    """One switch for each radio, held on the remote and shown on the page."""
+
+    def test_each_radio_keeps_its_switch_in_its_own_record(self) -> None:
+        # The flag replaces a reserved field, so an old record loads unchanged
+        # and reads as on.
+        self.assertIn("static constexpr uint16_t FLAG_RADIO_OFF = 0x0001;", ZIGBEE)
+        self.assertIn("uint16_t flags;", ZIGBEE)
+        self.assertIn("static constexpr uint8_t FLAG_RADIO_OFF = 0x01;", BLE_HEADER)
+        self.assertIn("uint8_t flags;", BLE_HEADER)
+        self.assertIn("uint8_t reserved[2];", BLE_HEADER)
+        self.assertIn("radio_on_.store((record_.flags & FLAG_RADIO_OFF) == 0", ZIGBEE)
+        self.assertIn("this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0", BLE)
+
+    def test_an_off_radio_sends_nothing(self) -> None:
+        play = section(ZIGBEE, "  bool play(uint8_t slot) {", "\n  }")
+        self.assertIn("!radio_enabled()", play)
+        tick = section(ZIGBEE, "  void tick() {", "const uint32_t now")
+        self.assertIn("if (!radio_enabled())\n      return;", tick)
+        pressed = section(BLE, "bool BleHid::set_pressed(uint8_t slot, bool pressed) {", "\n}")
+        self.assertIn("!this->radio_enabled()", pressed)
+        self.assertIn("if (!this->radio_enabled() || !this->hid_started_", BLE)
+
+    def test_the_bluetooth_stack_stays_down_while_the_switch_is_off(self) -> None:
+        setup = section(BLE, "void BleHid::setup() {", "\n}")
+        self.assertIn("if (!this->radio_enabled()) {", setup)
+        self.assertNotIn("mark_failed", section(setup, "radio_enabled()) {", "  }"))
+        # The first turn-on starts the stack, because setup skipped it.
+        switch = section(BLE, "bool BleHid::set_radio_enabled(bool enabled) {", "\n}")
+        self.assertIn("if (!this->stack_ready_) {", switch)
+        self.assertIn("this->release_all_();", switch)
+        self.assertIn("ble_gap_adv_stop();", switch)
+        self.assertIn("ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);", switch)
+
+    def test_the_state_and_action_endpoints_carry_both_switches(self) -> None:
+        self.assertIn('"radios":{"zigbee":%s,"ble":%s}', CPP)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s}', CPP)
+        self.assertIn("::zigbee_assignments.link_started() ? \"true\" : \"false\"", CPP)
+        self.assertIn("::zigbee_assignments.link_factory_new() ? \"true\" : \"false\"", CPP)
+        self.assertIn("::zigbee_assignments.radio_enabled() ? \"true\" : \"false\"", CPP)
+        self.assertIn('action == "set_radio"', CPP)
+        self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
+        self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio";', CPP)
+        # A switch writes flash, so it runs on the loop like every other write.
+        switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
+        self.assertIn("this->defer(", switch)
+        self.assertIn("::zigbee_assignments.set_radio_enabled(radio_on)", switch)
+        self.assertIn("set_radio_enabled(radio_on)", switch)
+
+    def test_an_off_zigbee_radio_keeps_the_stack_down_after_a_boot(self) -> None:
+        """The ESP-Zigbee stack has no stop and no restart, so the only way to
+        keep the radio off is to hold the component down before its setup."""
+        gate = section(CONFIG, "    - priority: 800", "    - priority: 600")
+        self.assertIn("if (!ZigbeeAssignmentManager::radio_enabled_from_flash()) {", gate)
+        self.assertIn("id(zigbee_radio)->mark_failed();", gate)
+        self.assertIn("zigbee_assignments.set_boot_gated(true);", gate)
+        # The rest of the boot work keeps its own priority behind that gate.
+        self.assertIn("    - priority: 600\n      then:\n"
+                      "        - lambda: ir_code_store.setup();", CONFIG)
+        # Preferences open in app_main, so a flash read works at any priority.
+        self.assertIn("static bool radio_enabled_from_flash() {", ZIGBEE)
+        self.assertIn("if (!preference.load(&record) || !valid_(record))\n      return true;", ZIGBEE)
+        # The switch cannot lift the gate, so the page asks for the one cure.
+        self.assertIn('if(z.gated)return "The stack is down. Reboot the remote to start it.";', PAGE)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s}', CPP)
+        self.assertIn("::zigbee_assignments.boot_gated() ? \"true\" : \"false\"", CPP)
+        # Nothing else on the device offers a reboot.
+        self.assertIn("  - platform: restart\n    name: Restart", CONFIG)
+
+    def test_neither_radio_switch_acts_on_its_own_state_at_boot(self) -> None:
+        """A template switch defaults to ALWAYS_OFF, and its setup fires
+        turn_off_action. That switched both radios off on every boot before the
+        stored flag was even read."""
+        block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
+        self.assertEqual(block.count("restore_mode: DISABLED"), 2)
+        self.assertNotIn("restore_mode: ALWAYS", block)
+
+    def test_the_yaml_exposes_one_switch_for_each_radio(self) -> None:
+        block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
+        self.assertIn("lambda: return zigbee_assignments.radio_enabled();", block)
+        self.assertIn("lambda: zigbee_assignments.set_radio_enabled(true);", block)
+        self.assertIn("lambda: zigbee_assignments.set_radio_enabled(false);", block)
+        self.assertIn("lambda: return id(ble_hid_remote).radio_enabled();", block)
+        self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(true);", block)
+        self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(false);", block)
+        # The component keeps no global instance, so the YAML pushes the link
+        # state to the manager the page reads.
+        self.assertIn("zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),", CONFIG)
+        self.assertIn("id(zigbee_radio)->factory_new_.load());", CONFIG)
+        # D5 must not report a healthy Zigbee link that sends nothing.
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
+                      CONFIG)
+
+    def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
+        self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
+        self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
+                      'r.action==="hid"?"ble":""}', PAGE)
+        self.assertIn('b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");', PAGE)
+        # The label stays, so the tile still says what the input is assigned to.
+        self.assertIn(".k.rf span{opacity:.55}", PAGE)
+        self.assertIn("background:var(--bad);margin-left:6px;vertical-align:middle}", PAGE)
+        self.assertIn('" radio is off, so this input is disabled. The assignment is kept.</div>"',
+                      PAGE)
+        self.assertIn('b.checked=radioBusy[kind]?radioWant[kind]:radioOn(kind);', PAGE)
+        self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
+        self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
+        self.assertIn('document.getElementById("zrb").onchange=function(){setRadio("zigbee")};', PAGE)
+        self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
+
+    def test_every_radio_line_states_what_is_on_or_off(self) -> None:
+        """A line that hides moves the text and the buttons under it, so each one
+        is always rendered and always names its own subject."""
+        # Nothing in the connection card carries a hidden attribute any more.
+        card = section(PAGE, '<section class="card full conn">', "</section>")
+        self.assertNotIn("hidden", card)
+        # The switch locks instead of leaving the page while the state is unknown.
+        self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)
+        self.assertIn('bf.disabled=bleForgetBusy||!st.ble.bonded;', PAGE)
+        line = section(PAGE, "function radioStatus(){", "\n\nfunction setRadio(")
+        self.assertIn('e.innerHTML=!known?"<span class=\'dot off\'></span>'
+                      'Zigbee radio state is loading.":', line)
+        # A radio that is on with no network is neither healthy nor failed, so
+        # the dot uses the warning colour instead of the idle grey.
+        self.assertIn('"<span class=\'dot "+(on?(zbPaired()?"":"warn"):"bad")+"\'></span>'
+                      'Zigbee radio is "+', line)
+        self.assertIn(".dot.warn{background:var(--warn)}", PAGE)
+        self.assertIn("--warn:#8a5300;", PAGE)
+        self.assertIn("--warn:#e0a44a;", PAGE)
+        # The remote can be on with no network, so the line names which it is.
+        self.assertIn('if(!z.started)return "The stack has not started.";', PAGE)
+        self.assertIn('if(z.paired)return "Paired to a Zigbee network.";', PAGE)
+        self.assertIn('return z["new"]?"Not paired.":', PAGE)
+        self.assertIn('"Not on the network yet. The remote is rejoining."}', PAGE)
+        self.assertIn('(on?"on. "+zbLink():"off. Zigbee buttons are disabled.")', PAGE)
+        # The remote radio and the browser link are separate subjects.
+        self.assertIn('This browser is connected to "+\n"Zigbee2MQTT. "', PAGE)
+        # The Bluetooth radio and its host each own a line, and the host line
+        # sits above the Forget text. A live flag never survives an off radio.
+        self.assertIn('<p class="sub st" id="bst">BLE HID state is loading.</p>\n'
+                      '<p class="sub st" id="bhs">Bluetooth host state is loading.</p>\n'
+                      '<p class="sub">Forget the saved host', PAGE)
+        ble = section(PAGE, "function bleStatus(){", "\n\nfunction forgetBle(")
+        self.assertIn('var off=!radioOn("ble"),live=!off&&st.ble.connected;', ble)
+        self.assertIn('(off?"off. BLE buttons are disabled.":"on.")', ble)
+        self.assertIn('(!st.ble.bonded?("No host bond."+(off?"":st.ble.pairing?" Pairing.":'
+                      '" Ready to pair.")):', ble)
+        self.assertIn('live?"Connected to "+bleHost()+".":', ble)
+        self.assertIn('"Bonded to "+bleHost()+"."+(off?"":" Waiting for the host."))', ble)
+
+    def test_a_forget_works_while_the_bluetooth_radio_is_off(self) -> None:
+        """The NimBLE keys are their own NVS namespace, so the stack is not
+        needed to read the bond or to drop it."""
+        self.assertIn('static const char *const BOND_NAMESPACE = "nimble_bond";', BLE)
+        present = section(BLE, "static bool stored_bond_present() {", "\n}")
+        self.assertIn("nvs_entry_find(NVS_DEFAULT_PART_NAME, BOND_NAMESPACE, NVS_TYPE_ANY", present)
+        self.assertIn("nvs_release_iterator(iterator);", present)
+        erase = section(BLE, "static bool erase_stored_bonds() {", "\n}")
+        self.assertIn("nvs_open(BOND_NAMESPACE, NVS_READWRITE, &handle)", erase)
+        self.assertIn("nvs_erase_all(handle)", erase)
+        self.assertIn("nvs_commit(handle)", erase)
+        self.assertIn("nvs_close(handle);", erase)
+        setup = section(BLE, "void BleHid::setup() {", "\n}")
+        self.assertIn("this->bonded_.store(stored_bond_present(), std::memory_order_release);", setup)
+        forget = section(BLE, "bool BleHid::forget_bond() {", "\n}")
+        self.assertIn("if (!this->stack_ready_) {", forget)
+        self.assertIn("const bool erased = erase_stored_bonds();", forget)
 
 
 class WiringTest(unittest.TestCase):

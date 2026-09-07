@@ -487,15 +487,29 @@ light:
 
             // D5 is Zigbee status during normal operation. A radio switched off
             // sends nothing, so it reads the same as a stack that never started.
+            // Pairing is tested before the join, so an open window never shows
+            // the red that means a fault. A join closes the window itself.
             if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started()) {
               it[3] = Color::BLACK;
-            } else if (id(zigbee_radio).is_connected()) {
-              it[3] = Color(0, 128, 0);
-            } else {
+            } else if (zigbee_assignments.pairing_window_open()) {
+              const float phase = (millis() % 800) / 800.0f;
+              const uint8_t level = 48 + static_cast<uint8_t>(
+                  144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              it[3] = Color(0, 0, level);
+            } else if (!id(zigbee_radio).is_connected()) {
               const float phase = (millis() % 1600) / 1600.0f;
               const uint8_t level = 48 + static_cast<uint8_t>(
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[3] = Color(level, 0, 0);
+            } else if (zigbee_assignments.reach() == ZigbeeAssignmentManager::REACH_FAILED) {
+              // Only a device unicast is acknowledged, so a groupcast-only
+              // remote never reaches this and stays solid green.
+              const float phase = (millis() % 2000) / 2000.0f;
+              const uint8_t level = 48 + static_cast<uint8_t>(
+                  144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              it[3] = Color(level, level / 3, 0);
+            } else {
+              it[3] = Color(0, 128, 0);
             }
     on_turn_on:
       - switch.turn_on: led_rail
@@ -798,12 +812,20 @@ interval:
           }
           if (ir_ui.tick())
             id(show_idle_status).execute();
-          zigbee_assignments.tick();
           // The Zigbee component exports no global instance, so the link state
-          // is pushed from here, where the id is in scope.
+          // is pushed from here, where the id is in scope. It comes before the
+          // tick, so a pairing step reads this boot and not the last one.
           zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),
                                             id(zigbee_radio).is_connected(),
                                             id(zigbee_radio)->factory_new_.load());
+          zigbee_assignments.tick();
+          // Pairing cannot steer while an older join is still in NVS. This
+          // erases only the "zigbee" NVS namespace, so every button assignment
+          // in the "esphome" namespace survives it. The call does not return:
+          // it restarts the remote, and the stored request runs the window on
+          // the boot after it.
+          if (zigbee_assignments.take_credential_erase_request())
+            id(zigbee_radio)->reset();
   - interval: 1s
     then:
       - if:

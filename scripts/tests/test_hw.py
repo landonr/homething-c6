@@ -6,7 +6,8 @@ import stat
 import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from unittest.mock import patch
 
 from scripts import hw
 
@@ -91,6 +92,37 @@ def analysis(*, components=None, nets=None, bom=None, findings=None):
         "findings": findings or [finding()],
         "no_connects": [{"x": 1.0, "y": 2.0}],
     }
+
+
+def current_result(raw=None):
+    raw = raw or analysis()
+    state = hw.canonicalize_analysis(raw)
+    return {
+        "analysis": raw,
+        "state": state,
+        "delta": hw.semantic_diff(state, state),
+        "footprint_changes": {"added": [], "modified": [], "deleted": []},
+        "parse_ok": True,
+    }
+
+
+def write_ready_session(directory, session, sources, footprints=None):
+    state = hw.canonicalize_analysis(analysis())
+    hw.write_json(
+        directory / "session.json",
+        {"schema_version": hw.SESSION_SCHEMA, "session": session, "status": "ready"},
+    )
+    hw.write_json(
+        directory / "baseline.json",
+        {
+            "schema_version": hw.SESSION_SCHEMA,
+            "session": session,
+            "sources": sources,
+            "footprints": footprints or {"files": {}, "aggregate": "baseline"},
+            "analysis_fingerprint": {"digest": "baseline"},
+        },
+    )
+    hw.write_json(directory / "baseline-state.json", state)
 
 
 class CanonicalStateTests(unittest.TestCase):
@@ -643,6 +675,230 @@ class VerifyLogicTests(unittest.TestCase):
         self.assertEqual(
             ["heuristic", "warning"], hw.new_blocking_finding_ids(delta)
         )
+
+
+class FastSessionWorkflowTests(unittest.TestCase):
+    def test_inspect_component_net_pin_and_changes_have_stable_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_root = Path(tmp) / "cache"
+            session = "inspect"
+            directory = cache_root / session
+            directory.mkdir(parents=True)
+            write_ready_session(directory, session, hw._source_hashes())
+            current = current_result()
+            output = io.StringIO()
+            with patch.object(hw, "CACHE_ROOT", cache_root), patch.object(
+                hw, "_compute_current", return_value=current
+            ) as compute, redirect_stdout(output):
+                self.assertEqual(
+                    0,
+                    hw.command_inspect(
+                        session, "component", ["R1"], json_output=True, force=True
+                    ),
+                )
+            payload = json.loads(output.getvalue())
+
+        self.assertEqual("component", payload["target"])
+        self.assertEqual("R1", payload["component"]["reference"])
+        self.assertEqual(
+            {"GND", "SIG"}, {item["net"] for item in payload["component"]["pins"]}
+        )
+        self.assertIn("properties", payload["component"])
+        self.assertIn("findings", payload)
+        self.assertIn("changes", payload)
+        self.assertTrue(compute.call_args.kwargs["force"])
+
+        net_payload = hw._net_inspection(current, "SIG", session)
+        pin_payload = hw._pin_inspection(current, "R1", "1", session)
+        changes_payload = hw._changes_inspection(current, session)
+        self.assertEqual(["R1", "R2"], [item["reference"] for item in net_payload["components"]])
+        self.assertEqual("SIG", pin_payload["pin"]["net"])
+        self.assertEqual(current["delta"], changes_payload["changes"])
+
+    def test_inspect_missing_identifiers_are_actionable(self):
+        current = current_result()
+        for callback, text in (
+            (lambda: hw._component_inspection(current, "R99", "inspect"), "component not found: R99"),
+            (lambda: hw._net_inspection(current, "MISSING", "inspect"), "net not found: MISSING"),
+            (lambda: hw._pin_inspection(current, "R1", "99", "inspect"), "pin not found: R1.99"),
+        ):
+            with self.subTest(text=text), self.assertRaises(hw.ConfigError) as caught:
+                callback()
+            self.assertEqual(text, str(caught.exception))
+
+    def test_valid_analysis_cache_reuses_and_force_or_corruption_refreshes(self):
+        raw = analysis()
+        calls = []
+
+        def fake_analyzer(output, diagnostics):
+            calls.append(output)
+            hw.write_json(output, raw)
+            return raw
+
+        fingerprint = {"digest": "fingerprint", "inputs": {"schematic": "one"}}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            hw, "_run_analyzer", side_effect=fake_analyzer
+        ):
+            directory = Path(tmp) / "session"
+            first, first_reused = hw._cached_analysis(directory, fingerprint, {"commands": []}, force=False)
+            second, second_reused = hw._cached_analysis(directory, fingerprint, {"commands": []}, force=False)
+            hw.write_json(directory / "analysis-cache" / "fingerprint" / "complete.json", {"bad": True})
+            third, third_reused = hw._cached_analysis(directory, fingerprint, {"commands": []}, force=False)
+            fourth, fourth_reused = hw._cached_analysis(directory, fingerprint, {"commands": []}, force=True)
+
+        self.assertEqual(raw, first)
+        self.assertEqual(raw, second)
+        self.assertEqual(raw, third)
+        self.assertEqual(raw, fourth)
+        self.assertFalse(first_reused)
+        self.assertTrue(second_reused)
+        self.assertFalse(third_reused)
+        self.assertFalse(fourth_reused)
+        self.assertEqual(3, len(calls))
+
+    def test_changed_footprint_parser_has_separate_validated_cache(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            library = root / "Library.pretty"
+            library.mkdir()
+            (library / "changed.kicad_mod").write_text("(footprint changed)")
+            cli = root / "kicad-cli"
+            cli.write_text("#!/bin/sh\n")
+            cli.chmod(cli.stat().st_mode | stat.S_IXUSR)
+            footprints = hw.hash_footprints(library)
+            changes = {"added": ["changed.kicad_mod"], "modified": [], "deleted": []}
+
+            def fake_command(args, *, cwd=None, expected_outputs=()):
+                calls.append(list(args))
+                for output in expected_outputs:
+                    Path(output).parent.mkdir(parents=True, exist_ok=True)
+                    Path(output).write_text("(footprint parsed)")
+                return {
+                    "returncode": 0,
+                    "missing_outputs": [],
+                    "unexpected_outputs": [],
+                    "stdout": "",
+                    "stderr": "",
+                }
+
+            with patch.object(hw, "FOOTPRINT_LIBRARY", library), patch.object(
+                hw, "kicad_cli_path", return_value=cli
+            ), patch.object(hw, "run_command", side_effect=fake_command):
+                directory = root / "session"
+                first = hw._cached_changed_footprints(
+                    directory, footprints, changes, {"commands": []}, force=False
+                )
+                second = hw._cached_changed_footprints(
+                    directory, footprints, changes, {"commands": []}, force=False
+                )
+                forced = hw._cached_changed_footprints(
+                    directory, footprints, changes, {"commands": []}, force=True
+                )
+
+        self.assertEqual((True, False), first)
+        self.assertEqual((True, True), second)
+        self.assertEqual((True, False), forced)
+        self.assertEqual(2, len(calls))
+
+    def test_session_lock_rejects_overlapping_operations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "session"
+            directory.mkdir()
+            with hw.session_operation_lock(directory, "session"):
+                with self.assertRaises(hw.ConfigError) as caught:
+                    with hw.session_operation_lock(directory, "session"):
+                        pass
+
+        self.assertIn("session is busy", str(caught.exception))
+
+    def test_quick_stops_for_pcb_drift_before_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            schematic = root / "board.kicad_sch"
+            pcb = root / "board.kicad_pcb"
+            project = root / "board.kicad_pro"
+            library = root / "Library.pretty"
+            cache_root = root / "cache"
+            for path in (schematic, pcb, project):
+                path.write_text(path.name)
+            library.mkdir()
+            sources = {
+                "schematic": hw.sha256_file(schematic),
+                "pcb": hw.sha256_file(pcb),
+                "project": hw.sha256_file(project),
+            }
+            session = "pcb-drift"
+            directory = cache_root / session
+            directory.mkdir(parents=True)
+            write_ready_session(directory, session, sources)
+            pcb.write_text("changed pcb")
+            with patch.object(hw, "SCHEMATIC", schematic), patch.object(
+                hw, "PCB", pcb
+            ), patch.object(hw, "PROJECT", project), patch.object(
+                hw, "FOOTPRINT_LIBRARY", library
+            ), patch.object(hw, "CACHE_ROOT", cache_root), patch.object(
+                hw, "_compute_current", side_effect=AssertionError("analysis started")
+            ):
+                with redirect_stderr(io.StringIO()):
+                    self.assertEqual(1, hw.command_quick(session))
+
+    def test_old_session_metadata_has_clean_and_preflight_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "old"
+            directory.mkdir()
+            with self.assertRaises(hw.ConfigError) as caught:
+                hw._load_baseline(directory, "old")
+
+        self.assertIn("clean old", str(caught.exception))
+        self.assertIn("preflight old", str(caught.exception))
+
+    def test_corrupt_session_metadata_has_clean_and_preflight_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "broken"
+            directory.mkdir()
+            (directory / "session.json").write_text("{")
+            with self.assertRaises(hw.ConfigError) as caught:
+                hw._load_baseline(directory, "broken")
+
+        self.assertIn("metadata is corrupt", str(caught.exception))
+        self.assertIn("clean broken", str(caught.exception))
+        self.assertIn("preflight broken", str(caught.exception))
+
+    def test_analyzer_and_cli_discovery_orders_are_explicit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / "shared"
+            codex = root / "codex"
+            claude = root / "claude"
+            codex_script = codex / "skills" / "kicad" / "scripts" / "analyze_schematic.py"
+            claude_script = claude / "skills" / "kicad" / "scripts" / "analyze_schematic.py"
+            codex_script.parent.mkdir(parents=True)
+            claude_script.parent.mkdir(parents=True)
+            codex_script.write_text("# analyzer")
+            claude_script.write_text("# analyzer")
+            environment = {
+                "AGENTS_HOME": str(shared),
+                "CODEX_HOME": str(codex),
+                "CLAUDE_CONFIG_DIR": str(claude),
+                "KICAD_HAPPY_DIR": "",
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                self.assertEqual(codex / "skills" / "kicad", hw.resolve_analyzer_root())
+                codex_script.unlink()
+                self.assertEqual(claude / "skills" / "kicad", hw.resolve_analyzer_root())
+            cli = root / "kicad-cli"
+            cli.write_text("#!/bin/sh\n")
+            cli.chmod(cli.stat().st_mode | stat.S_IXUSR)
+            with patch.dict(os.environ, {"KICAD_CLI": ""}, clear=False), patch(
+                "scripts.hw.shutil.which", return_value=str(cli)
+            ):
+                self.assertEqual(cli, hw.kicad_cli_path())
+            with patch.dict(os.environ, {"KICAD_CLI": str(root / "missing")}, clear=False):
+                with self.assertRaises(hw.ConfigError) as caught:
+                    hw.kicad_cli_path()
+
+        self.assertIn("KICAD_CLI is invalid", str(caught.exception))
 
 
 class DeltaOutputTests(unittest.TestCase):

@@ -1,4 +1,5 @@
-# c6remote microphone bring-up firmware. `esphome run c6remote-test-mic.yaml`
+# c6remote microphone and LED VU meter bring-up firmware.
+# `esphome run c6remote-test-mic-vu.yaml`
 #
 # MK1 pins: GPIO0 sd, GPIO2 sck, GPIO21 ws. L/R is at GND so the sample lands
 # in the left half of the frame and `channel: right` would read clean zeros.
@@ -7,12 +8,12 @@
 # talking at the board pushes peak past -30. Read Mic Verdict first.
 
 substitutions:
-  device_name: c6remote-mic
-  friendly_name: c6remote Mic Test
+  device_name: c6remote-mic-vu
+  friendly_name: c6remote Mic VU Test
   # 2020 LEDs are specified from 3.5V on a 3.3V rail, same cap as v1/v2.
   max_level: "0.4"
   # I2S slot is compile time, so flip it by reflashing:
-  # esphome run c6remote-test-mic.yaml -s mic_channel right
+  # esphome run c6remote-test-mic-vu.yaml -s mic_channel right
   mic_channel: left
 
 esphome:
@@ -23,12 +24,13 @@ esphome:
     # null I2S queue and panics in xQueueSemaphoreTake.
     priority: -100
     then:
+      - switch.turn_on: led_rail
       - light.turn_on:
           id: led_strip
           brightness: 100%
           effect: VU Meter
       - switch.turn_on: mic_capture
-      - logger.log: "c6remote mic test ready, capturing"
+      - logger.log: "c6remote mic VU test ready, capturing"
 
 esp32:
   board: seeed_xiao_esp32c6
@@ -237,6 +239,18 @@ interval:
           id(mic_sq_sum) = 0;
 
 switch:
+  # Q2 is a high-side P-FET on the LED rail: gate low powers led_vdd, so the
+  # pin is inverted. R10 1M holds the gate at +3.3V, so the rail is off
+  # whenever GPIO18 floats. Without this the strip stays dark.
+  - platform: gpio
+    name: LED Rail
+    id: led_rail
+    entity_category: config
+    pin:
+      number: GPIO18
+      inverted: true
+    restore_mode: ALWAYS_OFF
+
   - platform: template
     name: Mic Capture
     id: mic_capture

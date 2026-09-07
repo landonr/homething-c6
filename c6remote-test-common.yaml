@@ -1,5 +1,5 @@
 # Shared package for the c6remote bring-up firmwares. Not flashable alone:
-# c6remote-test-v1.yaml / c6remote-test-v2.yaml include it, override
+# c6remote-test-v2.yaml includes it, override
 # substitutions and define the LED strip.
 #
 # Pin map (c6remote.kicad_sch):

@@ -1,4 +1,4 @@
-// Render helpers shared by c6remote-test-v1/v2 via `esphome: includes:`.
+// Render helpers shared by c6remote-test-v2 via `esphome: includes:`.
 // Pure functions only: this header is emitted ahead of the generated globals
 // in main.cpp, so it cannot reference them.
 

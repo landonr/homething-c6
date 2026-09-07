@@ -42,7 +42,16 @@ STATE = {
     "action_id": 0,
     "action_ok": True,
     "radios": {"zigbee": True, "ble": True},
-    "zigbee": {"started": True, "paired": True, "new": False, "gated": False},
+    "zigbee": {
+        "started": True,
+        "paired": True,
+        "new": False,
+        "gated": False,
+        "pairing": False,
+        "pair_left": 0,
+        "pair_failed": False,
+        "reach": "ok",
+    },
     "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
 }
 
@@ -133,6 +142,17 @@ class Handler(BaseHTTPRequestHandler):
             radio = form.get("radio", [""])[0]
             if radio in STATE["radios"]:
                 STATE["radios"][radio] = form.get("on", ["1"])[0] == "1"
+        elif action == "pair":
+            # The real remote restarts here, so the preview only flips the flag
+            # and lets the page's own countdown run against it.
+            on = form.get("on", ["1"])[0] == "1"
+            STATE["zigbee"]["pairing"] = on
+            STATE["zigbee"]["pair_left"] = 180 if on else 0
+            STATE["zigbee"]["pair_failed"] = False
+            STATE["radios"]["zigbee"] = on
+            if on:
+                STATE["zigbee"]["paired"] = False
+                STATE["zigbee"]["new"] = True
         elif action == "forget_ble":
             STATE["ble"]["bonded"] = False
             STATE["ble"]["host"] = ""

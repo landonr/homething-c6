@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -13,16 +15,21 @@ import shutil
 import signal as signal_module
 import subprocess
 import sys
+import tempfile
+import time
 from typing import Any, Iterable
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMATIC = REPO_ROOT / "c6remote-kicad" / "c6remote.kicad_sch"
 PCB = REPO_ROOT / "c6remote-kicad" / "c6remote.kicad_pcb"
+PROJECT = REPO_ROOT / "c6remote-kicad" / "c6remote.kicad_pro"
 FOOTPRINT_LIBRARY = REPO_ROOT / "kicad lib" / "Library.pretty"
 CACHE_ROOT = REPO_ROOT / ".cache" / "hw"
 DEFAULT_KICAD_CLI = Path("/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
 REQUIRED_SCHEMA = (1, 4)
+SESSION_SCHEMA = "2.0"
+CACHE_SCHEMA = "1.0"
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 RECOVERY_COMMAND = (
     'python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/'
@@ -79,6 +86,33 @@ class ConfigError(RuntimeError):
         self.diagnostic = diagnostic
 
 
+class PcbDriftError(RuntimeError):
+    """The session cannot validate an edit which changed the PCB."""
+
+
+@contextmanager
+def session_operation_lock(directory: Path, session: str) -> Iterable[None]:
+    """Hold one nonblocking operation lock for a session."""
+    lock_path = directory / ".operation.lock"
+    try:
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    except FileNotFoundError as exc:
+        raise ConfigError(f"session does not exist: {directory}; run preflight {session}") from exc
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ConfigError(
+                f"session is busy: {session}; wait for the active operation to finish"
+            ) from exc
+        yield
+    finally:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+
 def canonical_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -97,7 +131,22 @@ def sha256_file(path: Path) -> str:
 
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n")
+    text = json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def read_json(path: Path) -> Any:
@@ -132,13 +181,58 @@ def create_session_directory(directory: Path, session: str) -> None:
 def resolve_analyzer_root() -> Path:
     override = os.environ.get("KICAD_HAPPY_DIR")
     if override:
-        return Path(override).expanduser()
-    codex_home = Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
-    return codex_home / "skills" / "kicad"
+        root = Path(override).expanduser()
+        script = root / "scripts" / "analyze_schematic.py"
+        if not script.is_file():
+            raise ConfigError(
+                f"KICAD_HAPPY_DIR is invalid: analyzer missing at {script}"
+            )
+        return root
+    home = Path.home()
+    shared_home = Path(os.environ.get("AGENTS_HOME", home / ".agents")).expanduser()
+    codex_home = Path(os.environ.get("CODEX_HOME", home / ".codex")).expanduser()
+    claude_home = Path(os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude")).expanduser()
+    claude_plugin_roots = sorted(
+        (claude_home / "plugins" / "cache").glob("kicad-happy/**/skills/kicad"),
+        reverse=True,
+    )
+    candidates = (
+        shared_home / "skills" / "kicad",
+        REPO_ROOT / ".agents" / "skills" / "kicad",
+        codex_home / "skills" / "kicad",
+        claude_home / "skills" / "kicad",
+        *claude_plugin_roots,
+    )
+    for root in candidates:
+        if (root / "scripts" / "analyze_schematic.py").is_file():
+            return root
+    searched = ", ".join(str(path) for path in candidates)
+    raise ConfigError(recovery_message(f"KiCad analyzer missing; searched {searched}"))
 
 
 def kicad_cli_path() -> Path:
-    return Path(os.environ.get("KICAD_CLI", str(DEFAULT_KICAD_CLI))).expanduser()
+    override = os.environ.get("KICAD_CLI")
+    if override:
+        requested = Path(override).expanduser()
+        resolved = (
+            Path(shutil.which(override) or requested)
+            if len(requested.parts) == 1
+            else requested
+        )
+        if not resolved.is_file() or not os.access(resolved, os.X_OK):
+            raise ConfigError(
+                f"KICAD_CLI is invalid: file is missing or not executable: {resolved}"
+            )
+        return resolved
+    path_result = shutil.which("kicad-cli")
+    if path_result:
+        return Path(path_result)
+    if DEFAULT_KICAD_CLI.is_file() and os.access(DEFAULT_KICAD_CLI, os.X_OK):
+        return DEFAULT_KICAD_CLI
+    raise ConfigError(
+        "kicad-cli is unavailable; set KICAD_CLI, add kicad-cli to PATH, "
+        f"or install the macOS application at {DEFAULT_KICAD_CLI}"
+    )
 
 
 def recovery_message(reason: str) -> str:
@@ -654,7 +748,11 @@ def _reset_dir(path: Path) -> None:
 
 
 def _require_repo_inputs() -> None:
-    missing = [str(path) for path in (SCHEMATIC, PCB, FOOTPRINT_LIBRARY) if not path.exists()]
+    missing = [
+        str(path)
+        for path in (SCHEMATIC, PCB, PROJECT, FOOTPRINT_LIBRARY)
+        if not path.exists()
+    ]
     if missing:
         raise ConfigError("missing repository input(s): " + ", ".join(missing))
 
@@ -663,7 +761,321 @@ def _source_hashes() -> dict[str, str]:
     return {
         "schematic": sha256_file(SCHEMATIC),
         "pcb": sha256_file(PCB),
+        "project": sha256_file(PROJECT),
     }
+
+
+def _hash_path(path: Path) -> dict[str, Any]:
+    """Return a stable hash for a file, directory, or absent dependency."""
+    if path.is_file():
+        return {"path": str(path), "kind": "file", "hash": sha256_file(path)}
+    if not path.exists():
+        return {"path": str(path), "kind": "absent", "hash": ""}
+    if not path.is_dir():
+        return {"path": str(path), "kind": "other", "hash": ""}
+    files: dict[str, str] = {}
+    for candidate in sorted(path.rglob("*")):
+        if not candidate.is_file() or "__pycache__" in candidate.parts:
+            continue
+        if ".git" in candidate.parts:
+            continue
+        files[candidate.relative_to(path).as_posix()] = sha256_file(candidate)
+    material = "".join(f"{name}\0{files[name]}\n" for name in sorted(files))
+    return {
+        "path": str(path),
+        "kind": "directory",
+        "hash": sha256_bytes(material.encode()),
+        "files": len(files),
+    }
+
+
+def _analyzer_input_paths(root: Path) -> tuple[list[Path], list[Path]]:
+    config_paths = [root / "config", root / "configs", REPO_ROOT / ".kicad-happy"]
+    datasheet_paths = [
+        root / "datasheets",
+        root / "cache" / "datasheets",
+        REPO_ROOT / "datasheets",
+        REPO_ROOT / ".cache" / "datasheets",
+    ]
+    if override := os.environ.get("KICAD_HAPPY_CONFIG"):
+        config_paths.append(Path(override).expanduser())
+    if override := os.environ.get("KICAD_HAPPY_DATASHEETS"):
+        datasheet_paths.append(Path(override).expanduser())
+    return config_paths, datasheet_paths
+
+
+def analysis_input_fingerprint() -> dict[str, Any]:
+    """Fingerprint every input which can change schematic analysis."""
+    analyzer_root = resolve_analyzer_root()
+    config_paths, datasheet_paths = _analyzer_input_paths(analyzer_root)
+    payload = {
+        "schema_version": "1.0",
+        "schematic": sha256_file(SCHEMATIC),
+        "project": sha256_file(PROJECT),
+        "footprints": hash_footprints(FOOTPRINT_LIBRARY)["aggregate"],
+        "analyzer_package": _hash_path(analyzer_root),
+        "configuration": [_hash_path(path) for path in config_paths],
+        "datasheet_caches": [_hash_path(path) for path in datasheet_paths],
+    }
+    return {"digest": sha256_bytes(canonical_json(payload).encode()), "inputs": payload}
+
+
+def _session_recovery_error(session: str, reason: str) -> ConfigError:
+    return ConfigError(
+        f"{reason}; session {session} cannot be reused. "
+        f"Run clean {session}, then preflight {session}."
+    )
+
+
+def _validate_canonical_state(value: Any, source: Path) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ConfigError(f"session state {source} must be a JSON object")
+    required = {
+        "schema_version": str,
+        "components": dict,
+        "nets": list,
+        "no_connects": list,
+        "bom_groups": dict,
+        "findings": dict,
+    }
+    for field, expected in required.items():
+        if not isinstance(value.get(field), expected):
+            raise ConfigError(
+                f"session state {source} field {field} must be {expected.__name__}"
+            )
+    return value
+
+
+def _load_session_metadata(directory: Path, session: str | None = None) -> dict[str, Any]:
+    expected_session = session or directory.name
+    metadata_path = directory / "session.json"
+    if not metadata_path.is_file():
+        raise _session_recovery_error(expected_session, "session metadata is missing or old")
+    try:
+        metadata = read_json(metadata_path)
+    except ConfigError as exc:
+        raise _session_recovery_error(
+            expected_session, f"session metadata is corrupt ({exc})"
+        ) from exc
+    if not isinstance(metadata, dict):
+        raise _session_recovery_error(expected_session, "session metadata is not an object")
+    if metadata.get("schema_version") != SESSION_SCHEMA:
+        raise _session_recovery_error(expected_session, "session metadata schema is incompatible")
+    if metadata.get("session") != expected_session:
+        raise _session_recovery_error(expected_session, "session metadata has the wrong session name")
+    if metadata.get("status") != "ready":
+        raise _session_recovery_error(expected_session, "session preflight did not complete")
+    return metadata
+
+
+def _load_baseline(directory: Path, session: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    expected_session = session or directory.name
+    _load_session_metadata(directory, expected_session)
+    baseline_path = directory / "baseline.json"
+    state_path = directory / "baseline-state.json"
+    if not baseline_path.is_file() or not state_path.is_file():
+        raise _session_recovery_error(expected_session, "session baseline is incomplete")
+    try:
+        baseline = read_json(baseline_path)
+        state_data = read_json(state_path)
+    except ConfigError as exc:
+        raise _session_recovery_error(
+            expected_session, f"session baseline is corrupt ({exc})"
+        ) from exc
+    if not isinstance(baseline, dict):
+        raise _session_recovery_error(expected_session, "session baseline is not an object")
+    if baseline.get("schema_version") != SESSION_SCHEMA:
+        raise _session_recovery_error(expected_session, "session baseline schema is incompatible")
+    if baseline.get("session") != expected_session:
+        raise _session_recovery_error(expected_session, "session baseline has the wrong session name")
+    sources = baseline.get("sources")
+    if not isinstance(sources, dict) or not all(
+        isinstance(sources.get(name), str) and sources[name]
+        for name in ("schematic", "pcb", "project")
+    ):
+        raise _session_recovery_error(expected_session, "session baseline source hashes are invalid")
+    footprints = baseline.get("footprints")
+    if not isinstance(footprints, dict) or not isinstance(footprints.get("files"), dict):
+        raise _session_recovery_error(expected_session, "session baseline footprint data is invalid")
+    fingerprint = baseline.get("analysis_fingerprint")
+    if not isinstance(fingerprint, dict) or not isinstance(fingerprint.get("digest"), str):
+        raise _session_recovery_error(expected_session, "session baseline analysis fingerprint is invalid")
+    try:
+        state = _validate_canonical_state(state_data, state_path)
+    except ConfigError as exc:
+        raise _session_recovery_error(
+            expected_session, f"session baseline state is invalid ({exc})"
+        ) from exc
+    return baseline, state
+
+
+def _ensure_pcb_is_unchanged(directory: Path, session: str) -> None:
+    baseline, _ = _load_baseline(directory, session)
+    current = sha256_file(PCB)
+    expected = baseline["sources"]["pcb"]
+    if current != expected:
+        raise PcbDriftError(
+            f"PCB changed after preflight for session {session}. "
+            "This session cannot validate PCB edits. Restore the PCB, or run clean and preflight again."
+        )
+
+
+def _cache_marker(path: Path, kind: str, fingerprint: str) -> dict[str, Any] | None:
+    marker_path = path / "complete.json"
+    try:
+        marker = read_json(marker_path)
+    except ConfigError:
+        return None
+    if not isinstance(marker, dict):
+        return None
+    if (
+        marker.get("schema_version") != CACHE_SCHEMA
+        or marker.get("kind") != kind
+        or marker.get("status") != "pass"
+        or marker.get("fingerprint") != fingerprint
+    ):
+        return None
+    return marker
+
+
+def _publish_cache_directory(temporary: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        shutil.rmtree(destination)
+    os.replace(temporary, destination)
+
+
+def _cached_analysis(
+    directory: Path,
+    fingerprint: dict[str, Any],
+    diagnostics: dict[str, Any],
+    *,
+    force: bool,
+) -> tuple[dict[str, Any] | None, bool]:
+    digest = fingerprint["digest"]
+    cache_root = directory / "analysis-cache"
+    cache_path = cache_root / digest
+    if not force:
+        marker = _cache_marker(cache_path, "analysis", digest)
+        if marker is not None:
+            analysis_path = cache_path / "analysis.json"
+            try:
+                if marker.get("analysis_hash") != sha256_file(analysis_path):
+                    raise ConfigError("analysis cache hash mismatch")
+                return validate_analysis_file(analysis_path), True
+            except (ConfigError, OSError):
+                pass
+
+    cache_root.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=".analysis-", dir=cache_root))
+    try:
+        analysis_path = temporary / "analysis.json"
+        analysis_data = _run_analyzer(analysis_path, diagnostics)
+        if analysis_data is None:
+            return None, False
+        marker = {
+            "schema_version": CACHE_SCHEMA,
+            "kind": "analysis",
+            "status": "pass",
+            "fingerprint": digest,
+            "inputs": fingerprint["inputs"],
+            "analysis_hash": sha256_file(analysis_path),
+        }
+        write_json(temporary / "complete.json", marker)
+        _publish_cache_directory(temporary, cache_path)
+        return analysis_data, False
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+
+
+def _footprint_parse_fingerprint(
+    footprints: dict[str, Any], changes: dict[str, list[str]]
+) -> dict[str, Any]:
+    cli = kicad_cli_path()
+    payload = {
+        "schema_version": "1.0",
+        "footprint_aggregate": footprints["aggregate"],
+        "changes": changes,
+        "kicad_cli": _hash_path(cli),
+    }
+    return {"digest": sha256_bytes(canonical_json(payload).encode()), "inputs": payload}
+
+
+def _cached_changed_footprints(
+    directory: Path,
+    footprints: dict[str, Any],
+    changes: dict[str, list[str]],
+    diagnostics: dict[str, Any],
+    *,
+    force: bool,
+) -> tuple[bool, bool]:
+    to_parse = changes["added"] + changes["modified"]
+    if not to_parse:
+        return True, True
+    fingerprint = _footprint_parse_fingerprint(footprints, changes)
+    digest = fingerprint["digest"]
+    cache_root = directory / "footprint-parse-cache"
+    cache_path = cache_root / digest
+    if not force:
+        marker = _cache_marker(cache_path, "footprint_parse", digest)
+        parsed_root = cache_path / "parsed.pretty"
+        if marker is not None and isinstance(marker.get("files"), dict):
+            try:
+                expected = {str(name): str(value) for name, value in marker["files"].items()}
+                actual = {
+                    path.relative_to(parsed_root).as_posix(): sha256_file(path)
+                    for path in sorted(parsed_root.rglob("*.kicad_mod"))
+                }
+                if actual == expected and all(name in actual for name in to_parse):
+                    return True, True
+            except OSError:
+                pass
+
+    cache_root.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=".footprints-", dir=cache_root))
+    try:
+        source = temporary / "changed.pretty"
+        parsed = temporary / "parsed.pretty"
+        source.mkdir()
+        for name in to_parse:
+            source_path = FOOTPRINT_LIBRARY / name
+            target_path = source / name
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+        expected = [parsed / name for name in to_parse]
+        result = run_command(
+            [kicad_cli_path(), "fp", "upgrade", source, "-o", parsed, "--force"],
+            cwd=REPO_ROOT,
+            expected_outputs=expected,
+        )
+        diagnostics["commands"].append(result)
+        if result["returncode"] != 0 or _command_tooling_failure(result):
+            return False, False
+        files = {
+            path.relative_to(parsed).as_posix(): sha256_file(path)
+            for path in sorted(parsed.rglob("*.kicad_mod"))
+        }
+        if sorted(files) != sorted(to_parse):
+            diagnostics["footprint_parse_error"] = "footprint parser output did not match changed footprints"
+            return False, False
+        write_json(
+            temporary / "complete.json",
+            {
+                "schema_version": CACHE_SCHEMA,
+                "kind": "footprint_parse",
+                "status": "pass",
+                "fingerprint": digest,
+                "inputs": fingerprint["inputs"],
+                "files": files,
+            },
+        )
+        shutil.rmtree(source)
+        _publish_cache_directory(temporary, cache_path)
+        return True, False
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
 
 
 def _run_analyzer(output: Path, diagnostics: dict[str, Any]) -> dict[str, Any] | None:
@@ -707,59 +1119,37 @@ def _run_analyzer(output: Path, diagnostics: dict[str, Any]) -> dict[str, Any] |
         return None
 
 
-def _parse_changed_footprints(
-    directory: Path,
-    changes: dict[str, list[str]],
-    diagnostics: dict[str, Any],
-) -> bool:
-    to_parse = changes["added"] + changes["modified"]
-    if not to_parse:
-        return True
-    source = directory / "changed.pretty"
-    parsed = directory / "changed-parsed.pretty"
-    _reset_dir(source)
-    if parsed.exists():
-        shutil.rmtree(parsed)
-    for name in to_parse:
-        source_path = FOOTPRINT_LIBRARY / name
-        target_path = source / name
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target_path)
-    expected = [parsed / name for name in to_parse]
-    result = run_command(
-        [kicad_cli_path(), "fp", "upgrade", source, "-o", parsed, "--force"],
-        cwd=REPO_ROOT,
-        expected_outputs=expected,
-    )
-    diagnostics["commands"].append(result)
-    return result["returncode"] == 0 and not result["missing_outputs"]
-
-
-def _load_baseline(directory: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    baseline_path = directory / "baseline.json"
-    state_path = directory / "baseline-state.json"
-    if not baseline_path.is_file() or not state_path.is_file():
-        raise ConfigError(f"session is incomplete; run clean then preflight again: {directory.name}")
-    baseline = read_json(baseline_path)
-    state = read_json(state_path)
-    return baseline, state
-
-
-def _compute_current(directory: Path, diagnostics: dict[str, Any]) -> dict[str, Any] | None:
+def _compute_current(
+    directory: Path, diagnostics: dict[str, Any], *, force: bool = False
+) -> dict[str, Any] | None:
     try:
         baseline, baseline_state = _load_baseline(directory)
     except ConfigError as exc:
         diagnostics["error"] = str(exc)
         return None
-    current_analysis_path = directory / "current-analysis.json"
-    analysis_data = _run_analyzer(current_analysis_path, diagnostics)
+    try:
+        fingerprint = analysis_input_fingerprint()
+    except ConfigError as exc:
+        diagnostics["error"] = str(exc)
+        return None
+    analysis_data, analysis_reused = _cached_analysis(
+        directory, fingerprint, diagnostics, force=force
+    )
+    if analysis_data is None:
+        return None
     footprints = hash_footprints(FOOTPRINT_LIBRARY)
     footprint_changes = diff_footprints(baseline["footprints"]["files"], footprints["files"])
     diagnostics["footprint_changes"] = footprint_changes
-    parse_ok = _parse_changed_footprints(directory, footprint_changes, diagnostics)
-    if analysis_data is None:
-        return None
+    parse_ok, footprints_reused = _cached_changed_footprints(
+        directory, footprints, footprint_changes, diagnostics, force=force
+    )
+    diagnostics["cache"] = {
+        "analysis_reused": analysis_reused,
+        "footprint_parse_reused": footprints_reused,
+        "analysis_fingerprint": fingerprint["digest"],
+    }
     state = canonicalize_analysis(analysis_data)
+    write_json(directory / "current-analysis.json", analysis_data)
     delta = semantic_diff(baseline_state, state)
     write_json(directory / "current-state.json", state)
     write_json(directory / "delta.json", delta)
@@ -843,6 +1233,324 @@ def _print_delta(delta: dict[str, Any], footprint_changes: dict[str, list[str]])
         print(f"pin move: {'.'.join(change['member'][:2])} {change['from']} -> {change['to']}")
 
 
+def _pin_dict(member: list[str], net: dict[str, Any]) -> dict[str, Any]:
+    component, number, name = member
+    peers = [
+        {
+            "reference": other[0],
+            "pin_number": other[1],
+            "pin_name": other[2],
+        }
+        for other in net["members"]
+        if other != member
+    ]
+    return {
+        "reference": component,
+        "pin_number": number,
+        "pin_name": name,
+        "net": _net_label(net),
+        "connections": peers,
+    }
+
+
+def _finding_matches(
+    finding: dict[str, Any],
+    references: set[str],
+    nets: set[str],
+    pins: set[tuple[str, str]],
+) -> bool:
+    if set(_text(item) for item in (finding.get("components") or [])) & references:
+        return True
+    if set(_text(item) for item in (finding.get("nets") or [])) & nets:
+        return True
+    for pin_value in finding.get("pins") or []:
+        if isinstance(pin_value, dict):
+            reference = _text(pin_value.get("component") or pin_value.get("reference"))
+            number = _text(pin_value.get("pin_number") or pin_value.get("number"))
+            if (reference, number) in pins or reference in references:
+                return True
+        elif isinstance(pin_value, str):
+            if any(pin_value.startswith(f"{reference}.") for reference in references):
+                return True
+    return False
+
+
+def _relevant_findings(
+    state: dict[str, Any],
+    references: set[str],
+    nets: set[str],
+    pins: set[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    return [
+        {"identity": identity, **finding}
+        for identity, finding in state["findings"].items()
+        if _finding_matches(finding, references, nets, pins)
+    ]
+
+
+def _filtered_delta(
+    delta: dict[str, Any],
+    references: set[str],
+    nets: set[str],
+    pins: set[tuple[str, str]],
+) -> dict[str, Any]:
+    def reference_in_bom(item: dict[str, Any]) -> bool:
+        return bool(set(_text(value) for value in item.get("references") or []) & references)
+
+    def relevant_finding_change(item: dict[str, Any]) -> bool:
+        candidates = [item]
+        if isinstance(item.get("before"), dict):
+            candidates.append(item["before"])
+        if isinstance(item.get("after"), dict):
+            candidates.append(item["after"])
+        return any(_finding_matches(candidate, references, nets, pins) for candidate in candidates)
+
+    return {
+        "components": {
+            "added": [item for item in delta["components"]["added"] if item in references],
+            "removed": [item for item in delta["components"]["removed"] if item in references],
+            "changed": [
+                item
+                for item in delta["components"]["changed"]
+                if item["reference"] in references
+            ],
+        },
+        "nets": {
+            "added": [item for item in delta["nets"]["added"] if item in nets],
+            "removed": [item for item in delta["nets"]["removed"] if item in nets],
+        },
+        "net_renames": [
+            item
+            for item in delta["net_renames"]
+            if item["from"] in nets or item["to"] in nets
+        ],
+        "pin_net_changes": [
+            item
+            for item in delta["pin_net_changes"]
+            if (item["member"][0], item["member"][1]) in pins
+            or item["member"][0] in references
+            or item.get("from") in nets
+            or item.get("to") in nets
+        ],
+        "no_connects": {
+            "added": [
+                item
+                for item in delta["no_connects"]["added"]
+                if (item[0], item[1]) in pins or item[0] in references
+            ],
+            "removed": [
+                item
+                for item in delta["no_connects"]["removed"]
+                if (item[0], item[1]) in pins or item[0] in references
+            ],
+        },
+        "bom_groups": {
+            "added": [item for item in delta["bom_groups"]["added"] if reference_in_bom(item)],
+            "removed": [item for item in delta["bom_groups"]["removed"] if reference_in_bom(item)],
+            "changed": [
+                item
+                for item in delta["bom_groups"]["changed"]
+                if reference_in_bom(item["before"]) or reference_in_bom(item["after"])
+            ],
+        },
+        "findings": {
+            category: [
+                item
+                for item in delta["findings"][category]
+                if relevant_finding_change(item)
+            ]
+            for category in ("added", "removed", "changed")
+        },
+    }
+
+
+def _component_inspection(current: dict[str, Any], reference: str, session: str) -> dict[str, Any]:
+    state = current["state"]
+    properties = state["components"].get(reference)
+    if properties is None:
+        raise ConfigError(f"component not found: {reference}")
+    matching = [
+        (member, net)
+        for net in state["nets"]
+        for member in net["members"]
+        if member[0] == reference
+    ]
+    pins = [_pin_dict(member, net) for member, net in matching]
+    pin_ids = {(item["reference"], item["pin_number"]) for item in pins}
+    net_names = {item["net"] for item in pins}
+    changes = _filtered_delta(current["delta"], {reference}, set(), pin_ids)
+    return {
+        "schema_version": "1.0",
+        "session": session,
+        "target": "component",
+        "query": {"reference": reference},
+        "component": {"reference": reference, "properties": properties, "pins": pins},
+        "findings": _relevant_findings(state, {reference}, set(), pin_ids),
+        "changes": changes,
+    }
+
+
+def _net_inspection(current: dict[str, Any], name: str, session: str) -> dict[str, Any]:
+    state = current["state"]
+    matches = [net for net in state["nets"] if net["name"] == name]
+    if not matches:
+        raise ConfigError(f"net not found: {name}")
+    network = matches[0]
+    pins = [_pin_dict(member, network) for member in network["members"]]
+    references = {item["reference"] for item in pins}
+    pin_ids = {(item["reference"], item["pin_number"]) for item in pins}
+    components = [
+        {"reference": reference, "properties": state["components"].get(reference, {})}
+        for reference in sorted(references)
+    ]
+    changes = _filtered_delta(current["delta"], set(), {name}, pin_ids)
+    return {
+        "schema_version": "1.0",
+        "session": session,
+        "target": "net",
+        "query": {"name": name},
+        "net": {"name": name, "identity": network["identity"], "pins": pins},
+        "components": components,
+        "findings": _relevant_findings(state, set(), {name}, pin_ids),
+        "changes": changes,
+    }
+
+
+def _pin_inspection(
+    current: dict[str, Any], reference: str, number: str, session: str
+) -> dict[str, Any]:
+    state = current["state"]
+    if reference not in state["components"]:
+        raise ConfigError(f"component not found: {reference}")
+    matches = [
+        (member, net)
+        for net in state["nets"]
+        for member in net["members"]
+        if member[0] == reference and member[1] == number
+    ]
+    if not matches:
+        raise ConfigError(f"pin not found: {reference}.{number}")
+    member, network = matches[0]
+    connection = _pin_dict(member, network)
+    net_name = connection["net"]
+    pin_id = {(reference, number)}
+    return {
+        "schema_version": "1.0",
+        "session": session,
+        "target": "pin",
+        "query": {"reference": reference, "pin_number": number},
+        "component": {
+            "reference": reference,
+            "properties": state["components"][reference],
+        },
+        "pin": connection,
+        "findings": _relevant_findings(state, {reference}, {net_name}, pin_id),
+        "changes": _filtered_delta(current["delta"], {reference}, {net_name}, pin_id),
+    }
+
+
+def _changes_inspection(current: dict[str, Any], session: str) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "session": session,
+        "target": "changes",
+        "query": {},
+        "changes": current["delta"],
+        "footprint_changes": current["footprint_changes"],
+    }
+
+
+def _print_inspection(payload: dict[str, Any]) -> None:
+    target = payload["target"]
+    if target == "changes":
+        _print_delta(payload["changes"], payload["footprint_changes"])
+        return
+    if target == "component":
+        component = payload["component"]
+        properties = component["properties"]
+        print(
+            f"component {component['reference']}: "
+            f"value={properties['value']} footprint={properties['footprint']}"
+        )
+        pins = component["pins"]
+    elif target == "net":
+        network = payload["net"]
+        print(f"net {network['name']}: {len(network['pins'])} pins")
+        for component in payload["components"]:
+            properties = component["properties"]
+            print(
+                f"component {component['reference']}: "
+                f"value={properties.get('value', '')} footprint={properties.get('footprint', '')}"
+            )
+        pins = network["pins"]
+    else:
+        component = payload["component"]
+        pin = payload["pin"]
+        properties = component["properties"]
+        print(
+            f"pin {component['reference']}.{pin['pin_number']}: "
+            f"{pin['pin_name']} on {pin['net']} "
+            f"value={properties.get('value', '')} footprint={properties.get('footprint', '')}"
+        )
+        pins = [pin]
+    for pin in pins:
+        peers = ", ".join(
+            f"{item['reference']}.{item['pin_number']}" for item in pin["connections"]
+        ) or "none"
+        print(f"  {pin['reference']}.{pin['pin_number']} {pin['pin_name']}: {pin['net']} -> {peers}")
+    findings = payload["findings"]
+    print(
+        "findings: "
+        + (", ".join(item["identity"] for item in findings) if findings else "none")
+    )
+    counts = _delta_counts(payload["changes"])
+    print("baseline changes: " + ", ".join(f"{name}={value}" for name, value in counts.items()))
+
+
+def command_inspect(
+    session: str,
+    target: str,
+    identifiers: list[str],
+    *,
+    json_output: bool = False,
+    force: bool = False,
+) -> int:
+    _require_repo_inputs()
+    directory = session_path(CACHE_ROOT, session)
+    if not directory.is_dir():
+        raise ConfigError(f"session does not exist: {directory}; run preflight {session}")
+    expected_counts = {"component": 1, "net": 1, "pin": 2, "changes": 0}
+    if target not in expected_counts or len(identifiers) != expected_counts[target]:
+        raise ConfigError(
+            "inspect usage: inspect <session> component <ref> | net <name> | "
+            "pin <ref> <number> | changes"
+        )
+    with session_operation_lock(directory, session):
+        try:
+            _ensure_pcb_is_unchanged(directory, session)
+            diagnostics: dict[str, Any] = {"session": session, "commands": [], "status": "running"}
+            current = _compute_current(directory, diagnostics, force=force)
+        except PcbDriftError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if current is None or not current["parse_ok"]:
+            detail = diagnostics.get("error") or diagnostics.get("analyzer_error") or "analysis cache refresh failed"
+            raise ConfigError(str(detail))
+        if target == "component":
+            payload = _component_inspection(current, identifiers[0], session)
+        elif target == "net":
+            payload = _net_inspection(current, identifiers[0], session)
+        elif target == "pin":
+            payload = _pin_inspection(current, identifiers[0], identifiers[1], session)
+        else:
+            payload = _changes_inspection(current, session)
+        if json_output:
+            print(json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False))
+        else:
+            _print_inspection(payload)
+        return 0
+
+
 def command_doctor() -> int:
     problems: list[str] = []
     print(f"repo: {REPO_ROOT}")
@@ -855,15 +1563,18 @@ def command_doctor() -> int:
         print(f"{label}: {'ok' if exists else 'missing'} ({path})")
         if not exists:
             problems.append(f"{label} missing")
-    cli = kicad_cli_path()
-    cli_ok = cli.is_file() and os.access(cli, os.X_OK)
-    print(f"kicad-cli: {'ok' if cli_ok else 'missing or not executable'} ({cli})")
-    if not cli_ok:
+    try:
+        cli = kicad_cli_path()
+        print(f"kicad-cli: ok ({cli})")
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
         problems.append("kicad-cli unavailable")
     try:
-        analyzer = probe_analyzer(resolve_analyzer_root())
+        analyzer_root = resolve_analyzer_root()
+        analyzer = probe_analyzer(analyzer_root)
         print(f"kicad-happy package: {analyzer['package_version']}")
         print(f"analyzer schema: {analyzer['schema_version']} (compatible)")
+        print(f"analyzer root: {analyzer_root}")
         print(f"analyzer: {analyzer['script']}")
     except ConfigError as exc:
         print(str(exc), file=sys.stderr)
@@ -879,74 +1590,95 @@ def command_preflight(session: str) -> int:
     _require_repo_inputs()
     directory = session_path(CACHE_ROOT, session)
     create_session_directory(directory, session)
-    diagnostics: dict[str, Any] = {"session": session, "commands": [], "status": "running"}
-    report = directory / "preflight-erc.rpt"
-    erc = run_command(
-        [kicad_cli_path(), "sch", "erc", SCHEMATIC, "-o", report, "--exit-code-violations"],
-        cwd=REPO_ROOT,
-        expected_outputs=[report],
-    )
-    diagnostics["commands"].append(erc)
-    if _command_tooling_failure(erc):
-        diagnostics["status"] = "tooling_failure"
+    with session_operation_lock(directory, session):
+        metadata = {
+            "schema_version": SESSION_SCHEMA,
+            "session": session,
+            "status": "preflight",
+            "created_at": int(time.time()),
+        }
+        write_json(directory / "session.json", metadata)
+        diagnostics: dict[str, Any] = {"session": session, "commands": [], "status": "running"}
+        report = directory / "preflight-erc.rpt"
+        erc = run_command(
+            [kicad_cli_path(), "sch", "erc", SCHEMATIC, "-o", report, "--exit-code-violations"],
+            cwd=REPO_ROOT,
+            expected_outputs=[report],
+        )
+        diagnostics["commands"].append(erc)
+        if _command_tooling_failure(erc):
+            diagnostics["status"] = "tooling_failure"
+            write_json(directory / "preflight.json", diagnostics)
+            return 2
+        if erc["returncode"] != 0:
+            diagnostics["status"] = "erc_regression"
+            write_json(directory / "preflight.json", diagnostics)
+            return 1
+        source_hashes = _source_hashes()
+        footprints = hash_footprints(FOOTPRINT_LIBRARY)
+        fingerprint = analysis_input_fingerprint()
+        analysis_data, _ = _cached_analysis(directory, fingerprint, diagnostics, force=False)
+        if analysis_data is None:
+            diagnostics["status"] = "tooling_failure"
+            write_json(directory / "preflight.json", diagnostics)
+            return 2
+        state = canonicalize_analysis(analysis_data)
+        baseline = {
+            "schema_version": SESSION_SCHEMA,
+            "session": session,
+            "sources": source_hashes,
+            "footprints": footprints,
+            "analyzer_schema": analysis_data["schema_version"],
+            "analysis_fingerprint": fingerprint,
+        }
+        write_json(directory / "baseline-analysis.json", analysis_data)
+        write_json(directory / "baseline-state.json", state)
+        write_json(directory / "baseline.json", baseline)
+        diagnostics["status"] = "pass"
+        diagnostics["sources"] = source_hashes
+        diagnostics["footprints"] = footprints
+        diagnostics["analysis_fingerprint"] = fingerprint["digest"]
         write_json(directory / "preflight.json", diagnostics)
-        return 2
-    if erc["returncode"] != 0:
-        diagnostics["status"] = "erc_regression"
-        write_json(directory / "preflight.json", diagnostics)
-        return 1
-    source_hashes = _source_hashes()
-    footprints = hash_footprints(FOOTPRINT_LIBRARY)
-    analysis_path = directory / "baseline-analysis.json"
-    analysis_data = _run_analyzer(analysis_path, diagnostics)
-    if analysis_data is None:
-        diagnostics["status"] = "tooling_failure"
-        write_json(directory / "preflight.json", diagnostics)
-        return 2
-    state = canonicalize_analysis(analysis_data)
-    baseline = {
-        "schema_version": "1.0",
-        "session": session,
-        "sources": source_hashes,
-        "footprints": footprints,
-        "analyzer_schema": analysis_data["schema_version"],
-    }
-    write_json(directory / "baseline-state.json", state)
-    write_json(directory / "baseline.json", baseline)
-    diagnostics["status"] = "pass"
-    diagnostics["sources"] = source_hashes
-    diagnostics["footprints"] = footprints
-    write_json(directory / "preflight.json", diagnostics)
-    print(f"preflight pass: session={session} cache={directory}")
-    return 0
+        metadata["status"] = "ready"
+        write_json(directory / "session.json", metadata)
+        print(f"preflight pass: session={session} cache={directory}")
+        return 0
 
 
-def command_quick(session: str) -> int:
+def command_quick(session: str, *, force: bool = False) -> int:
     _require_repo_inputs()
     directory = session_path(CACHE_ROOT, session)
     if not directory.is_dir():
         raise ConfigError(f"session does not exist: {directory}; run preflight {session}")
-    diagnostics: dict[str, Any] = {"session": session, "commands": [], "status": "running"}
-    try:
-        current = _compute_current(directory, diagnostics)
-    except ConfigError as exc:
-        diagnostics["error"] = str(exc)
-        current = None
-    if current is None or not current["parse_ok"]:
-        diagnostics["status"] = "tooling_failure"
+    with session_operation_lock(directory, session):
+        diagnostics: dict[str, Any] = {"session": session, "commands": [], "status": "running"}
+        try:
+            _ensure_pcb_is_unchanged(directory, session)
+            current = _compute_current(directory, diagnostics, force=force)
+        except PcbDriftError as exc:
+            diagnostics["status"] = "pcb_drift"
+            diagnostics["error"] = str(exc)
+            write_json(directory / "quick.json", diagnostics)
+            print(str(exc), file=sys.stderr)
+            return 1
+        except ConfigError as exc:
+            diagnostics["error"] = str(exc)
+            current = None
+        if current is None or not current["parse_ok"]:
+            diagnostics["status"] = "tooling_failure"
+            write_json(directory / "quick.json", diagnostics)
+            return 2
+        delta = current["delta"]
+        blockers = new_blocking_finding_ids(delta)
+        diagnostics["status"] = "design_regression" if blockers else "pass"
+        diagnostics["blocking_findings"] = blockers
+        diagnostics["counts"] = _delta_counts(delta)
         write_json(directory / "quick.json", diagnostics)
-        return 2
-    delta = current["delta"]
-    blockers = new_blocking_finding_ids(delta)
-    diagnostics["status"] = "design_regression" if blockers else "pass"
-    diagnostics["blocking_findings"] = blockers
-    diagnostics["counts"] = _delta_counts(delta)
-    write_json(directory / "quick.json", diagnostics)
-    _print_delta(delta, current["footprint_changes"])
-    if blockers:
-        print("blocking new deterministic errors: " + ", ".join(blockers), file=sys.stderr)
-        return 1
-    return 0
+        _print_delta(delta, current["footprint_changes"])
+        if blockers:
+            print("blocking new deterministic errors: " + ", ".join(blockers), file=sys.stderr)
+            return 1
+        return 0
 
 
 def _record_unexpected_files(result: dict[str, Any], directory: Path, expected: list[Path]) -> None:
@@ -961,6 +1693,14 @@ def _record_unexpected_files(result: dict[str, Any], directory: Path, expected: 
 
 
 def command_verify(session: str) -> int:
+    directory = session_path(CACHE_ROOT, session)
+    if not directory.is_dir():
+        raise ConfigError(f"session does not exist: {directory}; run preflight {session}")
+    with session_operation_lock(directory, session):
+        return _command_verify_locked(session)
+
+
+def _command_verify_locked(session: str) -> int:
     _require_repo_inputs()
     directory = session_path(CACHE_ROOT, session)
     if not directory.is_dir():
@@ -1138,7 +1878,8 @@ def command_clean(session: str) -> int:
         return 0
     if not directory.is_dir():
         raise ConfigError(f"session target is not a directory: {directory}")
-    shutil.rmtree(directory)
+    with session_operation_lock(directory, session):
+        shutil.rmtree(directory)
     print(f"clean: removed {directory}")
     return 0
 
@@ -1149,12 +1890,20 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands.add_parser("doctor", help="check KiCad and analyzer dependencies")
     for name, help_text in (
         ("preflight", "create a session baseline after native ERC"),
-        ("quick", "run fast semantic and changed-footprint checks"),
         ("verify", "run full session verification"),
         ("clean", "remove one validated session cache"),
     ):
         command = subcommands.add_parser(name, help=help_text)
         command.add_argument("session")
+    quick = subcommands.add_parser("quick", help="run fast semantic and changed-footprint checks")
+    quick.add_argument("session")
+    quick.add_argument("--force", action="store_true", help="bypass valid reusable analysis")
+    inspect = subcommands.add_parser("inspect", help="inspect current schematic analysis")
+    inspect.add_argument("session")
+    inspect.add_argument("target", choices=("component", "net", "pin", "changes"))
+    inspect.add_argument("identifiers", nargs="*")
+    inspect.add_argument("--json", action="store_true", help="emit stable structured JSON")
+    inspect.add_argument("--force", action="store_true", help="bypass valid reusable analysis")
     return parser
 
 
@@ -1166,7 +1915,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "preflight":
             return command_preflight(args.session)
         if args.command == "quick":
-            return command_quick(args.session)
+            return command_quick(args.session, force=args.force)
+        if args.command == "inspect":
+            return command_inspect(
+                args.session,
+                args.target,
+                args.identifiers,
+                json_output=args.json,
+                force=args.force,
+            )
         if args.command == "verify":
             return command_verify(args.session)
         if args.command == "clean":

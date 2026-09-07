@@ -276,21 +276,23 @@ a circle:
 The two are independent. This browser can hold a live link while the radio of the
 remote is off, so each line says which one it describes.
 
-The block also holds a line and a button for pairing. The line reads "Pairing
-is closed on the coordinator." or "Pairing is open on the coordinator for
-2:54." with a live countdown from the retained `bridge/info` message.
+The Zigbee2MQTT block also reports the coordinator pairing window. The line
+reads "Pairing is closed on the coordinator. Permit joining in Zigbee2MQTT." or
+"Pairing is open on the coordinator for 2:54." with a live countdown from the
+retained `bridge/info` message.
 
-The button reads **Enable pairing for 3 minutes**. Selecting it sends
-`{"topic":"bridge/request/permit_join","payload":{"value":true,"time":180}}` on
-the Zigbee2MQTT frontend websocket. This is the only message the page ever
-publishes to Zigbee2MQTT.
+That line is read only. The page publishes nothing to Zigbee2MQTT.
 
-While the window is open, the button reads **Stop pairing** and sends `time:
-0`. Zigbee2MQTT closes the window itself when the time expires, so the remote
-runs no timer.
+If the socket is down, the line reads "The coordinator pairing state needs the
+Zigbee2MQTT link."
 
-If the socket is down, the button is disabled and the line reads "Pairing needs
-the Zigbee2MQTT link."
+The pairing button belongs to the remote and sits above the rule, under the
+radio line. It reads **Pair this remote for 3 minutes** and posts to the remote,
+which turns its radio on and restarts to open the window. While the window is
+open the button reads **Stop pairing** and the line counts the window down.
+
+A join needs both sides. Open the coordinator in Zigbee2MQTT and the remote with
+this button. See `ZIGBEE.md` for what a pairing press erases.
 
 The **Bluetooth** block holds two lines. The first names the radio and starts
 with **BLE HID: radio on.** or **BLE HID: radio off.** The second names the host

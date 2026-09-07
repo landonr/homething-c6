@@ -9,7 +9,8 @@ assigned button sends one ZCL command to its stored target, which is a group or
 one device.
 
 The firmware holds no MQTT client. The `/buttons` page reads the Zigbee2MQTT
-inventory in the browser and posts only the resolved address to the remote.
+inventory in the browser and posts only the resolved address to the remote. The
+page never publishes to Zigbee2MQTT. That websocket is read only.
 
 The remote does not need MQTT, Wi-Fi, Home Assistant, or Zigbee2MQTT for button
 playback. It needs Wi-Fi only while you configure it from the page.
@@ -27,41 +28,83 @@ Zigbee2MQTT.
 
 ## Pair the remote
 
+A new remote boots with the Zigbee radio off. It has no record in flash, so it
+starts no 802.15.4 stack and `D5` stays dark until you pair it.
+
 1. Permit joining in Zigbee2MQTT.
-2. Power or restart the remote while joining is permitted.
-3. Wait for Zigbee2MQTT to show `homething-c6` as joined.
-4. Confirm that `D5` is solid green.
+2. Open `http://homething-c6.local/buttons`.
+3. Select **Pair this remote for 3 minutes** in the Zigbee block.
+4. Wait for Zigbee2MQTT to show `homething-c6` as joined.
+5. Confirm that `D5` is solid green.
+
+A join needs both sides. Step 1 opens the coordinator, and step 3 opens the
+remote. The page reports the coordinator state but never opens it.
 
 The remote does not sleep and does not route Zigbee traffic. Keep it powered
 while the coordinator forms or repairs the network.
 
 If `D5` pulses red, the Zigbee stack has started but has no network connection.
-Permit joining again, then restart the remote.
+Pair the remote again.
 
-A join needs both sides. The remote steers on its own when it is factory new,
-but it can only join while the coordinator permits it.
+## Pair the remote from the page
 
-## Permit joining from the page
+The button turns the Zigbee radio on, opens a 3 minute window, and restarts the
+remote to get there. The ESP-Zigbee stack starts only at boot, so a restart is
+the only way to bring the radio up.
 
-The Zigbee2MQTT block on the `/buttons` page can open the pairing window on the
-coordinator, so step 1 of pairing needs no separate Zigbee2MQTT session.
+While the window is open, the button reads **Stop pairing** and the line above it
+counts down, such as "The remote is pairing for 2:54." `D5` pulses blue.
 
-Select **Enable pairing for 3 minutes**. The browser sends
-`{"topic":"bridge/request/permit_join","payload":{"value":true,"time":180}}`
-over the Zigbee2MQTT frontend websocket that this browser already holds. This is
-the only message the page ever publishes to Zigbee2MQTT. Every assignment stays
-read only on that socket.
+If the remote joins inside the window, the window closes, the radio stays on and
+`D5` goes solid green. If the window closes with no join, the remote turns the
+radio off and restarts, and `D5` goes dark.
 
-The line above the button reads "Pairing is closed on the coordinator." or
-"Pairing is open on the coordinator for 2:54." with a live countdown from the
-retained `bridge/info` message.
+A radio that went off that way stays off. The flag is in flash, so a restart
+alone never brings it back. The `/buttons` page names the cause, so an off radio
+is never a mystery:
 
-While the window is open, the button reads **Stop pairing** and sends `time: 0`.
-Zigbee2MQTT closes the window itself when the time expires, so the remote runs
-no timer.
+`Zigbee radio is off. Zigbee buttons are disabled. The last pairing attempt
+found no coordinator, so the radio went off.`
 
-If the socket is down, the button is disabled and the line reads "Pairing needs
-the Zigbee2MQTT link."
+There are two ways back. Select **Pair this remote for 3 minutes** again, with
+joining permitted in Zigbee2MQTT this time. Or turn the **Zigbee Radio** switch
+on and restart the remote. Either one clears the line above.
+
+**Stop pairing** sets no such line, because you closed that window yourself.
+
+**Stop pairing** ends the window the same way. The credentials are already gone
+by then, so a stopped window leaves the remote unpaired with the radio off.
+
+### What a pairing press erases
+
+A pairing press on a remote that already holds credentials erases them first,
+which costs one more restart. The SDK calls that a factory reset, but its scope
+on this board is only the Zigbee network:
+
+- **Erased:** the network key, the PAN ID, the extended PAN ID, the channel, the
+  short address and the binding table.
+- **Kept:** all 18 button assignments, both radio switches, the stored IR codes,
+  the Bluetooth bond and host name, and the Wi-Fi credentials.
+
+The Zigbee stack keeps its data in the `zigbee` NVS namespace and clears that
+namespace alone. ESPHome keeps its preferences in the `esphome` namespace, so no
+assignment is at risk. The page asks for a confirmation before this, but only
+when the state endpoint reports the remote as paired.
+
+Zigbee2MQTT still holds the old entry after the erase. Remove the device there
+before you pair the remote again, or the bridge shows two.
+
+### The coordinator window
+
+The Zigbee2MQTT block reports the coordinator window from the retained
+`bridge/info` message. The line reads "Pairing is closed on the coordinator.
+Permit joining in Zigbee2MQTT." or "Pairing is open on the coordinator for 2:54."
+with a live countdown.
+
+The page cannot open that window. Permit joining in Zigbee2MQTT itself.
+
+If the socket is down, the line reads "The coordinator pairing state needs the
+Zigbee2MQTT link."
 
 ## Groups and devices
 
@@ -335,7 +378,8 @@ ESP-Zigbee stack has no restart. A rejoin would cost the pairing that the button
 point at.
 
 An `on_boot` trigger at priority 800 reads the stored switch from flash with
-`ZigbeeAssignmentManager::radio_enabled_from_flash()`. If the switch is off, it
+`ZigbeeAssignmentManager::radio_enabled_from_flash()`. A remote with no record
+has never paired, so an unreadable record also reads as off. If the switch is off, it
 calls `mark_failed()` on the Zigbee component and records the gate with
 `zigbee_assignments.set_boot_gated(true)`. A failed ESPHome component never runs
 its setup, so the 802.15.4 stack never starts.
@@ -345,7 +389,8 @@ the remote to lift the gate. See "Network state on the page" for the line the
 page shows.
 
 Select the **Restart** button entity to reboot the remote from Home Assistant or
-from the `/buttons` page. Nothing else on the device offers a reboot.
+from the `/buttons` page. A pairing press also restarts the remote, and it turns
+the radio on first, so it lifts the gate as well.
 
 `D5` is dark while the switch is off, the same as before the stack starts.
 
@@ -362,7 +407,9 @@ under the switch:
 | `Zigbee radio is on. The stack has not started.` | The stack has not answered its start signal yet. |
 | `Zigbee radio is on. Not paired.` | The stack is factory new. It has no credentials and it searches for a coordinator. |
 | `Zigbee radio is on. Not on the network yet. The remote is rejoining.` | The stack holds credentials and it rejoins the network. |
+| `Zigbee radio is on. Pairing.` | A 3 minute pairing window is open. |
 | `Zigbee radio is on. Paired to a Zigbee network.` | The remote joined a network. |
+| `Zigbee radio is on. Paired, but the last command to a device was not acknowledged.` | See "Reachability" below. |
 | `Zigbee radio is on. The stack is down. Reboot the remote to start it.` | The switch was off at boot, so the stack never started. Reboot to lift the gate. |
 
 The component latches its connected flag on the first join and never clears it,
@@ -371,6 +418,27 @@ so `Paired` means joined once, not reachable now.
 The `zigbee` component keeps its instance file-static, so the 250 ms interval in
 `c6remote.yaml` pushes `is_started()`, `is_connected()`, and `factory_new_` into
 `zigbee_assignments`. The `/buttons` state endpoint reads them from there.
+
+## Reachability
+
+The component sets its connected flag on the first join and never clears it, so
+solid green means joined once and not reachable now. The amber pulse is what
+reports reach, and the remote derives it from traffic the buttons already send.
+
+A device unicast carries an APS confirm. Each press gets one resend, so the state
+goes to failed only when the resend fails too. A `NWK_addr_req` that times out or
+that the mesh answers with a failure counts the same way. Any success clears it.
+
+Two limits follow from that:
+
+- A group target sets no confirm callback, because a groupcast is
+  unacknowledged. A remote whose buttons are all group targets therefore learns
+  nothing and stays unknown, which reads as solid green.
+- An idle remote learns nothing. Amber means the last device command was not
+  acknowledged, not that the network is down now.
+
+A join clears the state back to unknown. The warm-cache pass that follows a join
+is the one probe the remote makes without a press.
 
 ## Storage
 
@@ -391,8 +459,18 @@ clear.
 
 ## LED meanings
 
-`D5` shows Zigbee state at all times. It is off before the Zigbee stack starts,
-solid green when connected, and pulsing red when disconnected.
+`D5` shows Zigbee state at all times.
+
+| `D5` | Meaning |
+| --- | --- |
+| dark | The radio is off, or the stack has not started. |
+| blue pulse, 800 ms | A pairing window is open. |
+| red pulse, 1600 ms | The stack is up but it has not joined this boot. |
+| solid green | The remote joined a network. |
+| amber pulse, 2000 ms | Joined, but the last device command was not acknowledged. |
+
+Pairing is tested before the join, so an open window never shows the red that
+means a fault.
 
 `D2` shows Wi-Fi and the API. Wi-Fi serves the `/buttons` page only, so a dark
 `D2` does not stop a button.

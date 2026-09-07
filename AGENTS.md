@@ -418,9 +418,14 @@ Before an AGC change, verify code acceptance with `vishay.com/en/landingpage/agc
 ## KiCad workflow
 
 - Start agent schematic and custom-footprint work with `scripts/hw.py preflight <session>`.
+- Before an edit, inspect exact items with `scripts/hw.py inspect <session> component|net|pin`.
 - After each edit, run `scripts/hw.py quick <session>`.
+- Inspect all baseline changes with `scripts/hw.py inspect <session> changes`.
 - End the edit loop with `scripts/hw.py verify <session>`.
 - Reuse one session for one edit loop. Then remove it with `scripts/hw.py clean <session>`.
+- Keep the session baseline fixed for the complete edit loop.
+- Use `--json` for structured inspection output.
+- Use `--force` only when you must bypass validated cache reuse.
 - Do not use this fast loop for PCB edits. `verify` requires the original PCB hash.
 - Use native KiCad ERC for schematic validity. Use analyzer output for semantic regression checks.
 - Use KiCad MCP tools first for inspection, validation, and edits. Discover deferred tools before fallback.

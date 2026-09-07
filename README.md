@@ -126,17 +126,29 @@ Use a unique session name for one schematic or custom-footprint edit loop. The P
 ./scripts/hw.py doctor
 ./scripts/hw.py preflight my-edit
 
+# Inspect the baseline before an edit.
+./scripts/hw.py inspect my-edit component U3
+./scripts/hw.py inspect my-edit net sda
+./scripts/hw.py inspect my-edit pin U3 14
+
 # Run after every schematic or custom-footprint edit.
 ./scripts/hw.py quick my-edit
+
+# Inspect the refreshed state and all baseline changes.
+./scripts/hw.py inspect my-edit changes
 
 # Run once before handoff.
 ./scripts/hw.py verify my-edit
 ./scripts/hw.py clean my-edit
 ```
 
-Session artifacts stay under `.cache/hw/<session>/`. `preflight` refuses to replace an existing session. Reuse the same session for repeated `quick` runs, then use `clean` before creating a fresh baseline. A failed new `preflight` may intentionally leave ERC or analyzer diagnostics in its session directory; inspect them, then run `clean` before retrying.
+Use `--json` with an `inspect` command for stable structured output. Use `--force` with `quick` or `inspect` to bypass reusable analysis.
 
-The analyzer resolves from `KICAD_HAPPY_DIR` first, then `${CODEX_HOME:-$HOME/.codex}/skills/kicad`. It must emit schema 1.4.x. `KICAD_CLI` overrides the default macOS application binary. `doctor` may report the installed analyzer package version as unknown because this runtime has no package-version metadata; a compatible schema 1.4.x still passes.
+Session artifacts stay under `.cache/hw/<session>/`. `preflight` refuses to replace an existing session. Reuse the same session for repeated inspections and `quick` runs. The session keeps its original baseline until you run `clean`. If a session is old or incomplete, run `clean` and `preflight` again.
+
+The tool refreshes stale inspection data before it prints results. It reuses validated analysis and changed-footprint parsing when all fingerprints match. It never reuses failed or incomplete output. The tool rejects simultaneous operations on one session.
+
+The tool resolves `kicad-cli` from `KICAD_CLI`, `PATH`, or the macOS application bundle. It resolves the analyzer from `KICAD_HAPPY_DIR`, shared, Codex, or Claude skill locations. An invalid override stops discovery. `doctor` prints each selected path. The analyzer must emit schema 1.4.x.
 
 If the analyzer is missing or incompatible, move or remove its existing destination before reinstalling the pinned version:
 
@@ -144,7 +156,7 @@ If the analyzer is missing or incompatible, move or remove its existing destinat
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo aklofas/kicad-happy --ref v2.2.0 --path skills/kicad
 ```
 
-Exit codes are `0` for pass, `1` for a design regression, and `2` for missing tools, incompatible configuration, parser failure, process abort, or missing output. `quick` blocks only newly introduced analyzer findings whose severity is `error` and confidence is `deterministic`; warnings are reported without blocking. `verify` also runs native ERC, netlist and curated BOM export, full custom-footprint parsing, changed-footprint SVG export, PCB hash comparison, and `git diff --check`, with all outputs kept inside the session cache.
+Exit codes are `0` for pass, `1` for a design regression, and `2` for tooling or configuration failure. A PCB change makes `quick` and `inspect` fail before analysis starts. The message explains that the session cannot validate PCB edits. `quick` blocks only new deterministic analyzer errors. `verify` always runs fresh native checks and keeps all outputs inside the session cache.
 
 Run from `c6remote-kicad/`:
 

@@ -51,14 +51,15 @@ function mk(tag) {
   };
 }
 for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs",
-                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "bhs", "brb", "brw"])
+                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw"])
   els[id] = mk("section");
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
-  zigbee: {started: true, paired: true, "new": false},
+  zigbee: {started: true, paired: true, "new": false, gated: false,
+           pairing: false, pair_left: 0, pair_failed: false, reach: "ok"},
   ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
@@ -72,6 +73,9 @@ const STATE = {
 
 global.document = { getElementById: (id) => els[id] || null, createElement: (t) => mk(t) };
 global.localStorage = { getItem: () => null, setItem: () => {} };
+let confirmAsked = 0, confirmAnswer = true;
+global.confirm = (text) => { confirmAsked++; confirmText = text; return confirmAnswer; };
+let confirmText = "";
 global.navigator = {};
 let wsSent = [];
 global.WebSocket = function () {
@@ -811,53 +815,136 @@ setTimeout(() => {
     if (document.getElementById("zrs").innerHTML.indexOf("Paired to a Zigbee network.") < 0)
       throw new Error("a paired stack does not say so");
   });
-  step("the pairing button opens and closes the coordinator window", () => {
-    // The socket is the browser's, so the control locks while it is down.
-    global.ws = null; global.tg = null; global.td = null;
-    zpjPaint();
+  step("the pairing button pairs the remote and never writes to the bridge", () => {
+    global.st = STATE;
+    STATE.zigbee = {started: true, paired: false, "new": true, gated: false,
+                    pairing: false, pair_left: 0, reach: "unknown"};
+    zpjSync();
+    if (document.getElementById("zpj").disabled)
+      throw new Error("pairing stayed locked with a known state");
+    if (document.getElementById("zpj").textContent !== "Pair this remote for 3 minutes")
+      throw new Error("the button does not offer a pair");
+    // An unpaired remote has no network to lose, so it is not asked about one.
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    wsSent = []; confirmAsked = 0;
+    document.getElementById("zpj").onclick();
+    global.fetch = realFetch;
+    if (confirmAsked !== 0) throw new Error("an unpaired remote was asked to confirm");
+    if (wsSent.length !== 0) throw new Error("the button wrote to Zigbee2MQTT");
+    if (body !== "action=pair&on=1") throw new Error("wrong request: " + body);
     if (!document.getElementById("zpj").disabled)
-      throw new Error("pairing stayed live with no Zigbee2MQTT link");
-    if (document.getElementById("zpjs").innerHTML.indexOf("needs the Zigbee2MQTT link") < 0)
-      throw new Error("the pairing line does not say why it is locked");
-    // z2mConnect installs the handlers, and a group list marks the link up.
+      throw new Error("the button stayed live across the restart");
+    if (document.getElementById("zpj").textContent !== "Restarting...")
+      throw new Error("the button does not name the restart");
+    // The restart drops the poll, and the line says so instead of a dead remote.
+    zpjLost();
+    if (document.getElementById("zpjs").innerHTML.indexOf("The remote is restarting.") < 0)
+      throw new Error("the restart never reached the line");
+    // The remote comes back pairing, which is what clears the press.
+    STATE.zigbee.pairing = true; STATE.zigbee.pair_left = 174;
+    zpjSync();
+    const open = document.getElementById("zpjs").innerHTML;
+    if (open.indexOf("The remote is pairing for 2:54.") < 0)
+      throw new Error("the countdown is wrong: " + open);
+    if (document.getElementById("zpj").disabled)
+      throw new Error("the button stayed locked after the remote came back");
+    if (document.getElementById("zpj").textContent !== "Stop pairing")
+      throw new Error("the button does not offer a stop");
+    // The link line names pairing before it names a join state.
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("Pairing.") < 0)
+      throw new Error("the link line does not name the window");
+    body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("zpj").onclick();
+    global.fetch = realFetch;
+    if (body !== "action=pair&on=0") throw new Error("stop did not close the window: " + body);
+    STATE.zigbee.pairing = false; STATE.zigbee.pair_left = 0;
+    zpjSync();
+    if (document.getElementById("zpjs").innerHTML.indexOf("The remote is not pairing.") < 0)
+      throw new Error("the closed window is not reported");
+  });
+  step("a paired remote is asked before it loses its network", () => {
+    global.st = STATE;
+    STATE.zigbee = {started: true, paired: true, "new": false, gated: false,
+                    pairing: false, pair_left: 0, reach: "ok"};
+    zpjSync();
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("zpj").onclick();
+    global.fetch = realFetch;
+    if (confirmAsked !== 1) throw new Error("a paired remote was not asked");
+    if (confirmText.indexOf("erases the Zigbee network credentials") < 0)
+      throw new Error("the question does not say what is erased: " + confirmText);
+    if (confirmText.indexOf("button assignments are kept") < 0)
+      throw new Error("the question does not say what is kept: " + confirmText);
+    if (body !== null) throw new Error("a refused confirm still posted: " + body);
+    if (document.getElementById("zpj").disabled)
+      throw new Error("a refused confirm locked the button");
+    confirmAnswer = true;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("zpj").onclick();
+    global.fetch = realFetch;
+    if (body !== "action=pair&on=1") throw new Error("an accepted confirm did not post: " + body);
+    STATE.zigbee.pairing = true; zpjSync(); STATE.zigbee.pairing = false; zpjSync();
+  });
+  step("an off radio names a pairing window as the cause", () => {
+    global.st = STATE;
+    STATE.radios = {zigbee: false, ble: true};
+    STATE.zigbee = {started: false, paired: false, "new": true, gated: true,
+                    pairing: false, pair_left: 0, pair_failed: true, reach: "unknown"};
+    paint();
+    let line = document.getElementById("zrs").innerHTML;
+    if (line.indexOf("Zigbee radio is off.") < 0)
+      throw new Error("the off radio is not named: " + line);
+    if (line.indexOf("The last pairing attempt found no coordinator") < 0)
+      throw new Error("the off radio does not say why: " + line);
+    // A radio the user switched off has no such cause to report.
+    STATE.zigbee.pair_failed = false;
+    paint();
+    line = document.getElementById("zrs").innerHTML;
+    if (line.indexOf("pairing attempt") >= 0)
+      throw new Error("a hand-switched radio invented a cause: " + line);
+    STATE.radios = {zigbee: true, ble: true};
+    STATE.zigbee = {started: true, paired: true, "new": false, gated: false,
+                    pairing: false, pair_left: 0, pair_failed: false, reach: "ok"};
+  });
+  step("an unacknowledged device command reaches the link line", () => {
+    global.st = STATE;
+    STATE.zigbee = {started: true, paired: true, "new": false, gated: false,
+                    pairing: false, pair_left: 0, reach: "failed"};
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("was not acknowledged") < 0)
+      throw new Error("a failed send never reached the line");
+    // A groupcast-only remote learns nothing, so unknown still reads as paired.
+    STATE.zigbee.reach = "unknown";
+    paint();
+    if (document.getElementById("zrs").innerHTML.indexOf("Paired to a Zigbee network.") < 0)
+      throw new Error("an unknown reach did not read as paired");
+    STATE.zigbee.reach = "ok";
+  });
+  step("the coordinator window is reported and never asked for", () => {
+    global.ws = null; global.tg = null; global.td = null;
+    zcPaint();
+    if (document.getElementById("zcs").innerHTML.indexOf("needs the Zigbee2MQTT link") < 0)
+      throw new Error("the coordinator line does not say why it is blank");
     z2mConnect("ws://bridge/api", "");
     ws.onmessage({data: JSON.stringify({topic: "bridge/groups",
                                         payload: [{id: 1, friendly_name: "all_light", members: []}]})});
     wsSent = [];
-    zpjPaint();
-    if (document.getElementById("zpj").disabled)
-      throw new Error("pairing stayed locked with a live link");
-    document.getElementById("zpj").onclick();
-    if (wsSent.length !== 1) throw new Error("the button sent " + wsSent.length + " messages");
-    const sent = JSON.parse(wsSent[0]);
-    if (sent.topic !== "bridge/request/permit_join" || sent.payload.time !== 180 ||
-        sent.payload.value !== true) throw new Error("wrong request: " + wsSent[0]);
-    if (!document.getElementById("zpj").disabled)
-      throw new Error("the button stayed live while the request was open");
-    // The bridge answers, then reports the open window and what is left of it.
-    ws.onmessage({data: JSON.stringify({topic: "bridge/response/permit_join",
-                                        payload: {status: "ok", data: {time: 180}}})});
     ws.onmessage({data: JSON.stringify({topic: "bridge/info",
                                         payload: {permit_join: true, permit_join_timeout: 174}})});
-    const open = document.getElementById("zpjs").innerHTML;
+    const open = document.getElementById("zcs").innerHTML;
     if (open.indexOf("Pairing is open on the coordinator for 2:54.") < 0)
       throw new Error("the countdown is wrong: " + open);
-    if (document.getElementById("zpj").textContent !== "Stop pairing")
-      throw new Error("the button does not offer a stop");
-    wsSent = [];
-    document.getElementById("zpj").onclick();
-    if (JSON.parse(wsSent[0]).payload.time !== 0)
-      throw new Error("stop did not close the window: " + wsSent[0]);
     ws.onmessage({data: JSON.stringify({topic: "bridge/info", payload: {permit_join: false}})});
-    if (document.getElementById("zpjs").innerHTML.indexOf("Pairing is closed") < 0)
-      throw new Error("the closed window is not reported");
-    // A refusal reaches the line instead of being swallowed.
-    wsSent = [];
-    document.getElementById("zpj").onclick();
-    ws.onmessage({data: JSON.stringify({topic: "bridge/response/permit_join",
-                                        payload: {status: "error", error: "Coordinator is busy"}})});
-    if (document.getElementById("zpjs").innerHTML.indexOf("Coordinator is busy") < 0)
-      throw new Error("a refusal never reached the line");
+    if (document.getElementById("zcs").innerHTML.indexOf("Permit joining in Zigbee2MQTT") < 0)
+      throw new Error("the closed window does not say where to open it");
+    if (wsSent.length !== 0) throw new Error("the page wrote to Zigbee2MQTT");
     z2mDisconnect();
     global.ws = null; global.tg = null; global.td = null;
   });

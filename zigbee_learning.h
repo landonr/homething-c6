@@ -2,6 +2,7 @@
 
 #include "ir_learning.h"
 
+#include "esphome/core/application.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
@@ -40,6 +41,12 @@ class ZigbeeAssignmentManager {
   static constexpr uint8_t MAX_ENDPOINT = 240;
 
   enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };
+
+  // Only a device unicast is acknowledged, so a remote that sends nothing but
+  // groupcasts stays UNKNOWN for its whole life. UNKNOWN reads as healthy.
+  enum Reach : uint8_t { REACH_UNKNOWN = 0, REACH_OK = 1, REACH_FAILED = 2 };
+
+  static constexpr uint32_t PAIR_WINDOW_SECONDS = 180;
 
   // One press sends one ZCL command. The /buttons page reads the cluster list of
   // the target from Zigbee2MQTT and offers only the actions that list carries,
@@ -94,12 +101,19 @@ class ZigbeeAssignmentManager {
         ESP_LOGE("zigbee_learn", "Failed to save the migrated Zigbee assignments");
       }
     } else {
+      // A remote with no record has never been paired, so it boots with the
+      // radio off and waits for the pairing button. Only this branch sets the
+      // bit: a migrated record keeps the radio its owner already had.
       reset_record_(record_);
+      record_.flags = FLAG_RADIO_OFF;
+      record_.checksum = checksum_(record_);
       if (!preference_.save(&record_))
         ESP_LOGE("zigbee_learn", "Failed to invalidate old Zigbee assignments");
     }
 
     radio_on_.store((record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
+    pairing_.store((record_.flags & FLAG_PAIRING_PENDING) != 0, std::memory_order_release);
+    pair_failed_.store((record_.flags & FLAG_PAIR_FAILED) != 0, std::memory_order_release);
 
     ir_code_store.set_assignment_clear_callback([this](uint8_t slot) { this->clear(slot); });
     ir_ui.set_zigbee_play_callback([this](uint8_t slot) { return this->play(slot); });
@@ -112,12 +126,12 @@ class ZigbeeAssignmentManager {
   // Reads the switch before setup() runs, so the boot gate can hold the Zigbee
   // component down before its own setup. Preferences open in app_main, ahead of
   // every component, so this works at any boot priority. A record this cannot
-  // read leaves the radio on.
+  // read belongs to a remote that has never paired, so it leaves the radio off.
   static bool radio_enabled_from_flash() {
     auto preference = esphome::global_preferences->make_preference<Record>(PREFERENCE_KEY, true);
     Record record{};
     if (!preference.load(&record) || !valid_(record))
-      return true;
+      return false;
     return (record.flags & FLAG_RADIO_OFF) == 0;
   }
 
@@ -150,9 +164,11 @@ class ZigbeeAssignmentManager {
     radio_on_.store(enabled, std::memory_order_release);
 
     Record next = record_;
-    next.flags = enabled ? static_cast<uint16_t>(next.flags & ~FLAG_RADIO_OFF)
+    next.flags = enabled ? static_cast<uint16_t>(next.flags & ~(FLAG_RADIO_OFF | FLAG_PAIR_FAILED))
                          : static_cast<uint16_t>(next.flags | FLAG_RADIO_OFF);
     next.checksum = checksum_(next);
+    if (enabled)
+      pair_failed_.store(false, std::memory_order_release);
     {
       const std::lock_guard<std::mutex> lock(cache_mutex_);
       record_ = next;
@@ -167,6 +183,71 @@ class ZigbeeAssignmentManager {
       ESP_LOGE("zigbee_learn", "Failed to save the Zigbee radio switch");
     ESP_LOGI("zigbee_learn", "Zigbee radio %s", enabled ? "on" : "off");
     return true;
+  }
+
+  bool pairing() const { return pairing_.load(std::memory_order_acquire); }
+
+  // True only once the stack is up and steering, so the LED and the page do not
+  // count down through the reboots that get the remote there.
+  bool pairing_window_open() const { return pair_window_open_.load(std::memory_order_acquire); }
+
+  uint32_t pairing_seconds_left() const {
+    if (!pairing_window_open())
+      return pairing() ? PAIR_WINDOW_SECONDS : 0;
+    const uint32_t elapsed =
+        (esphome::millis() - pair_started_ms_.load(std::memory_order_relaxed)) / 1000;
+    return elapsed >= PAIR_WINDOW_SECONDS ? 0 : PAIR_WINDOW_SECONDS - elapsed;
+  }
+
+  // The stack starts only at boot, so a pairing press turns the radio on, parks
+  // the request in flash and restarts. pairing_tick_() picks it up over there.
+  // The credentials are not erased here: a gated boot never started the stack,
+  // so the lock that ZigBeeComponent::reset() takes would have nobody to answer.
+  bool begin_pairing() {
+    if (!write_flags_(static_cast<uint16_t>((record_.flags & ~(FLAG_RADIO_OFF | FLAG_PAIR_FAILED)) |
+                                            FLAG_PAIRING_PENDING)))
+      return false;
+    radio_on_.store(true, std::memory_order_release);
+    pairing_.store(true, std::memory_order_release);
+    pair_failed_.store(false, std::memory_order_release);
+    ESP_LOGI("zigbee_learn", "Pairing requested, restarting to start the Zigbee stack");
+    esphome::App.safe_reboot();
+    return true;
+  }
+
+  // Both ends of the window land here. The credentials are already gone by the
+  // time a window can be cancelled, so stopping leaves the remote unpaired.
+  // A deliberate stop needs no explanation. A window that ran out does, because
+  // the radio is off afterwards and the page has to say why.
+  bool cancel_pairing() { return end_pairing_("Pairing stopped", false); }
+
+  bool pairing_window_expired() {
+    return end_pairing_("Pairing window closed with no join", true);
+  }
+
+  bool pair_failed() const { return pair_failed_.load(std::memory_order_acquire); }
+
+  // The join clears the request and keeps the radio on, so the buttons work.
+  void pairing_joined() {
+    if (!pairing())
+      return;
+    pairing_.store(false, std::memory_order_release);
+    pair_window_open_.store(false, std::memory_order_release);
+    pair_failed_.store(false, std::memory_order_release);
+    write_flags_(static_cast<uint16_t>(record_.flags & ~(FLAG_PAIRING_PENDING | FLAG_PAIR_FAILED)));
+    ESP_LOGI("zigbee_learn", "Paired, so the Zigbee radio stays on");
+  }
+
+  // One-shot for the YAML, which owns the component id. Erasing the credentials
+  // restarts the device, so this must fire once and never on a repeat tick.
+  bool take_credential_erase_request() {
+    return erase_request_.exchange(false, std::memory_order_acq_rel);
+  }
+
+  uint8_t reach() const { return reach_.load(std::memory_order_relaxed); }
+
+  static const char *reach_name(uint8_t value) {
+    return value == REACH_OK ? "ok" : value == REACH_FAILED ? "failed" : "unknown";
   }
 
   // Runs on the main loop from a deferred web action, so the flash write cannot
@@ -260,6 +341,7 @@ class ZigbeeAssignmentManager {
   // Runs on the main loop. Every radio request that a callback asks for starts
   // here, so a Zigbee task callback never sends and never touches flash.
   void tick() {
+    pairing_tick_();
     if (!radio_enabled())
       return;
     const uint32_t now = esphome::millis();
@@ -270,6 +352,7 @@ class ZigbeeAssignmentManager {
       resolve_seq_.fetch_add(1, std::memory_order_acq_rel);
       resolve_in_flight_.store(false, std::memory_order_release);
       pending_state_.store(PENDING_NONE, std::memory_order_relaxed);
+      reach_.store(REACH_FAILED, std::memory_order_relaxed);
       ESP_LOGE("zigbee_tx", "No answer to the network address request for button %u",
                static_cast<unsigned>(resolve_slot_));
       return;
@@ -301,6 +384,10 @@ class ZigbeeAssignmentManager {
   // asks the mesh for the rest. Each slot is warmed at most once for each join,
   // which bounds the broadcasts a boot can cause.
   void on_network_up() {
+    pairing_joined();
+    // A new join says nothing about the targets, and the warm pass below is the
+    // next thing that will.
+    reach_.store(REACH_UNKNOWN, std::memory_order_relaxed);
     warm_mask_ = 0;
     for (size_t index = 0; index < SLOT_COUNT; index++) {
       if ((record_.mask & (1UL << index)) == 0)
@@ -374,6 +461,11 @@ class ZigbeeAssignmentManager {
   // flags bit 0 holds the radio switch. The field was reserved and zero in every
   // record before it, so an old record loads with the radio on.
   static constexpr uint16_t FLAG_RADIO_OFF = 0x0001;
+  // Bit 1 carries a pairing request across the reboots it takes to serve it.
+  static constexpr uint16_t FLAG_PAIRING_PENDING = 0x0002;
+  // Bit 2 says the radio is off because a pairing window found no coordinator.
+  // Without it the page can only report an off radio and not why it went off.
+  static constexpr uint16_t FLAG_PAIR_FAILED = 0x0004;
 
   struct Record {
     uint32_t magic;
@@ -623,10 +715,18 @@ class ZigbeeAssignmentManager {
   // Runs on the Zigbee task. It parks the slot for the next tick instead of
   // sending, because that task must not block on the flash or the record mutex.
   static void on_confirm_(ezb_af_user_cnf_t *cnf, void *user_ctx) {
-    if (cnf == nullptr || cnf->status == 0 || instance_ == nullptr)
+    if (cnf == nullptr || instance_ == nullptr)
       return;
-    if (!instance_->retry_armed_.exchange(false, std::memory_order_relaxed))
+    if (cnf->status == 0) {
+      instance_->reach_.store(REACH_OK, std::memory_order_relaxed);
       return;
+    }
+    // A press gets one resend, so the first failure arms it and only the second
+    // one, which finds it disarmed, says the target is out of reach.
+    if (!instance_->retry_armed_.exchange(false, std::memory_order_relaxed)) {
+      instance_->reach_.store(REACH_FAILED, std::memory_order_relaxed);
+      return;
+    }
     instance_->request_resolve_(context_slot_(user_ctx));
   }
 
@@ -647,10 +747,12 @@ class ZigbeeAssignmentManager {
     resolve_in_flight_.store(false, std::memory_order_release);
     if (result == nullptr || result->error != EZB_ERR_NONE || result->rsp == nullptr ||
         result->rsp->status != EZB_ZDP_STATUS_SUCCESS) {
+      reach_.store(REACH_FAILED, std::memory_order_relaxed);
       ESP_LOGE("zigbee_tx", "The mesh has no network address for button %u",
                static_cast<unsigned>(slot));
       return;
     }
+    reach_.store(REACH_OK, std::memory_order_relaxed);
     if (!slot_valid_(slot))
       return;
     nwk_cache_[slot - FIRST_SLOT].store(result->rsp->nwk_addr_remote_dev, std::memory_order_relaxed);
@@ -921,6 +1023,71 @@ class ZigbeeAssignmentManager {
     return true;
   }
 
+  bool write_flags_(uint16_t flags) {
+    Record next = record_;
+    next.flags = flags;
+    next.checksum = checksum_(next);
+    {
+      const std::lock_guard<std::mutex> lock(cache_mutex_);
+      record_ = next;
+    }
+    if (preference_.save(&record_))
+      return true;
+    ESP_LOGE("zigbee_learn", "Failed to save the Zigbee radio flags");
+    return false;
+  }
+
+  // A window that closes without a join puts the radio back the way the remote
+  // booted, which needs the restart the boot gate reads the flag on.
+  bool end_pairing_(const char *reason, bool failed) {
+    if (!pairing())
+      return false;
+    pairing_.store(false, std::memory_order_release);
+    pair_window_open_.store(false, std::memory_order_release);
+    radio_on_.store(false, std::memory_order_release);
+    pair_failed_.store(failed, std::memory_order_release);
+    uint16_t flags = static_cast<uint16_t>((record_.flags & ~FLAG_PAIRING_PENDING) | FLAG_RADIO_OFF);
+    flags = failed ? static_cast<uint16_t>(flags | FLAG_PAIR_FAILED)
+                   : static_cast<uint16_t>(flags & ~FLAG_PAIR_FAILED);
+    const bool saved = write_flags_(flags);
+    ESP_LOGI("zigbee_learn", "%s, so the Zigbee radio goes off", reason);
+    esphome::App.safe_reboot();
+    return saved;
+  }
+
+  // Runs before the radio gate in tick(), because every step of it happens on a
+  // boot where the radio is on but the remote is not yet on a network.
+  void pairing_tick_() {
+    if (!pairing())
+      return;
+    const uint32_t now = esphome::millis();
+    if (pair_boot_ms_ == 0)
+      pair_boot_ms_ = now | 1;
+    if (!link_started()) {
+      // The window covers the whole pairing boot, so a stack that never starts
+      // still closes it instead of leaving the radio on for good.
+      if (now - pair_boot_ms_ >= PAIR_WINDOW_SECONDS * 1000)
+        pairing_window_expired();
+      return;
+    }
+    if (!link_factory_new()) {
+      // Credentials from an older join block steering, so they go first. That
+      // erase restarts the device, and the flag brings it back here factory new.
+      if (!erase_request_.exchange(true, std::memory_order_acq_rel))
+        ESP_LOGI("zigbee_learn", "Pairing erases the Zigbee network credentials");
+      return;
+    }
+    if (!pair_window_open_.load(std::memory_order_acquire)) {
+      pair_started_ms_.store(now, std::memory_order_relaxed);
+      pair_window_open_.store(true, std::memory_order_release);
+      ESP_LOGI("zigbee_learn", "Pairing window open for %u seconds",
+               static_cast<unsigned>(PAIR_WINDOW_SECONDS));
+      return;
+    }
+    if (now - pair_started_ms_.load(std::memory_order_relaxed) >= PAIR_WINDOW_SECONDS * 1000)
+      pairing_window_expired();
+  }
+
   static void reset_record_(Record &record) {
     std::memset(&record, 0, sizeof(record));
     record.magic = MAGIC;
@@ -934,6 +1101,14 @@ class ZigbeeAssignmentManager {
   esphome::ESPPreferenceObject preference_;
   Record record_{};
   std::atomic<bool> radio_on_{true};
+  std::atomic<bool> pairing_{false};
+  std::atomic<bool> pair_failed_{false};
+  std::atomic<bool> pair_window_open_{false};
+  std::atomic<bool> erase_request_{false};
+  std::atomic<uint8_t> reach_{REACH_UNKNOWN};
+  // The state endpoint reads this from the httpd task while the loop writes it.
+  std::atomic<uint32_t> pair_started_ms_{0};
+  uint32_t pair_boot_ms_{0};
   std::atomic<bool> boot_gated_{false};
   std::atomic<bool> link_started_{false};
   std::atomic<bool> link_paired_{false};

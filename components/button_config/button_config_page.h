@@ -137,10 +137,14 @@ animation:sweep 1.4s ease-in-out infinite}
 aria-label="Zigbee radio"><span></span></label></h2>
 <p class="sub st" id="zrs">Zigbee radio state is loading.</p>
 <p class="sub st" id="zpjs">Pairing state is loading.</p>
-<div class="act"><button type="button" class="sec" id="zpj">Enable pairing for 3 minutes</button></div>
+<p class="sub">Pairing erases the Zigbee network credentials of this remote and restarts it.
+The button assignments are kept. Permit joining in Zigbee2MQTT as well, because a join needs
+both sides.</p>
+<div class="act"><button type="button" class="sec" id="zpj">Pair this remote for 3 minutes</button></div>
 <hr class="rule">
 <h3>Zigbee2MQTT</h3>
 <p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
+<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>
 <div id="z2m"></div>
 </div>
 <div id="blecfg">
@@ -200,7 +204,7 @@ var ZA=[
 {a:15,n:"Alarm",c:"ssIasWd",p:"Seconds",d:30,lo:1,hi:600},
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
-var bleTimer=0,bleBusy=false,bleForgetBusy=false,bleError="";
+var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 // One switch for each radio. The remote holds the state, so a reload and a
 // second browser both show the switch the remote is actually running with.
 // radioWant holds the position the switch was moved to, so a repaint during the
@@ -210,9 +214,13 @@ radioWant={zigbee:true,ble:true};
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
-// Permit join lives on the coordinator, so this browser asks Zigbee2MQTT for it
-// over the same socket. bridge/info carries the state and what is left of it.
-var zpjOn=false,zpjLeft=0,zpjBusy=false,zpjErr="",zpjTimer=0;
+// The remote runs its own pairing window, so these mirror the state endpoint.
+// zpjBusy holds from the press until the poll reports zpjWant, which spans the
+// restart the remote does to start or stop its radio.
+var zpjOn=false,zpjLeft=0,zpjBusy=false,zpjWant=false,zpjErr="",zpjTimer=0,zpjDown=false;
+// The coordinator runs a separate window. This browser only reads it, from the
+// retained bridge/info message, and never asks Zigbee2MQTT to open it.
+var zcOn=false,zcLeft=0,zcTimer=0;
 var ZPJ_SECONDS=180;
 // The Home Assistant add-on address, because Ingress cannot carry a websocket.
 var Z2MDEF="ws://homeassistant.local:8099/api";
@@ -375,7 +383,7 @@ e.innerHTML="<span class='dot off'></span>This browser is not connected to "+
 "Zigbee2MQTT. A group ID can still be typed by hand."}
 
 // The pairing control follows the same link, so every caller repaints both.
-function z2mStatus(){z2mLine();zpjPaint()}
+function z2mStatus(){z2mLine();zcPaint()}
 
 function plural(n,word){return n+" "+word+(n===1?"":"s")}
 
@@ -496,7 +504,13 @@ var err=radioError.zigbee,on=radioOn("zigbee"),known=!!(st&&st.radios);
 e.className="sub st"+(err||(known&&!on)?" bad":"");
 e.innerHTML=!known?"<span class='dot off'></span>Zigbee radio state is loading.":
 "<span class='dot "+(on?(zbPaired()?"":"warn"):"bad")+"'></span>Zigbee radio is "+
-(on?"on. "+zbLink():"off. Zigbee buttons are disabled.")+(err?" "+esc(err):"")}
+(on?"on. "+zbLink():"off. Zigbee buttons are disabled."+zbOffWhy())+(err?" "+esc(err):"")}
+
+// A window that runs out turns the radio off, so the off line has to name that
+// as the cause. Without this the page reports an off radio nobody switched off.
+function zbOffWhy(){
+return (st&&st.zigbee&&st.zigbee.pair_failed)?
+" The last pairing attempt found no coordinator, so the radio went off.":""}
 
 function zbPaired(){return !!(st&&st.zigbee&&st.zigbee.paired)}
 
@@ -509,7 +523,12 @@ if(!z)return "";
 // The stack cannot start later, so this asks for the one thing that works.
 if(z.gated)return "The stack is down. Reboot the remote to start it.";
 if(!z.started)return "The stack has not started.";
-if(z.paired)return "Paired to a Zigbee network.";
+if(z.pairing)return "Pairing.";
+// Only a device target is acknowledged, so a remote that sends nothing but
+// groupcasts stays unknown and reads as paired.
+if(z.paired)return z.reach==="failed"?
+"Paired, but the last command to a device was not acknowledged.":
+"Paired to a Zigbee network.";
 return z["new"]?"Not paired.":
 "Not on the network yet. The remote is rejoining."}
 
@@ -553,22 +572,24 @@ bleForgetBusy=true;bleError="";bleStatus();
 post("forget_ble").then(function(r){
 if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not forget the host.")})})
-.then(function(){bleForgetBusy=false;bleRefresh()},function(e){
+.then(function(){bleForgetBusy=false;stateRefresh()},function(e){
 bleForgetBusy=false;bleError=e&&e.message?e.message:"The remote did not answer.";bleStatus()})}
 
-function bleRefresh(){
-if(bleBusy)return;
-bleBusy=true;
+// The one recurring read of the remote. It carries the Zigbee half as well, so
+// the pairing clock, the link line and both switches all follow the firmware.
+function stateRefresh(){
+if(stBusy)return;
+stBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;st.radios=j.radios;
-radioStatus();bleStatus()}},function(){})
-.then(function(){bleBusy=false},function(){bleBusy=false})}
+.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
+zpjSync();radioStatus();bleStatus()}},zpjLost)
+.then(function(){stBusy=false},function(){stBusy=false})}
 
-function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}
+function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-z2mStatus();radioStatus();bleStatus();
+z2mStatus();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -735,17 +756,12 @@ done=true;td=devs;zerr="";
 z2mStatus();if(act==="zb")paint();return}
 // Retained, so the state arrives on connect and again on every change.
 if(m.topic==="bridge/info"&&m.payload){
-zpjOn=!!m.payload.permit_join;
+zcOn=!!m.payload.permit_join;
 var left=Number(m.payload.permit_join_timeout),
 end=Number(m.payload.permit_join_end);
-zpjLeft=!zpjOn?0:left>0?left:
+zcLeft=!zcOn?0:left>0?left:
 end>0?Math.max(0,Math.round((end-Date.now())/1000)):ZPJ_SECONDS;
-zpjTick();return}
-if(m.topic==="bridge/response/permit_join"){
-zpjBusy=false;
-zpjErr=(m.payload&&m.payload.status==="error")?
-String(m.payload.error||"Zigbee2MQTT refused the request."):"";
-zpjPaint();return}};
+zcTick();return}};
 ws.onerror=function(){if(!done){zerr="Could not reach Zigbee2MQTT at that address.";
 z2mStatus();if(act==="zb")paint()}};
 ws.onclose=function(){if(!done){zerr=zerr||"Zigbee2MQTT closed the connection. Check the token.";
@@ -758,44 +774,82 @@ if(ws){try{ws.onmessage=null;ws.onerror=null;ws.onclose=null;ws.close()}catch(x)
 tg=null;td=null;zerr="";
 // The coordinator keeps its own timer, so a closed socket only means that this
 // browser stopped watching it.
-zpjOn=false;zpjLeft=0;zpjBusy=false;zpjErr="";zpjTick();
+zcOn=false;zcLeft=0;zcTick();
 z2mStatus();if(act==="zb")paint()}
 
 function mmss(s){var m=Math.floor(s/60),r=s%60;return m+":"+(r<10?"0":"")+r}
 
 // The button and its line stay on the page at all times, so nothing under them
-// moves. The button locks while the socket is down or a request is open.
+// moves. The button locks from the press until the remote is back.
 function zpjPaint(){
-var b=document.getElementById("zpj"),e=document.getElementById("zpjs"),up=z2mUp();
-if(b){b.disabled=zpjBusy||!up;
-b.textContent=zpjBusy?"Working...":zpjOn?"Stop pairing":"Enable pairing for 3 minutes"}
+var b=document.getElementById("zpj"),e=document.getElementById("zpjs"),
+known=!!(st&&st.zigbee);
+if(b){b.disabled=zpjBusy||!known;
+b.textContent=zpjBusy?"Restarting...":zpjOn?"Stop pairing":"Pair this remote for 3 minutes"}
 if(e){e.className="sub st"+(zpjErr?" bad":"");
-e.innerHTML="<span class='dot "+(zpjOn?"":"off")+"'></span>"+
-(!up?"Pairing needs the Zigbee2MQTT link.":
-zpjOn?"Pairing is open on the coordinator for "+mmss(zpjLeft)+".":
-"Pairing is closed on the coordinator.")+(zpjErr?" "+esc(zpjErr):"")}}
+e.innerHTML="<span class='dot "+(zpjOn?"warn":"off")+"'></span>"+
+(zpjDown?"The remote is restarting.":
+!known?"Pairing state is loading.":
+zpjOn?"The remote is pairing for "+mmss(zpjLeft)+".":
+"The remote is not pairing.")+(zpjErr?" "+esc(zpjErr):"")}}
 
-// Zigbee2MQTT reports the state, not a tick, so the countdown runs here and the
-// next bridge/info corrects it.
+// The state poll carries whole seconds every 1.5s, which is too coarse to read
+// as a clock, so this fills the gap and the next poll corrects it.
 function zpjTick(){
 if(zpjTimer){clearInterval(zpjTimer);zpjTimer=0}
 zpjPaint();
 if(!zpjOn||!(zpjLeft>0))return;
 zpjTimer=setInterval(function(){
 zpjLeft--;
-if(zpjLeft<=0){zpjLeft=0;zpjOn=false;clearInterval(zpjTimer);zpjTimer=0}
+if(zpjLeft<=0){zpjLeft=0;clearInterval(zpjTimer);zpjTimer=0}
 zpjPaint()},1000)}
 
-// Zigbee2MQTT before 1.35 reads value, and later releases read time alone, so
-// the request carries both. time 0 closes the window early.
+// The remote owns the window, so the poll sets the clock and clears the press.
+function zpjSync(){
+var z=st&&st.zigbee;if(!z)return;
+zpjDown=false;
+var on=!!z.pairing;
+if(zpjBusy&&on===zpjWant)zpjBusy=false;
+zpjOn=on;zpjLeft=on?(Number(z.pair_left)||0):0;
+zpjTick()}
+
+// A failed poll while a press is open is the restart, not a dead remote. The
+// poll keeps running, so the line goes back on its own.
+function zpjLost(){if(zpjBusy)zpjDown=true;zpjPaint()}
+
+// The remote restarts to start or to stop its radio, so the answer to this
+// press arrives as the state poll coming back, not as the response to it.
 function zpjSet(open){
-if(zpjBusy||!z2mUp())return;
-zpjBusy=true;zpjErr="";zpjPaint();
-try{ws.send(JSON.stringify({topic:"bridge/request/permit_join",
-payload:{value:!!open,time:open?ZPJ_SECONDS:0}}))}
-catch(x){zpjBusy=false;zpjErr="Zigbee2MQTT did not take the request.";zpjPaint();return}
-setTimeout(function(){if(zpjBusy){zpjBusy=false;
-zpjErr="Zigbee2MQTT did not answer the request.";zpjPaint()}},5000)}
+if(zpjBusy||!(st&&st.zigbee))return;
+if(open&&zbPaired()&&!confirm(
+"Pairing erases the Zigbee network credentials of this remote and restarts it. "+
+"The button assignments are kept. Continue?"))return;
+zpjBusy=true;zpjWant=!!open;zpjErr="";zpjDown=false;zpjPaint();
+post("pair",null,undefined,undefined,"&on="+(open?"1":"0")).then(function(r){
+if(r.code!==200){zpjBusy=false;zpjErr=fail(r);zpjPaint()}},
+function(){zpjBusy=false;zpjErr="The remote did not answer.";zpjPaint()})}
+
+// Read only. Zigbee2MQTT owns this window, so the page reports it and never
+// asks for it. A join needs both this and the remote window open.
+function zcPaint(){
+var e=document.getElementById("zcs");if(!e)return;
+var up=z2mUp();
+e.className="sub st";
+e.innerHTML="<span class='dot "+(zcOn?"warn":"off")+"'></span>"+
+(!up?"The coordinator pairing state needs the Zigbee2MQTT link.":
+zcOn?"Pairing is open on the coordinator for "+mmss(zcLeft)+".":
+"Pairing is closed on the coordinator. Permit joining in Zigbee2MQTT.")}
+
+// bridge/info reports a state, not a tick, so the countdown runs here and the
+// next message corrects it.
+function zcTick(){
+if(zcTimer){clearInterval(zcTimer);zcTimer=0}
+zcPaint();
+if(!zcOn||!(zcLeft>0))return;
+zcTimer=setInterval(function(){
+zcLeft--;
+if(zcLeft<=0){zcLeft=0;zcOn=false;clearInterval(zcTimer);zcTimer=0}
+zcPaint()},1000)}
 
 function z2mSave(){
 if(z2mUp()){z2mDisconnect();return}
@@ -1367,11 +1421,11 @@ paint();if(sel!==null)loadCode(sel)}
 
 build();
 z2mBar();
-bleWatch();
+stateWatch();
 load().then(function(j){
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}
-paint();if(sel!==null)loadCode(sel)}).catch(function(){
+zpjSync();paint();if(sel!==null)loadCode(sel)}).catch(function(){
 document.getElementById("ed").textContent="The remote did not answer."});
 </script>
 </body>

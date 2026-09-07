@@ -540,10 +540,47 @@ class ProductionConfigTest(unittest.TestCase):
         # A radio the switch holds off sends nothing, so D5 stays dark for it too.
         self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
                       entry)
-        self.assertIn("else if (id(zigbee_radio).is_connected())", entry)
+        self.assertIn("else if (!id(zigbee_radio).is_connected())", entry)
         self.assertIn("it[3] = Color(0, 128, 0);", entry)
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
         self.assertNotIn("it[3]", before_d5.split("// D3 and D4", 1)[1])
+
+    def test_d5_separates_pairing_and_an_unreachable_target(self) -> None:
+        # An open window is a normal state, so it must not borrow the red that
+        # means the stack is up with no network.
+        entry = status_light_entry(CONFIG.read_text())
+        d5 = entry.split("// D5 is Zigbee status", 1)[1]
+        pairing = d5.index("zigbee_assignments.pairing_window_open()")
+        self.assertLess(pairing, d5.index("!id(zigbee_radio).is_connected()"))
+        self.assertIn("it[3] = Color(0, 0, level);", d5)
+        # Amber sits after the join test, so only a joined remote can show it.
+        reach = d5.index("ZigbeeAssignmentManager::REACH_FAILED")
+        self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
+        self.assertIn("it[3] = Color(level, level / 3, 0);", d5)
+
+    def test_a_stopped_window_is_told_apart_from_one_that_ran_out(self) -> None:
+        # Only an expiry leaves the radio off with no explanation, so only it
+        # sets the flag the page reads back after the restart.
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn('return end_pairing_("Pairing stopped", false);', header)
+        self.assertIn('return end_pairing_("Pairing window closed with no join", true);', header)
+        end = header.split("bool end_pairing_(const char *reason, bool failed) {", 1)[1]
+        self.assertIn("flags | FLAG_PAIR_FAILED", end.split("\n  }", 1)[0])
+        # Taking the radio back by hand clears the explanation with it.
+        switch = header.split("bool set_radio_enabled(bool enabled) {", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("~(FLAG_RADIO_OFF | FLAG_PAIR_FAILED)", switch)
+
+    def test_the_pairing_step_runs_before_the_credential_erase(self) -> None:
+        # set_link_state feeds the step, and the erase restarts the remote, so
+        # the order in the interval decides whether a window ever opens.
+        config = CONFIG.read_text()
+        block = config.split("interval:", 1)[1].split("\n  - interval: 1s", 1)[0]
+        link = block.index("zigbee_assignments.set_link_state(")
+        tick = block.index("zigbee_assignments.tick();")
+        erase = block.index("zigbee_assignments.take_credential_erase_request()")
+        self.assertLess(link, tick)
+        self.assertLess(tick, erase)
+        self.assertIn("id(zigbee_radio)->reset();", block)
 
 
 if __name__ == "__main__":

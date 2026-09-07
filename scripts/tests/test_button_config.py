@@ -611,45 +611,86 @@ class PageTest(unittest.TestCase):
         self.assertIn('"&ieee="+encodeURIComponent(ieee)', body)
         self.assertIn('"&ep="+encodeURIComponent(ep)', body)
 
-    def test_the_page_writes_only_the_permit_join_request(self) -> None:
-        """Assignment stays read only on the websocket. A group per device left
-        one behind on every repeat assign, so no assignment publishes. Permit
-        join is the one write, because that window belongs to the coordinator."""
+    def test_the_page_never_publishes_to_zigbee2mqtt(self) -> None:
+        """The websocket is read only. Assignment never published, because a
+        group per device left one behind on every repeat assign, and pairing is
+        now the remote's own window, so nothing is left that writes."""
         for gone in ("zpub", "zreq", "transaction", "bridge/request/group",
-                     "bridge/request/device"):
+                     "bridge/request/device", "bridge/request/permit_join",
+                     "bridge/response/permit_join"):
             self.assertNotIn(gone, PAGE)
-        self.assertEqual(PAGE.count("ws.send("), 1)
-        send = section(PAGE, "function zpjSet(open){", "\n\n")
-        self.assertIn('ws.send(JSON.stringify({topic:"bridge/request/permit_join",', send)
-        self.assertIn("payload:{value:!!open,time:open?ZPJ_SECONDS:0}}))", send)
+        self.assertEqual(PAGE.count("ws.send("), 0)
 
-    def test_the_pairing_button_opens_the_coordinator_for_three_minutes(self) -> None:
-        """The remote can only join while the coordinator permits it, so the
-        card offers that window without a second tool."""
+    def test_the_pairing_button_pairs_the_remote_for_three_minutes(self) -> None:
+        """The window belongs to the remote, so the button posts to the remote
+        and the countdown follows the state endpoint."""
         self.assertIn("var ZPJ_SECONDS=180;", PAGE)
         # The radio and its pairing window sit above the rule. The browser link
         # to Zigbee2MQTT is a different subject and sits below it.
         self.assertIn('<hr class="rule">\n<h3>Zigbee2MQTT</h3>', PAGE)
         self.assertIn("hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}", PAGE)
         self.assertIn('<div class="act"><button type="button" class="sec" id="zpj">'
-                      'Enable pairing for 3 minutes</button></div>', PAGE)
+                      'Pair this remote for 3 minutes</button></div>', PAGE)
         # The control outlives the browser block, so build() wires it.
         self.assertNotIn("id=zpj>", PAGE)
         self.assertIn('document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};', PAGE)
-        paint = section(PAGE, "function zpjPaint(){", "\n\n// Zigbee2MQTT reports")
-        self.assertIn("b.disabled=zpjBusy||!up;", paint)
-        self.assertIn('b.textContent=zpjBusy?"Working...":zpjOn?"Stop pairing":'
-                      '"Enable pairing for 3 minutes"}', paint)
-        self.assertIn('"Pairing is open on the coordinator for "+mmss(zpjLeft)+".":', paint)
-        self.assertIn('"Pairing is closed on the coordinator."', paint)
-        # bridge/info is retained, so the state and the countdown arrive on
-        # connect and again on every change.
+        send = section(PAGE, "function zpjSet(open){", "\n\n")
+        self.assertIn('post("pair",null,undefined,undefined,"&on="+(open?"1":"0"))', send)
+        # The remote restarts, so the press is never confirmed by an action id.
+        self.assertNotIn("waitAction(", send)
+        # A call that never restarts still has to release the action id, or every
+        # later action answers 409.
+        pair = section(CPP, 'else if (action == "pair") {', "  } else if")
+        self.assertIn("::zigbee_assignments.begin_pairing()", pair)
+        self.assertIn("::zigbee_assignments.cancel_pairing();", pair)
+        self.assertIn("this->complete_action_(action_id, ok);", pair)
+        # A joined remote loses its network to a pairing press, so it asks first.
+        self.assertIn("if(open&&zbPaired()&&!confirm(", send)
+        self.assertIn("erases the Zigbee network credentials of this remote", send)
+        self.assertIn("The button assignments are kept.", send)
+        paint = section(PAGE, "function zpjPaint(){", "\n\n// The state poll")
+        self.assertIn("b.disabled=zpjBusy||!known;", paint)
+        self.assertIn('b.textContent=zpjBusy?"Restarting...":zpjOn?"Stop pairing":'
+                      '"Pair this remote for 3 minutes"}', paint)
+        self.assertIn('zpjDown?"The remote is restarting.":', paint)
+        self.assertIn('zpjOn?"The remote is pairing for "+mmss(zpjLeft)+".":', paint)
+        self.assertIn('"The remote is not pairing."', paint)
+        # A window that runs out turns the radio off, so the off line names the
+        # cause. Otherwise the page reports a radio nobody switched off.
+        why = section(PAGE, "function zbOffWhy(){", "\n\n")
+        self.assertIn("st.zigbee.pair_failed", why)
+        self.assertIn('" The last pairing attempt found no coordinator, '
+                      'so the radio went off."', why)
+        self.assertIn('"off. Zigbee buttons are disabled."+zbOffWhy()', PAGE)
+
+    def test_the_coordinator_window_is_reported_and_never_asked_for(self) -> None:
+        """A join needs both sides open, so the page still names the coordinator
+        state. bridge/info is retained, so it arrives on connect and on change."""
+        self.assertIn('<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>', PAGE)
         self.assertIn('if(m.topic==="bridge/info"&&m.payload){', PAGE)
-        self.assertIn("zpjOn=!!m.payload.permit_join;", PAGE)
+        self.assertIn("zcOn=!!m.payload.permit_join;", PAGE)
         self.assertIn("end>0?Math.max(0,Math.round((end-Date.now())/1000)):ZPJ_SECONDS;", PAGE)
-        self.assertIn('if(m.topic==="bridge/response/permit_join"){', PAGE)
+        paint = section(PAGE, "function zcPaint(){", "\n\n// bridge/info reports")
+        self.assertIn('"The coordinator pairing state needs the Zigbee2MQTT link.":', paint)
+        self.assertIn('zcOn?"Pairing is open on the coordinator for "+mmss(zcLeft)+".":', paint)
+        self.assertIn('"Pairing is closed on the coordinator. Permit joining in Zigbee2MQTT."',
+                      paint)
         # A closed socket only means this browser stopped watching the window.
-        self.assertIn('zpjOn=false;zpjLeft=0;zpjBusy=false;zpjErr="";zpjTick();', PAGE)
+        self.assertIn("zcOn=false;zcLeft=0;zcTick();", PAGE)
+
+    def test_the_state_poll_carries_the_zigbee_half(self) -> None:
+        """One 1.5s poll drives every live line. It used to drop j.zigbee, which
+        froze the link line at whatever the first load put there."""
+        body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
+        self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
+        self.assertIn("zpjSync();radioStatus();bleStatus()}},zpjLost)", body)
+        self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
+                      PAGE)
+        # A failed poll while a press is open is the restart, not a dead remote.
+        self.assertIn("function zpjLost(){if(zpjBusy)zpjDown=true;zpjPaint()}", PAGE)
+        sync = section(PAGE, "function zpjSync(){", "\n\n")
+        self.assertIn("if(zpjBusy&&on===zpjWant)zpjBusy=false;", sync)
+        self.assertIn("zpjOn=on;zpjLeft=on?(Number(z.pair_left)||0):0;", sync)
 
     def test_a_device_target_carries_the_endpoint_of_its_action(self) -> None:
         """A groupcast needs no endpoint but a unicast does, and the endpoint that
@@ -765,11 +806,17 @@ class PageTest(unittest.TestCase):
                       '<span></span></label></h2>\n'
                       '<p class="sub st" id="zrs">Zigbee radio state is loading.</p>\n'
                       '<p class="sub st" id="zpjs">Pairing state is loading.</p>\n'
+                      '<p class="sub">Pairing erases the Zigbee network credentials of '
+                      'this remote and restarts it.\n'
+                      'The button assignments are kept. Permit joining in Zigbee2MQTT as '
+                      'well, because a join needs\n'
+                      'both sides.</p>\n'
                       '<div class="act"><button type="button" class="sec" id="zpj">'
-                      'Enable pairing for 3 minutes</button></div>\n'
+                      'Pair this remote for 3 minutes</button></div>\n'
                       '<hr class="rule">\n'
                       '<h3>Zigbee2MQTT</h3>\n'
                       '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
+                      '<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>\n'
                       '<div id="z2m"></div>\n</div>\n'
                       '<div id="blecfg">\n'
                       '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
@@ -830,10 +877,11 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("id=zst", PAGE)
         self.assertIn(".dot.off{background:var(--line)}.dot.warn{background:var(--warn)}\n"
                       ".dot.bad{background:var(--bad)}", PAGE)
-        self.assertIn("function bleWatch(){if(!bleTimer)bleTimer=setInterval(bleRefresh,1500)}", PAGE)
-        refresh = section(PAGE, "function bleRefresh(){", "\n\nfunction bleWatch()")
+        self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
+                      PAGE)
+        refresh = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch()")
         self.assertIn('fetch("/buttons/api/state",{cache:"no-store"})', refresh)
-        self.assertIn("st.ble=j.ble;st.radios=j.radios;", refresh)
+        self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
         self.assertNotIn("paint()", refresh)
         self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
@@ -992,13 +1040,15 @@ class RadioSwitchTest(unittest.TestCase):
 
     def test_the_state_and_action_endpoints_carry_both_switches(self) -> None:
         self.assertIn('"radios":{"zigbee":%s,"ble":%s}', CPP)
-        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s}', CPP)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
+                      '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
         self.assertIn("::zigbee_assignments.link_started() ? \"true\" : \"false\"", CPP)
         self.assertIn("::zigbee_assignments.link_factory_new() ? \"true\" : \"false\"", CPP)
         self.assertIn("::zigbee_assignments.radio_enabled() ? \"true\" : \"false\"", CPP)
         self.assertIn('action == "set_radio"', CPP)
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
-        self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio";', CPP)
+        self.assertIn('const bool needs_slot = action != "forget_ble" '
+                      '&& action != "set_radio" && action != "pair";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
         self.assertIn("this->defer(", switch)
@@ -1017,10 +1067,20 @@ class RadioSwitchTest(unittest.TestCase):
                       "        - lambda: ir_code_store.setup();", CONFIG)
         # Preferences open in app_main, so a flash read works at any priority.
         self.assertIn("static bool radio_enabled_from_flash() {", ZIGBEE)
-        self.assertIn("if (!preference.load(&record) || !valid_(record))\n      return true;", ZIGBEE)
+        # A remote with no record has never paired, so it boots with the radio
+        # off and waits for the pairing button.
+        self.assertIn("if (!preference.load(&record) || !valid_(record))\n      return false;",
+                      ZIGBEE)
+        setup = section(ZIGBEE, "  void setup() {", "\n  }")
+        self.assertIn("record_.flags = FLAG_RADIO_OFF;", setup)
+        # A migrated record keeps the radio its owner already had, so the bit is
+        # set in that branch alone and never in reset_record_.
+        self.assertNotIn("FLAG_RADIO_OFF",
+                         section(ZIGBEE, "static void reset_record_(Record &record) {", "\n  }"))
         # The switch cannot lift the gate, so the page asks for the one cure.
         self.assertIn('if(z.gated)return "The stack is down. Reboot the remote to start it.";', PAGE)
-        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s}', CPP)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
+                      '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
         self.assertIn("::zigbee_assignments.boot_gated() ? \"true\" : \"false\"", CPP)
         # Nothing else on the device offers a reboot.
         self.assertIn("  - platform: restart\n    name: Restart", CONFIG)
@@ -1086,10 +1146,13 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("--warn:#e0a44a;", PAGE)
         # The remote can be on with no network, so the line names which it is.
         self.assertIn('if(!z.started)return "The stack has not started.";', PAGE)
-        self.assertIn('if(z.paired)return "Paired to a Zigbee network.";', PAGE)
+        self.assertIn('if(z.pairing)return "Pairing.";', PAGE)
+        self.assertIn('if(z.paired)return z.reach==="failed"?\n'
+                      '"Paired, but the last command to a device was not acknowledged.":\n'
+                      '"Paired to a Zigbee network.";', PAGE)
         self.assertIn('return z["new"]?"Not paired.":', PAGE)
         self.assertIn('"Not on the network yet. The remote is rejoining."}', PAGE)
-        self.assertIn('(on?"on. "+zbLink():"off. Zigbee buttons are disabled.")', PAGE)
+        self.assertIn('(on?"on. "+zbLink():"off. Zigbee buttons are disabled."+zbOffWhy())', PAGE)
         # The remote radio and the browser link are separate subjects.
         self.assertIn('This browser is connected to "+\n"Zigbee2MQTT. "', PAGE)
         # The Bluetooth radio and its host each own a line, and the host line

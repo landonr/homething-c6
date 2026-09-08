@@ -2,6 +2,8 @@
 
 This runbook covers Rev B/V2 boards with MK1, the ICS-43434 bottom-ported I2S microphone. It is a relative sound meter, not a calibrated SPL instrument.
 
+**The design left this part on 2026-09-07.** `MK1` is now the PUI Audio `DMM-4026-B-I2S-R`. This runbook still applies to the five Rev B remotes in hand, because those boards carry the ICS-43434 and no new board exists yet. Read it as the record of why the part changed and as the procedure for the hardware you can hold. The swap is in [`docs/timeline.md`](timeline.md).
+
 **Read this first, 2026-08-26.** The build has five Rev B remotes. One mic works. One works with distortion. Three do not work, measured 2026-08-26. All five boards share one design, one firmware and one fab batch, so no design cause can explain the spread. If a mic is deaf, compare it against the working unit and do not repeat the ruled-out ladder below. Read "Assembly damage is the leading suspect" first.
 
 ## Confirm hardware mapping
@@ -145,8 +147,8 @@ Two gaps worth closing. `AN-100` Table 2 predates the ICS-43434, and neither tha
 
 | Candidate | Interface and ESPHome | Package and process | Decision |
 | --- | --- | --- | --- |
-| `ICS-43434` | I²S works on ESP32-C6 at 16 or 48 kHz | Bottom port, 3.5 x 2.65 mm, no wash | Keep only with controlled assembly and acoustic testing |
-| `DMM-4026-B-I2S-R` | I²S works on ESP32-C6 at 48 kHz | Bottom port, 4.0 x 3.0 mm, seven pads, MSL1 | Electrical candidate, but it keeps the blind cavity |
+| `ICS-43434` | I²S works on ESP32-C6 at 16 or 48 kHz | Bottom port, 3.5 x 2.65 mm, no wash | Rejected 2026-09-07 |
+| `DMM-4026-B-I2S-R` | I²S works on ESP32-C6 at 48 kHz | Bottom port, 4.0 x 3.0 mm, seven pads, MSL1 | **Selected 2026-09-07.** It keeps the blind cavity |
 | `SPH0645LM4H-B` | I²S works on ESP32-C6 | Bottom port, 3.5 x 2.65 mm, MSL1 | Reject because the part is obsolete |
 | Top-port PDM microphone | ESPHome supports PDM only on ESP32 and ESP32-S3 | Top port removes the PCB acoustic hole | Requires a move from ESP32-C6 to ESP32-S3 |
 
@@ -157,6 +159,8 @@ Set ESPHome to `sample_rate: 48000`, `bits_per_sample: 32bit`, and `pdm: false`.
 Tie `CONFIG` and `LR` to ground for left-channel operation. Fit 0.1 uF from VDD to ground and 100 kOhm from SD to ground.
 
 Do not reuse the ICS-43434 footprint. The `DMM-4026-B-I2S-R` uses a different body, land pattern, pin count, and acoustic-port position.
+
+All of the paragraph above is done as of 2026-09-07, with one exception. `c6remote.yaml` still runs the mic at 16 kHz, which is a 1.024 MHz bit clock and below the 2.048 MHz normal-mode minimum of the new part. That change waits for a board that carries the part. The item is in [`ROADMAP.md`](../ROADMAP.md).
 
 ## Firmware-independent test
 

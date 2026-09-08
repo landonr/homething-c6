@@ -268,7 +268,11 @@ Do not add this command to the hook. The release workflow publishes the fabricat
 
 Follow named nets across the schematic. Then verify the corresponding board nets and footprints.
 
-- Audio uses `MK1`, an ICS-43434 or INMP441-style I2S microphone, on `sck`, `ws`, and `sd`.
+- Audio uses `MK1`, a PUI Audio `DMM-4026-B-I2S-R` I2S microphone, on `sck`, `ws`, and `sd`.
+- `MK1` pins are 1 LR, 2 CONFIG, 3 VDD, 4 GND, 5 WS, 6 SCK, and 7 SD. Pins 1, 2, and 4 go to GND.
+- Pin 1 low selects the left channel, so ESPHome must keep `channel: left`.
+- `C5` is the 100nF VDD decoupling capacitor. `R12` is the 100k pull-down that the datasheet requires on `sd`.
+- The part needs a 2.048 to 4.096 MHz bit clock in normal mode. See the sample-rate item in `ROADMAP.md`.
 - IR uses `U2`, a `TSOP6136TT` receiver, on `IR REC`.
 - `U2` is a Vishay Panhead SMD part on B.Cu. It receives through the board bottom face.
 - `D1`, `Q1`, and `R1` transmit IR from `IR EMIT`.

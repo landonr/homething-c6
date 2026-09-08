@@ -8,6 +8,8 @@ Open work for c6remote, ordered by severity. Fabrication history, bring-up resul
 
 - [ ] **Raise the microphone sample rate before the next build runs a `DMM-4026-B-I2S-R`.** Raised 2026-09-07 with the `MK1` swap. `c6remote.yaml` runs the mic at `sample_rate: 16000` with `bits_per_sample: 32bit`, which is a 1.024 MHz bit clock. The PUI data sheet page 1 gives an input clock of 2.048 to 4.096 MHz in normal mode and 320 kHz in sleep mode, so 1.024 MHz sits below the normal-mode minimum and in no defined mode. The ICS-43434 accepted 16 kHz, so this is new with the part and not a pre-existing defect. Use `sample_rate: 32000` for a 2.048 MHz clock or `sample_rate: 48000` for 3.072 MHz. Check what the change costs downstream first, because `on_data` in `c6remote.yaml` shifts each sample right by 16 and the voice assistant consumes the same stream. The bench cannot settle this until a board carries the new part, so it is a firmware change to make with the next build and not before.
 
+Follow the microphone implementation and validation plan in [`docs/mic-v3-plan.md`](docs/mic-v3-plan.md).
+
 - [ ] **Bench-verify the `ir_vdd` gate and the `TSOP6136` on the next build.** No built board carries `Q3`, `R11`, `ir_en` on `GPIO6`, the `TSOP6136` or the `Library:Vishay_PANHEAD-4Pin_TopView` land pattern, because rev-B is the `2026.8.0` board and predates both changes. Verify that the rail is off by default, that the `IR Rail` switch turns it on, and that `remote_receiver` decodes through the bottom face with the top-view lens. Also verify the datasheet pin order 1 GND / 2 N.C. / 3 Vs / 4 OUT against the land pattern.
 
 ## Medium

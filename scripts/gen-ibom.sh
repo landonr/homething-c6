@@ -35,8 +35,39 @@ if [[ ! -f "$IBOM_CACHE_DIR/InteractiveHtmlBom/generate_interactive_bom.py" ]]; 
 fi
 
 GENERATOR="$IBOM_CACHE_DIR/InteractiveHtmlBom/generate_interactive_bom.py"
+IBOM_TIMEOUT="${IBOM_TIMEOUT:-180}"
 
 echo "==> Generating IBOM"
-"$KICAD_PYTHON" "$GENERATOR" "$PCB" --no-browser --dest-dir "$KI" --name-format ibom
+
+# The generator writes ibom.html and then never returns: under KiCad's bundled
+# python on macOS it initialises wx and keeps the process alive with no main
+# loop, even with --no-browser. So wait for the file, then kill it.
+log="$(mktemp -t ibom)"
+trap 'rm -f "$log"' EXIT
+
+"$KICAD_PYTHON" "$GENERATOR" "$PCB" --no-browser --dest-dir "$KI" --name-format ibom \
+	>"$log" 2>&1 &
+pid=$!
+
+done_marker=""
+for ((i = 0; i < IBOM_TIMEOUT; i++)); do
+	if grep -q "Created file" "$log" 2>/dev/null; then
+		done_marker=yes
+		break
+	fi
+	if ! kill -0 "$pid" 2>/dev/null; then
+		break
+	fi
+	sleep 1
+done
+
+kill -9 "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+
+if [[ -z "$done_marker" ]]; then
+	echo "error: IBOM generation did not finish in ${IBOM_TIMEOUT}s" >&2
+	cat "$log" >&2
+	exit 1
+fi
 
 echo "==> Done. Review artifact written to $KI/ibom.html (not committed)"

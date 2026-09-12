@@ -10,11 +10,11 @@ import params
 from .hardware import closure_point, mount_points
 from .backform import back_form
 from .shape import _cut, _fuse, _isect, _offset_face, _slab
-from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SKIRT_OUT
+from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SKIRT_OUT, SUPPORT_TOP
 
 
 def support_top():
-    return -params.SUPPORT_GAP
+    return SUPPORT_TOP
 
 
 def support_case_envelope(inset=0.0):

@@ -89,6 +89,44 @@ shrink with it. `case.py` prints both screw lengths, derived from the stack
 rather than quoted, so a future change of fastener starts at the board and is
 read back out of the model rather than transcribed into it.
 
+## The V2 retention post
+
+The V2 board has the same outline as V3 and the same origin. It does not have the
+same mounting holes. V2 put two holes at the IR end and one at the grip end. V3
+does the reverse, with `H1` alone at the IR end and `H2` and `H3` at the grip
+end. No hole of one revision lands on a hole of the other. So a V2 board drops
+into this case with nothing to fasten it to.
+
+The back shell carries one post for that. It stands under V2's upper-right hole,
+at the IR end. It reads `BOSS_OD`, `BOSS_PILOT_D` and `BOSS_PILOT_DEPTH`, the
+same three the front plate's bosses read. As a result the V2 screw is the same M2
+the V3 board already takes, and `case.py` prints its length. The root chamfer is
+`STANDOFF_CHAMFER`, the same one the closure standoff carries.
+
+**This is retention, not compatibility.** The post holds a V2 board still. It
+does not move V2's IR parts, and it does not move V2's upper keys. Those still
+land in the wrong place. No post can change that. Treat the post as a bench aid
+for the V2 boards that exist, not as a supported build.
+
+**The assembly order reverses.** A V3 board drops into a closed front shell and
+screws to it from the back. A V2 board screws to the back shell first, from its
+own component side. The front shell then closes over it. Use no washer. The head
+lands on the V2 board's own top face.
+
+The post stops at `SUPPORT_TOP`, the plane the board support ledges stop at. With
+a V3 board fitted it is one more ledge under the board, `SUPPORT_GAP` clear of
+it. The V3 board still hangs off the front plate as it did. The post changed
+`c6remote-case-back.stl` and nothing else. The front shell, the pad, the window
+and all eleven caps export byte for byte as they did before it.
+
+The point is read, not transcribed. `board.legacy_retention_point()` finds V2's
+three `LEGACY_MOUNT_D` holes in the V2 STEP and takes the one furthest +Y and
+then +X. That STEP is static reference geometry from release `2026.8.0` at commit
+`d0a2c2e`. The V2 board file is no longer in the working tree, so nothing
+regenerates the STEP. The reader compares the two outlines before it answers. It
+raises if they disagree, because a V2 coordinate means nothing in the case frame
+when the boards stop sharing a frame.
+
 ## How the shells close
 
 It is a lap joint, **back over front**. The front's cavity wall carries on past the
@@ -877,7 +915,7 @@ plain prism at that point, with one clean edge loop and no contour to trip over.
 
 ## Verification
 
-`check.py` is the part worth keeping. Thirty-one passes, because no single one
+`check.py` is the part worth keeping. Forty-five passes, because no single one
 is sufficient:
 
 - **Aperture probes** catch a hole that never got cut. A switch tops out well
@@ -1002,6 +1040,29 @@ is sufficient:
   was purely 2D it compared the bosses against the wrong side of the board
   entirely, so it never once tested them against the switches they sit among, and
   it reported a cradle rib fouling `C4` when the two are nowhere near in z.
+- **Legacy point in frame** confirms V2's three mounting holes still read off
+  the V2 STEP, and that the post takes the upper-right one. The reader raises
+  when the two revisions stop sharing an outline, so calling it is most of the
+  pass. What is added here is the count and the choice, neither of which the
+  raise covers.
+- **Legacy post clearance** puts the built V2 retention post against every
+  assembly solid, the V3 board at rest, the cell, both V3 screw heads and the
+  closure standoff. Not against `support_obstacles()`. Those keepouts are sized
+  for the ledge's own raked underside at the wall and reach well below anything
+  the board carries, so a free-standing column fails them on air. The post's
+  root chamfer clips `D1`'s keepout several millimetres under `D1`'s own lowest
+  solid. Courtyards at their real z are feature clashes' job, and the post is in
+  that list too.
+- **Legacy post merged** confirms the post is part of the back shell rather than
+  a second solid beside it. A solid count alone is not enough, because the shell
+  is also one solid with no post at all. So this asks the built shell for
+  material in the ring the post's wall occupies under its top.
+- **Legacy pilot blind** confirms the pilot is open its full `BOSS_PILOT_DEPTH`
+  and still stops inside the post. Both halves matter and neither implies the
+  other. A pilot that never got cut takes no screw. One that ran through the
+  floor is a hole in the outside of the case.
+- **Legacy post headroom** confirms the wall left around the pilot and the post
+  height left under it, which is the arithmetic no probe reports.
 - **End ports open** confirms D1's unchanged +Y bore and the USB shell's -Y
   slot remain real through-cuts at their end-wall centrelines.
 - **Receiver paths** confirms U2 has a clear -Z sightline through the bare back
@@ -1149,6 +1210,14 @@ discs from the part's own pin and legs by which ones come out square in plan.
 It answers for the wheel's top, its lip (the widest disc, and what the pad's
 bore clears), and the main rotating body above the lip that the shell's own
 opening closes in flush on.
+
+Read from the V2 board-only STEP: V2's own mounting holes, through
+`board.legacy_mounting_holes()`. That revision has no `MountingHole` footprint
+and no board file left in the working tree, so the holes come off the solid
+itself. They are circular voids in the board, so they arrive as inner wires of
+its bottom face, and `LEGACY_MOUNT_D` is what tells them from vias and part
+holes. The reader compares the two revisions' outlines first and raises when
+they disagree.
 
 Hand-entered: `board.WHEEL_OD`, cross-checked at import time against
 `wheel_profile()`'s measured lip rather than trusted blind, and everything in
@@ -1372,8 +1441,9 @@ helpers went in.
 | `params.py` | Every tunable. Start here. |
 | `board.py` | Board geometry from the KiCad exports. Run it for a report. |
 | `case.py` | The two shells, the pad, the IR window insert and the keycaps. |
-| `check.py` | Thirty-one-pass verification against the board. |
+| `check.py` | Forty-five-pass verification against the board. |
 | `fonts/` | Vendored `LEGEND_FONT`, so a legend cuts the same on any machine. |
 | `glyphs/` | Legend artwork for the symbols no font carries, filled outlines only. |
 | `board/` | Generated by `scripts/export-case-refs.sh`. The board-only STEP and the outline DXF are tracked; the two assembly exports are not. |
+| `board/c6remote-v2-board-only.step` | The V2 board, frozen at release `2026.8.0`, commit `d0a2c2e`. Tracked, static, and outside that script. |
 | `export/` | Generated STLs. Untracked. |

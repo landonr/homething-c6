@@ -16,6 +16,7 @@ import functools
 import sys
 import time
 
+import board
 import cache
 import case
 import params
@@ -34,6 +35,13 @@ from .ir import (
     receiver_clearance,
     receiver_paths,
     window_installation,
+)
+from .legacy import (
+    legacy_pilot_blind,
+    legacy_point_in_frame,
+    legacy_post_clearance,
+    legacy_post_headroom,
+    legacy_post_merged,
 )
 from .keypad import (
     neck_blends_smoothly,
@@ -409,6 +417,53 @@ def _support_case_containment(s):
     return _report(
         support_case_containment(s.back),
         "back shell stays inside the case envelope",
+    )
+
+
+@_check("legacy")
+def _legacy_point_in_frame(s):
+    return _report(
+        legacy_point_in_frame(),
+        f"V2's three mounting holes read off its own STEP in the shared frame; "
+        f"the post takes the upper-right one at {board.legacy_retention_point()}",
+    )
+
+
+@_check("legacy")
+def _legacy_post_clearance(s):
+    return _report(
+        legacy_post_clearance(),
+        f"V2 retention post stops {params.SUPPORT_GAP:.2f} below the V3 board and "
+        "clears every assembly solid, the cell, both V3 screw heads and the "
+        "closure standoff",
+    )
+
+
+@_check("legacy")
+def _legacy_post_merged(s):
+    return _report(
+        legacy_post_merged(s.back),
+        "V2 retention post is fused into one back-shell solid, walled all the "
+        "way round its pilot",
+    )
+
+
+@_check("legacy")
+def _legacy_pilot_blind(s):
+    return _report(
+        legacy_pilot_blind(s.back),
+        f"V2 pilot is open its full {params.BOSS_PILOT_DEPTH:.1f} and blind, on "
+        "solid floor below",
+    )
+
+
+@_check("legacy")
+def _legacy_post_headroom(s):
+    return _report(
+        legacy_post_headroom(),
+        f"V2 post takes an M2 x {case.legacy_screw_length():.0f}: "
+        f"{params.BOSS_PILOT_DEPTH:.1f} of engagement in "
+        f"{(params.BOSS_OD - params.BOSS_PILOT_D) / 2:.2f} of wall",
     )
 
 

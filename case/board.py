@@ -19,6 +19,13 @@ KICAD_PCB = ROOT / "c6remote-kicad" / "c6remote.kicad_pcb"
 POS_CSV = ROOT / "c6remote-kicad" / "export" / "c6remote-pos.csv"
 BOARD_ONLY_STEP = Path(__file__).resolve().parent / "board" / "c6remote-board-only.step"
 ASSEMBLY_STEP = Path(__file__).resolve().parent / "board" / "c6remote-board.step"
+LEGACY_BOARD_ONLY_STEP = (
+    Path(__file__).resolve().parent / "board" / "c6remote-v2-board-only.step"
+)
+"""The V2 board, frozen. Release 2026.8.0, commit d0a2c2e, exported with
+`kicad-cli pcb export step --board-only` the same way scripts/export-case-refs.sh
+exports the live one. It is static reference geometry: that revision is gone from
+the working tree, so nothing regenerates this file and nothing should."""
 
 WHEEL_CUTOUT_R = 2.0
 
@@ -96,6 +103,80 @@ def mounting_hole_refs():
     its refdes. The geometry needs no hole name, but a boss with an id of H2
     is one a reader can find on the board."""
     return {(x, y): ref for ref, x, y, _ in _mounting_hole_rows()}
+
+
+LEGACY_MOUNT_D = 2.9
+"""V2's mounting hole diameter, as its Edge.Cuts circles cut it. V3 went to
+2.4 mm NPTH footprints, so no reader shared between the two revisions can
+match on one size."""
+
+LEGACY_MOUNT_ROUND = 0.05
+"""How far a V2 hole may depart from LEGACY_MOUNT_D and still count. The
+STEP rounds a circle to the micron, so this only absorbs that."""
+
+LEGACY_FRAME_TOLERANCE = 0.01
+"""How far the two revisions' outlines may disagree before a V2 coordinate is
+meaningless in the case frame. The two boards share an outline and an origin,
+which is the only reason a V2 hole can be built on at all."""
+
+
+@functools.cache
+def legacy_mounting_holes():
+    """[(x, y)] for V2's 2.9 mm mounting holes, in STEP frame.
+
+    Read out of LEGACY_BOARD_ONLY_STEP rather than out of a KiCad file, because
+    V2 has no MountingHole footprint and its board file is no longer in the
+    working tree. The holes are plain circular voids in the board solid, so they
+    arrive as inner wires of its bottom face, told apart from vias and part holes
+    by diameter alone.
+
+    Raises if the two revisions no longer share an outline. A V2 coordinate is
+    only usable here because both boards sit on the same origin with the same
+    edge, and a case feature built on a hole from a board that has moved would
+    land somewhere arbitrary.
+    """
+    solid = import_step(_require(LEGACY_BOARD_ONLY_STEP)).solids()[0]
+    legacy_box = solid.bounding_box()
+    live_box = board_profile().bounding_box()
+    for axis in ("X", "Y"):
+        for end in ("min", "max"):
+            apart = abs(
+                getattr(getattr(legacy_box, end), axis)
+                - getattr(getattr(live_box, end), axis)
+            )
+            if apart > LEGACY_FRAME_TOLERANCE:
+                raise ValueError(
+                    f"V2 and V3 outlines disagree on {end}.{axis} by {apart:.3f}: "
+                    "they no longer share a frame, so no V2 coordinate means "
+                    "anything in the case frame"
+                )
+
+    bottom = solid.faces().filter_by(Plane.XY).sort_by(Axis.Z)[0]
+    out = []
+    for wire in bottom.inner_wires():
+        box = wire.bounding_box()
+        if abs(box.size.X - box.size.Y) > LEGACY_MOUNT_ROUND:
+            continue
+        if abs(box.size.X - LEGACY_MOUNT_D) > LEGACY_MOUNT_ROUND:
+            continue
+        out.append((box.center().X, box.center().Y))
+    if len(out) != 3:
+        raise ValueError(
+            f"expected three {LEGACY_MOUNT_D} holes in the V2 board, found {len(out)}"
+        )
+    return tuple(sorted(out))
+
+
+def legacy_retention_point():
+    """(x, y) of the one V2 hole the case offers a post under: the upper-right
+    one, at the IR end.
+
+    V2 put two holes at that end and one at the grip end; V3 does the reverse.
+    So no V2 hole lands on a V3 one, and only this one has room under it in the
+    V3 cavity for a post that clears every V3 part. Upper before right, so the
+    pair at the IR end is picked first and the right of that pair second.
+    """
+    return max(legacy_mounting_holes(), key=lambda point: (point[1], point[0]))
 
 
 def wheel_center():

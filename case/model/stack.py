@@ -21,6 +21,12 @@ SHELL_BACK = CAVITY_BACK - params.FLOOR
 
 SWITCH_TOP = BOARD_TOP + params.SWITCH_HEIGHT
 
+SUPPORT_TOP = -params.SUPPORT_GAP
+"""Top of anything the back shell stands under the board: the support
+ledges and the V2 retention post alike. Here rather than in support.py so
+hardware.py can build to the same plane without importing the module that
+imports it."""
+
 KEYPAD_KEEPOUT = params.SWITCH_HEIGHT + params.KEYPAD_PLUNGER_STUB
 """Vertical clearance the keypad region of the ceiling actually needs: the
 switch, plus KEYPAD_PLUNGER_STUB standing above it before the web begins.

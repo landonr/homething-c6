@@ -323,6 +323,12 @@ def _back(runs, obstacles):
             "add",
             hardware.shell_standoff(),
         ),
+        _entry(
+            "legacy_retention.post",
+            "hardware.legacy_retention_post",
+            "add",
+            hardware.legacy_retention_post(),
+        ),
     ]
     out += _support_entries(runs, "add")
     out += _support_gaps(runs, obstacles)
@@ -343,6 +349,12 @@ def _back(runs, obstacles):
             "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
         ),
         _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
+        _entry(
+            "legacy_retention.pilot",
+            "hardware.legacy_retention_pilot",
+            "cut",
+            hardware.legacy_retention_pilot(),
+        ),
     ]
     return out
 

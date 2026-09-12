@@ -119,6 +119,36 @@ def feature_clashes():
             floor + params.STANDOFF_CHAMFER,
         )
     )
+    # The V2 retention post, on both its own diameter and its root chamfer, the
+    # same pair the closure post carries. This is the pass that sees the eleven
+    # switches and D2-D5, so it is what says the post clears a part with no model.
+    lx, ly = board.legacy_retention_point()
+    floor = case.legacy_retention_floors()[1]
+    r = params.BOSS_OD / 2
+    features.append(
+        (
+            "legacy post",
+            lx - r,
+            ly - r,
+            lx + r,
+            ly + r,
+            floor,
+            case.SUPPORT_TOP,
+        )
+    )
+    root_r = r + params.STANDOFF_CHAMFER
+    features.append(
+        (
+            "legacy post root",
+            lx - root_r,
+            ly - root_r,
+            lx + root_r,
+            ly + root_r,
+            floor,
+            floor + params.STANDOFF_CHAMFER,
+        )
+    )
+
     mx, my = case.mic_port()
     r = params.MIC_DUCT_OD / 2
     features.append(

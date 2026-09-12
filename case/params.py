@@ -140,7 +140,11 @@ self-tap in plastic wants. No longer all the depth there is, either: the boss
 carries its own material from the board right up to SHELL_FRONT now, 6.4 of
 post, so this is a chosen engagement rather than whatever the ceiling left
 over. It also sets the short screws' length, BOARD_THICKNESS plus this, which
-case.py prints."""
+case.py prints.
+
+The back's V2 retention post reads this, BOSS_OD, BOSS_PILOT_D and
+STANDOFF_CHAMFER too, so the optional V2 screw is the same fastener at the same
+engagement rather than a second stack to keep in step."""
 SCREW_HEAD_D = 4.0
 SCREW_HEAD_H = 1.6
 """The largest standard M2 head, in both directions, since these two exist only

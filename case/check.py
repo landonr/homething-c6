@@ -1,4 +1,4 @@
-"""Verify the case against the board. Twenty-seven passes, each catching what
+"""Verify the case against the board. Forty-five passes, each catching what
 the others cannot.
 
 The passes live in checks/, one module per feature, mirroring model/. Each

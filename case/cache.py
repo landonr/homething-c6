@@ -43,7 +43,13 @@ def _sources():
     paths += sorted((HERE / "model").glob("*.py"))
     for directory in (HERE / "fonts", HERE / "glyphs"):
         paths += sorted(p for p in directory.rglob("*") if p.is_file())
-    paths += [board.KICAD_PCB, board.POS_CSV, board.BOARD_ONLY_STEP, board.ASSEMBLY_STEP]
+    paths += [
+        board.KICAD_PCB,
+        board.POS_CSV,
+        board.BOARD_ONLY_STEP,
+        board.ASSEMBLY_STEP,
+        board.LEGACY_BOARD_ONLY_STEP,
+    ]
     return paths
 
 

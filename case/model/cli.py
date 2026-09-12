@@ -27,7 +27,13 @@ from .caps import (
 )
 from .cell import cell_axis, cell_bay
 from .features import write_features
-from .hardware import closure_floors, closure_point, mount_points
+from .hardware import (
+    closure_floors,
+    closure_point,
+    legacy_retention_floors,
+    legacy_screw_length,
+    mount_points,
+)
 from .ir import (
     emitter_reach,
     ir_window,
@@ -92,6 +98,7 @@ from .stack import (
     SHELL_FRONT,
     SKIRT_OUT,
     STEM_TOP,
+    SUPPORT_TOP,
     WHEEL_LIP_OD,
     WHEEL_LIP_Z0,
     WHEEL_LIP_Z1,
@@ -408,6 +415,15 @@ def main():
         f"  {params.BOSS_PILOT_DEPTH:.1f} of self-tapped engagement in a "
         f"{params.BOSS_PILOT_D:.2f} pilot, {params.BOSS_OD:.1f} boss; heads "
         f"{params.SCREW_HEAD_D:.1f} across sit on the board's underside"
+    )
+    legacy_point = board.legacy_retention_point()
+    _, legacy_cavity = legacy_retention_floors()
+    print(
+        f"  optional: one M2 x {legacy_screw_length():.0f} at {legacy_point} into a "
+        f"{params.BOSS_OD:.1f} post standing {SUPPORT_TOP - legacy_cavity:.2f} off "
+        f"the back floor, for a V2 board's own upper-right hole. Retention only: "
+        f"V2's IR parts and upper keys still land wrong, and the V2 board fastens "
+        f"to the back before the front closes, the reverse of V3"
     )
     print(
         f"grip end: skirt {params.CATCH_SKIRT_H:.1f} deep with 2 windows "

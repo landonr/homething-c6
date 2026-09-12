@@ -19,7 +19,13 @@ import params
 
 from .backform import back_form
 from .caps import _key_prism, cap_counterbore, cap_face_hole
-from .hardware import closure_cuts, mount_points, shell_standoff
+from .hardware import (
+    closure_cuts,
+    legacy_retention_pilot,
+    legacy_retention_post,
+    mount_points,
+    shell_standoff,
+)
 from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import keypad_recess
@@ -189,13 +195,20 @@ def back_shell():
     # U2 receives through this shell's floor. Its opening and inside flange
     # rebate stay back-only; D1 and USB retain their shared end-wall cuts.
     shell = _cut(shell, catch_relief())
-    shell = _fuse(shell, shell_standoff(), *support_runs(), *catch_detents())
+    shell = _fuse(
+        shell,
+        shell_standoff(),
+        legacy_retention_post(),
+        *support_runs(),
+        *catch_detents(),
+    )
     return _cut(
         shell,
         *shared_cuts(),
         ir_window_opening(),
         ir_window_rebate(),
         *closure_cuts(),
+        legacy_retention_pilot(),
     )
 
 

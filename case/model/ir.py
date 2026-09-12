@@ -38,8 +38,8 @@ def _bottom_prism(expand=0.0):
 
 def _surface_layer(expand, low, high):
     """Plan-limited layer between two offsets of the built back outer form."""
-    body = _isect(_bottom_prism(expand), back_form(0, low, params.EDGE_R_BACK))
-    return _cut(body, back_form(0, high, params.EDGE_R_BACK))
+    body = _isect(_bottom_prism(expand), back_form(0, low))
+    return _cut(body, back_form(0, high))
 
 
 def ir_window_opening():
@@ -55,7 +55,7 @@ def ir_window_rebate():
     outer edge for adhesive.
     """
     outer = _bottom_prism(params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT)
-    return _isect(outer, back_form(0, params.IR_WINDOW_T, params.EDGE_R_BACK))
+    return _isect(outer, back_form(0, params.IR_WINDOW_T))
 
 
 @cache.solid

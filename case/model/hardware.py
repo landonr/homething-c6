@@ -9,7 +9,7 @@ import params
 
 from .backform import contour_depth
 from .cell import cell_axis
-from .shape import _hole
+from .shape import _chamfered_post, _hole
 from .stack import MERGE
 
 
@@ -58,7 +58,16 @@ def shell_standoff():
     clamps back, board and front together instead of only the two shells."""
     x, y = closure_point()
     _, cavity = closure_floors()
-    return _hole(x, y, params.SHELL_SCREW_OD, cavity - MERGE, 0.0)
+    return _chamfered_post(
+        x,
+        y,
+        params.SHELL_SCREW_OD,
+        cavity - MERGE,
+        0.0,
+        params.STANDOFF_CHAMFER,
+        "lower",
+        cavity,
+    )
 
 
 def closure_cuts():

@@ -11,6 +11,7 @@ import math
 from build123d import (
     BuildLine,
     BuildSketch,
+    Cone,
     Cylinder,
     Face,
     Kind,
@@ -62,8 +63,36 @@ def _slab(face, z0, z1):
     return Pos(0, 0, z0) * extrude(face, amount=z1 - z0, dir=(0, 0, 1))
 
 
+def _ring(inner, outer, z0, z1):
+    """A profile-offset band, with overlap available at either boundary."""
+    return _cut(
+        _slab(_offset_face(outer), z0, z1),
+        _slab(_offset_face(inner), z0 - 1, z1 + 1),
+    )
+
+
 def _hole(x, y, diameter, z0, z1):
     return Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=diameter / 2, height=z1 - z0)
+
+
+def _chamfered_post(x, y, diameter, z0, z1, size, root, root_z=None):
+    """Make a round post with a chamfer widest at its lower or upper root."""
+    if root not in {"lower", "upper"}:
+        raise ValueError(f"unknown post root: {root}")
+    if size <= 0 or 2 * size >= z1 - z0:
+        raise ValueError("post chamfer must be positive and shorter than half the post")
+
+    root_z = (z0 if root == "lower" else z1) if root_z is None else root_z
+    if not z0 <= root_z <= z1:
+        raise ValueError("post root must be inside the post")
+    post_r = diameter / 2
+    chamfer_z = root_z + size / 2 if root == "lower" else root_z - size / 2
+    chamfer = Pos(x, y, chamfer_z) * Cone(
+        bottom_radius=post_r + size if root == "lower" else post_r,
+        top_radius=post_r if root == "lower" else post_r + size,
+        height=size,
+    )
+    return _fuse(_hole(x, y, diameter, z0, z1), chamfer)
 
 
 def _rounded_prism(x, y, size, radius, z0, z1):

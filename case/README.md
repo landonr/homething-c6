@@ -107,24 +107,15 @@ inboard of that, in the slack `BOARD_FIT` already has, and it shares no plan are
 with the wall above it: an earlier attempt built as a ring floating in mid air,
 which showed up as the front shell coming out in two solids. Because its inner face
 is fixed at the cavity wall, the lap, the fit and the skirt all have to fit outboard
-of it inside one `WALL`, and the lap then has a channel cut into it as well. That is
-why `WALL` is 3.0, and the cost of the extra is 2.0 on each of the case's outside
-dimensions.
+of it inside one `WALL`. This arrangement keeps the lap at full thickness around
+the perimeter.
 
 Before this the front lapped over the back through a groove between two concentric
 skirts, and before that a single skirt sleeved over a stepped-back wall. Same joint
 in the same wall each time; only the side that shows changes.
 
-Three things hold the shells together.
-
-**A rail** down each long side of the skirt, running in a channel cut into the
-inside of the lap. Square in section over most of its height and tapered away over
-`RAIL_LEAD` at the bottom, so a channel slightly out of line picks it up rather
-than butting against the lap. The channel is open at the top and closed at the
-bottom, so the front slides straight in and nothing has to flex; what the rail buys
-is that the sides cannot then shift or bow apart across the middle of the case,
-which is the long unsupported span. It is generously slack along the case and tight
-across it, because the front goes in on an arc.
+Two features hold the shells together. The continuous skirt and lap align the
+shells without side rails or channels.
 
 **Two detents** at the grip end. There the skirt runs deeper than anywhere else,
 down to `CATCH_SKIRT_H`, and carries two rounded rectangular windows. The lap grows
@@ -155,8 +146,7 @@ Prepare the back shell first: press the IR window insert through its aperture
 from inside until its pane is flush outside, apply adhesive on the continuous
 shoulder under its interior flange, and let the joint set. Then assemble
 front-plate-down: caps in, pad in, board on, the two short screws, hook the grip
-end's detents, fold the other end down so the side rails run into their channels,
-then drive the long screw.
+end's detents, fold the other end down, then drive the long screw.
 The caps go first and they have to: they are captive behind the ceiling, so
 nothing can put one in once the pad is over them. See Keycaps. The window insert
 also goes into the back shell before the two shells meet, while its inside flange
@@ -849,8 +839,30 @@ of that end-wall budget. Its aperture and insert follow the contoured floor, and
 the receiver-path and clearance passes probe that built geometry directly.
 `IR_RELIEF_DEPTH` now belongs only to the D1 and USB end ports.
 
+The cell and cradle have the largest bottom-edge round. The round transitions over
+the upper contour taper to `EDGE_R_BACK_IR` near U2. This keeps the battery area
+full in the hand, but leaves a smaller valid section for the lifted IR insert.
+
+**The round runs the whole way round the plan, corners included.** Each loft
+section is as wide as the plan profile is at that point, not as wide as the case.
+The round then lands tangent to the wall everywhere along the perimeter. A
+full-width section lands tangent on the straight sides only. Where the plan turns
+a corner, that section meets the wall part way up its round, and the abrupt edge
+this leaves is what both ends used to carry. Each section also sits a hair outside
+its own chord, because a straight run between two sections falls inside a turning
+plan and would put a flat where the wall's arc must be.
+
+Each end region carries its own stations, spaced by equal angle from the end face.
+Both the tip roll and the plan corner stand vertical where they meet that face, so
+an equal-y step there spans more of either curve than the whole rest of it.
+`END_SECTIONS` sets the count and `END_STEP` stops the crowding at the tangent. The
+stations track the outer profile's corner only, because a section costs real time
+and memory. The cavity's corner starts a wall further in and is sampled more
+coarsely. That leaves its floor a hair proud of tangency at the corner, and so a
+hair of extra wall, on a face nobody sees.
+
 The shape is a loft, not a prism cut to size, and that is deliberate. The rounding
-on the long bottom edges has to follow the taper, or it only exists where the case
+on the bottom edges has to follow the taper, or it only exists where the case
 is deepest. It is also why there is no fillet anywhere in the back shell:
 intersecting a prism with a contour leaves degenerate zero-length edges along the
 bottom, and OCC refuses to fillet across those at any radius at all. Two further
@@ -1335,6 +1347,16 @@ datasheet and in the same epistemic class; it is what floors `CAP_LIFT` and
 **`J1` and `D2`-`D5` have no 3D model at all**, so the interference pass cannot see
 them. The courtyard pass covers where they sit. `LED_HEIGHT` is hand-entered for the
 same reason, and it sets where the light path check starts probing above each LED.
+
+**The board support ledge is named by its breaks as well as its runs.** The ledge
+down each side of the board is a row of runs, broken at every board obstacle.
+`support_obstacles()` labels each keepout with a refdes rather than a loop index,
+and `model/features.py` exports those breaks beside the runs. Without them a click
+on the bare wall between two runs lands in no box, and the viewer can answer with a
+coordinate only. One break can be wider than the obstacle that opens it, because
+`SUPPORT_MIN_RUN` drops any short fragment left between two obstacles. So the
+widest overlap gives the name. A break also carries its own op, `clear`: the same
+volume is a relief cut in the front shell and absent material in the back.
 
 **Booleans in this model are written defensively.** Added features overlap the body
 they grow from by `MERGE` rather than meeting it at a plane, and unions go through

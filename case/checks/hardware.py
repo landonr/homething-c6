@@ -73,7 +73,6 @@ def feature_clashes():
     where it does not.
     """
     court = board.courtyards()
-    rib_z = case.cradle_z()
     features = []
     for x, y, _ in board.mounting_holes():
         r = params.BOSS_OD / 2
@@ -86,18 +85,57 @@ def feature_clashes():
         features.append(
             ("boss", x - r, y - r, x + r, y + r, case.BOARD_TOP, case.SHELL_FRONT)
         )
+        root_r = r + params.STANDOFF_CHAMFER
+        features.append(
+            (
+                "boss root",
+                x - root_r,
+                y - root_r,
+                x + root_r,
+                y + root_r,
+                case.CAVITY_FRONT - params.STANDOFF_CHAMFER,
+                case.CAVITY_FRONT,
+            )
+        )
         h = params.SCREW_HEAD_D / 2
         features.append(
             ("screw head", x - h, y - h, x + h, y + h, -params.SCREW_HEAD_H, 0.0)
         )
-    for name, x0, y0, x1, y1 in case.cradle_footprints():
-        features.append((name, x0, y0, x1, y1, *rib_z))
     sx, sy = case.closure_point()
     r = params.SHELL_SCREW_OD / 2
     features.append(
         ("closure post", sx - r, sy - r, sx + r, sy + r, case.closure_floors()[1], 0.0)
     )
-    features.append((*case.mic_duct_footprint(), case.BOARD_TOP, case.SHELL_FRONT))
+    root_r = r + params.STANDOFF_CHAMFER
+    floor = case.closure_floors()[1]
+    features.append(
+        (
+            "closure post root",
+            sx - root_r,
+            sy - root_r,
+            sx + root_r,
+            sy + root_r,
+            floor,
+            floor + params.STANDOFF_CHAMFER,
+        )
+    )
+    mx, my = case.mic_port()
+    r = params.MIC_DUCT_OD / 2
+    features.append(
+        ("mic duct", mx - r, my - r, mx + r, my + r, case.BOARD_TOP, case.SHELL_FRONT)
+    )
+    root_r = r + params.STANDOFF_CHAMFER
+    features.append(
+        (
+            "mic duct root",
+            mx - root_r,
+            my - root_r,
+            mx + root_r,
+            my + root_r,
+            case.CAVITY_FRONT - params.STANDOFF_CHAMFER,
+            case.CAVITY_FRONT,
+        )
+    )
 
     clashes = []
     for name, fx0, fy0, fx1, fy1, fz0, fz1 in features:

@@ -981,6 +981,15 @@ def _boss_clearances(x0, y0, x1, y1):
     return out
 
 
+def _mic_clearance():
+    """Open-edge clearance around the mic duct's widest ceiling chamfer."""
+    x, y = mic_port()
+    diameter = 2 * (
+        mic_duct_or() + params.STANDOFF_CHAMFER + params.PAD_MIC_CLEARANCE
+    )
+    return _hole(x, y, diameter, PAD_WEB_BOTTOM - 1, PAD_WEB_TOP + 1)
+
+
 @cache.solid
 def button_pad():
     """One part in the export, two lobes in the mould: one per keypad island,
@@ -1004,5 +1013,8 @@ def button_pad():
             x, y = parts[ref][:2]
             raised.append(_stem(x, y))
             raised.append(_hole(x, y, params.PLUNGER_D, SWITCH_TOP, PAD_WEB_TOP))
-        lobes.append(_cut(_fuse(body, *raised), *_boss_clearances(x0, y0, x1, y1)))
+        cuts = _boss_clearances(x0, y0, x1, y1)
+        if name == "second":
+            cuts.append(_mic_clearance())
+        lobes.append(_cut(_fuse(body, *raised), *cuts))
     return _fuse(*lobes)

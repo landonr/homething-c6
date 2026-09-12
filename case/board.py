@@ -48,8 +48,9 @@ def _edge_cut_circles():
     return out
 
 
-def mounting_holes():
-    """(x, y, diameter) for the case's screw holes, in STEP frame.
+@functools.cache
+def _mounting_hole_rows():
+    """(ref, x, y, diameter) per case screw hole, in board file order.
 
     Read off any footprint whose name contains "MountingHole", currently
     the three MountingHole_2.4mm_M2 instances (H1-H3): a dedicated NPTH
@@ -67,14 +68,34 @@ def mounting_holes():
         if "MountingHole" not in name:
             continue
         at = re.search(r"\(at ([-\d.]+) ([-\d.]+)", body)
+        ref = re.search(r'\(property "Reference" "([^"]*)"', body)
         drill = re.search(
             r'\(pad "[^"]*" np_thru_hole \w+\s*\(at [-\d.]+ [-\d.]+\)\s*'
             r"\(size [-\d.]+ [-\d.]+\)\s*\(drill ([-\d.]+)\)",
             body,
         )
         if at and drill:
-            out.append((float(at.group(1)), -float(at.group(2)), float(drill.group(1))))
-    return out
+            out.append(
+                (
+                    ref.group(1) if ref else "",
+                    float(at.group(1)),
+                    -float(at.group(2)),
+                    float(drill.group(1)),
+                )
+            )
+    return tuple(out)
+
+
+def mounting_holes():
+    """(x, y, diameter) for the case's screw holes, in STEP frame."""
+    return [(x, y, diameter) for _, x, y, diameter in _mounting_hole_rows()]
+
+
+def mounting_hole_refs():
+    """{(x, y): ref} over the same holes, so a feature built on one can carry
+    its refdes. The geometry needs no hole name, but a boss with an id of H2
+    is one a reader can find on the board."""
+    return {(x, y): ref for ref, x, y, _ in _mounting_hole_rows()}
 
 
 def wheel_center():

@@ -10,8 +10,8 @@ from build123d import Cone, Pos, Torus
 import board
 import params
 
-from .shape import _cut, _fuse, _hole
-from .stack import BOARD_TOP, MERGE, SHELL_FRONT
+from .shape import _chamfered_post, _cut, _fuse, _hole
+from .stack import BOARD_TOP, CAVITY_FRONT, MERGE, SHELL_FRONT
 
 
 def mic_port():
@@ -162,7 +162,16 @@ def mic_duct():
     straight hole and every number describing it would still have looked right.
     """
     x, y = mic_port()
-    return _hole(x, y, params.MIC_DUCT_OD, BOARD_TOP, SHELL_FRONT)
+    return _chamfered_post(
+        x,
+        y,
+        params.MIC_DUCT_OD,
+        BOARD_TOP,
+        SHELL_FRONT,
+        params.STANDOFF_CHAMFER,
+        "upper",
+        CAVITY_FRONT,
+    )
 
 
 def mic_bore():

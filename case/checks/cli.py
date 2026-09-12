@@ -14,9 +14,11 @@ one side of it never runs it half blind.
 import argparse
 import functools
 import sys
+import time
 
 import cache
 import case
+import params
 
 from .apertures import probe_apertures
 from .caps import (
@@ -47,6 +49,17 @@ from .keypad import (
 )
 from .mic import mic_fillet
 from .shells import interference, parts_are_sound, shells_mate
+from .support import (
+    support_board_clearance,
+    support_case_containment,
+    support_cell_clearance,
+    support_flat_bearing,
+    support_inner_round,
+    support_min_run,
+    support_part_clearance,
+    support_printable,
+    support_wall_merge,
+)
 from .usb import usb_pocket_clearance
 from .wheel_ring import (
     led_ring,
@@ -324,6 +337,81 @@ def _cell_clearance(s):
     return True
 
 
+@_check("support")
+def _support_board_clearance(s):
+    return _report(
+        support_board_clearance(case.support_ledges()),
+        f"support ledges stop {params.SUPPORT_GAP:.2f} below the board",
+    )
+
+
+@_check("support")
+def _support_part_clearance(s):
+    return _report(
+        support_part_clearance(case.support_ledges()),
+        "support ledges clear every bottom courtyard and screw head",
+    )
+
+
+@_check("support")
+def _support_cell_clearance(s):
+    return _report(
+        support_cell_clearance(case.support_ledges()),
+        "support ledges clear the cell envelope",
+    )
+
+
+@_check("support")
+def _support_flat_bearing(s):
+    ledge = case.support_ledges()
+    widths = case.support_bearing_widths(ledge)
+    return _report(
+        support_flat_bearing(ledge),
+        "support flat bearing remains: "
+        + ", ".join(f"{side} {width:.2f} mm" for side, width in widths.items()),
+    )
+
+
+@_check("support")
+def _support_min_run(s):
+    return _report(
+        support_min_run(),
+        f"all {len(case.support_runs())} support runs meet SUPPORT_MIN_RUN",
+    )
+
+
+@_check("support")
+def _support_printable(s):
+    return _report(
+        support_printable(),
+        f"support undersides rise at {params.SUPPORT_UNDER_ANGLE:.1f} degrees",
+    )
+
+
+@_check("support")
+def _support_inner_round(s):
+    return _report(
+        support_inner_round(case.support_ledges()),
+        f"support inboard edges have a {params.SUPPORT_INNER_R:.2f} radius",
+    )
+
+
+@_check("support")
+def _support_wall_merge(s):
+    return _report(
+        support_wall_merge(s.back),
+        "support ledges overlap the back shell cavity wall",
+    )
+
+
+@_check("support")
+def _support_case_containment(s):
+    return _report(
+        support_case_containment(s.back),
+        "back shell stays inside the case envelope",
+    )
+
+
 @_check("assembly")
 def _feature_clashes(s):
     clashes = feature_clashes()
@@ -429,9 +517,23 @@ def main(argv=None):
     print(cache.provenance())
     solids = Solids()
     passed = True
+    suite_started = time.perf_counter()
     for feature, run in CHECKS:
         if selected is None or feature in selected:
-            passed = run(solids) and passed
+            name = run.__name__.lstrip("_")
+            started = time.perf_counter()
+            print(
+                f"[{time.perf_counter() - suite_started:8.2f}s] "
+                f"start {feature}.{name}",
+                flush=True,
+            )
+            result = run(solids)
+            print(
+                f"[{time.perf_counter() - suite_started:8.2f}s] "
+                f"done  {feature}.{name} ({time.perf_counter() - started:.2f}s)",
+                flush=True,
+            )
+            passed = result and passed
     if selected is not None:
         skipped = [name for name in FEATURES if name not in selected]
         print(

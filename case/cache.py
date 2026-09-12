@@ -130,6 +130,26 @@ def solid(builder):
     return wrapped
 
 
+def bytes_cached(name, build):
+    """Return the bytes for `name`, calling `build()` only on a miss.
+
+    For a file that is derived from the geometry but is not itself a solid, so
+    the BREP blobs cannot stand in for it. The features export needs this: the
+    builders it measures are almost all uncached, so a warm run that rebuilt
+    them for their bounding boxes would cost as much as a cold one.
+    """
+    if not enabled():
+        return build()
+    blob = _dir() / name
+    if blob.exists():
+        return blob.read_bytes()
+    data = build()
+    partial = _open_for_write() / f"{name}.partial"
+    partial.write_bytes(data)
+    partial.replace(blob)
+    return data
+
+
 def export_stl_cached(shape, dest):
     """Write dest, from the cached bytes if this shape has been meshed before."""
     dest = Path(dest)

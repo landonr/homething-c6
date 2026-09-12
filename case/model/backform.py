@@ -15,6 +15,7 @@ import board
 import params
 
 from .cell import cradle_span
+from .shape import _offset_face
 from .stack import SHELL_BACK, SHELL_FRONT
 
 
@@ -90,65 +91,191 @@ def contour_depth(y):
     return base - _tip_lift(y)
 
 
+def back_edge_radius(y):
+    """Bottom-edge radius at y, roundest over the cell and smallest near U2.
+
+    The blend shares the upper contour taper. This keeps the hand-held battery
+    section fully domed, then makes one C1 transition to the slimmer IR end.
+    """
+    _, hi = cradle_span()
+    if y <= hi:
+        return params.EDGE_R_BACK_CELL
+    t = min((y - hi) / params.CONTOUR_BLEND, 1.0)
+    blend = t * t * (3 - 2 * t)
+    return (
+        params.EDGE_R_BACK_CELL
+        + (params.EDGE_R_BACK_IR - params.EDGE_R_BACK_CELL) * blend
+    )
+
+
 SECTION_GAP = 0.2
-"""Closest two loft sections may sit. Sampling the taper and the rolled end
-independently landed two 0.05 apart, and the sliver of a face between them was
-enough to leave the loft unable to intersect anything."""
+"""Closest two loft sections may sit over the flats. Sampling the taper and the
+rolled end independently landed two 0.05 apart, and the sliver of a face between
+them was enough to leave the loft unable to intersect anything."""
+
+END_STEP = 0.06
+"""Closest two sections may sit inside an end region. The angle-spaced stations
+crowd toward the vertical tangent without limit, and past this they are buying
+accuracy finer than the tessellator carries anyway."""
 
 SECTION_OVERRUN = 3.0
 """How far the loft runs past the case. Ending it flush with the plan prism means
 the two bodies share their end faces, and the intersection then fails outright."""
 
+END_SECTIONS = 20
+"""Stations in each end region. They are spaced by equal angle from the end face,
+not by equal y: both the tip roll and the plan corner stand vertical where they
+meet that face, so an equal-y step there spans more of either curve than the
+whole rest of it put together."""
+
+
+@functools.cache
+def _plan_face(inset):
+    """The plan profile the form follows at this inset: the case outline itself
+    at 0, and the same outline pulled in by the wall for the cavity."""
+    return _offset_face(params.BOARD_FIT + params.WALL - inset)
+
+
+@functools.cache
+def _plan_chord(inset, y):
+    """(centre, half width) of that profile across this point along it.
+
+    Clamped to the profile's own ends, so the sections that overrun the case
+    repeat its end width instead of asking for a chord that is not there.
+    """
+    face = _plan_face(inset)
+    box = face.bounding_box()
+    y = min(max(y, box.min.Y), box.max.Y)
+    xs = [
+        v.X
+        for e in face.intersect(Plane(origin=(0, y, 0), z_dir=(0, 1, 0))).edges()
+        for v in e.vertices()
+    ]
+    return (min(xs) + max(xs)) / 2, (max(xs) - min(xs)) / 2
+
+
+def _plan_bias(inset, ys, i):
+    """How far past its chord a section sits, so the ruled faces between sections
+    stay outside the profile instead of chording inside it.
+
+    Where the loft is the narrower of the two bodies it is the loft that shows,
+    and a chord across a turning run of the plan would replace that run's arc
+    with a flat over the whole height of the wall. Each section is pushed out by
+    the worst shortfall of the runs either side of it, which is nothing at all
+    along the straight sides and a hair around the corners.
+    """
+    out = 0.0
+    for j in (i - 1, i):
+        if 0 <= j < len(ys) - 1:
+            y0, y1 = ys[j], ys[j + 1]
+            chord = (_plan_chord(inset, y0)[1] + _plan_chord(inset, y1)[1]) / 2
+            out = max(out, _plan_chord(inset, (y0 + y1) / 2)[1] - chord)
+    return out
+
+
+@functools.cache
+def end_reach():
+    """How far in from each end a section has to track a curve rather than a
+    straight run: the tip roll, or the plan corner if that is the longer."""
+    face = _plan_face(0.0)
+    box = face.bounding_box()
+    wire = face.outer_wire()
+    x = max(v.X for v in wire.vertices())
+    ys = [v.Y for v in wire.vertices() if x - v.X < 1e-6]
+    runs = (min(ys) - box.min.Y, box.max.Y - max(ys))
+    return max(params.CONTOUR_TIP_R, *runs)
+
+
+def _end_stations(tip, step):
+    """Stations through one end region, angle-spaced from the end face.
+
+    Keyed to the outer profile's corner, which is where the surface that shows
+    turns. The cavity's own corner starts a wall further in and is sampled more
+    coarsely, which leaves its floor a hair proud of tangency at the corner and
+    so a hair of extra wall. Resolving that one too doubles the section count
+    for a face nobody sees.
+    """
+    reach = end_reach()
+    out = set()
+    for i in range(END_SECTIONS + 1):
+        angle = math.pi * i / (2 * END_SECTIONS)
+        out.add(tip + step * reach * (1 - math.cos(angle)))
+    return out
+
 
 def _contour_samples():
-    """Where to cut sections for the loft. Dense through the tapers and the rolled
-    ends, sparse over the flats, because a section costs real time."""
+    """Where to cut sections for the loft. Dense through the tapers and the end
+    regions, sparse over the flats, because a section costs real time."""
     box = board.board_profile().bounding_box()
     lo, hi = cradle_span()
     over = params.BOARD_FIT + params.WALL
     ends = (box.min.Y - over, box.max.Y + over)
     b = params.CONTOUR_BLEND
+    reach = end_reach()
 
     ys = {lo, hi, ends[0] - SECTION_OVERRUN, ends[1] + SECTION_OVERRUN, *ends}
     for start in (lo - b, hi):
-        ys |= {start + b * i / 20 for i in range(21)}
+        for i in range(21):
+            y = start + b * i / 20
+            # The end regions carry their own stations. A taper station inside
+            # one creates a short ruled face beside a long face and shows as a
+            # kink.
+            if any(abs(y - tip) < reach for tip in ends):
+                continue
+            ys.add(y)
+    crowded = set()
     for tip, step in zip(ends, (1, -1)):
-        ys |= {tip + step * params.CONTOUR_TIP_R * i / 10 for i in range(11)}
+        crowded |= _end_stations(tip, step)
+    ys |= crowded
 
     out = []
     for y in sorted(ys):
-        if ends[0] - SECTION_OVERRUN <= y <= ends[1] + SECTION_OVERRUN and (
-            not out or y - out[-1] >= SECTION_GAP
-        ):
+        if not ends[0] - SECTION_OVERRUN <= y <= ends[1] + SECTION_OVERRUN:
+            continue
+        gap = END_STEP if out and y in crowded and out[-1] in crowded else SECTION_GAP
+        if not out or y - out[-1] >= gap:
             out.append(y)
     return out
 
 
 @functools.cache
-def back_form(inset, lift, radius):
+def back_form(inset, lift, corner_inset=0.0):
     """The back's outer surface as a solid, or with inset and lift, its cavity.
 
     A loft rather than a prism cut to shape, so the rounding on the long bottom
     edges follows the taper instead of only existing where the case is deepest.
-    It is also why there is no fillet in this model: intersecting a prism with a
-    contour leaves degenerate zero-length edges along the bottom, and OCC will
-    not fillet across those at any radius.
+    corner_inset offsets the round vertically for an inner cavity. It is also why
+    there is no fillet in this model: intersecting a prism with a contour leaves
+    degenerate zero-length edges along the bottom, and OCC will not fillet across
+    those at any radius.
 
-    Sections are the full case width, so its vertical sides land on the plan
-    profile's own sides and the two bodies agree there.
+    Each section is as wide as the plan profile is at that point, not as wide as
+    the case. The round then lands tangent to the wall the whole way round,
+    including where the plan turns its corners, rather than only on the straight
+    sides: a full-width section meets a corner wall part way up its round, and
+    that is the abrupt edge the ends used to carry.
     """
-    box = board.board_profile().bounding_box()
-    width = box.size.X + 2 * (params.BOARD_FIT + params.WALL) - 2 * inset
+    ys = _contour_samples()
     top = SHELL_FRONT + 10
     sections = []
-    for y in _contour_samples():
+    for i, y in enumerate(ys):
         depth = contour_depth(y) - lift
+        center, half = _plan_chord(inset, y)
+        half += _plan_bias(inset, ys, i)
+        radius = max(
+            min(
+                back_edge_radius(y) - corner_inset,
+                half - 0.01,
+                (top + depth) / 2 - 0.01,
+            ),
+            0.4,
+        )
         plane = Plane(
-            origin=(box.center().X, y, (top - depth) / 2),
+            origin=(center, y, (top - depth) / 2),
             x_dir=(1, 0, 0),
             z_dir=(0, -1, 0),
         )
-        sections.append(plane * RectangleRounded(width, top + depth, radius))
+        sections.append(plane * RectangleRounded(2 * half, top + depth, radius))
     # Ruled, not smooth. A smooth loft overshoots between sections, which put the
     # body 1.26 wider than its own sections on one side and left it failing to
     # intersect the plan prism at all.

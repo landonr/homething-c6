@@ -1,7 +1,5 @@
-"""The two shells and everything that joins them: the front's skirt with its
-rails and the deepened catch section at the grip end, the back's lap with the
-matching channels and detents, and the two builders that cut every feature
-into them.
+"""The two shells and their joint features: the front skirt, the deep catch
+section, the back lap, and the detents.
 """
 
 from build123d import (
@@ -21,18 +19,20 @@ import params
 
 from .backform import back_form
 from .caps import _key_prism, cap_counterbore, cap_face_hole
-from .cell import cradle
 from .hardware import closure_cuts, mount_points, shell_standoff
+from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import keypad_recess
 from .mic import mic_bore, mic_duct
 from .shape import (
     _cut,
+    _chamfered_post,
     _fuse,
     _hole,
     _isect,
     _offset_face,
     _profiles,
+    _ring,
     _slab,
 )
 from .stack import (
@@ -49,10 +49,6 @@ from .stack import (
 )
 from .usb import usb_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
-
-
-def _ring(inner, outer, z0, z1):
-    return _cut(_slab(_offset_face(outer), z0, z1), _slab(_offset_face(inner), z0 - 1, z1 + 1))
 
 
 def skirt_relief():
@@ -75,64 +71,6 @@ def skirt_cuts():
     return [
         _slab(_offset_face(params.BOARD_FIT), SKIRT_BOTTOM - 1, BOARD_TOP),
         _ring(SKIRT_OUT, LAP_OUT + 6, SKIRT_BOTTOM - 1, BOARD_TOP),
-    ]
-
-
-def rail_span():
-    """(y0, y1) the side rails run between."""
-    box = board.board_profile().bounding_box()
-    over = params.BOARD_FIT + params.WALL
-    y0, y1 = box.min.Y - over, box.max.Y + over
-    return tuple(y0 + f * (y1 - y0) for f in params.RAIL_FRACTIONS)
-
-
-def _rail_sides():
-    box = board.board_profile().bounding_box()
-    return [(box.center().X + sign * box.size.X / 2, sign) for sign in (-1, 1)]
-
-
-def rails():
-    """A rail along each side of the skirt, standing off it into the back's channel.
-
-    Square in section over most of its height and tapered away at the bottom, so
-    the front drops in on a lead-in rather than butting against the lap. It runs
-    right up to the parting plane, where it merges into the full-width body above,
-    and the channel is open at that end to match: the two engage by sliding, and
-    nothing has to flex to let them.
-    """
-    y0, y1 = rail_span()
-    inner = SKIRT_OUT - MERGE
-    out = []
-    for x, sign in _rail_sides():
-        def section(z, outer):
-            return Pos(x + sign * (inner + outer) / 2, (y0 + y1) / 2, z) * Rectangle(
-                outer - inner, y1 - y0
-            )
-
-        out.append(
-            loft(
-                [
-                    section(SKIRT_BOTTOM, SKIRT_OUT),
-                    section(SKIRT_BOTTOM + params.RAIL_LEAD, SKIRT_OUT + params.RAIL_D),
-                    section(BOARD_TOP, SKIRT_OUT + params.RAIL_D),
-                ],
-                ruled=True,
-            )
-        )
-    return out
-
-
-def rail_channels():
-    """The groove each rail runs in, cut out of the inside of the back's lap."""
-    y0, y1 = rail_span()
-    e = params.RAIL_END_FIT
-    z0 = SKIRT_BOTTOM - params.SKIRT_FIT
-    z1 = BOARD_TOP + 1
-    depth = params.RAIL_D + params.RAIL_FIT
-    return [
-        Pos(x + sign * (LAP_IN + depth / 2), (y0 + y1) / 2, (z0 + z1) / 2)
-        * Box(depth, y1 - y0 + 2 * e, z1 - z0)
-        for x, sign in _rail_sides()
     ]
 
 
@@ -236,12 +174,10 @@ def shared_cuts():
 @cache.solid
 def back_shell():
     inner, outer = _profiles()
-    form = back_form(0, 0, params.EDGE_R_BACK)
+    form = back_form(0, 0)
     # Inset by the wall and lifted by the floor, so the shell keeps its thickness
     # around the rounded corner instead of thinning into it.
-    cavity = back_form(
-        params.WALL, params.FLOOR, max(params.EDGE_R_BACK - params.FLOOR, 0.4)
-    )
+    cavity = back_form(params.WALL, params.FLOOR, params.FLOOR)
 
     shell = _isect(_slab(outer, SHELL_BACK, BOARD_TOP), form)
     shell = _cut(
@@ -252,8 +188,8 @@ def back_shell():
 
     # U2 receives through this shell's floor. Its opening and inside flange
     # rebate stay back-only; D1 and USB retain their shared end-wall cuts.
-    shell = _cut(shell, catch_relief(), *rail_channels())
-    shell = _fuse(shell, cradle(), shell_standoff(), *catch_detents())
+    shell = _cut(shell, catch_relief())
+    shell = _fuse(shell, shell_standoff(), *support_runs(), *catch_detents())
     return _cut(
         shell,
         *shared_cuts(),
@@ -291,21 +227,31 @@ def front_shell():
     # over the whole keypad ceiling's own depth, and going further would
     # poke the boss through the one outer face plane.
     bosses = [
-        _hole(x, y, params.BOSS_OD, BOARD_TOP, SHELL_FRONT)
+        _chamfered_post(
+            x,
+            y,
+            params.BOSS_OD,
+            BOARD_TOP,
+            SHELL_FRONT,
+            params.STANDOFF_CHAMFER,
+            "upper",
+            CAVITY_FRONT,
+        )
         for x, y in mount_points()
     ]
     shell = _fuse(
         shell,
         mic_duct(),
         deep_skirt(),
-        *rails(),
         *bosses,
     )
     # No local pocket for D1 any more. It sat on the front of the board once,
     # its dome standing taller than the keypad region's own ceiling; on the
     # back it clears the front shell entirely except for the leads bent up
     # through the board, which stop well under CAVITY_FRONT.
-    shell = _cut(shell, usb_pocket())
+    # The support ledges cross the skirt plane to reach the back lap. Match their
+    # derived breaks in the skirt so the shells can close around them.
+    shell = _cut(shell, usb_pocket(), *front_support_cuts())
 
     parts = board.components()
     # No collar cut around the bosses. key_size() sizes each key to clear them, so

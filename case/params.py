@@ -50,6 +50,20 @@ rattle in the extra space, it hangs off the four screw bosses, not the wall.
 The profile is offset uniformly, so this lengthens the case by the same 2.0 it
 widens it."""
 
+# Board deflection stops on the inside of the back shell side walls.
+SUPPORT_BEARING = 3.0
+SUPPORT_GAP = 0.25
+SUPPORT_CLEARANCE = 0.4
+SUPPORT_MIN_RUN = 8.0
+SUPPORT_UNDER_ANGLE = 60.0
+SUPPORT_INNER_R = 0.6
+"""Radius on the inboard support edge. It removes the sharp printed tip and
+shortens the flat bearing surface by the fillet tangent."""
+SUPPORT_MIN_BEARING = 1.5
+"""Minimum flat board bearing that must remain after the inboard fillet."""
+SUPPORT_SHELL_SKIN = 0.2
+"""Keep this exterior shell thickness outside the board support ledges."""
+
 # Vertical clearance measured from the board faces, not from z=0.
 FRONT_KEEPOUT = 4.5
 """Clears the USB-C shell at 4.21 above the board face, the tallest thing under
@@ -103,6 +117,9 @@ in a printed post a self-tapping screw is cutting its own thread into. The
 smaller M2 screw would allow less, but nothing asks for less: BOSS_COLLAR's
 clip on key_size() is idle at the current layout too, so shrinking this buys
 no key size back either."""
+STANDOFF_CHAMFER = 1.2
+"""Height and radial reach of the root chamfer on each screw boss, closure post,
+and microphone duct. The chamfer is widest where each post meets its shell."""
 BOSS_COLLAR = 1.0
 """Ceiling kept around a boss, so a key hole never swallows it and leaves it
 hanging off nothing. It is not cut out of the keys: key_size() shrinks whichever
@@ -150,26 +167,6 @@ SKIRT_T = 1.5
 is the skirt, so this one number splits the wall between the two shells."""
 SKIRT_FIT = 0.15
 
-# A rail down each long side of the skirt, running in a channel cut into the inside
-# of the back's lap. Open at the top and closed at the bottom, so the front drops
-# straight in with nothing having to flex, and the two shells cannot then shift or
-# bow apart across the case. It replaces a pair of snap lugs per side, which caught
-# but did nothing for the fit in between them.
-RAIL_D = 0.5
-"""How far the rail stands off the skirt. The channel takes this much out of the
-lap, so it cannot approach SKIRT_T."""
-RAIL_LEAD = 1.2
-"""Tapered lead-in at the rail's bottom, so a channel slightly out of line still
-picks it up rather than butting against the lap."""
-RAIL_FIT = 0.15
-RAIL_END_FIT = 1.0
-"""Slack at each end of the channel. Deliberately larger than the fit across it:
-the front goes in by hooking the grip end and folding down, so the rail arrives on
-an arc and wants room along the case even though it wants none across it."""
-RAIL_FRACTIONS = (0.28, 0.72)
-"""Where the rail starts and ends, as fractions of the case length. Clear of the
-detents at one end and of the USB and IR openings at the other."""
-
 # At the grip end the skirt runs deeper than anywhere else and carries two rounded
 # rectangular windows. The back's lap grows a detent behind each: the lap rides out
 # over the taper as the front goes down, and the window's lower edge then catches
@@ -178,7 +175,7 @@ detents at one end and of the USB and IR openings at the other."""
 CATCH_SKIRT_H = 7.0
 """Skirt depth at the grip end, against SKIRT_H everywhere else. It has to be deep
 enough to carry a window and still leave CATCH_RISE under it."""
-CATCH_SPAN = 26.0
+CATCH_SPAN = 15.66
 """How far the deepened section runs from the grip end."""
 CATCH_W = 7.0
 CATCH_H = 2.4
@@ -265,16 +262,22 @@ this depth produces. Built end-port and receiver-path checks guard both cases.""
 CONTOUR_TIP_R = 5.0
 """Radius the back rolls up through at each end of the case, so the bottom meets
 the end face tangentially instead of squaring off into it. Keyed to the case's own
-end, not the board's."""
+end, not the board's. The loft's end regions run over this radius or the plan's own
+corner, whichever reaches further in."""
 CONTOUR_BLEND = 22.0
 """Length each taper runs over, measured out from the cradle. Long enough that
 the hump is a curve to hold rather than a step."""
-EDGE_R_BACK = 8.0
-"""Round on the back's long bottom edges, large enough that the back reads as
-domed rather than as a box with the corners taken off. It does not thin the shell:
-the cavity is built at this radius less FLOOR, so the thickness is held around the
-corner by construction rather than by luck."""
-EDGE_R_FRONT = 1.2
+EDGE_R_BACK_CELL = 12.5
+"""Round on the back's bottom edge over the cell and cradle. It runs the whole way
+round the plan, corners included, because each loft section is as wide as the plan
+is at that point. It makes the battery end read as a hand-held dome rather than a
+box with its corners removed. The cavity uses this radius less FLOOR, so the shell
+keeps its thickness around the corner."""
+EDGE_R_BACK_IR = 8.0
+"""Round on the back's bottom edge near U2. It is smaller than EDGE_R_BACK_CELL so
+the upper taper stays light and every lifted form used by the IR insert remains a
+valid rounded section. The profile blends from the cell radius over CONTOUR_BLEND."""
+EDGE_R_FRONT = 2.5
 """Round on the front's top edge. Small: it is a face full of key holes, and the
 outermost sit close to the wall."""
 
@@ -623,6 +626,8 @@ cavity."""
 PAD_BOSS_CLEARANCE = 0.4
 """Gap where a front-plate boss passes through the pad, measured off the boss's
 ceiling collar rather than the boss, so the keytop stays clear of both."""
+PAD_MIC_CLEARANCE = 0.3
+"""Gap from the pad to the mic duct's widest chamfer at the ceiling."""
 PLUNGER_D = 2.5
 """Contacts the switch actuator. Reaches from the web down to SWITCH_HEIGHT."""
 

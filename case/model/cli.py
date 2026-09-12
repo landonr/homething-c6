@@ -26,6 +26,7 @@ from .caps import (
     keycap,
 )
 from .cell import cell_axis, cell_bay
+from .features import write_features
 from .hardware import closure_floors, closure_point, mount_points
 from .ir import (
     emitter_reach,
@@ -59,7 +60,8 @@ from .mic import (
     mic_taper_top,
     mic_throat_d,
 )
-from .shells import back_shell, front_shell, rail_span
+from .shells import back_shell, front_shell
+from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     LED_RING_TOP,
     led_ring_inner_r,
@@ -148,6 +150,15 @@ def main():
         box = part.bounding_box()
         print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
 
+    # What each surface in those meshes is called, for a viewer that has only
+    # triangles to go on. Written from the same builders the parts came from, so
+    # a feature that moves takes its box with it.
+    named = write_features(EXPORT / "c6remote-features.json")["parts"]
+    print(
+        "features "
+        + ", ".join(f"{name} {len(entries)}" for name, entries in named.items())
+    )
+
     _, _, cy0, cy1 = cell_axis()
     lo, hi = cell_bay()
     box = board.board_profile().bounding_box()
@@ -220,6 +231,17 @@ def main():
     print(
         f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} cell, "
         f"in {hi - lo:.2f} of clear run"
+    )
+    lengths = support_run_lengths()
+    margins = support_bearing_margins()
+    print(
+        f"board support {len(lengths)} runs at {params.SUPPORT_BEARING:.2f} bearing, "
+        f"{params.SUPPORT_GAP:.2f} below the board"
+    )
+    print("  run lengths " + ", ".join(f"{length:.2f}" for length in lengths))
+    print(
+        "  bearing margin "
+        + ", ".join(f"{side} {margin:.2f}" for side, margin in margins.items())
     )
     sizes = {}
     for ref in board.refs("SW"):
@@ -392,10 +414,8 @@ def main():
         f"{params.CATCH_W:.0f}x{params.CATCH_H:.1f}, detents {params.CATCH_D:.1f} "
         f"proud of the lap behind them"
     )
-    ry0, ry1 = rail_span()
     print(
         f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick under a "
-        f"{params.SKIRT_T:.2f} lap, {params.SKIRT_H:.1f} deep, "
-        f"2 rails {ry1 - ry0:.1f} long standing {params.RAIL_D:.1f} off it"
+        f"{params.SKIRT_T:.2f} lap, {params.SKIRT_H:.1f} deep"
     )
     print(f"written to {EXPORT}")

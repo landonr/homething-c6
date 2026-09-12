@@ -215,7 +215,7 @@ This project grew out of [homeThing](https://github.com/landonr/homeThing) but h
 
 # Includes
 - <a href="https://esphome.io/">ESPHome</a>
-- <a href="https://github.com/be5invis/Iosevka">Iosevka Font</a>, used for the board silkscreen brand text
+- <a href="https://dejavu-fonts.github.io/">DejaVu Sans Bold</a>, used for the board silkscreen brand text
 - [@luar123](https://github.com/luar123)'s <a href="https://github.com/luar123/zigbee_esphome">Zigbee ESPHome component</a>
 - <a href="https://www.kicad.org/">KiCad</a>
 - <a href="https://github.com/landonr/homeThing">homeThing</a>

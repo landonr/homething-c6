@@ -131,7 +131,7 @@ Use Edit → Fill All Zones. Stage the board file only after Landon confirms the
 
 This rule covers footprint moves, footprint changes, new tracks, new vias, and net changes.
 
-`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented six-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
+`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented one-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
 
 ```bash
 python3 scripts/check-design.py            # both checks
@@ -196,9 +196,9 @@ Treat these counts as the baseline unless the task targets them. A second warnin
 
 Two choices keep the silkscreen text checks quiet. `min_text_height` is 0.8mm, because the XIAO pin labels need it.
 
-The two brand texts use the `Iosevka Bold` face. For a TrueType font, KiCad measures the glyph outlines and ignores the `thickness` property.
+The two brand texts use the `DejaVu Sans Bold` face. For a TrueType font, KiCad measures the glyph outlines and ignores the `thickness` property.
 
-Do not select the `Iosevka` family with the bold attribute. Only the `Iosevka Bold` family passes the `text_thickness` check.
+Keep the `DejaVu Sans Bold` face on both brand texts. Do not replace it with a family-level bold attribute.
 
 Run DRC with `--refill-zones` for baseline checks. A stale fill can report false `isolated_copper` and zone `unconnected_items`.
 

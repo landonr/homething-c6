@@ -15628,7 +15628,7 @@
 		(uuid "2c0ef4a4-43e0-4903-8cce-a9a4f57cff0a")
 		(effects
 			(font
-				(face "Iosevka Bold")
+				(face "DejaVu Sans Bold")
 				(size 1.5 1.5)
 			)
 			(justify top)
@@ -15985,7 +15985,7 @@
 		(uuid "03537d21-b162-4622-94d8-f28167583ea0")
 		(effects
 			(font
-				(face "Iosevka Bold")
+				(face "DejaVu Sans Bold")
 				(size 1.5 1.6)
 			)
 			(justify top)

@@ -17,9 +17,11 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from urllib.parse import quote_from_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
+CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face-flat.svg"
 
 # One example of each action, so every tile style is on screen at once.
 SLOTS = {
@@ -75,7 +77,8 @@ def page_html() -> bytes:
     match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
     if match is None:
         raise SystemExit("button_config_page.h has no PAGE_HTML value")
-    return match.group(1).encode()
+    svg = quote_from_bytes(CASE_FRONT_FACE.read_bytes(), safe="/,:;=(){}@.-_")
+    return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg).encode()
 
 
 def slot_json(slot: int) -> dict:

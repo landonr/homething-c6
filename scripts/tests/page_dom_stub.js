@@ -50,7 +50,7 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgio",
+for (const id of ["remote", "ed", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "tabb", "tabc", "buttonstab", "configtab", "wfs", "has", "wip", "wmac"])
   els[id] = mk("section");

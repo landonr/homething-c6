@@ -48,19 +48,16 @@ def page_slots() -> list:
     """Parse the S array out of button_config_page.h as one dict per input."""
     array = section(PAGE, "var S=[", "];")
     rows = re.findall(
-        r'\{s:(\d+),l:"([^"]+)",v:([01]),g:"(\w+)"(?:,c:"(\w+)")?\}',
+        r'\{s:(\d+),l:"([^"]+)",v:([01]),x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
         array,
     )
     if not rows:
         raise AssertionError("page S array has no rows")
     return [
-        {"slot": int(slot), "label": label, "voice": voice == "1", "group": group, "cell": cell}
-        for slot, label, voice, group, cell in rows
+        {"slot": int(slot), "label": label, "voice": voice == "1", "x": float(x),
+         "y": float(y), "class": css_class}
+        for slot, label, voice, x, y, css_class in rows
     ]
-
-
-def page_group(name: str) -> list:
-    return [row for row in page_slots() if row["group"] == name]
 
 
 class RoutingTest(unittest.TestCase):
@@ -130,52 +127,37 @@ class SlotTableTest(unittest.TestCase):
 class PlacementTest(unittest.TestCase):
     def test_the_top_group_puts_sw1_on_the_right(self) -> None:
         """SW1 sits to the right of SW2 on the board."""
-        rows = page_group("top")
+        rows = page_slots()[:2]
         self.assertEqual([(row["slot"], row["label"]) for row in rows], [(19, "SW2"), (20, "SW1")])
+        self.assertLess(rows[0]["x"], rows[1]["x"])
 
-    def test_the_wheel_sits_in_the_correct_grid_cells(self) -> None:
-        """Catches a swap that would put Left on the right of the plus layout, or
-        put clockwise rotation on the left of Up."""
-        rows = page_group("plus")
-        self.assertEqual(
-            {(row["slot"], row["label"], row["cell"]) for row in rows},
-            {
-                (18, "Turn left", "tl"),
-                (13, "Up", "u"),
-                (17, "Turn right", "tr"),
-                (16, "Left", "l"),
-                (14, "Press", "c"),
-                (12, "Right", "r"),
-                (15, "Down", "d"),
-            },
-        )
+    def test_the_wheel_hotspots_match_the_physical_directions(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()[2:9]}
+        self.assertEqual(rows[18]["class"], "rot left")
+        self.assertEqual(rows[17]["class"], "rot right")
+        self.assertLess(rows[16]["x"], rows[14]["x"])
+        self.assertGreater(rows[12]["x"], rows[14]["x"])
+        self.assertLess(rows[13]["y"], rows[14]["y"])
+        self.assertGreater(rows[15]["y"], rows[14]["y"])
 
-    def test_every_plus_cell_has_a_grid_area_rule(self) -> None:
-        for cell, area in (
-            ("tl", "1/1"),
-            ("u", "1/2"),
-            ("tr", "1/3"),
-            ("l", "2/1"),
-            ("c", "2/2"),
-            ("r", "2/3"),
-            ("d", "3/2"),
-        ):
-            self.assertIn(f".plus .{cell}{{grid-area:{area}}}", PAGE)
-
-    def test_both_rotation_slots_live_in_the_wheel_group(self) -> None:
-        self.assertEqual({row["slot"] for row in page_group("plus")} & {17, 18}, {17, 18})
-        self.assertEqual(page_group("turn"), [])
+    def test_both_rotation_slots_flank_the_wheel_up_hotspot(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()}
+        self.assertEqual((rows[18]["x"], rows[18]["y"]), (50, 33.7))
+        self.assertEqual((rows[17]["x"], rows[17]["y"]), (50, 33.7))
+        self.assertIn(".remote .k.rot.left{clip-path:inset(0 50% 0 0)}", PAGE)
+        self.assertIn(".remote .k.rot.right{clip-path:inset(0 0 0 50%)}", PAGE)
 
     def test_the_keypad_group_fills_column_by_column(self) -> None:
         """The 3x3 grid fills in array order, so the array order is the layout.
         The board reads 3 6 11, 4 7 10, 5 8 9 across its rows."""
-        rows = page_group("pad")
+        rows = page_slots()[9:]
         self.assertEqual([row["slot"] for row in rows], [3, 6, 11, 4, 7, 10, 5, 8, 9])
         self.assertEqual([row["label"] for row in rows], [f"SW{n}" for n in (3, 6, 11, 4, 7, 10, 5, 8, 9)])
 
-    def test_the_page_renders_the_three_groups_it_names(self) -> None:
-        for group in ("top", "plus", "pad"):
-            self.assertIn(f'id="{group}"', PAGE)
+    def test_the_page_renders_the_full_front_face_selector(self) -> None:
+        self.assertIn('<div class="remote" id="remote">', PAGE)
+        self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
+        self.assertIn('"case-front-face-flat.svg"', INIT)
 
 
 class EnforcementTest(unittest.TestCase):

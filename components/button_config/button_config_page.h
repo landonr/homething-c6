@@ -65,12 +65,19 @@ a{color:var(--acc)}
 .grp{margin:0 0 14px}
 .grp>p{color:var(--mut);font-size:12px;margin:0 0 6px;text-transform:uppercase;
 letter-spacing:.06em}
-.row{display:grid;gap:8px;grid-template-columns:1fr 1fr}
-.pad{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
-.plus{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
-.plus .tl{grid-area:1/1}.plus .u{grid-area:1/2}.plus .tr{grid-area:1/3}
-.plus .l{grid-area:2/1}.plus .c{grid-area:2/2}.plus .r{grid-area:2/3}
-.plus .d{grid-area:3/2}
+.remote{position:relative;width:min(100%,316.5px);margin:0 auto}
+.remote>img{display:block;width:100%;height:auto}
+.remote .k{position:absolute;width:17%;aspect-ratio:1;border:2px solid transparent;
+border-radius:25%;padding:0;background:transparent;transform:translate(-50%,-50%)}
+.remote .k:hover{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 55%,transparent)}
+.remote .k[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 72%,transparent);
+box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--acc)}
+.remote .k.rot{left:50%;top:33.7%;width:36%;border-radius:50%;z-index:1}
+.remote .k.rot.left{clip-path:inset(0 50% 0 0)}
+.remote .k.rot.right{clip-path:inset(0 0 0 50%)}
+.remote .k:not(.rot){z-index:2}
+.remote .k b,.remote .k span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
@@ -136,9 +143,9 @@ animation:sweep 1.4s ease-in-out infinite}
 </nav>
 <div class="tabgrid" id="buttonstab">
 <section class="card">
-<div class="grp"><p>Top</p><div class="row" id="top"></div></div>
-<div class="grp"><p>Wheel</p><div class="plus" id="plus"></div></div>
-<div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
+<div class="remote" id="remote">
+<img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote">
+</div>
 </section>
 <section class="card" id="ed" aria-live="polite"></section>
 </div>
@@ -182,17 +189,17 @@ aria-label="Bluetooth radio"><span></span></label></h2>
 </div>
 <script>
 var S=[
-{s:19,l:"SW2",v:0,g:"top"},{s:20,l:"SW1",v:1,g:"top"},
+{s:19,l:"SW2",v:0,x:30.3,y:16.4},{s:20,l:"SW1",v:1,x:69.7,y:16.4},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
-{s:18,l:"Turn left",v:0,g:"plus",c:"tl"},{s:13,l:"Up",v:1,g:"plus",c:"u"},
-{s:17,l:"Turn right",v:0,g:"plus",c:"tr"},
-{s:16,l:"Left",v:1,g:"plus",c:"l"},{s:14,l:"Press",v:1,g:"plus",c:"c"},
-{s:12,l:"Right",v:1,g:"plus",c:"r"},{s:15,l:"Down",v:1,g:"plus",c:"d"},
+{s:18,l:"Turn left",v:0,x:50,y:33.7,c:"rot left"},{s:13,l:"Up",v:1,x:50,y:25},
+{s:17,l:"Turn right",v:0,x:50,y:33.7,c:"rot right"},
+{s:16,l:"Left",v:1,x:29,y:33.7},{s:14,l:"Press",v:1,x:50,y:33.7},
+{s:12,l:"Right",v:1,x:71,y:33.7},{s:15,l:"Down",v:1,x:50,y:42.7},
 // Keypad fills column by column on the board, so the rows read 3 6 11, 4 7 10,
 // 5 8 9. The array order is the render order, not the slot order.
-{s:3,l:"SW3",v:1,g:"pad"},{s:6,l:"SW6",v:1,g:"pad"},{s:11,l:"SW11",v:1,g:"pad"},
-{s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
-{s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
+{s:3,l:"SW3",v:1,x:30.3,y:51},{s:6,l:"SW6",v:1,x:50,y:51},{s:11,l:"SW11",v:1,x:69.7,y:51},
+{s:4,l:"SW4",v:1,x:30.3,y:59},{s:7,l:"SW7",v:1,x:50,y:59},{s:10,l:"SW10",v:1,x:69.7,y:59},
+{s:5,l:"SW5",v:1,x:30.3,y:67},{s:8,l:"SW8",v:1,x:50,y:67},{s:9,l:"SW9",v:1,x:69.7,y:67}];
 // One press, one Zigbee command. a is the number the remote stores, c is the
 // Zigbee2MQTT input cluster a target must carry to accept it, and p names the
 // value the command needs. The numbers match the Action enum in
@@ -331,9 +338,10 @@ function build(){
 for(var i=0;i<S.length;i++){var d=S[i];
 var b=document.createElement("button");
 b.type="button";b.className="k"+(d.c?" "+d.c:"");b.setAttribute("aria-pressed","false");
+b.style.left=d.x+"%";b.style.top=d.y+"%";
 b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
-keys[d.s]=b;document.getElementById(d.g).appendChild(b)}
+keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("tabb").onclick=function(){showTab(false)};
 document.getElementById("tabc").onclick=function(){showTab(true)};
@@ -626,6 +634,7 @@ z2mStatus();networkStatus();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
+b.setAttribute("aria-label",d.l+": "+words(d.s));
 b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
 editor();cfgPaint()}

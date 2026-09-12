@@ -54,6 +54,7 @@ from .keypad import (
     recess_margins,
     recess_solid_sane,
     recesses_open,
+    wheel_basin_shape,
 )
 from .mic import mic_fillet
 from .shells import interference, parts_are_sound, shells_mate
@@ -304,6 +305,15 @@ def _recess_margins(s):
         recess_margins(),
         "every counterbore sits inside the recess rim, the rim clears the "
         "exterior wall by KEYPAD_EDGE_MARGIN, and the dish centres share one x",
+    )
+
+
+@_check("keypad")
+def _wheel_basin_shape(s):
+    return _report(
+        wheel_basin_shape(),
+        "wheel basin has circular cardinal curvature and exact "
+        f"exponent {params.WHEEL_SQUIRCLE_N:.1f} diagonals",
     )
 
 

@@ -223,8 +223,8 @@ def _probe_sites():
     nearest it and not only in aggregate.
 
     Plus the wheel's seat on four bearings and each join's own waist. The wheel
-    dish is a superellipse around a round bore, so its seat is narrowest and
-    shallowest on the free axis and widest and deepest on the diagonals; and the
+    dish has circular cardinal curvature and superellipse diagonal reach. Its
+    seat is narrowest on the free axis and widest on the diagonals. The
     two bearings a join leaves on are different again, both reaches taking the
     bridge past the bore so the seat there is neck rather than dish and reads
     deeper. The waists are where the merged field is at its shallowest anywhere
@@ -378,6 +378,44 @@ column along y with one interval in x per station, which is only true while they
 share an x; on this board they agree to a couple of hundredths and the model
 averages them. Past this the averaging would be shearing a dish sideways rather
 than absorbing float, and that is worth failing on rather than shipping."""
+
+WHEEL_CURVATURE_STEP = 0.02
+"""Distance from the free wheel axis for the cardinal curvature probe."""
+
+WHEEL_CURVATURE_TOLERANCE = 0.03
+"""Allowed radius error for the numerical wheel curvature probe."""
+
+WHEEL_DIAGONAL_TOLERANCE = 0.002
+"""Allowed radial error for the wheel basin's diagonal reach."""
+
+
+def wheel_basin_shape():
+    """Check circular cardinal curvature and the exact 45-degree reach."""
+    wheel = case.keypad_recesses()["wheel"]
+    h = WHEEL_CURVATURE_STEP
+    centre_width = case.recess_spine(wheel.cy)[0]
+    plus_width = case.recess_spine(wheel.cy + h)[0]
+    minus_width = case.recess_spine(wheel.cy - h)[0]
+    second = (plus_width - 2 * centre_width + minus_width) / h**2
+    radius = 1 / abs(second) if abs(second) > 1e-12 else float("inf")
+
+    diagonal_radius = wheel.ax * 2 ** (0.5 - 1 / wheel.n)
+    diagonal_y = wheel.cy + diagonal_radius / math.sqrt(2)
+    diagonal_x = case.wheel_basin_width(diagonal_y)
+    measured_radius = math.hypot(diagonal_x, diagonal_y - wheel.cy)
+
+    problems = []
+    if abs(radius - wheel.ax) > WHEEL_CURVATURE_TOLERANCE:
+        problems.append(
+            f"the wheel basin's cardinal radius is {radius:.3f}, not circular "
+            f"at its {wheel.ax:.3f} half axis"
+        )
+    if abs(measured_radius - diagonal_radius) > WHEEL_DIAGONAL_TOLERANCE:
+        problems.append(
+            f"the wheel basin's diagonal reaches {measured_radius:.3f}, not the "
+            f"{diagonal_radius:.3f} set by exponent {wheel.n:.1f}"
+        )
+    return problems
 
 
 def recess_margins():

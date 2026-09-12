@@ -579,23 +579,16 @@ single centreline, over the key grid, over `KEYPAD_ISLAND_2` (`SW1` and `SW2`)
 and the mic inlet beside them, and around the wheel, joined by two neck channels
 that ramp between them and flare out into each basin's rim.
 
-Each basin is bounded in plan by a superellipse, and its depth is zero on that
-curve and greatest at its centre, following a circular-arc sag: flat at the
-bottom of the basin, steepening toward the rim.
+Each keyed basin is bounded in plan by a superellipse. The wheel basin uses an
+angular blend between a circle and a superellipse. Each depth is zero at its
+rim and greatest at its centre.
 
 The two keyed basins use `KEYPAD_SQUIRCLE_N`, a squircle: a rounded rectangle
 whose corner never stops turning, which is what lets a rim be one continuous
 curve with no arc-to-line junction to blend, and which is the right shape for a
-field of square keys. The wheel's uses its own lower `WHEEL_SQUIRCLE_N`, because
-a ring around a round knob wants a round outline instead. A superellipse has
-zero curvature exactly on its axes at any exponent above two, so what the
-exponent really sets is how far either side of a flank the outline stays
-visually straight; at the keyed value that was long enough on a basin this size
-to read as a flat edge beside the knob, and the lower one brings it close to the
-circle's own. What is spent for it is corner reach, the diagonals of a
-superellipse standing further out the higher the exponent, so the seat ring
-widens less toward its corners than it used to. Two is the floor and it is a
-real one, not a matter of taste: see the seat below.
+field of square keys. The wheel uses `WHEEL_SQUIRCLE_N` only for diagonal reach.
+Its radius blends from a circle with `sin²(2θ)`. The cardinal axes stay circular,
+and each diagonal reaches the exact `WHEEL_SQUIRCLE_N` superellipse radius.
 
 A rim is where the recess feathers back into the face, and it reads as a crisp
 boundary rather than a soft one. Strictly there is a wall there, the sag having
@@ -616,12 +609,10 @@ from anything else because there is nothing else.
 
 The field works because the whole recess is a single column along y: the basin
 centres share an x to within a few hundredths, and they are disjoint in y, so
-every y has exactly one interval in x. `recess_spine()` is that column, three
-scalars per y: how wide the recess is, how deep it is on the centreline, which
-cross-section it carries, and which exponent that section is drawn with. Inside
-a basin's body all four are that basin's own superellipse functions, so the
-field there is exactly the dish it would be on its own. Inside a join all four
-are cubic Hermite bridges, one each, matching value **and slope** at both ends,
+every y has exactly one interval in x. `recess_spine()` stores width, depth,
+cross-section shape, exponent, axis rounding, and normalized edge width.
+Inside a basin, these values describe that basin exactly. Inside a join, all
+six values use cubic Hermite bridges that match value **and slope** at both ends,
 which is what makes the field C1 across a junction rather than merely
 continuous. So the floor simply ramps from one basin surface to the other and
 the outline simply turns from one rim into the other, with no waypoint of its

@@ -374,30 +374,17 @@ where its join begins would have two. The joins cover the overlap up to about
 four and a half here, so this sits inside that; check.py walks the span and
 fails on any y that two basins claim and no join covers, which is the guard that
 makes the bound visible rather than a silent wrong answer."""
-WHEEL_SQUIRCLE_N = 2.4
-"""Exponent of the wheel basin's own superellipse, lower than the keyed basins'
-KEYPAD_SQUIRCLE_N so its outline reads as an arc on the flanks rather than as a
-straight run.
+WHEEL_SQUIRCLE_N = 2.2
+"""Exponent that sets the wheel basin's diagonal reach.
 
-A superellipse has zero curvature exactly on its axes for any exponent above
-two, so what the number really sets is how far either side of a flank the
-outline stays visually straight. At four that is over a centimetre on a basin
-this size, which is why the flanks looked flat next to a round knob; here it is
-under half of it, close to the circle's own. Two would be the circle exactly and
-is the floor: below it the diagonals come in closer than the axes and
-WHEEL_RIM_LEDGE would stop being the clearance the seat is sized on.
+The wheel outline blends a circle with this superellipse by angle. The blend
+weight is sin²(2θ). It is zero on each cardinal axis and one on each diagonal.
+As a result, the axes have circular curvature and the diagonals keep this
+superellipse's exact reach.
 
-What is spent for it is corner reach. The diagonals of a superellipse stand
-2^(1/2 - 1/n) of a half axis out, so the widest part of the seat ring comes in
-as this drops, and at two there is no corner reach left at all. This keeps about
-half of what the squircle had, which is enough that the ring still visibly
-widens toward the diagonals.
-
-It also narrows both joins, their wheel end being a chord of this curve, which
-is what the wheel's large KEYPAD_JOIN_REACH pays for: a rounder flank has to be
-reached further into before a join has enough width to turn through. Dropping
-this without raising that reach is what check.py's join radius floor catches, and
-that pair is the real bound here rather than the exponent on its own."""
+Two is the lower limit. Below two, the diagonals move inside the axes and can
+reduce WHEEL_RIM_LEDGE. The wheel's large KEYPAD_JOIN_REACH keeps both necks
+wide enough for their minimum outline radius."""
 WHEEL_DISH_DEPTH = 0.9
 """Depth of the wheel basin at its own centre. The centre is inside the bore, so
 none of it is ever cut: what the number really sets is the seat depth at the bore

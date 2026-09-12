@@ -202,14 +202,14 @@ def main():
     wx, wy = board.wheel_center()
     print(
         f"  seated in the keypad recess's own wheel basin: a "
-        f"{2 * wheel['half'][0]:.2f} superellipse ({params.WHEEL_BASIN_SPREAD:.2f} "
+        f"{2 * wheel['half'][0]:.2f} angular blend ({params.WHEEL_BASIN_SPREAD:.2f} "
         f"past the bore on its axes), dishing to "
         f"{face_depth_at(wx + WHEEL_OPENING_R, wy):.2f} at the bore on the axes, "
         f"{face_depth_at(wx + WHEEL_OPENING_R * 0.7071, wy + WHEEL_OPENING_R * 0.7071):.2f} "
         f"on the diagonals and "
         f"{face_depth_at(wx, wy - WHEEL_OPENING_R):.2f} where a join leaves it; "
-        f"its own exponent is {params.WHEEL_SQUIRCLE_N:.1f} rather than the keyed "
-        f"basins' {params.KEYPAD_SQUIRCLE_N:.1f}, so the flanks read as arcs; the "
+        f"its {params.WHEEL_SQUIRCLE_N:.1f} exponent sets exact diagonal reach, "
+        f"while its cardinal axes keep circular curvature; the "
         f"rim keeps {wheel_ledge_left():.2f} of seat clear of the bore all the way "
         f"round, against a {params.WHEEL_RIM_LEDGE:.2f} floor"
     )

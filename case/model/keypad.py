@@ -2,8 +2,8 @@
 recess sunk into the front face around them and around the wheel, and the soft
 pad that carries a stem and a plunger under every switch.
 
-The recess is three superellipse basins on a single centreline joined by two
-Hermite bridges into one C1 depth field, cut as a single loft along y. Read
+The recess has two superellipse basins and one angular-blend wheel basin. Two
+Hermite bridges make one C1 depth field, cut as one loft along y. Read
 recess_spine() and face_depth_at() first: everything else about it, including
 every check, is built off those two."""
 
@@ -266,9 +266,8 @@ def keypad_recesses():
     each axis and square, and what the bore does not swallow is the seat ring
     around the knob. WHEEL_RIM_LEDGE used to be that spread and is only the floor
     now: sizing the basin on the clearance minimum is what left the ring as
-    narrow as the minimum. It carries its own lower exponent as well
-    (WHEEL_SQUIRCLE_N): a basin that is a ring around a round knob wants a round
-    outline, where one that is a field of square keys wants a rounded rectangle.
+    narrow as the minimum. Its angular blend gives the cardinal axes circular
+    curvature. WHEEL_SQUIRCLE_N keeps exact superellipse reach on the diagonals.
 
     That sizing rule still delivers WHEEL_RIM_LEDGE at every angle, and it does
     so for the same reason at either exponent. Above n=2 a superellipse's own
@@ -326,9 +325,38 @@ def _dish_shape(recess, y):
 
 
 def _dish_width(recess, y):
-    """Half width of the basin's own plan outline at y, so the outline is
-    x = centerline_x() +/- this. Exactly the superellipse."""
-    return recess.ax * max(0.0, 1.0 - _dish_shape(recess, y)) ** (1 / recess.n)
+    """Half width of one basin's plan outline at y."""
+    if recess.name != "wheel":
+        return recess.ax * max(0.0, 1.0 - _dish_shape(recess, y)) ** (1 / recess.n)
+
+    v = min(abs(y - recess.cy) / recess.ay, 1.0)
+    if v >= 1.0:
+        return 0.0
+    lo, hi = 0.0, 2 ** (0.5 - 1 / recess.n)
+    for _ in range(52):
+        mid = (lo + hi) / 2
+        theta = math.atan2(v, mid)
+        radius = _angular_radius(theta, recess.n, 1.0)
+        if math.hypot(mid, v) < radius:
+            lo = mid
+        else:
+            hi = mid
+    return recess.ax * (lo + hi) / 2
+
+
+def _dish_axis_rounding(recess, _y):
+    """Amount of circular-axis angular blending in one basin."""
+    return 1.0 if recess.name == "wheel" else 0.0
+
+
+def _dish_edge_width(recess, y):
+    """Plan half width at y, normalized by the basin's x half axis."""
+    return _dish_width(recess, y) / recess.ax
+
+
+def wheel_basin_width(y):
+    """Half width of the unjoined wheel basin outline at y."""
+    return _dish_width(keypad_recesses()["wheel"], y)
 
 
 def _dish_depth(recess, y):
@@ -456,16 +484,14 @@ def _hermite(t, p0, m0, p1, m1, span):
 
 
 def recess_spine(y):
-    """(half_width, depth, shape, exponent) of the merged recess at y:
+    """(half_width, depth, shape, exponent, axis_rounding, edge_width) at y:
     everything the cross-section at that station needs.
 
-    Inside a dish's body all three are that dish's own functions, so the field
-    there is exactly the superellipse dish it was before the merge. Inside a
-    neck all three are Hermite bridges, matching value and slope at both ends,
-    which is what makes the merged field C1 across a junction rather than
-    merely continuous.
+    Inside a dish's body all six are that dish's own functions. Inside a neck,
+    all six are Hermite bridges that match value and slope at both ends. This
+    makes the merged field C1 across a junction rather than only continuous.
 
-All four get one cubic across the whole join, so nothing has a waypoint of
+    All six get one cubic across the whole join, so nothing has a waypoint of
     its own: the floor simply ramps from one basin surface to the other and the
     outline simply turns from one rim into the other. Width used to get two
     cubics instead, meeting at the join's midpoint at a stated waist with zero
@@ -512,11 +538,29 @@ All four get one cubic across the whole join, so nothing has a waypoint of
                 span,
             )
             exponent = _hermite(t, lower.n, 0.0, upper.n, 0.0, span)
+            axis_rounding = _hermite(
+                t,
+                _dish_axis_rounding(lower, neck.y0),
+                0.0,
+                _dish_axis_rounding(upper, neck.y1),
+                0.0,
+                span,
+            )
+            edge_width = _hermite(
+                t,
+                _dish_edge_width(lower, neck.y0),
+                _slope(lambda v: _dish_edge_width(lower, v), neck.y0),
+                _dish_edge_width(upper, neck.y1),
+                _slope(lambda v: _dish_edge_width(upper, v), neck.y1),
+                span,
+            )
             return (
                 max(width, 0.0),
                 max(depth, 0.0),
                 min(max(shape, 0.0), 1.0),
                 max(exponent, 2.0),
+                min(max(axis_rounding, 0.0), 1.0),
+                max(edge_width, 0.0),
             )
     for recess in keypad_recesses().values():
         if abs(y - recess.cy) <= recess.ay:
@@ -525,8 +569,10 @@ All four get one cubic across the whole join, so nothing has a waypoint of
                 _dish_depth(recess, y),
                 _dish_shape(recess, y),
                 recess.n,
+                _dish_axis_rounding(recess, y),
+                _dish_edge_width(recess, y),
             )
-    return 0.0, 0.0, 1.0, params.KEYPAD_SQUIRCLE_N
+    return 0.0, 0.0, 1.0, params.KEYPAD_SQUIRCLE_N, 0.0, 0.0
 
 
 SHAPE_LIMIT = 1e-9
@@ -535,7 +581,15 @@ its own limit. At one the normalised profile is 0/0, and the limit it tends to
 is the superellipse's own outline exponent."""
 
 
-def _cross(u, shape, n):
+def _angular_radius(theta, n, axis_rounding):
+    """Normalized radius of the angular circle-to-superellipse blend."""
+    c, s = abs(math.cos(theta)), abs(math.sin(theta))
+    squircle = (c**n + s**n) ** (-1 / n)
+    weight = axis_rounding * math.sin(2 * theta) ** 2
+    return 1.0 + weight * (squircle - 1.0)
+
+
+def _cross(u, shape, n, axis_rounding=0.0, edge_width=0.0):
     """The cross-section profile across x, normalised to one on the centerline
     and zero at the rim: u is |dx| over the local half width.
 
@@ -548,6 +602,19 @@ def _cross(u, shape, n):
     """
     if u >= 1.0:
         return 0.0
+    if axis_rounding > 0.0 and edge_width > 0.0:
+        x = u * edge_width
+        y = shape ** (1 / n)
+        theta = math.atan2(y, x)
+        rho = math.hypot(x, y) / _angular_radius(theta, n, axis_rounding)
+        edge_theta = math.atan2(y, edge_width)
+        edge_rho = math.hypot(edge_width, y) / _angular_radius(
+            edge_theta, n, axis_rounding
+        )
+        span = edge_rho * edge_rho - y * y
+        if span <= 0.0:
+            return 0.0
+        return math.sqrt(max(0.0, edge_rho * edge_rho - rho * rho) / span)
     if 1.0 - shape < SHAPE_LIMIT:
         return math.sqrt(max(0.0, 1.0 - u**n))
     top = 1.0 - (shape + u**n * (1.0 - shape)) ** (2 / n)
@@ -564,10 +631,16 @@ def face_depth_at(x, y):
     whatever it says the floor is over the board's acoustic port, so none of
     the three can drift from the others.
     """
-    width, depth, shape, n = recess_spine(y)
+    width, depth, shape, n, axis_rounding, edge_width = recess_spine(y)
     if width <= 0.0 or depth <= 0.0:
         return 0.0
-    return depth * _cross(abs(x - centerline_x()) / width, shape, n)
+    return depth * _cross(
+        abs(x - centerline_x()) / width,
+        shape,
+        n,
+        axis_rounding,
+        edge_width,
+    )
 
 
 def face_floor_at(x, y):
@@ -750,14 +823,20 @@ def _station_section(y):
     vertical where it meets a rim, and even steps in x leave the last chord
     cutting the corner off.
     """
-    width, depth, shape, n = recess_spine(y)
+    width, depth, shape, n, axis_rounding, edge_width = recess_spine(y)
     width = max(width, SECTION_MIN_WIDTH)
     cx = centerline_x()
     count = params.KEYPAD_PROFILE_POINTS
     points = []
     for i in range(count + 1):
         u = math.sin(-math.pi / 2 + math.pi * i / count)
-        points.append((cx + u * width, SHELL_FRONT - depth * _cross(abs(u), shape, n)))
+        points.append(
+            (
+                cx + u * width,
+                SHELL_FRONT
+                - depth * _cross(abs(u), shape, n, axis_rounding, edge_width),
+            )
+        )
     points.append((cx + width, SHELL_FRONT + MERGE))
     points.append((cx - width, SHELL_FRONT + MERGE))
     plane = Plane.XZ.offset(-y)

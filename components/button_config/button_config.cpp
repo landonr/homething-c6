@@ -4,7 +4,9 @@
 
 #include "ir_learning.h"
 #include "zigbee_learning.h"
+#include "esphome/components/api/api_server.h"
 #include "esphome/components/ble_hid/ble_hid.h"
+#include "esphome/components/wifi/wifi_component.h"
 
 #include <algorithm>
 #include <cctype>
@@ -414,14 +416,26 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   // action, not the LED state machine, marks the page as the owner.
   const char *owner = !busy ? "none" : ((action_pending || ::ir_ui.web_owner()) ? "web" : "device");
   const uint32_t completed_id = this->completed_action_id_.load(std::memory_order_acquire);
+  char ip[network::IP_ADDRESS_BUFFER_SIZE] = "";
+  for (const auto &address : wifi::global_wifi_component->get_ip_addresses()) {
+    if (address.is_ip4() && address.is_set()) {
+      address.str_to(ip);
+      break;
+    }
+  }
+  char mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+  get_mac_address_pretty_into_buffer(mac);
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"radios":{"zigbee":%s,"ble":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
+      wifi::global_wifi_component->is_connected() ? "true" : "false",
+      api::global_api_server->is_connected() ? "true" : "false",
+      ip, mac,
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
       ::zigbee_assignments.link_started() ? "true" : "false",

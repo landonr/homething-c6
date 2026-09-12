@@ -50,12 +50,14 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs",
-                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw"])
+for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgio",
+                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
+                  "tabb", "tabc", "buttonstab", "configtab", "wfs", "has", "wip", "wmac"])
   els[id] = mk("section");
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
+  network: {wifi: true, home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
@@ -650,35 +652,6 @@ setTimeout(() => {
     global.fetch = realFetch;
     if (calls !== 0) throw new Error("a bad paste was still sent");
     if (!cfgBad) throw new Error("no refusal was reported");
-  });
-  step("the card starts closed and reads no code until it is opened", () => {
-    let codeReads = 0;
-    const realFetch = global.fetch;
-    global.fetch = (u, o) => { if (String(u).indexOf("/api/code") >= 0) codeReads++; return realFetch(u, o); };
-    global.cfgOpen = false;
-    global.cfgBusy = false;
-    global.cfgAll = {};
-    cfgPaint();
-    if (!document.getElementById("cxo")) throw new Error("no toggle on a closed card");
-    if (document.getElementById("cx")) throw new Error("the box showed on a closed card");
-    if (els.cfgb.hidden !== true) throw new Error("the closed card left its body on screen");
-    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
-    if (codeReads !== 0) throw new Error("a closed card still read a code");
-    document.getElementById("cxo").onclick();
-    global.fetch = realFetch;
-    if (!cfgOpen) throw new Error("the card did not open");
-    if (!document.getElementById("cx")) throw new Error("the open card has no box");
-    if (cfgBusy) throw new Error("opening the card read the remote");
-    if (codeReads) throw new Error("opening the card requested a stored code");
-    if (els.cxs.textContent !== "Hide") throw new Error("the open heading says " + els.cxs.textContent);
-    if (els.cfgb.hidden !== false) throw new Error("the open card kept its body hidden");
-    global.cfgBusy = false;
-    cfgPaint();
-    document.getElementById("cxo").onclick();
-    if (cfgOpen) throw new Error("the heading did not close the card");
-    if (document.getElementById("cx")) throw new Error("the box survived the close");
-    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
-    global.cfgOpen = true;
   });
   step("the card keeps one config box and all actions", () => {
     global.cfgBusy = false;

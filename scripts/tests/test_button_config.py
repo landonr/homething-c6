@@ -223,6 +223,14 @@ class EnforcementTest(unittest.TestCase):
             self.assertNotIn(call, state)
         self.assertIn("::zigbee_assignments.assignment(info.slot)", state)
 
+    def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
+        self.assertIn("wifi::global_wifi_component->is_connected()", state)
+        self.assertIn("api::global_api_server->is_connected()", state)
+        self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
+        self.assertIn("get_mac_address_pretty_into_buffer(mac)", state)
+
     def test_the_state_row_reports_the_zigbee_target_first(self) -> None:
         """A slot holds one action, and a Zigbee target hides an old IR code."""
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
@@ -335,11 +343,14 @@ class PageTest(unittest.TestCase):
         self.assertIn('<link rel=icon href="data:image/svg+xml,', PAGE)
         self.assertEqual(re.findall(r"http://[^\s\"'>%]*", PAGE),
                          ["http://www.w3.org/2000/svg"])
-        # One outbound anchor names the code library. A link loads nothing until
-        # the reader follows it, so it cannot stall the page on an offline LAN.
+        # Outbound anchors load nothing until the reader follows them, so they
+        # cannot stall the page on an offline LAN.
         self.assertEqual(
             re.findall(r"https://[^\s\"'>]+", PAGE),
-            ["https://github.com/Lucaslhm/Flipper-IRDB"],
+            [
+                "https://github.com/landonr/homething-c6",
+                "https://github.com/Lucaslhm/Flipper-IRDB",
+            ],
         )
 
     def test_the_page_only_calls_its_own_endpoints(self) -> None:
@@ -682,8 +693,8 @@ class PageTest(unittest.TestCase):
         """One 1.5s poll drives every live line. It used to drop j.zigbee, which
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
-        self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("zpjSync();radioStatus();bleStatus()}},zpjLost)", body)
+        self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
+        self.assertIn("zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
         # A failed poll while a press is open is the restart, not a dead remote.
@@ -797,10 +808,16 @@ class PageTest(unittest.TestCase):
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can
         be restored without a source remote in hand."""
-        # Both radios share one card at the top of the page, so the import block
-        # is the only thing the Config card holds.
-        self.assertIn('<section class="card full conn">\n'
-                      '<div id="zbcfg">\n'
+        # All radio types use vertical sections above import and export.
+        self.assertIn('<nav class="tabs full" aria-label="Setup sections">', PAGE)
+        self.assertIn('<div class="tabgrid" id="buttonstab">', PAGE)
+        self.assertIn('<div class="tabgrid" id="configtab" hidden>', PAGE)
+        self.assertIn('<h1 class="full secttl">Connections</h1>', PAGE)
+        self.assertIn('<section class="card full conn" id="wificfg">\n'
+                      '<h2>Wi-Fi</h2>\n'
+                      '<p class="sub st" id="wfs">Wi-Fi state is loading.</p>\n'
+                      '<p class="sub st" id="has">Home Assistant API state is loading.</p>', PAGE)
+        self.assertIn('<section class="card full conn" id="zbcfg">\n'
                       '<h2 class="ttl">Zigbee<label class="sw" id="zrw">'
                       '<input type="checkbox" id="zrb"\naria-label="Zigbee radio">'
                       '<span></span></label></h2>\n'
@@ -817,17 +834,17 @@ class PageTest(unittest.TestCase):
                       '<h3>Zigbee2MQTT</h3>\n'
                       '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
                       '<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>\n'
-                      '<div id="z2m"></div>\n</div>\n'
-                      '<div id="blecfg">\n'
+                      '<div id="z2m"></div>', PAGE)
+        self.assertIn('<section class="card full conn" id="blecfg">\n'
                       '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
                       '<input type="checkbox" id="brb"\naria-label="Bluetooth radio">'
                       '<span></span></label></h2>\n'
                       '<p class="sub st" id="bst">BLE HID state is loading.</p>', PAGE)
-        # A rule separates the two, and the pair stacks on a narrow screen.
-        self.assertIn(".conn>div+div{border-left:1px solid var(--line)", PAGE)
-        self.assertIn("@media (max-width:720px){.conn{grid-template-columns:1fr}", PAGE)
-        self.assertIn('<section class="card full" id="cfg">', PAGE)
-        self.assertIn('<div id="cfgb" hidden><div id="cfgio"></div></div>', PAGE)
+        self.assertIn('<section class="card full" id="cfg">', PAGE.split('id="configtab"', 1)[1])
+        self.assertIn('<h1 class="full secttl">Import Export</h1>\n'
+                      '<section class="card full" id="cfg">\n<div id="cfgio"></div>', PAGE)
+        self.assertNotIn("saveWifi", PAGE)
+        self.assertNotIn("set_wifi", PAGE)
         # A connection card cannot sit inside the collapsed import card.
         self.assertNotIn('id="cfgb" hidden><div id="z2m">', PAGE)
         self.assertNotIn('class="sep"', PAGE)
@@ -835,7 +852,8 @@ class PageTest(unittest.TestCase):
         self.assertNotIn('id="cxz"', PAGE)
         # The page title leads, so neither radio card pushes it down.
         self.assertIn('<div>\n<h1>homeThing c6</h1>\n'
-                      '<p class="sub">Select an input to see or change what it does.</p>\n'
+                      '<p class="sub"><a href="https://github.com/landonr/homething-c6">'
+                      'github.com/landonr/homething-c6</a></p>\n'
                       '</div>\n</header>', PAGE)
         # The logo is inline and uncoloured, so one copy follows the theme text
         # colour instead of shipping a light file and a dark file.
@@ -852,10 +870,9 @@ class PageTest(unittest.TestCase):
                       "%3C/style%3E", PAGE)
         self.assertIn("header.full{display:flex;align-items:center;gap:12px}", PAGE)
         card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
-        # Closed on arrival, because most visits change one input instead.
-        self.assertIn("var cfgOpen=false;", PAGE)
-        self.assertIn('<h2><button type="button" class="tog" id="cxo" aria-expanded="false">'
-                      'Import and export<span\nid="cxs">Show</span></button></h2>', PAGE)
+        self.assertIn('<h1 class="full secttl">Import Export</h1>', PAGE)
+        self.assertNotIn('id="cxo"', PAGE)
+        self.assertNotIn('id="cxs"', PAGE)
         # The button keeps its place and locks instead, so no line moves.
         self.assertIn('id="bfr">Forget Bluetooth host</button>', PAGE)
         self.assertIn('post("forget_ble")', PAGE)
@@ -884,15 +901,8 @@ class PageTest(unittest.TestCase):
         self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
         self.assertNotIn("paint()", refresh)
-        self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
-        self.assertIn("b.hidden=!cfgOpen;", card)
-        self.assertIn('o.onclick=cfgToggle}', card)
-        self.assertIn("h2>button.tog{", PAGE)
         # The connection inputs are built once, so the repaint owns cfgio alone.
         self.assertIn('var e=document.getElementById("cfgio")', card)
-        toggle = section(PAGE, "function cfgToggle(){", "\n\n")
-        self.assertIn("cfgOpen=!cfgOpen", toggle)
-        self.assertNotIn("cfgRefresh", toggle)
         # The startup path reads the state and the open code box, nothing more.
         start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
         self.assertNotIn("cfgRefresh", start)
@@ -1129,8 +1139,9 @@ class RadioSwitchTest(unittest.TestCase):
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
         # Nothing in the connection card carries a hidden attribute any more.
-        card = section(PAGE, '<section class="card full conn">', "</section>")
-        self.assertNotIn("hidden", card)
+        for card_id in ("wificfg", "zbcfg", "blecfg"):
+            card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
+            self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)
         self.assertIn('bf.disabled=bleForgetBusy||!st.ble.bonded;', PAGE)

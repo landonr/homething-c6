@@ -8,7 +8,7 @@ static const char PAGE_HTML[] = R"=====(<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel=icon href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20805.333%20795.107%22%3E%3Cstyle%3Epath%7Bfill:%2316181d%7D@media(prefers-color-scheme:dark)%7Bpath%7Bfill:%23e7eaef%7D%7D%3C/style%3E%3Cpath%20d=%22M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z%22/%3E%3Cpath%20d=%22M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z%22/%3E%3Cpath%20d=%22M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z%22/%3E%3C/svg%3E">
-<title>homeThing c6</title>
+<title>homeThing c6 config</title>
 <style>
 :root{--bg:#f3f4f7;--fg:#16181d;--card:#fff;--line:#c6cad3;--mut:#565b66;
 --acc:#14428f;--sel:#dae5fb;--ok:#0f5c31;--warn:#8a5300;--bad:#9c2114}
@@ -32,6 +32,12 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:baseline}
 .dot.off{background:var(--line)}.dot.warn{background:var(--warn)}
 .dot.bad{background:var(--bad)}
+.tabs{display:flex;gap:8px}.tabs button{background:transparent;border:1px solid var(--line);
+border-radius:8px;padding:8px 14px;cursor:pointer}.tabs button[aria-selected=true]{background:var(--acc);
+border-color:var(--acc);color:#fff}.tabgrid{display:grid;grid-column:1/-1;gap:16px;
+grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.tabgrid[hidden]{display:none}
+@media (max-width:720px){.tabgrid{grid-template-columns:1fr}}
 header.full{display:flex;align-items:center;gap:12px}
 .logo{width:34px;height:34px;flex:none}
 h1{font-size:20px;margin:0 0 4px}
@@ -72,10 +78,6 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 header.full .sub{margin:0}
 .grp:last-child{margin:0}
-.conn{display:grid;gap:16px;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
-.conn>div+div{border-left:1px solid var(--line);padding-left:16px}
-@media (max-width:720px){.conn{grid-template-columns:1fr}
-.conn>div+div{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:14px}}
 .conn .act{margin-bottom:0}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
@@ -83,9 +85,6 @@ text-transform:uppercase;letter-spacing:.06em}
 p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
 h3{font-size:15px;margin:14px 0 8px}
-h2>button.tog{background:none;border:0;padding:0;margin:0;width:100%;cursor:pointer;
-display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
-h2>button.tog span{color:var(--acc);font-size:13px;font-weight:400}
 select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
@@ -128,11 +127,31 @@ animation:sweep 1.4s ease-in-out infinite}
 <svg class=logo viewBox="0 0 805.333 795.107" fill=currentColor aria-hidden=true><path d="M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z"/><path d="M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z"/><path d="M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z"/></svg>
 <div>
 <h1>homeThing c6</h1>
-<p class="sub">Select an input to see or change what it does.</p>
+<p class="sub"><a href="https://github.com/landonr/homething-c6">github.com/landonr/homething-c6</a></p>
 </div>
 </header>
-<section class="card full conn">
-<div id="zbcfg">
+<nav class="tabs full" aria-label="Setup sections">
+<button type="button" id="tabb" aria-selected="true">Buttons</button>
+<button type="button" id="tabc" aria-selected="false">Config</button>
+</nav>
+<div class="tabgrid" id="buttonstab">
+<section class="card">
+<div class="grp"><p>Top</p><div class="row" id="top"></div></div>
+<div class="grp"><p>Wheel</p><div class="plus" id="plus"></div></div>
+<div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
+</section>
+<section class="card" id="ed" aria-live="polite"></section>
+</div>
+<div class="tabgrid" id="configtab" hidden>
+<h1 class="full secttl">Connections</h1>
+<section class="card full conn" id="wificfg">
+<h2>Wi-Fi</h2>
+<p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<p class="sub st" id="has">Home Assistant API state is loading.</p>
+<dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
+<dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
+</section>
+<section class="card full conn" id="zbcfg">
 <h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
 aria-label="Zigbee radio"><span></span></label></h2>
 <p class="sub st" id="zrs">Zigbee radio state is loading.</p>
@@ -146,27 +165,20 @@ both sides.</p>
 <p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
 <p class="sub st" id="zcs">Coordinator pairing state is loading.</p>
 <div id="z2m"></div>
-</div>
-<div id="blecfg">
+</section>
+<section class="card full conn" id="blecfg">
 <h2 class="ttl">Bluetooth<label class="sw" id="brw"><input type="checkbox" id="brb"
 aria-label="Bluetooth radio"><span></span></label></h2>
 <p class="sub st" id="bst">BLE HID state is loading.</p>
 <p class="sub st" id="bhs">Bluetooth host state is loading.</p>
 <p class="sub">Forget the saved host before you pair this remote with a different host.</p>
 <div class="act"><button type="button" class="sec" id="bfr">Forget Bluetooth host</button></div>
-</div>
 </section>
-<section class="card">
-<div class="grp"><p>Top</p><div class="row" id="top"></div></div>
-<div class="grp"><p>Wheel</p><div class="plus" id="plus"></div></div>
-<div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
-</section>
-<section class="card" id="ed" aria-live="polite"></section>
+<h1 class="full secttl">Import Export</h1>
 <section class="card full" id="cfg">
-<h2><button type="button" class="tog" id="cxo" aria-expanded="false">Import and export<span
-id="cxs">Show</span></button></h2>
-<div id="cfgb" hidden><div id="cfgio"></div></div>
+<div id="cfgio"></div>
 </section>
+</div>
 </div>
 <script>
 var S=[
@@ -238,7 +250,6 @@ var hkv="keyboard",huv="",hmv="0",hcust=false;
 // no second read of a code the editor already fetched.
 var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
 // Closed on arrival, because most visits change one input instead.
-var cfgOpen=false;
 // clip holds one selected IR or Zigbee assignment in this browser only. It
 // cannot include Voice or Clear, because those are actions and not configs.
 var clip=null,clipBusy=false;
@@ -324,9 +335,17 @@ b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById(d.g).appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
+document.getElementById("tabb").onclick=function(){showTab(false)};
+document.getElementById("tabc").onclick=function(){showTab(true)};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
 document.getElementById("brb").onchange=function(){setRadio("ble")}}
+
+function showTab(config){
+document.getElementById("buttonstab").hidden=config;
+document.getElementById("configtab").hidden=!config;
+document.getElementById("tabb").setAttribute("aria-selected",String(!config));
+document.getElementById("tabc").setAttribute("aria-selected",String(config))}
 
 // Built once. A repaint only rewrites the status line, because rebuilding the
 // inputs would discard an address that is still being typed.
@@ -566,6 +585,20 @@ live?"Connected to "+bleHost()+".":
 if(bf){bf.disabled=bleForgetBusy||!st.ble.bonded;
 bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth host"}}
 
+function networkStatus(){
+var wf=document.getElementById("wfs"),ha=document.getElementById("has"),
+ip=document.getElementById("wip"),mac=document.getElementById("wmac");
+if(!st||!st.network)return;
+var wifi=st.network.wifi,api=wifi&&st.network.home_assistant;
+if(wf){wf.className="sub st"+(wifi?"":" bad");
+wf.innerHTML="<span class='dot "+(wifi?"":"bad")+"'></span>Wi-Fi is "+
+(wifi?"connected.":"disconnected. The config page is unavailable over the network.")}
+if(ha){ha.className="sub st"+(api?"":" bad");
+ha.innerHTML="<span class='dot "+(api?"":"bad")+"'></span>Home Assistant API is "+
+(api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down.")}
+if(ip)ip.textContent=st.network.ip||"Unavailable";
+if(mac)mac.textContent=st.network.mac||"Unavailable"}
+
 function forgetBle(){
 if(bleForgetBusy)return;
 bleForgetBusy=true;bleError="";bleStatus();
@@ -582,14 +615,14 @@ if(stBusy)return;
 stBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-zpjSync();radioStatus();bleStatus()}},zpjLost)
+.then(function(j){if(j&&j.ble){if(!st)st={};st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
+zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)
 .then(function(){stBusy=false},function(){stBusy=false})}
 
 function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-z2mStatus();radioStatus();bleStatus();zpjPaint();
+z2mStatus();networkStatus();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -1124,16 +1157,9 @@ reader.readAsText(file)}
 
 // The box holds the current text, so a repaint keeps a pasted file or edit.
 // The heading is the toggle, so the card needs no control of its own.
-function cfgToggle(){cfgOpen=!cfgOpen;cfgMsg="";cfgBad=false;cfgPaint()}
-
 function cfgPaint(){
-var e=document.getElementById("cfgio"),b=document.getElementById("cfgb"),
-s=document.getElementById("cxs"),o=document.getElementById("cxo");
-if(!e||!b)return;
-if(s)s.textContent=cfgOpen?"Hide":"Show";
-if(o){o.setAttribute("aria-expanded",cfgOpen?"true":"false");o.onclick=cfgToggle}
-b.hidden=!cfgOpen;
-if(!cfgOpen){e.innerHTML="";return}
+var e=document.getElementById("cfgio");
+if(!e)return;
 var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy))?" disabled":"";
 var h="<p class=sub>Read the remote or choose a saved JSON file. Copy, download, or "+
 "edit the text, then apply it when ready.</p>"+

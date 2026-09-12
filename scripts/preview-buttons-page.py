@@ -41,6 +41,12 @@ STATE = {
     "result": "none",
     "action_id": 0,
     "action_ok": True,
+    "network": {
+        "wifi": True,
+        "home_assistant": True,
+        "ip": "192.168.1.86",
+        "mac": "A4:CF:12:34:56:78",
+    },
     "radios": {"zigbee": True, "ble": True},
     "zigbee": {
         "started": True,

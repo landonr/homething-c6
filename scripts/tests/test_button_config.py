@@ -1031,7 +1031,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);", switch)
 
     def test_the_state_and_action_endpoints_carry_both_switches(self) -> None:
-        self.assertIn('"radios":{"zigbee":%s,"ble":%s}', CPP)
+        self.assertIn('"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s}', CPP)
         self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
                       '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
         self.assertIn("::zigbee_assignments.link_started() ? \"true\" : \"false\"", CPP)
@@ -1046,6 +1046,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("this->defer(", switch)
         self.assertIn("::zigbee_assignments.set_radio_enabled(radio_on)", switch)
         self.assertIn("set_radio_enabled(radio_on)", switch)
+        self.assertIn("this->set_ha_api_expected(radio_on)", switch)
+        self.assertIn('radio != "home_assistant"', CPP)
 
     def test_an_off_zigbee_radio_keeps_the_stack_down_after_a_boot(self) -> None:
         """The ESP-Zigbee stack has no stop and no restart, so the only way to
@@ -1082,7 +1084,7 @@ class RadioSwitchTest(unittest.TestCase):
         turn_off_action. That switched both radios off on every boot before the
         stored flag was even read."""
         block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
-        self.assertEqual(block.count("restore_mode: DISABLED"), 2)
+        self.assertEqual(block.count("restore_mode: DISABLED"), 3)
         self.assertNotIn("restore_mode: ALWAYS", block)
 
     def test_the_yaml_exposes_one_switch_for_each_radio(self) -> None:
@@ -1093,6 +1095,9 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("lambda: return id(ble_hid_remote).radio_enabled();", block)
         self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(true);", block)
         self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(false);", block)
+        self.assertIn("lambda: return id(button_cfg).ha_api_expected();", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(true);", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(false);", block)
         # The component keeps no global instance, so the YAML pushes the link
         # state to the manager the page reads.
         self.assertIn("zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),", CONFIG)
@@ -1100,6 +1105,8 @@ class RadioSwitchTest(unittest.TestCase):
         # D5 must not report a healthy Zigbee link that sends nothing.
         self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
                       CONFIG)
+        self.assertIn("const bool ha_expected = id(button_cfg).ha_api_expected();", CONFIG)
+        self.assertIn("it[0] = Color(130, 65, 0);", CONFIG)
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
@@ -1115,7 +1122,10 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
         self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
         self.assertIn('document.getElementById("zrb").onchange=function(){setRadio("zigbee")};', PAGE)
+        self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
+        self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
+        self.assertIn("Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.", PAGE)
 
     def test_every_radio_line_states_what_is_on_or_off(self) -> None:
         """A line that hides moves the text and the buttons under it, so each one

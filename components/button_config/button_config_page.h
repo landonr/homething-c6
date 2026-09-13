@@ -154,9 +154,13 @@ animation:sweep 1.4s ease-in-out infinite}
 <section class="card full conn" id="wificfg">
 <h2>Wi-Fi</h2>
 <p class="sub st" id="wfs">Wi-Fi state is loading.</p>
-<p class="sub st" id="has">Home Assistant API state is loading.</p>
 <dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
 <dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
+<hr class="rule">
+<h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
+aria-label="Home Assistant API"><span></span></label></h2>
+<p class="sub st" id="has">Home Assistant API state is loading.</p>
+<p class="sub">Off keeps D2 solid orange while Wi-Fi is up. On pulses until the API connects.</p>
 </section>
 <section class="card full conn" id="zbcfg">
 <h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
@@ -228,8 +232,8 @@ var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 // second browser both show the switch the remote is actually running with.
 // radioWant holds the position the switch was moved to, so a repaint during the
 // write keeps it there instead of snapping back to the old state.
-var radioBusy={zigbee:false,ble:false},radioError={zigbee:"",ble:""},
-radioWant={zigbee:true,ble:true};
+var radioBusy={zigbee:false,ble:false,home_assistant:false},radioError={zigbee:"",ble:"",home_assistant:""},
+radioWant={zigbee:true,ble:true,home_assistant:true};
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
@@ -347,7 +351,8 @@ document.getElementById("tabb").onclick=function(){showTab(false)};
 document.getElementById("tabc").onclick=function(){showTab(true)};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
-document.getElementById("brb").onchange=function(){setRadio("ble")}}
+document.getElementById("brb").onchange=function(){setRadio("ble")};
+document.getElementById("hab").onchange=function(){setRadio("home_assistant")}}
 
 function showTab(config){
 document.getElementById("buttonstab").hidden=config;
@@ -525,6 +530,7 @@ b.disabled=radioBusy[kind]||!(st&&st.radios)}
 function radioStatus(){
 radioSwitch("zigbee","zrb");
 radioSwitch("ble","brb");
+radioSwitch("home_assistant","hab");
 var e=document.getElementById("zrs");
 if(!e)return;
 var err=radioError.zigbee,on=radioOn("zigbee"),known=!!(st&&st.radios);
@@ -562,14 +568,14 @@ return z["new"]?"Not paired.":
 function setRadio(kind){
 if(radioBusy[kind])return;
 var next=radioOn(kind)?"0":"1";
-radioBusy[kind]=true;radioWant[kind]=next==="1";radioError[kind]="";radioStatus();
+radioBusy[kind]=true;radioWant[kind]=next==="1";radioError[kind]="";radioStatus();networkStatus();
 post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next).then(function(r){
 if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){
 if(!ok)throw new Error("The remote could not change the radio.")})})
 .then(function(){radioBusy[kind]=false;return load().then(paint)},function(e){
 radioBusy[kind]=false;
-radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus()})}
+radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus();networkStatus()})}
 
 // One line carries the radio and the host, so an off radio can never read as
 // connected. The bond lives in flash, so its name survives the link and a
@@ -597,13 +603,17 @@ function networkStatus(){
 var wf=document.getElementById("wfs"),ha=document.getElementById("has"),
 ip=document.getElementById("wip"),mac=document.getElementById("wmac");
 if(!st||!st.network)return;
-var wifi=st.network.wifi,api=wifi&&st.network.home_assistant;
+var wifi=st.network.wifi,api=wifi&&st.network.home_assistant,expect=radioOn("home_assistant"),
+err=radioError.home_assistant;
 if(wf){wf.className="sub st"+(wifi?"":" bad");
 wf.innerHTML="<span class='dot "+(wifi?"":"bad")+"'></span>Wi-Fi is "+
 (wifi?"connected.":"disconnected. The config page is unavailable over the network.")}
-if(ha){ha.className="sub st"+(api?"":" bad");
-ha.innerHTML="<span class='dot "+(api?"":"bad")+"'></span>Home Assistant API is "+
-(api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down.")}
+if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
+ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'></span>"+
+(!expect?"Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.":
+"Home Assistant API is "+
+(api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+
+(err?" "+esc(err):"")}
 if(ip)ip.textContent=st.network.ip||"Unavailable";
 if(mac)mac.textContent=st.network.mac||"Unavailable"}
 

@@ -366,11 +366,44 @@ static void print_json_text(AsyncResponseStream *stream, const char *text) {
 }
 
 void ButtonConfig::setup() {
+  this->load_ha_pref_();
   this->base_->init();
   this->base_->add_handler(this);
 }
 
-void ButtonConfig::dump_config() { ESP_LOGCONFIG(TAG, "Button config page at /buttons"); }
+void ButtonConfig::load_ha_pref_() {
+  this->ha_pref_ = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
+  HaPref loaded{};
+  if (this->ha_pref_.load(&loaded) && loaded.magic == HA_PREF_MAGIC) {
+    this->ha_api_expected_.store(loaded.expected != 0, std::memory_order_release);
+  } else {
+    this->ha_api_expected_.store(true, std::memory_order_release);
+  }
+}
+
+bool ButtonConfig::save_ha_pref_() {
+  HaPref next{HA_PREF_MAGIC, this->ha_api_expected() ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!this->ha_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the Home Assistant API switch");
+    return false;
+  }
+  return true;
+}
+
+bool ButtonConfig::set_ha_api_expected(bool expected) {
+  if (this->ha_api_expected() == expected)
+    return true;
+  this->ha_api_expected_.store(expected, std::memory_order_release);
+  if (!this->save_ha_pref_())
+    return false;
+  ESP_LOGI(TAG, "Home Assistant API expected %s", expected ? "on" : "off");
+  return true;
+}
+
+void ButtonConfig::dump_config() {
+  ESP_LOGCONFIG(TAG, "Button config page at /buttons");
+  ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
+}
 
 // init() starts the HTTP server, which asserts if it runs before the network is
 // up. WebServer uses WIFI - 1.0f, so stay just behind it and reuse its server.
@@ -428,7 +461,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -438,6 +471,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       ip, mac,
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
+      this->ha_api_expected() ? "true" : "false",
       ::zigbee_assignments.link_started() ? "true" : "false",
       ::zigbee_assignments.link_paired() ? "true" : "false",
       ::zigbee_assignments.link_factory_new() ? "true" : "false",
@@ -568,7 +602,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   bool radio_on = false;
   if (action == "set_radio") {
     const std::string on = request->arg("on");
-    if ((radio != "zigbee" && radio != "ble") || (on != "0" && on != "1")) {
+    if ((radio != "zigbee" && radio != "ble" && radio != "home_assistant") ||
+        (on != "0" && on != "1")) {
       request->send(400, "application/json", R"({"ok":false,"error":"invalid radio switch"})");
       return;
     }
@@ -732,11 +767,15 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       this->complete_action_(action_id, ok);
     });
   } else if (action == "set_radio") {
-    const bool zigbee = radio == "zigbee";
-    this->defer([this, action_id, zigbee, radio_on]() {
-      this->complete_action_(action_id,
-                             zigbee ? ::zigbee_assignments.set_radio_enabled(radio_on)
-                                    : esphome::ble_hid::BleHid::instance()->set_radio_enabled(radio_on));
+    this->defer([this, action_id, radio, radio_on]() {
+      bool ok = false;
+      if (radio == "zigbee")
+        ok = ::zigbee_assignments.set_radio_enabled(radio_on);
+      else if (radio == "ble")
+        ok = esphome::ble_hid::BleHid::instance()->set_radio_enabled(radio_on);
+      else
+        ok = this->set_ha_api_expected(radio_on);
+      this->complete_action_(action_id, ok);
     });
   } else {
     this->defer([this, button, action_id]() {

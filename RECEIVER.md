@@ -10,28 +10,28 @@ action.
 
 ## Enter and leave the mode
 
-Hold `SW2` for two seconds to enter assignment mode. Hold `SW2` for two seconds
+Hold `SW1` for two seconds to enter assignment mode. Hold `SW1` for two seconds
 again to leave it.
 
 The ready state closes after five seconds without an input.
 
-The release that ends an `SW2` hold does not count as a tap.
+The release that ends an `SW1` hold does not count as a tap.
 
 ## Assignment cycle
 
-For `SW1`, `SW3` through `SW11`, and the five wheel directions, tap the same
+For `SW2`, `SW3` through `SW11`, and the five wheel directions, tap the same
 input in this order:
 
 1. First tap: train an IR code.
 2. Second tap: assign the voice assistant.
 3. Third tap: clear the input.
 
-For `SW2`, tap the same input in this order:
+For `SW1`, tap the same input in this order:
 
 1. First tap: train an IR code.
 2. Second tap: clear the input.
 
-`SW2` has no voice stage because its hold gesture controls assignment mode.
+`SW1` has no voice stage because its hold gesture controls assignment mode.
 
 The cycle has no Zigbee stage. A Zigbee target comes from Zigbee2MQTT, which
 the remote cannot read, so only the web page assigns one.
@@ -169,8 +169,8 @@ Each wheel detent sends one short HID press and release.
 
 | Input | Slots | Record IR | Zigbee target | BLE HID | Voice assistant | Clear |
 | --- | --- | --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Page only | Page only | Yes | Yes |
-| `SW2` | 19 | Yes | Page only | Page only | No | Yes |
+| `SW1` | 20 | Yes | Page only | Page only | No | Yes |
+| `SW2` | 19 | Yes | Page only | Page only | Yes | Yes |
 | `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Yes | Yes |
 | Wheel directions | 12 to 16 | Yes | Page only | Page only | Yes | Yes |
 | Wheel rotation | 17 and 18 | Yes | Page only | Page only | No | Yes |
@@ -180,7 +180,7 @@ press handler as IR playback, so a wheel detent can send it. A command that only
 makes sense as a pair, such as brighter and dimmer, costs two slots, and the
 wheel directions are the natural home for one.
 
-`SW2` has no voice action because the hold gesture owns its press edge.
+`SW1` has no voice action because the hold gesture owns its press edge.
 
 Wheel rotation has no voice action because a detent has no release edge to end
 push-to-talk.
@@ -188,7 +188,7 @@ push-to-talk.
 The page hides the voice button on those three slots. The firmware checks the
 same rule again on each request.
 
-A voice request for slot 17, 18, or 19 gets HTTP 400 and changes nothing.
+A voice request for slot 17, 18, or 20 gets HTTP 400 and changes nothing.
 
 ### One operation at a time
 

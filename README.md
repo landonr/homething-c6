@@ -44,7 +44,7 @@ This repo contains the KiCad hardware and ESPHome bring-up configuration for a p
 
 Open `http://homething-c6.local/buttons` in a browser on the same network.
 The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
-You can also clear the input. Hold `SW2` for two seconds to use the on-device assignment mode.
+You can also clear the input. Hold `SW1` for two seconds to use the on-device assignment mode.
 [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
 
 ## Hardware

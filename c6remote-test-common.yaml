@@ -269,7 +269,7 @@ pcf8574:
 #   bit 12 up, 14 down, 15 left, 11 right, 13 centre (defined per revision)
 binary_sensor:
   - platform: gpio
-    name: Encoder Up
+    name: Wheel Up
     id: ano_up
     pin: &expander_pin
       pcf8574: button_expander
@@ -292,7 +292,7 @@ binary_sensor:
             - delay: 90ms
 
   - platform: gpio
-    name: Encoder Down
+    name: Wheel Down
     id: ano_down
     pin:
       <<: *expander_pin
@@ -312,7 +312,7 @@ binary_sensor:
             - delay: 90ms
 
   - platform: gpio
-    name: Encoder Left
+    name: Wheel Left
     id: ano_left
     pin:
       <<: *expander_pin
@@ -323,7 +323,7 @@ binary_sensor:
           dir: -1
 
   - platform: gpio
-    name: Encoder Right
+    name: Wheel Right
     id: ano_right
     pin:
       <<: *expander_pin
@@ -346,7 +346,7 @@ binary_sensor:
 
 sensor:
   - platform: rotary_encoder
-    name: Encoder
+    name: Wheel
     id: wheel
     pin_a:
       number: GPIO20

@@ -41,14 +41,14 @@ class ProductionConfigTest(unittest.TestCase):
         """Catches an input that lost its slot or took a neighbour's slot."""
         config = CONFIG.read_text()
         expected = {f"Button {number}": number for number in range(3, 12)}
-        expected["Button 1"] = 20
+        expected["Button 2"] = 19
         expected.update(
             {
-                "Encoder Right": 12,
-                "Encoder Up": 13,
-                "Encoder Press": 14,
-                "Encoder Down": 15,
-                "Encoder Left": 16,
+                "Wheel Right": 12,
+                "Wheel Up": 13,
+                "Wheel Press": 14,
+                "Wheel Down": 15,
+                "Wheel Left": 16,
             }
         )
         for name, slot in expected.items():
@@ -58,7 +58,7 @@ class ProductionConfigTest(unittest.TestCase):
             self.assertEqual(int(match.group(1)), slot, name)
             self.assertEqual(match.group(2), "FULL", name)
 
-        self.assertIn("ir_ui.tap(19, IrUi::Tap::NO_VOICE);", config)
+        self.assertIn("ir_ui.tap(20, IrUi::Tap::NO_VOICE);", config)
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", config)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", config)
 
@@ -69,8 +69,8 @@ class ProductionConfigTest(unittest.TestCase):
             r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
         )
 
-    def test_sw1_is_push_to_talk_for_home_assistant_assist(self) -> None:
-        """SW2 owns the receiver-mode hold, so SW1 carries push to talk."""
+    def test_sw2_is_push_to_talk_for_home_assistant_assist(self) -> None:
+        """SW1 owns the receiver-mode hold, so SW2 carries push to talk."""
         config = CONFIG.read_text()
         # Zigbee and Wi-Fi share the C6 radio. Coexistence needs modem power
         # save, or the STA misses beacons and the association flaps.
@@ -90,11 +90,11 @@ class ProductionConfigTest(unittest.TestCase):
             config,
             r"id: board_microphone[\s\S]*?sample_rate: 16000",
         )
-        # The voice stage is a shared anchor, so it is defined on Button 1.
+        # The voice stage is a shared anchor, so it is defined on Button 2.
         self.assertRegex(
             config,
-            r"name: Button 1\n    pin: &button_1[\s\S]*?"
-            r"\n      - lambda: ir_ui\.tap\(20, IrUi::Tap::FULL\);[\s\S]*?"
+            r"name: Button 2\n    id: button_2\n    pin:[\s\S]*?"
+            r"\n      - lambda: ir_ui\.tap\(19, IrUi::Tap::FULL\);[\s\S]*?"
             r"\n      - if: &start_learned_voice",
         )
         start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
@@ -232,7 +232,7 @@ class ProductionConfigTest(unittest.TestCase):
         )
         for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_"):
             self.assertNotIn(gone, header)
-        self.assertIn("ir_ui.tap(19, IrUi::Tap::NO_VOICE);", CONFIG.read_text())
+        self.assertIn("ir_ui.tap(20, IrUi::Tap::NO_VOICE);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
 

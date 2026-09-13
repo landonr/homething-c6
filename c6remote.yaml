@@ -140,15 +140,48 @@ binary_sensor:
       number: 0
       mode: INPUT
       inverted: true
+    # SW1 carries the receiver-mode gesture as well as its own assignment. A hold
+    # of two seconds opens the mode from OFF and closes it from any learn state.
+    # A tap runs its assignment. The consumed flag stops a hold release from
+    # counting as a tap. A HID assignment uses the physical press edge.
     on_press:
-      - lambda: ir_ui.tap(20, IrUi::Tap::FULL);
-      - if: &send_learned_code
+      - lambda: |-
+          ir_ui.hold_consumed = false;
+          id(ble_hid_remote).set_pressed(20, true);
+      - if:
           condition:
-            lambda: return ir_ui.take_transmit();
+            lambda: return ir_ui.state != IrUi::OFF;
           then:
-            - remote_transmitter.transmit_raw:
-                carrier_frequency: 38kHz
-                code: !lambda return ir_ui.code();
+            - script.execute: exit_receiver_hold
+          else:
+            - script.execute: detect_receiver_hold
+    on_release:
+      - script.stop: detect_receiver_hold
+      - script.stop: exit_receiver_hold
+      - if:
+          condition:
+            lambda: |-
+              return !ir_ui.hold_consumed &&
+                     !id(ble_hid_remote).assignment(20).assigned;
+          then:
+            - lambda: ir_ui.tap(20, IrUi::Tap::NO_VOICE);
+            - if: &send_learned_code
+                condition:
+                  lambda: return ir_ui.take_transmit();
+                then:
+                  - remote_transmitter.transmit_raw:
+                      carrier_frequency: 38kHz
+                      code: !lambda return ir_ui.code();
+      - lambda: id(ble_hid_remote).set_pressed(20, false);
+  - platform: gpio
+    name: Button 2
+    id: button_2
+    pin:
+      <<: *button_1
+      number: 1
+    on_press:
+      - lambda: ir_ui.tap(19, IrUi::Tap::FULL);
+      - if: *send_learned_code
       - if: &start_learned_voice
           condition:
             lambda: return ir_ui.take_voice_start();
@@ -165,40 +198,7 @@ binary_sensor:
     on_release:
       - script.execute:
           id: release_assignment
-          slot: 20
-  - platform: gpio
-    name: Button 2
-    id: button_2
-    pin:
-      <<: *button_1
-      number: 1
-    # SW2 carries the receiver-mode gesture as well as its own assignment. A hold
-    # of two seconds opens the mode from OFF and closes it from any learn state.
-    # A tap runs its assignment. The consumed flag stops a hold release from
-    # counting as a tap. A HID assignment uses the physical press edge.
-    on_press:
-      - lambda: |-
-          ir_ui.sw2_consumed = false;
-          id(ble_hid_remote).set_pressed(19, true);
-      - if:
-          condition:
-            lambda: return ir_ui.state != IrUi::OFF;
-          then:
-            - script.execute: exit_receiver_hold
-          else:
-            - script.execute: detect_receiver_hold
-    on_release:
-      - script.stop: detect_receiver_hold
-      - script.stop: exit_receiver_hold
-      - if:
-          condition:
-            lambda: |-
-              return !ir_ui.sw2_consumed &&
-                     !id(ble_hid_remote).assignment(19).assigned;
-          then:
-            - lambda: ir_ui.tap(19, IrUi::Tap::NO_VOICE);
-            - if: *send_learned_code
-      - lambda: id(ble_hid_remote).set_pressed(19, false);
+          slot: 19
   - platform: gpio
     name: Button 3
     pin:
@@ -302,7 +302,7 @@ binary_sensor:
   # logging expander edges per press; they match the ENC1 symbol pin names, so
   # the part is mounted as drawn and there is no rotation to compensate for.
   - platform: gpio
-    name: Encoder Right
+    name: Wheel Right
     pin:
       <<: *button_1
       number: 11
@@ -313,7 +313,7 @@ binary_sensor:
     on_release:
       - script.execute: {id: release_assignment, slot: 12}
   - platform: gpio
-    name: Encoder Up
+    name: Wheel Up
     pin:
       <<: *button_1
       number: 12
@@ -324,7 +324,7 @@ binary_sensor:
     on_release:
       - script.execute: {id: release_assignment, slot: 13}
   - platform: gpio
-    name: Encoder Press
+    name: Wheel Press
     pin:
       <<: *button_1
       number: 13
@@ -335,7 +335,7 @@ binary_sensor:
     on_release:
       - script.execute: {id: release_assignment, slot: 14}
   - platform: gpio
-    name: Encoder Down
+    name: Wheel Down
     pin:
       <<: *button_1
       number: 14
@@ -346,7 +346,7 @@ binary_sensor:
     on_release:
       - script.execute: {id: release_assignment, slot: 15}
   - platform: gpio
-    name: Encoder Left
+    name: Wheel Left
     pin:
       <<: *button_1
       number: 15
@@ -373,7 +373,7 @@ binary_sensor:
 
 sensor:
   - platform: rotary_encoder
-    name: Encoder
+    name: Wheel
     pin_a:
       number: GPIO20
       mode:
@@ -717,7 +717,7 @@ script:
           if (ir_ui.state != IrUi::OFF)
             return;
           ir_ui.open();
-          ir_ui.sw2_consumed = true;
+          ir_ui.hold_consumed = true;
           id(ir_rail).turn_on();
           id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();
   - id: exit_receiver_hold
@@ -728,7 +728,7 @@ script:
           if (ir_ui.state == IrUi::OFF)
             return;
           ir_ui.close();
-          ir_ui.sw2_consumed = true;
+          ir_ui.hold_consumed = true;
   - id: show_idle_status
     then:
       - if:

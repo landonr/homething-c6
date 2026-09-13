@@ -26,8 +26,8 @@ static const SlotInfo SLOTS[] = {
     {9, true},   {10, true},  {11, true}, {12, true}, {13, true}, {14, true},
     {15, true},  {16, true},  {17, false},  // wheel clockwise
     {18, false},                            // wheel anticlockwise
-    {19, false},                            // SW2 owns the receiver-mode hold
-    {20, true},
+    {19, true},
+    {20, false},                            // SW1 owns the receiver-mode hold
 };
 
 static const SlotInfo *find_slot(long slot) {

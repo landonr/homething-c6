@@ -107,10 +107,10 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("hid_play_callback_(button, false)", (ROOT / "ir_learning.h").read_text())
-        for slot in list(range(3, 17)) + [20]:
+        for slot in list(range(3, 17)) + [19]:
             self.assertIn(f"slot: {slot}", CONFIG)
-        self.assertIn("set_pressed(19, true)", CONFIG)
-        self.assertIn("set_pressed(19, false)", CONFIG)
+        self.assertIn("set_pressed(20, true)", CONFIG)
+        self.assertIn("set_pressed(20, false)", CONFIG)
 
 
 if __name__ == "__main__":

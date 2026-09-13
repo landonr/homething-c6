@@ -21,7 +21,7 @@ class IrCodeStore {
   // FIRST_BUTTON would shift every existing key by one slot and hand each
   // button its neighbour's code.
   static constexpr uint8_t LAST_BUTTON = 20;
-  static constexpr uint8_t VOICE_BUTTON = 20;
+  static constexpr uint8_t VOICE_BUTTON = 19;
   static constexpr size_t SLOT_COUNT = LAST_BUTTON - FIRST_BUTTON + 1;
   static constexpr size_t MAX_PULSES = 512;
   // Flipper .ir names are short words such as Power or Vol_up.
@@ -53,9 +53,9 @@ class IrCodeStore {
     if (voice_pref_.load(&mask)) {
       voice_mask_ = mask;
     } else {
-      // First boot after this feature. Seed SW1 so the board still has an Assist
+      // First boot after this feature. Seed SW2 so the board still has an Assist
       // button before anyone opens receiver mode. A clear writes the mask, so a
-      // cleared SW1 stays cleared.
+      // cleared SW2 stays cleared.
       voice_mask_ = slot_bit_(VOICE_BUTTON);
       voice_pref_.save(&voice_mask_);
     }
@@ -535,7 +535,7 @@ class IrUi {
   uint8_t state = OFF;
   uint8_t target = 0;
   uint8_t stage = 0;
-  bool sw2_consumed = false;
+  bool hold_consumed = false;
 
   void open() {
     state = READY;
@@ -545,7 +545,7 @@ class IrUi {
     web_result_ = OFF;
     web_result_slot_ = 0;
     mark_();
-    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW2 or wait 5 s to leave");
+    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW1 or wait 5 s to leave");
   }
 
   void close() {

@@ -18,7 +18,7 @@ static const char PAGE_HTML[] = R"=====(<!doctype html>
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
 font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:16px;
+.wrap{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px;
 grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:720px){.wrap{grid-template-columns:1fr}}
 .full{grid-column:1/-1}
@@ -36,8 +36,14 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}
 border-radius:8px;padding:8px 14px;cursor:pointer}.tabs button[aria-selected=true]{background:var(--acc);
 border-color:var(--acc);color:#fff}.tabgrid{display:grid;grid-column:1/-1;gap:16px;
 grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#buttonstab{grid-template-columns:auto minmax(220px,.9fr) minmax(260px,1.2fr);
+align-items:start;column-gap:16px}
 .tabgrid[hidden]{display:none}
-@media (max-width:720px){.tabgrid{grid-template-columns:1fr}}
+@media (max-width:960px){#buttonstab{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#buttonstab .remote-pane{grid-column:1/-1}
+#buttonstab .remote{margin:0 auto}}
+@media (max-width:720px){.tabgrid,#buttonstab{grid-template-columns:1fr}
+#buttonstab .remote-pane{grid-column:auto}}
 header.full{display:flex;align-items:center;gap:12px}
 .logo{width:34px;height:34px;flex:none}
 h1{font-size:20px;margin:0 0 4px}
@@ -60,24 +66,44 @@ border-radius:50%;background:var(--card);transition:left .15s}
 border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
 .edtitle .clip button[disabled]{opacity:.5;cursor:not-allowed}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.remote-pane{background:transparent;border:0;border-radius:0;padding:0}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
 a{color:var(--acc)}
 .grp{margin:0 0 14px}
 .grp>p{color:var(--mut);font-size:12px;margin:0 0 6px;text-transform:uppercase;
 letter-spacing:.06em}
-.remote{position:relative;width:min(100%,316.5px);margin:0 auto}
-.remote>img{display:block;width:100%;height:auto}
+.remote{position:relative;width:fit-content;max-width:100%;margin:0}
+.remote>img{display:block;width:auto;max-width:100%;max-height:100vh;height:auto;
+user-select:none;-webkit-user-drag:none}
 .remote .k{position:absolute;width:17%;aspect-ratio:1;border:2px solid transparent;
 border-radius:25%;padding:0;background:transparent;transform:translate(-50%,-50%)}
 .remote .k:hover{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 55%,transparent)}
 .remote .k[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 72%,transparent);
-box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--acc)}
-.remote .k.rot{left:50%;top:33.7%;width:36%;border-radius:50%;z-index:1}
+box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
+.set-ble{--set-bg:#2f80ed}
+.set-zigbee{--set-bg:#38a169}
+.set-ir{--set-bg:#e5b700}
+.set-voice{--set-bg:#8b5cf6}
+.remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 22%,transparent)}
+.remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 30%,transparent)}
+.remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 35%,transparent)}
+.remote .k.rot{left:50%;top:31.7%;width:49%;border-radius:50%;z-index:1}
 .remote .k.rot.left{clip-path:inset(0 50% 0 0)}
 .remote .k.rot.right{clip-path:inset(0 0 0 50%)}
 .remote .k:not(.rot){z-index:2}
 .remote .k b,.remote .k span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
 overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.assignments{grid-column:1/-1;padding:0}
+.assignments h2{margin:0;padding:14px;border-bottom:1px solid var(--line)}
+.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
+@media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}
+.assignment-list button{display:flex;flex-direction:column;gap:5px;min-height:76px;border:1px solid var(--line);
+border-radius:10px;padding:12px;background:transparent;text-align:left;cursor:pointer;width:100%}
+.assignment-list button[class*=set-]{background:color-mix(in srgb,var(--set-bg) 13%,transparent)}
+.assignment-list button:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
+background:var(--set-bg);margin-right:8px}
+.assignment-list button:hover{border-color:var(--acc)}
 button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
@@ -89,8 +115,16 @@ header.full .sub{margin:0}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 .code .load{color:var(--mut);font-size:13px;margin:8px 0 0}
-p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
+h2.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
+.aslist{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+.aslist button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);
+border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer;width:100%;
+display:flex;align-items:center;justify-content:space-between;gap:8px}
+.aslist button:hover{border-color:var(--acc)}
+.aslist button[aria-checked=true]{background:var(--sel);border-color:var(--acc)}
+.aslist button[aria-checked=true]:after{content:"✓";color:var(--acc);font-weight:600}
+.aslist button[disabled]{opacity:.5;cursor:not-allowed}
 h3{font-size:15px;margin:14px 0 8px}
 select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
@@ -142,12 +176,17 @@ animation:sweep 1.4s ease-in-out infinite}
 <button type="button" id="tabc" aria-selected="false">Config</button>
 </nav>
 <div class="tabgrid" id="buttonstab">
-<section class="card">
+<section class="remote-pane">
 <div class="remote" id="remote">
-<img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote">
+<img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote" draggable="false">
 </div>
 </section>
 <section class="card" id="ed" aria-live="polite"></section>
+<section class="card" id="edpanel" aria-live="polite"></section>
+<section class="card assignments">
+<h2 id="assignmentSummary">Assignments</h2>
+<div class="assignment-list" id="assignmentList"></div>
+</section>
 </div>
 <div class="tabgrid" id="configtab" hidden>
 <h1 class="full secttl">Connections</h1>
@@ -193,17 +232,17 @@ aria-label="Bluetooth radio"><span></span></label></h2>
 </div>
 <script>
 var S=[
-{s:19,l:"SW2",v:0,x:30.3,y:16.4},{s:20,l:"SW1",v:1,x:69.7,y:16.4},
+{s:19,l:"Button 2",v:1,x:22.9,y:12.2},{s:20,l:"Button 1",v:0,x:77.1,y:12.2},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
-{s:18,l:"Turn left",v:0,x:50,y:33.7,c:"rot left"},{s:13,l:"Up",v:1,x:50,y:25},
-{s:17,l:"Turn right",v:0,x:50,y:33.7,c:"rot right"},
-{s:16,l:"Left",v:1,x:29,y:33.7},{s:14,l:"Press",v:1,x:50,y:33.7},
-{s:12,l:"Right",v:1,x:71,y:33.7},{s:15,l:"Down",v:1,x:50,y:42.7},
+{s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.7,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.9},
+{s:17,l:"Wheel Clockwise",v:0,x:50,y:31.7,c:"rot right"},
+{s:16,l:"Wheel Left",v:1,x:21.1,y:31.7},{s:14,l:"Wheel Press",v:1,x:50,y:31.7},
+{s:12,l:"Wheel Right",v:1,x:78.9,y:31.7},{s:15,l:"Wheel Down",v:1,x:50,y:41.8},
 // Keypad fills column by column on the board, so the rows read 3 6 11, 4 7 10,
 // 5 8 9. The array order is the render order, not the slot order.
-{s:3,l:"SW3",v:1,x:30.3,y:51},{s:6,l:"SW6",v:1,x:50,y:51},{s:11,l:"SW11",v:1,x:69.7,y:51},
-{s:4,l:"SW4",v:1,x:30.3,y:59},{s:7,l:"SW7",v:1,x:50,y:59},{s:10,l:"SW10",v:1,x:69.7,y:59},
-{s:5,l:"SW5",v:1,x:30.3,y:67},{s:8,l:"SW8",v:1,x:50,y:67},{s:9,l:"SW9",v:1,x:69.7,y:67}];
+{s:3,l:"Button 3",v:1,x:22.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:77.1,y:51.1},
+{s:4,l:"Button 4",v:1,x:22.9,y:60.1},{s:7,l:"Button 7",v:1,x:50,y:60.1},{s:10,l:"Button 10",v:1,x:77.1,y:60.1},
+{s:5,l:"Button 5",v:1,x:22.9,y:69.1},{s:8,l:"Button 8",v:1,x:50,y:69.1},{s:9,l:"Button 9",v:1,x:77.1,y:69.1}];
 // One press, one Zigbee command. a is the number the remote stores, c is the
 // Zigbee2MQTT input cluster a target must carry to accept it, and p names the
 // value the command needs. The numbers match the Action enum in
@@ -271,6 +310,8 @@ function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
 // Only these two actions leave the board over a radio. IR and voice do not.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
+function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":
+(a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
@@ -641,13 +682,26 @@ function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
 z2mStatus();networkStatus();radioStatus();bleStatus();zpjPaint();
-for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
+for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
 b.setAttribute("aria-label",d.l+": "+words(d.s));
-b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");
+b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""].filter(Boolean).join(" ");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
-editor();cfgPaint()}
+assignmentPaint();editor();cfgPaint()}
+
+function assignmentPaint(){
+var list=document.getElementById("assignmentList"),summary=document.getElementById("assignmentSummary");
+var h="",used=[],i,d,r;
+for(i=0;i<S.length;i++){d=S[i];r=row(d.s);if(!r||r.action==="none")continue;
+used.push({slot:d.s,label:d.l,row:r})}
+used.sort(function(a,b){return a.label.localeCompare(b.label,undefined,{numeric:true})});
+for(i=0;i<used.length;i++){d=used[i];h+="<button type=button id=assignment-"+d.slot+" class='"+
+setClass(d.row)+"'><b>"+esc(d.label)+"</b><span>"+esc(words(d.slot))+"</span></button>"}
+  summary.textContent="Assignments";
+list.innerHTML=h||"<p class=sub>No inputs are assigned.</p>";
+for(i=0;i<used.length;i++)(function(s){
+document.getElementById("assignment-"+s).onclick=function(){pick(s)}})(used[i].slot)}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
 // esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.
@@ -916,13 +970,12 @@ z2mConnect(u,k);z2mStatus()}
 function hasCode(text){return !!String(text||"").replace(/\s+/g,"")}
 
 function codeBox(lock){
-var dis=lock?" disabled":"",codeDis=dis||(!hasCode(cd)?" disabled":"");
+var codeDis=lock||!hasCode(cd)?" disabled":"";
 var h="<div class=code><p class=hd>IR code</p>"+
 "<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
 "rel=noreferrer>Flipper-IRDB</a></p>"+
 "<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
-h+="<div class=act><button type=button class=sec id=cc"+codeDis+">Copy</button>"+
-"<button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
+h+=detail(sel)+"<div class=act><button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
 (cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")+"</div>";
 return h}
 
@@ -942,12 +995,6 @@ try{ok=document.execCommand("copy")}catch(x){}
 if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}
 return ok}
 
-function copyCode(){var t=document.getElementById("ct");
-if(!hasCode(t.value)){msg="This input has no code to copy.";bad=true;paint();return}
-var ok=copyBox(t);
-msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
-bad=!ok;paint()}
-
 function clipConfig(r){
 if(!r)return null;
 if(r.action==="ir")return {kind:"ir",source:r.slot};
@@ -964,20 +1011,21 @@ function clipName(c){var d=info(c.source);return d?d.l:"that input"}
 function copyAssignment(){
 var c=clipConfig(row(sel)),source=sel;
 if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint();return}
-if(c.kind!=="ir"){clip=c;msg="Copied "+(c.kind==="hid"?"BLE HID":"Zigbee")+
-" config from "+clipName(c)+".";bad=false;paint();return}
+if(c.kind!=="ir"){clip=c;msg="";bad=false;paint();return}
 clipBusy=true;paint();
 fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){
 if(j.slot!==source||!j.present||!j.text)throw new Error();
 c.code=j.text;clip=c;cfgAll[source]=j.text;
-msg="Copied IR config from "+clipName(c)+".";bad=false})
+msg="";bad=false})
 .catch(function(){msg="Could not read that IR code.";bad=true})
 .then(function(){clipBusy=false;paint()})}
 
 function pasteAssignment(){
 var c=clip,target=sel;
 if(!c){msg="Copy an IR, Zigbee, or BLE HID config first.";bad=true;paint();return}
+if(!confirm("Apply the "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
+" config from "+clipName(c)+" to "+info(target).l+"?"))return;
 if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}
 else if(c.kind==="hid"){act="hid";hkv=c.hid_kind;huv=String(c.usage);hmv=String(c.mod||0);
 hcust=hidCustom(hkv,huv)}
@@ -987,9 +1035,12 @@ zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";
 zgv=c.device?"":String(c.group);zhv=c.device?c.ieee:"";
 zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;
 zvv=za(zav)&&za(zav).p?String(c.val):""}
-msg="Pasted "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
-" config from "+clipName(c)+". Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it.";
-bad=false;paint()}
+msg="";bad=false;
+if(c.kind==="ir"){paint();go("set_ir_code",c.code);return}
+if(c.kind==="hid"){paint();go("set_hid",null,"&kind="+hkv+"&usage="+c.usage+
+"&mod="+(c.mod||0));return}
+if(c.device){sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0));return}
+sendGroup(String(c.group),c.name||"",String(c.val||0))}
 
 function applyCode(){
 var text=document.getElementById("ct").value;
@@ -1210,24 +1261,29 @@ if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}
 
 function editor(){
 var e=document.getElementById("ed");
+var p=document.getElementById("edpanel");
 if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
-"<p class=sub>Select an input on the left to change what it does.</p>";return}
+"<p class=sub>Select an input on the left to change what it does.</p>";
+p.innerHTML="";return}
 var d=info(sel);
 var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
 var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
 "<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
 "<button type=button id=bpaste"+(!clip||locked?" disabled":"")+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
-"</span></h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
+"</span></h2>";
 // The assignment is intact, so this says why the press reaches nothing.
 if(slotRadioOff(sel))h+="<div class='note bad'>The "+
 (slotRadio(row(sel))==="zigbee"?"Zigbee":"Bluetooth")+
 " radio is off, so this input is disabled. The assignment is kept.</div>";
 if(mode==="rec"&&rec===sel){
-h+="<p>Point the source remote at the front of the board and press its button.</p>"+
+e.innerHTML=h+"<h2 class=hd2 id=asl>Action</h2>"+
+"<div class=aslist role=radiogroup aria-labelledby=asl id=as>"+
+"<button type=button role=radio aria-checked=true disabled>IR code</button></div>";
+p.innerHTML="<h2>IR code</h2><p class=sub>Point the source remote at the front of the board and press its button.</p>"+
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
-e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
+document.getElementById("bc").onclick=cancel;return}
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 var lock=locked;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
@@ -1235,32 +1291,36 @@ else if(st&&st.busy&&st.owner==="device")
 h+="<div class=note>Assignment in progress on the remote.</div>";
 else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</div>";
 
-// One selector, because a slot holds one action. The panel below it carries
+// One open list, because a slot holds one action. The panel beside it carries
 // everything that action needs, so nothing from another action is on screen.
 var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
-h+="<p class=hd2>Action</p><select id=as"+(lock?" disabled":"")+">";
-var title="";
-for(var i=0;i<opts.length;i++){h+="<option value="+opts[i][0]+
-(act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
-if(act===opts[i][0])title=opts[i][1]}
-h+="</select><h2>"+esc(title)+"</h2>";
-h+=act==="zb"?zbForm(st&&st.busy):act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
-act==="cl"?clearPanel(lock):irPanel(lock);
+h+="<h2 class=hd2 id=asl>Action</h2><div class=aslist role=radiogroup "+
+"aria-labelledby=asl id=as>";
+var title="",dis=lock?" disabled":"";
+for(var i=0;i<opts.length;i++){var on=act===opts[i][0];
+h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
+" aria-checked="+on+dis+">"+esc(opts[i][1])+"</button>";
+if(on)title=opts[i][1]}
+h+="</div>";
+var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):
+act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
+act==="cl"?clearPanel(lock):irPanel(lock));
 e.innerHTML=h;
+p.innerHTML=panel;
 
 if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
 if(!locked&&clip)document.getElementById("bpaste").onclick=pasteAssignment;
-document.getElementById("as").onchange=function(){act=this.value;msg="";bad=false;paint()};
+if(!lock)for(var j=0;j<opts.length;j++)(function(v){
+document.getElementById("as-"+v).onclick=function(){
+act=v;msg="";bad=false;paint()}})(opts[j][0]);
 if(act==="ir"){
 var box=document.getElementById("ct");
 box.oninput=function(){cd=box.value;
 var disabled=lock||!hasCode(cd);
-document.getElementById("cc").disabled=disabled;
 document.getElementById("ca").disabled=disabled};
-document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
 if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
 if(act==="zb"){

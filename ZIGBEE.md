@@ -464,10 +464,10 @@ clear.
 | `D5` | Meaning |
 | --- | --- |
 | dark | The radio is off, or the stack has not started. |
-| blue pulse, 800 ms | A pairing window is open. |
-| red pulse, 1600 ms | The stack is up but it has not joined this boot. |
+| blue pulse, 1600 ms | A pairing window is open. |
+| red pulse, 3200 ms | The stack is up but it has not joined this boot. |
 | solid green | The remote joined a network. |
-| amber pulse, 2000 ms | Joined, but the last device command was not acknowledged. |
+| amber pulse, 4000 ms | Joined, but the last device command was not acknowledged. |
 
 Pairing is tested before the join, so an open window never shows the red that
 means a fault.

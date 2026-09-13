@@ -444,13 +444,13 @@ light:
             if (api_connected) {
               it[0] = Color(0, 96, 24);
             } else if (!wifi_connected) {
-              const float phase = (millis() % 2400) / 2400.0f;
+              const float phase = (millis() % 4800) / 4800.0f;
               // Input 98 produces 3/255 after 50% brightness and gamma correction.
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, 0, 0);
             } else if (ha_expected) {
-              const float phase = (millis() % 2400) / 2400.0f;
+              const float phase = (millis() % 4800) / 4800.0f;
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, level / 2, 0);
@@ -505,19 +505,19 @@ light:
             if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started()) {
               it[3] = Color::BLACK;
             } else if (zigbee_assignments.pairing_window_open()) {
-              const float phase = (millis() % 800) / 800.0f;
+              const float phase = (millis() % 1600) / 1600.0f;
               const uint8_t level = 48 + static_cast<uint8_t>(
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[3] = Color(0, 0, level);
             } else if (!id(zigbee_radio).is_connected()) {
-              const float phase = (millis() % 1600) / 1600.0f;
+              const float phase = (millis() % 3200) / 3200.0f;
               const uint8_t level = 48 + static_cast<uint8_t>(
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[3] = Color(level, 0, 0);
             } else if (zigbee_assignments.reach() == ZigbeeAssignmentManager::REACH_FAILED) {
               // Only a device unicast is acknowledged, so a groupcast-only
               // remote never reaches this and stays solid green.
-              const float phase = (millis() % 2000) / 2000.0f;
+              const float phase = (millis() % 4000) / 4000.0f;
               const uint8_t level = 48 + static_cast<uint8_t>(
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[3] = Color(level, level / 3, 0);

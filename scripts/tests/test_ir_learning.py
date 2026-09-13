@@ -63,6 +63,14 @@ class IrLearningTest(unittest.TestCase):
         green = status.index("it[0] = Color(0, 96, 24);")
         self.assertLess(status.index("if (!api_connected) {"), green)
 
+    def test_d2_and_d5_pulse_periods_are_slow(self) -> None:
+        status = CONFIG.split("name: Status Indicators", 1)[1].split("on_turn_on:", 1)[0]
+        d2 = status.split("// D2 pulses", 1)[1].split("// D3 and D4", 1)[0]
+        d5 = status.split("// D5 is Zigbee status", 1)[1]
+        self.assertEqual(2, d2.count("(millis() % 4800) / 4800.0f"))
+        for period in (1600, 3200, 4000):
+            self.assertIn(f"(millis() % {period}) / {period}.0f", d5)
+
     def test_successful_save_returns_to_ready_until_sw2(self) -> None:
         self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)
         self.assertIn("state = READY", HEADER)

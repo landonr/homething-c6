@@ -31,6 +31,8 @@ function mk(tag) {
         const child = mk("stub");
         child._owner = this;
         child.disabled = /\sdisabled(?:\s|=|>)/.test(m[0]);
+        const ap = /\saria-pressed=['"]?(true|false)['"]?/.exec(m[0]);
+        if (ap) child.attrs["aria-pressed"] = ap[1];
         els[m[1]] = child;
         this._ids.push(m[1]);
       }
@@ -51,7 +53,7 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["remote", "ed", "edpanel", "assignmentSummary", "assignmentList", "z2m", "bst", "bfr", "cfg", "cfgio",
+for (const id of ["remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfs", "has",
                   "wip", "wmac"])
@@ -148,22 +150,11 @@ setTimeout(() => {
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
-  step("assignment collection lists only set input cards", () => {
-    const list = document.getElementById("assignmentList");
-    if (document.getElementById("assignment-3")) throw new Error("clear input was listed");
-    for (const slot of [4, 5, 6, 7, 20])
-      if (!document.getElementById("assignment-" + slot)) throw new Error("set input " + slot + " was omitted");
-    if (document.getElementById("assignmentSummary").textContent !== "Assignments")
-      throw new Error("assignment heading is wrong");
-    if (list.innerHTML.indexOf("set-voice") < 0 || list.innerHTML.indexOf("set-zigbee") < 0 ||
-        list.innerHTML.indexOf("set-ir") < 0 || list.innerHTML.indexOf("set-ble") < 0)
-      throw new Error("assignment colors were omitted");
-    if (list.innerHTML.indexOf("<span>") < 0 || list.innerHTML.indexOf("<br>") >= 0)
-      throw new Error("assignments were rendered as rows instead of cards");
-    const labels = ["Button 1", "Button 4", "Button 5", "Button 6", "Button 7"];
-    for (let i = 1; i < labels.length; i++)
-      if (list.innerHTML.indexOf(labels[i - 1]) > list.innerHTML.indexOf(labels[i]))
-        throw new Error("assignments are not sorted by input label");
+  step("assignment collection is gone and color switch remains", () => {
+    if (document.getElementById("assignmentList") || document.getElementById("assignmentSummary"))
+      throw new Error("assignment collection still present");
+    if (!document.getElementById("scb") || !document.getElementById("scw"))
+      throw new Error("assignment color switch was removed");
   });
    step("assignment color overlay switch toggles body class and storage", () => {
     if (!document.body.classList.contains("set-colors"))

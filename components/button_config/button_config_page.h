@@ -66,7 +66,10 @@ border-radius:50%;background:var(--card);transition:left .15s}
 border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
 .edtitle .clip button[disabled]{opacity:.5;cursor:not-allowed}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
-.remote-pane{background:transparent;border:0;border-radius:0;padding:0}
+.remote-pane{background:transparent;border:0;border-radius:0;padding:0;
+display:flex;flex-direction:column;align-items:center;gap:8px;width:fit-content;max-width:100%}
+.colorbar{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.colorbar h2{margin:0;font-size:16px}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
 a{color:var(--acc)}
 .grp{margin:0 0 14px}
@@ -86,26 +89,15 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 .set-voice{--set-bg:#8b5cf6}
 /* Off by default in CSS. body.set-colors turns the tints on, and the switch
    stores that choice in this browser only. */
-body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 22%,transparent)}
-body.set-colors .remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 30%,transparent)}
-body.set-colors .remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 35%,transparent)}
+body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 42%,transparent)}
+body.set-colors .remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 52%,transparent)}
+body.set-colors .remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 62%,transparent)}
 .remote .k.rot{left:50%;top:31.7%;width:49%;border-radius:50%;z-index:1}
 .remote .k.rot.left{clip-path:inset(0 50% 0 0)}
 .remote .k.rot.right{clip-path:inset(0 0 0 50%)}
 .remote .k:not(.rot){z-index:2}
 .remote .k b,.remote .k span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
 overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.assignments{grid-column:1/-1;padding:0}
-.assignments h2.ttl{margin:0;padding:14px;border-bottom:1px solid var(--line)}
-.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
-@media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}
-.assignment-list button{display:flex;flex-direction:column;gap:5px;min-height:76px;border:1px solid var(--line);
-border-radius:10px;padding:12px;background:transparent;text-align:left;cursor:pointer;width:100%}
-body.set-colors .assignment-list button[class*=set-]{background:color-mix(in srgb,var(--set-bg) 13%,transparent)}
-body.set-colors .assignment-list button:before{content:"";display:inline-block;width:9px;height:9px;
-border-radius:50%;background:var(--set-bg);margin-right:8px}
-.assignment-list button:hover{border-color:var(--acc)}
 button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
@@ -182,15 +174,12 @@ animation:sweep 1.4s ease-in-out infinite}
 <div class="remote" id="remote">
 <img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote" draggable="false">
 </div>
+<div class="colorbar"><h2>Assignment colors</h2>
+<label class="sw" id="scw"><input type="checkbox" id="scb"
+aria-label="Assignment colors" checked><span></span></label></div>
 </section>
 <section class="card" id="ed" aria-live="polite"></section>
 <section class="card" id="edpanel" aria-live="polite"></section>
-<section class="card assignments">
-<h2 class="ttl"><span id="assignmentSummary">Assignments</span><label class="sw" id="scw"
-title="Assignment colors"><input type="checkbox" id="scb" aria-label="Assignment colors"
-checked><span></span></label></h2>
-<div class="assignment-list" id="assignmentList"></div>
-</section>
 </div>
 <div class="tabgrid" id="configtab" hidden>
 <h1 class="full secttl">Connections</h1>
@@ -705,20 +694,7 @@ b.lastChild.textContent=words(d.s);
 b.setAttribute("aria-label",d.l+": "+words(d.s));
 b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""].filter(Boolean).join(" ");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
-assignmentPaint();editor();cfgPaint()}
-
-function assignmentPaint(){
-var list=document.getElementById("assignmentList"),summary=document.getElementById("assignmentSummary");
-var h="",used=[],i,d,r;
-for(i=0;i<S.length;i++){d=S[i];r=row(d.s);if(!r||r.action==="none")continue;
-used.push({slot:d.s,label:d.l,row:r})}
-used.sort(function(a,b){return a.label.localeCompare(b.label,undefined,{numeric:true})});
-for(i=0;i<used.length;i++){d=used[i];h+="<button type=button id=assignment-"+d.slot+" class='"+
-setClass(d.row)+"'><b>"+esc(d.label)+"</b><span>"+esc(words(d.slot))+"</span></button>"}
-  summary.textContent="Assignments";
-list.innerHTML=h||"<p class=sub>No inputs are assigned.</p>";
-for(i=0;i<used.length;i++)(function(s){
-document.getElementById("assignment-"+s).onclick=function(){pick(s)}})(used[i].slot)}
+editor();cfgPaint()}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
 // esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.

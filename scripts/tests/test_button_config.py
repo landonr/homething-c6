@@ -1152,34 +1152,22 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('a==="hid"?"set-ble"', PAGE)
         self.assertIn('a==="zigbee"||a==="ir"||a==="voice"', PAGE)
         self.assertIn('body.set-colors .remote .k[class*=set-]', PAGE)
-        self.assertIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
+        self.assertNotIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
         self.assertIn('localStorage.getItem("c6.set-colors")', PAGE)
         self.assertIn('document.getElementById("scb").onchange=setColorsToggle;', PAGE)
         self.assertIn('aria-label="Assignment colors"', PAGE)
 
-    def test_assignment_collection_stays_visible_and_lists_only_set_inputs(self) -> None:
-        self.assertIn('<section class="card assignments">', PAGE)
-        self.assertIn('<span id="assignmentSummary">Assignments</span>', PAGE)
-        self.assertNotIn('<details class="card assignments"', PAGE)
-        self.assertIn(
-            '.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));',
-            PAGE,
-        )
-        self.assertIn(
-            '@media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}',
-            PAGE,
-        )
-        self.assertIn(
-            '@media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}',
-            PAGE,
-        )
-        self.assertIn('.assignment-list button{display:flex;flex-direction:column;', PAGE)
-        menu = section(PAGE, "function assignmentPaint(){", "\n\nfunction esc(")
-        self.assertIn('if(!r||r.action==="none")continue;', menu)
-        self.assertIn('a.label.localeCompare(b.label,undefined,{numeric:true})', menu)
-        self.assertIn('summary.textContent="Assignments";', menu)
-        self.assertIn('<span>"+esc(words(d.slot))+"</span>', menu)
-        self.assertIn('onclick=function(){pick(s)}', menu)
+    def test_assignment_collection_is_removed_and_color_switch_stays(self) -> None:
+        self.assertNotIn('<section class="card assignments">', PAGE)
+        self.assertNotIn('id="assignmentList"', PAGE)
+        self.assertNotIn('id="assignmentSummary"', PAGE)
+        self.assertNotIn("function assignmentPaint(){", PAGE)
+        self.assertIn('<label class="sw" id="scw">', PAGE)
+        self.assertIn('<div class="colorbar"><h2>Assignment colors</h2>', PAGE)
+        self.assertIn('id="scb"', PAGE)
+        self.assertIn('.colorbar{display:flex;align-items:center;justify-content:center;gap:8px;', PAGE)
+        self.assertIn('.remote-pane{background:transparent;border:0;border-radius:0;padding:0;\n'
+                      'display:flex;flex-direction:column;align-items:center;gap:8px;width:fit-content;max-width:100%}', PAGE)
 
     def test_every_radio_line_states_what_is_on_or_off(self) -> None:
         """A line that hides moves the text and the buttons under it, so each one

@@ -2,7 +2,7 @@
 
 Models the project footprints reference through `${KIPRJMOD}/3dmodels/`. Every file's origin, so a replacement starts from the same source rather than a guess.
 
-- `5221 ANO Rotary Encoder.step`: [GrabCAD, Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1).
+- `5221 ANO Rotary Encoder.step`: [GrabCAD, Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1). The source assembly includes a PCB. This file keeps only the `Encoder` solid so the board does not sit inside the c6remote PCB.
 - `DMM-4026-B-I2S-R.STEP`: user-provided PUI Audio model from `DMM_4026_B_I2S_R (1).zip`, received 2026-09-07. The bottom footprint uses X=270, Y=0, and Z=180 degrees so the package projects away from the PCB.
 - `Seeed Studio XIAO ESP32-C6.step`: [GrabCAD, Seeed Studio XIAO ESP32-C6](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1).
 - `TL3315NF160Q.wrl`: modelled for this repo from the E-Switch TL3315NF160Q datasheet drawing (4.5 x 4.5 x 0.55 gold snap dome), replacing a wrong 5mm PTS647 model; see commit 8757cb5.

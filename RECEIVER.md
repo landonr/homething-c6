@@ -419,8 +419,12 @@ Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
 | `D2` | Meaning |
 | --- | --- |
 | Red pulse | Wi-Fi is down. |
-| Orange pulse | Wi-Fi is up, but the API is down. |
-| Solid green | Wi-Fi and the API are both up. |
+| Orange pulse | Wi-Fi is up, Home Assistant is expected, and the API is down. |
+| Solid orange | Wi-Fi is up and Home Assistant is not required (Config switch off). |
+| Solid green | The API is connected. |
+
+The Home Assistant switch on `/buttons` Config only changes this LED. The API
+server keeps running either way.
 
 Wi-Fi serves the `/buttons` page only. A dark `D2` does not stop a button,
 because IR and Zigbee playback need neither Wi-Fi nor the API.

@@ -6,6 +6,9 @@ browser can run it without an ESPHome build and without hardware. This server
 answers the three page endpoints from a small in-memory state, so the layout,
 the radio switches, and the assignment tiles can be checked in a browser.
 
+Slot assignments come from preview-c6remote-config.json, an export from the
+/buttons config card.
+
 Usage: python3 scripts/preview-buttons-page.py [--port 8123]
 """
 
@@ -17,19 +20,12 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from urllib.parse import quote_from_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
-
-# One example of each action, so every tile style is on screen at once.
-SLOTS = {
-    3: {"action": "hid", "hid_kind": "keyboard", "hid_usage": 0x4F, "hid_mod": 0},
-    4: {"action": "hid", "hid_kind": "consumer", "hid_usage": 0xE9, "hid_mod": 0},
-    5: {"action": "zigbee", "act": 0, "group": 12, "name": "Kitchen lights"},
-    6: {"action": "zigbee", "act": 3, "group": 12, "name": "Kitchen lights"},
-    7: {"action": "ir", "pulses": 67, "us": 62000, "fields": "07 02", "name": "TV power"},
-    13: {"action": "voice"},
-}
+CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face-flat.svg"
+CONFIG = Path(__file__).resolve().parent / "preview-c6remote-config.json"
 
 STATE = {
     "busy": False,
@@ -41,6 +37,12 @@ STATE = {
     "result": "none",
     "action_id": 0,
     "action_ok": True,
+    "network": {
+        "wifi": True,
+        "home_assistant": True,
+        "ip": "192.168.1.86",
+        "mac": "A4:CF:12:34:56:78",
+    },
     "radios": {"zigbee": True, "ble": True},
     "zigbee": {
         "started": True,
@@ -55,13 +57,86 @@ STATE = {
     "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
 }
 
-CODE_TEXT = (
-    "name: TV power\\n"
-    "type: parsed\\n"
-    "protocol: Samsung32\\n"
-    "address: 07 00 00 00\\n"
-    "command: 02 00 00 00\\n"
-)
+
+def reverse_bits(value: int) -> int:
+    out = 0
+    for bit in range(8):
+        out = (out << 1) | ((value >> bit) & 1)
+    return out
+
+
+def samsung_code(address: int, command: int) -> str:
+    data = (
+        (reverse_bits(address) << 24)
+        | (reverse_bits(address) << 16)
+        | (reverse_bits(command) << 8)
+        | reverse_bits((~command) & 0xFF)
+    )
+    return f"0x{data:08X}"
+
+
+def parse_ir_code(text: str) -> dict:
+    name = "IR"
+    address = 0
+    command = 0
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        key = key.strip().lower()
+        value = value.strip()
+        if key == "name" and value:
+            name = value
+        elif key == "address" and value:
+            address = int(value.split()[0], 16)
+        elif key == "command" and value:
+            command = int(value.split()[0], 16)
+    return {
+        "action": "ir",
+        "pulses": 68,
+        "us": 61780,
+        "fields": f"{address:02X} {command:02X}",
+        "code": samsung_code(address, command),
+        "name": name,
+    }
+
+
+def load_config(path: Path) -> tuple[dict, dict]:
+    # Export JSON from /buttons uses a shorter shape than /api/state.
+    data = json.loads(path.read_text())
+    slots: dict[int, dict] = {}
+    codes: dict[int, str] = {}
+    for entry in data.get("slots", []):
+        slot = int(entry["slot"])
+        action = entry.get("action", "none")
+        if action == "voice":
+            slots[slot] = {"action": "voice"}
+        elif action == "hid":
+            slots[slot] = {
+                "action": "hid",
+                "hid_kind": entry.get("kind", "keyboard"),
+                "hid_usage": int(entry.get("usage", 0)),
+                "hid_mod": int(entry.get("mod", 0)),
+            }
+        elif action == "zigbee":
+            row = {
+                "action": "zigbee",
+                "act": int(entry.get("act", 0)),
+                "val": int(entry.get("val", 0)),
+                "name": entry.get("name", ""),
+            }
+            if entry.get("kind") == "device":
+                row["ieee"] = entry.get("ieee", "")
+                row["ep"] = int(entry.get("ep", 1))
+            else:
+                row["group"] = int(entry.get("group", 0))
+            slots[slot] = row
+        elif action == "ir":
+            text = entry.get("code", "")
+            codes[slot] = text
+            slots[slot] = parse_ir_code(text)
+    return slots, codes
+
+
+SLOTS, IR_CODES = load_config(CONFIG)
 
 
 def page_html() -> bytes:
@@ -69,7 +144,8 @@ def page_html() -> bytes:
     match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
     if match is None:
         raise SystemExit("button_config_page.h has no PAGE_HTML value")
-    return match.group(1).encode()
+    svg = quote_from_bytes(CASE_FRONT_FACE.read_bytes(), safe="/,:;=(){}@.-_")
+    return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg).encode()
 
 
 def slot_json(slot: int) -> dict:
@@ -122,9 +198,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/buttons/api/code":
             slot = int(parse_qs(urlparse(self.path).query).get("slot", ["0"])[0])
-            present = SLOTS.get(slot, {}).get("action") == "ir"
-            self.send_json({"slot": slot, "present": present,
-                            "text": CODE_TEXT if present else ""})
+            text = IR_CODES.get(slot, "")
+            present = SLOTS.get(slot, {}).get("action") == "ir" and bool(text)
+            self.send_json({"slot": slot, "present": present, "text": text})
             return
         self.send_error(404)
 

@@ -117,6 +117,7 @@ web_server:
 
 # Serves the button assignment page at /buttons on the same server.
 button_config:
+  id: button_cfg
 
 i2c:
   sda: GPIO22
@@ -430,19 +431,31 @@ light:
             }
             it.all() = Color::BLACK;
 
-            // D2 pulses red offline and orange on Wi-Fi alone, then holds green
-            // on the API. Wi-Fi only serves the /buttons page, so a dark D2 does
-            // not stop a button: playback is Zigbee groupcast or IR.
+            // D2 pulses red offline and orange on Wi-Fi alone when Home Assistant
+            // is expected, then holds green on the API. Turning the HA switch off
+            // keeps a solid orange while Wi-Fi is up, so a missing API is quiet.
+            // Green is brighter than red on these 2020 parts at 3.3V, so orange
+            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). Wi-Fi only serves
+            // the /buttons page, so a dark D2 does not stop a button: playback is
+            // Zigbee groupcast or IR.
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
-            if (!api_connected) {
+            const bool ha_expected = id(button_cfg).ha_api_expected();
+            if (api_connected) {
+              it[0] = Color(0, 96, 24);
+            } else if (!wifi_connected) {
               const float phase = (millis() % 2400) / 2400.0f;
               // Input 98 produces 3/255 after 50% brightness and gamma correction.
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              it[0] = wifi_connected ? Color(level, level / 4, 0) : Color(level, 0, 0);
+              it[0] = Color(level, 0, 0);
+            } else if (ha_expected) {
+              const float phase = (millis() % 2400) / 2400.0f;
+              const uint8_t level = 98 + static_cast<uint8_t>(
+                  64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              it[0] = Color(level, level / 2, 0);
             } else {
-              it[0] = Color(0, 96, 24);
+              it[0] = Color(130, 65, 0);
             }
 
             // D3 and D4 show assignment mode when it is open, otherwise
@@ -615,6 +628,18 @@ switch:
       - lambda: id(ble_hid_remote).set_radio_enabled(true);
     turn_off_action:
       - lambda: id(ble_hid_remote).set_radio_enabled(false);
+
+  # Off keeps D2 solid orange on Wi-Fi alone. The API server itself stays up.
+  - platform: template
+    name: Home Assistant API
+    id: ha_api_expected
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: return id(button_cfg).ha_api_expected();
+    turn_on_action:
+      - lambda: id(button_cfg).set_ha_api_expected(true);
+    turn_off_action:
+      - lambda: id(button_cfg).set_ha_api_expected(false);
 
 remote_receiver:
   pin:

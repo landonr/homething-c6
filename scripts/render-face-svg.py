@@ -32,10 +32,9 @@ BAND_KEY_H = 44.0
 
 OUTLINE_STEPS = 640
 CONTOUR_STEPS = 640
-BAND_LEVELS = 16
-LEGEND_PTS_PER_MM = 12.0
-CIRCLE_PTS = 160
-SHADOW_PER_MM = 1.8  # cap drop shadow offset per mm the cap stands proud
+BAND_LEVELS = 8
+LEGEND_PTS_PER_MM = 4.0
+CIRCLE_PTS = 48
 PLAN_STROKE_PAD = 0.7  # half the shell outline stroke, so the crop does not clip it
 
 # Palette. Every rule states its light value first and then the token, so a
@@ -48,16 +47,15 @@ LIGHT = {
     "face": "#ffffff",
     "edge": "#5f584e",
     "dish-lo": "#ffffff",
-    "dish-hi": "#adadad",
-    "contour": "#e3e3e3",
-    "rim": "#7a6f5c",
+    "dish-hi": "#c5bfb4",
+    "contour": "#ebe8e2",
+    "rim": "#b9b1a4",
     "void": "#39352e",
     "knob": "#000000",
     "wheel-ink": "#ffffff",
     "ring": "#f7e9b8",
     "cap": "#fdfcf9",
     "cap-edge": "#453f37",
-    "shadow": "#4a4438",
     "glyph": "#221e19",
     "hatch": "#b3ab9c",
     "accent": "#a8552c",
@@ -71,8 +69,8 @@ DARK = {
     "face": "#ffffff",
     "edge": "#98a1a9",
     "dish-lo": "#ffffff",
-    "dish-hi": "#adadad",
-    "contour": "#e3e3e3",
+    "dish-hi": "#c5bfb4",
+    "contour": "#ebe8e2",
     "rim": "#9daab4",
     "void": "#05070a",
     "knob": "#000000",
@@ -80,7 +78,6 @@ DARK = {
     "ring": "#5c5326",
     "cap": "#c6ced5",
     "cap-edge": "#0b0f13",
-    "shadow": "#04070a",
     "glyph": "#11161b",
     "hatch": "#4d565f",
     "accent": "#e2a06a",
@@ -100,10 +97,10 @@ def _mix(a, b, t):
 
 
 def band_tones(palette):
-    """One tone per depth band, rim to deepest."""
+    """One tone per depth band, rim to deepest. Ease keeps shallow bands light."""
     span = max(BAND_LEVELS - 1, 1)
     return [
-        _mix(palette["dish-lo"], palette["dish-hi"], i / span)
+        _mix(palette["dish-lo"], palette["dish-hi"], (i / span) ** 1.7)
         for i in range(BAND_LEVELS)
     ]
 
@@ -190,16 +187,18 @@ def _level_spans(level):
 
 
 def contour_loops(level):
-    """Closed plan loops of the level-depth contour, one per span, so a broken
-    level never draws a segment across the gap."""
+    """Closed plan loops for one depth contour without bridging a neck gap."""
     cx = kp.centerline_x()
     y0, y1 = kp.recess_span()
     loops = []
     for ya, yb in _level_spans(level):
-        steps = max(32, int(CONTOUR_STEPS * (yb - ya) / (y1 - y0)))
+        # Cosine spacing packs points at both ends so round tips stay round
+        # under the reduced mid-span step count.
+        steps = max(48, int(CONTOUR_STEPS * (yb - ya) / (y1 - y0)))
         right, left = [], []
         for i in range(steps + 1):
-            y = ya + (yb - ya) * i / steps
+            t = i / steps
+            y = ya + (yb - ya) * (1 - math.cos(math.pi * t)) / 2
             half = _half_at(y, level)
             right.append((cx + half, y))
             left.append((cx - half, y))
@@ -348,12 +347,7 @@ def plan_view(P, deepest, plan_x, plan_y, plan_w, plan_h, bounds, annotations=Tr
         )
     for ref in capmod.cap_refs():
         x, y = board.components()[ref][:2]
-        drop = capmod.cap_proud(ref) * SHADOW_PER_MM
         cap = capmod.cap_outline(capmod.cap_body(ref), x, y)
-        out.append(
-            f'<path class="shade" d="'
-            f'{path_d([[(px + drop, py - drop) for px, py in cap]], P)}"/>'
-        )
         out.append(f'<path class="cap" d="{path_d([cap], P)}"/>')
         out.append(
             f'<path class="glyph" fill-rule="evenodd" '
@@ -420,7 +414,7 @@ def plan_view(P, deepest, plan_x, plan_y, plan_w, plan_h, bounds, annotations=Tr
         label(
             plan_x,
             base + 66,
-            "1   Front face plan, keypad recess as iso-depth contours",
+            "1   Front face plan, keypad recess as 8-step depth fill",
             "cap1",
         )
     )
@@ -624,7 +618,7 @@ def spine_table(x, y):
 
 
 def band_key(x, y, deepest):
-    """What the contour tones mean, in millimetres off the model."""
+    """What the band tones mean, in millimetres off the model."""
     w, h = 26.0, 15.0
     out = [label(x, y, "recess depth below the flat face", "tag")]
     top = y + 12
@@ -690,7 +684,7 @@ def build():
         f'<rect class="bg" x="0" y="0" width="{fmt(sheet_w)}" height="{fmt(sheet_h)}"/>',
         f'<text class="h1" x="{fmt(MARGIN)}" y="{fmt(MARGIN + 12)}">c6remote front face</text>',
         f'<text class="h2" x="{fmt(MARGIN)}" y="{fmt(MARGIN + 38)}">Shell face and keypad '
-        f"recess, drawn from the build123d case model</text>",
+        f"recess profile, drawn from the build123d case model</text>",
         f'<path class="rule" d="M{fmt(MARGIN)} {fmt(MARGIN + 54)} '
         f'L{fmt(sheet_w - MARGIN)} {fmt(MARGIN + 54)}"/>',
         plan_view(P, deepest, plan_x, plan_y, plan_w, plan_h, (ex0, ex1, ey0, ey1)),
@@ -793,7 +787,6 @@ def _style():
         f".duct{{{tok('stroke', 'rim')};stroke-width:.7;stroke-dasharray:2.5 2.5;"
         "stroke-opacity:.7}",
         f".seat{{{tok('stroke', 'rim')};stroke-width:.5;stroke-opacity:.5}}",
-        f".shade{{{tok('fill', 'shadow')};fill-opacity:.22}}",
         f".cap{{{tok('fill', 'cap')};{tok('stroke', 'cap-edge')};stroke-width:1}}",
         f".glyph{{{tok('fill', 'glyph')}}}",
         f".slab{{{tok('fill', 'face')}}}",
@@ -816,7 +809,7 @@ def _style():
     for i in range(BAND_LEVELS):
         rules.append(
             f".d{i}{{fill:{light_tones[i]};fill:var(--d{i});"
-            f"{tok('stroke', 'contour')};stroke-width:.25}}"
+            f"{tok('stroke', 'contour')};stroke-width:.7}}"
         )
     return "<style>" + "".join(rules) + "</style>"
 

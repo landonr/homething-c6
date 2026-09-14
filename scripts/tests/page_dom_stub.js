@@ -23,12 +23,13 @@ function mk(tag) {
       // ones. Without this a field that a repaint stopped rendering is still
       // found by getElementById, and a panel that hides a field looks the same
       // as one that still shows it.
-      for (const id of this._ids) delete els[id];
+      for (const id of this._ids) if (els[id] && els[id]._owner === this) delete els[id];
       this._ids = [];
       const re = /<[^>]*\bid=['"]?([A-Za-z0-9_-]+)['"]?[^>]*>/g;
       let m;
       while ((m = re.exec(v))) {
         const child = mk("stub");
+        child._owner = this;
         child.disabled = /\sdisabled(?:\s|=|>)/.test(m[0]);
         els[m[1]] = child;
         this._ids.push(m[1]);
@@ -50,12 +51,16 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["top", "plus", "pad", "ed", "z2m", "bst", "bfr", "cfg", "cfgb", "cfgio", "cxo", "cxs",
-                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw"])
+for (const id of ["remote", "ed", "edpanel", "assignmentSummary", "assignmentList", "z2m", "bst", "bfr", "cfg", "cfgio",
+                  "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
+                  "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfs", "has",
+                  "wip", "wmac"])
   els[id] = mk("section");
+els.scb.checked = true;
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
+  network: {wifi: true, home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
@@ -71,8 +76,22 @@ const STATE = {
   ],
 };
 
-global.document = { getElementById: (id) => els[id] || null, createElement: (t) => mk(t) };
-global.localStorage = { getItem: () => null, setItem: () => {} };
+const body = mk("body");
+body.classList = {
+  _on: false,
+  toggle(name, on) { this._on = !!on; body.className = on ? name : ""; },
+  contains(name) { return this._on && name === "set-colors"; },
+};
+global.document = {
+  body,
+  getElementById: (id) => els[id] || null,
+  createElement: (t) => mk(t),
+};
+global.localStorage = {
+  store: {},
+  getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; },
+  setItem(k, v) { this.store[k] = String(v); },
+};
 let confirmAsked = 0, confirmAnswer = true;
 global.confirm = (text) => { confirmAsked++; confirmText = text; return confirmAnswer; };
 let confirmText = "";
@@ -129,6 +148,40 @@ setTimeout(() => {
     // A device slot with no friendly name still has to name its target.
     if (words(5).indexOf("0x94deb8fffe9db81e") < 0) throw new Error("a device slot lost its address");
   });
+  step("assignment collection lists only set input cards", () => {
+    const list = document.getElementById("assignmentList");
+    if (document.getElementById("assignment-3")) throw new Error("clear input was listed");
+    for (const slot of [4, 5, 6, 7, 20])
+      if (!document.getElementById("assignment-" + slot)) throw new Error("set input " + slot + " was omitted");
+    if (document.getElementById("assignmentSummary").textContent !== "Assignments")
+      throw new Error("assignment heading is wrong");
+    if (list.innerHTML.indexOf("set-voice") < 0 || list.innerHTML.indexOf("set-zigbee") < 0 ||
+        list.innerHTML.indexOf("set-ir") < 0 || list.innerHTML.indexOf("set-ble") < 0)
+      throw new Error("assignment colors were omitted");
+    if (list.innerHTML.indexOf("<span>") < 0 || list.innerHTML.indexOf("<br>") >= 0)
+      throw new Error("assignments were rendered as rows instead of cards");
+    const labels = ["Button 1", "Button 4", "Button 5", "Button 6", "Button 7"];
+    for (let i = 1; i < labels.length; i++)
+      if (list.innerHTML.indexOf(labels[i - 1]) > list.innerHTML.indexOf(labels[i]))
+        throw new Error("assignments are not sorted by input label");
+  });
+  step("assignment color overlay switch toggles body class and storage", () => {
+    if (!document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors start off");
+    const box = document.getElementById("scb");
+    box.checked = false;
+    setColorsToggle();
+    if (document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors stayed on");
+    if (localStorage.getItem("c6.set-colors") !== "0")
+      throw new Error("off choice was not stored");
+    box.checked = true;
+    setColorsToggle();
+    if (!document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors stayed off");
+    if (localStorage.getItem("c6.set-colors") !== "1")
+      throw new Error("on choice was not stored");
+  });
   step("switching to an empty input clears stale IR code without loading", () => {
     const realFetch = global.fetch;
     let codeRequests = 0;
@@ -142,7 +195,7 @@ setTimeout(() => {
     global.act = "ir";
     paint();
     pick(3);
-    const html = document.getElementById("ed").innerHTML;
+    const html = document.getElementById("edpanel").innerHTML;
     if (html.indexOf(CODE.text) >= 0) throw new Error("the previous input's code stayed visible");
     if (html.indexOf("Loading the stored code.") >= 0)
       throw new Error("an empty input showed a loading state");
@@ -162,39 +215,51 @@ setTimeout(() => {
     global.act = "ir";
     paint();
     pick(6);
-    const html = document.getElementById("ed").innerHTML;
+    const html = document.getElementById("edpanel").innerHTML;
     const status = html.indexOf("Loading the stored code.");
-    const actions = html.indexOf('<div class=act><button type=button class=sec id=cc');
+    const actions = html.indexOf('<div class=act><button type=button id=ca');
     const actionsEnd = html.indexOf("</div>", actions);
     if (actions < 0 || actionsEnd < 0 || status <= actionsEnd)
       throw new Error("the loading state is not below the code actions");
     global.fetch = realFetch;
   });
-  step("empty IR code disables Copy and Apply until text arrives", () => {
+  step("empty IR code disables Apply until text arrives", () => {
     global.sel = 3;
     global.cd = " \t\n";
     global.cdSlot = 3;
     global.act = "ir";
     paint();
     const box = document.getElementById("ct");
-    const copy = document.getElementById("cc");
     const apply = document.getElementById("ca");
-    if (!copy.disabled || !apply.disabled)
+    if (!apply.disabled)
       throw new Error("empty code enabled a code action");
     box.value = " \t\n";
     box.oninput();
-    if (!copy.disabled || !apply.disabled)
+    if (!apply.disabled)
       throw new Error("whitespace enabled a code action");
     box.value = "name: Home";
     box.oninput();
-    if (copy.disabled || apply.disabled)
+    if (apply.disabled)
       throw new Error("typed code did not enable its actions");
     box.value = "";
     box.oninput();
-    if (!copy.disabled || !apply.disabled)
+    if (!apply.disabled)
       throw new Error("cleared code left an action enabled");
   });
-  step("Paste fills a cleared input before it assigns a Zigbee device", () => {
+  step("IR details precede code actions without a Now summary", () => {
+    global.sel = 6;
+    global.cd = CODE.text;
+    global.cdSlot = 6;
+    global.act = "ir";
+    paint();
+    const html = document.getElementById("edpanel").innerHTML;
+    const details = html.indexOf("<dl class=info>");
+    const actions = html.indexOf('<div class=act><button type=button id=ca');
+    if (html.indexOf("Now:") >= 0) throw new Error("the current assignment summary remains");
+    if (details < 0 || actions < 0 || details >= actions)
+      throw new Error("IR details do not precede Apply");
+  });
+  step("accepted Paste immediately assigns a Zigbee device", () => {
     global.sel = 5;
     global.clip = null;
     global.clipBusy = false;
@@ -204,6 +269,7 @@ setTimeout(() => {
     copy.onclick();
     if (!clip || clip.kind !== "zigbee" || !clip.device || clip.act !== 3 || clip.val !== 32)
       throw new Error("the Zigbee assignment was not copied: " + JSON.stringify(clip));
+    if (msg) throw new Error("Zigbee Copy showed a success notice: " + msg);
     pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
@@ -211,14 +277,14 @@ setTimeout(() => {
     const bodies = [];
     const realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    confirmAnswer = true; confirmAsked = 0;
     paste.onclick();
-    if (bodies.length) throw new Error("Paste wrote before Assign: " + bodies[0]);
+    if (confirmAsked !== 1 || confirmText.indexOf("Button 5 to Button 3") < 0)
+      throw new Error("Paste did not identify source and target: " + confirmText);
+    if (bodies.length !== 1) throw new Error("accepted Paste did not write once");
     if (act !== "zb" || zkv !== "d" || zhv !== "0x94deb8fffe9db81e" ||
         zpv !== "1" || zav !== 3 || zvv !== "32")
       throw new Error("Paste did not fill the device form");
-    if (typeof document.getElementById("zi").onclick !== "function")
-      throw new Error("Paste did not open the Zigbee panel");
-    document.getElementById("zi").onclick();
     if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee_device&slot=3") < 0 ||
         bodies[0].indexOf("ieee=0x94deb8fffe9db81e") < 0 || bodies[0].indexOf("act=3") < 0 ||
         bodies[0].indexOf("val=32") < 0)
@@ -226,24 +292,45 @@ setTimeout(() => {
     global.fetch = realFetch;
     global.zbusy = false;
   });
-  step("Paste fills a Zigbee group before it assigns", () => {
+  step("cancelled Paste changes nothing and sends nothing", () => {
     const realFetch = global.fetch;
     const bodies = [];
     global.tg = [{id: 4609, name: "Office Lamp", members: []}];
     global.clip = clipConfig(row(20));
     pick(3);
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    const before = {act, zkv, zsv, zgv, zav, zvv, msg, bad};
+    confirmAnswer = false; confirmAsked = 0;
     document.getElementById("bpaste").onclick();
-    if (bodies.length) throw new Error("Paste wrote before Assign: " + bodies[0]);
-    if (act !== "zb" || zkv !== "g" || zsv !== "4609" || zgv !== "4609" || zav !== 0 || zvv !== "")
-      throw new Error("Paste did not fill the group form");
-    document.getElementById("zi").onclick();
+    if (confirmAsked !== 1) throw new Error("Paste did not ask for confirmation");
+    if (bodies.length) throw new Error("cancelled Paste wrote: " + bodies[0]);
+    for (const k of Object.keys(before)) if (global[k] !== before[k])
+      throw new Error("cancelled Paste changed " + k);
+    confirmAnswer = true;
     global.fetch = realFetch;
-    if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee&slot=3") < 0 ||
-        bodies[0].indexOf("group=4609") < 0 || bodies[0].indexOf("act=0") < 0 ||
-        bodies[0].indexOf("name=Office%20Lamp") < 0)
-      throw new Error("Assign sent the wrong group payload: " + bodies[0]);
     global.zbusy = false;
+  });
+  step("accepted Paste immediately assigns BLE HID", () => {
+    global.sel = 7;
+    global.clip = null;
+    global.clipBusy = false;
+    paint();
+    document.getElementById("bcopy").onclick();
+    if (!clip || clip.kind !== "hid")
+      throw new Error("the BLE HID assignment was not copied: " + JSON.stringify(clip));
+    if (msg) throw new Error("BLE HID Copy showed a success notice: " + msg);
+    pick(3);
+    const bodies = [];
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    confirmAnswer = true; confirmAsked = 0;
+    document.getElementById("bpaste").onclick();
+    global.fetch = realFetch;
+    if (confirmAsked !== 1) throw new Error("BLE HID Paste did not ask for confirmation");
+    if (bodies.length !== 1 || bodies[0].indexOf("action=set_hid&slot=3") < 0 ||
+        bodies[0].indexOf("kind=keyboard") < 0 || bodies[0].indexOf("usage=4") < 0 ||
+        bodies[0].indexOf("mod=2") < 0)
+      throw new Error("accepted BLE HID Paste sent the wrong payload: " + bodies[0]);
   });
   step("the title starts a full IR config copy", () => {
     global.sel = 6;
@@ -255,9 +342,10 @@ setTimeout(() => {
     copy.onclick();
     if (!clipBusy) throw new Error("IR Copy did not wait for the full code");
   });
-  setTimeout(() => step("Paste fills an IR box before it applies", () => {
+  setTimeout(() => step("accepted Paste immediately applies an IR code", () => {
     if (!clip || clip.kind !== "ir" || clip.code !== CODE.text)
       throw new Error("the full IR code was not copied: " + JSON.stringify(clip));
+    if (msg) throw new Error("IR Copy showed a success notice: " + msg);
     pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
@@ -265,13 +353,12 @@ setTimeout(() => {
     const bodies = [];
     const realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    confirmAnswer = true; confirmAsked = 0;
     paste.onclick();
-    if (bodies.length) throw new Error("Paste wrote before Apply: " + bodies[0]);
+    if (confirmAsked !== 1) throw new Error("IR Paste did not ask for confirmation");
+    if (bodies.length !== 1) throw new Error("accepted IR Paste did not write once");
     if (act !== "ir" || cd !== CODE.text || cdSlot !== 3)
       throw new Error("Paste did not fill the IR code box");
-    const code = document.getElementById("ct");
-    code.value = CODE.text;
-    document.getElementById("ca").onclick();
     global.fetch = realFetch;
     if (bodies.length !== 1 || bodies[0].indexOf("action=set_ir_code&slot=3") < 0 ||
         bodies[0].indexOf("code=name%3A%20Home") < 0)
@@ -295,7 +382,7 @@ setTimeout(() => {
     if (!h) throw new Error("empty form");
   });
   step("every action panel paints on a voice capable slot", () => {
-    global.sel = 20;
+    global.sel = 19;
     for (const a of ["ir", "zb", "va", "cl"]) {
       global.act = a;
       paint();
@@ -303,19 +390,19 @@ setTimeout(() => {
     }
   });
   step("the voice panel is not offered on a slot without it", () => {
-    global.sel = 19;  // SW2 owns the hold gesture, so it has no voice action.
+    global.sel = 20;  // SW1 owns the hold gesture, so it has no voice action.
     global.act = "va";
     paint();
     if (act === "va") throw new Error("voice stayed selected on a slot without it");
   });
   step("switching the selector repaints", () => {
-    global.sel = 20;
+    global.sel = 19;
     global.act = "ir";
+    global.clipBusy = false;
     paint();
-    const sw = document.getElementById("as");
-    if (typeof sw.onchange !== "function") throw new Error("no onchange handler");
-    sw.value = "zb";
-    sw.onchange.call(sw);
+    const zb = document.getElementById("as-zb");
+    if (!zb || typeof zb.onclick !== "function") throw new Error("no Zigbee option");
+    zb.onclick.call(zb);
     if (act !== "zb") throw new Error("act did not follow the selector");
   });
   step("the endpoint follows the cluster the action needs", () => {
@@ -521,8 +608,8 @@ setTimeout(() => {
     const hp = document.getElementById("hp");
     if (!hp) throw new Error("no key list");
     if (document.getElementById("hu")) throw new Error("a named usage left the box open");
-    if (els.ed.innerHTML.indexOf("<option value=0x04 selected>A</option>") < 0)
-      throw new Error("the stored key was not selected: " + els.ed.innerHTML);
+    if (els.edpanel.innerHTML.indexOf("<option value=0x04 selected>A</option>") < 0)
+      throw new Error("the stored key was not selected: " + els.edpanel.innerHTML);
     hp.value = "custom";
     hp.onchange.call(hp);
     if (!hcust || !document.getElementById("hu")) throw new Error("Custom opened no usage box");
@@ -650,35 +737,6 @@ setTimeout(() => {
     global.fetch = realFetch;
     if (calls !== 0) throw new Error("a bad paste was still sent");
     if (!cfgBad) throw new Error("no refusal was reported");
-  });
-  step("the card starts closed and reads no code until it is opened", () => {
-    let codeReads = 0;
-    const realFetch = global.fetch;
-    global.fetch = (u, o) => { if (String(u).indexOf("/api/code") >= 0) codeReads++; return realFetch(u, o); };
-    global.cfgOpen = false;
-    global.cfgBusy = false;
-    global.cfgAll = {};
-    cfgPaint();
-    if (!document.getElementById("cxo")) throw new Error("no toggle on a closed card");
-    if (document.getElementById("cx")) throw new Error("the box showed on a closed card");
-    if (els.cfgb.hidden !== true) throw new Error("the closed card left its body on screen");
-    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
-    if (codeReads !== 0) throw new Error("a closed card still read a code");
-    document.getElementById("cxo").onclick();
-    global.fetch = realFetch;
-    if (!cfgOpen) throw new Error("the card did not open");
-    if (!document.getElementById("cx")) throw new Error("the open card has no box");
-    if (cfgBusy) throw new Error("opening the card read the remote");
-    if (codeReads) throw new Error("opening the card requested a stored code");
-    if (els.cxs.textContent !== "Hide") throw new Error("the open heading says " + els.cxs.textContent);
-    if (els.cfgb.hidden !== false) throw new Error("the open card kept its body hidden");
-    global.cfgBusy = false;
-    cfgPaint();
-    document.getElementById("cxo").onclick();
-    if (cfgOpen) throw new Error("the heading did not close the card");
-    if (document.getElementById("cx")) throw new Error("the box survived the close");
-    if (els.cxs.textContent !== "Show") throw new Error("the closed heading says " + els.cxs.textContent);
-    global.cfgOpen = true;
   });
   step("the card keeps one config box and all actions", () => {
     global.cfgBusy = false;

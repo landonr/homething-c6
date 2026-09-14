@@ -1,0 +1,20 @@
+{"c6remote":1,"slots":[
+{"slot":19,"label":"Button 2","action":"voice"},
+{"slot":20,"label":"Button 1","action":"ir","code":"name: Power\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 02 00 00 00"},
+{"slot":18,"label":"Wheel Anticlockwise","action":"ir","code":"name: VolDown\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 07 00 00 00"},
+{"slot":13,"label":"Wheel Up","action":"ir","code":"name: Up\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 60 00 00 00"},
+{"slot":17,"label":"Wheel Clockwise","action":"ir","code":"name: VolUp\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 0B 00 00 00"},
+{"slot":16,"label":"Wheel Left","action":"ir","code":"name: Left\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 65 00 00 00"},
+{"slot":14,"label":"Wheel Press","action":"ir","code":"name: Select\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 68 00 00 00"},
+{"slot":12,"label":"Wheel Right","action":"ir","code":"name: Right\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 62 00 00 00"},
+{"slot":15,"label":"Wheel Down","action":"ir","code":"name: Down\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 61 00 00 00"},
+{"slot":3,"label":"Button 3","action":"ir","code":"name: Power\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 02 00 00 00"},
+{"slot":6,"label":"Button 6","action":"ir","code":"name: Power\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 02 00 00 00"},
+{"slot":11,"label":"Button 11","action":"ir","code":"name: Source\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 01 00 00 00"},
+{"slot":4,"label":"Button 4","action":"ir","code":"name: Power\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 02 00 00 00"},
+{"slot":7,"label":"Button 7","action":"zigbee","kind":"device","ieee":"0x680ae2fffe1fc977","ep":1,"act":3,"val":32,"name":"Office Lamp"},
+{"slot":10,"label":"Button 10","action":"hid","kind":"keyboard","usage":40,"mod":0},
+{"slot":5,"label":"Button 5","action":"zigbee","kind":"group","group":7,"act":0,"name":"office_lights"},
+{"slot":8,"label":"Button 8","action":"zigbee","kind":"device","ieee":"0x680ae2fffe1fc977","ep":1,"act":4,"val":32,"name":"Office Lamp"},
+{"slot":9,"label":"Button 9","action":"zigbee","kind":"group","group":6,"act":0,"name":"Hallway Lights"}
+]}

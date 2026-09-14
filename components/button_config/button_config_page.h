@@ -8,7 +8,7 @@ static const char PAGE_HTML[] = R"=====(<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel=icon href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20805.333%20795.107%22%3E%3Cstyle%3Epath%7Bfill:%2316181d%7D@media(prefers-color-scheme:dark)%7Bpath%7Bfill:%23e7eaef%7D%7D%3C/style%3E%3Cpath%20d=%22M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z%22/%3E%3Cpath%20d=%22M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z%22/%3E%3Cpath%20d=%22M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z%22/%3E%3C/svg%3E">
-<title>homeThing c6</title>
+<title>homeThing c6 config</title>
 <style>
 :root{--bg:#f3f4f7;--fg:#16181d;--card:#fff;--line:#c6cad3;--mut:#565b66;
 --acc:#14428f;--sel:#dae5fb;--ok:#0f5c31;--warn:#8a5300;--bad:#9c2114}
@@ -18,7 +18,7 @@ static const char PAGE_HTML[] = R"=====(<!doctype html>
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
 font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:16px;
+.wrap{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px;
 grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:720px){.wrap{grid-template-columns:1fr}}
 .full{grid-column:1/-1}
@@ -32,6 +32,18 @@ hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:baseline}
 .dot.off{background:var(--line)}.dot.warn{background:var(--warn)}
 .dot.bad{background:var(--bad)}
+.tabs{display:flex;gap:8px}.tabs button{background:transparent;border:1px solid var(--line);
+border-radius:8px;padding:8px 14px;cursor:pointer}.tabs button[aria-selected=true]{background:var(--acc);
+border-color:var(--acc);color:#fff}.tabgrid{display:grid;grid-column:1/-1;gap:16px;
+grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#buttonstab{grid-template-columns:auto minmax(220px,.9fr) minmax(260px,1.2fr);
+align-items:start;column-gap:16px}
+.tabgrid[hidden]{display:none}
+@media (max-width:960px){#buttonstab{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#buttonstab .remote-pane{grid-column:1/-1}
+#buttonstab .remote{margin:0 auto}}
+@media (max-width:720px){.tabgrid,#buttonstab{grid-template-columns:1fr}
+#buttonstab .remote-pane{grid-column:auto}}
 header.full{display:flex;align-items:center;gap:12px}
 .logo{width:34px;height:34px;flex:none}
 h1{font-size:20px;margin:0 0 4px}
@@ -54,17 +66,46 @@ border-radius:50%;background:var(--card);transition:left .15s}
 border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
 .edtitle .clip button[disabled]{opacity:.5;cursor:not-allowed}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.remote-pane{background:transparent;border:0;border-radius:0;padding:0}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
 a{color:var(--acc)}
 .grp{margin:0 0 14px}
 .grp>p{color:var(--mut);font-size:12px;margin:0 0 6px;text-transform:uppercase;
 letter-spacing:.06em}
-.row{display:grid;gap:8px;grid-template-columns:1fr 1fr}
-.pad{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
-.plus{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
-.plus .tl{grid-area:1/1}.plus .u{grid-area:1/2}.plus .tr{grid-area:1/3}
-.plus .l{grid-area:2/1}.plus .c{grid-area:2/2}.plus .r{grid-area:2/3}
-.plus .d{grid-area:3/2}
+.remote{position:relative;width:fit-content;max-width:100%;margin:0}
+.remote>img{display:block;width:auto;max-width:100%;max-height:100vh;height:auto;
+user-select:none;-webkit-user-drag:none}
+.remote .k{position:absolute;width:17%;aspect-ratio:1;border:2px solid transparent;
+border-radius:25%;padding:0;background:transparent;transform:translate(-50%,-50%)}
+.remote .k:hover{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 55%,transparent)}
+.remote .k[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 72%,transparent);
+box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
+.set-ble{--set-bg:#2f80ed}
+.set-zigbee{--set-bg:#38a169}
+.set-ir{--set-bg:#e5b700}
+.set-voice{--set-bg:#8b5cf6}
+/* Off by default in CSS. body.set-colors turns the tints on, and the switch
+   stores that choice in this browser only. */
+body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 22%,transparent)}
+body.set-colors .remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 30%,transparent)}
+body.set-colors .remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 35%,transparent)}
+.remote .k.rot{left:50%;top:31.7%;width:49%;border-radius:50%;z-index:1}
+.remote .k.rot.left{clip-path:inset(0 50% 0 0)}
+.remote .k.rot.right{clip-path:inset(0 0 0 50%)}
+.remote .k:not(.rot){z-index:2}
+.remote .k b,.remote .k span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.assignments{grid-column:1/-1;padding:0}
+.assignments h2.ttl{margin:0;padding:14px;border-bottom:1px solid var(--line)}
+.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
+@media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}
+.assignment-list button{display:flex;flex-direction:column;gap:5px;min-height:76px;border:1px solid var(--line);
+border-radius:10px;padding:12px;background:transparent;text-align:left;cursor:pointer;width:100%}
+body.set-colors .assignment-list button[class*=set-]{background:color-mix(in srgb,var(--set-bg) 13%,transparent)}
+body.set-colors .assignment-list button:before{content:"";display:inline-block;width:9px;height:9px;
+border-radius:50%;background:var(--set-bg);margin-right:8px}
+.assignment-list button:hover{border-color:var(--acc)}
 button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
 color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;
@@ -72,20 +113,21 @@ padding:8px;width:100%;margin:2px 0;resize:vertical}
 .code{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 header.full .sub{margin:0}
 .grp:last-child{margin:0}
-.conn{display:grid;gap:16px;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
-.conn>div+div{border-left:1px solid var(--line);padding-left:16px}
-@media (max-width:720px){.conn{grid-template-columns:1fr}
-.conn>div+div{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:14px}}
 .conn .act{margin-bottom:0}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 .code .load{color:var(--mut);font-size:13px;margin:8px 0 0}
-p.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
+h2.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
+.aslist{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+.aslist button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);
+border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer;width:100%;
+display:flex;align-items:center;justify-content:space-between;gap:8px}
+.aslist button:hover{border-color:var(--acc)}
+.aslist button[aria-checked=true]{background:var(--sel);border-color:var(--acc)}
+.aslist button[aria-checked=true]:after{content:"✓";color:var(--acc);font-weight:600}
+.aslist button[disabled]{opacity:.5;cursor:not-allowed}
 h3{font-size:15px;margin:14px 0 8px}
-h2>button.tog{background:none;border:0;padding:0;margin:0;width:100%;cursor:pointer;
-display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
-h2>button.tog span{color:var(--acc);font-size:13px;font-weight:400}
 select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
@@ -128,11 +170,42 @@ animation:sweep 1.4s ease-in-out infinite}
 <svg class=logo viewBox="0 0 805.333 795.107" fill=currentColor aria-hidden=true><path d="M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z"/><path d="M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z"/><path d="M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z"/></svg>
 <div>
 <h1>homeThing c6</h1>
-<p class="sub">Select an input to see or change what it does.</p>
+<p class="sub"><a href="https://github.com/landonr/homething-c6">github.com/landonr/homething-c6</a></p>
 </div>
 </header>
-<section class="card full conn">
-<div id="zbcfg">
+<nav class="tabs full" aria-label="Setup sections">
+<button type="button" id="tabb" aria-selected="true">Buttons</button>
+<button type="button" id="tabc" aria-selected="false">Config</button>
+</nav>
+<div class="tabgrid" id="buttonstab">
+<section class="remote-pane">
+<div class="remote" id="remote">
+<img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote" draggable="false">
+</div>
+</section>
+<section class="card" id="ed" aria-live="polite"></section>
+<section class="card" id="edpanel" aria-live="polite"></section>
+<section class="card assignments">
+<h2 class="ttl"><span id="assignmentSummary">Assignments</span><label class="sw" id="scw"
+title="Assignment colors"><input type="checkbox" id="scb" aria-label="Assignment colors"
+checked><span></span></label></h2>
+<div class="assignment-list" id="assignmentList"></div>
+</section>
+</div>
+<div class="tabgrid" id="configtab" hidden>
+<h1 class="full secttl">Connections</h1>
+<section class="card full conn" id="wificfg">
+<h2>Wi-Fi</h2>
+<p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
+<dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
+<hr class="rule">
+<h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
+aria-label="Home Assistant API"><span></span></label></h2>
+<p class="sub st" id="has">Home Assistant API state is loading.</p>
+<p class="sub">Off keeps D2 solid orange while Wi-Fi is up. On pulses until the API connects.</p>
+</section>
+<section class="card full conn" id="zbcfg">
 <h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
 aria-label="Zigbee radio"><span></span></label></h2>
 <p class="sub st" id="zrs">Zigbee radio state is loading.</p>
@@ -146,41 +219,34 @@ both sides.</p>
 <p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
 <p class="sub st" id="zcs">Coordinator pairing state is loading.</p>
 <div id="z2m"></div>
-</div>
-<div id="blecfg">
+</section>
+<section class="card full conn" id="blecfg">
 <h2 class="ttl">Bluetooth<label class="sw" id="brw"><input type="checkbox" id="brb"
 aria-label="Bluetooth radio"><span></span></label></h2>
 <p class="sub st" id="bst">BLE HID state is loading.</p>
 <p class="sub st" id="bhs">Bluetooth host state is loading.</p>
 <p class="sub">Forget the saved host before you pair this remote with a different host.</p>
 <div class="act"><button type="button" class="sec" id="bfr">Forget Bluetooth host</button></div>
-</div>
 </section>
-<section class="card">
-<div class="grp"><p>Top</p><div class="row" id="top"></div></div>
-<div class="grp"><p>Wheel</p><div class="plus" id="plus"></div></div>
-<div class="grp"><p>Keypad</p><div class="pad" id="pad"></div></div>
-</section>
-<section class="card" id="ed" aria-live="polite"></section>
+<h1 class="full secttl">Import Export</h1>
 <section class="card full" id="cfg">
-<h2><button type="button" class="tog" id="cxo" aria-expanded="false">Import and export<span
-id="cxs">Show</span></button></h2>
-<div id="cfgb" hidden><div id="cfgio"></div></div>
+<div id="cfgio"></div>
 </section>
+</div>
 </div>
 <script>
 var S=[
-{s:19,l:"SW2",v:0,g:"top"},{s:20,l:"SW1",v:1,g:"top"},
+{s:19,l:"Button 2",v:1,x:22.9,y:12.2},{s:20,l:"Button 1",v:0,x:77.1,y:12.2},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
-{s:18,l:"Turn left",v:0,g:"plus",c:"tl"},{s:13,l:"Up",v:1,g:"plus",c:"u"},
-{s:17,l:"Turn right",v:0,g:"plus",c:"tr"},
-{s:16,l:"Left",v:1,g:"plus",c:"l"},{s:14,l:"Press",v:1,g:"plus",c:"c"},
-{s:12,l:"Right",v:1,g:"plus",c:"r"},{s:15,l:"Down",v:1,g:"plus",c:"d"},
+{s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.7,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.9},
+{s:17,l:"Wheel Clockwise",v:0,x:50,y:31.7,c:"rot right"},
+{s:16,l:"Wheel Left",v:1,x:21.1,y:31.7},{s:14,l:"Wheel Press",v:1,x:50,y:31.7},
+{s:12,l:"Wheel Right",v:1,x:78.9,y:31.7},{s:15,l:"Wheel Down",v:1,x:50,y:41.8},
 // Keypad fills column by column on the board, so the rows read 3 6 11, 4 7 10,
 // 5 8 9. The array order is the render order, not the slot order.
-{s:3,l:"SW3",v:1,g:"pad"},{s:6,l:"SW6",v:1,g:"pad"},{s:11,l:"SW11",v:1,g:"pad"},
-{s:4,l:"SW4",v:1,g:"pad"},{s:7,l:"SW7",v:1,g:"pad"},{s:10,l:"SW10",v:1,g:"pad"},
-{s:5,l:"SW5",v:1,g:"pad"},{s:8,l:"SW8",v:1,g:"pad"},{s:9,l:"SW9",v:1,g:"pad"}];
+{s:3,l:"Button 3",v:1,x:22.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:77.1,y:51.1},
+{s:4,l:"Button 4",v:1,x:22.9,y:60.1},{s:7,l:"Button 7",v:1,x:50,y:60.1},{s:10,l:"Button 10",v:1,x:77.1,y:60.1},
+{s:5,l:"Button 5",v:1,x:22.9,y:69.1},{s:8,l:"Button 8",v:1,x:50,y:69.1},{s:9,l:"Button 9",v:1,x:77.1,y:69.1}];
 // One press, one Zigbee command. a is the number the remote stores, c is the
 // Zigbee2MQTT input cluster a target must carry to accept it, and p names the
 // value the command needs. The numbers match the Action enum in
@@ -209,8 +275,8 @@ var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 // second browser both show the switch the remote is actually running with.
 // radioWant holds the position the switch was moved to, so a repaint during the
 // write keeps it there instead of snapping back to the old state.
-var radioBusy={zigbee:false,ble:false},radioError={zigbee:"",ble:""},
-radioWant={zigbee:true,ble:true};
+var radioBusy={zigbee:false,ble:false,home_assistant:false},radioError={zigbee:"",ble:"",home_assistant:""},
+radioWant={zigbee:true,ble:true,home_assistant:true};
 // tg holds the Zigbee2MQTT group snapshot this browser fetched, and zerr the
 // reason it has none. The remote never sees either.
 var tg=null,td=null,zerr="",ws=null,zbusy=false;
@@ -238,7 +304,6 @@ var hkv="keyboard",huv="",hmv="0",hcust=false;
 // no second read of a code the editor already fetched.
 var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
 // Closed on arrival, because most visits change one input instead.
-var cfgOpen=false;
 // clip holds one selected IR or Zigbee assignment in this browser only. It
 // cannot include Voice or Clear, because those are actions and not configs.
 var clip=null,clipBusy=false;
@@ -249,6 +314,19 @@ function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
 // Only these two actions leave the board over a radio. IR and voice do not.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
+function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":
+(a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
+// The colour overlay is a browser preference. Default on, and the remote never
+// sees it.
+var setColors=true;
+try{setColors=localStorage.getItem("c6.set-colors")!=="0"}catch(x){}
+function setColorsPaint(){
+document.body.classList.toggle("set-colors",setColors);
+var b=document.getElementById("scb");if(b)b.checked=setColors}
+function setColorsToggle(){
+setColors=!!document.getElementById("scb").checked;
+try{localStorage.setItem("c6.set-colors",setColors?"1":"0")}catch(x){}
+setColorsPaint()}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
@@ -320,13 +398,25 @@ function build(){
 for(var i=0;i<S.length;i++){var d=S[i];
 var b=document.createElement("button");
 b.type="button";b.className="k"+(d.c?" "+d.c:"");b.setAttribute("aria-pressed","false");
+b.style.left=d.x+"%";b.style.top=d.y+"%";
 b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
-keys[d.s]=b;document.getElementById(d.g).appendChild(b)}
+keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
+document.getElementById("tabb").onclick=function(){showTab(false)};
+document.getElementById("tabc").onclick=function(){showTab(true)};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
-document.getElementById("brb").onchange=function(){setRadio("ble")}}
+document.getElementById("brb").onchange=function(){setRadio("ble")};
+document.getElementById("hab").onchange=function(){setRadio("home_assistant")};
+document.getElementById("scb").onchange=setColorsToggle;
+setColorsPaint()}
+
+function showTab(config){
+document.getElementById("buttonstab").hidden=config;
+document.getElementById("configtab").hidden=!config;
+document.getElementById("tabb").setAttribute("aria-selected",String(!config));
+document.getElementById("tabc").setAttribute("aria-selected",String(config))}
 
 // Built once. A repaint only rewrites the status line, because rebuilding the
 // inputs would discard an address that is still being typed.
@@ -498,6 +588,7 @@ b.disabled=radioBusy[kind]||!(st&&st.radios)}
 function radioStatus(){
 radioSwitch("zigbee","zrb");
 radioSwitch("ble","brb");
+radioSwitch("home_assistant","hab");
 var e=document.getElementById("zrs");
 if(!e)return;
 var err=radioError.zigbee,on=radioOn("zigbee"),known=!!(st&&st.radios);
@@ -535,14 +626,14 @@ return z["new"]?"Not paired.":
 function setRadio(kind){
 if(radioBusy[kind])return;
 var next=radioOn(kind)?"0":"1";
-radioBusy[kind]=true;radioWant[kind]=next==="1";radioError[kind]="";radioStatus();
+radioBusy[kind]=true;radioWant[kind]=next==="1";radioError[kind]="";radioStatus();networkStatus();
 post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next).then(function(r){
 if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){
 if(!ok)throw new Error("The remote could not change the radio.")})})
 .then(function(){radioBusy[kind]=false;return load().then(paint)},function(e){
 radioBusy[kind]=false;
-radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus()})}
+radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus();networkStatus()})}
 
 // One line carries the radio and the host, so an off radio can never read as
 // connected. The bond lives in flash, so its name survives the link and a
@@ -566,6 +657,24 @@ live?"Connected to "+bleHost()+".":
 if(bf){bf.disabled=bleForgetBusy||!st.ble.bonded;
 bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth host"}}
 
+function networkStatus(){
+var wf=document.getElementById("wfs"),ha=document.getElementById("has"),
+ip=document.getElementById("wip"),mac=document.getElementById("wmac");
+if(!st||!st.network)return;
+var wifi=st.network.wifi,api=wifi&&st.network.home_assistant,expect=radioOn("home_assistant"),
+err=radioError.home_assistant;
+if(wf){wf.className="sub st"+(wifi?"":" bad");
+wf.innerHTML="<span class='dot "+(wifi?"":"bad")+"'></span>Wi-Fi is "+
+(wifi?"connected.":"disconnected. The config page is unavailable over the network.")}
+if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
+ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'></span>"+
+(!expect?"Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.":
+"Home Assistant API is "+
+(api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+
+(err?" "+esc(err):"")}
+if(ip)ip.textContent=st.network.ip||"Unavailable";
+if(mac)mac.textContent=st.network.mac||"Unavailable"}
+
 function forgetBle(){
 if(bleForgetBusy)return;
 bleForgetBusy=true;bleError="";bleStatus();
@@ -582,20 +691,34 @@ if(stBusy)return;
 stBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j&&j.ble){if(!st)st={};st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-zpjSync();radioStatus();bleStatus()}},zpjLost)
+.then(function(j){if(j&&j.ble){if(!st)st={};st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
+zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)
 .then(function(){stBusy=false},function(){stBusy=false})}
 
 function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-z2mStatus();radioStatus();bleStatus();zpjPaint();
-for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s];
+z2mStatus();networkStatus();radioStatus();bleStatus();zpjPaint();
+for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
-b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");
+b.setAttribute("aria-label",d.l+": "+words(d.s));
+b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""].filter(Boolean).join(" ");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
-editor();cfgPaint()}
+assignmentPaint();editor();cfgPaint()}
+
+function assignmentPaint(){
+var list=document.getElementById("assignmentList"),summary=document.getElementById("assignmentSummary");
+var h="",used=[],i,d,r;
+for(i=0;i<S.length;i++){d=S[i];r=row(d.s);if(!r||r.action==="none")continue;
+used.push({slot:d.s,label:d.l,row:r})}
+used.sort(function(a,b){return a.label.localeCompare(b.label,undefined,{numeric:true})});
+for(i=0;i<used.length;i++){d=used[i];h+="<button type=button id=assignment-"+d.slot+" class='"+
+setClass(d.row)+"'><b>"+esc(d.label)+"</b><span>"+esc(words(d.slot))+"</span></button>"}
+  summary.textContent="Assignments";
+list.innerHTML=h||"<p class=sub>No inputs are assigned.</p>";
+for(i=0;i<used.length;i++)(function(s){
+document.getElementById("assignment-"+s).onclick=function(){pick(s)}})(used[i].slot)}
 
 function esc(t){var e=document.createElement("div");e.textContent=t;return e.innerHTML}
 // esc() escapes text nodes only, and a Zigbee2MQTT name can carry a quote.
@@ -864,13 +987,12 @@ z2mConnect(u,k);z2mStatus()}
 function hasCode(text){return !!String(text||"").replace(/\s+/g,"")}
 
 function codeBox(lock){
-var dis=lock?" disabled":"",codeDis=dis||(!hasCode(cd)?" disabled":"");
+var codeDis=lock||!hasCode(cd)?" disabled":"";
 var h="<div class=code><p class=hd>IR code</p>"+
 "<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
 "rel=noreferrer>Flipper-IRDB</a></p>"+
 "<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
-h+="<div class=act><button type=button class=sec id=cc"+codeDis+">Copy</button>"+
-"<button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
+h+=detail(sel)+"<div class=act><button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
 (cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")+"</div>";
 return h}
 
@@ -890,12 +1012,6 @@ try{ok=document.execCommand("copy")}catch(x){}
 if(!ok&&navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}
 return ok}
 
-function copyCode(){var t=document.getElementById("ct");
-if(!hasCode(t.value)){msg="This input has no code to copy.";bad=true;paint();return}
-var ok=copyBox(t);
-msg=ok?"Code copied.":"Copy is blocked. Select the text and copy it by hand.";
-bad=!ok;paint()}
-
 function clipConfig(r){
 if(!r)return null;
 if(r.action==="ir")return {kind:"ir",source:r.slot};
@@ -912,20 +1028,21 @@ function clipName(c){var d=info(c.source);return d?d.l:"that input"}
 function copyAssignment(){
 var c=clipConfig(row(sel)),source=sel;
 if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint();return}
-if(c.kind!=="ir"){clip=c;msg="Copied "+(c.kind==="hid"?"BLE HID":"Zigbee")+
-" config from "+clipName(c)+".";bad=false;paint();return}
+if(c.kind!=="ir"){clip=c;msg="";bad=false;paint();return}
 clipBusy=true;paint();
 fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){
 if(j.slot!==source||!j.present||!j.text)throw new Error();
 c.code=j.text;clip=c;cfgAll[source]=j.text;
-msg="Copied IR config from "+clipName(c)+".";bad=false})
+msg="";bad=false})
 .catch(function(){msg="Could not read that IR code.";bad=true})
 .then(function(){clipBusy=false;paint()})}
 
 function pasteAssignment(){
 var c=clip,target=sel;
 if(!c){msg="Copy an IR, Zigbee, or BLE HID config first.";bad=true;paint();return}
+if(!confirm("Apply the "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
+" config from "+clipName(c)+" to "+info(target).l+"?"))return;
 if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}
 else if(c.kind==="hid"){act="hid";hkv=c.hid_kind;huv=String(c.usage);hmv=String(c.mod||0);
 hcust=hidCustom(hkv,huv)}
@@ -935,9 +1052,12 @@ zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";
 zgv=c.device?"":String(c.group);zhv=c.device?c.ieee:"";
 zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;
 zvv=za(zav)&&za(zav).p?String(c.val):""}
-msg="Pasted "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
-" config from "+clipName(c)+". Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it.";
-bad=false;paint()}
+msg="";bad=false;
+if(c.kind==="ir"){paint();go("set_ir_code",c.code);return}
+if(c.kind==="hid"){paint();go("set_hid",null,"&kind="+hkv+"&usage="+c.usage+
+"&mod="+(c.mod||0));return}
+if(c.device){sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0));return}
+sendGroup(String(c.group),c.name||"",String(c.val||0))}
 
 function applyCode(){
 var text=document.getElementById("ct").value;
@@ -1124,16 +1244,9 @@ reader.readAsText(file)}
 
 // The box holds the current text, so a repaint keeps a pasted file or edit.
 // The heading is the toggle, so the card needs no control of its own.
-function cfgToggle(){cfgOpen=!cfgOpen;cfgMsg="";cfgBad=false;cfgPaint()}
-
 function cfgPaint(){
-var e=document.getElementById("cfgio"),b=document.getElementById("cfgb"),
-s=document.getElementById("cxs"),o=document.getElementById("cxo");
-if(!e||!b)return;
-if(s)s.textContent=cfgOpen?"Hide":"Show";
-if(o){o.setAttribute("aria-expanded",cfgOpen?"true":"false");o.onclick=cfgToggle}
-b.hidden=!cfgOpen;
-if(!cfgOpen){e.innerHTML="";return}
+var e=document.getElementById("cfgio");
+if(!e)return;
 var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy))?" disabled":"";
 var h="<p class=sub>Read the remote or choose a saved JSON file. Copy, download, or "+
 "edit the text, then apply it when ready.</p>"+
@@ -1165,24 +1278,29 @@ if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}
 
 function editor(){
 var e=document.getElementById("ed");
+var p=document.getElementById("edpanel");
 if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
-"<p class=sub>Select an input on the left to change what it does.</p>";return}
+"<p class=sub>Select an input on the left to change what it does.</p>";
+p.innerHTML="";return}
 var d=info(sel);
 var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
 var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
 "<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
 "<button type=button id=bpaste"+(!clip||locked?" disabled":"")+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
-"</span></h2><p class=sub>Now: "+esc(words(sel))+"</p>"+detail(sel);
+"</span></h2>";
 // The assignment is intact, so this says why the press reaches nothing.
 if(slotRadioOff(sel))h+="<div class='note bad'>The "+
 (slotRadio(row(sel))==="zigbee"?"Zigbee":"Bluetooth")+
 " radio is off, so this input is disabled. The assignment is kept.</div>";
 if(mode==="rec"&&rec===sel){
-h+="<p>Point the source remote at the front of the board and press its button.</p>"+
+e.innerHTML=h+"<h2 class=hd2 id=asl>Action</h2>"+
+"<div class=aslist role=radiogroup aria-labelledby=asl id=as>"+
+"<button type=button role=radio aria-checked=true disabled>IR code</button></div>";
+p.innerHTML="<h2>IR code</h2><p class=sub>Point the source remote at the front of the board and press its button.</p>"+
 "<div class=bar><i></i></div><div class=act>"+
 "<button type=button class=sec id=bc>Cancel</button></div>";
-e.innerHTML=h;document.getElementById("bc").onclick=cancel;return}
+document.getElementById("bc").onclick=cancel;return}
 if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 var lock=locked;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
@@ -1190,32 +1308,36 @@ else if(st&&st.busy&&st.owner==="device")
 h+="<div class=note>Assignment in progress on the remote.</div>";
 else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</div>";
 
-// One selector, because a slot holds one action. The panel below it carries
+// One open list, because a slot holds one action. The panel beside it carries
 // everything that action needs, so nothing from another action is on screen.
 var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
-h+="<p class=hd2>Action</p><select id=as"+(lock?" disabled":"")+">";
-var title="";
-for(var i=0;i<opts.length;i++){h+="<option value="+opts[i][0]+
-(act===opts[i][0]?" selected":"")+">"+opts[i][1]+"</option>";
-if(act===opts[i][0])title=opts[i][1]}
-h+="</select><h2>"+esc(title)+"</h2>";
-h+=act==="zb"?zbForm(st&&st.busy):act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
-act==="cl"?clearPanel(lock):irPanel(lock);
+h+="<h2 class=hd2 id=asl>Action</h2><div class=aslist role=radiogroup "+
+"aria-labelledby=asl id=as>";
+var title="",dis=lock?" disabled":"";
+for(var i=0;i<opts.length;i++){var on=act===opts[i][0];
+h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
+" aria-checked="+on+dis+">"+esc(opts[i][1])+"</button>";
+if(on)title=opts[i][1]}
+h+="</div>";
+var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):
+act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
+act==="cl"?clearPanel(lock):irPanel(lock));
 e.innerHTML=h;
+p.innerHTML=panel;
 
 if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
 if(!locked&&clip)document.getElementById("bpaste").onclick=pasteAssignment;
-document.getElementById("as").onchange=function(){act=this.value;msg="";bad=false;paint()};
+if(!lock)for(var j=0;j<opts.length;j++)(function(v){
+document.getElementById("as-"+v).onclick=function(){
+act=v;msg="";bad=false;paint()}})(opts[j][0]);
 if(act==="ir"){
 var box=document.getElementById("ct");
 box.oninput=function(){cd=box.value;
 var disabled=lock||!hasCode(cd);
-document.getElementById("cc").disabled=disabled;
 document.getElementById("ca").disabled=disabled};
-document.getElementById("cc").onclick=copyCode;
 document.getElementById("ca").onclick=applyCode;
 if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
 if(act==="zb"){

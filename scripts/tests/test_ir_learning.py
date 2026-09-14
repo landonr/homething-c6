@@ -58,10 +58,10 @@ class IrLearningTest(unittest.TestCase):
         # IR, so a dark D2 must not read as a dead button.
         status = CONFIG.split("name: Status Indicators", 1)[1].split("// D3 and D4", 1)[0]
         self.assertNotIn("mqtt", status)
-        self.assertIn("if (!api_connected) {", status)
-        self.assertIn("it[0] = wifi_connected ? Color(level, level / 4, 0) : Color(level, 0, 0);", status)
+        self.assertIn("if (api_connected) {", status)
+        self.assertIn("it[0] = Color(level, level / 2, 0);", status)
         green = status.index("it[0] = Color(0, 96, 24);")
-        self.assertLess(status.index("if (!api_connected) {"), green)
+        self.assertLess(status.index("if (api_connected) {"), green)
 
     def test_successful_save_returns_to_ready_until_sw2(self) -> None:
         self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)

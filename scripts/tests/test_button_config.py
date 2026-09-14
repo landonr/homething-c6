@@ -17,10 +17,10 @@ ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
 
-# Slots that cannot start the voice assistant. 19 is SW2, whose press edge is
+# Slots that cannot start the voice assistant. 20 is SW1, whose press edge is
 # already owned by the receiver-mode hold gesture. 17 and 18 are the wheel
 # detents, which have no release edge to end push-to-talk with.
-NO_VOICE = {17, 18, 19}
+NO_VOICE = {17, 18, 20}
 ALL_SLOTS = list(range(3, 21))
 
 
@@ -48,19 +48,16 @@ def page_slots() -> list:
     """Parse the S array out of button_config_page.h as one dict per input."""
     array = section(PAGE, "var S=[", "];")
     rows = re.findall(
-        r'\{s:(\d+),l:"([^"]+)",v:([01]),g:"(\w+)"(?:,c:"(\w+)")?\}',
+        r'\{s:(\d+),l:"([^"]+)",v:([01]),x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
         array,
     )
     if not rows:
         raise AssertionError("page S array has no rows")
     return [
-        {"slot": int(slot), "label": label, "voice": voice == "1", "group": group, "cell": cell}
-        for slot, label, voice, group, cell in rows
+        {"slot": int(slot), "label": label, "voice": voice == "1", "x": float(x),
+         "y": float(y), "class": css_class}
+        for slot, label, voice, x, y, css_class in rows
     ]
-
-
-def page_group(name: str) -> list:
-    return [row for row in page_slots() if row["group"] == name]
 
 
 class RoutingTest(unittest.TestCase):
@@ -120,62 +117,57 @@ class SlotTableTest(unittest.TestCase):
         page = {row["slot"]: row["voice"] for row in page_slots()}
         self.assertEqual(firmware, page)
 
-    def test_only_slots_17_and_18_and_19_have_no_voice_action(self) -> None:
+    def test_only_slots_17_and_18_and_20_have_no_voice_action(self) -> None:
         """17 and 18 are wheel detents with no release edge to end push-to-talk.
-        19 is SW2, whose press edge belongs to the receiver-mode hold."""
+        20 is SW1, whose press edge belongs to the receiver-mode hold."""
         firmware = {slot for slot, voice in cpp_slots() if not voice}
         self.assertEqual(firmware, NO_VOICE)
 
 
 class PlacementTest(unittest.TestCase):
-    def test_the_top_group_puts_sw1_on_the_right(self) -> None:
-        """SW1 sits to the right of SW2 on the board."""
-        rows = page_group("top")
-        self.assertEqual([(row["slot"], row["label"]) for row in rows], [(19, "SW2"), (20, "SW1")])
-
-    def test_the_wheel_sits_in_the_correct_grid_cells(self) -> None:
-        """Catches a swap that would put Left on the right of the plus layout, or
-        put clockwise rotation on the left of Up."""
-        rows = page_group("plus")
+    def test_the_top_group_puts_button_1_on_the_right(self) -> None:
+        """Button 1 sits to the right of Button 2 on the board."""
+        rows = page_slots()[:2]
         self.assertEqual(
-            {(row["slot"], row["label"], row["cell"]) for row in rows},
-            {
-                (18, "Turn left", "tl"),
-                (13, "Up", "u"),
-                (17, "Turn right", "tr"),
-                (16, "Left", "l"),
-                (14, "Press", "c"),
-                (12, "Right", "r"),
-                (15, "Down", "d"),
-            },
+            [(row["slot"], row["label"]) for row in rows],
+            [(19, "Button 2"), (20, "Button 1")],
         )
+        self.assertLess(rows[0]["x"], rows[1]["x"])
 
-    def test_every_plus_cell_has_a_grid_area_rule(self) -> None:
-        for cell, area in (
-            ("tl", "1/1"),
-            ("u", "1/2"),
-            ("tr", "1/3"),
-            ("l", "2/1"),
-            ("c", "2/2"),
-            ("r", "2/3"),
-            ("d", "3/2"),
-        ):
-            self.assertIn(f".plus .{cell}{{grid-area:{area}}}", PAGE)
+    def test_the_wheel_hotspots_match_the_physical_directions(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()[2:9]}
+        self.assertEqual(rows[18]["class"], "rot left")
+        self.assertEqual(rows[17]["class"], "rot right")
+        self.assertLess(rows[16]["x"], rows[14]["x"])
+        self.assertGreater(rows[12]["x"], rows[14]["x"])
+        self.assertLess(rows[13]["y"], rows[14]["y"])
+        self.assertGreater(rows[15]["y"], rows[14]["y"])
 
-    def test_both_rotation_slots_live_in_the_wheel_group(self) -> None:
-        self.assertEqual({row["slot"] for row in page_group("plus")} & {17, 18}, {17, 18})
-        self.assertEqual(page_group("turn"), [])
+    def test_both_rotation_slots_flank_the_wheel_up_hotspot(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()}
+        self.assertEqual((rows[18]["x"], rows[18]["y"]), (50, 31.7))
+        self.assertEqual((rows[17]["x"], rows[17]["y"]), (50, 31.7))
+        self.assertIn(".remote .k.rot.left{clip-path:inset(0 50% 0 0)}", PAGE)
+        self.assertIn(".remote .k.rot.right{clip-path:inset(0 0 0 50%)}", PAGE)
 
     def test_the_keypad_group_fills_column_by_column(self) -> None:
         """The 3x3 grid fills in array order, so the array order is the layout.
         The board reads 3 6 11, 4 7 10, 5 8 9 across its rows."""
-        rows = page_group("pad")
+        rows = page_slots()[9:]
         self.assertEqual([row["slot"] for row in rows], [3, 6, 11, 4, 7, 10, 5, 8, 9])
-        self.assertEqual([row["label"] for row in rows], [f"SW{n}" for n in (3, 6, 11, 4, 7, 10, 5, 8, 9)])
+        self.assertEqual(
+            [row["label"] for row in rows],
+            [f"Button {n}" for n in (3, 6, 11, 4, 7, 10, 5, 8, 9)],
+        )
 
-    def test_the_page_renders_the_three_groups_it_names(self) -> None:
-        for group in ("top", "plus", "pad"):
-            self.assertIn(f'id="{group}"', PAGE)
+    def test_the_page_renders_the_full_front_face_selector(self) -> None:
+        self.assertIn('<div class="remote" id="remote">', PAGE)
+        self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
+        self.assertIn('"case-front-face-flat.svg"', INIT)
+
+    def test_the_front_face_image_is_not_draggable(self) -> None:
+        self.assertIn('alt="Front face of the homeThing c6 remote" draggable="false">', PAGE)
+        self.assertIn('user-select:none;-webkit-user-drag:none', PAGE)
 
 
 class EnforcementTest(unittest.TestCase):
@@ -222,6 +214,14 @@ class EnforcementTest(unittest.TestCase):
         ):
             self.assertNotIn(call, state)
         self.assertIn("::zigbee_assignments.assignment(info.slot)", state)
+
+    def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
+        self.assertIn("wifi::global_wifi_component->is_connected()", state)
+        self.assertIn("api::global_api_server->is_connected()", state)
+        self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
+        self.assertIn("get_mac_address_pretty_into_buffer(mac)", state)
 
     def test_the_state_row_reports_the_zigbee_target_first(self) -> None:
         """A slot holds one action, and a Zigbee target hides an old IR code."""
@@ -335,11 +335,14 @@ class PageTest(unittest.TestCase):
         self.assertIn('<link rel=icon href="data:image/svg+xml,', PAGE)
         self.assertEqual(re.findall(r"http://[^\s\"'>%]*", PAGE),
                          ["http://www.w3.org/2000/svg"])
-        # One outbound anchor names the code library. A link loads nothing until
-        # the reader follows it, so it cannot stall the page on an offline LAN.
+        # Outbound anchors load nothing until the reader follows them, so they
+        # cannot stall the page on an offline LAN.
         self.assertEqual(
             re.findall(r"https://[^\s\"'>]+", PAGE),
-            ["https://github.com/Lucaslhm/Flipper-IRDB"],
+            [
+                "https://github.com/landonr/homething-c6",
+                "https://github.com/Lucaslhm/Flipper-IRDB",
+            ],
         )
 
     def test_the_page_only_calls_its_own_endpoints(self) -> None:
@@ -373,8 +376,12 @@ class PageTest(unittest.TestCase):
         # A constant row says nothing. Every frame goes out at 38 kHz.
         self.assertNotIn("Carrier", body)
         self.assertNotIn('"Type"', body)
+        self.assertNotIn("<details", body)
         self.assertIn('function ms(u){return (u/1000).toFixed(1)+" ms"}', PAGE)
-        self.assertIn('esc(words(sel))+"</p>"+detail(sel)', PAGE)
+        # The IR detail sits in its code box immediately before its actions.
+        box = section(PAGE, "function codeBox(lock){", "\n\nfunction loadCode")
+        self.assertIn('h+=detail(sel)+"<div class=act>', box)
+        self.assertNotIn("Now:", PAGE)
 
     def test_the_state_row_reports_the_frame_length_and_the_code(self) -> None:
         """Nine slots hold 68 pulses of the same length, so only the data word
@@ -397,28 +404,25 @@ class PageTest(unittest.TestCase):
         self.assertIn("const int16_t space = record.pulses[3 + 2 * bit];", decode)
         self.assertIn("value = (value << 1) | (-space > 100 ? 1U : 0U);", decode)
 
-    def test_the_page_can_copy_a_code_out_and_paste_one_in(self) -> None:
-        """Plain HTTP is not a secure context, so navigator.clipboard is often
-        missing and execCommand has to carry the copy."""
+    def test_the_page_can_apply_a_code_and_copy_an_assignment(self) -> None:
         box = section(PAGE, "function codeBox(lock){", 'return h}')
         self.assertIn("<textarea id=ct", box)
         # The box carries the only copy of a code, so it never hides behind a toggle.
-        self.assertNotIn("<details", PAGE)
+        self.assertNotIn("<details", box)
         self.assertIn('function hasCode(text){return !!String(text||"").replace(/\\s+/g,"")}', PAGE)
-        self.assertIn('var dis=lock?" disabled":"",codeDis=dis||(!hasCode(cd)?" disabled":"");', box)
-        self.assertIn('id=cc"+codeDis+">Copy</button>', box)
+        self.assertIn('var codeDis=lock||!hasCode(cd)?" disabled":"";', box)
+        self.assertNotIn('id=cc', box)
         self.assertIn('id=ca"+codeDis+">Apply to this input</button>', box)
         # Loading follows the code actions, so it cannot move them.
         self.assertIn(".code .load{color:var(--mut);font-size:13px;margin:8px 0 0}", PAGE)
-        self.assertIn('"<button type=button id=ca"+codeDis+">Apply to this input</button></div>"+', box)
+        self.assertIn('"<div class=act><button type=button id=ca"+codeDis+">Apply to this input</button></div>"+', box)
         self.assertIn('"<p class=load>Loading the stored code.</p>"', box)
         self.assertIn('var disabled=lock||!hasCode(cd);', PAGE)
-        # One helper carries both boxes, so the code box and the config box
-        # cannot drift apart on the browsers that lack navigator.clipboard.
+        # Assignment and config copies use one fallback for plain HTTP.
         copy = section(PAGE, "function copyBox(t){", "return ok}")
         self.assertIn('document.execCommand("copy")', copy)
         self.assertIn("if(!ok&&navigator.clipboard)", copy)
-        self.assertIn("var ok=copyBox(t);", section(PAGE, "function copyCode(){", "bad=!ok;paint()}"))
+        self.assertNotIn("function copyCode()", PAGE)
         self.assertIn('go("set_ir_code",text)', PAGE)
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
         self.assertIn('cd=j.text||""', PAGE)
@@ -488,11 +492,16 @@ class PageTest(unittest.TestCase):
         self.assertLess(editor.index('"Zigbee target"'), editor.index("if(d.v)opts.push"))
         # A slot that lost its voice action must not stay on a voice panel.
         self.assertIn('if(!d.v&&act==="va")act="ir";', editor)
-        # The panel below the selector repeats the selected action as a heading,
-        # so the fields under it are never read out of context.
-        self.assertIn('if(act===opts[i][0])title=opts[i][1]}', editor)
-        self.assertIn('h+="</select><h2>"+esc(title)+"</h2>";', editor)
-        self.assertIn('document.getElementById("as").onchange=', editor)
+        # The action list stays open, and the panel beside it repeats the selected
+        # action as a heading so the fields under it are never read out of context.
+        self.assertIn('class=aslist role=radiogroup', editor)
+        self.assertIn('if(on)title=opts[i][1]}', editor)
+        self.assertIn('var panel="<h2>"+esc(title)+"</h2>"+', editor)
+        self.assertNotIn('var panel="<h2 class=hd2>', editor)
+        self.assertIn('p.innerHTML="<h2>IR code</h2><p class=sub>', editor)
+        self.assertIn('p.innerHTML=panel;', editor)
+        self.assertIn('act=v;msg="";bad=false;paint()', editor)
+        self.assertNotIn("<select id=as", editor)
         # Record IR and the code box belong to the IR panel alone.
         ir = section(PAGE, "function irPanel(lock){", "\n\nfunction ")
         self.assertIn('id=b1', ir)
@@ -518,7 +527,7 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("id=zh", group)
         self.assertNotIn("id=zp", group)
         # A label must render like the other headings and take its own line.
-        self.assertIn("p.hd2,label.hd2{display:block;", PAGE)
+        self.assertIn("h2.hd2,label.hd2{display:block;", PAGE)
         # One box per kind, so nothing has to guess from the digit count.
         self.assertNotIn("ztv", PAGE)
 
@@ -682,8 +691,8 @@ class PageTest(unittest.TestCase):
         """One 1.5s poll drives every live line. It used to drop j.zigbee, which
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
-        self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("zpjSync();radioStatus();bleStatus()}},zpjLost)", body)
+        self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
+        self.assertIn("zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
         # A failed poll while a press is open is the restart, not a dead remote.
@@ -763,8 +772,7 @@ class PageTest(unittest.TestCase):
         )
 
     def test_the_selected_input_title_copies_and_pastes_ir_and_zigbee_configs(self) -> None:
-        """Paste opens the matching editor and fills it. Apply or Assign writes
-        the copied config to the selected input."""
+        """Paste asks before it writes the copied config to the selected input."""
         self.assertIn(".edtitle .clip{display:flex", PAGE)
         editor = section(PAGE, "function editor(){", "\n\nfunction actFor(")
         self.assertIn('<h2 class=edtitle><span>', editor)
@@ -782,14 +790,16 @@ class PageTest(unittest.TestCase):
         self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
         self.assertIn('clip=c;', copy)
         paste = section(PAGE, "function pasteAssignment(){", "\n\nfunction applyCode(")
+        self.assertIn('if(!confirm("Apply the "+', paste)
         self.assertIn('if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}', paste)
         self.assertIn('act="zb";zkv=c.device?"d":"g";', paste)
         self.assertIn('zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";', paste)
         self.assertIn('zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;', paste)
         self.assertIn('zvv=za(zav)&&za(zav).p?String(c.val):""}', paste)
-        self.assertIn('Select "+(c.kind==="ir"?"Apply to this input":"Assign")+" to save it."', paste)
-        self.assertNotIn('post("set_', paste)
-        self.assertNotIn('waitAction(', paste)
+        self.assertIn('go("set_ir_code",c.code)', paste)
+        self.assertIn('go("set_hid",null,"&kind="+hkv', paste)
+        self.assertIn('sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0))', paste)
+        self.assertIn('sendGroup(String(c.group),c.name||"",String(c.val||0))', paste)
         load = section(PAGE, "function loadCode(s){", "\n\n// The page")
         self.assertIn("var loadId=++codeLoad", load)
         self.assertIn("if(loadId!==codeLoad||j.slot!==s)return;", load)
@@ -797,10 +807,15 @@ class PageTest(unittest.TestCase):
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can
         be restored without a source remote in hand."""
-        # Both radios share one card at the top of the page, so the import block
-        # is the only thing the Config card holds.
-        self.assertIn('<section class="card full conn">\n'
-                      '<div id="zbcfg">\n'
+        # All radio types use vertical sections above import and export.
+        self.assertIn('<nav class="tabs full" aria-label="Setup sections">', PAGE)
+        self.assertIn('<div class="tabgrid" id="buttonstab">', PAGE)
+        self.assertIn('<div class="tabgrid" id="configtab" hidden>', PAGE)
+        self.assertIn('<h1 class="full secttl">Connections</h1>', PAGE)
+        self.assertIn('<section class="card full conn" id="wificfg">', PAGE)
+        self.assertIn('<p class="sub st" id="wfs">Wi-Fi state is loading.</p>', PAGE)
+        self.assertIn('<p class="sub st" id="has">Home Assistant API state is loading.</p>', PAGE)
+        self.assertIn('<section class="card full conn" id="zbcfg">\n'
                       '<h2 class="ttl">Zigbee<label class="sw" id="zrw">'
                       '<input type="checkbox" id="zrb"\naria-label="Zigbee radio">'
                       '<span></span></label></h2>\n'
@@ -817,17 +832,17 @@ class PageTest(unittest.TestCase):
                       '<h3>Zigbee2MQTT</h3>\n'
                       '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
                       '<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>\n'
-                      '<div id="z2m"></div>\n</div>\n'
-                      '<div id="blecfg">\n'
+                      '<div id="z2m"></div>', PAGE)
+        self.assertIn('<section class="card full conn" id="blecfg">\n'
                       '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
                       '<input type="checkbox" id="brb"\naria-label="Bluetooth radio">'
                       '<span></span></label></h2>\n'
                       '<p class="sub st" id="bst">BLE HID state is loading.</p>', PAGE)
-        # A rule separates the two, and the pair stacks on a narrow screen.
-        self.assertIn(".conn>div+div{border-left:1px solid var(--line)", PAGE)
-        self.assertIn("@media (max-width:720px){.conn{grid-template-columns:1fr}", PAGE)
-        self.assertIn('<section class="card full" id="cfg">', PAGE)
-        self.assertIn('<div id="cfgb" hidden><div id="cfgio"></div></div>', PAGE)
+        self.assertIn('<section class="card full" id="cfg">', PAGE.split('id="configtab"', 1)[1])
+        self.assertIn('<h1 class="full secttl">Import Export</h1>\n'
+                      '<section class="card full" id="cfg">\n<div id="cfgio"></div>', PAGE)
+        self.assertNotIn("saveWifi", PAGE)
+        self.assertNotIn("set_wifi", PAGE)
         # A connection card cannot sit inside the collapsed import card.
         self.assertNotIn('id="cfgb" hidden><div id="z2m">', PAGE)
         self.assertNotIn('class="sep"', PAGE)
@@ -835,7 +850,8 @@ class PageTest(unittest.TestCase):
         self.assertNotIn('id="cxz"', PAGE)
         # The page title leads, so neither radio card pushes it down.
         self.assertIn('<div>\n<h1>homeThing c6</h1>\n'
-                      '<p class="sub">Select an input to see or change what it does.</p>\n'
+                      '<p class="sub"><a href="https://github.com/landonr/homething-c6">'
+                      'github.com/landonr/homething-c6</a></p>\n'
                       '</div>\n</header>', PAGE)
         # The logo is inline and uncoloured, so one copy follows the theme text
         # colour instead of shipping a light file and a dark file.
@@ -852,10 +868,9 @@ class PageTest(unittest.TestCase):
                       "%3C/style%3E", PAGE)
         self.assertIn("header.full{display:flex;align-items:center;gap:12px}", PAGE)
         card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
-        # Closed on arrival, because most visits change one input instead.
-        self.assertIn("var cfgOpen=false;", PAGE)
-        self.assertIn('<h2><button type="button" class="tog" id="cxo" aria-expanded="false">'
-                      'Import and export<span\nid="cxs">Show</span></button></h2>', PAGE)
+        self.assertIn('<h1 class="full secttl">Import Export</h1>', PAGE)
+        self.assertNotIn('id="cxo"', PAGE)
+        self.assertNotIn('id="cxs"', PAGE)
         # The button keeps its place and locks instead, so no line moves.
         self.assertIn('id="bfr">Forget Bluetooth host</button>', PAGE)
         self.assertIn('post("forget_ble")', PAGE)
@@ -884,15 +899,8 @@ class PageTest(unittest.TestCase):
         self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
         self.assertNotIn("paint()", refresh)
-        self.assertIn('if(s)s.textContent=cfgOpen?"Hide":"Show";', card)
-        self.assertIn("b.hidden=!cfgOpen;", card)
-        self.assertIn('o.onclick=cfgToggle}', card)
-        self.assertIn("h2>button.tog{", PAGE)
         # The connection inputs are built once, so the repaint owns cfgio alone.
         self.assertIn('var e=document.getElementById("cfgio")', card)
-        toggle = section(PAGE, "function cfgToggle(){", "\n\n")
-        self.assertIn("cfgOpen=!cfgOpen", toggle)
-        self.assertNotIn("cfgRefresh", toggle)
         # The startup path reads the state and the open code box, nothing more.
         start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
         self.assertNotIn("cfgRefresh", start)
@@ -1039,7 +1047,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);", switch)
 
     def test_the_state_and_action_endpoints_carry_both_switches(self) -> None:
-        self.assertIn('"radios":{"zigbee":%s,"ble":%s}', CPP)
+        self.assertIn('"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s}', CPP)
         self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
                       '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
         self.assertIn("::zigbee_assignments.link_started() ? \"true\" : \"false\"", CPP)
@@ -1054,6 +1062,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("this->defer(", switch)
         self.assertIn("::zigbee_assignments.set_radio_enabled(radio_on)", switch)
         self.assertIn("set_radio_enabled(radio_on)", switch)
+        self.assertIn("this->set_ha_api_expected(radio_on)", switch)
+        self.assertIn('radio != "home_assistant"', CPP)
 
     def test_an_off_zigbee_radio_keeps_the_stack_down_after_a_boot(self) -> None:
         """The ESP-Zigbee stack has no stop and no restart, so the only way to
@@ -1090,7 +1100,7 @@ class RadioSwitchTest(unittest.TestCase):
         turn_off_action. That switched both radios off on every boot before the
         stored flag was even read."""
         block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
-        self.assertEqual(block.count("restore_mode: DISABLED"), 2)
+        self.assertEqual(block.count("restore_mode: DISABLED"), 3)
         self.assertNotIn("restore_mode: ALWAYS", block)
 
     def test_the_yaml_exposes_one_switch_for_each_radio(self) -> None:
@@ -1101,6 +1111,9 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("lambda: return id(ble_hid_remote).radio_enabled();", block)
         self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(true);", block)
         self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(false);", block)
+        self.assertIn("lambda: return id(button_cfg).ha_api_expected();", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(true);", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(false);", block)
         # The component keeps no global instance, so the YAML pushes the link
         # state to the manager the page reads.
         self.assertIn("zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),", CONFIG)
@@ -1108,12 +1121,14 @@ class RadioSwitchTest(unittest.TestCase):
         # D5 must not report a healthy Zigbee link that sends nothing.
         self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
                       CONFIG)
+        self.assertIn("const bool ha_expected = id(button_cfg).ha_api_expected();", CONFIG)
+        self.assertIn("it[0] = Color(130, 65, 0);", CONFIG)
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
         self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
                       'r.action==="hid"?"ble":""}', PAGE)
-        self.assertIn('b.className="k"+(d.c?" "+d.c:"")+(slotRadioOff(d.s)?" rf":"");', PAGE)
+        self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
         # The label stays, so the tile still says what the input is assigned to.
         self.assertIn(".k.rf span{opacity:.55}", PAGE)
         self.assertIn("background:var(--bad);margin-left:6px;vertical-align:middle}", PAGE)
@@ -1123,14 +1138,56 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
         self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
         self.assertIn('document.getElementById("zrb").onchange=function(){setRadio("zigbee")};', PAGE)
+        self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
+        self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
+        self.assertIn("Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.", PAGE)
+
+    def test_set_inputs_have_action_background_colors(self) -> None:
+        self.assertIn('.set-ble{--set-bg:#2f80ed}', PAGE)
+        self.assertIn('.set-zigbee{--set-bg:#38a169}', PAGE)
+        self.assertIn('.set-ir{--set-bg:#e5b700}', PAGE)
+        self.assertIn('.set-voice{--set-bg:#8b5cf6}', PAGE)
+        self.assertIn('function setClass(r){var a=r&&r.action;', PAGE)
+        self.assertIn('a==="hid"?"set-ble"', PAGE)
+        self.assertIn('a==="zigbee"||a==="ir"||a==="voice"', PAGE)
+        self.assertIn('body.set-colors .remote .k[class*=set-]', PAGE)
+        self.assertIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
+        self.assertIn('localStorage.getItem("c6.set-colors")', PAGE)
+        self.assertIn('document.getElementById("scb").onchange=setColorsToggle;', PAGE)
+        self.assertIn('aria-label="Assignment colors"', PAGE)
+
+    def test_assignment_collection_stays_visible_and_lists_only_set_inputs(self) -> None:
+        self.assertIn('<section class="card assignments">', PAGE)
+        self.assertIn('<span id="assignmentSummary">Assignments</span>', PAGE)
+        self.assertNotIn('<details class="card assignments"', PAGE)
+        self.assertIn(
+            '.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));',
+            PAGE,
+        )
+        self.assertIn(
+            '@media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+            PAGE,
+        )
+        self.assertIn(
+            '@media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}',
+            PAGE,
+        )
+        self.assertIn('.assignment-list button{display:flex;flex-direction:column;', PAGE)
+        menu = section(PAGE, "function assignmentPaint(){", "\n\nfunction esc(")
+        self.assertIn('if(!r||r.action==="none")continue;', menu)
+        self.assertIn('a.label.localeCompare(b.label,undefined,{numeric:true})', menu)
+        self.assertIn('summary.textContent="Assignments";', menu)
+        self.assertIn('<span>"+esc(words(d.slot))+"</span>', menu)
+        self.assertIn('onclick=function(){pick(s)}', menu)
 
     def test_every_radio_line_states_what_is_on_or_off(self) -> None:
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
         # Nothing in the connection card carries a hidden attribute any more.
-        card = section(PAGE, '<section class="card full conn">', "</section>")
-        self.assertNotIn("hidden", card)
+        for card_id in ("wificfg", "zbcfg", "blecfg"):
+            card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
+            self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)
         self.assertIn('bf.disabled=bleForgetBusy||!st.ble.bonded;', PAGE)

@@ -84,9 +84,11 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 .set-zigbee{--set-bg:#38a169}
 .set-ir{--set-bg:#e5b700}
 .set-voice{--set-bg:#8b5cf6}
-.remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 22%,transparent)}
-.remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 30%,transparent)}
-.remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 35%,transparent)}
+/* Off by default in CSS. body.set-colors turns the tints on, and the switch
+   stores that choice in this browser only. */
+body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 22%,transparent)}
+body.set-colors .remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 30%,transparent)}
+body.set-colors .remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 35%,transparent)}
 .remote .k.rot{left:50%;top:31.7%;width:49%;border-radius:50%;z-index:1}
 .remote .k.rot.left{clip-path:inset(0 50% 0 0)}
 .remote .k.rot.right{clip-path:inset(0 0 0 50%)}
@@ -94,15 +96,15 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 .remote .k b,.remote .k span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
 overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .assignments{grid-column:1/-1;padding:0}
-.assignments h2{margin:0;padding:14px;border-bottom:1px solid var(--line)}
+.assignments h2.ttl{margin:0;padding:14px;border-bottom:1px solid var(--line)}
 .assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
 @media (max-width:800px){.assignment-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:520px){.assignment-list{grid-template-columns:minmax(0,1fr)}}
 .assignment-list button{display:flex;flex-direction:column;gap:5px;min-height:76px;border:1px solid var(--line);
 border-radius:10px;padding:12px;background:transparent;text-align:left;cursor:pointer;width:100%}
-.assignment-list button[class*=set-]{background:color-mix(in srgb,var(--set-bg) 13%,transparent)}
-.assignment-list button:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
-background:var(--set-bg);margin-right:8px}
+body.set-colors .assignment-list button[class*=set-]{background:color-mix(in srgb,var(--set-bg) 13%,transparent)}
+body.set-colors .assignment-list button:before{content:"";display:inline-block;width:9px;height:9px;
+border-radius:50%;background:var(--set-bg);margin-right:8px}
 .assignment-list button:hover{border-color:var(--acc)}
 button{font:inherit;color:inherit}
 textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
@@ -184,7 +186,9 @@ animation:sweep 1.4s ease-in-out infinite}
 <section class="card" id="ed" aria-live="polite"></section>
 <section class="card" id="edpanel" aria-live="polite"></section>
 <section class="card assignments">
-<h2 id="assignmentSummary">Assignments</h2>
+<h2 class="ttl"><span id="assignmentSummary">Assignments</span><label class="sw" id="scw"
+title="Assignment colors"><input type="checkbox" id="scb" aria-label="Assignment colors"
+checked><span></span></label></h2>
 <div class="assignment-list" id="assignmentList"></div>
 </section>
 </div>
@@ -312,6 +316,17 @@ function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
 function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":
 (a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
+// The colour overlay is a browser preference. Default on, and the remote never
+// sees it.
+var setColors=true;
+try{setColors=localStorage.getItem("c6.set-colors")!=="0"}catch(x){}
+function setColorsPaint(){
+document.body.classList.toggle("set-colors",setColors);
+var b=document.getElementById("scb");if(b)b.checked=setColors}
+function setColorsToggle(){
+setColors=!!document.getElementById("scb").checked;
+try{localStorage.setItem("c6.set-colors",setColors?"1":"0")}catch(x){}
+setColorsPaint()}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 // The code block prints the same fallback, so a copy and a tile agree.
@@ -393,7 +408,9 @@ document.getElementById("tabc").onclick=function(){showTab(true)};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
 document.getElementById("brb").onchange=function(){setRadio("ble")};
-document.getElementById("hab").onchange=function(){setRadio("home_assistant")}}
+document.getElementById("hab").onchange=function(){setRadio("home_assistant")};
+document.getElementById("scb").onchange=setColorsToggle;
+setColorsPaint()}
 
 function showTab(config){
 document.getElementById("buttonstab").hidden=config;

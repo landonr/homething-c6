@@ -1,0 +1,5 @@
+build123d==0.11.1
+# Already here through build123d's own ezdxf, listed because check.py imports
+# it directly to read LEGEND_FONT's cmap. Unpinned so it resolves to whatever
+# ezdxf wants rather than fighting it.
+fonttools

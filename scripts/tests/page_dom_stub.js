@@ -53,9 +53,10 @@ function mk(tag) {
 }
 for (const id of ["remote", "ed", "edpanel", "assignmentSummary", "assignmentList", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
-                  "hab", "haw", "tabb", "tabc", "buttonstab", "configtab", "wfs", "has",
+                  "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfs", "has",
                   "wip", "wmac"])
   els[id] = mk("section");
+els.scb.checked = true;
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
@@ -75,8 +76,22 @@ const STATE = {
   ],
 };
 
-global.document = { getElementById: (id) => els[id] || null, createElement: (t) => mk(t) };
-global.localStorage = { getItem: () => null, setItem: () => {} };
+const body = mk("body");
+body.classList = {
+  _on: false,
+  toggle(name, on) { this._on = !!on; body.className = on ? name : ""; },
+  contains(name) { return this._on && name === "set-colors"; },
+};
+global.document = {
+  body,
+  getElementById: (id) => els[id] || null,
+  createElement: (t) => mk(t),
+};
+global.localStorage = {
+  store: {},
+  getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; },
+  setItem(k, v) { this.store[k] = String(v); },
+};
 let confirmAsked = 0, confirmAnswer = true;
 global.confirm = (text) => { confirmAsked++; confirmText = text; return confirmAnswer; };
 let confirmText = "";
@@ -150,6 +165,23 @@ setTimeout(() => {
       if (list.innerHTML.indexOf(labels[i - 1]) > list.innerHTML.indexOf(labels[i]))
         throw new Error("assignments are not sorted by input label");
   });
+   step("assignment color overlay switch toggles body class and storage", () => {
+    if (!document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors start off");
+    const box = document.getElementById("scb");
+    box.checked = false;
+    setColorsToggle();
+    if (document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors stayed on");
+    if (localStorage.getItem("c6.set-colors") !== "0")
+      throw new Error("off choice was not stored");
+    box.checked = true;
+    setColorsToggle();
+    if (!document.body.classList.contains("set-colors"))
+      throw new Error("assignment colors stayed off");
+    if (localStorage.getItem("c6.set-colors") !== "1")
+       throw new Error("on choice was not stored");
+   });
   step("switching to an empty input clears stale IR code without loading", () => {
     const realFetch = global.fetch;
     let codeRequests = 0;

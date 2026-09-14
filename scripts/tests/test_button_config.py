@@ -1151,10 +1151,15 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('function setClass(r){var a=r&&r.action;', PAGE)
         self.assertIn('a==="hid"?"set-ble"', PAGE)
         self.assertIn('a==="zigbee"||a==="ir"||a==="voice"', PAGE)
+        self.assertIn('body.set-colors .remote .k[class*=set-]', PAGE)
+        self.assertIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
+        self.assertIn('localStorage.getItem("c6.set-colors")', PAGE)
+        self.assertIn('document.getElementById("scb").onchange=setColorsToggle;', PAGE)
+        self.assertIn('aria-label="Assignment colors"', PAGE)
 
     def test_assignment_collection_stays_visible_and_lists_only_set_inputs(self) -> None:
         self.assertIn('<section class="card assignments">', PAGE)
-        self.assertIn('<h2 id="assignmentSummary">Assignments</h2>', PAGE)
+        self.assertIn('<span id="assignmentSummary">Assignments</span>', PAGE)
         self.assertNotIn('<details class="card assignments"', PAGE)
         self.assertIn(
             '.assignment-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));',

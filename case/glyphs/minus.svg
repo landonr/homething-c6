@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minus sign as a filled outline, plus.svg's horizontal bar on its own:
+     same length and thickness, so SW9 and SW11 cut a matched pair. See
+     plus.svg for why these are SVGs rather than font glyphs. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20" width="100" height="20">
+  <path d="M 0 0 L 100 0 L 100 20 L 0 20 L 0 0 Z" fill="#000000"/>
+</svg>

@@ -25,6 +25,13 @@ localdatasheets/
 # Local-only agent config: hookify rules and anything else *.local.md.
 .claude/*.local.md
 
+# Case model. The board-only STEP and the outline DXF are tracked, so the shells
+# build from a fresh clone without KiCad. The two assembly exports are 5MB of
+# regenerable input needed only for the keepout and interference checks.
+case/export/
+case/board/c6remote-board.step
+case/board/c6remote-board.glb
+
 # Fab upload archives. The pre-commit hook blanket-stages export/, so a stray
 # zip dropped in there gets tracked; export.zip is rebuilt from export/ on demand.
 c6remote-kicad/export.zip

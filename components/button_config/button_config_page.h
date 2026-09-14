@@ -170,6 +170,7 @@ animation:sweep 1.4s ease-in-out infinite}
 <button type="button" id="tabc" aria-selected="false">Config</button>
 </nav>
 <div class="tabgrid" id="buttonstab">
+<p class="sub full">Select a button to assign an action.</p>
 <section class="remote-pane">
 <div class="remote" id="remote">
 <img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__" alt="Front face of the homeThing c6 remote" draggable="false">

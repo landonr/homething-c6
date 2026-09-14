@@ -810,6 +810,7 @@ class PageTest(unittest.TestCase):
         # All radio types use vertical sections above import and export.
         self.assertIn('<nav class="tabs full" aria-label="Setup sections">', PAGE)
         self.assertIn('<div class="tabgrid" id="buttonstab">', PAGE)
+        self.assertIn('<p class="sub full">Select a button to assign an action.</p>', PAGE)
         self.assertIn('<div class="tabgrid" id="configtab" hidden>', PAGE)
         self.assertIn('<h1 class="full secttl">Connections</h1>', PAGE)
         self.assertIn('<section class="card full conn" id="wificfg">', PAGE)

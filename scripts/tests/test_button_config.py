@@ -163,7 +163,7 @@ class PlacementTest(unittest.TestCase):
     def test_the_page_renders_the_full_front_face_selector(self) -> None:
         self.assertIn('<div class="remote" id="remote">', PAGE)
         self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
-        self.assertIn('"case-front-face-flat.svg"', INIT)
+        self.assertIn('"case-front-face.svg"', INIT)
 
     def test_the_front_face_image_is_not_draggable(self) -> None:
         self.assertIn('alt="Front face of the homeThing c6 remote" draggable="false">', PAGE)

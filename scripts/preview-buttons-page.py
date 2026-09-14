@@ -24,7 +24,7 @@ from urllib.parse import quote_from_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
-CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face-flat.svg"
+CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 CONFIG = Path(__file__).resolve().parent / "preview-c6remote-config.json"
 
 STATE = {

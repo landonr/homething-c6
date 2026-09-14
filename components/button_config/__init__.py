@@ -34,7 +34,7 @@ async def to_code(config):
     match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
     if match is None:
         raise cv.Invalid("button_config_page.h has no PAGE_HTML value")
-    svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face-flat.svg"
+    svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"
     svg = quote_from_bytes(svg_path.read_bytes(), safe="/,:;=(){}@.-_")
     html = match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg)
     page = gzip.compress(html.encode(), compresslevel=9, mtime=0)

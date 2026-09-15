@@ -25,15 +25,16 @@
   <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
 </p>
 
-This repo contains the KiCad hardware and ESPHome bring-up configuration for a prototype built around a Seeed Studio XIAO ESP32-C6. The hardware source of truth lives in `c6remote-kicad/`.
+## Summary
 
-<p align="center">
-  <img alt="Raytraced 3D top view of the board" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
-  <img alt="Raytraced 3D bottom view of the board" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
-</p>
-<p align="center"><sub>Raytraced renders, top and bottom</sub></p>
+- **Case:** The [`case/` README](case/README.md) documents the enclosure files and assembly information.
+- **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
+- **Firmware:** The [firmware section](#firmware) documents the ESPHome configuration and local components.
+- **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
 
-## Features
+The prototype uses a Seeed Studio XIAO ESP32-C6.
+
+### Features
 
 - Control a TV with on-board IR receive and transmit hardware
 - Drive music playback over Wi-Fi and BLE
@@ -42,12 +43,38 @@ This repo contains the KiCad hardware and ESPHome bring-up configuration for a p
 - Assign every button from a web page on the remote itself
 - Run for a long time between charges
 
-Open `http://homething-c6.local/buttons` in a browser on the same network.
-The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
-You can also clear the input. Hold `SW1` for two seconds to use the on-device assignment mode.
-[`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
+## Case
 
-## Hardware
+<p align="center">
+  <img alt="Assembled case" src="docs/readme-assets/case-assembled.png" width="240">
+</p>
+<p align="center"><sub>Assembled case</sub></p>
+
+<p align="center">
+  <img alt="Exploded view of the case, buttons, board, and back shell" src="docs/readme-assets/case-exploded.png" width="550">
+</p>
+<p align="center"><sub>Exploded view: front shell, button caps, silicone pads, board, and back shell</sub></p>
+
+## Board ([more info](c6remote-kicad/README.md))
+
+### PCB and hardware
+
+<p align="center">
+  <img alt="Raytraced 3D top view of the board" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
+  <img alt="Raytraced 3D bottom view of the board" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
+</p>
+<p align="center"><sub>Raytraced renders, top and bottom</sub></p>
+
+<p align="center">
+  <img alt="Flat 3D top view" src="docs/readme-assets/board-3d-top.png" width="180">
+  &nbsp;&nbsp;
+  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img alt="Flat 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180">
+  &nbsp;&nbsp;
+  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180">
+</p>
+<p align="center"><sub>Top render, top copper, bottom render, and bottom copper</sub></p>
 
 | Ref | Part | Role |
 | --- | --- | --- |
@@ -64,146 +91,18 @@ You can also clear the input. Hold `SW1` for two seconds to use the on-device as
 
 The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
 
-## Board views
-
-<p align="center">
-  <img alt="Basic 3D top view" src="docs/readme-assets/board-3d-top.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180">
-</p>
-<p align="center"><sub>Top: basic 3D and flat copper</sub></p>
-
-<p align="center">
-  <img alt="Basic 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180">
-</p>
-<p align="center"><sub>Bottom: basic 3D and flat copper</sub></p>
-
-## Schematic
+### Schematic
 
 ![Current schematic](docs/readme-assets/schematic.svg)
 
-## Repo layout
+## Firmware
 
-```text
-.
-├── c6remote-kicad/          Main KiCad project
-│   ├── c6remote.kicad_sch   Schematic
-│   ├── c6remote.kicad_pcb   PCB layout
-│   ├── c6remote.kicad_pro   Project settings
-│   ├── 3dmodels/            STEP models used for 3D board view
-│   └── export/              Generated fabrication outputs
-├── kicad lib/Library.pretty Custom PCB footprints used by board
-└── ano rotary.kicad_sym     Project-local schematic symbol library
-```
+### Button assignment
 
-## Opening the project
-
-Open `c6remote-kicad/c6remote.kicad_pro` in KiCad. The board uses local custom footprints under `kicad lib/Library.pretty/`, which KiCad must resolve under the library nickname `Library`.
-
-Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
-
-- `ano rotary`: project-local custom rotary symbol (`ano rotary.kicad_sym`) for the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001)
-- `Seeed_Studio_XIAO_Series`: XIAO module symbols from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
-
-3D models for the board view live in `c6remote-kicad/3dmodels/`; every file's source is cited in [`c6remote-kicad/3dmodels/README.md`](c6remote-kicad/3dmodels/README.md).
-
-## KiCad MCP
-
-The repo is set up to use the same KiCad MCP server with Codex and GitHub Copilot / VS Code:
-
-- Codex workspace config: `.mcp.json`
-- VS Code / Copilot workspace config: `.vscode/mcp.json`
-
-## Validation and fabrication
-
-### Fast agent schematic loop
-
-Use a unique session name for one schematic or custom-footprint edit loop. The PCB is excluded from this workflow and must remain byte-for-byte unchanged between `preflight` and `verify`. Native KiCad ERC is authoritative; semantic analysis detects topology, BOM, metadata, findings, and custom-footprint regressions.
-
-```bash
-./scripts/hw.py doctor
-./scripts/hw.py preflight my-edit
-
-# Inspect the baseline before an edit.
-./scripts/hw.py inspect my-edit component U3
-./scripts/hw.py inspect my-edit net sda
-./scripts/hw.py inspect my-edit pin U3 14
-
-# Run after every schematic or custom-footprint edit.
-./scripts/hw.py quick my-edit
-
-# Inspect the refreshed state and all baseline changes.
-./scripts/hw.py inspect my-edit changes
-
-# Run once before handoff.
-./scripts/hw.py verify my-edit
-./scripts/hw.py clean my-edit
-```
-
-Use `--json` with an `inspect` command for stable structured output. Use `--force` with `quick` or `inspect` to bypass reusable analysis.
-
-Session artifacts stay under `.cache/hw/<session>/`. `preflight` refuses to replace an existing session. Reuse the same session for repeated inspections and `quick` runs. The session keeps its original baseline until you run `clean`. If a session is old or incomplete, run `clean` and `preflight` again.
-
-The tool refreshes stale inspection data before it prints results. It reuses validated analysis and changed-footprint parsing when all fingerprints match. It never reuses failed or incomplete output. The tool rejects simultaneous operations on one session.
-
-The tool resolves `kicad-cli` from `KICAD_CLI`, `PATH`, or the macOS application bundle. It resolves the analyzer from `KICAD_HAPPY_DIR`, shared, Codex, or Claude skill locations. An invalid override stops discovery. `doctor` prints each selected path. The analyzer must emit schema 1.4.x.
-
-If the analyzer is missing or incompatible, move or remove its existing destination before reinstalling the pinned version:
-
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo aklofas/kicad-happy --ref v2.2.0 --path skills/kicad
-```
-
-Exit codes are `0` for pass, `1` for a design regression, and `2` for tooling or configuration failure. A PCB change makes `quick` and `inspect` fail before analysis starts. The message explains that the session cannot validate PCB edits. `quick` blocks only new deterministic analyzer errors. `verify` always runs fresh native checks and keeps all outputs inside the session cache.
-
-Run from `c6remote-kicad/`:
-
-```bash
-# Schematic ERC
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations
-
-# Board DRC
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --exit-code-violations
-
-# Full board DRC with schematic parity and zone refill
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations
-```
-
-Regenerate all fabrication outputs (gerbers, drill, position file, BOM) into `export/`:
-
-```bash
-scripts/regen-fab.sh
-```
-
-Regenerate just the BOM after editing symbol sourcing fields (Datasheet, MPN, vendor links). Use this, not the KiCad MCP `export_bom` tool, which emits a different schema and drops the custom sourcing columns:
-
-```bash
-scripts/export-bom.sh
-```
-
-Render reusable 2D board views (default output: `c6remote-kicad/renders/<format>/`):
-
-```bash
-./scripts/render-2d.sh
-./scripts/render-2d.sh --side top
-./scripts/render-2d.sh --side bottom --format pdf
-```
-
-Regenerate the README preview assets in `docs/readme-assets/`:
-
-```bash
-./scripts/render-readme-assets.sh
-```
-
-Generate the interactive HTML BOM used for the pre-fab pin-1 orientation walk. Output is `c6remote-kicad/ibom.html`, a gitignored review artifact that the pre-commit hook also refreshes whenever `c6remote.kicad_pcb` is staged:
-
-```bash
-./scripts/gen-ibom.sh
-```
-
-Everything that has to happen before a board order, including the orientation and pinout checks ERC and DRC cannot do, is in [`docs/pre-fab-checklist.md`](docs/pre-fab-checklist.md).
+Open `http://homething-c6.local/buttons` in a browser on the same network.
+The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
+You can also clear the input. Hold `SW1` for two seconds to use the on-device assignment mode.
+[`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
 
 ## Status
 

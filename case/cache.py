@@ -23,6 +23,7 @@ import json
 import os
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 from build123d import export_brep, export_stl, import_brep
@@ -33,6 +34,22 @@ CACHE = HERE / ".cache"
 
 def enabled():
     return not os.environ.get("CASE_NO_CACHE")
+
+
+def _parallel():
+    """True when independent check workers can write this cache key."""
+    return bool(os.environ.get("CASE_CACHE_PARALLEL"))
+
+
+def _partial(path):
+    """A process-unique adjacent temporary path for an atomic cache write."""
+    return path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.partial")
+
+
+def _write_bytes(path, data):
+    partial = _partial(path)
+    partial.write_bytes(data)
+    partial.replace(path)
 
 
 def _sources():
@@ -84,16 +101,21 @@ def _dir():
 
 @functools.cache
 def _open_for_write():
-    """The blob directory, created, with its manifest written and every other
-    key's directory dropped."""
+    """The blob directory, created, with its manifest written.
+
+    Serial callers remove stale keys. Concurrent workers preserve them because
+    another process can still read or write one.
+    """
     target = _dir()
     target.mkdir(parents=True, exist_ok=True)
-    (target / "manifest.json").write_text(
-        json.dumps({"key": key(), "files": manifest()}, indent=2, sort_keys=True) + "\n"
+    _write_bytes(
+        target / "manifest.json",
+        (json.dumps({"key": key(), "files": manifest()}, indent=2, sort_keys=True) + "\n").encode(),
     )
-    for stale in CACHE.iterdir():
-        if stale.is_dir() and stale != target:
-            shutil.rmtree(stale, ignore_errors=True)
+    if not _parallel():
+        for stale in CACHE.iterdir():
+            if stale.is_dir() and stale != target:
+                shutil.rmtree(stale, ignore_errors=True)
     return target
 
 
@@ -128,7 +150,7 @@ def solid(builder):
         if blob.exists():
             return import_brep(blob)
         shape = builder(*args, **kwargs)
-        partial = _open_for_write() / f"{name}.brep.partial"
+        partial = _partial(_open_for_write() / f"{name}.brep")
         export_brep(shape, partial)
         partial.replace(blob)
         return shape
@@ -150,9 +172,8 @@ def bytes_cached(name, build):
     if blob.exists():
         return blob.read_bytes()
     data = build()
-    partial = _open_for_write() / f"{name}.partial"
-    partial.write_bytes(data)
-    partial.replace(blob)
+    _open_for_write()
+    _write_bytes(blob, data)
     return data
 
 
@@ -168,4 +189,6 @@ def export_stl_cached(shape, dest):
         return
     export_stl(shape, str(dest))
     _open_for_write()
-    shutil.copyfile(dest, blob)
+    partial = _partial(blob)
+    shutil.copyfile(dest, partial)
+    partial.replace(blob)

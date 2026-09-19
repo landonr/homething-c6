@@ -9,6 +9,11 @@ handling.
     python check.py                 every pass
     python check.py --only ir       one feature's passes, building only the
                                     solids those passes probe
+
+Every run also writes export/c6remote-checks.json, the same report in machine
+form, carrying each failure's own point or box in the case frame wherever the
+pass recorded one. That is what the c6remote-explode viewer draws the failures
+from.
 """
 
 from checks.cli import main

@@ -12,9 +12,15 @@ one side of it never runs it half blind.
 """
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import functools
+import io
+import json
+import multiprocessing
+import os
 import sys
 import time
+import traceback
 
 import board
 import cache
@@ -22,6 +28,7 @@ import case
 import params
 
 from .apertures import probe_apertures
+from .common import Problem
 from .caps import (
     cap_fits_around_perimeter,
     caps_fit,
@@ -44,6 +51,7 @@ from .legacy import (
     legacy_post_merged,
 )
 from .keypad import (
+    mic_pad_contour,
     neck_blends_smoothly,
     neck_continuity,
     pad_clears_wheel,
@@ -113,6 +121,19 @@ class Solids:
 
 CHECKS = []
 
+CHECKS_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "export", "c6remote-checks.json")
+
+_PENDING = []
+"""The problems the pass now running has reported, drained by _run_pass().
+
+A pass says where a failure is by appending a checks.common.Problem rather than
+a bare string, and the printed report cannot carry that. This is where the
+objects wait to be written to the JSON report, which is what the viewer draws
+from. It is filled and drained inside one process, so a --jobs run keeps its own
+per worker and only dicts ever cross a fork.
+"""
+
 
 def _check(feature):
     def register(fn):
@@ -125,6 +146,7 @@ def _check(feature):
 def _report(problems, passed):
     """Print a pass's problem lines, or its one-line all-clear, and say which."""
     if problems:
+        _PENDING.extend(problems)
         for line in problems:
             print(f"  {line}")
         return False
@@ -156,6 +178,14 @@ def _plunger_stub_contact(s):
     return _report(
         plunger_stub_contact(s.pad),
         "every plunger lands on its switch top within tolerance",
+    )
+
+
+@_check("keypad")
+def _mic_pad_contour(s):
+    return _report(
+        mic_pad_contour(s.pad),
+        "mic pad follows both buttons with rounded inner joins and an attached lower bridge",
     )
 
 
@@ -473,7 +503,7 @@ def _legacy_post_headroom(s):
         legacy_post_headroom(),
         f"V2 post takes an M2 x {case.legacy_screw_length():.0f}: "
         f"{params.BOSS_PILOT_DEPTH:.1f} of engagement in "
-        f"{(params.BOSS_OD - params.BOSS_PILOT_D) / 2:.2f} of wall",
+        f"{(params.LEGACY_RETENTION_OD - params.BOSS_PILOT_D) / 2:.2f} of wall",
     )
 
 
@@ -564,9 +594,34 @@ def _selection(argv):
         metavar="FEATURE[,FEATURE...]",
         help="run only these features' passes: " + ", ".join(FEATURES),
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        metavar="N",
+        help="run feature groups in N independent processes (default: 1)",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="show failures, provenance, counts, and scoped-run warnings only",
+    )
+    parser.add_argument(
+        "--json",
+        metavar="PATH",
+        default=CHECKS_JSON,
+        help=f"where to write the machine-readable report (default: {CHECKS_JSON})",
+    )
+    parser.add_argument(
+        "--timings",
+        action="store_true",
+        help="show per-pass elapsed times after the report",
+    )
     args = parser.parse_args(argv)
+    if args.jobs < 1:
+        parser.error("--jobs must be at least 1")
     if args.only is None:
-        return None
+        return None, args
     wanted = [name.strip() for name in args.only.split(",") if name.strip()]
     unknown = [name for name in wanted if name not in FEATURES]
     if unknown or not wanted:
@@ -574,31 +629,174 @@ def _selection(argv):
             f"unknown feature: {', '.join(unknown) or '(none given)'}. "
             f"Valid names: {', '.join(FEATURES)}"
         )
-    return wanted
+    return wanted, args
+
+
+def _run_pass(feature, run, solids):
+    """Run one pass and retain its output for deterministic parent reporting."""
+    output = io.StringIO()
+    _PENDING.clear()
+    started = time.perf_counter()
+    try:
+        previous = sys.stdout
+        sys.stdout = output
+        try:
+            passed = bool(run(solids))
+        finally:
+            sys.stdout = previous
+    except Exception:
+        passed = False
+        output.write(traceback.format_exc())
+    return {
+        "feature": feature,
+        "name": run.__name__.lstrip("_"),
+        "passed": passed,
+        "output": output.getvalue(),
+        "elapsed": time.perf_counter() - started,
+        "problems": [
+            p.as_dict() if isinstance(p, Problem) else {"text": str(p)}
+            for p in _PENDING
+        ],
+    }
+
+
+def _run_feature(feature):
+    """Run one feature in its own process, with no geometry shared across forks."""
+    solids = Solids()
+    return [_run_pass(group, run, solids) for group, run in CHECKS if group == feature]
+
+
+def _parallel_initializer():
+    """Keep concurrent writers from deleting another worker's cache directory."""
+    os.environ["CASE_CACHE_PARALLEL"] = "1"
+
+
+def _report_record(record, suite_started, quiet):
+    """Render buffered output in registry order, regardless of worker completion."""
+    if not quiet or not record["passed"]:
+        output = record["output"]
+        if not output and not record["passed"]:
+            output = f"{record['feature']}.{record['name']}: failed without diagnostic\n"
+        print(output, end="")
+    if not quiet:
+        print(
+            f"[{time.perf_counter() - suite_started:8.2f}s] "
+            f"done  {record['feature']}.{record['name']} "
+            f"({record['elapsed']:.2f}s)",
+            flush=True,
+        )
+
+
+def _write_report(path, records, features, scoped):
+    """The machine-readable half of the report: what ran, what failed, and where.
+
+    Written on every run rather than behind a flag, because the viewer reads it
+    beside the geometry and a report older than the case it is drawn on is worse
+    than none. A scoped run writes only the features it ran and says so, so the
+    ones it skipped are never mistaken for clean.
+
+    The location comes from the problems, which is why a pass that prints its own
+    table rather than going through _report() carries none: its lines are in
+    `output` and the viewer lists them without a marker.
+    """
+    payload = {
+        "provenance": cache.provenance(),
+        "features": features,
+        "scoped": scoped,
+        "passes": [
+            {
+                "feature": record["feature"],
+                "name": record["name"],
+                "passed": record["passed"],
+                "elapsed": round(record["elapsed"], 3),
+                "problems": record.get("problems", []),
+                **({} if record["passed"] else {"output": record["output"].strip()}),
+            }
+            for record in records
+        ],
+    }
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        json.dump(payload, handle, indent=1)
+        handle.write("\n")
+
+
+def _timing_report(records):
+    print("timings:")
+    for record in records:
+        print(f"  {record['feature']}.{record['name']}: {record['elapsed']:.2f}s")
 
 
 def main(argv=None):
-    selected = _selection(sys.argv[1:] if argv is None else argv)
+    selected, args = _selection(sys.argv[1:] if argv is None else argv)
     print(cache.provenance())
-    solids = Solids()
-    passed = True
     suite_started = time.perf_counter()
-    for feature, run in CHECKS:
-        if selected is None or feature in selected:
-            name = run.__name__.lstrip("_")
-            started = time.perf_counter()
+    selected_checks = [
+        (feature, run) for feature, run in CHECKS if selected is None or feature in selected
+    ]
+    selected_features = list(dict.fromkeys(feature for feature, _ in selected_checks))
+    if args.jobs == 1 or len(selected_features) < 2:
+        solids = Solids()
+        records = []
+        for feature, run in selected_checks:
+            if not args.quiet:
+                print(
+                    f"[{time.perf_counter() - suite_started:8.2f}s] "
+                    f"start {feature}.{run.__name__.lstrip('_')}",
+                    flush=True,
+                )
+            record = _run_pass(feature, run, solids)
+            records.append(record)
+            _report_record(record, suite_started, args.quiet)
+    else:
+        workers = min(args.jobs, len(selected_features))
+        if not args.quiet:
             print(
-                f"[{time.perf_counter() - suite_started:8.2f}s] "
-                f"start {feature}.{name}",
+                f"running {len(selected_checks)} checks with {workers} workers",
                 flush=True,
             )
-            result = run(solids)
-            print(
-                f"[{time.perf_counter() - suite_started:8.2f}s] "
-                f"done  {feature}.{name} ({time.perf_counter() - started:.2f}s)",
-                flush=True,
-            )
-            passed = result and passed
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_parallel_initializer,
+            mp_context=multiprocessing.get_context("spawn"),
+        ) as executor:
+            futures = {
+                feature: executor.submit(_run_feature, feature)
+                for feature in selected_features
+            }
+            by_feature = {}
+            for feature, future in futures.items():
+                try:
+                    by_feature[feature] = future.result()
+                except Exception:
+                    detail = traceback.format_exc()
+                    by_feature[feature] = [
+                        {
+                            "feature": group,
+                            "name": run.__name__.lstrip("_"),
+                            "passed": False,
+                            "output": f"{feature} worker failed:\n{detail}",
+                            "elapsed": 0.0,
+                        }
+                        for group, run in selected_checks
+                        if group == feature
+                    ]
+        by_key = {
+            (record["feature"], record["name"]): record
+            for records_for_feature in by_feature.values()
+            for record in records_for_feature
+        }
+        records = [
+            by_key[(feature, run.__name__.lstrip("_"))]
+            for feature, run in selected_checks
+        ]
+        for record in records:
+            _report_record(record, suite_started, args.quiet)
+    passed = all(record["passed"] for record in records)
+    _write_report(args.json, records, selected_features, selected is not None)
+    print(f"checks: {sum(record['passed'] for record in records)}/{len(records)} passed")
+    if args.timings:
+        _timing_report(records)
     if selected is not None:
         skipped = [name for name in FEATURES if name not in selected]
         print(

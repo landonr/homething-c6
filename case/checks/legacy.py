@@ -112,7 +112,7 @@ def legacy_post_merged(back):
         )
 
     x, y = board.legacy_retention_point()
-    mid_r = (params.BOSS_PILOT_D / 2 + params.BOSS_OD / 2) / 2
+    mid_r = (params.BOSS_PILOT_D / 2 + params.LEGACY_RETENTION_OD / 2) / 2
     # Top and bottom of the thread, not the top alone. This is also what stops
     # legacy_pilot_blind()'s open half reading as open on bare cavity air: the
     # bore is only meaningfully open if there is post wall around it, and that
@@ -189,7 +189,7 @@ def legacy_post_headroom():
     the pilot offers, and the wall left around it.
     """
     problems = []
-    wall = (params.BOSS_OD - params.BOSS_PILOT_D) / 2
+    wall = (params.LEGACY_RETENTION_OD - params.BOSS_PILOT_D) / 2
     if wall < params.WALL / 3:
         problems.append(f"only {wall:.2f} of wall around the pilot")
     post = case.legacy_retention_post().bounding_box()

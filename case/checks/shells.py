@@ -17,7 +17,26 @@ from collections import Counter
 
 import board
 
-from .common import TOLERANCE, _volume
+from .common import TOLERANCE, Problem, _volume
+
+
+EXPORT_STEMS = {
+    "front shell": "case-front",
+    "back shell": "case-back",
+    "button pad": "case-pad",
+    "IR window": "ir-window",
+}
+
+
+def _stem(name):
+    """The export file's stem for a part's display name. A failure that belongs to
+    a whole part has no place on it to point at, so the part itself is what a
+    viewer has to be handed, and the file it exports to is the one name both
+    sides already agree on."""
+    if name in EXPORT_STEMS:
+        return EXPORT_STEMS[name]
+    ref, _, kind = name.partition(" ")
+    return f"cap-{ref.lower()}" if kind == "cap" else None
 
 
 def shells_mate(front, back):
@@ -27,8 +46,11 @@ def shells_mate(front, back):
     so a mating feature cut on the wrong side, or a fit that went negative, passes
     all of them and only shows up when the parts will not close.
     """
-    fouled = _volume(front.intersect(back))
-    return [] if fouled <= TOLERANCE else [f"front and back overlap by {fouled:.2f} mm3"]
+    overlap = front.intersect(back)
+    fouled = _volume(overlap)
+    if fouled <= TOLERANCE:
+        return []
+    return [Problem(f"front and back overlap by {fouled:.2f} mm3", box=overlap)]
 
 
 MESH_TOLERANCE = 0.05
@@ -88,25 +110,30 @@ def parts_are_sound(parts):
     """
     problems = []
     for name, shape in parts.items():
+        part = _stem(name)
         if not shape.is_valid:
-            problems.append(f"{name} is not a valid solid")
+            problems.append(Problem(f"{name} is not a valid solid", part=part))
         if len(shape.solids()) < 1:
-            problems.append(f"{name} has no solid in it at all")
+            problems.append(Problem(f"{name} has no solid in it at all", part=part))
         if shape.volume <= 0:
-            problems.append(f"{name} has a volume of {shape.volume:.2f}")
+            problems.append(Problem(
+                f"{name} has a volume of {shape.volume:.2f}", part=part
+            ))
         try:
             loose = _open_edges(shape)
         except Exception as exc:
-            problems.append(
+            problems.append(Problem(
                 f"{name} will not mesh at all ({type(exc).__name__}): it cannot "
-                "be exported, whatever the solid behind it says"
-            )
+                "be exported, whatever the solid behind it says",
+                part=part,
+            ))
             continue
         if loose:
-            problems.append(
+            problems.append(Problem(
                 f"{name} meshes to {loose} open or non-manifold edges: the "
-                "exported surface is torn, whatever the solid behind it says"
-            )
+                "exported surface is torn, whatever the solid behind it says",
+                part=part,
+            ))
     return problems
 
 

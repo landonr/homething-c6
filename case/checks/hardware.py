@@ -124,7 +124,7 @@ def feature_clashes():
     # switches and D2-D5, so it is what says the post clears a part with no model.
     lx, ly = board.legacy_retention_point()
     floor = case.legacy_retention_floors()[1]
-    r = params.BOSS_OD / 2
+    r = params.LEGACY_RETENTION_OD / 2
     features.append(
         (
             "legacy post",

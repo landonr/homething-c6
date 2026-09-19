@@ -6,7 +6,14 @@ import board
 import case
 import params
 
-from .common import PROBE_D, TOLERANCE, _fill_fraction, _volume
+from .common import (
+    PROBE_D,
+    TOLERANCE,
+    Problem,
+    _fill_fraction,
+    _ray_runs,
+    _volume,
+)
 
 
 OPENING_INSET = 0.5
@@ -39,11 +46,56 @@ def _column(shape, x, y):
     return box
 
 
+BEARING_BASE = -50.0
+BEARING_SPAN = 80.0
+"""Vertical extent a bearing is read over, the whole enclosure either way."""
+
+
+def _bearing_runs(shape, x, y):
+    """Built material down one vertical bearing, as ordered (low, high) z pairs."""
+    runs = _ray_runs(
+        shape, (x, y, BEARING_BASE), (x, y, BEARING_BASE + BEARING_SPAN)
+    )
+    return [(BEARING_BASE + lo, BEARING_BASE + hi) for lo, hi in runs]
+
+
+def _surface_run(shape, x, y):
+    """Outermost run at this bearing: the exterior face and the depth behind it.
+
+    The back is a curved form and the insert is conformal to it, so the exterior
+    height is a local reading. Across this aperture it rises by more than any of
+    these probes is tall, so one height read at one bearing does not serve the
+    others.
+    """
+    runs = _bearing_runs(shape, x, y)
+    return runs[0] if runs else None
+
+
+def _covers(shape, x, y, z):
+    """Whether this bearing is inside built material at this height."""
+    return any(lo <= z <= hi for lo, hi in _bearing_runs(shape, x, y))
+
+
+def _floor_bearing_xy():
+    """Where the floor is read, split out so a pass that finds no floor there can
+    still say which bearing it went looking on."""
+    x0, x1, y0, y1 = _receiver_span()
+    return x1 + params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT + PROBE_D, (y0 + y1) / 2
+
+
 def _floor_bearing(back):
     """Built back-floor bounds beside the receiver feature, at matching y."""
-    x0, x1, y0, y1 = _receiver_span()
-    x = x1 + params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT + PROBE_D
-    return _column(back, x, (y0 + y1) / 2)
+    return _column(back, *_floor_bearing_xy())
+
+
+def _no_bearing():
+    """The miss wants the bearing it was looked for on, which is a line rather
+    than a spot."""
+    x, y = _floor_bearing_xy()
+    return Problem(
+        "no built back-floor bearing beside U2's aperture",
+        at=(x, y, 0.0), part="case-back",
+    )
 
 
 def end_ports_open(shells):
@@ -70,7 +122,10 @@ def end_ports_open(shells):
         probe = Pos(x, y, z) * Box(PROBE_D, OPENING_INSET, PROBE_D)
         frac = _fill_fraction(shells, probe)
         if frac > 0.1:
-            problems.append(f"{name} reads {frac:.2f} solid at its exterior wall")
+            problems.append(Problem(
+                f"{name} reads {frac:.2f} solid at its exterior wall",
+                at=(x, y, z), box=probe,
+            ))
     return problems
 
 
@@ -80,7 +135,7 @@ def receiver_paths(shells, back):
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     bearing = _floor_bearing(back)
     if bearing is None:
-        return ["no built back-floor bearing beside U2's aperture"]
+        return [_no_bearing()]
 
     problems = []
     sightline = Pos(cx, cy, (bearing.min.Z + bearing.max.Z) / 2) * Box(
@@ -90,9 +145,10 @@ def receiver_paths(shells, back):
     )
     frac = _fill_fraction(back, sightline)
     if frac > 0.1:
-        problems.append(
-            f"U2 bottom sightline reads {frac:.2f} solid through the built back floor"
-        )
+        problems.append(Problem(
+            f"U2 bottom sightline reads {frac:.2f} solid through the built back floor",
+            box=sightline, part="case-back",
+        ))
 
     edge_y = board.board_profile().bounding_box().max.Y + case.LAP_OUT
     u2 = board.part_envelope("U2", radius=3.0)
@@ -101,9 +157,10 @@ def receiver_paths(shells, back):
     )
     frac = _fill_fraction(shells, obsolete)
     if frac < 0.9:
-        problems.append(
-            f"obsolete U2 +Y path reads only {frac:.2f} solid at the end wall"
-        )
+        problems.append(Problem(
+            f"obsolete U2 +Y path reads only {frac:.2f} solid at the end wall",
+            box=obsolete,
+        ))
     return problems
 
 
@@ -120,9 +177,14 @@ def receiver_clearance(back, window):
         u2.size.Y + 2 * c,
         u2.max.Z - (u2.min.Z - c),
     )
-    fouled = _volume((back + window).intersect(clearance))
+    intruding = (back + window).intersect(clearance)
+    fouled = _volume(intruding)
     if fouled > TOLERANCE:
-        return [f"U2 clearance volume is fouled by {fouled:.2f} mm3"]
+        # The intruding material's own bounds rather than the clearance volume's:
+        # the box is there to be looked at, and the whole keepout says only that
+        # the failure is somewhere in it.
+        return [Problem(f"U2 clearance volume is fouled by {fouled:.2f} mm3",
+                        box=intruding)]
     return []
 
 
@@ -130,24 +192,8 @@ def window_installation(back, window):
     """Insert is flush, press-held, flanged onto adhesive land, and closes."""
     x0, x1, y0, y1 = _receiver_span()
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    bearing = _floor_bearing(back)
-    if bearing is None:
-        return ["no built back-floor bearing beside U2's aperture"]
-    outer = bearing.min.Z
-    pane_top = outer + params.IR_WINDOW_T
     problems = []
 
-    window_column = _column(window, cx, cy)
-    if window_column is None:
-        problems.append("IR insert has no material on U2's optical centreline")
-    else:
-        flush_error = window_column.min.Z - outer
-        if abs(flush_error) > TOLERANCE:
-            problems.append(
-                f"IR insert exterior is {flush_error:+.2f} mm from the built back surface"
-            )
-
-    press_z = outer + params.IR_WINDOW_T / 2
     press = max(params.IR_WINDOW_PRESS, PRESS_INTERFERENCE_REQUIRED)
     inside = PRESS_PROBE_D / 2
     press_points = (
@@ -157,12 +203,31 @@ def window_installation(back, window):
         (cx, y1 + press - inside),
     )
     for x, y in press_points:
+        shell = _surface_run(back, x, y)
+        if shell is None:
+            problems.append(Problem(
+                "no built back-shell material beside U2's aperture",
+                at=(x, y, 0.0), part="case-back",
+            ))
+            break
+        press_z = shell[0] + params.IR_WINDOW_T / 2
         probe = Pos(x, y, press_z) * Box(PRESS_PROBE_D, PRESS_PROBE_D, PRESS_PROBE_D)
         if _fill_fraction(window, probe) < 0.8 or _fill_fraction(back, probe) < 0.8:
-            problems.append(
+            problems.append(Problem(
                 f"IR insert does not fill the full {press:.2f} press band "
-                "at every bearing"
-            )
+                "at every bearing",
+                at=(x, y, press_z), box=probe, part="ir-window",
+            ))
+            break
+        # Shell and insert are read on one bearing, so the exterior's own rise
+        # cancels out and what is left is the step across the seam.
+        flush_error = _surface_run(window, x, y)[0] - shell[0]
+        if abs(flush_error) > TOLERANCE:
+            problems.append(Problem(
+                f"IR insert exterior is {flush_error:+.2f} mm from the built "
+                "back surface",
+                at=(x, y, shell[0]), part="ir-window",
+            ))
             break
 
     overlap = params.IR_WINDOW_FLANGE / 2
@@ -172,37 +237,59 @@ def window_installation(back, window):
         (cx, y1 + overlap),
         (cx, y0 - overlap),
     )
-    flange_z = pane_top + PRESS_PROBE_D
-    shoulder_z = pane_top - PRESS_PROBE_D
     for x, y in flange_points:
-        flange_probe = Pos(x, y, flange_z) * Box(PROBE_D / 2, PROBE_D / 2, PRESS_PROBE_D)
-        shoulder_probe = Pos(x, y, shoulder_z) * Box(
-            PROBE_D / 2, PROBE_D / 2, PRESS_PROBE_D
-        )
-        if _fill_fraction(window, flange_probe) < 0.8:
-            problems.append("IR insert flange does not overlap the aperture on every side")
+        shoulder = _surface_run(back, x, y)
+        if shoulder is None:
+            problems.append(Problem(
+                "IR insert flange has no continuous shell shoulder for adhesive",
+                at=(x, y, 0.0), part="case-back",
+            ))
             break
-        if _fill_fraction(back, shoulder_probe) < 0.8:
-            problems.append("IR insert flange has no continuous shell shoulder for adhesive")
+        depth = shoulder[1] - shoulder[0]
+        if abs(depth - params.IR_WINDOW_T) > TOLERANCE:
+            problems.append(Problem(
+                f"shell shoulder stands {depth:.2f} mm off the exterior here, "
+                f"wants the pane's {params.IR_WINDOW_T:.2f}",
+                at=(x, y, shoulder[1]), part="case-back",
+            ))
+            break
+        if not _covers(window, x, y, shoulder[1] + PRESS_PROBE_D):
+            problems.append(Problem(
+                "IR insert flange does not overlap the aperture on every side",
+                at=(x, y, shoulder[1]), part="ir-window",
+            ))
             break
 
+    # Both of these are read off the parameters rather than off a probe, so the
+    # insert as a whole is the most either can point at.
     held = case.ir_window_retention()
     if held < FLANGE_OVERLAP_MIN:
-        problems.append(
-            f"IR insert retention is {held:.2f}, wants {FLANGE_OVERLAP_MIN:.2f}"
-        )
+        problems.append(Problem(
+            f"IR insert retention is {held:.2f}, wants {FLANGE_OVERLAP_MIN:.2f}",
+            part="ir-window",
+        ))
     land = params.IR_WINDOW_FLANGE - params.IR_WINDOW_PRESS
     if land < ADHESIVE_LAND_MIN:
-        problems.append(
-            f"IR adhesive land is {land:.2f}, wants {ADHESIVE_LAND_MIN:.2f}"
-        )
+        problems.append(Problem(
+            f"IR adhesive land is {land:.2f}, wants {ADHESIVE_LAND_MIN:.2f}",
+            part="ir-window",
+        ))
 
-    closure = Pos(cx, cy, outer + params.IR_WINDOW_T / 2) * Box(
-        PROBE_D, PROBE_D, params.IR_WINDOW_T
-    )
-    frac = _fill_fraction(window, closure)
-    if frac < 0.9:
-        problems.append(
-            f"installed IR insert reads {frac:.2f} solid across its pane on centreline"
+    pane = _surface_run(window, cx, cy)
+    if pane is None:
+        problems.append(Problem(
+            "IR insert has no material on U2's optical centreline",
+            at=(cx, cy, 0.0), part="ir-window",
+        ))
+    else:
+        closure = Pos(cx, cy, pane[0] + params.IR_WINDOW_T / 2) * Box(
+            PROBE_D, PROBE_D, params.IR_WINDOW_T
         )
+        frac = _fill_fraction(window, closure)
+        if frac < 0.9:
+            problems.append(Problem(
+                f"installed IR insert reads {frac:.2f} solid across its pane "
+                "on centreline",
+                box=closure, part="ir-window",
+            ))
     return problems

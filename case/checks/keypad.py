@@ -46,7 +46,7 @@ column along y and so what one spine and one loft depend on.
 
 import math
 
-from build123d import Cylinder, Pos
+from build123d import Axis, Cylinder, Pos
 
 import board
 import case
@@ -67,6 +67,44 @@ def pad_fits(front, pad):
     if fouled > TOLERANCE:
         return [f"pad fouls the front shell by {fouled:.2f} mm3"]
     return []
+
+
+def mic_pad_contour(pad):
+    """Probe the open upper gap, lower bridge, and rounded inner joins."""
+    refs = sorted(case.island_refs("second"), key=lambda ref: board.components()[ref][0])
+    left, right = [board.components()[ref][:2] for ref in refs]
+    y = min(left[1], right[1])
+    bridge_top = case.pad_bridge_top()
+    x = (left[0] + right[0]) / 2
+    z = (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2
+    problems = []
+
+    def filled(px, py):
+        probe = Pos(px, py, z) * Cylinder(radius=0.05, height=params.PAD_WEB_T / 2)
+        return _fill_fraction(pad, probe)
+
+    if filled(x, bridge_top + params.PAD_MARGIN) > 0.01:
+        problems.append("the mic pad has a straight upper web between its buttons")
+    lower_edge = next(box[2] for box in case.pad_lobes() if box[0] == "second")
+    if filled(x, (bridge_top + lower_edge) / 2) < 0.99:
+        problems.append("the mic pad has no lower bridge between its buttons")
+    nearby = [solid for solid in pad.solids() if solid.bounding_box().min.Y <= y <= solid.bounding_box().max.Y]
+    if len(nearby) != 1:
+        problems.append(f"the mic pad has {len(nearby)} pieces instead of one attached bridge")
+    for ref, (kx, ky), direction in zip(refs, (left, right), (1, -1)):
+        inner = kx + direction * (case.key_size(ref) / 2 + params.PAD_MARGIN)
+        # A sharp join leaves this point empty. The inside round fills it.
+        offset = params.PAD_JOIN_RADIUS / 5
+        if filled(inner + direction * offset, bridge_top + offset) < 0.99:
+            problems.append(f"the mic pad inner join beside {ref} has no round")
+    start = left[0] + case.key_size(refs[0]) / 2 + params.PAD_MARGIN + params.PAD_JOIN_RADIUS
+    end = right[0] - case.key_size(refs[-1]) / 2 - params.PAD_MARGIN - params.PAD_JOIN_RADIUS
+    for fraction in (0.25, 0.5, 0.75):
+        px = start + (end - start) * fraction
+        if filled(px, bridge_top - 0.1) < 0.99 or filled(px, bridge_top + 0.1) > 0.01:
+            problems.append("the mic pad bridge floor has a clearance bite instead of a smooth edge")
+            break
+    return problems
 
 
 PLUNGER_CONTACT_TOLERANCE = 0.05
@@ -643,6 +681,9 @@ def neck_blends_smoothly():
     the field rather than on the solid, because the field is what the loft
     reproduces and a crease in it would be faithfully lofted.
 
+    Probe the built recess floor on both flanks at each junction. The angular
+    profile must meet the keyed profile without a step away from the centerline.
+
     The waist is read as well as the two junctions. Nothing is spliced there
     any more, one cubic spanning the whole join, so it passes by construction;
     it is checked so that a future bridge built in two pieces again cannot put a
@@ -668,6 +709,32 @@ def neck_blends_smoothly():
                     problems.append(
                         f"the {label}'s {what} turns from {before:+.3f} to "
                         f"{after:+.3f} per mm across it, a tangent break"
+                    )
+    solid = case.keypad_recess()
+    for neck in case.keypad_necks():
+        for where, y in (("start", neck.y0), ("end", neck.y1)):
+            width = case.recess_spine(y)[0]
+            for side in (-1, 1):
+                x = cx + side * 0.75 * width
+                floors = []
+                for offset in (-0.05, 0.05):
+                    hits = solid.find_intersection_points(
+                        Axis((x, y + offset, 0), (0, 0, 1))
+                    )
+                    if len(hits) != 2:
+                        problems.append(
+                            f"the built {neck.name} join {where} has "
+                            f"{len(hits)} floor intersections at x={x:.2f}"
+                        )
+                        break
+                    floors.append(min(point.Z for point, _normal in hits))
+                if len(floors) != 2:
+                    continue
+                if abs(floors[1] - floors[0]) > 0.015:
+                    problems.append(
+                        f"the built {neck.name} join {where} floor changes "
+                        f"{abs(floors[1] - floors[0]):.3f} mm across 0.1 mm "
+                        f"at x={x:.2f}: the join has a step"
                     )
     return problems
 

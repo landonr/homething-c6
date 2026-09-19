@@ -149,7 +149,7 @@ def mic_profile_r(z):
     return mic_throat_r() + (mic_taper_r() - mic_throat_r()) * (z - BOARD_TOP) / run
 
 
-def mic_duct():
+def mic_duct(face=SHELL_FRONT):
     """The duct as a solid post, board to front face, for the funnel to be
     drilled out of afterwards.
 
@@ -167,7 +167,7 @@ def mic_duct():
         y,
         params.MIC_DUCT_OD,
         BOARD_TOP,
-        SHELL_FRONT,
+        face,
         params.STANDOFF_CHAMFER,
         "upper",
         CAVITY_FRONT,

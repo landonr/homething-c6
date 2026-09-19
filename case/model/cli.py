@@ -48,6 +48,7 @@ from .keypad import (
     key_pitch,
     key_size,
     keypad_recess_facts,
+    outline_length,
     pad_lobes,
     pad_wheel_gap,
     recess_span,
@@ -66,7 +67,7 @@ from .mic import (
     mic_taper_top,
     mic_throat_d,
 )
-from .shells import back_shell, front_shell
+from .shells import back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     LED_RING_TOP,
@@ -83,6 +84,7 @@ from .wheel_ring import (
 )
 from .stack import (
     BOARD_TOP,
+    FDM_FACE,
     CAP_BOTTOM,
     CAVITY_FRONT,
     CAVITY_FRONT_USB,
@@ -132,6 +134,12 @@ def main():
 
         show(*parts.values(), *caps.values())
         return
+
+    # The FDM front is a second copy of the same part, not a fifth part of the
+    # assembly, so it is added after --show has returned: showing both would
+    # draw two front shells in the same place. features.py keys its features
+    # under its own file name, since that is the file the viewer loads.
+    parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.
@@ -363,6 +371,26 @@ def main():
         f"  D1 fires through its own {2 * (max(lens.size.X, lens.size.Z) / 2 + params.IR_EMITTER_FIT):.2f} "
         f"bore, uncovered, {params.IR_EMITTER_FIT:.2f} around a {lens.size.X:.2f} "
         f"lens that stops {emitter_reach():.2f} short of the exterior face"
+    )
+    print(
+        f"FDM front is the same shell with the face finished differently: the "
+        f"recess's own outline, the same {outline_length():.1f} of rim, as a "
+        f"{params.FDM_OUTLINE_W:.2f} x {params.FDM_OUTLINE_DEPTH:.2f} slot in an "
+        f"otherwise flat face, so it prints face down with no support on the "
+        f"cosmetic surface"
+    )
+    print(
+        f"  top edge rounds at {front_edge_round(True):.2f} rather than "
+        f"{front_edge_round():.2f}, which is what leaves the outline "
+        f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it"
+    )
+    print(
+        f"  face sits {params.FDM_FACE_DROP:.2f} below the recessed front's, at "
+        f"{FDM_FACE:.2f}, so flattening the dish does not keep the material the "
+        f"dish took out; caps and the wheel stand that far proud, against the "
+        f"{min(cap_proud(r) for r in cap_refs()):.2f} to "
+        f"{max(cap_proud(r) for r in cap_refs()):.2f} a cap already stands proud "
+        f"of the dish around it"
     )
     facts = keypad_recess_facts()
     span = recess_span()

@@ -46,12 +46,34 @@ def usb_slot():
     )
 
 
+def usb_roof():
+    """Top of both USB voids: the connector's own envelope plus USB_CLEARANCE.
+
+    One expression for the pocket and the slot, so the two are flush by
+    construction. They were not: the slot has always been this, and the pocket
+    was CAVITY_FRONT_USB plus MERGE, which stands 0.3 higher for no reason the
+    connector asks for. What that cost was ceiling. The step between the two
+    roofs was also a ledge in the middle of one continuous void, which is
+    material the print has to bridge to and then leave.
+
+    CAVITY_FRONT_USB is where this started and is now the floor under it rather
+    than the value itself: FRONT_KEEPOUT was sized to the USB-C shell by hand
+    and comes out a couple of tenths under what the measured envelope and its
+    clearance actually want, which is the whole reason the MERGE fudge was
+    there. Reading the envelope is what makes the number exact.
+    """
+    box = board.usb_envelope()
+    return max(
+        CAVITY_FRONT_USB, box.center().Z + box.size.Z / 2 + params.USB_CLEARANCE
+    )
+
+
 def usb_pocket():
     """Local extra ceiling depth over the USB connector's own footprint,
-    reaching CAVITY_FRONT_USB, the one place under the front shell still
-    taller than a switch. Blind: it stops there rather than breaking
-    through to the face, leaving SHELL_FRONT - CAVITY_FRONT_USB of ceiling
-    over it, the same outer face plane as everywhere else.
+    reaching usb_roof(), the one place under the front shell still taller
+    than a switch. Blind: it stops there rather than breaking through to
+    the face, leaving the front's own face less usb_roof() of ceiling over
+    it, the same outer face plane as everywhere else.
 
     Padded by USB_CLEARANCE in plan as well as height, on the connector's
     own full envelope, not just the sliver of it that crosses the board
@@ -64,15 +86,15 @@ def usb_pocket():
     """
     box = board.usb_envelope()
     c = params.USB_CLEARANCE
-    # MERGE at both ends, and the top one is not cosmetic. FRONT_KEEPOUT is
-    # sized off the switches, so CAVITY_FRONT_USB alone clears the connector by
-    # less than USB_CLEARANCE; the roof has to stand MERGE above it for the
-    # margin this pocket is padded for. usb_pocket_clearance() is what caught
-    # that. The real roof is CAVITY_FRONT_USB + MERGE, not CAVITY_FRONT_USB,
-    # and _chamfer_usb_pocket_lip() measures the wall it ramps from this solid
-    # rather than from the stack for the same reason.
-    return Pos(box.center().X, box.center().Y, (CAVITY_FRONT + CAVITY_FRONT_USB) / 2) * Box(
+    # MERGE at the bottom only, to break cleanly into the cavity below. The top
+    # is usb_roof() exactly, which is the slot's own roof, so the two voids meet
+    # flush instead of leaving a step in the middle of one opening.
+    # _chamfer_usb_pocket_lip() measures the wall it ramps from this solid
+    # rather than from the stack, so it follows this without being told.
+    top = usb_roof()
+    bottom = CAVITY_FRONT - MERGE
+    return Pos(box.center().X, box.center().Y, (bottom + top) / 2) * Box(
         box.size.X + 2 * c,
         box.size.Y + 2 * c,
-        CAVITY_FRONT_USB - CAVITY_FRONT + 2 * MERGE,
+        top - bottom,
     )

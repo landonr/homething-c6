@@ -36,6 +36,13 @@ from .caps import (
     caps_proud_of_pocket,
     legends_present,
 )
+from .fdm import (
+    ceilings_hold,
+    edge_round_is_hard,
+    face_is_flat,
+    outline_is_cut,
+    outline_solid_sane,
+)
 from .hardware import cell_clearance, feature_clashes
 from .ir import (
     end_ports_open,
@@ -97,6 +104,10 @@ class Solids:
     @functools.cached_property
     def front(self):
         return case.front_shell()
+
+    @functools.cached_property
+    def front_fdm(self):
+        return case.front_shell(fdm=True)
 
     @functools.cached_property
     def back(self):
@@ -238,6 +249,51 @@ def _legends_present(s):
     )
 
 
+@_check("fdm")
+def _outline_solid_sane(s):
+    return _report(
+        outline_solid_sane(),
+        f"the FDM outline cut is one band {params.FDM_OUTLINE_W:.2f} wide and "
+        f"{params.FDM_OUTLINE_DEPTH:.2f} deep, on the recess's own rim",
+    )
+
+
+@_check("fdm")
+def _edge_round_is_hard(s):
+    return _report(
+        edge_round_is_hard(s.front_fdm),
+        f"the FDM front's top edge rounds at {case.front_edge_round(True):.2f} "
+        f"rather than {case.front_edge_round():.2f}, leaving the outline "
+        f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it",
+    )
+
+
+@_check("fdm")
+def _ceilings_hold(s):
+    return _report(
+        ceilings_hold(s.front_fdm),
+        f"the {params.FDM_FACE_DROP:.2f} the FDM face drops leaves every "
+        f"ceiling it thins above the floor the recessed front holds it to",
+    )
+
+
+@_check("fdm")
+def _face_is_flat(s):
+    return _report(
+        face_is_flat(s.front_fdm),
+        "the FDM front's face is flat everywhere the recessed one is dished",
+    )
+
+
+@_check("fdm")
+def _outline_is_cut(s):
+    return _report(
+        outline_is_cut(s.front_fdm),
+        f"the outline is cut to depth all the way round and leaves material "
+        f"under every point of itself",
+    )
+
+
 @_check("shells")
 def _shells_mate(s):
     return _report(
@@ -324,8 +380,9 @@ def _recess_land(s):
 def _usb_pocket_clearance(s):
     return _report(
         usb_pocket_clearance(s.front),
-        f"USB pocket clears the connector by USB_CLEARANCE, leaving "
-        f"{case.SHELL_FRONT - case.CAVITY_FRONT_USB:.2f} of ceiling above it",
+        f"USB pocket clears the connector by USB_CLEARANCE and is flush with "
+        f"the slot at {case.usb_roof():.2f}, leaving "
+        f"{case.SHELL_FRONT - case.usb_roof():.2f} of ceiling above it",
     )
 
 
@@ -556,6 +613,7 @@ def _window_installation(s):
 def _parts_are_sound(s):
     parts = {
         "front shell": s.front,
+        "FDM front shell": s.front_fdm,
         "back shell": s.back,
         "button pad": s.pad,
         "IR window": s.window,

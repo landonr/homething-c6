@@ -20,11 +20,18 @@ the support ledge. The keepout gaps need that third word, because the same break
 is a relief cut in the front and absent material in the back, so "add" and "cut"
 would invert between the two parts.
 
-Two things are deliberately left out. The keycaps carry no entries, because each
-is already one part in the export and its STL is moved to the origin rather than
-left where it was built, so a box in the case frame would not describe it. The
-skirt and the cavities carry none either: each is a cut over the whole plan
+Two things are deliberately left out. The keycaps carry no entries, because
+each is already one part in the export and its STL is moved to the origin rather
+than left where it was built, so a box in the case frame would not describe it.
+The skirt and the cavities carry none either: each is a cut over the whole plan
 profile, so its box is the part's own box and says nothing that ranking can use.
+
+The FDM front does carry entries, and they are the front shell's own but for the
+one cut the face is finished with: the outline groove where the standard shell
+has the keypad recess. They are keyed under `c6remote-case-front-fdm.stl`,
+because that is the file the viewer loaded and therefore the name it looks a
+click up under. The two fronts are never both on screen, so nothing of one ever
+ranks against the other.
 """
 
 import inspect
@@ -221,8 +228,12 @@ def _support_gaps(runs, obstacles):
     return out
 
 
-def _front(runs, obstacles):
-    """The front shell, in the order front_shell() builds and cuts it."""
+def _front(runs, obstacles, fdm=False):
+    """The front shell, in the order front_shell() builds and cuts it.
+
+    `fdm` swaps the one entry the two fronts differ by, the outline groove the
+    filament build cuts where the standard shell cuts the keypad recess.
+    """
     refs = board.mounting_hole_refs()
     placements = board.components()
     out = [
@@ -308,7 +319,16 @@ def _front(runs, obstacles):
             )
         )
     out += [
-        _entry("keypad_recess", "keypad.keypad_recess", "cut", keypad.keypad_recess()),
+        _entry(
+            "keypad_outline_groove",
+            "keypad.keypad_outline_groove",
+            "cut",
+            keypad.keypad_outline_groove(),
+        )
+        if fdm
+        else _entry(
+            "keypad_recess", "keypad.keypad_recess", "cut", keypad.keypad_recess()
+        ),
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
     ]
@@ -452,6 +472,7 @@ def features():
     obstacles = support.support_obstacles()
     out = {
         "c6remote-case-front.stl": _front(front_runs, obstacles),
+        "c6remote-case-front-fdm.stl": _front(front_runs, obstacles, fdm=True),
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-ir-window.stl": _window(),

@@ -86,6 +86,22 @@ keypad ceiling is whatever gap this leaves over CAVITY_FRONT, and the USB
 pocket's roof is whatever it leaves over CAVITY_FRONT_USB, deliberately the
 thinnest ceiling anywhere (usb_pocket_clearance holds its floor)."""
 
+FDM_FACE = SHELL_FRONT - params.FDM_FACE_DROP
+"""The FDM front's own outer face, FDM_FACE_DROP below the recessed front's.
+
+That front replaces the keypad recess with an outline scribed in a flat face,
+and a flat face at SHELL_FRONT would keep all the material the dish removed.
+This is the same plane taken down to where the dish's own floor is, so the part
+is as slim as the one it stands in for. Everything under it is unchanged and at
+its own z, which is why the ceilings it thins are what bound the drop rather
+than anything moving with it."""
+
+
+def front_face(fdm=False):
+    """Which of the two outer faces a front shell is built to."""
+    return FDM_FACE if fdm else SHELL_FRONT
+
+
 KEYPAD_CEILING = SHELL_FRONT - CAVITY_FRONT
 """Ceiling actually left over the keypad, now that SHELL_FRONT is fixed
 and CAVITY_FRONT is not: a derived report value rather than a tunable

@@ -34,7 +34,10 @@ def usb_pocket_clearance(front):
     arithmetic, the same trap recess_land() guards on the keypad side.
     """
     problems = []
-    remaining = case.SHELL_FRONT - case.CAVITY_FRONT_USB
+    # Off the built pocket, not off CAVITY_FRONT_USB, which is the floor under
+    # usb_roof() rather than the roof itself. Reading the solid is what makes
+    # the number the one the part actually has.
+    remaining = case.SHELL_FRONT - case.usb_pocket().bounding_box().max.Z
     if remaining < USB_CEILING_MIN - TOLERANCE:
         problems.append(
             f"USB pocket leaves only {remaining:.2f} of ceiling, wants "

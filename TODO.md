@@ -1,5 +1,12 @@
 # Open tasks
 
+## Finish the factory and release firmware work
+
+Restore `stash@{0}` and complete its factory and release firmware changes.
+
+The factory firmware uses `c6remote-test-v2.yaml`. The release firmware uses
+`c6remote.yaml`.
+
 ## Remove the leftover `homething-c6-button-*` groups
 
 The old training flow created one private Zigbee2MQTT group for each device

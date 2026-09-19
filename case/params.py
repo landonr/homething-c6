@@ -291,7 +291,25 @@ the upper taper stays light and every lifted form used by the IR insert remains 
 valid rounded section. The profile blends from the cell radius over CONTOUR_BLEND."""
 EDGE_R_FRONT = 2.5
 """Round on the front's top edge. Small: it is a face full of key holes, and the
-outermost sit close to the wall."""
+outermost sit close to the wall. The FDM front carries its own, see
+EDGE_R_FRONT_FDM."""
+EDGE_R_FRONT_FDM = 0.8
+"""Round on the FDM front's top edge, in place of EDGE_R_FRONT.
+
+Much harder, and the outline is what makes it so. That front draws the recess's
+rim as a groove in the face, the rim sits KEYPAD_EDGE_MARGIN off the wall, and
+the groove is centred on it, so the groove's outer edge is half a width further
+out than that. What is left for the round is everything inboard of that edge
+less FDM_OUTLINE_EDGE_CLEAR, and this is exactly that bound: the softest edge
+the outline leaves room for rather than a number chosen for its own sake.
+checks/fdm.py measures the flat the built shell actually has and holds the
+relationship, so widening the groove or moving the rim fails there instead of
+quietly putting the line back on the curve.
+
+It reads better on this front anyway. A 2.5 round on a face with a dish in it
+is a continuous fall from the middle of the face to the side wall. On a flat
+face it is 2.5 of dome either side of a plane, which is the "weird" the variant
+first came back as."""
 
 # Apertures in the front shell
 KEY_GAP = 1.6
@@ -606,20 +624,21 @@ USB_CLEARANCE = 0.5
 past the connector's measured envelope, the same role IR_CLEARANCE plays at
 the other end. Also the plan margin usb_pocket() keeps clear of the
 connector's footprint in the ceiling above it."""
-USB_POCKET_LIP_CHAMFER = 1.9
+USB_POCKET_LIP_CHAMFER = 1.6
 """Chamfer on the pocket's inboard lip, the convex corner where usb_pocket()'s
 wall meets the cavity ceiling one board width in from the end wall. The USB-C
 connector catches on that square corner during assembly, so the 45 degree cut
 gives it a lead-in instead.
 
 This is the wall's full height, CAVITY_FRONT up to the pocket roof, so the
-wall becomes one ramp with no square face left anywhere on it. Note that the
-roof is CAVITY_FRONT_USB plus MERGE, not CAVITY_FRONT_USB: usb_pocket() needs
-that overshoot for the connector's own USB_CLEARANCE, so the wall is 1.9 and
-not the 1.4 the stack planes suggest. The roof also bounds the cut, which
-cannot climb past it, so the ceiling over the ramp stays as thick as the
-ceiling over the connector. _chamfer_usb_pocket_lip() measures the built wall
-and fails if this value goes past it."""
+wall becomes one ramp with no square face left anywhere on it. That roof is
+case.usb_roof(), the connector's own envelope plus USB_CLEARANCE, so the wall
+is 1.6 and not the 1.4 the stack planes suggest. It was 1.9 while the pocket
+stood MERGE higher than the slot for no reason the connector asked for. The
+roof also bounds the cut, which cannot climb past it, so the ceiling over the
+ramp stays as thick as the ceiling over the connector.
+_chamfer_usb_pocket_lip() measures the built wall and fails if this value goes
+past it, which is what caught the change."""
 
 # Button pad: one soft moulding, flat web with raised keys and no skirt. Held up
 # against the ceiling by its own plungers resting on the switches.
@@ -771,6 +790,90 @@ Live, not idle: the grid's coverage box is wide enough that the superellipse
 bounding it would reach inside this, so case.keypad_recesses() caps that half
 axis here instead. The keys still sit inside the curve with room to spare; what
 is given up is dish beyond the box's own corners."""
+
+
+# FDM front: a second front shell for a filament printer. Its face carries the
+# recess's plan outline as a shallow engraved slot and is otherwise one flat
+# plane, so nothing on the cosmetic surface needs support.
+#
+# The recess cannot be printed face down. It is a dish a few tenths deep over a
+# span of tens of millimetres, so its floor is a near-horizontal ceiling a
+# fraction of a millimetre off the build plate: too shallow to bridge and too
+# wide to span, and support under it prints directly against the one surface on
+# the case that is looked at. Face up is no better, because that stands the
+# whole cavity on its ceiling. So this variant gives up the dish and keeps the
+# line it drew, which a slot narrow enough to bridge can carry.
+#
+# Nothing else about the shell changes. The caps are flush with the face by
+# construction (CAP_PROTRUSION), so they stay flush with a flat one; each
+# counterbore keeps the whole of DISH_HEADROOM as land instead of giving a dish
+# depth up to it; and the mic inlet's mouth already runs at constant radius to
+# the face, so it opens as a plain hole rather than in a curved floor. What is
+# given up with the dish is the finger access around the wheel: the seat that
+# dished down to the knob's own lip is flat here, so the wheel is reachable
+# across its top face only.
+FDM_FACE_DROP = 0.4
+"""How far the FDM front's outer face sits below the recessed front's.
+
+The recessed front's face is the raised land the dish is sunk out of. Flatten
+that dish and the face has to land at one height or the other, and the raised
+one leaves a part thicker than the one it replaces for no reason: the material
+the dish took out is simply kept. So this front's face lands at the sunken
+level instead, and the part comes out that much slimmer.
+
+What bounds it is not the dish's own depth, which is 0.6 to 0.9, but the three
+ceilings the drop thins, none of which the dish itself reaches: the USB
+pocket's roof against USB_CEILING_MIN, the LED ring's roof against
+ROOF_LEFT_MIN, and the thinnest counterbore land against LAND_FLOOR_MIN. The
+USB pocket is the tight one: its roof is 1.04 on the recessed front, against
+USB_CEILING_MIN's 0.4, so 0.64 is all there is. The ring is close behind at
+0.7. This takes most of the tighter of the two and leaves a real margin under
+both rather than spending to the bound.
+
+The drop is therefore a little short of the dish it stands in for, which runs
+0.6 to 0.9. The face lands near the shallow end of the recess rather than on
+its floor. Going further means raising usb_roof(), and the connector's own
+envelope is what sets that.
+
+Caps and the wheel stand proud by this much, against the 0.47 to 0.80 the caps
+already stand proud by on the recessed front, so a cap on a flat face reads as
+one sitting a little shallower in a dish. The wheel standing proud gives the
+knob back some of the finger access a flat face takes from it.
+
+checks/fdm.py reads all three ceilings off the built shell, against the same
+floors the recessed front's own passes hold them to."""
+FDM_OUTLINE_W = 0.8
+"""Full width of the engraved outline in the FDM front's face. Two extrusions
+of a 0.4 nozzle: narrow enough that the layer over it bridges in a single span
+with nothing under it, wide enough that a slicer resolves it as a slot rather
+than closing it up into solid infill.
+
+The groove is centred on the rim, so it reaches half of this further out than
+the rim itself does. That is what EDGE_R_FRONT_FDM is sized against: the round
+gives way to the outline rather than the outline being moved off the rim to
+make room for the round."""
+FDM_OUTLINE_EDGE_CLEAR = 0.3
+"""Flat face kept between the groove's outer edge and the tangent line of the
+FDM front's own edge round. What it bounds is EDGE_R_FRONT_FDM.
+
+Not cosmetic. At zero the two edges are coincident, and two coincident edges in
+one plane crack a triangulation: the solid stays valid, its bounding box and
+widths all read correctly, and the exported STL comes back with nine open edges
+along the face. checks/shells.py's parts_are_sound() is what catches that, and
+it is the only pass in the model that would. This model has already shipped
+that exact failure once. It also buys the same print-safety buffer
+KEYPAD_EDGE_MARGIN carries, and for the same reason."""
+FDM_OUTLINE_DEPTH = 0.4
+"""How far that outline is sunk into the face. Two 0.2 layers, so the slot is
+half as deep as it is wide and the bridge over it is two layers rather than a
+stack of them.
+
+It has to stay under LED_RING_ROOF as well. The recess's rim passes within a
+few hundredths of the LED ring channel's outer wall either side of the wheel,
+so a small change on either side puts this groove over a roof that has to carry
+the light, and what would be left there is LED_RING_ROOF less this.
+checks/fdm.py holds the floor under it for that case rather than for the
+clearance the present layout happens to have."""
 
 
 # Keycaps: every switch carries a rigid translucent cap over a soft stem

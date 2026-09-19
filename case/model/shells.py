@@ -33,7 +33,7 @@ from .hardware import (
 )
 from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
-from .keypad import keypad_recess
+from .keypad import keypad_outline_groove, keypad_recess
 from .mic import mic_bore, mic_duct
 from .shape import (
     _cut,
@@ -50,6 +50,7 @@ from .stack import (
     BOARD_TOP,
     CAVITY_FRONT,
     COUNTERBORE_TOP,
+    front_face,
     LAP_IN,
     LAP_OUT,
     MERGE,
@@ -60,6 +61,15 @@ from .stack import (
 )
 from .usb import usb_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
+
+
+def front_edge_round(fdm=False):
+    """Radius on the front's top edge, which of the two fronts it is.
+
+    Here rather than read at the fillet call so checks/fdm.py can ask for the
+    number it is about to measure on the built shell without restating the
+    choice."""
+    return params.EDGE_R_FRONT_FDM if fdm else params.EDGE_R_FRONT
 
 
 def skirt_relief():
@@ -324,17 +334,36 @@ def _chamfer_usb_pocket_lip(shell):
 
 
 @cache.solid
-def front_shell():
-    # The body is built to SHELL_FRONT and filleted there before any key or
+def front_shell(fdm=False):
+    """The front shell. `fdm` swaps the one cut the face is finished with.
+
+    Everything under the face is identical between the two, and deliberately
+    so: the same bosses, ceiling, holes, counterbores, ducts and skirt, so a
+    cap, a pad and a back shell fit either one. Two things differ, both on the
+    outer plane. The recessed front takes keypad_recess(), the dish the keys sit
+    in; the FDM front takes keypad_outline_groove(), that same recess's plan
+    outline as a shallow slot, and stays flat everywhere else, because a dish
+    that shallow over a span that wide cannot be printed face down and face down
+    is the only way to print this part without support on its one cosmetic
+    surface. And that face is built at front_face(fdm) rather than at
+    SHELL_FRONT: flattening the dish at the raised level would keep every bit of
+    material the dish removed, so the FDM face lands at the sunken level instead
+    and the part comes out as slim as the one it stands in for. Its top edge
+    carries a much harder round with it, because the outline runs inside
+    EDGE_R_FRONT and the round is what gives way rather than the line. See
+    params.FDM_FACE_DROP, params.FDM_OUTLINE_W and params.EDGE_R_FRONT_FDM.
+    """
+    # The body is built to its own face and filleted there before any key or
     # wheel hole is cut into it: at this point the only top edge loop is the
     # outer perimeter, so the fillet cannot land on an aperture's own edge by
     # construction rather than by filtering for it afterwards. See back_form's
     # docstring for why a fillet cannot be trusted against a loft's own edges.
+    face = front_face(fdm)
     inner, outer = _profiles()
-    body = _slab(outer, SKIRT_BOTTOM, SHELL_FRONT)
+    body = _slab(outer, SKIRT_BOTTOM, face)
     body = fillet(
-        [e for e in body.edges() if e.bounding_box().min.Z > SHELL_FRONT - 0.01],
-        params.EDGE_R_FRONT,
+        [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01],
+        front_edge_round(fdm),
     )
     shell = _cut(body, _slab(inner, BOARD_TOP - 0.01, CAVITY_FRONT), *skirt_cuts())
 
@@ -343,11 +372,11 @@ def front_shell():
     # the whole cavity, and mic_bore() drills the funnel through it as one solid,
     # opening in the keypad recess's own curved floor rather than SHELL_FRONT.
     # The duct goes in solid: see mic_duct() for why it cannot be the tube it was.
-    # Bosses reach SHELL_FRONT, not CAVITY_FRONT: the keypad region's own
+    # Bosses reach the face, not CAVITY_FRONT: the keypad region's own
     # ceiling is too thin now to hold BOSS_PILOT_DEPTH under it, so each
     # boss carries its own material the rest of the way to the flat face,
     # the "local pad" the USB pocket has on the void side instead. No
-    # overshoot past SHELL_FRONT: the fuse already overlaps real volume
+    # overshoot past the face: the fuse already overlaps real volume
     # over the whole keypad ceiling's own depth, and going further would
     # poke the boss through the one outer face plane.
     bosses = [
@@ -356,7 +385,7 @@ def front_shell():
             y,
             params.BOSS_OD,
             BOARD_TOP,
-            SHELL_FRONT,
+            face,
             params.STANDOFF_CHAMFER,
             "upper",
             CAVITY_FRONT,
@@ -365,7 +394,7 @@ def front_shell():
     ]
     shell = _fuse(
         shell,
-        mic_duct(),
+        mic_duct(face),
         deep_skirt(),
         *bosses,
     )
@@ -409,6 +438,6 @@ def front_shell():
         led_ring_channel(),
         mic_bore(),
         *keys,
-        keypad_recess(),
+        keypad_outline_groove() if fdm else keypad_recess(),
         *shared_cuts(),
     )

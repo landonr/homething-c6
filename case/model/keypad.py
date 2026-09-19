@@ -25,6 +25,7 @@ from build123d import (
     extrude,
     loft,
     make_face,
+    offset,
 )
 
 import board
@@ -43,6 +44,7 @@ from .shape import (
     _squircle_points,
 )
 from .stack import (
+    FDM_FACE,
     MERGE,
     PAD_WEB_BOTTOM,
     PAD_WEB_TOP,
@@ -886,6 +888,63 @@ def keypad_recess():
     as suspect in this model.
     """
     return loft([_station_section(y) for y in recess_stations()], ruled=True)
+
+
+def recess_outline():
+    """The merged recess's plan outline, as one closed face in the z=0 plane.
+
+    Built from the same half widths the loft's own sections are, read at the
+    same recess_stations(), so the line the FDM front draws in its face is the
+    rim the recessed front has there and not an approximation of it. Up the
+    right-hand side and back down the left: the field is one interval in x per
+    station by construction, which is what makes the outline a single closed
+    polygon rather than several loops.
+
+    Nothing clamps it. The rim runs inside EDGE_R_FRONT, so an outline drawn on
+    a front with that round would spend most of its length on the round's
+    curve; on the FDM front the round gives way instead, which is what
+    EDGE_R_FRONT_FDM is. Clamping the outline was the other way round and it
+    showed: it flat-sided the line over most of its length and carried it into
+    the LED ring channel.
+    """
+    cx = centerline_x()
+    ys = recess_stations()
+    points = [(cx + recess_spine(y)[0], y) for y in ys]
+    points += [(cx - recess_spine(y)[0], y) for y in reversed(ys)]
+    with BuildSketch(Plane.XY) as sketch:
+        with BuildLine(Plane.XY):
+            Polyline(*points, close=True)
+        make_face()
+    return sketch.sketch.faces()[0]
+
+
+@cache.solid
+def keypad_outline_groove():
+    """The FDM front's face marking: recess_outline() as a shallow slot.
+
+    A true 2D offset either side of the outline rather than the outline's own
+    half width moved in x. The two differ wherever the outline turns away from
+    the y axis, which is both tips and the outboard flank of every rim, and
+    moving x there leaves the slot wider than it was asked for and closes it to
+    a filled blob at the tips, where the outline's own width falls under the
+    offset. Kind.ARC rounds the outside of a convex turn, which is what a
+    constant-width slot around a closed curve is.
+
+    Cut to FDM_OUTLINE_DEPTH and carried MERGE past the face, so the cut
+    breaks through the plane rather than leaving a skin of it behind.
+    """
+    face = recess_outline()
+    band = offset(
+        face, amount=params.FDM_OUTLINE_W / 2, kind=Kind.ARC
+    ) - offset(face, amount=-params.FDM_OUTLINE_W / 2, kind=Kind.ARC)
+    groove = extrude(band, amount=params.FDM_OUTLINE_DEPTH + MERGE)
+    return Pos(0, 0, FDM_FACE - params.FDM_OUTLINE_DEPTH) * groove
+
+
+def outline_length():
+    """Length of the outline's own centreline, for a pass that wants the mean
+    width the built groove came out as rather than the one it was asked for."""
+    return recess_outline().outer_wire().length
 
 
 def keypad_recess_facts():

@@ -775,11 +775,11 @@ def _parallel_initializer():
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": ("front", "front_fdm", "back", "pad", "window", "caps"),
-    "caps": ("front", "pad", "caps"),
-    "fdm": ("front_fdm",),
-    "hardware": (),
+    "caps": ("front", "pad", "caps", "caps_plain"),
+    "fdm": ("front_fdm", "keypad_outline_groove"),
+    "hardware": ("back",),
     "ir": ("front", "back", "window"),
-    "keypad": ("front", "pad"),
+    "keypad": ("front", "pad", "keypad_recess"),
     "legacy": ("back",),
     "mic": ("front",),
     "shells": ("front", "back"),
@@ -787,53 +787,95 @@ _FEATURE_SOLIDS = {
     "usb": ("front",),
     "wheel_ring": ("front", "back", "pad"),
 }
-"""Which of the cached solids each feature's passes reach for.
+"""Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
 
-Written in terms of the six properties that have a blob of their own rather
-than the seven Solids exposes: `shells` is `back` fused to `front` in memory
-and is not cached itself, so a feature that reads it wants those two.
+Rows name cached builders, not Solids properties. The first version of this
+table named properties, and drifted within a day for the reason that distinction
+exists: a pass is free to call a cached builder on `case` directly rather than
+through a property, and four of them do (checks/hardware.py reads back_shell,
+checks/keypad.py reads keypad_recess, checks/fdm.py reads keypad_outline_groove,
+checks/caps.py reads the unlegended keycaps), so a table keyed on properties
+cannot even express what those passes need. `shells` is still absent as a name
+because it is `back` fused to `front` in memory and has no blob of its own, so a
+feature that reads it wants those two.
 
 The table only ever decides what to prewarm. It never gates what a pass can
-reach, because the properties stay lazy and a pass touches whatever it touches
-whether or not this expected it. A feature listed short, or left out of the
-table entirely, costs a worker one build it would have done anyway; a feature
-listed long costs one solid nobody reads. Neither can move a verdict, and that
-is the whole reason a hand-maintained list is acceptable here when it would not
-be if it stood between a pass and its geometry.
+reach: builders stay lazy and go through the cache themselves, so a pass touches
+whatever it touches whether or not this expected it. A feature listed short, or
+left out, or naming something _CACHED_SOLIDS has never heard of, costs a worker
+one build it would have done anyway; a feature listed long costs one solid
+nobody reads. Neither can move a verdict, and that is the whole reason a
+hand-maintained list is acceptable here when it would not be if it stood between
+a pass and its geometry.
+
+To re-derive it, which is the only thing that catches drift, walk the AST:
+for each function in this module carrying an @_check decorator, collect the
+`s.<property>` reads in the pass body itself, then follow the checks/ functions
+it calls, transitively, collecting every `case.<builder>(...)` call whose
+builder carries @cache.solid (grep model/ for that decorator: there are eight).
+Map the properties onto names here through Solids, take the builders as they
+are, and compare against the rows above. Collect properties from the pass body
+only, not through the call, or every local named `s` in checks/ reads as one.
 """
 
-_SOLID_BLOBS = {
-    "front": (case.front_shell, {}),
-    "front_fdm": (case.front_shell, {"fdm": True}),
-    "back": (case.back_shell, {}),
-    "pad": (case.button_pad, {}),
-    "window": (case.ir_window, {}),
+_CACHED_SOLIDS = {
+    "front": lambda: [functools.partial(case.front_shell)],
+    "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
+    "back": lambda: [functools.partial(case.back_shell)],
+    "pad": lambda: [functools.partial(case.button_pad)],
+    "window": lambda: [functools.partial(case.ir_window)],
+    "keypad_recess": lambda: [functools.partial(case.keypad_recess)],
+    "keypad_outline_groove": lambda: [functools.partial(case.keypad_outline_groove)],
+    "caps": lambda: [functools.partial(case.keycap, ref) for ref in case.cap_refs()],
+    "caps_plain": lambda: [
+        functools.partial(case.keycap, ref, legend=False) for ref in case.cap_refs()
+    ],
 }
-"""The cached builder and arguments behind each Solids property, for asking the
-cache whether that property would import or build. `caps` is not here because it
-is one blob per keycap rather than one blob, so _is_warm handles it on its own.
+"""What each name in _FEATURE_SOLIDS stands for, as the builder calls themselves.
+
+A partial rather than a name and an argument list because one object then
+answers both questions prewarming has: cache.cached() reads .func, .args and
+.keywords to ask whether the blob is written, and calling it builds the thing.
+A row is a list because a name can stand for more than one blob: `caps` is one
+per keycap, and `caps_plain` is the same eleven again at legend=False, which the
+cache keys separately because the argument is part of the blob name.
+
+Every entry is a lambda so that nothing here runs at import. cap_refs() reads
+the board, and the table must not make `check.py --help` pay for that.
 """
 
 
-def _is_warm(name):
-    """Whether the blob a Solids property would import is already written.
+def _cold_calls(name):
+    """The builder calls one name stands for that are not on disk yet.
 
     Per blob rather than per cache directory. cache.provenance() calls a key
     directory a hit as soon as it holds any blob at all, which is the right
     answer for the line it prints and the wrong one here: an interrupted run or
     an evicted blob leaves a directory that reads as a hit and is still most of
     a cold build, and prewarming exists for exactly that state.
+
+    A name with no entry prewarms nothing rather than raising. The justification
+    for maintaining _FEATURE_SOLIDS by hand is that being wrong about it costs
+    time and never correctness, and a KeyError here would break precisely that:
+    a typo in a performance-only table would kill the parent before the pool
+    starts, on a run that would otherwise have completed. It is silent as well
+    as harmless, because the alternative is a diagnostic line in the middle of a
+    report that a serial run, which never prewarms, would not carry.
     """
-    if name == "caps":
-        return all(cache.cached(case.keycap, ref) for ref in case.cap_refs())
-    builder, kwargs = _SOLID_BLOBS[name]
-    return cache.cached(builder, **kwargs)
+    calls = _CACHED_SOLIDS.get(name)
+    if calls is None:
+        return []
+    return [
+        call
+        for call in calls()
+        if not cache.cached(call.func, *call.args, **call.keywords)
+    ]
 
 
 def _prewarm(features):
     """Build whatever this selection needs and does not have, once, here.
 
-    Each worker builds its own Solids() and every one of those goes through the
+    Each worker builds its own solids and every one of those goes through the
     disk cache in case/cache.py. Warm, that is a BREP import per worker and
     costs nothing worth avoiding. Cold, which is exactly the state right after
     the geometry edit that prompted the run, every worker independently builds
@@ -850,14 +892,20 @@ def _prewarm(features):
     is the common case and must stay free: this runs in the parent, serially,
     so anything it does is time the pool is not running.
     """
-    wanted = {name for feature in features for name in _FEATURE_SOLIDS.get(feature, ())}
-    cold = [name for name in sorted(wanted) if not _is_warm(name)]
+    wanted = dict.fromkeys(
+        name for feature in features for name in _FEATURE_SOLIDS.get(feature, ())
+    )
+    cold = [name for name in wanted if _cold_calls(name)]
     if not cold:
         return
     print(f"prewarming {', '.join(cold)} before fanning out", flush=True)
-    solids = Solids()
     for name in cold:
-        getattr(solids, name)
+        # Retested rather than reusing the list above, because one build can
+        # write another name's blob on the way past: front_shell cuts the
+        # keypad recess, so building the front leaves the recess warm and the
+        # second entry with nothing left to do.
+        for call in _cold_calls(name):
+            call()
 
 
 def _progress(record, suite_started, done, total, quiet):

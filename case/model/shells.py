@@ -2,12 +2,17 @@
 section, the back lap, and the detents.
 """
 
+import math
+
 from build123d import (
     Box,
     Plane,
     Pos,
+    Polygon,
     Rectangle,
     RectangleRounded,
+    Compound,
+    chamfer,
     extrude,
     fillet,
     loft,
@@ -107,6 +112,60 @@ def deep_skirt():
         _ring(params.BOARD_FIT, SKIRT_OUT, DEEP_BOTTOM, SKIRT_BOTTOM + MERGE),
         catch_region(),
     )
+
+
+@cache.solid
+def skirt_lead_in_cuts():
+    """Return material removed from the skirt for the folding lead-ins."""
+    if params.SKIRT_TRANSITION_CHAMFER <= 0:
+        return Compound([])
+    skirt = _fuse(
+        _ring(params.BOARD_FIT, SKIRT_OUT, SKIRT_BOTTOM, BOARD_TOP),
+        deep_skirt(),
+    )
+    cuts = front_support_cuts()
+    skirt = _cut(skirt, *cuts)
+    original = skirt
+    tolerance = 1e-5
+    profiles = []
+    for cut in cuts:
+        box = cut.bounding_box()
+        height = box.max.Z - SKIRT_BOTTOM
+        profiles.extend(
+            ((box.min.Y, SKIRT_BOTTOM, height, -1),
+             (box.max.Y, SKIRT_BOTTOM, height, 1))
+        )
+    profiles.append(
+        (catch_region().bounding_box().max.Y, DEEP_BOTTOM,
+         params.SKIRT_TRANSITION_CHAMFER, -1)
+    )
+    if not 0 < params.SKIRT_LEAD_ANGLE < 90:
+        raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
+    slope = math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
+    wedges = []
+    for y, bottom, height, direction in profiles:
+        run = height / slope
+        for edge in original.edges():
+            box = edge.bounding_box()
+            if not (
+                box.size.X > tolerance
+                and box.size.Y < tolerance
+                and box.size.Z < tolerance
+                and abs(box.min.Z - bottom) < tolerance
+                and abs(edge.center().Y - y) < tolerance
+            ):
+                continue
+            plane = Plane(
+                origin=(box.min.X - MERGE, y, bottom),
+                x_dir=(0, 1, 0), z_dir=(1, 0, 0),
+            )
+            triangle = plane * Polygon(
+                (0, 0), (direction * run, 0), (0, height), align=None,
+            )
+            wedges.append(extrude(triangle, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
+    skirt = _cut(skirt, *wedges)
+    # A lead-in removes material only. Keep the catch lands outside this operation.
+    return _cut(original, skirt)
 
 
 def catch_windows():
@@ -212,6 +271,58 @@ def back_shell():
     )
 
 
+OCC_CHAMFER_GAP = 1e-3
+"""One micron, under print resolution: see _chamfer_usb_pocket_lip()."""
+
+
+def _chamfer_usb_pocket_lip(shell):
+    """Chamfer the pocket's inboard lip, where the USB connector catches.
+
+    usb_pocket() leaves a square convex corner where its inboard wall meets
+    the cavity ceiling at CAVITY_FRONT. The chamfer must come off the shell
+    after the cut, not off the cut box: chamfering the box shrinks the void
+    and adds material, which makes the catch worse. At the full wall height
+    the cut consumes that face completely and leaves one 45 degree ramp with
+    no square arris on top of it.
+
+    The wall is measured off the built pocket, not off CAVITY_FRONT_USB: the
+    pocket roof stands MERGE above that plane, and a chamfer sized from the
+    plane alone leaves exactly the MERGE-tall arris this exists to remove.
+
+    Selected by position, as _uncut_support() selects its own edges: the one
+    edge lying in the CAVITY_FRONT plane on the pocket's inboard wall that
+    spans the pocket's width. Call this directly after the pocket cut, while
+    the corner is still the only edge that matches. The count assertion makes
+    a later geometry change fail here instead of cutting some other edge.
+    """
+    pocket = usb_pocket()
+    wall = pocket.bounding_box().max.Z - CAVITY_FRONT
+    if params.USB_POCKET_LIP_CHAMFER > wall + OCC_CHAMFER_GAP:
+        raise ValueError(
+            f"USB_POCKET_LIP_CHAMFER {params.USB_POCKET_LIP_CHAMFER} is past the "
+            f"pocket wall's own {wall:.2f} height"
+        )
+    # OCCT refuses a chamfer that consumes its face exactly, and the full-height
+    # value asks for exactly that, so stop one micron short of the pocket roof.
+    length = min(params.USB_POCKET_LIP_CHAMFER, wall - OCC_CHAMFER_GAP)
+    box = board.usb_envelope()
+    c = params.USB_CLEARANCE
+    wall_y = box.center().Y + box.size.Y / 2 + c
+    span = box.size.X + 2 * c
+    tol = 1e-4
+    lip = [
+        edge
+        for edge in shell.edges()
+        if abs(edge.bounding_box().min.Z - CAVITY_FRONT) < tol
+        and abs(edge.bounding_box().max.Z - CAVITY_FRONT) < tol
+        and abs(edge.center().Y - wall_y) < tol
+        and edge.bounding_box().size.X > span / 2
+    ]
+    if len(lip) != 1:
+        raise ValueError(f"expected one USB pocket lip edge, found {len(lip)}")
+    return chamfer(lip, length)
+
+
 @cache.solid
 def front_shell():
     # The body is built to SHELL_FRONT and filleted there before any key or
@@ -264,7 +375,9 @@ def front_shell():
     # through the board, which stop well under CAVITY_FRONT.
     # The support ledges cross the skirt plane to reach the back lap. Match their
     # derived breaks in the skirt so the shells can close around them.
-    shell = _cut(shell, usb_pocket(), *front_support_cuts())
+    shell = _cut(shell, usb_pocket())
+    shell = _chamfer_usb_pocket_lip(shell)
+    shell = _cut(shell, *front_support_cuts(), *skirt_lead_in_cuts().solids())
 
     parts = board.components()
     # No collar cut around the bosses. key_size() sizes each key to clear them, so

@@ -585,8 +585,8 @@ def _angular_radius(theta, n, axis_rounding):
     """Normalized radius of the angular circle-to-superellipse blend."""
     c, s = abs(math.cos(theta)), abs(math.sin(theta))
     squircle = (c**n + s**n) ** (-1 / n)
-    weight = axis_rounding * math.sin(2 * theta) ** 2
-    return 1.0 + weight * (squircle - 1.0)
+    weight = axis_rounding * (1.0 - math.sin(2 * theta) ** 2)
+    return squircle + weight * (1.0 - squircle)
 
 
 def _cross(u, shape, n, axis_rounding=0.0, edge_width=0.0):
@@ -715,6 +715,11 @@ def ring_roof_left():
     half axis on the diagonals, and both necks running out across the annulus
     on the way to the dishes either side. What any of them sinks there comes
     out of this.
+
+    The annulus walked is the roof's own, inner wall to outer. The inner wall
+    is plumb, so that end is simply led_ring_inner_r() and the walk runs nearer
+    the bore than it did when the wall raked away from it, which is where the
+    wheel basin is deepest.
     """
     wx, wy = board.wheel_center()
     lo, hi = led_ring_roof_inner_r(), led_ring_roof_outer_r()
@@ -990,15 +995,54 @@ def _pad_limit():
     return Face(inner.outer_wire().offset_2d(-params.PAD_FIT, kind=Kind.INTERSECTION))
 
 
+def pad_bridge_top():
+    """Place the lower bridge below each boss clearance between the buttons."""
+    parts = board.components()
+    refs = sorted(island_refs("second"), key=lambda ref: parts[ref][0])
+    left = parts[refs[0]][0] + key_size(refs[0]) / 2 + params.PAD_MARGIN
+    right = parts[refs[-1]][0] - key_size(refs[-1]) / 2 - params.PAD_MARGIN
+    top = min(parts[ref][1] for ref in refs)
+    radius = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
+    for x, y in mount_points():
+        if left < x < right:
+            top = min(top, y - radius - params.PAD_BOSS_CLEARANCE)
+    return top
+
+
 def pad_lobe_face(name):
-    """One lobe's outline: its rectangle, rounded at PAD_RADIUS, clipped inside
-    _pad_limit()."""
+    """Round each button contour near the mic and keep the lower web attached."""
     x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
     with BuildSketch() as sketch:
         with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
             RectangleRounded(x1 - x0, y1 - y0, params.PAD_RADIUS)
     rect = sketch.sketch.faces()[0]
-    clipped = extrude(rect, amount=1, dir=(0, 0, 1)) & extrude(
+    outline = extrude(rect, amount=1, dir=(0, 0, 1))
+    if name == "second":
+        parts = board.components()
+        refs = island_refs(name)
+        bridge_top = pad_bridge_top()
+        lower = outline.intersect(
+            Pos((x0 + x1) / 2, (y0 + bridge_top) / 2, 0.5)
+            * Box(x1 - x0 + 2, bridge_top - y0, 1)
+        ).solids()[0]
+        keys = []
+        for ref in refs:
+            x, y = parts[ref][:2]
+            size = key_size(ref) + 2 * params.PAD_MARGIN
+            keys.append(_rounded_prism(x, y, size, params.PAD_RADIUS, 0, 1))
+            keys.append(
+                Pos(x, (bridge_top - MERGE + y) / 2, 0.5)
+                * Box(size, y - bridge_top + MERGE, 1)
+            )
+        contour = _fuse(lower, *keys).faces().sort_by()[0]
+        joins = [
+            vertex for vertex in contour.vertices()
+            if abs(vertex.Y - bridge_top) < 1e-6
+            and x0 + params.PAD_RADIUS < vertex.X < x1 - params.PAD_RADIUS
+        ]
+        contour = contour.fillet_2d(params.PAD_JOIN_RADIUS, joins)
+        outline = extrude(contour, amount=1, dir=(0, 0, 1)).intersect(outline).solids()[0]
+    clipped = outline & extrude(
         _pad_limit(), amount=1, dir=(0, 0, 1)
     )
     return clipped.faces().sort_by()[0]
@@ -1071,17 +1115,10 @@ def _mic_clearance():
 
 @cache.solid
 def button_pad():
-    """One part in the export, two lobes in the mould: one per keypad island,
-    each held up against the ceiling by its own plungers.
+    """Build two pad lobes supported by their switch plungers.
 
-    Two separate rectangles rather than one slab the wheel bore severs. The old
-    shape reached the full cavity width and the full span of every key, so both
-    ends of it stretched toward the wheel and the bore had to take the middle
-    back out, leaving each lobe with a semicircular bite facing the encoder. A
-    lobe padded PAD_MARGIN off its own keys stops short of the wheel on its own
-    (pad_wheel_gap()), so nothing is cut there any more and the bite is gone.
-
-    Print in TPU to try it, mould in silicone to keep it.
+    The mic lobe follows both buttons with a connected lower bridge.
+    Both lobes stop outside the wheel clearance band.
     """
     parts = board.components()
     lobes = []

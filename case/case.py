@@ -34,6 +34,7 @@ along +Y through a bare bore drilled to its own lens.
     python case.py            write an STL for each part, shells, pad, window
                               and caps
     python case.py --show     open in ocp-vscode instead of exporting
+    python case.py --draft    write the STLs only, for a quick preview
 
 The geometry lives in model/, one module per feature. This file re-exports it
 flat, so `case.X` still names everything it always did and check.py needs no

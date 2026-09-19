@@ -193,6 +193,15 @@ def support_runs(wall_offset=LAP_IN):
     ]
     box = board.board_profile().bounding_box()
     middle = box.center().X
+    if not params.SUPPORT_SOUTH_RUNS:
+        for left in (True, False):
+            side = [
+                solid
+                for solid in runs
+                if (solid.bounding_box().center().X < middle) == left
+            ]
+            if side:
+                runs.remove(min(side, key=lambda solid: solid.bounding_box().center().Y))
     envelope = support_case_envelope(params.SUPPORT_SHELL_SKIN)
     out = []
     for solid in runs:

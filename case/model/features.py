@@ -228,6 +228,10 @@ def _front(runs, obstacles):
     out = [
         _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
         _entry("deep_skirt", "shells.deep_skirt", "add", shells.deep_skirt()),
+        *[
+            _entry(f"skirt_lead_in.{index}", "shells.skirt_lead_in_cuts", "cut", solid)
+            for index, solid in enumerate(shells.skirt_lead_in_cuts().solids(), 1)
+        ],
     ]
     # The bosses and their pilots have no builder of their own: front_shell()
     # holes them straight out of mount_points(), so the parameters are named

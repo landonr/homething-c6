@@ -11,10 +11,11 @@ window off a flange that reached out over the LEDs; the translucent case
 material diffuses better than the silicone did, so the pad gets out of the
 light's way entirely and the light pipe is now a void inside the shell: an
 annular channel circling the wheel opening, open to the cavity below, roofed
-by LED_RING_ROOF of translucent shell, its two walls plumb with a 45 degree
-chamfer breaking each bottom corner so the mouth opens wider than the rest. The
-four LEDs fire up into it and the channel carries their light around the wheel,
-so the face shows a ring rather than four dots.
+by LED_RING_ROOF of translucent shell. Its inner wall stands plumb, so the web
+to the wheel's bore is a full LED_RING_WALL at every height; its outer wall is
+one 45 degree plane over the whole height, widest at the mouth, so the light
+enters across a flare. The four LEDs fire up into it and the channel carries
+their light around the wheel, so the face shows a ring rather than four dots.
 """
 
 import math
@@ -33,7 +34,7 @@ from build123d import (
 import board
 import params
 
-from .shape import _hole, _isect, _offset_face, _slab
+from .shape import _face_reach, _hole, _isect, _offset_face, _slab
 from .stack import CAVITY_FRONT, LIP_CLEAR_R, SHELL_FRONT, WHEEL_OPENING_R
 
 LED_RING_TOP = SHELL_FRONT - params.LED_RING_ROOF
@@ -67,15 +68,43 @@ def pad_clear_y():
 
 
 def _opening_clip():
-    """Plan-view boundary the wheel opening and the LED ring channel are kept
-    inside of, clear of the case's own side wall by WHEEL_OPENING_EDGE. Idle
-    for the opening at its current radius, live for the channel: its outer
-    wall runs past this near the X axis, at the mouth by more than higher up
-    now that LED_RING_CHAMFER breaks that corner, so the ring narrows against
-    two chords there rather than cutting toward the wall, and stays continuous
-    because the clip sits well outside the channel's inner radius at either
-    end."""
+    """Plan-view boundary the wheel opening is kept inside of, clear of the
+    case's own side wall by WHEEL_OPENING_EDGE. Idle at the opening's current
+    radius, which stops well short of it. The LED ring channel used to share
+    this clip and has _channel_clip() instead, because the channel is wanted
+    flush to the cavity wall rather than held a ledge off it."""
     return _offset_face(params.BOARD_FIT - params.WHEEL_OPENING_EDGE)
+
+
+def _channel_clip():
+    """Plan-view boundary the LED ring channel is kept inside of: the cavity
+    wall itself, so where the channel runs out to the wall it stops flush
+    against it.
+
+    Live near the X axis, where the mouth's own radius reaches past the wall and
+    the ring narrows against two chords. Those chords are the wall, not a ledge
+    short of it, so the channel opens into the cavity along the wall the same
+    way its mouth opens into the cavity everywhere else, and the roof over it
+    lands on a full-height wall rather than on a strip of ceiling. Holding it a
+    ledge short left a square corner against the cavity ceiling instead, which
+    this removes rather than breaks.
+
+    The ring stays continuous because the wall sits well outside the channel's
+    plumb inner wall at either end."""
+    return _offset_face(params.BOARD_FIT)
+
+
+def led_ring_clip_reach(angle):
+    """How far from the wheel centre _channel_clip() lets the channel run, along
+    the ray at `angle` radians, measured on the clip face rather than worked
+    back out of BOARD_FIT.
+
+    Near the X axis this comes in short of led_ring_mouth_outer_r() and the
+    channel is chorded off against the cavity wall there. Everywhere else it
+    lands far outside the channel and the clip does nothing.
+    """
+    x, y = board.wheel_center()
+    return _face_reach(_channel_clip(), x, y, angle)
 
 
 def led_radial_reach():
@@ -91,42 +120,34 @@ def led_radial_reach():
 
 
 def led_ring_inner_r():
-    """The inner wall's nominal radius: LED_RING_WALL of web outside the wheel
-    opening's bore. The wall is one 45 degree plane rather than a cylinder, so
-    it holds this radius at exactly one height, LED_RING_CHAMFER above the
-    mouth, and stands further out above it. Still the number the web is
-    reasoned from, and still what the LEDs have to sit outside of; the
-    light_path check is what catches a layout where the wall grows past an
-    LED's inner edge."""
+    """The inner wall's radius: LED_RING_WALL of web outside the wheel opening's
+    bore. The wall is a plain cylinder, so it holds this radius over the
+    channel's whole height and the web is the full LED_RING_WALL at every one of
+    them. Also what the LEDs have to sit outside of; the light_path check is
+    what catches a layout where the wall grows past an LED's inner edge."""
     return WHEEL_OPENING_R + params.LED_RING_WALL
 
 
 def led_ring_outer_r():
     """The outer wall's nominal radius: LED_RING_OVER past the furthest LED's
     body edge, derived off the placements so moving an LED outward widens the
-    channel rather than leaving it half covered. Crossed LED_RING_CHAMFER above
-    the mouth, the same way the inner one is."""
+    channel rather than leaving it half covered. This wall rakes, so it crosses
+    this radius LED_RING_CHAMFER above the mouth rather than holding it."""
     return led_radial_reach()[1] + params.LED_RING_OVER
 
 
-def led_ring_mouth_inner_r():
-    """Channel inner wall at the mouth, the closest the void ever comes to the
-    bore. The whole wall is built off this: it is the fixed end, since the web
-    left here is the ring's light barrier and there is none to spare."""
-    return led_ring_inner_r() - params.LED_RING_CHAMFER
-
-
 def led_ring_mouth_outer_r():
-    """Channel outer wall at the mouth, its widest. What _opening_clip() has to
+    """Channel outer wall at the mouth, its widest. What _channel_clip() has to
     answer for, rather than any radius above it."""
     return led_ring_outer_r() + params.LED_RING_CHAMFER
 
 
 def led_ring_roof_inner_r():
-    """Channel inner wall where it meets the roof, at its furthest from the
-    bore. Derived, not set: 45 degrees over the wall's own height means the
-    radius travels exactly that height."""
-    return led_ring_mouth_inner_r() + led_ring_wall_height()
+    """Channel inner wall where it meets the roof. The wall is plumb, so this is
+    led_ring_inner_r() again. Kept as a name because the roof is spoken of as a
+    pair of radii and the outer one does travel; there is no matching mouth name,
+    since the mouth's inner end is the same radius as well."""
+    return led_ring_inner_r()
 
 
 def led_ring_roof_outer_r():
@@ -135,48 +156,51 @@ def led_ring_roof_outer_r():
 
 
 def led_ring_roof_flat():
-    """Width of the flat the channel actually presents to its roof, once both
-    walls have converged across the full height. The surface the ring glows
-    through, and what has to stay over the LEDs: light_path is what proves it
-    does."""
+    """Width of the flat the channel presents to its roof, once the outer wall
+    has raked in across the full height. Only that wall travels, so the flat
+    closes from one side. The surface the ring glows through, and what has to
+    stay over the LEDs: light_path is what proves it does."""
     return led_ring_roof_outer_r() - led_ring_roof_inner_r()
 
 
 def led_ring_web_left():
-    """Thinnest web left between the bore and the channel: LED_RING_WALL less
-    the chamfer, down at the mouth where the wall comes closest. The ring's
-    inner light barrier at its weakest, and what bounds LED_RING_CHAMFER."""
-    return led_ring_mouth_inner_r() - WHEEL_OPENING_R
+    """Web left between the bore and the channel: the whole of LED_RING_WALL,
+    at every height, because the inner wall is plumb and no longer rakes in
+    toward the bore at the mouth. The ring's inner light barrier; led_ring
+    probes it on the built shell rather than trusting this."""
+    return led_ring_inner_r() - WHEEL_OPENING_R
 
 
 def led_ring_wall_height():
     """Height of the channel's wall: ceiling underside to the roof. Not the
     cut's own height, which starts a millimetre lower; that overrun is inside
-    the cavity, where there is no wall. At 45 degrees this is also the radial
-    distance each wall travels, which is what closes the roof flat down to
-    led_ring_roof_flat()."""
+    the cavity, where there is no wall. The outer wall rakes at 45 degrees, so
+    this is also how far that wall travels radially, which is what closes the
+    roof flat down to led_ring_roof_flat(). The inner wall is plumb and travels
+    nothing."""
     return LED_RING_TOP - CAVITY_FRONT
 
 
 def led_ring_channel():
     """The channel itself, as the cut: an annular void from below the ceiling
     underside (open to the cavity, which is where the LED light comes from) up
-    to LED_RING_TOP, clipped by _opening_clip() where its outer radius would
-    otherwise run into the side wall's own ceiling margin.
+    to LED_RING_TOP, clipped by _channel_clip() where its outer radius would
+    otherwise run past the cavity wall.
 
-    Neither wall is plumb anywhere. Each is one 45 degree plane running the
-    channel's whole height, widest at the mouth and converging on the roof, so
-    the section is a trapezoid closing upward. The mouth is the fixed end
-    because that is where the web to the bore is thinnest and there is none to
-    give away; the roof is wherever 45 degrees over led_ring_wall_height()
-    leaves it, and what is left there is led_ring_roof_flat(). Revolved from
-    that section rather than cut as two cylinders, which is what the plain
-    rectangle was.
+    The two walls differ. The inner one is a plain cylinder at
+    led_ring_inner_r(), plumb over the whole height, so the web behind it is a
+    full LED_RING_WALL everywhere rather than thinnest at the mouth. That web is
+    the ring's light barrier and the wheel's own seat, and neither wants it
+    spent to flare a wall that faces the bore instead of an LED. The outer one is
+    one 45 degree plane running the whole height, widest at the mouth and raking
+    in to led_ring_roof_outer_r(), so the section is a right trapezoid that
+    closes from one side and leaves led_ring_roof_flat() at the top.
 
-    Flaring the mouth is what the light wants: it enters there, off LEDs firing
-    up out of the cavity, and a wall raked away from them puts more of the roof
-    in view of each one. A 45 degree rake is also what a printer can close a
-    ceiling over without support.
+    Flaring the outer wall is what the light wants: it enters at the mouth, off
+    LEDs firing up out of the cavity, and a wall raked away from them puts more
+    of the roof in view of each one. A 45 degree rake is also what a printer can
+    close a ceiling over without support. Revolved from that section rather than
+    cut as two cylinders, which is what the plain rectangle was.
 
     The overrun below the ceiling underside holds the mouth radii. It is there
     to break the cut through into the cavity, and carrying the widest width down
@@ -185,21 +209,20 @@ def led_ring_channel():
     """
     x, y = board.wheel_center()
     z0, z1 = CAVITY_FRONT - 1, LED_RING_TOP
-    mouth_inner, mouth_outer = led_ring_mouth_inner_r(), led_ring_mouth_outer_r()
+    inner, mouth_outer = led_ring_inner_r(), led_ring_mouth_outer_r()
     with BuildSketch(Plane.XZ) as section:
         with BuildLine():
             Polyline(
-                (mouth_inner, z0),
+                (inner, z0),
                 (mouth_outer, z0),
                 (mouth_outer, CAVITY_FRONT),
                 (led_ring_roof_outer_r(), z1),
-                (led_ring_roof_inner_r(), z1),
-                (mouth_inner, CAVITY_FRONT),
+                (inner, z1),
                 close=True,
             )
         make_face()
     channel = Pos(x, y, 0) * revolve(section.sketch, Axis.Z)
-    return _isect(channel, _slab(_opening_clip(), z0, z1))
+    return _isect(channel, _slab(_channel_clip(), z0, z1))
 
 
 def wheel_opening(z0, z1):

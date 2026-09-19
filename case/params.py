@@ -41,20 +41,18 @@ FLOOR = 2.4
 """Thick enough to sink the closure screw's head and still leave solid under
 it: 0.7 at SHELL_SCREW_HEAD_H, which is the thinnest the back's outer face
 gets anywhere."""
-BOARD_FIT = 1.35
-"""Gap between the board edge and the inner wall. Deliberately larger than a fit
-needs: it is what widens the case enough for the LED ring to come out as a
-complete annulus instead of one clipped flat at each side. The board does not
-rattle in the extra space, it hangs off the four screw bosses, not the wall.
-
-The profile is offset uniformly, so this lengthens the case by the same 2.0 it
-widens it."""
+BOARD_FIT = 0.5
+"""Gap between the board edge and the inner wall. Board screws locate the board.
+The uniform offset changes case length and width by twice the clearance change."""
 
 # Board deflection stops on the inside of the back shell side walls.
 SUPPORT_BEARING = 3.0
 SUPPORT_GAP = 0.25
 SUPPORT_CLEARANCE = 0.4
 SUPPORT_MIN_RUN = 8.0
+SUPPORT_SOUTH_RUNS = False
+"""Include the south-most board support run on each side when true. The runs
+in the deep grip-end skirt are not needed, so this stays false."""
 SUPPORT_UNDER_ANGLE = 60.0
 SUPPORT_INNER_R = 0.6
 """Radius on the inboard support edge. It removes the sharp printed tip and
@@ -117,6 +115,11 @@ in a printed post a self-tapping screw is cutting its own thread into. The
 smaller M2 screw would allow less, but nothing asks for less: BOSS_COLLAR's
 clip on key_size() is idle at the current layout too, so shrinking this buys
 no key size back either."""
+LEGACY_RETENTION_OD = 5.5
+"""V2 retention post outside diameter. This adds 0.25 mm of radial wall over
+the front bosses, so the tall free-standing post prints with more material
+around its M2 pilot. The extra width clears the V3 cavity components and the
+closure standoff."""
 STANDOFF_CHAMFER = 1.2
 """Height and radial reach of the root chamfer on each screw boss, closure post,
 and microphone duct. The chamfer is widest where each post meets its shell."""
@@ -142,9 +145,9 @@ post, so this is a chosen engagement rather than whatever the ceiling left
 over. It also sets the short screws' length, BOARD_THICKNESS plus this, which
 case.py prints.
 
-The back's V2 retention post reads this, BOSS_OD, BOSS_PILOT_D and
-STANDOFF_CHAMFER too, so the optional V2 screw is the same fastener at the same
-engagement rather than a second stack to keep in step."""
+The back's V2 retention post reads this, LEGACY_RETENTION_OD,
+BOSS_PILOT_D and STANDOFF_CHAMFER too, so the optional V2 screw is the same
+fastener at the same engagement rather than a second stack to keep in step."""
 SCREW_HEAD_D = 4.0
 SCREW_HEAD_H = 1.6
 """The largest standard M2 head, in both directions, since these two exist only
@@ -169,7 +172,12 @@ SKIRT_H = 4.0
 SKIRT_T = 1.5
 """The back's lap over the skirt. Whatever is left of WALL after this and the fit
 is the skirt, so this one number splits the wall between the two shells."""
-SKIRT_FIT = 0.15
+SKIRT_FIT = 0.30
+"""Clearance between the shells. This gap lets the front fold closed and prevents a tight seal."""
+SKIRT_TRANSITION_CHAMFER = 3.0
+"""Vertical rise at the deep-skirt ends. Support-cut ends use their full exposed height to remove small steps. Zero disables all skirt lead-ins."""
+SKIRT_LEAD_ANGLE = 65.0
+"""Lead-in angle in degrees from the flat skirt bottom along Y. A shallow angle reduces contact during assembly."""
 
 # At the grip end the skirt runs deeper than anywhere else and carries two rounded
 # rectangular windows. The back's lap grows a detent behind each: the lap rides out
@@ -417,10 +425,10 @@ WHEEL_OPENING_EDGE = 0.65
 """Minimum ceiling between the shell's wheel opening and the side wall. The
 opening is clipped to a chord near the X axis if it would come closer than
 this, which is what made the case a flat-sided oval before BOARD_FIT was
-padded out. At the opening's current radius there is more room than this
-asks for and nothing is clipped. The LED ring channel shares the same clip:
-at its outer radius it does run past it near the X axis, so the channel is
-the feature the clip is live for now."""
+padded out. At the opening's current radius there is more room than this asks
+for and nothing is clipped, so this is idle. The LED ring channel used to share
+the clip and no longer does: the channel runs flush to the cavity wall
+instead."""
 
 # LED ring channel: an annular void inside the front shell's ceiling, circling
 # the wheel opening and passing over D2-D5, so their light spreads around the
@@ -428,37 +436,42 @@ the feature the clip is live for now."""
 # open to the cavity below (the pad's wheel cut already uncovers the LEDs) and
 # roofed by LED_RING_ROOF of translucent shell, which is the diffuser.
 LED_RING_WALL = 1.0
-"""Nominal web between the wheel opening's bore and the channel's inner wall.
-It is what keeps the opening a closed cylinder the wheel seats against, and it
-is the ring's inner light barrier, so it is not free to thin toward zero. The
-wall rakes rather than standing plumb, so WHEEL_OPENING_R plus this is the one
-radius it passes through rather than the whole wall; LED_RING_CHAMFER is how
-much less than this the web is at the mouth, which is the end the check probes
-on the built shell rather than trusting either sum."""
+"""Web between the wheel opening's bore and the channel's inner wall. It is what
+keeps the opening a closed cylinder the wheel seats against, and it is the
+ring's inner light barrier, so it is not free to thin toward zero. That wall
+stands plumb, so this is the web at every height rather than a radius the wall
+crosses once. The check still probes it on the built shell rather than trusting
+the sum."""
 LED_RING_CHAMFER = 0.6
-"""How much wider than its nominal radius each of the channel's walls opens at
-the mouth. Since both walls rake at 45 degrees, it is also how far above the
-mouth each one crosses that nominal radius, and the roof end is then wherever
-45 degrees over the channel's own height leaves it rather than anything set
-here.
+"""How much wider than its nominal radius the channel's outer wall opens at the
+mouth. That wall rakes at 45 degrees, so this is also how far above the mouth it
+crosses led_ring_outer_r(), and the roof end is then wherever 45 degrees over
+the channel's own height leaves it rather than anything set here. The inner wall
+is plumb and this does not reach it.
 
-The mouth is the fixed end and the flared one, because that is where the light
-enters, off LEDs firing up out of the cavity: a wall raked away from them puts
-more of the roof in view of each. A 45 degree rake is also what a printer can
-close a ceiling over without support.
+The mouth is the flared end because that is where the light enters, off LEDs
+firing up out of the cavity: a wall raked away from them puts more of the roof
+in view of each, and the light lands on the middle of the rake, which is the
+aim wanted rather than an accident of the layout. See LED_RING_OVER. A 45 degree
+rake is also what a printer can close a ceiling over without support.
 
-The inner side is what bounds it. That wall rakes toward the wheel's bore, so
-the web LED_RING_WALL leaves is thinnest at the mouth and thinner by exactly
-this; at 0.6 out of a 1.0 web there is 0.4 of light barrier left down there,
-which is the floor. Widening this without widening LED_RING_WALL to match
-spends the barrier, not spare material. What it buys at the other end is roof:
-the flat the ring glows through is the mouth's width less twice the channel's
-height, so the mouth has to be wide enough to still leave one."""
+The web to the bore used to bound this and no longer does, because the inner
+wall stopped raking. The cavity wall bounds it now: a wider mouth runs further
+past the wall near the X axis, so the ring narrows against a longer chord there.
+What it buys is roof, since the flat the ring glows through is the mouth's outer
+radius less the channel's own height less the inner wall."""
 LED_RING_OVER = 0.6
-"""How far past an LED's own body edge the channel's outer wall reaches, so
-the package fires into the void rather than under its rim. Same job as
-PAD_LED_CLEARANCE one layer down: derived off the LED placements plus
-LED_BODY, so moving an LED moves the channel with it."""
+"""How far past an LED's own body edge the channel's outer wall reaches. Same
+job as PAD_LED_CLEARANCE one layer down: derived off the LED placements plus
+LED_BODY, so moving an LED moves the channel with it.
+
+It does not stand the package clear of the raked wall, and it must not be
+trimmed to. Each LED fires at the middle of that rake on purpose: the rake is
+the ring's reflector, and a source aimed at the middle of it throws light
+furthest around the channel, which is the best effect this feature has. The
+light_path check asks a different question, that the column straight above each
+package is void up to the roof, so it catches a package firing into material
+without asking it to fire past the reflector."""
 LED_RING_ROOF = 1.2
 """Translucent roof left over the channel, face side: the surface the ring
 actually glows through. The keypad recess overlaps the channel in plan where the
@@ -467,7 +480,6 @@ joins runs out across the annulus, and what the recess sinks there comes out of
 this roof; the difference is the thinnest the roof gets anywhere, and check.py's
 ring stack guard is what holds a floor under it, walking the whole annulus rather
 than one radius."""
-
 # Apertures in the back shell
 MIC_THROAT_MARGIN = 0.5
 """How much wider than the board's own acoustic port the inlet's throat is,
@@ -594,20 +606,30 @@ USB_CLEARANCE = 0.5
 past the connector's measured envelope, the same role IR_CLEARANCE plays at
 the other end. Also the plan margin usb_pocket() keeps clear of the
 connector's footprint in the ceiling above it."""
+USB_POCKET_LIP_CHAMFER = 1.9
+"""Chamfer on the pocket's inboard lip, the convex corner where usb_pocket()'s
+wall meets the cavity ceiling one board width in from the end wall. The USB-C
+connector catches on that square corner during assembly, so the 45 degree cut
+gives it a lead-in instead.
+
+This is the wall's full height, CAVITY_FRONT up to the pocket roof, so the
+wall becomes one ramp with no square face left anywhere on it. Note that the
+roof is CAVITY_FRONT_USB plus MERGE, not CAVITY_FRONT_USB: usb_pocket() needs
+that overshoot for the connector's own USB_CLEARANCE, so the wall is 1.9 and
+not the 1.4 the stack planes suggest. The roof also bounds the cut, which
+cannot climb past it, so the ceiling over the ramp stays as thick as the
+ceiling over the connector. _chamfer_usb_pocket_lip() measures the built wall
+and fails if this value goes past it."""
 
 # Button pad: one soft moulding, flat web with raised keys and no skirt. Held up
 # against the ceiling by its own plungers resting on the switches.
 PAD_WEB_T = 1.2
 PAD_MARGIN = 1.0
-"""Web left around the outermost key on every side of a lobe. The pad is two
-tight rectangles now, one per keypad island, rather than one full-width slab
-the wheel bore had to sever, so this is the whole plan margin the pad carries
-anywhere."""
+"""Web margin around each island's outermost buttons. The mic island follows each button above a shared lower bridge."""
 PAD_RADIUS = 4.8
-"""Corner round on a pad lobe. A lobe is a rectangle over a
-whole island rather than a keytop, so it wants a corner far bigger than one;
-must stay under half the shorter side of the smaller lobe, or RectangleRounded
-throws."""
+"""Corner radius on the grid lobe and each mic-island button contour. Keep it below half the smallest contour width."""
+PAD_JOIN_RADIUS = 1.5
+"""Round the inner corners between the two button contours and their lower connecting web."""
 PAD_FIT = 0.3
 """Gap to the shell's inner wall. Once kept small so the pad stayed wider than
 the wheel bore; the lobes no longer reach the wheel at all (see

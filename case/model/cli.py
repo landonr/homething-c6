@@ -70,12 +70,11 @@ from .shells import back_shell, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     LED_RING_TOP,
+    led_ring_clip_reach,
     led_ring_inner_r,
-    led_ring_mouth_inner_r,
     led_ring_mouth_outer_r,
     led_ring_outer_r,
     led_ring_roof_flat,
-    led_ring_roof_inner_r,
     led_ring_roof_outer_r,
     led_ring_wall_height,
     led_ring_web_left,
@@ -111,6 +110,11 @@ from .stack import (
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true", help="preview via ocp-vscode")
+    ap.add_argument(
+        "--draft",
+        action="store_true",
+        help="write the STLs and cap placements only, no feature map, no summary",
+    )
     args = ap.parse_args()
 
     print(cache.provenance())
@@ -156,6 +160,12 @@ def main():
         cache.export_stl_cached(part, EXPORT / f"{name}.stl")
         box = part.bounding_box()
         print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+
+    # The facts below all query built geometry, which costs more than the meshes
+    # on a warm cache. A draft stops here and leaves the last full run's feature
+    # map in place, so Identify still answers, off the geometry it was written from.
+    if args.draft:
+        return
 
     # What each surface in those meshes is called, for a viewer that has only
     # triangles to go on. Written from the same builders the parts came from, so
@@ -228,12 +238,17 @@ def main():
         f"({ring_roof_left():.2f} where the recess crosses it)"
     )
     print(
-        f"  both walls raked 45 degrees over the full {led_ring_wall_height():.2f} "
-        f"of height, widest at the mouth: {led_ring_mouth_inner_r():.2f} to "
-        f"{led_ring_mouth_outer_r():.2f} there, closing to "
-        f"{led_ring_roof_inner_r():.2f} to {led_ring_roof_outer_r():.2f} at the "
-        f"roof, so {led_ring_roof_flat():.2f} of flat glows and "
-        f"{led_ring_web_left():.2f} of web is left to the bore at the mouth"
+        f"  inner wall plumb at {led_ring_inner_r():.2f} over the full "
+        f"{led_ring_wall_height():.2f} of height, outer wall raked 45 degrees "
+        f"and widest at the mouth: {led_ring_mouth_outer_r():.2f} there, closing "
+        f"to {led_ring_roof_outer_r():.2f} at the roof, so "
+        f"{led_ring_roof_flat():.2f} of flat glows and {led_ring_web_left():.2f} "
+        f"of web is left to the bore at every height"
+    )
+    print(
+        f"  chorded flush against the cavity wall at "
+        f"{led_ring_clip_reach(0.0):.2f} near the X axis, which still leaves "
+        f"{led_ring_clip_reach(0.0) - led_ring_inner_r():.2f} of ring there"
     )
     print(
         f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} cell, "
@@ -420,7 +435,7 @@ def main():
     _, legacy_cavity = legacy_retention_floors()
     print(
         f"  optional: one M2 x {legacy_screw_length():.0f} at {legacy_point} into a "
-        f"{params.BOSS_OD:.1f} post standing {SUPPORT_TOP - legacy_cavity:.2f} off "
+        f"{params.LEGACY_RETENTION_OD:.1f} post standing {SUPPORT_TOP - legacy_cavity:.2f} off "
         f"the back floor, for a V2 board's own upper-right hole. Retention only: "
         f"V2's IR parts and upper keys still land wrong, and the V2 board fastens "
         f"to the back before the front closes, the reverse of V3"

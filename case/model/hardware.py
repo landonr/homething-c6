@@ -102,15 +102,16 @@ def legacy_retention_post():
     board rests on: the V3 board is still carried by the front shell's bosses
     and is still SUPPORT_GAP clear of everything below it.
 
-    Same 5 mm boss, 1.7 mm pilot and 4.4 mm engagement as the front plate's
-    bosses, so the V2 screw is the same M2 x 6 the V3 board already takes.
+    A 5.5 mm post leaves extra printed wall around the same 1.7 mm pilot and
+    4.4 mm engagement as the front bosses. The V2 screw is the same M2 x 6
+    that the V3 board already takes.
     """
     x, y = board.legacy_retention_point()
     _, cavity = legacy_retention_floors()
     return _chamfered_post(
         x,
         y,
-        params.BOSS_OD,
+        params.LEGACY_RETENTION_OD,
         cavity - MERGE,
         SUPPORT_TOP,
         params.STANDOFF_CHAMFER,

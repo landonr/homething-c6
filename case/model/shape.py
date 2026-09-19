@@ -13,6 +13,7 @@ from build123d import (
     BuildSketch,
     Cone,
     Cylinder,
+    Edge,
     Face,
     Kind,
     Polyline,
@@ -29,6 +30,28 @@ import params
 def _offset_face(distance):
     edge = board.board_profile().outer_wire()
     return Face(edge.offset_2d(distance, kind=Kind.INTERSECTION))
+
+
+def _face_reach(face, x, y, angle):
+    """How far a plan face reaches from (x, y) along the ray at `angle` radians,
+    measured on the face itself.
+
+    An offset profile is not a circle around any one point, so the distance from
+    an interior point to it is not the offset that built it. A caller that wants
+    the real reach along one direction has to read the face, which is what this
+    does.
+    """
+    far = 2 * face.bounding_box().diagonal
+    ray = Edge.make_line(
+        (x, y, 0), (x + far * math.cos(angle), y + far * math.sin(angle), 0)
+    )
+    inside = face.intersect(ray).edges()
+    if len(inside) != 1:
+        raise ValueError(
+            f"the ray at {math.degrees(angle):.0f} degrees crosses this face "
+            f"{len(inside)} times, so it has no one reach"
+        )
+    return inside[0].length
 
 
 def _profiles():

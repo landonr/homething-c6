@@ -64,6 +64,13 @@ def usb_pocket():
     """
     box = board.usb_envelope()
     c = params.USB_CLEARANCE
+    # MERGE at both ends, and the top one is not cosmetic. FRONT_KEEPOUT is
+    # sized off the switches, so CAVITY_FRONT_USB alone clears the connector by
+    # less than USB_CLEARANCE; the roof has to stand MERGE above it for the
+    # margin this pocket is padded for. usb_pocket_clearance() is what caught
+    # that. The real roof is CAVITY_FRONT_USB + MERGE, not CAVITY_FRONT_USB,
+    # and _chamfer_usb_pocket_lip() measures the wall it ramps from this solid
+    # rather than from the stack for the same reason.
     return Pos(box.center().X, box.center().Y, (CAVITY_FRONT + CAVITY_FRONT_USB) / 2) * Box(
         box.size.X + 2 * c,
         box.size.Y + 2 * c,

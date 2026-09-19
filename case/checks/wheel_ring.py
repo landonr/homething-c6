@@ -23,11 +23,13 @@ off well inside that, by design. A probe at one radius asks for width
 nothing built it with out there, which is what ROOF_FLAT_MIN is for instead: the
 measured width has to clear it at every angle.
 
-Wheel seat clearance: the shell's own wheel opening clears the housing and
-knob (board.wheel_profile()'s main_od and top) by WHEEL_OPENING_CLEARANCE, its
-own gap rather than the pad's WHEEL_CLEARANCE, at every
-height from the ceiling underside to the knob's own peak, and the lip stays
-clear of the ceiling in the first place. Replaces a claim that the shell's
+Wheel seat clearance: the shell's own wheel opening clears the housing
+(board.wheel_profile()'s main_od) by WHEEL_OPENING_CLEARANCE, its own gap
+rather than the pad's WHEEL_CLEARANCE, at every height there is shell to cut
+the opening through, which is the ceiling underside up to the front face's own
+dished floor over the seat and not up to the knob's peak; above that floor
+there is no seat and rotation_clearance holds the claim instead. And the lip
+stays clear of the ceiling in the first place. Replaces a claim that the shell's
 opening had to match the lip so it could pass through on assembly, which
 does not happen: the board is lowered into an already-closed front shell, so
 the lip never transits the ceiling. Probed on the built shell by bisecting
@@ -56,6 +58,7 @@ from .common import (
     PROBE_D,
     RUN_MIN,
     TOLERANCE,
+    OpeningNotFound,
     _Crop,
     _fill_fraction,
     _opening_crop,
@@ -403,20 +406,23 @@ def led_ring(front):
 
 
 WHEEL_SEAT_SAMPLES = 5
-"""Heights sampled between CAVITY_FRONT and the wheel's own top for
-wheel_seat_clearance: enough to span the opening's whole run rather than
-resampling one or two points every run."""
+"""Heights sampled across the run of shell the wheel opening is actually cut
+through, from the cavity ceiling underside up to the front face's own floor over
+the seat, for wheel_seat_clearance: enough to span that run rather than
+resampling one or two points every run. It used to span up to the wheel's own
+top, which is above the shell out there, and the two samples that reached past
+the face floor read the same empty air whatever the opening did."""
 
 
 def wheel_seat_clearance(front):
-    """The shell's own wheel opening clears everything of the wheel that
-    actually reaches the ceiling: the housing and knob,
-    board.wheel_profile()'s main_od and top, by at least
-    WHEEL_OPENING_CLEARANCE at every height from the ceiling underside up to
-    the knob's own peak. That is the opening's own gap; WHEEL_CLEARANCE is the
-    pad's, against the lip, and this pass has nothing to do with it. The
-    opening is built to exactly that radius now, flush to the wheel, so this
-    is the pass that catches anything eating into it.
+    """The shell's own wheel opening clears the wheel's main rotating body,
+    board.wheel_profile()'s main_od, by at least WHEEL_OPENING_CLEARANCE at
+    every height there is shell for it to be cut through: from the cavity
+    ceiling underside up to the front face's own floor over the seat. That is
+    the opening's own gap; WHEEL_CLEARANCE is the pad's, against the lip, and
+    this pass has nothing to do with it. The opening is built to exactly that
+    radius now, flush to the wheel, so this is the pass that catches anything
+    eating into it.
 
     This is the real guard behind what used to be a claim that the shell's
     hole had to be sized to the lip so it could pass through on assembly.
@@ -427,6 +433,42 @@ def wheel_seat_clearance(front):
     _opening_radius on the built shell at several heights, not trusted from
     WHEEL_OPENING_R, because this exact feature was silently erased by
     _wheel_hole while the formulas behind it still looked right on paper.
+
+    Why the span stops at the face floor and not at the knob's peak, which is
+    what it claimed before. The bore is cut from under the ceiling to past the
+    face, but the shell it is cut out of ends at the face, and over the wheel
+    that face is the keypad recess's wheel basin: a dish whose floor is
+    case.face_floor_at() and not SHELL_FRONT. Just outside the bore that floor
+    sits half a millimetre below the knob's own top, so between the two there is
+    no front shell on this ray at any radius the search covers. Sampling up
+    there sent the bisection to find a wall above all the material there was,
+    and a bisection that meets nothing used to return its own upper bound:
+    17.03 against a requirement of 16.05, which passes, and passes no matter
+    what the opening does. So the span ends at that floor, read at `needed`,
+    the tightest radius the seat is allowed to have and therefore the lowest the
+    floor gets anywhere a reading can land: wider seats meet the floor further
+    out, where it is higher still.
+
+    Both ends then pull in by the probe's own height, and for one reason. A
+    probe centred on a horizontal boundary straddles material and air, so it
+    fills half at most, and the bisection wants a strict majority; every radius
+    reads open and the search saturates again. The top had this pull-in
+    already, against the face plane it was then thought to end at. The bottom
+    never did, and sat exactly on the cavity ceiling underside, which is such a
+    boundary: that is why breaking the opening failed only the three interior
+    samples.
+
+    Above the face floor the claim is rotation_clearance's, which is where it
+    belongs. There is no seat up there to measure a radius of, only the
+    requirement that nothing of the shell reaches inside WHEEL_OPENING_R
+    between the lip's top face and past the knob's peak, and that pass probes
+    that whole band by volume.
+
+    Saturation is loud now rather than laundered. _opening_radius raises instead
+    of handing back its bound, and each height catches that and reports itself
+    unmeasured, so a span that goes wrong again, or a seat that grows out past
+    the bound the ring channel's inner wall puts on the search, fails rather
+    than passes for free.
     """
     problems = []
     profile = board.wheel_profile()
@@ -441,10 +483,19 @@ def wheel_seat_clearance(front):
 
     wx, wy = board.wheel_center()
     needed = profile.main_od / 2 + params.WHEEL_OPENING_CLEARANCE
-    # The face is flush to the knob's top now, so the top sample pulls in by
-    # the probe's own height: exactly at the face plane the probe straddles
-    # material and air and reads open no matter what the opening does.
-    z0, z1 = case.CAVITY_FRONT, profile.top - OPENING_PROBE_H
+    # The run of shell the opening is cut through, both ends pulled in off their
+    # own boundary plane by the probe's own height so that no sample straddles
+    # one. See the docstring: a straddling probe is half air at every radius and
+    # the bisection it feeds cannot find anything.
+    z0 = case.CAVITY_FRONT + OPENING_PROBE_H
+    z1 = case.face_floor_at(wx + needed, wy) - OPENING_PROBE_H
+    if z1 <= z0:
+        problems.append(
+            f"no shell left to seat the wheel against: the face floor over the "
+            f"opening is at {case.face_floor_at(wx + needed, wy):.2f}, against a "
+            f"cavity ceiling underside at {case.CAVITY_FRONT:.2f}"
+        )
+        return problems
     # Bounded inside the ring channel's inner wall: past it the material is
     # no longer monotonic along the radius (web, channel void, outer wall),
     # and a bisect that wanders into the void reads the channel's outer wall
@@ -462,7 +513,13 @@ def wheel_seat_clearance(front):
     crop = _opening_crop(front, wx, wy, z0, z1, OPENING_SEARCH_LO, hi)
     for i in range(WHEEL_SEAT_SAMPLES):
         z = z0 + (z1 - z0) * i / (WHEEL_SEAT_SAMPLES - 1)
-        opening = _opening_radius(front, wx, wy, z, hi=hi, crop=crop)
+        try:
+            opening = _opening_radius(front, wx, wy, z, hi=hi, crop=crop)
+        except OpeningNotFound as missing:
+            problems.append(
+                f"opening unmeasurable at z={z:.2f}: {missing}"
+            )
+            continue
         if opening < needed - OPENING_PROBE_R:
             problems.append(
                 f"opening only {opening:.2f} at z={z:.2f}, wants {needed:.2f}"

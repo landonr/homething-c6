@@ -220,6 +220,33 @@ which span it cropped over instead of repeating the number and letting the two
 drift apart."""
 
 
+class OpeningNotFound(RuntimeError):
+    """_opening_radius' bisection never met material, so it has no radius to
+    report.
+
+    The search narrows on the radius where a shell stops being open, and the
+    only thing that narrows it is a probe reading material: every probe that
+    reads open pushes the low end out, and if none of them ever reads material
+    the search ends with the upper bound it started with and hands that bound
+    back. That number measures nothing. It is what an opening genuinely wider
+    than the bound looks like, and equally what a feature that was never built
+    looks like, and what any height where there is no material on the ray at all
+    looks like. A caller comparing it against a requirement smaller than the
+    bound reads all three as a generous pass, so a bisection that failed becomes
+    a check that cannot fail whatever the geometry does. That is the worst
+    defect a pass here can have, and wheel_seat_clearance shipped it for two of
+    its five heights: both returned the bound exactly and neither could be made
+    to fail by breaking the opening.
+
+    Raised rather than returned as a sentinel for the same reason _Crop refuses
+    a probe it cannot contain rather than returning zero: a sentinel puts the
+    burden on every caller of a shared helper to remember it exists, and the one
+    that forgets goes quiet rather than loud. A caller with something better to
+    say about its own feature catches this and reports that reading as a
+    failure; one without stops the pass, which is a state somebody fixes.
+    """
+
+
 def _opening_crop(shell, x, y, z_lo, z_hi, lo=OPENING_SEARCH_LO,
                   hi=OPENING_SEARCH_HI, margin=CROP_MARGIN):
     """A _Crop holding every probe an _opening_radius bisection can ever place,
@@ -267,8 +294,17 @@ def _opening_radius(shell, x, y, z, lo=OPENING_SEARCH_LO,
     same column and would rather pay that price once for all of them. It has to
     contain every probe this call will place, which _opening_crop is what builds
     and which the crop itself re-checks on every single reading.
+
+    Raises OpeningNotFound if no probe anywhere in the search ever read
+    material, which is the one outcome the returned number cannot describe: see
+    that exception for what it costs to hand the bound back instead. The other
+    end needs no such guard, because it fails safe on its own. Material filling
+    the search all the way down to `lo` walks `hi` down to `lo` and returns it,
+    and `lo` is under every radius this model asks for, so a bore that closed
+    entirely reports a uselessly small opening rather than a generous one.
     """
     region = crop if crop is not None else _opening_crop(shell, x, y, z, z, lo, hi)
+    floor, bound = lo, hi
     probe_r, probe_h = OPENING_PROBE_R, OPENING_PROBE_H
     for _ in range(iterations):
         mid = (lo + hi) / 2
@@ -277,4 +313,14 @@ def _opening_radius(shell, x, y, z, lo=OPENING_SEARCH_LO,
             hi = mid
         else:
             lo = mid
+    if hi == bound:
+        raise OpeningNotFound(
+            f"no material anywhere between r={floor:.2f} and r={bound:.2f} on the "
+            f"+x ray from ({x:.2f}, {y:.2f}) at z={z:.2f}: the bisection never "
+            "met the wall it was sent to find, so the only radius it could "
+            f"return is the {bound:.2f} bound it started from. That is not an "
+            "opening of that radius, it is no reading at all. Probe where the "
+            "feature has material, or widen the bound; do not compare the "
+            "bound against a requirement."
+        )
     return hi

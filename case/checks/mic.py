@@ -11,7 +11,7 @@ either might have been built as, and the middle can.
 
 import case
 
-from .common import _opening_crop, _opening_radius
+from .common import OpeningNotFound, _opening_crop, _opening_radius
 
 MIC_DUCT_WALL_MIN = 0.5
 """Thinnest the mic duct's wall may be left where the mouth has widened the bore
@@ -118,6 +118,17 @@ def mic_fillet(front):
     whole funnel, so the finite probe height costs nothing in accuracy anywhere
     except at the mouth itself. See MIC_MOUTH_STANDOFF for what is done there.
 
+    A site where the bisection never met material at all is reported as one
+    unmeasurable site and the remaining sites are still read, the same way
+    wheel_seat_clearance handles it. Letting OpeningNotFound out instead would
+    be honest but needlessly coarse: it is exactly the shape a broken inlet
+    takes, one or two low sites with no duct wall left around them, so the first
+    of them would abort the pass and take with it the duct wall problem, every
+    site above it, and the sited lines the viewer draws from. The failure that
+    stops a pass dead is the one nobody can place; this one knows its own height
+    and its own band, so it says so and the pass carries on to say what else is
+    wrong.
+
     Plus the wall the mouth leaves in the duct it is drilled through,
     arithmetic, which is the only thing bounding MIC_MOUTH_D against
     MIC_DUCT_OD.
@@ -155,9 +166,13 @@ def mic_fillet(front):
 
     for where, z in heights:
         want = case.mic_profile_r(z)
-        got = _opening_radius(
-            front, x, y, z, lo=MIC_SEARCH_LO, hi=MIC_SEARCH_HI, crop=crop
-        )
+        try:
+            got = _opening_radius(
+                front, x, y, z, lo=MIC_SEARCH_LO, hi=MIC_SEARCH_HI, crop=crop
+            )
+        except OpeningNotFound as missing:
+            problems.append(f"inlet unmeasurable {where} at z={z:.2f}: {missing}")
+            continue
         if abs(got - want) > MIC_RADIUS_TOLERANCE:
             problems.append(
                 f"inlet opens {2 * got:.2f} {where} at z={z:.2f}, wants "

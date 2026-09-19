@@ -336,8 +336,9 @@ def _led_ring(s):
 def _wheel_seat_clearance(s):
     return _report(
         wheel_seat_clearance(s.front),
-        "shell's own opening sits flush to the housing and knob at "
-        "WHEEL_OPENING_CLEARANCE, lip stays clear of the ceiling",
+        "shell's own opening sits flush to the housing at "
+        "WHEEL_OPENING_CLEARANCE wherever it is cut through real shell, "
+        "lip stays clear of the ceiling",
     )
 
 

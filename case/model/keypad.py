@@ -15,6 +15,7 @@ from build123d import (
     Box,
     BuildLine,
     BuildSketch,
+    Cone,
     Face,
     Kind,
     Locations,
@@ -1172,6 +1173,23 @@ def _mic_clearance():
     return _hole(x, y, diameter, PAD_WEB_BOTTOM - 1, PAD_WEB_TOP + 1)
 
 
+def plunger(x, y):
+    """Build one plunger with a 45 degree lower-edge chamfer and flat contact."""
+    z0 = SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
+    size = params.PLUNGER_LOWER_CHAMFER
+    radius = params.PLUNGER_D / 2
+    if size <= 0 or size >= radius or size >= PAD_WEB_TOP - z0:
+        raise ValueError("plunger lower chamfer must leave a flat contact and upper shaft")
+    contact_radius = radius - size
+    chamfer = Pos(x, y, z0 + size / 2) * Cone(
+        bottom_radius=contact_radius,
+        top_radius=radius,
+        height=size,
+    )
+    shaft = _hole(x, y, params.PLUNGER_D, z0 + size, PAD_WEB_TOP)
+    return _fuse(chamfer, shaft)
+
+
 @cache.solid
 def button_pad():
     """Build two pad lobes supported by their switch plungers.
@@ -1187,7 +1205,7 @@ def button_pad():
         for ref in island_refs(name):
             x, y = parts[ref][:2]
             raised.append(_stem(x, y))
-            raised.append(_hole(x, y, params.PLUNGER_D, SWITCH_TOP, PAD_WEB_TOP))
+            raised.append(plunger(x, y))
         cuts = _boss_clearances(x0, y0, x1, y1)
         if name == "second":
             cuts.append(_mic_clearance())

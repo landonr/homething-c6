@@ -88,6 +88,12 @@ shallow end of what still reads as a real stub; check.py's
 plunger_stub_contact confirms the built pad actually reaches the switch
 by it, not merely by the formula."""
 
+PLUNGER_SWITCH_EXTENSION = 0.5
+"""Distance each plunger extends below SWITCH_TOP to engage the switch."""
+
+PLUNGER_LOWER_CHAMFER = 0.375
+"""45 degree chamfer size at the lower plunger edge. It leaves a flat switch contact."""
+
 BACK_KEEPOUT = 15.3
 """The deepest the cavity ever gets, which is over the cell: CELL_TOP_GAP, then
 the cell diameter, then slack. Nothing else under the board comes close, because
@@ -968,12 +974,11 @@ STEM_R = 0.6
 """Corner round on the stem. The socket's inside corners follow it, and a sharp
 inside corner is what a printed or moulded socket rounds off anyway, so matching
 them is what keeps the fit on the flats where it was designed."""
-STEM_GRIP = 0.15
-"""Interference per side between stem and socket. It no longer retains anything,
-the flange does, so what it is for is preload against CAP_FLANGE_FLOAT: with no
-grip a cap rattles through its float. Still the tolerance knob for the fit, raise
-it if caps buzz and drop it if they will not seat. TPU at around 95A grips at
-this on its own, and moulded silicone being slipperier now costs nothing."""
+STEM_GRIP = -0.10
+"""Clearance per side between each rigid stem and cap socket.
+
+The flange retains the cap. The clearance prevents a rigid printed stem from
+binding in its cap socket. Use a positive value only for a soft pad."""
 SOCKET_LEAD = 0.8
 """Chamfer around the recess mouth. Without it the mouth is a square edge
 arriving on an interference fit and it shaves the stem instead of seating on it.

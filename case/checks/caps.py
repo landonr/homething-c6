@@ -1,8 +1,7 @@
 """Caps fit: all eleven rigid caps clear the shell pressed and released, clear each
-other, grip their stems, stay captive under the face land, and still go in from
-inside. Every part of it is arithmetic the solids cannot show: a cap that grips
-nothing still models cleanly, and a flange that would pull through its hole once
-the cap sits off centre looks exactly like one that would not.
+other, fit their stems, stay captive under the face land, and still go in from
+inside. A positive STEM_GRIP requires interference. A zero or negative value
+requires clearance. The solids alone cannot prove either fit mode.
 
 Caps flush: a cap's top lands level with the flat front face, not merely close
 to it. CAP_TOP is SHELL_FRONT + CAP_PROTRUSION by construction and
@@ -81,12 +80,11 @@ bounded by wanting to see through it as much as by strength."""
 
 
 def caps_fit(front, pad, caps):
-    """The nine rigid caps against the shell, each other, their stems and the two
+    """The rigid caps against the shell, each other, their stems and the two
     holes each one has to sit in.
 
-    The cap-to-pad overlap is the fit, not a fault: the socket bore is one
-    STEM_GRIP narrower than the stem per side, so the two solids are modelled
-    interfering on purpose and it is a zero overlap that means a loose cap.
+    A positive STEM_GRIP requires cap-to-pad interference. A zero or negative
+    STEM_GRIP requires no cap-to-pad intersection.
     """
     problems = []
     parts = board.components()
@@ -99,8 +97,13 @@ def caps_fit(front, pad, caps):
         fouled = _volume(front.intersect(pressed))
         if fouled > TOLERANCE:
             problems.append(f"{ref}'s cap fouls the front shell once pressed")
-        if _volume(pad.intersect(cap)) <= TOLERANCE:
-            problems.append(f"{ref}'s cap grips nothing: no interference with its stem")
+        stem_overlap = _volume(pad.intersect(cap))
+        if params.STEM_GRIP > 0 and stem_overlap <= TOLERANCE:
+            problems.append(f"{ref}'s cap has no interference with its stem")
+        if params.STEM_GRIP <= 0 and stem_overlap > TOLERANCE:
+            problems.append(
+                f"{ref}'s cap fouls its stem by {stem_overlap:.2f} mm3 with clearance fit"
+            )
 
     # A cap's visible width is its body: the flange is behind the face and is
     # answered for by the counterbore rib.

@@ -108,42 +108,32 @@ def mic_pad_contour(pad):
 
 
 PLUNGER_CONTACT_TOLERANCE = 0.05
-"""How exactly a plunger's own bottom has to land on the switch top it
-rests on. Float slop, not a design margin: case.SWITCH_TOP is what
-button_pad() builds every plunger down to by construction."""
+"""Allowed error at the plunger bottom. This is float slop, not a design margin."""
 
 PLUNGER_PROBE_SPAN = 0.6
-"""Height of the plunger_stub_contact probe, centred on SWITCH_TOP: wide
-enough either side to catch the plunger's own bottom face cleanly, narrow
-enough that it still means something rather than always finding material
-somewhere in a probe reaching into the web proper."""
+"""Probe height about the target plunger bottom. It finds the bottom face without reaching the web."""
 
 
 def plunger_stub_contact(pad):
-    """Every switch's plunger actually reaches down to land on SWITCH_TOP,
-    not merely in the formula: probed on the built pad, since a clearance
-    cut or a wrong z reference could leave a plunger short, or long enough
-    to overshoot into the switch, without any volume-based check noticing
-    either (a shorter or longer peg still has plenty of material, just not
-    where KEYPAD_PLUNGER_STUB says it should be).
-    """
+    """Check each built plunger bottom against its extension target."""
     problems = []
     parts = board.components()
     half = PLUNGER_PROBE_SPAN / 2
     for ref in board.refs("SW"):
         x, y = parts[ref][:2]
-        z0, z1 = case.SWITCH_TOP - half, case.SWITCH_TOP + half
+        target = case.SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
+        z0, z1 = target - half, target + half
         probe = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
         hit = pad.intersect(probe)
         if _volume(hit) <= TOLERANCE:
-            problems.append(f"{ref}'s plunger does not reach near the switch top")
+            problems.append(f"{ref}'s plunger does not reach its bottom target")
             continue
         bottom = min(s.bounding_box().min.Z for s in hit.solids())
-        off = bottom - case.SWITCH_TOP
+        off = bottom - target
         if abs(off) > PLUNGER_CONTACT_TOLERANCE:
             problems.append(
-                f"{ref}'s plunger bottom at {bottom:.3f} against switch top "
-                f"{case.SWITCH_TOP:.3f}, off by {off:.3f}"
+                f"{ref}'s plunger bottom at {bottom:.3f} against target "
+                f"{target:.3f}, off by {off:.3f}"
             )
     return problems
 

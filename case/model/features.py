@@ -404,10 +404,9 @@ def _pad():
             out.append(
                 _entry(
                     f"plunger.{ref}",
-                    "keypad.button_pad",
+                    "keypad.plunger",
                     "add",
-                    _hole(x, y, params.PLUNGER_D, SWITCH_TOP, PAD_WEB_TOP),
-                    ["PLUNGER_D"],
+                    keypad.plunger(x, y),
                 )
             )
         # A clearance cut can be an open U rather than a circle, so its box is

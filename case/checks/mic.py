@@ -11,7 +11,7 @@ either might have been built as, and the middle can.
 
 import case
 
-from .common import _opening_radius
+from .common import _opening_crop, _opening_radius
 
 MIC_DUCT_WALL_MIN = 0.5
 """Thinnest the mic duct's wall may be left where the mouth has widened the bore
@@ -25,6 +25,17 @@ MIC_RADIUS_TOLERANCE = 0.05
 """How closely the inlet's measured radius has to match case.mic_profile_r()
 at the same height. Float slop over _opening_radius' own probe width, not a
 design margin."""
+
+MIC_SEARCH_LO = 0.0
+MIC_SEARCH_HI = 3.0
+"""Bounds the inlet's opening radius is bisected between, narrower than
+_opening_radius' own wheel-sized defaults because this is a funnel a few
+millimetres across. Named rather than left inline because the crop the
+bisection reads against is cut over exactly this span, and a crop that did not
+cover the whole search would be a probe reading open air beyond its own edge.
+The high bound is comfortably outside anything the funnel can legitimately open
+to, so a bore that has gone wrong reads as the bound itself and fails loudly
+rather than converging on a plausible wrong number."""
 
 MIC_TAPER_FRACTIONS = (0.2, 0.4, 0.6, 0.8)
 """Where up the taper the opening is probed, as fractions of the cone's own run
@@ -130,9 +141,23 @@ def mic_fillet(front):
     heights += [(f"{f:.0%} up the fillet", base + f * r) for f in MIC_FILLET_FRACTIONS]
     heights.append(("just below the mouth", case.mic_face() - MIC_MOUTH_STANDOFF))
 
+    # One crop of the shell for all eight sites, cut before any of them is read.
+    # Every probe stands on the duct's own axis between the same two search
+    # bounds, so the whole set lives in one small box from the lowest height to
+    # the highest, and cutting that box once turns a hundred and sixty readings
+    # against the built front's ten thousand faces into a hundred and sixty
+    # against a few dozen. It changes nothing about where or how wide anything
+    # is probed, only what the probe is intersected with, and the crop refuses
+    # outright any probe it does not wholly contain: a site that wandered
+    # outside it would stop the pass rather than quietly read the funnel open.
+    zs = [z for _, z in heights]
+    crop = _opening_crop(front, x, y, min(zs), max(zs), MIC_SEARCH_LO, MIC_SEARCH_HI)
+
     for where, z in heights:
         want = case.mic_profile_r(z)
-        got = _opening_radius(front, x, y, z, lo=0.0, hi=3.0)
+        got = _opening_radius(
+            front, x, y, z, lo=MIC_SEARCH_LO, hi=MIC_SEARCH_HI, crop=crop
+        )
         if abs(got - want) > MIC_RADIUS_TOLERANCE:
             problems.append(
                 f"inlet opens {2 * got:.2f} {where} at z={z:.2f}, wants "

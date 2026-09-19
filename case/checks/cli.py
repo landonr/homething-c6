@@ -9,10 +9,23 @@ are built on demand: an ir-only run never touches the pad or the keycap
 legends, so it skips the build a full run pays for. A pass whose subject is the
 whole assembly rather than one feature is tagged `assembly` instead, so scoping
 one side of it never runs it half blind.
+
+`--jobs N` spreads the passes themselves across N processes rather than the
+features. The features are wildly uneven, one of them being better than a third
+of the suite on its own, so feature-sized units of work leave most of the pool
+idle within seconds and put a floor under the wall clock at whatever the slowest
+single feature costs. Pass-sized units have no such floor, which also means a
+larger --jobs is worth asking for than it used to be.
+
+Passes then finish in whatever order they finish, and each one says so the
+moment it does. The report proper is replayed afterwards in registry order, so
+what a run prints as its verdict never depends on how the work happened to land
+across the pool; only the progress lines are in completion order, and nothing
+reads those back.
 """
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import functools
 import io
 import json
@@ -657,7 +670,7 @@ def _selection(argv):
         type=int,
         default=1,
         metavar="N",
-        help="run feature groups in N independent processes (default: 1)",
+        help="run passes in N independent processes (default: 1)",
     )
     parser.add_argument(
         "--quiet",
@@ -718,15 +731,159 @@ def _run_pass(feature, run, solids):
     }
 
 
-def _run_feature(feature):
-    """Run one feature in its own process, with no geometry shared across forks."""
-    solids = Solids()
-    return [_run_pass(group, run, solids) for group, run in CHECKS if group == feature]
+_WORKER_SOLIDS = None
+"""The one Solids() this worker process owns, made by the pool initializer.
+
+Work is handed out a pass at a time, so a worker runs many passes and they come
+from whichever features happen to still be pending. Solids is a lazy holder
+whose properties cost minutes to fill the first time and nothing every time
+after, so it has to outlive the task that first asked for a shape: building a
+fresh one per task would throw away everything the previous task built and pay
+for it again, which is strictly worse than owning a whole feature was. The pool
+is spawned rather than forked, so nothing can be inherited from the parent and
+the initializer is the only place this can be made.
+"""
+
+
+def _run_indexed(index):
+    """Run CHECKS[index] against this worker's solids.
+
+    A task is an index into CHECKS rather than the pass's own function because
+    the task has to cross a spawn. An int is an int on both sides; a function
+    survives the trip only by being importable under the qualified name it was
+    defined at, which silently couples the schedule to where a pass happens to
+    live. CHECKS is built at import time in one fixed order in the parent and in
+    every worker, so an index names the same pass everywhere.
+    """
+    feature, run = CHECKS[index]
+    return _run_pass(feature, run, _WORKER_SOLIDS)
 
 
 def _parallel_initializer():
-    """Keep concurrent writers from deleting another worker's cache directory."""
+    """Set a worker up: off its neighbours' cache directory, and with solids.
+
+    CASE_CACHE_PARALLEL keeps concurrent writers from deleting another worker's
+    cache directory. The Solids() is this process's only one, for the reason in
+    _WORKER_SOLIDS.
+    """
+    global _WORKER_SOLIDS
     os.environ["CASE_CACHE_PARALLEL"] = "1"
+    _WORKER_SOLIDS = Solids()
+
+
+_FEATURE_SOLIDS = {
+    "apertures": ("front", "back"),
+    "assembly": ("front", "front_fdm", "back", "pad", "window", "caps"),
+    "caps": ("front", "pad", "caps"),
+    "fdm": ("front_fdm",),
+    "hardware": (),
+    "ir": ("front", "back", "window"),
+    "keypad": ("front", "pad"),
+    "legacy": ("back",),
+    "mic": ("front",),
+    "shells": ("front", "back"),
+    "support": ("back",),
+    "usb": ("front",),
+    "wheel_ring": ("front", "back", "pad"),
+}
+"""Which of the cached solids each feature's passes reach for.
+
+Written in terms of the six properties that have a blob of their own rather
+than the seven Solids exposes: `shells` is `back` fused to `front` in memory
+and is not cached itself, so a feature that reads it wants those two.
+
+The table only ever decides what to prewarm. It never gates what a pass can
+reach, because the properties stay lazy and a pass touches whatever it touches
+whether or not this expected it. A feature listed short, or left out of the
+table entirely, costs a worker one build it would have done anyway; a feature
+listed long costs one solid nobody reads. Neither can move a verdict, and that
+is the whole reason a hand-maintained list is acceptable here when it would not
+be if it stood between a pass and its geometry.
+"""
+
+_SOLID_BLOBS = {
+    "front": (case.front_shell, {}),
+    "front_fdm": (case.front_shell, {"fdm": True}),
+    "back": (case.back_shell, {}),
+    "pad": (case.button_pad, {}),
+    "window": (case.ir_window, {}),
+}
+"""The cached builder and arguments behind each Solids property, for asking the
+cache whether that property would import or build. `caps` is not here because it
+is one blob per keycap rather than one blob, so _is_warm handles it on its own.
+"""
+
+
+def _is_warm(name):
+    """Whether the blob a Solids property would import is already written.
+
+    Per blob rather than per cache directory. cache.provenance() calls a key
+    directory a hit as soon as it holds any blob at all, which is the right
+    answer for the line it prints and the wrong one here: an interrupted run or
+    an evicted blob leaves a directory that reads as a hit and is still most of
+    a cold build, and prewarming exists for exactly that state.
+    """
+    if name == "caps":
+        return all(cache.cached(case.keycap, ref) for ref in case.cap_refs())
+    builder, kwargs = _SOLID_BLOBS[name]
+    return cache.cached(builder, **kwargs)
+
+
+def _prewarm(features):
+    """Build whatever this selection needs and does not have, once, here.
+
+    Each worker builds its own Solids() and every one of those goes through the
+    disk cache in case/cache.py. Warm, that is a BREP import per worker and
+    costs nothing worth avoiding. Cold, which is exactly the state right after
+    the geometry edit that prompted the run, every worker independently builds
+    the same shells from scratch, so the expensive half of the suite is paid for
+    once per worker instead of once. Building them here, before the pool exists,
+    turns those N cold builds into one cold build and N imports.
+
+    Scoped runs get this too, and only for what they use: a one feature run can
+    still fan out across that feature's passes, so it can still pay for the same
+    shell N times, while prewarming the full set for --only ir would cost far
+    more than the fan-out could ever save. That is what _FEATURE_SOLIDS is for.
+
+    A fully warm selection returns having built nothing and said nothing, which
+    is the common case and must stay free: this runs in the parent, serially,
+    so anything it does is time the pool is not running.
+    """
+    wanted = {name for feature in features for name in _FEATURE_SOLIDS.get(feature, ())}
+    cold = [name for name in sorted(wanted) if not _is_warm(name)]
+    if not cold:
+        return
+    print(f"prewarming {', '.join(cold)} before fanning out", flush=True)
+    solids = Solids()
+    for name in cold:
+        getattr(solids, name)
+
+
+def _progress(record, suite_started, done, total, quiet):
+    """Say that a pass finished, the moment it finishes.
+
+    The report is replayed in registry order once everything is home, which is
+    what makes a --jobs run comparable to a serial one, but it also means not a
+    line of it can be printed until the last pass lands. A full run is a quarter
+    of an hour, and a quarter of an hour of silence is indistinguishable from a
+    hang. So completion gets a channel of its own: unordered, one flushed line
+    per pass, carrying enough to place the run in time (suite clock, which pass,
+    what it cost, how it went, how many of how many are home).
+
+    None of this reaches the JSON report or the pass's own buffered output, so
+    the interleaving these lines inevitably have between workers cannot make the
+    report itself depend on scheduling. --quiet suppresses the passes that
+    passed, the same passes it already suppresses from the report.
+    """
+    if quiet and record["passed"]:
+        return
+    print(
+        f"[{time.perf_counter() - suite_started:8.2f}s] "
+        f"{'ok  ' if record['passed'] else 'FAIL'} "
+        f"{record['feature']}.{record['name']} "
+        f"({record['elapsed']:.2f}s) [{done}/{total}]",
+        flush=True,
+    )
 
 
 def _report_record(record, suite_started, quiet):
@@ -789,11 +946,14 @@ def main(argv=None):
     selected, args = _selection(sys.argv[1:] if argv is None else argv)
     print(cache.provenance())
     suite_started = time.perf_counter()
-    selected_checks = [
-        (feature, run) for feature, run in CHECKS if selected is None or feature in selected
+    selected_indices = [
+        index
+        for index, (feature, _) in enumerate(CHECKS)
+        if selected is None or feature in selected
     ]
+    selected_checks = [CHECKS[index] for index in selected_indices]
     selected_features = list(dict.fromkeys(feature for feature, _ in selected_checks))
-    if args.jobs == 1 or len(selected_features) < 2:
+    if args.jobs == 1 or len(selected_checks) < 2:
         solids = Solids()
         records = []
         for feature, run in selected_checks:
@@ -807,47 +967,53 @@ def main(argv=None):
             records.append(record)
             _report_record(record, suite_started, args.quiet)
     else:
-        workers = min(args.jobs, len(selected_features))
+        # Nothing to prewarm into when the cache is off: the workers would
+        # rebuild regardless, so the parent's build would be pure added time.
+        if cache.enabled():
+            _prewarm(selected_features)
+        total = len(selected_indices)
+        workers = min(args.jobs, total)
         if not args.quiet:
             print(
                 f"running {len(selected_checks)} checks with {workers} workers",
                 flush=True,
             )
+        by_index = {}
         with ProcessPoolExecutor(
             max_workers=workers,
             initializer=_parallel_initializer,
             mp_context=multiprocessing.get_context("spawn"),
         ) as executor:
             futures = {
-                feature: executor.submit(_run_feature, feature)
-                for feature in selected_features
+                executor.submit(_run_indexed, index): index
+                for index in selected_indices
             }
-            by_feature = {}
-            for feature, future in futures.items():
+            for future in as_completed(futures):
+                index = futures[future]
+                feature, run = CHECKS[index]
                 try:
-                    by_feature[feature] = future.result()
+                    record = future.result()
                 except Exception:
-                    detail = traceback.format_exc()
-                    by_feature[feature] = [
-                        {
-                            "feature": group,
-                            "name": run.__name__.lstrip("_"),
-                            "passed": False,
-                            "output": f"{feature} worker failed:\n{detail}",
-                            "elapsed": 0.0,
-                        }
-                        for group, run in selected_checks
-                        if group == feature
-                    ]
-        by_key = {
-            (record["feature"], record["name"]): record
-            for records_for_feature in by_feature.values()
-            for record in records_for_feature
-        }
-        records = [
-            by_key[(feature, run.__name__.lstrip("_"))]
-            for feature, run in selected_checks
-        ]
+                    # A worker that dies takes its task with it, and the pool
+                    # fails every task still outstanding. Each of those is one
+                    # pass now rather than a whole feature, so each gets its own
+                    # failed record and the traceback that explains it; the
+                    # alternative is a pass that silently drops out of a report
+                    # that still says it ran.
+                    record = {
+                        "feature": feature,
+                        "name": run.__name__.lstrip("_"),
+                        "passed": False,
+                        "output": f"{feature} worker failed:\n{traceback.format_exc()}",
+                        "elapsed": 0.0,
+                        "problems": [],
+                    }
+                by_index[index] = record
+                _progress(record, suite_started, len(by_index), total, args.quiet)
+        # Back into registry order for the report. The printed body and
+        # _write_report both read this list, and both have to see the same order
+        # whatever order the pool happened to finish in.
+        records = [by_index[index] for index in selected_indices]
         for record in records:
             _report_record(record, suite_started, args.quiet)
     passed = all(record["passed"] for record in records)

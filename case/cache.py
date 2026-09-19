@@ -134,6 +134,24 @@ def _blob_name(name, args, kwargs):
     return re.sub(r"[^A-Za-z0-9_.-]", "_", "-".join(fields))
 
 
+def cached(builder, *args, **kwargs):
+    """True when this builder's blob for these arguments is already on disk.
+
+    provenance() answers "did this run find a cache at all", for a human to
+    read at the top of a report. This answers "is this one shape already built",
+    for a caller deciding whether building it itself is worth the wait. They are
+    not the same question, and confusing them is expensive: a key directory
+    holding one blob of thirty reads as a hit and is still very nearly a cold
+    build.
+
+    Read only. It hashes nothing, writes nothing and evicts nothing, it just
+    asks after the blob `solid` would have looked for.
+    """
+    if not enabled():
+        return False
+    return (_dir() / f"{_blob_name(builder.__name__, args, kwargs)}.brep").exists()
+
+
 def solid(builder):
     """Decorator: back a no-side-effect shape builder with a BREP blob.
 

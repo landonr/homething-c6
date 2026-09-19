@@ -49,14 +49,17 @@ import params
 from build123d import Cylinder, Pos
 
 from .common import (
+    CROP_MARGIN,
     OPENING_PROBE_H,
     OPENING_PROBE_R,
+    OPENING_SEARCH_LO,
     PROBE_D,
     RUN_MIN,
     TOLERANCE,
+    _Crop,
     _fill_fraction,
+    _opening_crop,
     _opening_radius,
-    _ray_runs,
     _volume,
 )
 
@@ -160,6 +163,50 @@ recess thins the roof on the four diagonals and where each neck crosses, and 24
 samples land on all of those exactly."""
 
 
+RING_CROP_SECTORS = 4
+"""How many crops of the shell led_ring cuts, each serving a run of consecutive
+angles that then cut their own out of it.
+
+Measured, not chosen. Every reading wants a crop small enough to be a handful
+of faces, but cutting each of the 24 straight out of the built front costs
+about 1.4 seconds of boolean apiece and dominates the pass. Cutting one crop
+covering the whole ring and reading everything against that is far worse: the
+box bounding the ring holds over half the shell's faces, because the wheel is
+where the keypad recess crosses in plan, and 96 readings against 5284 faces
+took three times as long as the per-angle crops did. Nesting is what wins. One
+crop per quarter of the ring holds about 1400 faces, and an angle's crop comes
+out of that for a fraction of what it costs out of the shell.
+
+Four rather than more or fewer because the two costs pull opposite ways: every
+extra sector is another cut against the whole front, and every sector dropped
+makes all 24 angle cuts dearer. Two and four measure about the same and eight
+is worse, so this sits on the flat of the curve rather than on a peak, and
+LED_RING_SAMPLES can move a good way either side of 24 without stranding it."""
+
+
+def _ring_crop_box(wx, wy, r_in, r_out, angles, z_lo):
+    """The box holding every reading led_ring takes at `angles`: each angle's
+    ray from `r_in` out to `r_out`, the widest probe that can stand anywhere on
+    it, and margin, over the whole height from below the channel up past the
+    front face. No face floor is above the undished face, so SHELL_FRONT tops it
+    whatever the keypad recess does over the channel.
+
+    One builder for both levels of the crop, which is what makes the nesting
+    sound rather than merely plausible: a sector's box is this function over its
+    own angles, so it is at least the union of its members' boxes by
+    construction and contains every one of them. _Crop checks that anyway when
+    it cuts a child out of a parent, and refuses rather than hand back a crop
+    quietly missing the material outside its parent.
+    """
+    pad = PROBE_D / 2 + CROP_MARGIN
+    xs = [wx + r * math.cos(a) for a in angles for r in (r_in, r_out)]
+    ys = [wy + r * math.sin(a) for a in angles for r in (r_in, r_out)]
+    return (
+        (min(xs) - pad, min(ys) - pad, z_lo - CROP_MARGIN),
+        (max(xs) + pad, max(ys) + pad, case.SHELL_FRONT + CROP_MARGIN),
+    )
+
+
 def _ring_stack_sane():
     """Arithmetic bounds the probes need before they can even be built: the
     channel's ceiling has to sit above its floor and far enough below the dished
@@ -190,7 +237,7 @@ def _ring_stack_sane():
     return problems
 
 
-def _channel_width(front, angle, z):
+def _channel_width(crop, angle, z):
     """(inner, outer) radii of the channel's void at `angle`, height `z`, read
     off the built shell.
 
@@ -202,6 +249,14 @@ def _channel_width(front, angle, z):
     of which share a formula and only one of which any radius in the model knows
     about.
 
+    `crop` is that angle's crop of the built shell rather than the shell itself,
+    for the same reason every other reading here takes one: a line against the
+    front's ten thousand faces costs a second, and the same line against the few
+    dozen the crop holds costs nothing measurable. The crop spans the whole ray
+    by construction, and refuses the reading outright if it does not, because a
+    segment clipped at a crop wall would report the shell closing where it does
+    not.
+
     Two answers are not a width, and the caller reports each rather than
     measuring off it. None at all means the ray began in air: it starts mid-web,
     which is material by design, so the web has gone. `outer` of None means the
@@ -212,8 +267,8 @@ def _channel_width(front, angle, z):
     r0 = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
     r1 = case.led_ring_mouth_outer_r()
     dx, dy = math.cos(angle), math.sin(angle)
-    runs = _ray_runs(
-        front, (wx + r0 * dx, wy + r0 * dy, z), (wx + r1 * dx, wy + r1 * dy, z)
+    runs = crop.ray_runs(
+        (wx + r0 * dx, wy + r0 * dy, z), (wx + r1 * dx, wy + r1 * dy, z)
     )
     if not runs or runs[0][0] > RUN_MIN:
         return None
@@ -255,68 +310,95 @@ def led_ring(front):
     mid-web answers for the whole web. The roof probe follows the measured
     width's own middle, so across a chord it reads the roof over the part of the
     ring that is left rather than over material.
+
+    Every one of those readings, the ray included, is taken against a crop of
+    the shell cut for that one angle rather than against the shell itself. Each
+    angle asks four questions of a sliver of geometry a couple of millimetres
+    across, and against the built front each of them costs a boolean over ten
+    thousand faces. The angle's crop spans its whole ray, from mid-web out to
+    the mouth's own outer radius, and the whole height from below the channel up
+    past the front face, so the web probe, the ray, the void probe and the roof
+    probe all sit inside it wherever the measured width puts them.
+
+    Those crops are themselves cut out of RING_CROP_SECTORS crops of the
+    shell rather than out of the shell each time, which is the difference
+    between the pass taking half a minute and a sixth of one. Nothing about
+    where or how wide anything is probed changes; only what it is intersected
+    with does, and every level of that checks containment on every reading and
+    refuses what it cannot hold, because a probe outside its crop reads open
+    whatever the shell does there, which is how a pass like this goes vacuous.
     """
     problems = _ring_stack_sane()
     if problems:
         return problems
     wx, wy = board.wheel_center()
     r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
+    r_out = case.led_ring_mouth_outer_r()
     z0, z1 = case.CAVITY_FRONT + 0.05, case.LED_RING_TOP - 0.05
+    per_sector = math.ceil(LED_RING_SAMPLES / RING_CROP_SECTORS)
     problems = []
-    for i in range(LED_RING_SAMPLES):
-        a = 2 * math.pi * i / LED_RING_SAMPLES
-        deg = round(math.degrees(a))
-        cos_a, sin_a = math.cos(a), math.sin(a)
+    for first in range(0, LED_RING_SAMPLES, per_sector):
+        angles = [
+            2 * math.pi * i / LED_RING_SAMPLES
+            for i in range(first, min(first + per_sector, LED_RING_SAMPLES))
+        ]
+        sector = _Crop(front, *_ring_crop_box(wx, wy, r_web, r_out, angles, z0))
 
-        web = Pos(wx + r_web * cos_a, wy + r_web * sin_a, (z0 + z1) / 2) * Cylinder(
-            radius=WEB_PROBE_D / 2, height=z1 - z0
-        )
-        if _fill_fraction(front, web) < 0.99:
-            problems.append(f"web to the wheel opening open at {deg} degrees")
+        for a in angles:
+            deg = round(math.degrees(a))
+            cos_a, sin_a = math.cos(a), math.sin(a)
+            crop = _Crop(sector, *_ring_crop_box(wx, wy, r_web, r_out, [a], z0))
 
-        width = _channel_width(front, a, z1)
-        if width is None:
-            problems.append(
-                f"no web at all at {deg} degrees: the shell is open where "
-                f"{case.led_ring_web_left():.2f} of light barrier should stand "
-                "between the bore and the channel"
-            )
-            continue
-        inner, outer = width
-        if outer is None:
-            problems.append(
-                f"channel severed at {deg} degrees: the shell never opens again "
-                f"between the web and {case.led_ring_mouth_outer_r():.2f}, so the "
-                "ring reads as arcs"
-            )
-            continue
-        if outer - inner < ROOF_FLAT_MIN:
-            problems.append(
-                f"channel down to {outer - inner:.2f} at {deg} degrees, wants "
-                f"{ROOF_FLAT_MIN:.2f}: it runs {inner:.2f} to {outer:.2f} there, "
-                f"against an inner wall at {case.led_ring_inner_r():.2f} and an "
-                f"outer one at {case.led_ring_roof_outer_r():.2f}"
-            )
-            continue
+            web = Pos(
+                wx + r_web * cos_a, wy + r_web * sin_a, (z0 + z1) / 2
+            ) * Cylinder(radius=WEB_PROBE_D / 2, height=z1 - z0)
+            if crop.fill_fraction(web) < 0.99:
+                problems.append(f"web to the wheel opening open at {deg} degrees")
 
-        rx, ry = wx + (inner + outer) / 2 * cos_a, wy + (inner + outer) / 2 * sin_a
-        probe_d = min(PROBE_D, outer - inner - 2 * BAND_PROBE_GAP)
-        void = Pos(rx, ry, (z0 + z1) / 2) * Cylinder(
-            radius=probe_d / 2, height=z1 - z0
-        )
-        filled = _fill_fraction(front, void)
-        if filled > VOID_FILL_MAX:
-            problems.append(
-                f"channel blocked at {deg} degrees: {filled:.0%} of the "
-                f"{outer - inner:.2f} it measures there is material"
-            )
+            width = _channel_width(crop, a, z1)
+            if width is None:
+                problems.append(
+                    f"no web at all at {deg} degrees: the shell is open where "
+                    f"{case.led_ring_web_left():.2f} of light barrier should stand "
+                    "between the bore and the channel"
+                )
+                continue
+            inner, outer = width
+            if outer is None:
+                problems.append(
+                    f"channel severed at {deg} degrees: the shell never opens again "
+                    f"between the web and {case.led_ring_mouth_outer_r():.2f}, so the "
+                    "ring reads as arcs"
+                )
+                continue
+            if outer - inner < ROOF_FLAT_MIN:
+                problems.append(
+                    f"channel down to {outer - inner:.2f} at {deg} degrees, wants "
+                    f"{ROOF_FLAT_MIN:.2f}: it runs {inner:.2f} to {outer:.2f} there, "
+                    f"against an inner wall at {case.led_ring_inner_r():.2f} and an "
+                    f"outer one at {case.led_ring_roof_outer_r():.2f}"
+                )
+                continue
 
-        floor = case.face_floor_at(rx, ry)
-        roof = Pos(rx, ry, (case.LED_RING_TOP + floor) / 2) * Cylinder(
-            radius=PROBE_D / 2, height=floor - case.LED_RING_TOP - 0.04
-        )
-        if _fill_fraction(front, roof) < 0.99:
-            problems.append(f"roof open over the channel at {deg} degrees")
+            mid_r = (inner + outer) / 2
+            rx, ry = wx + mid_r * cos_a, wy + mid_r * sin_a
+            probe_d = min(PROBE_D, outer - inner - 2 * BAND_PROBE_GAP)
+            void = Pos(rx, ry, (z0 + z1) / 2) * Cylinder(
+                radius=probe_d / 2, height=z1 - z0
+            )
+            filled = crop.fill_fraction(void)
+            if filled > VOID_FILL_MAX:
+                problems.append(
+                    f"channel blocked at {deg} degrees: {filled:.0%} of the "
+                    f"{outer - inner:.2f} it measures there is material"
+                )
+
+            floor = case.face_floor_at(rx, ry)
+            roof = Pos(rx, ry, (case.LED_RING_TOP + floor) / 2) * Cylinder(
+                radius=PROBE_D / 2, height=floor - case.LED_RING_TOP - 0.04
+            )
+            if crop.fill_fraction(roof) < 0.99:
+                problems.append(f"roof open over the channel at {deg} degrees")
     return problems
 
 
@@ -369,9 +451,18 @@ def wheel_seat_clearance(front):
     # as the opening, hiding an undersized seat behind a passing number. That
     # wall is plumb, so one radius bounds every height this samples.
     hi = case.led_ring_inner_r() - OPENING_PROBE_R
+    # One crop of the shell for all five heights. Every probe of every bisection
+    # stands on the same +x ray out of the wheel axis between OPENING_SEARCH_LO
+    # and that bound, so the lot of them live in one thin box spanning the
+    # heights sampled, and cutting it once replaces a hundred booleans against
+    # the built front with a hundred against a few dozen faces. It moves no
+    # probe and changes no bound; it only changes what the probe meets. The crop
+    # refuses any probe it does not wholly contain, so the alternative to a
+    # correct crop here is a stopped pass, not a seat measured against nothing.
+    crop = _opening_crop(front, wx, wy, z0, z1, OPENING_SEARCH_LO, hi)
     for i in range(WHEEL_SEAT_SAMPLES):
         z = z0 + (z1 - z0) * i / (WHEEL_SEAT_SAMPLES - 1)
-        opening = _opening_radius(front, wx, wy, z, hi=hi)
+        opening = _opening_radius(front, wx, wy, z, hi=hi, crop=crop)
         if opening < needed - OPENING_PROBE_R:
             problems.append(
                 f"opening only {opening:.2f} at z={z:.2f}, wants {needed:.2f}"

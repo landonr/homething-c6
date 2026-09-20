@@ -1043,12 +1043,13 @@ slack.
 Trimmed from 0.2 alongside CAP_LIFT to buy the keypad recesses back out of the
 counterbore stack. Still inside check.py's FLANGE_FLOAT_RANGE, with room to
 spare unlike CAP_LIFT."""
-CAP_GUIDE_CLEARANCE = 0.15
-"""Gap per side between the cap body and the face hole it stands in. Half
-KEY_CLEARANCE, because this hole guides the cap rather than merely clearing it:
-it is one of the two lands that keep a cap straight, the counterbore being the
-other. It comes straight out of CAP_FLANGE_OVERLAP as retention lost to a cap
-sitting off centre."""
+CAP_GUIDE_CLEARANCE = 0.25
+"""Gap per side between the cap body and the face hole it stands in.
+
+A 0.25 mm clearance per side gives the printed cap 0.50 mm total clearance
+through the front face. The previous 0.15 mm clearance was too tight for the
+printed button and front-shell tolerances. The face land and counterbore still
+guide the cap. The retention check holds the flange overlap after this change."""
 
 STEM_W = 4.0
 """Side of the square stem. Square rather than cross or round because a legend

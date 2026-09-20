@@ -7,7 +7,7 @@ from build123d import Box, Cylinder, Face, Pos, fillet, loft
 import board
 import params
 
-from .hardware import closure_point, mount_points
+from .hardware import mount_points
 from .backform import back_form
 from .shape import _cut, _fuse, _isect, _offset_face, _slab
 from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SKIRT_OUT, SUPPORT_TOP
@@ -105,13 +105,12 @@ def support_obstacles(clearance=params.SUPPORT_CLEARANCE):
             (z0 + z1) / 2,
         ) * Box(x1 - x0, y1 - y0, z1 - z0)
         through_wall(f"through-board solid {index}", obstacle, x0, y0, x1, y1)
-    closure = closure_point()
     # By refdes, not by loop index, so a check message and a feature id both
-    # name the hole a reader can find on the board.
+    # name the hole a reader can find on the board. Every hole now, H1 included:
+    # its screw head sits on the board's underside like the other two, the
+    # standoff that used to fill that column having gone with the floor screw.
     refs = board.mounting_hole_refs()
     for x, y in mount_points():
-        if (x, y) == closure:
-            continue
         solid = Pos(x, y, (z0 + z1) / 2) * Cylinder(
             params.SCREW_HEAD_D / 2 + clearance, z1 - z0
         )
@@ -165,17 +164,24 @@ def support_fragments():
         math.radians(params.SUPPORT_UNDER_ANGLE)
     )
     z1 = support_top() + MERGE
-    y0 = box.min.Y - params.BOARD_FIT - params.WALL + params.CATCH_SPAN
+    # The ledges have to stop short of the deepened skirt, which the front
+    # carries down to DEEP_BOTTOM and would otherwise land on top of them. That
+    # section is at the IR end now, so this is the north limit rather than the
+    # south one, and the grip end runs the full length of the plan: with a plain
+    # skirt there, nothing asks for an end trim, and AGENTS.md wants every break
+    # derived from a board obstacle instead.
+    y0 = box.min.Y
+    y1 = box.max.Y + params.BOARD_FIT + params.WALL - params.CATCH_SPAN
     clips = []
     for x in (
         box.min.X + (clip_bearing - outer_reach) / 2,
         box.max.X - (clip_bearing - outer_reach) / 2,
     ):
         clips.append(
-            Pos(x, (y0 + box.max.Y) / 2, (z0 + z1) / 2)
+            Pos(x, (y0 + y1) / 2, (z0 + z1) / 2)
             * Box(
                 clip_bearing + outer_reach,
-                box.max.Y - y0,
+                y1 - y0,
                 z1 - z0,
             )
         )

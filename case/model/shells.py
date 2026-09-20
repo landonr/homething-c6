@@ -25,11 +25,12 @@ import params
 from .backform import back_form
 from .caps import _key_prism, cap_counterbore, cap_face_hole
 from .hardware import (
-    closure_cuts,
+    end_screw_block,
+    end_screw_cuts,
+    end_screw_pilot,
     legacy_retention_pilot,
     legacy_retention_post,
     mount_points,
-    shell_standoff,
 )
 from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
@@ -96,28 +97,43 @@ def skirt_cuts():
 
 
 DEEP_BOTTOM = BOARD_TOP - params.CATCH_SKIRT_H
-"""How far the skirt reaches at the grip end."""
+"""How far the skirt reaches at the IR end."""
 
 CATCH_Z0 = DEEP_BOTTOM + params.CATCH_RISE
 """Bottom of each window, and so the top of the skirt that catches under a detent."""
 
 
 def catch_region():
-    """Limits the deepened skirt to the grip end."""
+    """Limits the deepened skirt to the IR end."""
     box = board.board_profile().bounding_box()
-    y0 = box.min.Y - params.BOARD_FIT - params.WALL
-    return Pos(box.center().X, y0 + params.CATCH_SPAN / 2, 0) * Box(
+    y0 = box.max.Y + params.BOARD_FIT + params.WALL
+    return Pos(box.center().X, y0 - params.CATCH_SPAN / 2, 0) * Box(
         300, params.CATCH_SPAN, 300
     )
 
 
 def catch_x():
+    """Where the two windows sit across the IR end wall.
+
+    The -x one is CATCH_SPACING off the centreline as it always was. The +x one
+    cannot be: D1's bore is in this same face, and the mirrored position lands
+    on it, so that window is placed off the bore instead and takes whichever of
+    the two is further -x.
+    """
     cx = board.board_profile().bounding_box().center().X
-    return [cx - params.CATCH_SPACING / 2, cx + params.CATCH_SPACING / 2]
+    clear = (
+        emitter_bore().bounding_box().min.X
+        - params.CATCH_EMITTER_CLEAR
+        - params.CATCH_W / 2
+    )
+    return [
+        cx - params.CATCH_SPACING / 2,
+        min(cx + params.CATCH_SPACING / 2, clear),
+    ]
 
 
 def deep_skirt():
-    """The skirt carried further down, at the grip end only."""
+    """The skirt carried further down, at the IR end only."""
     return _isect(
         _ring(params.BOARD_FIT, SKIRT_OUT, DEEP_BOTTOM, SKIRT_BOTTOM + MERGE),
         catch_region(),
@@ -145,9 +161,11 @@ def skirt_lead_in_cuts():
             ((box.min.Y, SKIRT_BOTTOM, height, -1),
              (box.max.Y, SKIRT_BOTTOM, height, 1))
         )
+    # +1: the deepened region lies on the +Y side of this edge, and a wedge's
+    # own local x runs +Y, so the lead-in has to ramp into the deep skirt.
     profiles.append(
-        (catch_region().bounding_box().max.Y, DEEP_BOTTOM,
-         params.SKIRT_TRANSITION_CHAMFER, -1)
+        (catch_region().bounding_box().min.Y, DEEP_BOTTOM,
+         params.SKIRT_TRANSITION_CHAMFER, 1)
     )
     if not 0 < params.SKIRT_LEAD_ANGLE < 90:
         raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
@@ -180,15 +198,15 @@ def skirt_lead_in_cuts():
 
 def catch_windows():
     """Two rounded rectangles through the deepened skirt."""
-    edge = board.board_profile().bounding_box().min.Y
-    y = edge - (params.BOARD_FIT + SKIRT_OUT) / 2
+    edge = board.board_profile().bounding_box().max.Y
+    y = edge + (params.BOARD_FIT + SKIRT_OUT) / 2
     reach = (SKIRT_OUT - params.BOARD_FIT) / 2 + 0.3
     out = []
     for x in catch_x():
         plane = Plane(
             origin=(x, y, CATCH_Z0 + params.CATCH_H / 2),
             x_dir=(1, 0, 0),
-            z_dir=(0, -1, 0),
+            z_dir=(0, 1, 0),
         )
         sketch = plane * RectangleRounded(params.CATCH_W, params.CATCH_H, params.CATCH_R)
         out.append(extrude(sketch, amount=reach, both=True))
@@ -217,10 +235,14 @@ def catch_detents():
     first: it fouled all four rounded corners and stood proud of the window's top,
     which is what the shells-mate pass reported.
     """
-    edge = board.board_profile().bounding_box().min.Y
-    base, tip = edge - LAP_IN - MERGE, edge - LAP_IN + params.CATCH_D
+    edge = board.board_profile().bounding_box().max.Y
+    base, tip = edge + LAP_IN + MERGE, edge + LAP_IN - params.CATCH_D
     f = params.CATCH_FIT
     z0, z1 = CATCH_Z0 + f, CATCH_Z0 + params.CATCH_H - f
+    # The detent stands in along -Y at this end, so tip is below base in y and
+    # every span below is taken as a magnitude with the direction carried by
+    # copysign. Rectangle and extrude both refuse a negative one.
+    reach = abs(tip - base)
     out = []
     for x in catch_x():
         plane = Plane(
@@ -229,11 +251,12 @@ def catch_detents():
         profile = plane * RectangleRounded(
             params.CATCH_W - 2 * f, params.CATCH_H - 2 * f, max(params.CATCH_R - f, 0.2)
         )
-        prism = extrude(profile, amount=(tip - base) / 2 + 1, both=True)
+        prism = extrude(profile, amount=reach / 2 + 1, both=True)
         wedge = loft(
             [
-                Pos(x, (base + tip) / 2, z0) * Rectangle(params.CATCH_W + 2, tip - base),
-                Pos(x, base + 0.05, z1) * Rectangle(params.CATCH_W + 2, 0.1),
+                Pos(x, (base + tip) / 2, z0) * Rectangle(params.CATCH_W + 2, reach),
+                Pos(x, base + math.copysign(0.05, tip - base), z1)
+                * Rectangle(params.CATCH_W + 2, 0.1),
             ],
             ruled=True,
         )
@@ -266,7 +289,6 @@ def back_shell():
     shell = _cut(shell, catch_relief())
     shell = _fuse(
         shell,
-        shell_standoff(),
         legacy_retention_post(),
         *support_runs(),
         *catch_detents(),
@@ -276,7 +298,7 @@ def back_shell():
         *shared_cuts(),
         ir_window_opening(),
         ir_window_rebate(),
-        *closure_cuts(),
+        *end_screw_cuts(),
         legacy_retention_pilot(),
     )
 
@@ -396,6 +418,7 @@ def front_shell(fdm=False):
         shell,
         mic_duct(face),
         deep_skirt(),
+        end_screw_block(),
         *bosses,
     )
     # No local pocket for D1 any more. It sat on the front of the board once,
@@ -433,6 +456,7 @@ def front_shell(fdm=False):
     return _cut(
         shell,
         *pilots,
+        end_screw_pilot(),
         *catch_windows(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1),
         led_ring_channel(),

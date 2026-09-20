@@ -4,17 +4,20 @@ boss, and both shells.
 Feature clashes: bosses, ribs and the cell against every part's courtyard. The
 only pass that sees the eleven switches, D2-D5 and J1, none of which reach the
 STEP assembly. 2D, so it answers where a part sits, never how tall it is.
+
+End screw: the one fastener that closes the two shells, read off both built
+shells rather than off the stack that sized it.
 """
 
 import functools
 
-from build123d import Box, Pos
+from build123d import Box, Cylinder, Pos, Rot
 
 import board
 import case
 import params
 
-from .common import TOLERANCE, _volume
+from .common import TOLERANCE, Problem, _fill_fraction, _volume
 
 
 def cell_clearance():
@@ -101,26 +104,23 @@ def feature_clashes():
         features.append(
             ("screw head", x - h, y - h, x + h, y + h, -params.SCREW_HEAD_H, 0.0)
         )
-    sx, sy = case.closure_point()
-    r = params.SHELL_SCREW_OD / 2
-    features.append(
-        ("closure post", sx - r, sy - r, sx + r, sy + r, case.closure_floors()[1], 0.0)
-    )
-    root_r = r + params.STANDOFF_CHAMFER
-    floor = case.closure_floors()[1]
+    # The end screw's block, which hangs off the front skirt into the back's
+    # cavity under the board's -Y end. Its box rather than a radius: it is the
+    # one cavity feature that is not a round post.
+    block = case.end_screw_block().bounding_box()
     features.append(
         (
-            "closure post root",
-            sx - root_r,
-            sy - root_r,
-            sx + root_r,
-            sy + root_r,
-            floor,
-            floor + params.STANDOFF_CHAMFER,
+            "end screw block",
+            block.min.X,
+            block.min.Y,
+            block.max.X,
+            block.max.Y,
+            block.min.Z,
+            case.SUPPORT_TOP,
         )
     )
-    # The V2 retention post, on both its own diameter and its root chamfer, the
-    # same pair the closure post carries. This is the pass that sees the eleven
+    # The V2 retention post, on both its own diameter and its root chamfer. This
+    # is the pass that sees the eleven
     # switches and D2-D5, so it is what says the post clears a part with no model.
     lx, ly = board.legacy_retention_point()
     floor = case.legacy_retention_floors()[1]
@@ -179,3 +179,134 @@ def feature_clashes():
             if min(overlap) > 0:
                 clashes.append((name, ref, min(overlap)))
     return clashes
+
+
+def end_screw(front, back):
+    """The one screw that closes the two shells, on the built shells.
+
+    Five readings, and none of them restates the stack that sized the feature.
+    The block has to have survived the front's fuse and to be standing clear of
+    both the back and the cell, or the shells will not close on it. The head
+    recess has to land on flat, full-thickness wall rather than on the tip roll,
+    which is why the four rim points are probed on the outer face rather than
+    the axis alone: a counterbore centred on solid can still have half its rim
+    hanging in air. And the thread has to be there, with wall under the head in
+    front of it and block behind it.
+    """
+    problems = []
+    block = case.end_screw_block()
+    box = block.bounding_box()
+    x, z = case.end_screw_axis()
+    edge = case.end_wall_edge()
+
+    if len(front.solids()) != 1:
+        problems.append(
+            Problem(
+                f"front shell has {len(front.solids())} solids with the end "
+                "screw block fused",
+                part="case-front",
+            )
+        )
+    for label, probe_z in (
+        ("under its top", case.SUPPORT_TOP - 0.3),
+        ("at the axis", z),
+        ("above its bottom", box.min.Z + 0.3),
+    ):
+        probe = Pos(x, box.max.Y - 0.3, probe_z) * Box(0.3, 0.3, 0.3)
+        filled = _fill_fraction(front, probe)
+        if filled < 1 - TOLERANCE:
+            problems.append(
+                Problem(
+                    f"end screw block is only {filled:.0%} material {label}, so "
+                    "it did not survive the front's fuse",
+                    box=probe,
+                    part="case-front",
+                )
+            )
+
+    fouled = _volume(block.intersect(back))
+    if fouled > TOLERANCE:
+        problems.append(
+            Problem(
+                f"end screw block runs into the back shell by {fouled:.2f} mm3",
+                part="case-front",
+            )
+        )
+    fouled = _volume(block.intersect(case.cell_envelope()))
+    if fouled > TOLERANCE:
+        problems.append(
+            Problem(f"end screw block runs into the cell by {fouled:.2f} mm3")
+        )
+
+    # The counterbore's own rim, on the outer face, just inside the wall. A
+    # radius a hair past the head's own, so this reads the wall the head lands
+    # on rather than the wall the counterbore removed.
+    outer = edge - case.LAP_OUT
+    rim = params.SHELL_SCREW_HEAD_D / 2 + 0.3
+    for dx, dz, where in (
+        (rim, 0, "+x"), (-rim, 0, "-x"), (0, rim, "above"), (0, -rim, "below"),
+    ):
+        probe = Pos(x + dx, outer + 0.3, z + dz) * Box(0.4, 0.4, 0.4)
+        filled = _fill_fraction(back, probe)
+        if filled < 1 - TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the head recess rim is only {filled:.0%} material {where} "
+                    "the axis: the counterbore is off the flat wall",
+                    box=probe,
+                    part="case-back",
+                )
+            )
+
+    # Wall left under the head, measured as material rather than subtracted.
+    head_bottom = outer + params.SHELL_SCREW_HEAD_H
+    cavity = edge - params.BOARD_FIT
+    left = cavity - head_bottom
+    if left < 1.0:
+        problems.append(
+            Problem(f"only {left:.2f} of wall is left under the head, wants 1.0")
+        )
+    # An annulus, not a plug: the clearance bore runs the whole way through this
+    # band, so what the head actually bears on is the ring between the two
+    # diameters and a solid cylinder here reads 36% void by construction.
+    seat = Pos(x, (head_bottom + cavity) / 2, z) * Rot(90, 0, 0) * Cylinder(
+        radius=params.SHELL_SCREW_HEAD_D / 2 - 0.1, height=left
+    )
+    bore = Pos(x, (head_bottom + cavity) / 2, z) * Rot(90, 0, 0) * Cylinder(
+        radius=params.SHELL_SCREW_CLEAR_D / 2 + 0.1, height=left + 1
+    )
+    plug = seat.cut(bore)
+    filled = _fill_fraction(back, plug)
+    if filled < 1 - TOLERANCE:
+        problems.append(
+            Problem(
+                f"only {filled:.0%} of the {left:.2f} under the head is material",
+                box=plug,
+                part="case-back",
+            )
+        )
+
+    # The pilot stops inside the block, and there is block left beyond it.
+    pilot = case.end_screw_pilot().bounding_box()
+    if pilot.max.Y >= box.max.Y:
+        problems.append(
+            Problem(
+                f"the pilot ends at {pilot.max.Y:.2f}, at or past the block's "
+                f"own back at {box.max.Y:.2f}, so it is not blind"
+            )
+        )
+    else:
+        probe = Pos(x, (pilot.max.Y + box.max.Y) / 2, z) * Box(
+            0.3, box.max.Y - pilot.max.Y, 0.3
+        )
+        filled = _fill_fraction(front, probe)
+        if filled < 1 - TOLERANCE:
+            problems.append(
+                Problem(
+                    f"only {filled:.0%} of the block behind the pilot is "
+                    "material, so the thread opens out of its own boss",
+                    box=probe,
+                    part="case-front",
+                )
+            )
+    return problems

@@ -28,8 +28,8 @@ from .caps import (
 from .cell import cell_axis, cell_bay
 from .features import write_features
 from .hardware import (
-    closure_floors,
-    closure_point,
+    end_screw_axis,
+    end_screw_length,
     legacy_retention_floors,
     legacy_screw_length,
     mount_points,
@@ -85,6 +85,7 @@ from .wheel_ring import (
 from .stack import (
     BOARD_TOP,
     FDM_FACE,
+    LAP_OUT,
     CAP_BOTTOM,
     CAVITY_FRONT,
     CAVITY_FRONT_USB,
@@ -443,16 +444,17 @@ def main():
     )
     for name, x0, y0, x1, y1 in pad_lobes():
         print(f"  {name:<6} {x1 - x0:.2f} x {y1 - y0:.2f}")
-    outer, _ = closure_floors()
-    # Both derived from the same stack rather than quoted: a short screw crosses
-    # the board and takes the pilot, and the long one adds everything between the
-    # back's counterbore and the board's underside on top of that.
+    # Both derived from the same stack rather than quoted: a board screw crosses
+    # the board and takes the pilot, and the end screw crosses the wall left
+    # under its head, the fit the block stands off that wall by, and the same
+    # engagement. They come out the same length, so the case takes one fastener.
     short_screw = params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
-    long_screw = -(outer + params.SHELL_SCREW_HEAD_H) + short_screw
+    end_x, end_z = end_screw_axis()
     print(
-        f"screws: {len(mount_points()) - 1}x M2 x {short_screw:.0f} into the front "
+        f"screws: {len(mount_points())}x M2 x {short_screw:.0f} into the front "
         f"plate through the board's own {board.mounting_holes()[0][2]:.1f} holes, plus "
-        f"one M2 x {long_screw:.0f} at {closure_point()} through the back"
+        f"one M2 x {end_screw_length():.0f} through the -Y end wall at x "
+        f"{end_x:.2f}, z {end_z:.2f}, into a block behind the front skirt"
     )
     print(
         f"  {params.BOSS_PILOT_DEPTH:.1f} of self-tapped engagement in a "
@@ -469,9 +471,16 @@ def main():
         f"to the back before the front closes, the reverse of V3"
     )
     print(
-        f"grip end: skirt {params.CATCH_SKIRT_H:.1f} deep with 2 windows "
-        f"{params.CATCH_W:.0f}x{params.CATCH_H:.1f}, detents {params.CATCH_D:.1f} "
-        f"proud of the lap behind them"
+        f"IR end: skirt {params.CATCH_SKIRT_H:.1f} deep over {params.CATCH_SPAN:.1f}, "
+        f"with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f}, detents "
+        f"{params.CATCH_D:.1f} proud of the lap behind them; the +x window is held "
+        f"{params.CATCH_EMITTER_CLEAR:.1f} off D1's bore rather than mirrored"
+    )
+    print(
+        f"grip end: no detents, closed by the one end-wall screw into a "
+        f"{params.END_SCREW_BLOCK_W:.1f}x{params.END_SCREW_BLOCK_D:.1f} block, "
+        f"{params.BOSS_PILOT_DEPTH:.1f} of engagement under "
+        f"{LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.1f} of wall"
     )
     print(
         f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick under a "

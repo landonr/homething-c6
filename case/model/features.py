@@ -257,6 +257,14 @@ def _front(runs, obstacles, fdm=False):
                 ["BOSS_OD"],
             )
         )
+    out.append(
+        _entry(
+            "end_screw_block",
+            "hardware.end_screw_block",
+            "add",
+            hardware.end_screw_block(),
+        )
+    )
     out.append(_entry("usb_pocket", "usb.usb_pocket", "cut", usb.usb_pocket()))
     out += _support_entries(runs, "cut")
     out += _support_gaps(runs, obstacles)
@@ -276,6 +284,14 @@ def _front(runs, obstacles, fdm=False):
                 ["BOSS_PILOT_D", "BOSS_PILOT_DEPTH"],
             )
         )
+    out.append(
+        _entry(
+            "end_screw_pilot",
+            "hardware.end_screw_pilot",
+            "cut",
+            hardware.end_screw_pilot(),
+        )
+    )
     out += _split(
         "catch_windows", "shells.catch_windows", "cut", shells.catch_windows()
     )
@@ -337,16 +353,9 @@ def _front(runs, obstacles, fdm=False):
 
 def _back(runs, obstacles):
     """The back shell, in the order back_shell() builds and cuts it."""
-    refs = board.mounting_hole_refs()
     out = [
         _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
         _entry("catch_relief", "shells.catch_relief", "cut", shells.catch_relief()),
-        _entry(
-            "shell_standoff",
-            "hardware.shell_standoff",
-            "add",
-            hardware.shell_standoff(),
-        ),
         _entry(
             "legacy_retention.post",
             "hardware.legacy_retention_post",
@@ -359,12 +368,12 @@ def _back(runs, obstacles):
     out += _split(
         "catch_detents", "shells.catch_detents", "add", shells.catch_detents()
     )
-    # The two closure cuts share one hole, so the shank and the head counterbore
-    # are told apart by what each does rather than by where it is.
-    closure = refs[hardware.closure_point()]
-    for name, shape in zip(("clearance", "head"), hardware.closure_cuts()):
+    # The two end-screw cuts share one hole, so the shank and the head
+    # counterbore are told apart by what each does rather than by where it is.
+    # No refdes: this screw goes into a case feature, not a board hole.
+    for name, shape in zip(("clearance", "head"), hardware.end_screw_cuts()):
         out.append(
-            _entry(f"closure.{closure}.{name}", "hardware.closure_cuts", "cut", shape)
+            _entry(f"end_screw.{name}", "hardware.end_screw_cuts", "cut", shape)
         )
     out += [
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),

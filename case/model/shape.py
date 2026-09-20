@@ -119,7 +119,13 @@ def _chamfered_post(x, y, diameter, z0, z1, size, root, root_z=None):
 
 
 def _rounded_prism(x, y, size, radius, z0, z1):
-    sketch = Pos(x, y, z0) * RectangleRounded(size, size, radius)
+    """A prism on a rounded rectangle, centred on (x, y).
+
+    `size` is one number for a square plan or (sx, sy) for a rectangular one,
+    so a caller with a block rather than a post uses the same primitive.
+    """
+    sx, sy = (size, size) if isinstance(size, (int, float)) else size
+    sketch = Pos(x, y, z0) * RectangleRounded(sx, sy, radius)
     return extrude(sketch, amount=z1 - z0, dir=(0, 0, 1))
 
 

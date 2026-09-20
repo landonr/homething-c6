@@ -2,7 +2,7 @@
 itself, body through the face hole with a flange riding the counterbore
 behind it."""
 
-from build123d import Pos, RectangleRounded, loft
+from build123d import Pos, RectangleRounded, fillet, loft
 
 import board
 import cache
@@ -146,6 +146,14 @@ def keycap(ref, legend=True):
     lead = params.SOCKET_LEAD
 
     body = _key_prism(x, y, cap_body(ref), CAP_BOTTOM, CAP_TOP)
+    top_edges = [
+        edge
+        for edge in body.edges()
+        if edge.bounding_box().min.Z > CAP_TOP - 0.01
+    ]
+    if not top_edges:
+        raise ValueError(f"{ref}'s cap has no top perimeter edges to fillet")
+    body = fillet(top_edges, params.CAP_TOP_FILLET)
     flange = _key_prism(
         x, y, cap_flange(ref), CAP_BOTTOM, CAP_BOTTOM + params.CAP_FLANGE_T
     )

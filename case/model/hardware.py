@@ -1,16 +1,16 @@
 """The board's own mounting holes, the single screw that closes the two shells
-through the back's floor, and the one post the back offers a V2 board."""
+through the back's -Y end wall, and the one post the back offers a V2 board."""
 
 import functools
-import math
+
+from build123d import Box, Cylinder, Pos, Rot
 
 import board
 import params
 
 from .backform import contour_depth
-from .cell import cell_axis
-from .shape import _chamfered_post, _hole
-from .stack import MERGE, SUPPORT_TOP
+from .shape import _chamfered_post, _fuse, _hole, _rounded_prism
+from .stack import LAP_OUT, MERGE, SKIRT_BOTTOM, SUPPORT_TOP
 
 
 def mount_points():
@@ -21,62 +21,112 @@ def mount_points():
     return [(x, y) for x, y, _ in board.mounting_holes()]
 
 
+def end_wall_edge():
+    """The board edge the closure screw enters through: the -Y one."""
+    return board.board_profile().bounding_box().min.Y
+
+
 @functools.cache
-def closure_point():
-    """The mounting hole the back screws up through.
+def end_screw_axis():
+    """(x, z) of the end screw's axis, in the -Y end wall.
 
-    Wants a clear run from the back's floor to the board, so it is the hole away
-    from the cell with the most room under it. The pair at the grip end are over
-    the cell bay, and of the two at the IR end the other has U2 4.5 away against
-    this one's 7.16 to R3.
+    Off the board's own centre rather than off a mounting hole, because this
+    screw passes through no board hole: it closes the two shells to each other
+    behind the board's end, and END_SCREW_X_OFFSET is what puts it in the clear
+    column between R8 and the cradle on one side and J1 on the other.
     """
-    _, _, y0, y1 = cell_axis()
-    clear = [p for p in mount_points() if not y0 - 10 < p[1] < y1 + 10]
-
-    def room(point):
-        return min(
-            math.hypot(
-                max(x0 - point[0], point[0] - x1, 0),
-                max(cy0 - point[1], point[1] - cy1, 0),
-            )
-            for _, (x0, cy0, x1, cy1, side) in board.courtyards().items()
-            if side == "bottom"
-        )
-
-    return max(clear, key=room)
+    x = board.board_profile().bounding_box().center().X + params.END_SCREW_X_OFFSET
+    return x, params.END_SCREW_Z
 
 
-def closure_floors():
-    """(outer, cavity) z of the back's floor under the closure screw."""
-    _, y = closure_point()
-    outer = -contour_depth(y)
-    return outer, outer + params.FLOOR
+def end_screw_block():
+    """The front's own boss for that screw, hanging behind the skirt.
 
+    Two solids rather than one. The block proper stands off the back's inner
+    wall by SKIRT_FIT, so the two shells never rub over the whole depth it
+    hangs down; a block built flush to that wall would bind the fold closed.
+    That leaves it with nothing to grow from, so a web at the skirt's own
+    height ties it into the skirt's inner face, which is the only front
+    material within reach this far down.
 
-def shell_standoff():
-    """Post from the back's floor up to the board's underside, so the one screw
-    clamps back, board and front together instead of only the two shells."""
-    x, y = closure_point()
-    _, cavity = closure_floors()
-    return _chamfered_post(
+    It carries END_SCREW_BLOCK_BOTTOM under the axis and runs up to
+    SUPPORT_TOP, so it stops clear of the board like everything else the
+    cavity holds.
+
+    The block's vertical edges carry END_SCREW_BLOCK_R in plan. The web stays
+    the block's full width and reaches past the two wall-side rounds by that
+    radius plus MERGE, so what bridges to the skirt is the block's whole
+    section and not the narrowed waist a round would otherwise leave.
+    """
+    x, z = end_screw_axis()
+    edge = end_wall_edge()
+    face = edge - params.BOARD_FIT + params.SKIRT_FIT
+    back = face + params.END_SCREW_BLOCK_D
+    bottom = z - params.END_SCREW_BLOCK_BOTTOM
+    block = _rounded_prism(
         x,
-        y,
-        params.SHELL_SCREW_OD,
-        cavity - MERGE,
-        0.0,
-        params.STANDOFF_CHAMFER,
-        "lower",
-        cavity,
+        (face + back) / 2,
+        (params.END_SCREW_BLOCK_W, back - face),
+        params.END_SCREW_BLOCK_R,
+        bottom,
+        SUPPORT_TOP,
+    )
+    web_y0 = edge - params.BOARD_FIT - MERGE
+    web_y1 = face + params.END_SCREW_BLOCK_R + MERGE
+    web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
+        params.END_SCREW_BLOCK_W, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
+    )
+    return _fuse(block, web)
+
+
+def end_screw_pilot():
+    """The block's blind self-tapping pilot, drilled in along -Y.
+
+    END_SCREW_BLOCK_D is BOSS_PILOT_DEPTH plus half a millimetre, so this stops
+    inside the block rather than opening out of the back of it.
+    """
+    x, z = end_screw_axis()
+    face = end_wall_edge() - params.BOARD_FIT + params.SKIRT_FIT
+    y0, y1 = face - 0.1, face + params.BOSS_PILOT_DEPTH
+    return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(
+        radius=params.BOSS_PILOT_D / 2, height=y1 - y0
     )
 
 
-def closure_cuts():
-    x, y = closure_point()
-    outer, _ = closure_floors()
+def end_screw_cuts():
+    """(clearance, head recess) through the back's -Y end wall.
+
+    The clearance stops at the cavity face rather than running on into the
+    cavity, so the only thing it opens is the wall itself; the block behind it
+    is the front's and takes the thread.
+    """
+    x, z = end_screw_axis()
+    edge = end_wall_edge()
+    outer = edge - LAP_OUT
+    y0 = outer - 1
     return [
-        _hole(x, y, params.SHELL_SCREW_CLEAR_D, outer - 1, 0.1),
-        _hole(x, y, params.SHELL_SCREW_HEAD_D, outer - 1, outer + params.SHELL_SCREW_HEAD_H),
+        _y_hole(x, z, params.SHELL_SCREW_CLEAR_D, y0, edge - params.BOARD_FIT + 0.1),
+        _y_hole(x, z, params.SHELL_SCREW_HEAD_D, y0, outer + params.SHELL_SCREW_HEAD_H),
     ]
+
+
+def end_screw_length():
+    """What the end screw has to be: the wall left under its head, the fit the
+    block stands off that wall by, and the engagement it then takes. Comes out
+    at the same M2 x 6 as the three board screws, so the case takes one
+    fastener in one length."""
+    return (
+        (LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H)
+        + params.SKIRT_FIT
+        + params.BOSS_PILOT_DEPTH
+    )
+
+
+def _y_hole(x, z, diameter, y0, y1):
+    """A Y-axis bore, the way ir.emitter_bore builds one. _hole is Z-only."""
+    return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(
+        radius=diameter / 2, height=y1 - y0
+    )
 
 
 def legacy_retention_floors():

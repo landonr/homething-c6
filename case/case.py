@@ -6,10 +6,11 @@ thickness where the cell is. Elsewhere it tapers to what the board needs, so the
 back is a contoured hump rather than a slab. The board hangs off the front plate,
 on one boss per mounting hole dropping from the ceiling, taking M2 screws driven
 from the back. The two shells meet in a lap joint around the whole perimeter, the back
-closing over a skirt on the front, and are held by two detents at the grip end and
-one screw at the other, which runs up through the back and the board into a front
-boss and so clamps all three parts. A rail down each side of the skirt runs in a
-channel in the lap and takes the play out of the middle.
+closing over a skirt on the front, and are held by two detents at the IR end and
+one screw at the other, driven horizontally through the back's end wall into a
+block the front carries behind its skirt. Every mounting hole keeps its own short
+screw, so the case takes four M2 x 6 and nothing longer. A rail down each side of
+the skirt runs in a channel in the lap and takes the play out of the middle.
 
 The pad is two flat soft lobes with one raised feature per switch, one lobe per
 island of keys, each padded off its own keys and so stopping short of the wheel

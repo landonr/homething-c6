@@ -161,9 +161,9 @@ The rim runs inside the larger round. The FDM front reduces the round instead of
 
 The front shell holds the board. Three M2 screws fasten the V3 board to its bosses.
 
-The back lap closes over the front skirt. Two detents secure the grip end.
+The back lap closes over the front skirt. Two detents secure the IR end.
 
-One long M2 screw secures the IR end through the back shell and board.
+One M2 x 6 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The case uses four M2 x 6 screws in total and no long screw.
 
 Prepare the back shell first:
 
@@ -177,10 +177,10 @@ Assemble the remaining parts with the front face down:
 1. Install all caps in the front shell.
 2. Install the button pad.
 3. Put the board on the front-shell bosses.
-4. Install the two short M2 screws at the grip end.
-5. Engage the two grip-end detents.
+4. Install the three M2 screws through the board into the front-shell bosses.
+5. Engage the two IR-end detents.
 6. Fold the back shell onto the front shell.
-7. Install the long M2 screw at the IR end.
+7. Install the end-wall M2 screw at the grip end.
 
 Install the caps before the pad. The caps are captive after pad installation.
 

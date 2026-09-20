@@ -38,9 +38,10 @@ has a rail standing off it into a channel cut in the lap. At 2.0 the lap is left
 too thin to take that channel. It costs 2.0 on each of the case's outside
 dimensions."""
 FLOOR = 2.4
-"""Thick enough to sink the closure screw's head and still leave solid under
-it: 0.7 at SHELL_SCREW_HEAD_H, which is the thinnest the back's outer face
-gets anywhere."""
+"""Back shell floor, under the cavity and over the whole contoured form. No
+fastener passes through it any more: the one closure screw enters the -Y end
+wall horizontally, so this is sized as a printed floor over a hand-held
+volume rather than against a counterbore sunk into it."""
 BOARD_FIT = 0.5
 """Gap between the board edge and the inner wall. Board screws locate the board.
 The uniform offset changes case length and width by twice the clearance change."""
@@ -51,8 +52,10 @@ SUPPORT_GAP = 0.25
 SUPPORT_CLEARANCE = 0.4
 SUPPORT_MIN_RUN = 8.0
 SUPPORT_SOUTH_RUNS = False
-"""Include the south-most board support run on each side when true. The runs
-in the deep grip-end skirt are not needed, so this stays false."""
+"""Include the south-most board support run on each side when true. The board
+is carried by the front plate's bosses, and the runs nearest the grip end back
+onto the cell bay rather than onto anything that deflects, so this stays
+false."""
 SUPPORT_UNDER_ANGLE = 60.0
 SUPPORT_INNER_R = 0.6
 """Radius on the inboard support edge. It removes the sharp printed tip and
@@ -126,11 +129,11 @@ no key size back either."""
 LEGACY_RETENTION_OD = 5.5
 """V2 retention post outside diameter. This adds 0.25 mm of radial wall over
 the front bosses, so the tall free-standing post prints with more material
-around its M2 pilot. The extra width clears the V3 cavity components and the
-closure standoff."""
+around its M2 pilot. The extra width clears the V3 cavity components."""
 STANDOFF_CHAMFER = 1.2
-"""Height and radial reach of the root chamfer on each screw boss, closure post,
-and microphone duct. The chamfer is widest where each post meets its shell."""
+"""Height and radial reach of the root chamfer on each screw boss, the V2
+retention post, and the microphone duct. The chamfer is widest where each post
+meets its shell."""
 BOSS_COLLAR = 1.0
 """Ceiling kept around a boss, so a key hole never swallows it and leaves it
 hanging off nothing. It is not cut out of the keys: key_size() shrinks whichever
@@ -187,16 +190,24 @@ SKIRT_TRANSITION_CHAMFER = 3.0
 SKIRT_LEAD_ANGLE = 65.0
 """Lead-in angle in degrees from the flat skirt bottom along Y. A shallow angle reduces contact during assembly."""
 
-# At the grip end the skirt runs deeper than anywhere else and carries two rounded
+# At the IR end the skirt runs deeper than anywhere else and carries two rounded
 # rectangular windows. The back's lap grows a detent behind each: the lap rides out
 # over the taper as the front goes down, and the window's lower edge then catches
 # under the flat. That end needs no screw as a result, and the front has to be
-# hooked in there and folded down, which is the point of it.
+# hooked in there and folded down, which is the point of it. The grip end is the
+# one closed by a screw now, through its own end wall.
 CATCH_SKIRT_H = 7.0
-"""Skirt depth at the grip end, against SKIRT_H everywhere else. It has to be deep
+"""Skirt depth at the IR end, against SKIRT_H everywhere else. It has to be deep
 enough to carry a window and still leave CATCH_RISE under it."""
-CATCH_SPAN = 15.66
-"""How far the deepened section runs from the grip end."""
+CATCH_SPAN = 8.0
+"""How far the deepened section runs in from the IR end.
+
+Bounded by the board support runs rather than by the catches themselves. Both
+side runs stop at y -34.36 at that end and their own skirt lead-ins occupy the
+1.0 above that, so a deepened section reaching past -33.36 would put the deep
+skirt on top of them. This leaves its inboard face at -32.71, which clears them
+by about six tenths. It was 15.66 while the deepened section was at the grip
+end, where nothing but the plain skirt was in the way."""
 CATCH_W = 7.0
 CATCH_H = 2.4
 CATCH_R = 1.0
@@ -210,34 +221,83 @@ CATCH_D = 0.8
 past the skirt thickness less the fit it breaks through into the cavity, and the
 whole end wall has to flex this far to let the front in."""
 CATCH_FIT = 0.15
+CATCH_EMITTER_CLEAR = 2.5
+"""Wall kept between the +x window and D1's emitter bore in the same end face.
 
-# One screw at the IR end, up through the back's floor and an internal standoff,
-# through the board's own mounting hole, into the front plate's boss. So it clamps
-# all three parts, and replaces the short screw at that hole rather than adding to
-# the count. Its head is the only hole in the back's outer face. Same M2 as the
-# short screws, only longer: case.py prints the length the stack computes.
-SHELL_SCREW_OD = 6.0
-"""Standoff post outside diameter, leaving 1.8 of wall around the clearance
-hole. Not scaled down with the screw: the post spans the whole cavity depth
-from the back's floor to the board, so it is the slenderness of a tall printed
-column that sizes it rather than the screw passing through it."""
+The +x catch is placed off that bore rather than off the centreline, which is
+what CATCH_SPACING would do: mirroring the grip end's spacing lands the window
+squarely on the bore, and the bore is drilled to D1's own lens and cannot move.
+So shells.catch_x() takes whichever is further -x of the spacing and this
+clearance, and at the present layout this one governs."""
+
+# One screw at the grip end, driven horizontally through the back's -Y end wall
+# into a block the front shell carries behind its skirt. So it closes the two
+# shells to each other; the board is held by its own three screws into the front
+# plate's bosses, and every mounting hole keeps a short screw. Its head is the
+# only hole in the back's outer surface. Same M2 x 6 as the board screws:
+# case.py prints the length the stack computes.
 SHELL_SCREW_CLEAR_D = 2.4
-"""Clearance hole through the back's floor, matched to the board's own 2.4
-holes rather than chosen: the screw already passes a 2.4 at H1-H3, so drilling
-the shell tighter than the board would centre the screw on the printed part
-instead of on the board it is there to clamp. Also ISO 273 medium clearance for
-M2, which is where the board's own 2.4 comes from."""
+"""Clearance hole through the back's -Y end wall, matched to the board's own 2.4
+holes rather than chosen: the same M2 passes a 2.4 at H1-H3, so drilling the
+shell tighter than the board would hold this screw to a fit the rest of the
+stack does not. Also ISO 273 medium clearance for M2, which is where the
+board's own 2.4 comes from."""
 SHELL_SCREW_HEAD_D = 4.2
-"""Counterbore in the back's outer face, SCREW_HEAD_D plus 0.2. Slacker than
-the fits elsewhere in this model on purpose: it is the one screw feature
-printed as a hole in a bottom-facing surface, where the first layers spread
-inward, and a head that will not sit flush is the one visible from outside."""
+"""Counterbore in the back's -Y end face, SCREW_HEAD_D plus 0.2. Slacker than
+the fits elsewhere in this model on purpose: a head that will not sit flush is
+the one screw feature visible from outside the case."""
 SHELL_SCREW_HEAD_H = 1.7
 """Counterbore depth: SCREW_HEAD_H plus 0.1, so the tallest standard M2 head
-lands a shade below the outer face instead of standing in it. The M2.5 stack
-sank 2.0 here and left FLOOR only 0.4 of solid under the counterbore, two print
-layers holding the one fastener that clamps all three parts; the smaller head
-buys that back to 0.7 without the floor getting any thicker."""
+lands a shade below the outer face instead of standing in it. It comes out of
+the end wall rather than out of FLOOR now, and WALL is 3.0 there, so 1.3 of
+wall is left under the head."""
+END_SCREW_X_OFFSET = 5.8
+"""How far +x of the board's centreline the end screw's axis runs.
+
+Set by what is behind the wall rather than by the wall, and by which way the
+block is free to grow. R8's courtyard is the near obstacle, so the block's -x
+face is what the column has to clear; J1 sits well -x of that and nothing at
+all sits +x of the block until the side wall. So the width went on the +x side
+and the axis moved out with it by half of what was added, which leaves the -x
+face exactly where it was, clear of R8, with the block wider the other way.
+The block the screw threads into is centred on this axis."""
+END_SCREW_Z = -6.5
+"""Height of the end screw's axis, below the board.
+
+Bounded both ways by the -Y wall's own section. Above, the back's lap is
+hollowed out for the skirt down to SKIRT_BOTTOM less the fit, so a head
+counterbore any higher would break into that relief instead of sinking into
+solid wall. Below, the back's outer surface rolls away through
+CONTOUR_TIP_R toward the floor. This leaves the whole SHELL_SCREW_HEAD_D
+counterbore on flat, full-thickness wall, which checks/hardware.py's end_screw
+pass measures on the built back rather than restating here."""
+END_SCREW_BLOCK_W = 10.0
+"""Width of the block the end screw threads into, across the case.
+
+Wider than BOSS_OD for the same reason the V2 post is: it is a printed feature
+a self-tapping screw cuts its own thread into, and it is loaded in withdrawal
+along its own weakest direction, the layer lines of a part printed face down.
+It is wider than that reason alone asks because the room is free: the whole
++x span from the block to the side wall is empty, so the extra width costs
+nothing and every millimetre of it is thread the screw can pull against."""
+END_SCREW_BLOCK_D = 4.9
+"""How far the block reaches back into the cavity: BOSS_PILOT_DEPTH plus 0.5,
+so the pilot ends inside it and the thread is never drilled out the back of
+its own boss."""
+END_SCREW_BLOCK_BOTTOM = 2.5
+"""Material the block carries below the screw axis, matching BOSS_OD/2 so the
+wall under the thread is what it is around every other M2 in this case. Above
+the axis the block runs on up to SUPPORT_TOP, so it is not symmetric: that is
+where it meets the skirt it hangs from."""
+END_SCREW_BLOCK_R = 1.5
+"""Round on the block's vertical edges, in plan.
+
+The block hangs alone in the back's cavity with the shells closing over it, so
+its corners are what a misaligned fold catches on first; a round gives the
+assembly somewhere to slide instead. Kept under half END_SCREW_BLOCK_D, which
+is the shallower plan dimension and so the bound on any plan round here. The
+two wall-side corners end up buried: the web that ties the block to the skirt
+runs past them by this radius plus MERGE, so the bridge stays full width."""
 
 # Cell: one AA lying along the board underneath it, horizontally, in the same
 # saddle cradle the 18650 used. Change these for another format and the cavity,
@@ -932,6 +992,12 @@ CAP_TOP_T = 1.0
 the flush face left no room for the old 1.4. LEGEND_DEPTH comes out of it, and
 what is left is the translucent bridge the pad's backlight glows through, so it
 is bounded below by the legend rather than by strength."""
+CAP_TOP_FILLET = 0.4
+"""Radius on the exposed top perimeter of every rigid cap.
+
+This removes the sharp edge a finger meets without changing the cap's body at
+the face hole, its flange, or its captive retention geometry. It stays below
+CAP_TOP_T, so the socket roof remains below the rounded edge."""
 CAP_WALL = 1.0
 """Thinnest wall the cap may be left with anywhere around its socket. Not a
 modelled dimension: the cap's body follows the face hole and its widest bore is

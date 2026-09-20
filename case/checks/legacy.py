@@ -92,8 +92,6 @@ def legacy_post_clearance():
         if _volume(post.intersect(head)) > TOLERANCE:
             problems.append(f"V2 retention post hits the V3 screw head at ({x}, {y})")
 
-    if _volume(post.intersect(case.shell_standoff())) > TOLERANCE:
-        problems.append("V2 retention post runs into the closure standoff")
     return problems
 
 

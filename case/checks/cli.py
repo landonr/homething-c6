@@ -56,7 +56,7 @@ from .fdm import (
     outline_is_cut,
     outline_solid_sane,
 )
-from .hardware import cell_clearance, feature_clashes
+from .hardware import cell_clearance, end_screw, feature_clashes
 from .ir import (
     end_ports_open,
     receiver_clearance,
@@ -477,6 +477,16 @@ def _cell_clearance(s):
     return True
 
 
+@_check("hardware")
+def _end_screw(s):
+    return _report(
+        end_screw(s.front, s.back),
+        f"end screw is an M2 x {case.end_screw_length():.0f} through "
+        f"{case.LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.2f} of flat "
+        f"-Y wall into a block the front carries clear of the back and the cell",
+    )
+
+
 @_check("support")
 def _support_board_clearance(s):
     return _report(
@@ -566,8 +576,7 @@ def _legacy_post_clearance(s):
     return _report(
         legacy_post_clearance(),
         f"V2 retention post stops {params.SUPPORT_GAP:.2f} below the V3 board and "
-        "clears every assembly solid, the cell, both V3 screw heads and the "
-        "closure standoff",
+        "clears every assembly solid, the cell and every V3 screw head",
     )
 
 

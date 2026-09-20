@@ -46,13 +46,122 @@ column along y and so what one spine and one loft depend on.
 
 import math
 
-from build123d import Axis, Cylinder, Pos
+from build123d import Axis, Box, Cylinder, Pos
 
 import board
 import case
+from model import keypad as keypad_model
 import params
 
-from .common import PROBE_D, TOLERANCE, _fill_fraction, _volume
+from .common import PROBE_D, TOLERANCE, _fill_fraction, _ray_runs, _volume
+
+
+GROOVE_TOLERANCE = 0.05
+"""Allowed built-solid error at a groove wall or floor."""
+
+
+def _grid_pad(pad):
+    """Built grid lobe, isolated from the unchanged SW1/SW2 lobe."""
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    crop = Pos((x0 + x1) / 2, (y0 + y1) / 2, (case.SWITCH_TOP + case.STEM_TOP) / 2)
+    crop *= Box(x1 - x0 + 0.2, y1 - y0 + 0.2, case.STEM_TOP - case.SWITCH_TOP + 0.2)
+    return pad.intersect(crop)
+
+
+def _groove_runs(pad, orientation, centre, run0, run1):
+    """Built material runs across and along one top-side isolation groove."""
+    z = case.PAD_WEB_TOP - params.PAD_GROOVE_DEPTH / 2
+    width = params.PAD_GROOVE_W
+    if orientation == "vertical":
+        across = ((centre - width, (run0 + run1) / 2, z),
+                  (centre + width, (run0 + run1) / 2, z))
+        along = ((centre, run0 - width, z), (centre, run1 + width, z))
+    else:
+        across = (((run0 + run1) / 2, centre - width, z),
+                  ((run0 + run1) / 2, centre + width, z))
+        along = ((run0 - width, centre, z), (run1 + width, centre, z))
+    return _ray_runs(pad, *across), _ray_runs(pad, *along)
+
+
+def pad_isolation_grooves(pad):
+    """Probe every isolation groove on the built grid-lobe solid.
+
+    Top-face rays read the actual slot width and its rounded-end run. A vertical
+    ray at each centreline reads both face cuts and the centre web they retain.
+    """
+    problems = []
+    grid = _grid_pad(pad)
+    if len(grid.solids()) != 1:
+        problems.append(f"the grooved nine-button lobe has {len(grid.solids())} solids, not one")
+    expected_core = params.PAD_WEB_T - 2 * params.PAD_GROOVE_DEPTH
+    if expected_core <= 0:
+        problems.append("the two groove depths consume the complete pad web")
+        return problems
+    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs()):
+        label = f"{orientation} groove {index + 1}"
+        across, along = _groove_runs(pad, orientation, centre, run0, run1)
+        if len(across) != 2:
+            problems.append(f"the built {label} does not have two side walls")
+        else:
+            width = across[1][0] - across[0][1]
+            if abs(width - params.PAD_GROOVE_W) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} is {width:.2f} mm wide, wants {params.PAD_GROOVE_W:.2f}")
+        if len(along) != 2:
+            problems.append(f"the built {label} does not stop inside the pad frame")
+        else:
+            start = run0 - params.PAD_GROOVE_W + along[0][1]
+            end = run0 - params.PAD_GROOVE_W + along[1][0]
+            if abs(start - run0) > GROOVE_TOLERANCE or abs(end - run1) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} ends at {start:.2f} .. {end:.2f}, wants {run0:.2f} .. {run1:.2f}")
+        z0, z1 = case.PAD_WEB_BOTTOM - 0.1, case.PAD_WEB_TOP + 0.1
+        if orientation == "vertical":
+            point = (centre, (run0 + run1) / 2)
+        else:
+            point = ((run0 + run1) / 2, centre)
+        core = _ray_runs(pad, (*point, z0), (*point, z1))
+        if len(core) != 1:
+            problems.append(f"the built {label} has {len(core)} centre-web runs, not one")
+        else:
+            thickness = core[0][1] - core[0][0]
+            if abs(thickness - expected_core) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} leaves {thickness:.2f} mm of centre web, wants {expected_core:.2f}")
+    return problems
+
+
+def groove_clearances(pad):
+    """Keep groove cuts out of every stem, cap seat, boss, and lobe perimeter."""
+    problems = []
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    width = params.PAD_GROOVE_W / 2
+    if params.PAD_GROOVE_EDGE_RETENTION <= 0:
+        problems.append("the isolation grooves retain no continuous outer frame")
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
+        if min(run0 - (y0 if orientation == "vertical" else x0),
+               (y1 if orientation == "vertical" else x1) - run1) < params.PAD_GROOVE_EDGE_RETENTION - GROOVE_TOLERANCE:
+            problems.append(f"the {orientation} groove does not retain its requested pad edge frame")
+        for ref in case.island_refs("grid"):
+            x, y = board.components()[ref][:2]
+            along = min(max((y if orientation == "vertical" else x), run0), run1)
+            across = abs((x if orientation == "vertical" else y) - centre)
+            distance = math.hypot(across, (y if orientation == "vertical" else x) - along)
+            needed = width + max(params.STEM_W / 2, case.cap_counterbore(ref) / 2)
+            if distance < needed - GROOVE_TOLERANCE:
+                problems.append(f"the {orientation} groove reaches {ref}'s stem or cap seat")
+        for x, y in case.mount_points():
+            along = min(max((y if orientation == "vertical" else x), run0), run1)
+            across = abs((x if orientation == "vertical" else y) - centre)
+            distance = math.hypot(across, (y if orientation == "vertical" else x) - along)
+            boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
+            if distance < width + boss_r - GROOVE_TOLERANCE:
+                problems.append(f"the {orientation} groove reaches a boss clearance")
+    # Read unchanged-lobe material above and below its web. A grid-only cut must
+    # not create a new void in SW1/SW2's lobe.
+    for ref in case.island_refs("second"):
+        x, y = board.components()[ref][:2]
+        probe = Pos(x, y, case.PAD_WEB_TOP - params.PAD_GROOVE_DEPTH / 2) * Cylinder(radius=0.1, height=0.05)
+        if _fill_fraction(pad, probe) < 0.99:
+            problems.append(f"the SW1/SW2 lobe is cut above {ref}")
+    return problems
 
 
 def pad_fits(front, pad):

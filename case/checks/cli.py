@@ -71,11 +71,13 @@ from .legacy import (
     legacy_post_merged,
 )
 from .keypad import (
+    groove_clearances,
     mic_pad_contour,
     neck_blends_smoothly,
     neck_continuity,
     pad_clears_wheel,
     pad_fits,
+    pad_isolation_grooves,
     plunger_stub_contact,
     recess_edge_clearance,
     recess_land,
@@ -210,6 +212,25 @@ def _mic_pad_contour(s):
     return _report(
         mic_pad_contour(s.pad),
         "mic pad follows both buttons with rounded inner joins and an attached lower bridge",
+    )
+
+
+@_check("keypad")
+def _pad_isolation_grooves(s):
+    return _report(
+        pad_isolation_grooves(s.pad),
+        f"four built isolation grooves are {params.PAD_GROOVE_W:.2f} mm wide, "
+        f"{params.PAD_GROOVE_DEPTH:.2f} mm deep on each face, and leave "
+        f"{params.PAD_WEB_T - 2 * params.PAD_GROOVE_DEPTH:.2f} mm of centre web",
+    )
+
+
+@_check("keypad")
+def _groove_clearances(s):
+    return _report(
+        groove_clearances(s.pad),
+        f"grooves clear stems, cap seats and bosses, retain a "
+        f"{params.PAD_GROOVE_EDGE_RETENTION:.2f} mm grid-lobe frame, and leave SW1/SW2 unchanged",
     )
 
 

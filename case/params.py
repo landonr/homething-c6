@@ -88,8 +88,10 @@ shallow end of what still reads as a real stub; check.py's
 plunger_stub_contact confirms the built pad actually reaches the switch
 by it, not merely by the formula."""
 
-PLUNGER_SWITCH_EXTENSION = 0.5
-"""Distance each plunger extends below SWITCH_TOP to engage the switch."""
+PLUNGER_SWITCH_EXTENSION = 1.0
+"""Each plunger extends 1.0 mm below SWITCH_TOP. This is approximately twice the
+previous extension, so the plunger nearly touches the switch button. It provides
+nominal switch engagement."""
 
 PLUNGER_LOWER_CHAMFER = 0.375
 """45 degree chamfer size at the lower plunger edge. It leaves a flat switch contact."""
@@ -649,6 +651,23 @@ past it, which is what caught the change."""
 # Button pad: one soft moulding, flat web with raised keys and no skirt. Held up
 # against the ceiling by its own plungers resting on the switches.
 PAD_WEB_T = 1.2
+PAD_GROOVE_W = 0.8
+"""Width of each press-isolation groove in the nine-button pad lobe.
+
+The grooves divide the web between adjacent buttons but leave more web than
+the 0.7 mm minimum key gap. This keeps the pad one moulded part.
+"""
+PAD_GROOVE_DEPTH = 0.3
+"""Depth cut from each face of the pad web at an isolation groove.
+
+The two cuts leave PAD_WEB_T - 2 * PAD_GROOVE_DEPTH of centre material.
+"""
+PAD_GROOVE_EDGE_RETENTION = 1.0
+"""Material retained between each isolation groove end and the grid-lobe edge.
+
+This continuous frame keeps the nine buttons in one pad and prevents a groove
+from opening at the perimeter.
+"""
 PAD_MARGIN = 1.0
 """Web margin around each island's outermost buttons. The mic island follows each button above a shared lower bridge."""
 PAD_RADIUS = 4.8

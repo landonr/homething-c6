@@ -426,6 +426,17 @@ def _pad():
                     cut,
                 )
             )
+        if name == "grid":
+            for index, cut in enumerate(keypad._pad_grooves()):
+                face = "top" if index % 2 == 0 else "bottom"
+                out.append(
+                    _entry(
+                        f"isolation_groove.{index // 2}.{face}",
+                        "keypad._pad_grooves",
+                        "cut",
+                        cut,
+                    )
+                )
     return out
 
 

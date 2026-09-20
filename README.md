@@ -65,16 +65,17 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 </p>
 <p align="center"><sub>Raytraced renders, top and bottom</sub></p>
 
-<p align="center">
-  <img alt="Flat 3D top view" src="docs/readme-assets/board-3d-top.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img alt="Flat 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180">
-</p>
-<p align="center"><sub>Top render, top copper, bottom render, and bottom copper</sub></p>
+#### Top
+
+| Render | Copper |
+| :---: | :---: |
+| <img alt="Flat 3D top view" src="docs/readme-assets/board-3d-top.png" width="180"> | <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180"> |
+
+#### Bottom
+
+| Render | Copper |
+| :---: | :---: |
+| <img alt="Flat 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180"> | <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180"> |
 
 | Ref | Part | Role |
 | --- | --- | --- |

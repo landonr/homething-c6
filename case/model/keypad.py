@@ -1108,6 +1108,71 @@ def pad_lobe_face(name):
     return clipped.faces().sort_by()[0]
 
 
+def _grid_axes(axis):
+    """Ordered grid row or column coordinates, read from SW3 through SW11.
+
+    SW4 and SW7 are slightly off their nominal column or row. Group positions
+    within 0.1 mm so each physical grid line still produces one coordinate.
+    """
+    index = 0 if axis == "x" else 1
+    values = sorted(board.components()[ref][index] for ref in island_refs("grid"))
+    groups = []
+    for value in values:
+        if not groups or value - groups[-1][-1] > 0.1:
+            groups.append([value])
+        else:
+            groups[-1].append(value)
+    if len(groups) != 3:
+        raise ValueError(f"nine-button grid has {len(groups)} {axis} lines, not three")
+    return [sum(group) / len(group) for group in groups]
+
+
+def _pad_groove_specs():
+    """Isolation-groove plan data derived from the nine switch coordinates.
+
+    Each tuple is (orientation, centre, run0, run1). A vertical groove runs
+    along Y between adjacent switch columns. A horizontal groove runs along X
+    between adjacent switch rows. Only the grid lobe appears here.
+    """
+    _, x0, y0, x1, y1 = next(box for box in pad_lobes() if box[0] == "grid")
+    edge = params.PAD_GROOVE_EDGE_RETENTION
+    columns = _grid_axes("x")
+    rows = _grid_axes("y")
+    return tuple(
+        ("vertical", (a + b) / 2, y0 + edge, y1 - edge)
+        for a, b in zip(columns, columns[1:])
+    ) + tuple(
+        ("horizontal", (a + b) / 2, x0 + edge, x1 - edge)
+        for a, b in zip(rows, rows[1:])
+    )
+
+
+def _pad_grooves():
+    """Eight rounded flat-bottom cuts, two faces for each grid centreline."""
+    width = params.PAD_GROOVE_W
+    depth = params.PAD_GROOVE_DEPTH
+    if width <= 0 or depth <= 0:
+        raise ValueError("pad groove width and depth must be positive")
+    cuts = []
+    for orientation, centre, run0, run1 in _pad_groove_specs():
+        length = run1 - run0
+        if length <= width:
+            raise ValueError("pad groove edge retention leaves no groove run")
+        x, y = ((centre, (run0 + run1) / 2) if orientation == "vertical"
+                else ((run0 + run1) / 2, centre))
+        size_x, size_y = ((width, length) if orientation == "vertical"
+                          else (length, width))
+        with BuildSketch() as sketch:
+            with Locations((x, y)):
+                # build123d requires a radius strictly below half the narrow
+                # dimension. One micron preserves the intended semicircle.
+                RectangleRounded(size_x, size_y, width / 2 - 0.001)
+        face = sketch.sketch.faces()[0]
+        cuts.append(_slab(face, PAD_WEB_TOP - depth, PAD_WEB_TOP + MERGE))
+        cuts.append(_slab(face, PAD_WEB_BOTTOM - MERGE, PAD_WEB_BOTTOM + depth))
+    return cuts
+
+
 def _stem(x, y):
     """The soft stem a cap sits over, raised out of the pad where a keytop was.
 
@@ -1209,5 +1274,7 @@ def button_pad():
         cuts = _boss_clearances(x0, y0, x1, y1)
         if name == "second":
             cuts.append(_mic_clearance())
+        else:
+            cuts.extend(_pad_grooves())
         lobes.append(_cut(_fuse(body, *raised), *cuts))
     return _fuse(*lobes)

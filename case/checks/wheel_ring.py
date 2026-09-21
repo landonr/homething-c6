@@ -37,6 +37,15 @@ for the true opening radius, not trusted from WHEEL_OPENING_R, because this
 exact feature was once silently erased by a stale full-ceiling clearance cut
 while the formulas behind it still looked right on paper.
 
+FDM wheel seat: the printed front's bore is its own. It stands at
+WHEEL_OPENING_R plus FDM_WHEEL_OPENING_CLEARANCE where the recessed front's
+stands at WHEEL_OPENING_R, both bisected off the built shells at the same
+heights, because that widening has to be the FDM shell's alone: led_ring_inner_r()
+is derived off WHEEL_OPENING_R, so a widening that reached it would take the
+whole channel outward off the LEDs. And the web the widening and its mouth
+chamfer are spent out of still stands on that front, probed where led_ring()
+probes the recessed one's.
+
 Wheel rotation clearance: nothing of the pad or the front shell may intrude
 inside the wheel's rotating envelope, at the lip's own clearance radius at and
 below its top face and at the main body's clearance above it, where the shell's
@@ -523,6 +532,120 @@ def wheel_seat_clearance(front):
         if opening < needed - OPENING_PROBE_R:
             problems.append(
                 f"opening only {opening:.2f} at z={z:.2f}, wants {needed:.2f}"
+            )
+    return problems
+
+
+FDM_SEAT_SAMPLES = 3
+"""Heights fdm_wheel_seat bisects both fronts' bores at. Fewer than
+WHEEL_SEAT_SAMPLES because the span is shorter: it stops under the FDM front's
+own mouth chamfer rather than running up to a face floor, and both bores are
+plain cylinders over the whole of it, so this is here to catch a bore that is
+not a cylinder at all rather than to trace a profile."""
+
+FDM_WEB_SAMPLES = 4
+"""Angles fdm_wheel_seat stands its web probe at on the FDM front. Far fewer
+than LED_RING_SAMPLES, and not for the same job: led_ring() walks the channel
+looking for a sector something has blocked, which is a regional failure, while
+this is asking whether a bore and a cone both revolved about the wheel axis
+have eaten a web also revolved about it. Nothing here varies with angle by
+construction, so these are the sanity that it did not, on the four cardinal
+bearings rather than at a single one."""
+
+
+def fdm_wheel_seat(front, fdm_front):
+    """The FDM front's bore stands at its own widened radius where the recessed
+    front's stands at WHEEL_OPENING_R, and the web that widening is spent out of
+    still reaches the LED ring channel on that front.
+
+    The claim is a difference, so both fronts are read in one pass.
+    FDM_WHEEL_OPENING_CLEARANCE belongs to the printed shell alone: it is there
+    because that front's face is flat, with no wheel basin opening the top of
+    the bore and no dish taking the fit off the knob. Widening WHEEL_OPENING_R
+    instead would look identical on this front and carry led_ring_inner_r(),
+    and with it the whole LED ring channel, outward off the LEDs it is built
+    over. One front measuring wide and the other measuring narrow at the same
+    heights is what says the widening stayed where it was put.
+
+    Both radii are bisected off the built shells by _opening_radius rather than
+    read back out of the parameters that were meant to produce them, for the
+    reason wheel_seat_clearance() gives at length: this exact feature has been
+    silently erased before while every formula behind it still looked right.
+
+    The span stops OPENING_PROBE_H under the FDM front's mouth chamfer, so what
+    each bisection meets is the bore itself and not the cone that opens it. The
+    cone is checks/fdm.py's, read at the face where it lives.
+
+    The web is then probed on the FDM front where led_ring()'s own web probe
+    stands on the recessed one, mid-web over the channel's full height. That
+    web is where both FDM_WHEEL_OPENING_CLEARANCE and
+    FDM_WHEEL_OPENING_CHAMFER are spent, so it is the one that can go, and
+    _fdm_mouth_budget()'s arithmetic is no proof that the shell it produced
+    still has material standing there.
+    """
+    problems = _ring_stack_sane()
+    if problems:
+        return problems
+    wx, wy = board.wheel_center()
+    fdm_r = case.fdm_wheel_opening_r()
+    # Under the mouth chamfer on the FDM front, and under the recessed front's
+    # own dished floor over the seat, so one span suits both bores. Each end is
+    # pulled in by the probe's own height for the reason wheel_seat_clearance()
+    # gives: a probe straddling a horizontal boundary is half air at every
+    # radius and the bisection it feeds saturates.
+    ceiling = min(
+        case.FDM_FACE - params.FDM_WHEEL_OPENING_CHAMFER,
+        case.face_floor_at(wx + fdm_r, wy),
+    )
+    z0 = case.CAVITY_FRONT + OPENING_PROBE_H
+    z1 = ceiling - OPENING_PROBE_H
+    if z1 <= z0:
+        return [
+            f"no bore left to measure: the FDM mouth chamfer and the recessed "
+            f"front's own floor leave a ceiling at {ceiling:.2f}, against a "
+            f"cavity underside at {case.CAVITY_FRONT:.2f}"
+        ]
+    # The same bound wheel_seat_clearance() uses, for the same reason: past the
+    # channel's inner wall the material stops being monotonic along the radius
+    # and a bisection that wanders into the void reads the channel's outer wall
+    # as the opening.
+    hi = case.led_ring_inner_r() - OPENING_PROBE_R
+    for label, shell, want in (
+        ("FDM", fdm_front, fdm_r),
+        ("recessed", front, case.WHEEL_OPENING_R),
+    ):
+        crop = _opening_crop(shell, wx, wy, z0, z1, OPENING_SEARCH_LO, hi)
+        for i in range(FDM_SEAT_SAMPLES):
+            z = z0 + (z1 - z0) * i / (FDM_SEAT_SAMPLES - 1)
+            try:
+                opening = _opening_radius(shell, wx, wy, z, hi=hi, crop=crop)
+            except OpeningNotFound as missing:
+                problems.append(
+                    f"{label} front's bore unmeasurable at z={z:.2f}: {missing}"
+                )
+                continue
+            if abs(opening - want) > OPENING_PROBE_R + TOLERANCE:
+                problems.append(
+                    f"the {label} front's bore measures {opening:.2f} at z={z:.2f} "
+                    f"where it should be {want:.2f}: FDM_WHEEL_OPENING_CLEARANCE is "
+                    f"the printed front's alone, and WHEEL_OPENING_R is what "
+                    f"led_ring_inner_r() and the whole channel hang off"
+                )
+
+    r_web = (fdm_r + case.led_ring_inner_r()) / 2
+    z_lo, z_hi = case.CAVITY_FRONT + 0.05, case.LED_RING_TOP - 0.05
+    for i in range(FDM_WEB_SAMPLES):
+        a = 2 * math.pi * i / FDM_WEB_SAMPLES
+        web = Pos(
+            wx + r_web * math.cos(a), wy + r_web * math.sin(a), (z_lo + z_hi) / 2
+        ) * Cylinder(radius=WEB_PROBE_D / 2, height=z_hi - z_lo)
+        filled = _fill_fraction(fdm_front, web)
+        if filled < 0.99:
+            problems.append(
+                f"the FDM front's web to the LED ring channel is {filled:.0%} "
+                f"material at {round(math.degrees(a))} degrees: the widened bore "
+                f"and its mouth chamfer have eaten into the light barrier "
+                f"LED_RING_WALL leaves"
             )
     return problems
 

@@ -27,8 +27,10 @@ The skirt and the cavities carry none either: each is a cut over the whole plan
 profile, so its box is the part's own box and says nothing that ranking can use.
 
 The FDM front does carry entries, and they are the front shell's own but for the
-one cut the face is finished with: the outline groove where the standard shell
-has the keypad recess. They are keyed under `c6remote-case-front-fdm.stl`,
+two cuts that answer to its flat face: the outline groove where the standard
+shell has the keypad recess, and a wheel opening carrying its own clearance and
+a chamfered mouth where the standard shell's bore opens into a dish instead.
+They are keyed under `c6remote-case-front-fdm.stl`,
 because that is the file the viewer loaded and therefore the name it looks a
 click up under. The two fronts are never both on screen, so nothing of one ever
 ranks against the other.
@@ -231,8 +233,10 @@ def _support_gaps(runs, obstacles):
 def _front(runs, obstacles, fdm=False):
     """The front shell, in the order front_shell() builds and cuts it.
 
-    `fdm` swaps the one entry the two fronts differ by, the outline groove the
-    filament build cuts where the standard shell cuts the keypad recess.
+    `fdm` swaps the two entries the fronts differ by: the outline groove the
+    filament build cuts where the standard shell cuts the keypad recess, and
+    the wheel opening, which on that build carries its own clearance and a
+    chamfered mouth because it meets a flat face rather than a dish.
     """
     refs = board.mounting_hole_refs()
     placements = board.components()
@@ -300,7 +304,7 @@ def _front(runs, obstacles, fdm=False):
             "wheel_opening",
             "wheel_ring.wheel_opening",
             "cut",
-            wheel_ring.wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1),
+            wheel_ring.wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         ),
         _entry(
             "led_ring_channel",

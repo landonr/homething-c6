@@ -3,13 +3,24 @@ through the back's -Y end wall, and the one post the back offers a V2 board."""
 
 import functools
 
-from build123d import Box, Cylinder, Pos, Rot
+from build123d import (
+    BuildLine,
+    BuildSketch,
+    Box,
+    Cylinder,
+    Plane,
+    Polyline,
+    Pos,
+    Rot,
+    extrude,
+    make_face,
+)
 
 import board
 import params
 
 from .backform import contour_depth
-from .shape import _chamfered_post, _fuse, _hole, _rounded_prism
+from .shape import _chamfered_post, _cut, _fuse, _hole, _rounded_prism
 from .stack import LAP_OUT, MERGE, SKIRT_BOTTOM, SUPPORT_TOP
 
 
@@ -39,6 +50,47 @@ def end_screw_axis():
     return x, params.END_SCREW_Z
 
 
+def _chamfer_block_lead_in(block, back):
+    """Cut the block's top +Y arris back to a ramp, where the board lands on it.
+
+    A straight wedge cut, not an edge chamfer. The wedge is the triangle in the
+    YZ plane on (back - s, SUPPORT_TOP), (back, SUPPORT_TOP) and
+    (back, SUPPORT_TOP - s) for s = END_SCREW_BLOCK_CHAMFER, run across the
+    block's whole width plus MERGE either side and taken off the block.
+
+    It is a cut because the edge chamfer this replaces exported a torn mesh.
+    That arris is not one edge: it is the straight edge across the width plus
+    the two END_SCREW_BLOCK_R plan rounds tangent to it, and chamfering that
+    tangent chain tessellated to open edges at the two tangency points, leaving
+    the front shell non-manifold in both exported STLs. The solid was valid and
+    every geometric check was green, which is the whole reason this note is
+    here: do not put the edge chamfer back. See the STL discipline in AGENTS.md.
+
+    The wedge is one planar ramp with no tangent chain to tear, and it takes
+    the tops off the two plan rounds as well, which is if anything a better
+    lead-in for a board sliding in.
+    """
+    if not 0 < params.END_SCREW_BLOCK_CHAMFER < params.END_SCREW_BLOCK_D:
+        raise ValueError(
+            f"END_SCREW_BLOCK_CHAMFER {params.END_SCREW_BLOCK_CHAMFER} is not "
+            f"inside the block's own {params.END_SCREW_BLOCK_D} depth"
+        )
+    size = params.END_SCREW_BLOCK_CHAMFER
+    with BuildSketch(Plane.YZ) as section:
+        with BuildLine():
+            Polyline(
+                (back - size, SUPPORT_TOP),
+                (back, SUPPORT_TOP),
+                (back, SUPPORT_TOP - size),
+                close=True,
+            )
+        make_face()
+    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
+    x = block.bounding_box().center().X
+    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    return _cut(block, wedge)
+
+
 def end_screw_block():
     """The front's own boss for that screw, hanging behind the skirt.
 
@@ -57,6 +109,16 @@ def end_screw_block():
     the block's full width and reaches past the two wall-side rounds by that
     radius plus MERGE, so what bridges to the skirt is the block's whole
     section and not the narrowed waist a round would otherwise leave.
+
+    Its top +Y arris is cut back by END_SCREW_BLOCK_CHAMFER. That arris stands
+    under the board with only SUPPORT_GAP over it and sits END_SCREW_BLOCK_D
+    inboard of the board's own end, so it is what a board going in at a tilt
+    strikes first; the ramp gives the board a lead-in instead. It is a wedge
+    cut across the block's full width rather than an edge chamfer, because the
+    arris is a tangent chain of the straight edge and the two plan rounds and
+    chamfering it exported a torn, non-manifold front shell while every
+    geometric check stayed green. It comes off the block before the web joins
+    it.
     """
     x, z = end_screw_axis()
     edge = end_wall_edge()
@@ -71,6 +133,7 @@ def end_screw_block():
         bottom,
         SUPPORT_TOP,
     )
+    block = _chamfer_block_lead_in(block, back)
     web_y0 = edge - params.BOARD_FIT - MERGE
     web_y1 = face + params.END_SCREW_BLOCK_R + MERGE
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(

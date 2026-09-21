@@ -8,6 +8,18 @@ about this variant is that it prints face down and that claim is exactly
 those sites is a dish that survived into the variant that exists to have
 none.
 
+Wheel mouth is chamfered: the one place this front is not flat on purpose. Its
+bore carries FDM_WHEEL_OPENING_CLEARANCE the recessed front's does not, and
+opens out of the face on a 45 degree cone where the recessed front opens into
+the keypad recess's wheel basin instead. Read by ray across the band between
+the bore and the mouth, and what is checked is the rise over run, which is the
+surface rather than the depth it was cut to. The flat face has to resume
+outside the mouth, which is what holds the cone off the web to the LED ring
+channel, and the recessed front has to come back a dish across the same band,
+which is what holds the widening off WHEEL_OPENING_R and so off every radius
+the channel is derived from. face_is_flat() hands that band's own probe sites
+over rather than reading them against a plane they are not on.
+
 Outline is cut: the slot is where the outline is, at the depth it was asked
 for, and there is real material left under every point of it. One ray down
 through the face at each sample rather than a pair of probes: what the ray
@@ -216,6 +228,32 @@ def _samples():
     return out
 
 
+def _mouth_sites():
+    """The _probe_sites() entries standing inside the FDM front's own wheel
+    mouth, which are the ones face_is_flat() cannot read against a plane.
+
+    checks/keypad.py puts four sites on the wheel seat, half of WHEEL_RIM_LEDGE
+    outside the recessed front's bore. FDM_WHEEL_OPENING_CHAMFER opens this
+    front's bore out past that radius, so those four stand on the cone rather
+    than on the face. Rather than drop the claim, the two passes split it:
+    face_is_flat() reads every site outside this radius as flat, and
+    wheel_mouth_is_chamfered() reads the whole band those four stand in against
+    the cone they are actually on, at its own bearings and at more radii than
+    the seat happens to carry sites at. Derived off fdm_wheel_mouth_r() rather
+    than listed, so a chamfer narrowed back inside the seat hands its sites
+    back to the flat pass on its own.
+    """
+    wx, wy = board.wheel_center()
+    mouth = case.fdm_wheel_mouth_r()
+    return [
+        (label, x, y)
+        for label, x, y in _probe_sites()
+        if x is not None
+        and y is not None
+        and math.hypot(x - wx, y - wy) < mouth
+    ]
+
+
 def face_is_flat(front):
     """The FDM front's outer surface is one plane at FDM_FACE, at every site
     checks/keypad.py reads the recessed front's dish at.
@@ -227,11 +265,19 @@ def face_is_flat(front):
     to how deep the recess would have been there. The sites are
     checks/keypad.py's own, so the two passes read the same places with opposite
     verdicts: dished there, flat here.
+
+    Every site but the handful standing inside the wheel mouth, where this face
+    is not flat on purpose and wheel_mouth_is_chamfered() reads them instead.
+    _mouth_sites() is what decides which, off the built mouth's own radius, so
+    the two passes cannot both let a site go.
     """
     problems = []
     top_z = case.FDM_FACE + FACE_PROBE_START
+    skip = {label for label, _, _ in _mouth_sites()}
     for label, x, y in _probe_sites():
         if x is None or y is None:
+            continue
+        if label in skip:
             continue
         runs = _ray_runs(front, (x, y, top_z), (x, y, case.CAVITY_FRONT - 1))
         if not runs:
@@ -320,6 +366,235 @@ def outline_is_cut(front):
                 part="c6remote-case-front-fdm",
             )
         )
+    return problems
+
+
+MOUTH_SAMPLES = 4
+"""Bearings the wheel mouth is read on. The bore and its cone are both revolved
+about the wheel axis and nothing clips either, so angle is not where a failure
+would hide; these are here so a mouth that came out of the boolean as something
+other than a surface of revolution says so."""
+
+MOUTH_STEPS = 4
+"""Radii read across the chamfer band at each bearing. Four readings give three
+slopes, so one reading landing on a fillet or a tessellation artefact shows as
+one slope out of line rather than as the whole band's verdict."""
+
+MOUTH_PROBE_INSET = 0.05
+"""How far inside the widened bore, and outside the mouth, the two bracketing
+rays stand. Off the surface rather than on it, since a ray on a vertical wall
+reads whichever side the boolean rounded to."""
+
+MOUTH_SLOPE_TOLERANCE = 0.06
+"""How far the mouth's measured rise over run may sit from the 1.0 a 45 degree
+cone has. The band is read in steps of a few tenths, so a hundredth of boolean
+or tessellation slop at either end of a step is already a percent of the slope;
+this is that, not a working allowance on the angle."""
+
+MOUTH_FLAT_SLOPE_MAX = 0.25
+"""Steepest the recessed front's own face may fall across the same band before
+it counts as carrying a chamfer of its own. The wheel basin is a dish, so it
+does fall there, but it falls across tens of millimetres rather than across
+FDM_WHEEL_OPENING_CHAMFER; anything near the cone's 1.0 means the FDM front's
+mouth leaked onto the front that is not supposed to have one."""
+
+
+MOUTH_RAY_END = case.CAVITY_FRONT - 1
+"""How far down a mouth ray runs: a millimetre under the cavity ceiling, so a
+ray that finds nothing has genuinely passed through the bore rather than
+stopped inside the shell it was meant to read."""
+
+
+def _mouth_crop(shell, angle, radii, face_z):
+    """The crop holding every ray a mouth pass casts on one bearing.
+
+    The same economy led_ring() takes and for the same reason: each of these
+    rays is a line against a front shell's ten thousand faces, and all of one
+    bearing's rays live in a box a couple of millimetres across. The crop spans
+    every radius in `radii` on that bearing and the whole height a ray runs, so
+    it holds each of them by construction, and _Crop refuses any it does not
+    rather than reporting the shell closing at a box wall.
+    """
+    wx, wy = board.wheel_center()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    xs = [wx + r * cos_a for r in radii]
+    ys = [wy + r * sin_a for r in radii]
+    return _Crop(
+        shell,
+        (min(xs) - CROP_MARGIN, min(ys) - CROP_MARGIN, MOUTH_RAY_END - CROP_MARGIN),
+        (
+            max(xs) + CROP_MARGIN,
+            max(ys) + CROP_MARGIN,
+            face_z + FACE_PROBE_START + CROP_MARGIN,
+        ),
+    )
+
+
+def _surface_at(crop, x, y, face_z):
+    """Where the cropped shell's outer surface sits at (x, y), or None where the
+    ray meets no material at all, which over the wheel means the bore is open
+    there."""
+    top = face_z + FACE_PROBE_START
+    runs = crop.ray_runs((x, y, top), (x, y, MOUTH_RAY_END))
+    if not runs:
+        return None
+    return top - runs[0][0]
+
+
+def wheel_mouth_is_chamfered(front):
+    """The FDM front's wheel opening is open at its own widened radius, opens
+    out from there on one 45 degree cone, and the recessed front does neither.
+
+    Read off both built faces by ray, the way face_is_flat() reads the plane
+    those rays land on everywhere else. Three things come out of the same sweep.
+
+    The bore is open where the recessed front is solid. One ray stands just
+    inside fdm_wheel_opening_r() and finds no material at all on this front and
+    material on the other, which is FDM_WHEEL_OPENING_CLEARANCE seen from the
+    face rather than bisected at depth as checks/wheel_ring.py does.
+
+    The mouth is a 45 degree cone. The band between the bore and the mouth is
+    read at several radii and what is checked is the rise over run between
+    them, which is a measurement of the surface rather than a restatement of
+    the depth it was cut to: a cone at the wrong angle, a mouth that came back
+    as a round, and a chamfer that ran only part of the band each read as a
+    slope that is not one.
+
+    The face resumes outside it. One ray just outside fdm_wheel_mouth_r() has
+    to land on FDM_FACE itself, which is what says the cone stopped where the
+    budget against LED_RING_WALL says it does rather than carrying on over the
+    web and into the roof of the LED ring channel.
+
+    The recessed front is then read across the same band and has to be flat by
+    comparison. It is not flat in absolute terms, the wheel basin dishes there,
+    but a dish spread over the whole seat falls a small fraction of what a 45
+    degree cone does over a few tenths, so the two are not confusable and a
+    chamfer that leaked onto that front would show at once.
+    """
+    problems = []
+    wx, wy = board.wheel_center()
+    bore = case.fdm_wheel_opening_r()
+    mouth = case.fdm_wheel_mouth_r()
+    step = (mouth - bore) / MOUTH_STEPS
+    band = [bore + step * (i + 0.5) for i in range(MOUTH_STEPS)]
+    inside, outside = bore - MOUTH_PROBE_INSET, mouth + MOUTH_PROBE_INSET
+
+    for i in range(MOUTH_SAMPLES):
+        a = 2 * math.pi * i / MOUTH_SAMPLES
+        deg = round(math.degrees(a))
+        cos_a, sin_a = math.cos(a), math.sin(a)
+        crop = _mouth_crop(front, a, [inside] + band + [outside], case.FDM_FACE)
+
+        def at(radius):
+            return _surface_at(
+                crop, wx + radius * cos_a, wy + radius * sin_a, case.FDM_FACE
+            )
+
+        if at(inside) is not None:
+            problems.append(
+                Problem(
+                    f"the FDM front is still material {inside:.2f} from the wheel "
+                    f"centre at {deg} degrees, inside its own bore at "
+                    f"{bore:.2f}: FDM_WHEEL_OPENING_CLEARANCE was not cut",
+                    at=(wx + inside * cos_a, wy + inside * sin_a, case.FDM_FACE),
+                    part="c6remote-case-front-fdm",
+                )
+            )
+
+        surface = at(outside)
+        if surface is None or abs(surface - case.FDM_FACE) > FACE_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the FDM face is at {surface if surface is None else round(surface, 3)} "
+                    f"{outside:.2f} from the wheel centre at {deg} degrees, where "
+                    f"FDM_FACE says {case.FDM_FACE:.3f}: the mouth chamfer has run "
+                    f"past its own outer radius and over the web LED_RING_WALL "
+                    f"leaves to the ring channel",
+                    at=(wx + outside * cos_a, wy + outside * sin_a, case.FDM_FACE),
+                    part="c6remote-case-front-fdm",
+                )
+            )
+
+        read = [at(r) for r in band]
+        if any(z is None for z in read):
+            problems.append(
+                Problem(
+                    f"the FDM front has no surface at all across its wheel mouth "
+                    f"at {deg} degrees: the opening has swallowed the band the "
+                    f"chamfer is cut in",
+                    at=(wx + band[0] * cos_a, wy + band[0] * sin_a, case.FDM_FACE),
+                    part="c6remote-case-front-fdm",
+                )
+            )
+            continue
+        for lower, upper in zip(read, read[1:]):
+            slope = (upper - lower) / step
+            if abs(slope - 1) > MOUTH_SLOPE_TOLERANCE:
+                problems.append(
+                    Problem(
+                        f"the FDM front's wheel mouth rises {slope:.2f} per unit of "
+                        f"radius at {deg} degrees, where a 45 degree lead-in rises "
+                        f"1.00: FDM_WHEEL_OPENING_CHAMFER is not the cone the "
+                        f"printed face needs to be self supporting",
+                        at=(wx + band[0] * cos_a, wy + band[0] * sin_a, lower),
+                        part="c6remote-case-front-fdm",
+                    )
+                )
+                break
+    return problems
+
+
+def recessed_mouth_is_plain(recessed):
+    """The recessed front carries none of the FDM front's mouth chamfer.
+
+    The other half of wheel_mouth_is_chamfered()'s claim, on the other solid.
+    FDM_WHEEL_OPENING_CHAMFER and FDM_WHEEL_OPENING_CLEARANCE are the printed
+    front's alone, and the reason they have to be is that the recessed front's
+    bore is what led_ring_inner_r() and the whole LED ring channel are derived
+    off. So the same band is read on that front and has to come back a dish:
+    falling, because the wheel basin does fall there, but falling a fraction of
+    what a 45 degree cone falls over the same few tenths.
+    """
+    problems = []
+    wx, wy = board.wheel_center()
+    bore = case.fdm_wheel_opening_r()
+    mouth = case.fdm_wheel_mouth_r()
+    step = (mouth - bore) / MOUTH_STEPS
+    band = [bore + step * (i + 0.5) for i in range(MOUTH_STEPS)]
+    for i in range(MOUTH_SAMPLES):
+        a = 2 * math.pi * i / MOUTH_SAMPLES
+        deg = round(math.degrees(a))
+        cos_a, sin_a = math.cos(a), math.sin(a)
+        crop = _mouth_crop(recessed, a, band, case.SHELL_FRONT)
+        read = [
+            _surface_at(crop, wx + r * cos_a, wy + r * sin_a, case.SHELL_FRONT)
+            for r in band
+        ]
+        if any(z is None for z in read):
+            problems.append(
+                Problem(
+                    f"the recessed front has no surface at all across the FDM "
+                    f"front's mouth band at {deg} degrees",
+                    at=(wx + band[0] * cos_a, wy + band[0] * sin_a, case.SHELL_FRONT),
+                    part="c6remote-case-front",
+                )
+            )
+            continue
+        for lower, upper in zip(read, read[1:]):
+            slope = (upper - lower) / step
+            if abs(slope) > MOUTH_FLAT_SLOPE_MAX:
+                problems.append(
+                    Problem(
+                        f"the recessed front falls {slope:.2f} per unit of radius "
+                        f"across the FDM front's mouth band at {deg} degrees, which "
+                        f"is a chamfer rather than the wheel basin's own dish: "
+                        f"FDM_WHEEL_OPENING_CHAMFER has leaked onto the front that "
+                        f"the LED ring channel's radii are derived off",
+                        at=(wx + band[0] * cos_a, wy + band[0] * sin_a, lower),
+                        part="c6remote-case-front",
+                    )
+                )
+                break
     return problems
 
 

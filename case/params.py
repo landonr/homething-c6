@@ -298,6 +298,24 @@ assembly somewhere to slide instead. Kept under half END_SCREW_BLOCK_D, which
 is the shallower plan dimension and so the bound on any plan round here. The
 two wall-side corners end up buried: the web that ties the block to the skirt
 runs past them by this radius plus MERGE, so the bridge stays full width."""
+END_SCREW_BLOCK_CHAMFER = 1.5
+"""Lead-in on the block's top +Y arris, where the board lands on it.
+
+The block's top is SUPPORT_TOP, so SUPPORT_GAP is the whole of the clearance
+the board has over it, and the block reaches END_SCREW_BLOCK_D inboard of the
+board's own -Y edge. That puts a square arris under the board and well inside
+its footprint, so it is the first thing the board's end strikes when the board
+goes in at any tilt, with nothing like enough gap to clear it. The chamfer
+turns that catch into a ramp the board slides down.
+
+Forty five degrees because the front prints face down, so this face builds
+upward and is self supporting; anything steeper would need support in the one
+orientation that keeps support off the cosmetic face.
+
+Bounded twice. It has to stay well inside END_SCREW_BLOCK_D so the block keeps
+a top land for the board to sit over rather than being cut to a knife edge,
+and well inside the height between SUPPORT_TOP and the top of the pilot, which
+is END_SCREW_Z plus half BOSS_PILOT_D, so the ramp never opens the thread."""
 
 # Cell: one AA lying along the board underneath it, horizontally, in the same
 # saddle cradle the 18650 used. Change these for another format and the cavity,
@@ -707,6 +725,29 @@ roof also bounds the cut, which cannot climb past it, so the ceiling over the
 ramp stays as thick as the ceiling over the connector.
 _chamfer_usb_pocket_lip() measures the built wall and fails if this value goes
 past it, which is what caught the change."""
+USB_POCKET_INBOARD_REACH = 2.0
+"""How much further inboard usb_pocket() reaches than the connector's own
+envelope plus USB_CLEARANCE, on the +Y side alone.
+
+What it buys is run. The plug enters along +Y and wants the connector's full
+height under it for a while before the ceiling steps back down to CAVITY_FRONT,
+so it slides home instead of catching on the lip. USB_POCKET_LIP_CHAMFER
+already ramps that lip over the whole of its own height and
+_chamfer_usb_pocket_lip() refuses any more, so the lip itself cannot give
+anything further; moving the wall is what is left, and the ramp rides with it
+because that function reads the wall off the built pocket.
+
+A separate number rather than more USB_CLEARANCE because that one also sizes
+usb_slot(), the through-cut in the end wall, and the opening the connector
+shows through must not grow: it is the line around the plug on the exterior
+face. This pocket is blind and internal, so it can grow where the slot cannot,
+and asymmetric because only the inboard side is in the plug's way.
+
+What it costs is reach on the thinnest roof in the model. usb_roof() up to the
+face leaves 1.04 on the recessed front and 0.64 on the FDM front, and this
+carries that run this much further inboard. Nothing structural is in the band;
+the nearest mounting bosses stand well past it. checks/usb.py reads the wall
+and its ramp off the built front rather than off this."""
 
 # Button pad: one soft moulding, flat web with raised keys and no skirt. Held up
 # against the ceiling by its own plungers resting on the switches.
@@ -959,6 +1000,48 @@ so a small change on either side puts this groove over a roof that has to carry
 the light, and what would be left there is LED_RING_ROOF less this.
 checks/fdm.py holds the floor under it for that case rather than for the
 clearance the present layout happens to have."""
+FDM_WHEEL_OPENING_CLEARANCE = 0.2
+"""Extra radius the FDM front's own wheel opening carries, over and above
+WHEEL_OPENING_CLEARANCE, so the printed bore clears the wheel's main rotating
+body by both together instead of by the moulded front's gap alone.
+
+This front only. The recessed front opens the top of its bore with the keypad
+recess's wheel basin, a dish on the same axis whose floor the bore breaks
+through, so the knob already has a lead-in there and the tight gap below it
+reads as a visible line rather than as a fit. Flatten the dish and the bore
+meets the face as a square arris with nothing above it, and the fit is the
+whole of the story. A printed bore also comes back tighter than the solid it
+was cut from, which the moulded one does not.
+
+It cannot simply be more WHEEL_OPENING_CLEARANCE. led_ring_inner_r() is
+WHEEL_OPENING_R plus LED_RING_WALL, so widening that radius drags the LED ring
+channel outward with it and off the LEDs the channel is built over. So this is
+applied to the FDM shell's bore alone and is spent out of that shell's own web
+rather than out of the channel's position.
+
+The web is what bounds it. This plus FDM_WHEEL_OPENING_CHAMFER has to stay
+inside LED_RING_WALL, so the widened bore and the cone that opens it never
+reach the channel's inner wall; wheel_opening() raises if they do. Coincident
+is as bad as past: FDM_OUTLINE_EDGE_CLEAR is the note on what two coincident
+edges in one surface do to an exported mesh."""
+FDM_WHEEL_OPENING_CHAMFER = 0.6
+"""Lead-in at the mouth of the FDM front's wheel opening, a 45 degree cone
+opening the bore out by this much over this much height, ending at the face.
+
+The recessed front wants none, for the same reason it wants no extra
+clearance: its wheel basin is already the lead-in, a saucer the knob drops
+into. This front's face is flat, so what the knob meets going in is the square
+arris where the bore breaks it, and this replaces that arris with a ramp.
+
+45 degrees because the front prints face down. The face lies on the bed and the
+hole narrows as it rises off it, so the cone is a self supporting overhang
+rather than a ceiling the slicer has to bridge or prop, which is the same trade
+FDM_FACE_DROP and the outline groove are built on.
+
+Shares FDM_WHEEL_OPENING_CLEARANCE's budget against LED_RING_WALL: the widened
+bore plus this cone stay inside the web, so the mouth's own widest radius stops
+short of the LED ring channel's inner wall. wheel_opening() raises naming both
+if that is ever untrue, and checks/fdm.py reads the cone off the built face."""
 
 
 # Keycaps: every switch carries a rigid translucent cap over a soft stem

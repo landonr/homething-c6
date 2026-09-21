@@ -34,8 +34,15 @@ from build123d import (
 import board
 import params
 
-from .shape import _face_reach, _hole, _isect, _offset_face, _slab
-from .stack import CAVITY_FRONT, LIP_CLEAR_R, SHELL_FRONT, WHEEL_OPENING_R
+from .shape import _face_reach, _fuse, _hole, _isect, _offset_face, _slab
+from .stack import (
+    CAVITY_FRONT,
+    FDM_FACE,
+    LIP_CLEAR_R,
+    MERGE,
+    SHELL_FRONT,
+    WHEEL_OPENING_R,
+)
 
 LED_RING_TOP = SHELL_FRONT - params.LED_RING_ROOF
 """Ceiling of the channel, and so the underside of the roof the ring glows
@@ -225,15 +232,94 @@ def led_ring_channel():
     return _isect(channel, _slab(_channel_clip(), z0, z1))
 
 
-def wheel_opening(z0, z1):
+def fdm_wheel_opening_r():
+    """Radius of the FDM front's own bore: WHEEL_OPENING_R plus
+    FDM_WHEEL_OPENING_CLEARANCE.
+
+    The recessed front's bore stays at WHEEL_OPENING_R, and so does
+    led_ring_inner_r(), which is derived off it. The extra radius is spent out
+    of the web on this one shell rather than by moving the LED ring channel,
+    which is the whole reason the FDM front carries a clearance of its own."""
+    return WHEEL_OPENING_R + params.FDM_WHEEL_OPENING_CLEARANCE
+
+
+def fdm_wheel_mouth_r():
+    """Widest the FDM front's wheel opening gets, at the face itself, once
+    FDM_WHEEL_OPENING_CHAMFER has opened the bore out at 45 degrees.
+
+    What the budget against LED_RING_WALL is measured on, and what the flat face
+    has to resume outside of."""
+    return fdm_wheel_opening_r() + params.FDM_WHEEL_OPENING_CHAMFER
+
+
+def _fdm_mouth_budget():
+    """Refuse an FDM mouth that reaches the LED ring channel's inner wall.
+
+    The FDM front's widening is taken out of the web, which is a full
+    LED_RING_WALL of shell between the bore and the channel, and the widened
+    bore plus its chamfer are both spent out of it. At LED_RING_WALL exactly
+    the mouth's outer edge goes coincident with the channel's inner wall, which
+    is the same coincident-edge trap FDM_OUTLINE_EDGE_CLEAR exists for and
+    tears an exported mesh while every solid reading still looks right, so the
+    bound is exclusive."""
+    spent = params.FDM_WHEEL_OPENING_CLEARANCE + params.FDM_WHEEL_OPENING_CHAMFER
+    if spent >= params.LED_RING_WALL:
+        raise ValueError(
+            f"FDM_WHEEL_OPENING_CLEARANCE {params.FDM_WHEEL_OPENING_CLEARANCE} plus "
+            f"FDM_WHEEL_OPENING_CHAMFER {params.FDM_WHEEL_OPENING_CHAMFER} spends "
+            f"{spent:.2f} of the {params.LED_RING_WALL:.2f} web LED_RING_WALL leaves "
+            "between the wheel opening and the LED ring channel's inner wall"
+        )
+
+
+def wheel_opening(z0, z1, fdm=False):
     """The shell's wheel opening: one plain bore at WHEEL_OPENING_R, ceiling
     underside to flat face, so below the keypad recess's wheel basin the face closes in flush
     to the wheel's main rotating body with only WHEEL_OPENING_CLEARANCE between
     them. The top of the bore is opened out by that recess instead, a dish on
     the same axis whose floor the bore breaks through. No countersink and no
     window any more: nothing seats in it, and the LEDs show through the
-    translucent face itself rather than through an opening."""
+    translucent face itself rather than through an opening.
+
+    `fdm` swaps that bore for the printed front's own, the way
+    stack.front_face(fdm) swaps the face it rises to. Two things change and
+    both follow from that face being flat. The bore widens by
+    FDM_WHEEL_OPENING_CLEARANCE, because a printed bore comes back tighter than
+    the solid and there is no dish above it taking the fit off the knob. And a
+    truncated cone is fused onto the cut, standing at the bore's own radius
+    FDM_WHEEL_OPENING_CHAMFER below the face and opening out by that much again
+    at it, so the arris the flat face would otherwise leave becomes a 45 degree
+    lead-in. The cone carries on past the face at the same rake, so the cut
+    breaks through rather than ending on a surface coincident with it.
+
+    Both are spent out of the web, which _fdm_mouth_budget() is what holds.
+    Neither touches WHEEL_OPENING_R, since led_ring_inner_r() is derived off it
+    and the LED ring channel would travel with any change to it.
+
+    The cone is fused before the clip rather than after, so it is trimmed at
+    the case's own side wall exactly as the bore is, rather than reaching past
+    a boundary the bore respects."""
     x, y = board.wheel_center()
-    return _isect(
-        _hole(x, y, 2 * WHEEL_OPENING_R, z0, z1), _slab(_opening_clip(), z0, z1)
-    )
+    if not fdm:
+        tool = _hole(x, y, 2 * WHEEL_OPENING_R, z0, z1)
+        return _isect(tool, _slab(_opening_clip(), z0, z1))
+
+    _fdm_mouth_budget()
+    bore = fdm_wheel_opening_r()
+    base = FDM_FACE - params.FDM_WHEEL_OPENING_CHAMFER
+    # The rake runs on past the face by MERGE so the cone leaves the solid
+    # rather than ending in its surface, the same overrun every other cut here
+    # takes for the same reason.
+    reach = params.FDM_WHEEL_OPENING_CHAMFER + MERGE
+    with BuildSketch(Plane.XZ) as section:
+        with BuildLine():
+            Polyline(
+                (bore, base),
+                (bore + reach, base + reach),
+                (bore, base + reach),
+                close=True,
+            )
+        make_face()
+    cone = Pos(x, y, 0) * revolve(section.sketch, Axis.Z)
+    tool = _fuse(_hole(x, y, 2 * bore, z0, z1), cone)
+    return _isect(tool, _slab(_opening_clip(), z0, z1))

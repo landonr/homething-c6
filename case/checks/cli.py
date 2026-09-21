@@ -58,6 +58,8 @@ from .fdm import (
     fdm_pad_fits,
     outline_is_cut,
     outline_solid_sane,
+    recessed_mouth_is_plain,
+    wheel_mouth_is_chamfered,
 )
 from .hardware import cell_clearance, end_screw, feature_clashes
 from .ir import (
@@ -102,8 +104,9 @@ from .support import (
     support_printable,
     support_wall_merge,
 )
-from .usb import usb_pocket_clearance
+from .usb import usb_pocket_clearance, usb_pocket_reach
 from .wheel_ring import (
+    fdm_wheel_seat,
     led_ring,
     light_path,
     rotation_clearance,
@@ -353,6 +356,27 @@ def _face_is_flat(s):
 
 
 @_check("fdm")
+def _wheel_mouth_is_chamfered(s):
+    return _report(
+        wheel_mouth_is_chamfered(s.front_fdm),
+        f"the FDM front's bore opens at "
+        f"{case.fdm_wheel_opening_r():.2f} and its mouth chamfers out to "
+        f"{case.fdm_wheel_mouth_r():.2f} on one 45 degree cone, with the flat "
+        f"face resuming outside it",
+    )
+
+
+@_check("fdm")
+def _recessed_mouth_is_plain(s):
+    return _report(
+        recessed_mouth_is_plain(s.front),
+        f"the recessed front carries none of that mouth: it dishes across the "
+        f"same band rather than chamfering, so WHEEL_OPENING_R and every LED "
+        f"ring radius derived off it are untouched",
+    )
+
+
+@_check("fdm")
 def _outline_is_cut(s):
     return _report(
         outline_is_cut(s.front_fdm),
@@ -393,6 +417,17 @@ def _wheel_seat_clearance(s):
         "shell's own opening sits flush to the housing at "
         "WHEEL_OPENING_CLEARANCE wherever it is cut through real shell, "
         "lip stays clear of the ceiling",
+    )
+
+
+@_check("wheel_ring")
+def _fdm_wheel_seat(s):
+    return _report(
+        fdm_wheel_seat(s.front, s.front_fdm),
+        f"the FDM front's bore measures "
+        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the recessed "
+        f"front's, which stays at WHEEL_OPENING_R, and the web to the ring "
+        f"channel survives on it",
     )
 
 
@@ -451,6 +486,16 @@ def _usb_pocket_clearance(s):
         f"USB pocket clears the connector by USB_CLEARANCE and is flush with "
         f"the slot at {case.usb_roof():.2f}, leaving "
         f"{case.SHELL_FRONT - case.usb_roof():.2f} of ceiling above it",
+    )
+
+
+@_check("usb")
+def _usb_pocket_reach(s):
+    return _report(
+        usb_pocket_reach(s.front),
+        f"USB pocket reaches {params.USB_POCKET_INBOARD_REACH:.2f} inboard of "
+        f"the connector's own clearance, with the lip's 45 degree ramp starting "
+        f"at that wall",
     )
 
 

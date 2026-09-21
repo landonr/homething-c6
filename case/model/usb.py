@@ -83,6 +83,15 @@ def usb_pocket():
     height than a switch anywhere under this shallower ceiling. See
     usb_slot() for the end wall's own opening, which shares this same
     envelope.
+
+    Symmetric everywhere but the inboard side, which reaches
+    USB_POCKET_INBOARD_REACH further in again. That is the side the plug
+    arrives from, and what it wants is a run at the connector's full height
+    before the ceiling steps back down, rather than the lip standing at the
+    end of the connector's own footprint. The lip's ramp is already the whole
+    of its height and cannot give more, so the wall moves and the ramp rides
+    with it. The reach is the pocket's alone: usb_slot()'s opening through the
+    end wall is sized on USB_CLEARANCE and does not grow.
     """
     box = board.usb_envelope()
     c = params.USB_CLEARANCE
@@ -93,8 +102,10 @@ def usb_pocket():
     # rather than from the stack, so it follows this without being told.
     top = usb_roof()
     bottom = CAVITY_FRONT - MERGE
-    return Pos(box.center().X, box.center().Y, (bottom + top) / 2) * Box(
+    y0 = box.min.Y - c
+    y1 = box.max.Y + c + params.USB_POCKET_INBOARD_REACH
+    return Pos(box.center().X, (y0 + y1) / 2, (bottom + top) / 2) * Box(
         box.size.X + 2 * c,
-        box.size.Y + 2 * c,
+        y1 - y0,
         top - bottom,
     )

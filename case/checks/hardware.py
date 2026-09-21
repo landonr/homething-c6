@@ -207,12 +207,21 @@ def end_screw(front, back):
                 part="case-front",
             )
         )
-    for label, probe_z in (
-        ("under its top", case.SUPPORT_TOP - 0.3),
-        ("at the axis", z),
-        ("above its bottom", box.min.Z + 0.3),
+    # The top row alone probes further in than the other two: the block's back
+    # face is chamfered away at the top for END_SCREW_BLOCK_CHAMFER, so a probe
+    # at the back reads air there by construction and would fail on the lead-in
+    # rather than on a missed fuse. Stepping inboard of the chamfer puts it back
+    # on the top land the board sits over.
+    for label, probe_y, probe_z in (
+        (
+            "under its top",
+            box.max.Y - params.END_SCREW_BLOCK_CHAMFER - 0.3,
+            case.SUPPORT_TOP - 0.3,
+        ),
+        ("at the axis", box.max.Y - 0.3, z),
+        ("above its bottom", box.max.Y - 0.3, box.min.Z + 0.3),
     ):
-        probe = Pos(x, box.max.Y - 0.3, probe_z) * Box(0.3, 0.3, 0.3)
+        probe = Pos(x, probe_y, probe_z) * Box(0.3, 0.3, 0.3)
         filled = _fill_fraction(front, probe)
         if filled < 1 - TOLERANCE:
             problems.append(
@@ -223,6 +232,28 @@ def end_screw(front, back):
                     part="case-front",
                 )
             )
+
+    # And the lead-in itself, read as void on the built front. This box sits
+    # just inside the top back corner the lead-in takes off, and it is sized
+    # and placed off END_SCREW_BLOCK_CHAMFER rather than fixed, so it stays
+    # wholly inside the removed wedge at any positive value of it; material
+    # here means the wedge stopped being cut and the board has a square arris
+    # to land on again. It is the twin of the offset above: that one is on the
+    # land the lead-in leaves, this one is in the wedge it removes.
+    lead_in = params.END_SCREW_BLOCK_CHAMFER
+    probe = Pos(
+        x, box.max.Y - 0.25 * lead_in, case.SUPPORT_TOP - 0.25 * lead_in
+    ) * Box(0.2 * lead_in, 0.2 * lead_in, 0.2 * lead_in)
+    filled = _fill_fraction(front, probe)
+    if filled > TOLERANCE:
+        problems.append(
+            Problem(
+                f"the block's top back corner is {filled:.0%} material, so the "
+                "board's lead-in chamfer is not cut",
+                box=probe,
+                part="case-front",
+            )
+        )
 
     fouled = _volume(block.intersect(back))
     if fouled > TOLERANCE:

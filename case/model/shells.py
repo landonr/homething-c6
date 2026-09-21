@@ -321,14 +321,21 @@ def _chamfer_usb_pocket_lip(shell):
     pocket roof stands MERGE above that plane, and a chamfer sized from the
     plane alone leaves exactly the MERGE-tall arris this exists to remove.
 
+    Where that wall stands is read off the same solid, and for the same reason.
+    usb_pocket() reaches USB_POCKET_INBOARD_REACH past the connector's envelope
+    and its clearance on this side alone, so the envelope plus USB_CLEARANCE is
+    no longer where the wall is; reading the pocket is what makes the ramp
+    follow the wall wherever the pocket puts it rather than having to be told
+    twice. Its span across the pocket comes off the same box.
+
     Selected by position, as _uncut_support() selects its own edges: the one
     edge lying in the CAVITY_FRONT plane on the pocket's inboard wall that
     spans the pocket's width. Call this directly after the pocket cut, while
     the corner is still the only edge that matches. The count assertion makes
     a later geometry change fail here instead of cutting some other edge.
     """
-    pocket = usb_pocket()
-    wall = pocket.bounding_box().max.Z - CAVITY_FRONT
+    pocket = usb_pocket().bounding_box()
+    wall = pocket.max.Z - CAVITY_FRONT
     if params.USB_POCKET_LIP_CHAMFER > wall + OCC_CHAMFER_GAP:
         raise ValueError(
             f"USB_POCKET_LIP_CHAMFER {params.USB_POCKET_LIP_CHAMFER} is past the "
@@ -337,10 +344,8 @@ def _chamfer_usb_pocket_lip(shell):
     # OCCT refuses a chamfer that consumes its face exactly, and the full-height
     # value asks for exactly that, so stop one micron short of the pocket roof.
     length = min(params.USB_POCKET_LIP_CHAMFER, wall - OCC_CHAMFER_GAP)
-    box = board.usb_envelope()
-    c = params.USB_CLEARANCE
-    wall_y = box.center().Y + box.size.Y / 2 + c
-    span = box.size.X + 2 * c
+    wall_y = pocket.max.Y
+    span = pocket.size.X
     tol = 1e-4
     lip = [
         edge
@@ -458,7 +463,7 @@ def front_shell(fdm=False):
         *pilots,
         end_screw_pilot(),
         *catch_windows(),
-        wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1),
+        wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(),
         mic_bore(),
         *keys,

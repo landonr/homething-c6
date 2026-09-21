@@ -310,7 +310,7 @@ def _front(runs, obstacles, fdm=False):
             "led_ring_channel",
             "wheel_ring.led_ring_channel",
             "cut",
-            wheel_ring.led_ring_channel(),
+            wheel_ring.led_ring_channel(fdm),
         ),
         _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore()),
     ]

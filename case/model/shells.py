@@ -464,7 +464,7 @@ def front_shell(fdm=False):
         end_screw_pilot(),
         *catch_windows(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
-        led_ring_channel(),
+        led_ring_channel(fdm),
         mic_bore(),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess(),

@@ -50,6 +50,10 @@ one part of this variant that removes material the keypad recess never reached,
 so it is the one part that cannot be justified by saying the recessed front
 already lives with it.
 
+LED channel is half depth: vertical rays through both built fronts read the
+tops of their channel voids, so the FDM channel has to measure half the recessed
+front's depth rather than merely receiving a different construction argument.
+
 Outline solid sane: the cut itself is one closed band of the width and depth it
 was built from, measured off the solid rather than restated from the offsets
 that made it. A 2D offset can come back self-intersecting on a
@@ -119,6 +123,9 @@ TOP_FILLET_TOLERANCE = 0.02
 This is boolean and curve approximation slop. The sampled profile is an arc,
 so a larger difference means the top edge is sharp or has a different radius.
 """
+
+CHANNEL_RATIO_TOLERANCE = 0.02
+"""Allowed error in the measured FDM-to-recessed LED channel depth ratio."""
 
 
 def fdm_pad_fits(front, pad):
@@ -676,8 +683,8 @@ def ceilings_hold(front):
     judged by one standard and the drop cannot be widened past what any of them
     can give.
 
-    The ring is the tight one. Its roof is LED_RING_ROOF less the drop, and
-    LED_RING_ROOF is the smallest of the three to begin with.
+    The FDM channel is shallower now, but its roof remains a ceiling the flat
+    face thins and is kept in this shared floor check.
     """
     problems = []
     usb = board.usb_envelope()
@@ -720,6 +727,57 @@ def ceilings_hold(front):
                 )
             )
     return problems
+
+
+def led_channel_is_half_depth(front, recessed_front):
+    """Measure the two built channel depths and hold the FDM ratio.
+
+    A vertical ray through the roof flat returns its first material run. The
+    bottom of that run is the top of the channel void, regardless of whether
+    the outer surface above it is the recessed dish or the FDM groove. Four
+    diagonal bearings stay away from the cavity-wall chords at the case sides.
+    """
+    wx, wy = board.wheel_center()
+    radius = (case.led_ring_roof_inner_r() + case.led_ring_roof_outer_r()) / 2
+
+    def depths(shell, face):
+        values = []
+        top = face + FACE_PROBE_START
+        for angle in (math.pi / 4, 3 * math.pi / 4, 5 * math.pi / 4, 7 * math.pi / 4):
+            x = wx + radius * math.cos(angle)
+            y = wy + radius * math.sin(angle)
+            runs = _ray_runs(shell, (x, y, top), (x, y, case.CAVITY_FRONT - 0.2))
+            if runs:
+                channel_top = top - runs[0][1]
+                values.append(channel_top - case.CAVITY_FRONT)
+        return values
+
+    full = depths(recessed_front, case.SHELL_FRONT)
+    fdm = depths(front, case.FDM_FACE)
+    if len(full) != 4 or len(fdm) != 4:
+        return [
+            Problem(
+                f"the LED channel depth could be read at only {len(fdm)} FDM and "
+                f"{len(full)} recessed-front bearings",
+                at=(wx, wy, case.CAVITY_FRONT),
+                part="c6remote-case-front-fdm",
+            )
+        ]
+
+    full_depth = sum(full) / len(full)
+    fdm_depth = sum(fdm) / len(fdm)
+    ratio = fdm_depth / full_depth
+    if abs(ratio - params.FDM_LED_RING_DEPTH_RATIO) > CHANNEL_RATIO_TOLERANCE:
+        return [
+            Problem(
+                f"the built FDM LED channel is {fdm_depth:.2f} deep against the "
+                f"recessed front's {full_depth:.2f}, a {ratio:.3f} ratio where "
+                f"FDM_LED_RING_DEPTH_RATIO says {params.FDM_LED_RING_DEPTH_RATIO:.3f}",
+                at=(wx, wy, case.CAVITY_FRONT + fdm_depth),
+                part="c6remote-case-front-fdm",
+            )
+        ]
+    return []
 
 
 def _wall_gap(x0, x1, y0, y1):

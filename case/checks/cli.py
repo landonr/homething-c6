@@ -56,6 +56,7 @@ from .fdm import (
     fdm_keytops_are_attached,
     fdm_keytops_have_top_fillets,
     fdm_pad_fits,
+    led_channel_is_half_depth,
     outline_is_cut,
     outline_solid_sane,
     recessed_mouth_is_plain,
@@ -344,6 +345,15 @@ def _ceilings_hold(s):
         ceilings_hold(s.front_fdm),
         f"the {params.FDM_FACE_DROP:.2f} the FDM face drops leaves every "
         f"ceiling it thins above the floor the recessed front holds it to",
+    )
+
+
+@_check("fdm")
+def _led_channel_is_half_depth(s):
+    return _report(
+        led_channel_is_half_depth(s.front_fdm, s.front),
+        f"the FDM LED ring channel is "
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's depth",
     )
 
 

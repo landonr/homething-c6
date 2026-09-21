@@ -379,7 +379,7 @@ EDGE_R_FRONT = 2.5
 """Round on the front's top edge. Small: it is a face full of key holes, and the
 outermost sit close to the wall. The FDM front carries its own, see
 EDGE_R_FRONT_FDM."""
-EDGE_R_FRONT_FDM = 0.8
+EDGE_R_FRONT_FDM = 0.6
 """Round on the FDM front's top edge, in place of EDGE_R_FRONT.
 
 Much harder, and the outline is what makes it so. That front draws the recess's
@@ -546,7 +546,7 @@ ring's inner light barrier, so it is not free to thin toward zero. That wall
 stands plumb, so this is the web at every height rather than a radius the wall
 crosses once. The check still probes it on the built shell rather than trusting
 the sum."""
-LED_RING_CHAMFER = 0.6
+LED_RING_CHAMFER = 0.0
 """How much wider than its nominal radius the channel's outer wall opens at the
 mouth. That wall rakes at 45 degrees, so this is also how far above the mouth it
 crosses led_ring_outer_r(), and the roof end is then wherever 45 degrees over
@@ -563,7 +563,9 @@ The web to the bore used to bound this and no longer does, because the inner
 wall stopped raking. The cavity wall bounds it now: a wider mouth runs further
 past the wall near the X axis, so the ring narrows against a longer chord there.
 What it buys is roof, since the flat the ring glows through is the mouth's outer
-radius less the channel's own height less the inner wall."""
+radius less the channel's own height less the inner wall. Zero keeps the mouth
+flush with the pad's grid-lobe boundary on both front variants; the wall still
+rakes inward at 45 degrees over the channel height above that mouth."""
 LED_RING_OVER = 0.6
 """How far past an LED's own body edge the channel's outer wall reaches. Same
 job as PAD_LED_CLEARANCE one layer down: derived off the LED placements plus
@@ -947,14 +949,13 @@ one leaves a part thicker than the one it replaces for no reason: the material
 the dish took out is simply kept. So this front's face lands at the sunken
 level instead, and the part comes out that much slimmer.
 
-What bounds it is not the dish's own depth, which is 0.6 to 0.9, but the three
-ceilings the drop thins, none of which the dish itself reaches: the USB
-pocket's roof against USB_CEILING_MIN, the LED ring's roof against
-ROOF_LEFT_MIN, and the thinnest counterbore land against LAND_FLOOR_MIN. The
+What bounds it is not the dish's own depth, which is 0.6 to 0.9, but the
+ceilings the drop thins outside that dish: the USB pocket's roof against
+USB_CEILING_MIN and the thinnest counterbore land against LAND_FLOOR_MIN. The
 USB pocket is the tight one: its roof is 1.04 on the recessed front, against
-USB_CEILING_MIN's 0.4, so 0.64 is all there is. The ring is close behind at
-0.7. This takes most of the tighter of the two and leaves a real margin under
-both rather than spending to the bound.
+USB_CEILING_MIN's 0.4, so 0.64 is all there is. The FDM LED channel is only
+half the recessed front's depth and therefore leaves a thicker roof of its own.
+This takes most of the USB bound while retaining a real margin.
 
 The drop is therefore a little short of the dish it stands in for, which runs
 0.6 to 0.9. The face lands near the shallow end of the recess rather than on
@@ -968,11 +969,11 @@ knob back some of the finger access a flat face takes from it.
 
 checks/fdm.py reads all three ceilings off the built shell, against the same
 floors the recessed front's own passes hold them to."""
-FDM_OUTLINE_W = 0.8
+FDM_OUTLINE_W = 1.2
 """Full width of the engraved outline in the FDM front's face. Two extrusions
-of a 0.4 nozzle: narrow enough that the layer over it bridges in a single span
-with nothing under it, wide enough that a slicer resolves it as a slot rather
-than closing it up into solid infill.
+of a 0.6 nozzle, or three of a 0.4 nozzle: wide enough that the marking reads
+clearly after printing while still short enough for the layer above it to
+bridge without support.
 
 The groove is centred on the rim, so it reaches half of this further out than
 the rim itself does. That is what EDGE_R_FRONT_FDM is sized against: the round
@@ -1000,6 +1001,15 @@ so a small change on either side puts this groove over a roof that has to carry
 the light, and what would be left there is LED_RING_ROOF less this.
 checks/fdm.py holds the floor under it for that case rather than for the
 clearance the present layout happens to have."""
+FDM_LED_RING_DEPTH_RATIO = 0.5
+"""LED ring channel depth on the FDM front, as a fraction of the recessed
+front's channel depth.
+
+The flat FDM face does not need the full-height light-spreading void used below
+the dished face. Half depth keeps the channel open over the LEDs while leaving
+a thicker printable roof. This changes only the FDM front; the recessed front
+retains the full channel. checks/fdm.py measures both built shells and holds
+this ratio rather than trusting the construction."""
 FDM_WHEEL_OPENING_CLEARANCE = 0.2
 """Extra radius the FDM front's own wheel opening carries, over and above
 WHEEL_OPENING_CLEARANCE, so the printed bore clears the wheel's main rotating

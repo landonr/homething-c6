@@ -172,7 +172,7 @@ The FDM front carries a much harder top edge round than the recessed front. `EDG
 
 The rim runs inside the larger round. The FDM front reduces the round instead of moving the outline, so the groove sits on flat face.
 
-`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. Run `check.py --only fdm` to validate it.
+`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. The LED ring channel is half-depth on this front, leaving a thicker printable roof. Run `check.py --only fdm` to validate it.
 
 ## Assembly
 

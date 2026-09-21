@@ -49,6 +49,19 @@ LED_RING_TOP = SHELL_FRONT - params.LED_RING_ROOF
 through."""
 
 
+def led_ring_top(fdm=False):
+    """Ceiling of the channel on either front.
+
+    The recessed front uses the full channel. The FDM front shortens that wall
+    from the cavity side, leaving a thicker roof under its lower flat face.
+    """
+    if not fdm:
+        return LED_RING_TOP
+    return CAVITY_FRONT + params.FDM_LED_RING_DEPTH_RATIO * (
+        LED_RING_TOP - CAVITY_FRONT
+    )
+
+
 def led_y_reach():
     """Furthest any status LED's body edge sits from the wheel centre in y:
     the reach the pad's cut has to uncover."""
@@ -157,17 +170,17 @@ def led_ring_roof_inner_r():
     return led_ring_inner_r()
 
 
-def led_ring_roof_outer_r():
+def led_ring_roof_outer_r(fdm=False):
     """Channel outer wall where it meets the roof, at its nearest the wheel."""
-    return led_ring_mouth_outer_r() - led_ring_wall_height()
+    return led_ring_mouth_outer_r() - led_ring_wall_height(fdm)
 
 
-def led_ring_roof_flat():
+def led_ring_roof_flat(fdm=False):
     """Width of the flat the channel presents to its roof, once the outer wall
     has raked in across the full height. Only that wall travels, so the flat
     closes from one side. The surface the ring glows through, and what has to
     stay over the LEDs: light_path is what proves it does."""
-    return led_ring_roof_outer_r() - led_ring_roof_inner_r()
+    return led_ring_roof_outer_r(fdm) - led_ring_roof_inner_r()
 
 
 def led_ring_web_left():
@@ -178,17 +191,17 @@ def led_ring_web_left():
     return led_ring_inner_r() - WHEEL_OPENING_R
 
 
-def led_ring_wall_height():
+def led_ring_wall_height(fdm=False):
     """Height of the channel's wall: ceiling underside to the roof. Not the
     cut's own height, which starts a millimetre lower; that overrun is inside
     the cavity, where there is no wall. The outer wall rakes at 45 degrees, so
     this is also how far that wall travels radially, which is what closes the
     roof flat down to led_ring_roof_flat(). The inner wall is plumb and travels
     nothing."""
-    return LED_RING_TOP - CAVITY_FRONT
+    return led_ring_top(fdm) - CAVITY_FRONT
 
 
-def led_ring_channel():
+def led_ring_channel(fdm=False):
     """The channel itself, as the cut: an annular void from below the ceiling
     underside (open to the cavity, which is where the LED light comes from) up
     to LED_RING_TOP, clipped by _channel_clip() where its outer radius would
@@ -215,7 +228,7 @@ def led_ring_channel():
     feather.
     """
     x, y = board.wheel_center()
-    z0, z1 = CAVITY_FRONT - 1, LED_RING_TOP
+    z0, z1 = CAVITY_FRONT - 1, led_ring_top(fdm)
     inner, mouth_outer = led_ring_inner_r(), led_ring_mouth_outer_r()
     with BuildSketch(Plane.XZ) as section:
         with BuildLine():
@@ -223,7 +236,7 @@ def led_ring_channel():
                 (inner, z0),
                 (mouth_outer, z0),
                 (mouth_outer, CAVITY_FRONT),
-                (led_ring_roof_outer_r(), z1),
+                (led_ring_roof_outer_r(fdm), z1),
                 (inner, z1),
                 close=True,
             )

@@ -336,6 +336,12 @@ def _front(runs, obstacles, fdm=False):
                 caps._key_prism(
                     x, y, caps.cap_face_hole(ref), CAVITY_FRONT - 1, SHELL_FRONT + 1
                 ),
+                [
+                    "CAP_FACE_HOLE_CHAMFER",
+                    "CAP_FACE_HOLE_CHAMFER_ANGLE",
+                    "CAP_FLANGE_OVERLAP",
+                    "KEY_SQUIRCLE_N",
+                ],
             )
         )
     out += [

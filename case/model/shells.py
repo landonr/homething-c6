@@ -11,6 +11,8 @@ from build123d import (
     Polygon,
     Rectangle,
     RectangleRounded,
+    Shell,
+    Solid,
     Compound,
     chamfer,
     extrude,
@@ -23,7 +25,7 @@ import cache
 import params
 
 from .backform import back_form
-from .caps import _key_prism, cap_counterbore, cap_face_hole
+from .caps import _key_prism, cap_counterbore, cap_face_hole, cap_outline
 from .hardware import (
     end_screw_block,
     end_screw_cuts,
@@ -34,7 +36,7 @@ from .hardware import (
 )
 from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
-from .keypad import keypad_outline_groove, keypad_recess
+from .keypad import face_depth_at, keypad_outline_groove, keypad_recess
 from .mic import mic_bore, mic_duct
 from .shape import (
     _cut,
@@ -360,6 +362,66 @@ def _chamfer_usb_pocket_lip(shell):
     return chamfer(lip, length)
 
 
+def _cap_face_hole_cut(ref, fdm=False):
+    """Face-hole prism plus a tapered mouth following this front's height.
+
+    The recessed front meets a key hole at different Z around its perimeter,
+    so a post-boolean edge chamfer is a fragmented non-planar loop that OCCT
+    cannot chamfer reliably. Build a triangulated taper from the face depth at
+    each outline point instead. The straight prism beneath it preserves the
+    guide and the counterbore shoulder preserves the cap's retention.
+    """
+    x, y = board.components()[ref][:2]
+    size = cap_face_hole(ref)
+    amount = params.CAP_FACE_HOLE_CHAMFER
+    depth = amount * math.tan(math.radians(params.CAP_FACE_HOLE_CHAMFER_ANGLE))
+    inner_xy = cap_outline(size, x, y)
+    outer_xy = cap_outline(size + 2 * amount, x, y)
+
+    def surface_z(px, py):
+        return front_face(True) if fdm else SHELL_FRONT - face_depth_at(px, py)
+
+    inner_low = [(px, py, surface_z(px, py) - depth) for px, py in inner_xy]
+    inner_high = [(px, py, surface_z(px, py) + MERGE) for px, py in inner_xy]
+    outer_high = [(px, py, surface_z(px, py) + MERGE) for px, py in outer_xy]
+
+    # A triangular tube around the opening: its sloped A-B wall is the visible
+    # chamfer, while the other two walls merely close the cutter for OCCT. Each
+    # quad is split into triangles because the dish makes its four corners
+    # non-coplanar. This follows the face locally instead of introducing the
+    # shelf a single planar loft made in an X/Y bisect.
+    faces = []
+    count = len(inner_xy)
+    for index in range(count):
+        following = (index + 1) % count
+        for a, b, c, d in (
+            (
+                inner_low[index],
+                inner_low[following],
+                inner_high[following],
+                inner_high[index],
+            ),
+            (
+                inner_high[index],
+                inner_high[following],
+                outer_high[following],
+                outer_high[index],
+            ),
+            (
+                inner_low[index],
+                inner_low[following],
+                outer_high[following],
+                outer_high[index],
+            ),
+        ):
+            faces.append(Polygon(a, b, c))
+            faces.append(Polygon(a, c, d))
+    taper = Solid(Shell(faces))
+    return _fuse(
+        _key_prism(x, y, size, CAVITY_FRONT - 1, SHELL_FRONT + 1), taper
+    )
+
+
 @cache.solid
 def front_shell(fdm=False):
     """The front shell. `fdm` swaps the one cut the face is finished with.
@@ -451,9 +513,7 @@ def front_shell(fdm=False):
         keys.append(
             _key_prism(x, y, cap_counterbore(ref), CAVITY_FRONT - 1, COUNTERBORE_TOP)
         )
-        keys.append(
-            _key_prism(x, y, cap_face_hole(ref), CAVITY_FRONT - 1, SHELL_FRONT + 1)
-        )
+        keys.append(_cap_face_hole_cut(ref, fdm))
     pilots = [
         _hole(x, y, params.BOSS_PILOT_D, BOARD_TOP - 0.1, BOARD_TOP + params.BOSS_PILOT_DEPTH)
         for x, y in mount_points()

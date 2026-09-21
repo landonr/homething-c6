@@ -1144,6 +1144,20 @@ through the front face. The previous 0.15 mm clearance was too tight for the
 printed button and front-shell tolerances. The face land and counterbore still
 guide the cap. The retention check holds the flange overlap after this change."""
 
+CAP_FACE_HOLE_CHAMFER = 1.00
+"""Small edge break around each rigid cap's opening in the front face.
+
+The cap is still guided by the straight face hole below this chamfer, and its
+flange is still retained by the unchanged CAP_FLANGE_OVERLAP. 1.00 mm gives a
+visible lead-in without consuming much of the face land or making the
+gap around a flush cap read as another counterbore."""
+
+CAP_FACE_HOLE_CHAMFER_ANGLE = 30.0
+"""Angle of the rigid-cap hole lead-in measured up from the outer face.
+
+Thirty degrees gives the 1.00 mm radial break a shallow lead-in while leaving
+the unchanged straight bore below it to guide the cap."""
+
 STEM_W = 4.0
 """Side of the square stem. Square rather than cross or round because a legend
 has an orientation and a round stem does not hold one. Roomy because the two

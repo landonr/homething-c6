@@ -1065,6 +1065,14 @@ STEM_GRIP = -0.10
 
 The flange retains the cap. The clearance prevents a rigid printed stem from
 binding in its cap socket. Use a positive value only for a soft pad."""
+FDM_CAP_GUIDE_CLEARANCE = 0.35
+"""Clearance per side between an integrated FDM keytop and its face hole.
+
+The FDM pad installs from inside the front shell. Its keytops have no captive
+flanges, so each must pass through its face hole with printer-tolerant space.
+This is larger than CAP_GUIDE_CLEARANCE because the pad and keytops print as
+one rigid part, and a tight fit would bind every button at once.
+"""
 SOCKET_LEAD = 0.8
 """Chamfer around the recess mouth. Without it the mouth is a square edge
 arriving on an interference fit and it shaves the stem instead of seating on it.

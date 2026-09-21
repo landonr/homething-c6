@@ -45,11 +45,15 @@ concave turn and leave a band that pinches or doubles back, and the mean width
 is what says it did not.
 """
 
+import math
+
+from build123d import Box, Pos
+
 import board
 import case
 import params
 
-from .common import TOLERANCE, Problem, _ray_runs
+from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _ray_runs, _volume
 from .keypad import LAND_FLOOR_MIN, _probe_sites
 from .usb import USB_CEILING_MIN
 from .wheel_ring import ROOF_LEFT_MIN
@@ -96,6 +100,110 @@ PLANE_TOLERANCE = 1e-6
 BOX_TOLERANCE = 0.01
 """How far the built band's own bounding box may sit from the outline's, grown
 by half a width."""
+
+TOP_FILLET_TOLERANCE = 0.02
+"""Allowed radial error on an FDM keytop's exposed-edge fillet.
+
+This is boolean and curve approximation slop. The sampled profile is an arc,
+so a larger difference means the top edge is sharp or has a different radius.
+"""
+
+
+def fdm_pad_fits(front, pad):
+    """Probe the complete FDM button export against its matching front shell."""
+    problems = []
+    for state, offset in (("released", 0), ("pressed", -params.SWITCH_TRAVEL)):
+        fouled = _volume(front.intersect(Pos(0, 0, offset) * pad))
+        if fouled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the FDM pad fouls the FDM front by {fouled:.2f} mm3 when {state}",
+                    part="c6remote-case-pad-fdm",
+                )
+            )
+    return problems
+
+
+def fdm_keytops_are_attached(pad):
+    """Every printed keytop must be flush with and fused to its lobe web."""
+    problems = []
+    for ref in case.cap_refs():
+        x, y = board.components()[ref][:2]
+        bottom = case.fdm_keycap(ref).bounding_box().min.Z
+        if abs(bottom - case.PAD_WEB_TOP) > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"{ref}'s FDM keytop starts at {bottom:.3f}, but its pad web "
+                    f"ends at {case.PAD_WEB_TOP:.3f}",
+                    at=(x, y, bottom),
+                    part="c6remote-case-pad-fdm",
+                )
+            )
+        top = Pos(x, y, (case.CAP_BOTTOM + case.CAP_TOP) / 2) * Box(
+            case.fdm_cap_body(ref) / 3,
+            case.fdm_cap_body(ref) / 3,
+            (case.CAP_TOP - case.CAP_BOTTOM) / 3,
+        )
+        web = Pos(x, y, (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2) * Box(
+            params.STEM_W / 3,
+            params.STEM_W / 3,
+            params.PAD_WEB_T / 2,
+        )
+        top_solids = [solid for solid in pad.solids() if _volume(solid.intersect(top)) > TOLERANCE]
+        web_solids = [solid for solid in pad.solids() if _volume(solid.intersect(web)) > TOLERANCE]
+        if len(top_solids) != 1 or top_solids != web_solids:
+            problems.append(
+                Problem(
+                    f"{ref}'s FDM keytop is not fused to its pad lobe",
+                    at=(x, y, case.CAP_TOP),
+                    part="c6remote-case-pad-fdm",
+                )
+            )
+    return problems
+
+
+def fdm_keytops_have_top_fillets():
+    """Probe each blank FDM keytop's built side profile for the rigid cap's
+    exposed-top fillet.
+
+    The ray runs along the plan's X axis, clear of the legend. A fillet of
+    CAP_TOP_FILLET has a quarter-circle profile. Three heights prove that the
+    exposed edge is the same radius, while the flat bottom remains untouched.
+    """
+    problems = []
+    radius = params.CAP_TOP_FILLET
+    for ref in case.cap_refs():
+        x, y = board.components()[ref][:2]
+        keytop = case.fdm_keycap(ref, legend=False)
+        half = case.fdm_cap_body(ref) / 2
+        for depth in (radius / 4, radius / 2, 3 * radius / 4):
+            z = case.CAP_TOP - depth
+            reach = half + radius + 1
+            runs = _ray_runs(keytop, (x - reach, y, z), (x + reach, y, z))
+            if len(runs) != 1:
+                problems.append(
+                    Problem(
+                        f"{ref}'s FDM keytop has {len(runs)} material runs at its "
+                        "top-edge fillet probe",
+                        at=(x, y, z),
+                        part="c6remote-case-pad-fdm",
+                    )
+                )
+                break
+            got = runs[0][1] - reach
+            want = half - radius + math.sqrt(radius**2 - (radius - depth) ** 2)
+            if abs(got - want) > TOP_FILLET_TOLERANCE:
+                problems.append(
+                    Problem(
+                        f"{ref}'s FDM keytop reaches {got:.3f} from its centre "
+                        f"{depth:.3f} below its top, where a {radius:.2f} mm "
+                        f"fillet reaches {want:.3f}",
+                        at=(x + got, y, z),
+                        part="c6remote-case-pad-fdm",
+                    )
+                )
+                break
+    return problems
 
 
 def _samples():

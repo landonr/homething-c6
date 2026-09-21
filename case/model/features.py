@@ -449,6 +449,22 @@ def _pad():
     return out
 
 
+def _fdm_pad():
+    """The FDM pad, with printed keytops flush with its lobe webs."""
+    out = _pad()
+    for ref in board.refs("SW"):
+        out.append(
+            _entry(
+                f"keytop.{ref}",
+                "keypad.fdm_keycap",
+                "add",
+                keypad.fdm_keycap(ref),
+                ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH"],
+            )
+        )
+    return out
+
+
 def _window():
     """The IR window insert: the pane in the beam and the flange behind it.
 
@@ -494,6 +510,7 @@ def features():
         "c6remote-case-front-fdm.stl": _front(front_runs, obstacles, fdm=True),
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
+        "c6remote-case-pad-fdm.stl": _fdm_pad(),
         "c6remote-ir-window.stl": _window(),
     }
     # An id is what a viewer hands back to be acted on, so two features holding

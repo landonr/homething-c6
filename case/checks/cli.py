@@ -53,6 +53,9 @@ from .fdm import (
     ceilings_hold,
     edge_round_is_hard,
     face_is_flat,
+    fdm_keytops_are_attached,
+    fdm_keytops_have_top_fillets,
+    fdm_pad_fits,
     outline_is_cut,
     outline_solid_sane,
 )
@@ -135,6 +138,10 @@ class Solids:
     @functools.cached_property
     def pad(self):
         return case.button_pad()
+
+    @functools.cached_property
+    def pad_fdm(self):
+        return case.button_pad(fdm=True)
 
     @functools.cached_property
     def window(self):
@@ -280,6 +287,32 @@ def _legends_present(s):
         legends_present(s.caps),
         f"all {len(s.caps)} legends cut a real deboss out of one solid cap, "
         "every glyph in the font",
+    )
+
+
+@_check("fdm")
+def _fdm_keytops_are_attached(s):
+    return _report(
+        fdm_keytops_are_attached(s.pad_fdm),
+        f"all {len(case.cap_refs())} FDM keytops start flush with and are fused "
+        "to their pad lobes",
+    )
+
+
+@_check("fdm")
+def _fdm_keytops_have_top_fillets(s):
+    return _report(
+        fdm_keytops_have_top_fillets(),
+        f"all {len(case.cap_refs())} FDM keytops have the rigid caps' "
+        f"{params.CAP_TOP_FILLET:.2f} mm exposed-top fillet",
+    )
+
+
+@_check("fdm")
+def _fdm_pad_fits(s):
+    return _report(
+        fdm_pad_fits(s.front_fdm, s.pad_fdm),
+        "the FDM pad clears the FDM front released and through switch travel",
     )
 
 
@@ -806,7 +839,7 @@ _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": ("front", "front_fdm", "back", "pad", "window", "caps"),
     "caps": ("front", "pad", "caps", "caps_plain"),
-    "fdm": ("front_fdm", "keypad_outline_groove"),
+    "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("back",),
     "ir": ("front", "back", "window"),
     "keypad": ("front", "pad", "keypad_recess"),
@@ -853,6 +886,7 @@ _CACHED_SOLIDS = {
     "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
     "back": lambda: [functools.partial(case.back_shell)],
     "pad": lambda: [functools.partial(case.button_pad)],
+    "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
     "window": lambda: [functools.partial(case.ir_window)],
     "keypad_recess": lambda: [functools.partial(case.keypad_recess)],
     "keypad_outline_groove": lambda: [functools.partial(case.keypad_outline_groove)],

@@ -14,6 +14,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 <p align="center"><sub>Front shell, caps, button pad, board, and back shell</sub></p>
 
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps.
+It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).
 
 ## Setup
@@ -123,7 +124,19 @@ If the shell filament blocks too much infrared light, make the same insert from 
 
 Prototype the button pad in TPU. Use translucent silicone for a molded part.
 
-Print the caps in translucent PETG with the top faces against the build plate.
+Print the caps in translucent PETG. Either orientation works.
+
+Top faces against the build plate gives the best finish. Top faces up needs support on the top faces. Trim the support marks after the print.
+
+For a rigid FDM button set, print `c6remote-case-pad-fdm.stl`. It includes the
+two pad lobes and all 11 keytops in one STL. Each keytop is flush with its lobe
+web. Do not install separate caps with it.
+
+Print the FDM pad in either orientation. The STL exports with the keytops up.
+
+Keytops down puts the keytop faces on the plate. The pad then stands on 523 mm2.
+
+Keytops up puts the pad on the keytop stems. The pad then stands on 26 mm2. Use a brim and a clean plate. Set the support roof density to 80 percent, or the web sags into the support. Trim the support marks after the print.
 
 ## FDM front
 
@@ -132,6 +145,10 @@ The export contains two front shells. Both shells have the same interior, so the
 `c6remote-case-front.stl` is the recessed front. Its face carries a shallow dish around the keys and around the wheel.
 
 `c6remote-case-front-fdm.stl` is the FDM front. Its face is one flat plane and carries the same dish outline as a shallow groove.
+
+Use `c6remote-case-pad-fdm.stl` with this front. The keytops have no captive
+flanges, so install this pad from inside before the board. The face holes guide
+the integrated keytops with `FDM_CAP_GUIDE_CLEARANCE` on each side.
 
 Print a front shell with its face against the build plate. A filament printer cannot make the dish in this orientation.
 
@@ -183,6 +200,8 @@ Assemble the remaining parts with the front face down:
 7. Install the end-wall M2 screw at the grip end.
 
 Install the caps before the pad. The caps are captive after pad installation.
+
+For the FDM pad, omit step 1 and install `c6remote-case-pad-fdm.stl` in step 2.
 
 Install the IR window before shell assembly. Its flange is not accessible after shell assembly.
 

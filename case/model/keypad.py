@@ -24,6 +24,7 @@ from build123d import (
     Pos,
     RectangleRounded,
     extrude,
+    fillet,
     loft,
     make_face,
     offset,
@@ -34,6 +35,7 @@ import cache
 import params
 
 from .hardware import mount_points
+from .legends import legend_solids
 from .mic import mic_duct_or, mic_port
 from .shape import (
     _cut,
@@ -43,8 +45,11 @@ from .shape import (
     _rounded_prism,
     _slab,
     _squircle_points,
+    _squircle_prism,
 )
 from .stack import (
+    CAP_BOTTOM,
+    CAP_TOP,
     FDM_FACE,
     MERGE,
     PAD_WEB_BOTTOM,
@@ -1188,6 +1193,49 @@ def _stem(x, y):
     return _rounded_prism(x, y, params.STEM_W, params.STEM_R, PAD_WEB_BOTTOM, STEM_TOP)
 
 
+def fdm_cap_body(ref):
+    """Side of an integrated FDM keytop."""
+    flange = key_size(ref) - 2 * params.CAP_FLANGE_TRIM
+    face_hole = flange - 2 * params.CAP_FLANGE_OVERLAP
+    return face_hole - 2 * params.FDM_CAP_GUIDE_CLEARANCE
+
+
+def fdm_keycap_bottom():
+    """Bottom of each integrated FDM keytop, flush with its lobe web."""
+    return PAD_WEB_TOP
+
+
+def fdm_keycap(ref, legend=True):
+    """One solid keytop for the FDM pad, fused across its lobe web.
+
+    It keeps the normal cap's visible superellipse, exposed-top fillet, and
+    debossed legend, but it has no flange or socket. Its bottom is flush with
+    the web, which removes the cap-to-stem step. The keytops stop short of the
+    grid grooves, so each button still has independent flex. `legend=False`
+    leaves the top blank for geometry checks.
+    """
+    x, y = board.components()[ref][:2]
+    body = _squircle_prism(
+        x,
+        y,
+        fdm_cap_body(ref),
+        params.KEY_SQUIRCLE_N,
+        params.KEY_SQUIRCLE_POINTS,
+        fdm_keycap_bottom(),
+        CAP_TOP,
+    )
+    top_edges = [
+        edge
+        for edge in body.edges()
+        if edge.bounding_box().min.Z > CAP_TOP - 0.01
+    ]
+    if not top_edges:
+        raise ValueError(f"{ref}'s FDM keytop has no top perimeter edges to fillet")
+    body = fillet(top_edges, params.CAP_TOP_FILLET)
+    marks = legend_solids(ref, x, y) if legend else []
+    return _cut(body, *marks)
+
+
 def _boss_clearances(x0, y0, x1, y1):
     """The holes a lobe needs where a front-plate boss passes through it.
 
@@ -1256,11 +1304,12 @@ def plunger(x, y):
 
 
 @cache.solid
-def button_pad():
+def button_pad(fdm=False):
     """Build two pad lobes supported by their switch plungers.
 
     The mic lobe follows both buttons with a connected lower bridge.
-    Both lobes stop outside the wheel clearance band.
+    Both lobes stop outside the wheel clearance band. With fdm=True, the
+    printed keytops and legends are fused to their lobe webs in this export.
     """
     parts = board.components()
     lobes = []
@@ -1271,6 +1320,8 @@ def button_pad():
             x, y = parts[ref][:2]
             raised.append(_stem(x, y))
             raised.append(plunger(x, y))
+            if fdm:
+                raised.append(fdm_keycap(ref))
         cuts = _boss_clearances(x0, y0, x1, y1)
         if name == "second":
             cuts.append(_mic_clearance())

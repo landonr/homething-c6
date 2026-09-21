@@ -141,6 +141,7 @@ def main():
     # draw two front shells in the same place. features.py keys its features
     # under its own file name, since that is the file the viewer loads.
     parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
+    parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.

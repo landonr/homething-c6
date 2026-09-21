@@ -293,7 +293,8 @@ def main():
     proud = sorted((cap_proud(ref), ref) for ref in cap_refs())
     lands = sorted((counterbore_land(ref), ref) for ref in cap_refs())
     print(
-        f"caps on all {len(cap_refs())} keys, flush with the face and so standing "
+        f"caps on all {len(cap_refs())} keys, {params.CAP_PROTRUSION:.2f} proud of "
+        f"the face and standing "
         f"{proud[0][0]:.2f} ({proud[0][1]}) to {proud[-1][0]:.2f} ({proud[-1][1]}) "
         f"proud of the recess floor around them"
     )

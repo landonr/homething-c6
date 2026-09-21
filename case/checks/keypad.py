@@ -68,10 +68,9 @@ def _grid_pad(pad):
     return pad.intersect(crop)
 
 
-def _groove_runs(pad, orientation, centre, run0, run1):
+def _groove_runs(pad, orientation, centre, run0, run1, width, depth):
     """Built material runs across and along one top-side isolation groove."""
-    z = case.PAD_WEB_TOP - params.PAD_GROOVE_DEPTH / 2
-    width = params.PAD_GROOVE_W
+    z = case.PAD_WEB_TOP - depth / 2
     if orientation == "vertical":
         across = ((centre - width, (run0 + run1) / 2, z),
                   (centre + width, (run0 + run1) / 2, z))
@@ -83,7 +82,7 @@ def _groove_runs(pad, orientation, centre, run0, run1):
     return _ray_runs(pad, *across), _ray_runs(pad, *along)
 
 
-def pad_isolation_grooves(pad):
+def pad_isolation_grooves(pad, fdm=False):
     """Probe every isolation groove on the built grid-lobe solid.
 
     Top-face rays read the actual slot width and its rounded-end run. A vertical
@@ -93,26 +92,26 @@ def pad_isolation_grooves(pad):
     grid = _grid_pad(pad)
     if len(grid.solids()) != 1:
         problems.append(f"the grooved nine-button lobe has {len(grid.solids())} solids, not one")
-    expected_core = params.PAD_WEB_T - 2 * params.PAD_GROOVE_DEPTH
+    width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
+    depth = params.FDM_PAD_GROOVE_DEPTH if fdm else params.PAD_GROOVE_DEPTH
+    expected_core = params.PAD_WEB_T - 2 * depth
     if expected_core <= 0:
         problems.append("the two groove depths consume the complete pad web")
         return problems
-    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs()):
+    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs(fdm)):
         label = f"{orientation} groove {index + 1}"
-        across, along = _groove_runs(pad, orientation, centre, run0, run1)
+        across, along = _groove_runs(pad, orientation, centre, run0, run1, width, depth)
         if len(across) != 2:
             problems.append(f"the built {label} does not have two side walls")
         else:
             width = across[1][0] - across[0][1]
-            if abs(width - params.PAD_GROOVE_W) > GROOVE_TOLERANCE:
-                problems.append(f"the built {label} is {width:.2f} mm wide, wants {params.PAD_GROOVE_W:.2f}")
-        if len(along) != 2:
-            problems.append(f"the built {label} does not stop inside the pad frame")
-        else:
-            start = run0 - params.PAD_GROOVE_W + along[0][1]
-            end = run0 - params.PAD_GROOVE_W + along[1][0]
-            if abs(start - run0) > GROOVE_TOLERANCE or abs(end - run1) > GROOVE_TOLERANCE:
-                problems.append(f"the built {label} ends at {start:.2f} .. {end:.2f}, wants {run0:.2f} .. {run1:.2f}")
+            if abs(width - (params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W)) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} is {width:.2f} mm wide, wants {(params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W):.2f}")
+        if fdm:
+            if along:
+                problems.append(f"the built {label} leaves material across an FDM lobe edge")
+        elif len(along) != 2:
+            problems.append(f"the built {label} does not stop inside the moulded-pad frame")
         z0, z1 = case.PAD_WEB_BOTTOM - 0.1, case.PAD_WEB_TOP + 0.1
         if orientation == "vertical":
             point = (centre, (run0 + run1) / 2)
@@ -128,17 +127,25 @@ def pad_isolation_grooves(pad):
     return problems
 
 
-def groove_clearances(pad):
-    """Keep groove cuts out of every stem, cap seat, boss, and lobe perimeter."""
+def groove_clearances(pad, fdm=False):
+    """Keep groove cuts out of every stem, cap seat, and boss, and open their ends."""
     problems = []
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
-    width = params.PAD_GROOVE_W / 2
-    if params.PAD_GROOVE_EDGE_RETENTION <= 0:
-        problems.append("the isolation grooves retain no continuous outer frame")
-    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
-        if min(run0 - (y0 if orientation == "vertical" else x0),
-               (y1 if orientation == "vertical" else x1) - run1) < params.PAD_GROOVE_EDGE_RETENTION - GROOVE_TOLERANCE:
-            problems.append(f"the {orientation} groove does not retain its requested pad edge frame")
+    groove_width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
+    width = groove_width / 2
+    if fdm and params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL < groove_width / 2:
+        problems.append("the FDM isolation reliefs do not reach full width at the lobe edge")
+    if not fdm and params.PAD_GROOVE_EDGE_RETENTION <= 0:
+        problems.append("the moulded-pad isolation grooves retain no outer frame")
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs(fdm):
+        low = y0 if orientation == "vertical" else x0
+        high = y1 if orientation == "vertical" else x1
+        if fdm:
+            overtravel = params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
+            if run0 > low - overtravel + GROOVE_TOLERANCE or run1 < high + overtravel - GROOVE_TOLERANCE:
+                problems.append(f"the {orientation} FDM relief does not overrun both pad edges")
+        elif min(run0 - low, high - run1) < params.PAD_GROOVE_EDGE_RETENTION - GROOVE_TOLERANCE:
+            problems.append(f"the {orientation} groove does not retain its moulded-pad frame")
         for ref in case.island_refs("grid"):
             x, y = board.components()[ref][:2]
             along = min(max((y if orientation == "vertical" else x), run0), run1)

@@ -228,20 +228,24 @@ def _mic_pad_contour(s):
 
 @_check("keypad")
 def _pad_isolation_grooves(s):
+    problems = pad_isolation_grooves(s.pad)
+    problems.extend(f"FDM: {problem}" for problem in pad_isolation_grooves(s.pad_fdm, True))
     return _report(
-        pad_isolation_grooves(s.pad),
+        problems,
         f"four built isolation grooves are {params.PAD_GROOVE_W:.2f} mm wide, "
-        f"{params.PAD_GROOVE_DEPTH:.2f} mm deep on each face, and leave "
-        f"{params.PAD_WEB_T - 2 * params.PAD_GROOVE_DEPTH:.2f} mm of centre web",
+        f"while the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
+        f"leave {params.PAD_WEB_T - 2 * params.FDM_PAD_GROOVE_DEPTH:.2f} mm of centre web",
     )
 
 
 @_check("keypad")
 def _groove_clearances(s):
+    problems = groove_clearances(s.pad)
+    problems.extend(f"FDM: {problem}" for problem in groove_clearances(s.pad_fdm, True))
     return _report(
-        groove_clearances(s.pad),
-        f"grooves clear stems, cap seats and bosses, retain a "
-        f"{params.PAD_GROOVE_EDGE_RETENTION:.2f} mm grid-lobe frame, and leave SW1/SW2 unchanged",
+        problems,
+        f"grooves clear stems, cap seats and bosses; only the FDM reliefs exit "
+        f"both grid-lobe edges at full width; SW1/SW2 stay unchanged",
     )
 
 
@@ -265,7 +269,10 @@ def _cap_fits_around_perimeter(s):
 
 @_check("caps")
 def _caps_flush(s):
-    return _report(caps_flush(), "caps land flush with the front face")
+    return _report(
+        caps_flush(),
+        f"released caps stand {params.CAP_PROTRUSION:.2f} proud of the front face",
+    )
 
 
 @_check("keypad")

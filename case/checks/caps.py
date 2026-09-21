@@ -3,15 +3,14 @@ other, fit their stems, stay captive under the face land, and still go in from
 inside. A positive STEM_GRIP requires interference. A zero or negative value
 requires clearance. The solids alone cannot prove either fit mode.
 
-Caps flush: a cap's top lands level with the flat front face, not merely close
-to it. CAP_TOP is SHELL_FRONT + CAP_PROTRUSION by construction and
-CAP_PROTRUSION is 0, so this should always read as zero; it exists to catch
-CAP_PROTRUSION drifting off zero without CAP_TOP following.
+Caps face height: a released cap's top lands CAP_PROTRUSION above the flat front
+face, not merely close to it. It exists to catch CAP_TOP drifting away from the
+design parameter that is meant to drive it.
 
 Caps proud of pocket: a cap stands proud of the recess floor around it by
-exactly the recess's own local depth there, on top of landing flush with the
-face, the same reasoning as caps flush applied to the dished floor instead of
-the face.
+exactly CAP_PROTRUSION plus the recess's own local depth there, the same
+reasoning as the face-height check applied to the dished floor instead of the
+flat face.
 
 Legends present: every cap carries a real legend, cut out of one solid cap,
 in a glyph the vendored font actually has. A blank cap is the quietest
@@ -170,10 +169,9 @@ def caps_fit(front, pad, caps):
     # against every cap would test the wrong number on most of them, and a font
     # size is an em rather than an ink height in the first place.
 
-    # CAP_PROTRUSION dropped out of this check: it is 0 by design now, and the
-    # cap is meant to sink SWITCH_TRAVEL into its own face hole on a press
-    # rather than stay proud of it. CAP_LIFT is the one travel budget left that
-    # still has to clear the switch before anything else bottoms out.
+    # CAP_PROTRUSION sets the released top height but does not add travel under
+    # the flange. CAP_LIFT still has to clear the switch before anything else
+    # bottoms out.
     if params.CAP_LIFT < params.SWITCH_TRAVEL + TRAVEL_MARGIN:
         problems.append(
             f"CAP_LIFT is {params.CAP_LIFT:.2f} against "
@@ -187,11 +185,11 @@ def caps_fit(front, pad, caps):
     return problems
 
 
-FACE_FLUSH_TOLERANCE = 0.01
-"""How exactly a cap's top has to land on the flat front face. CAP_TOP is
-SHELL_FRONT + CAP_PROTRUSION by construction and CAP_PROTRUSION is 0, so this
-should read as zero; it is float slop, not a design margin, and a nonzero
-reading means CAP_TOP stopped following SHELL_FRONT."""
+FACE_HEIGHT_TOLERANCE = 0.01
+"""How exactly a released cap's height must follow CAP_PROTRUSION.
+
+This is float slop, not a design margin; a larger error means CAP_TOP stopped
+following the parameter."""
 
 
 def cap_fits_around_perimeter():
@@ -236,15 +234,12 @@ def cap_fits_around_perimeter():
 
 
 def caps_flush():
-    """A cap's top has to land level with the flat front face, not merely close
-    to it: CAP_TOP is SHELL_FRONT + CAP_PROTRUSION by construction. This is what
-    would catch the two drifting apart, e.g. a future edit that gave CAP_TOP its
-    own value instead of following SHELL_FRONT."""
+    """A released cap's top has to land CAP_PROTRUSION above the front face."""
     off = case.CAP_TOP - case.SHELL_FRONT
-    if abs(off) > FACE_FLUSH_TOLERANCE:
+    if abs(off - params.CAP_PROTRUSION) > FACE_HEIGHT_TOLERANCE:
         return [
             f"cap top {case.CAP_TOP:.3f} against face {case.SHELL_FRONT:.3f}, "
-            f"off by {off:.3f}"
+            f"stands {off:.3f} proud but wants {params.CAP_PROTRUSION:.3f}"
         ]
     return []
 
@@ -257,9 +252,8 @@ recess that got shallow enough to stop showing, not a target."""
 
 
 def caps_proud_of_pocket():
-    """A cap still lands flush with the face (caps_flush covers that), and now
-    also has to stand proud of the recess floor immediately around it by
-    exactly what face_depth_at() says the recess is worth there.
+    """A released cap stands above its recess floor by CAP_PROTRUSION plus the
+    local depth reported by face_depth_at().
 
     Arithmetic, because case.CAP_TOP and the recess floor are both built off
     SHELL_FRONT by construction and the failure this catches is one of them
@@ -271,9 +265,9 @@ def caps_proud_of_pocket():
     problems = []
     for ref in case.cap_refs():
         x, y = board.components()[ref][:2]
-        want = case.face_depth_at(x, y)
+        want = params.CAP_PROTRUSION + case.face_depth_at(x, y)
         proud = case.cap_proud(ref)
-        if abs(proud - want) > FACE_FLUSH_TOLERANCE:
+        if abs(proud - want) > FACE_HEIGHT_TOLERANCE:
             problems.append(
                 f"{ref}'s cap stands {proud:.3f} proud of its recess floor, "
                 f"wants {want:.3f}"

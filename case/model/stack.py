@@ -108,8 +108,7 @@ and CAVITY_FRONT is not: a derived report value rather than a tunable
 input, the inverse of how the two used to relate."""
 
 CAP_TOP = SHELL_FRONT + params.CAP_PROTRUSION
-"""Top of a cap. CAP_PROTRUSION is 0, so this is flush with the flat
-front face by construction rather than by coincidence."""
+"""Top of a released cap, proud of the flat face by CAP_PROTRUSION."""
 
 CAP_BOTTOM = PAD_WEB_TOP + params.CAP_LIFT
 """Bottom of a cap's flange, and so the air the cap has to move down through."""

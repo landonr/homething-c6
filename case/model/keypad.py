@@ -1132,7 +1132,7 @@ def _grid_axes(axis):
     return [sum(group) / len(group) for group in groups]
 
 
-def _pad_groove_specs():
+def _pad_groove_specs(fdm=False):
     """Isolation-groove plan data derived from the nine switch coordinates.
 
     Each tuple is (orientation, centre, run0, run1). A vertical groove runs
@@ -1140,7 +1140,11 @@ def _pad_groove_specs():
     between adjacent switch rows. Only the grid lobe appears here.
     """
     _, x0, y0, x1, y1 = next(box for box in pad_lobes() if box[0] == "grid")
-    edge = params.PAD_GROOVE_EDGE_RETENTION
+    edge = (
+        -params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
+        if fdm
+        else params.PAD_GROOVE_EDGE_RETENTION
+    )
     columns = _grid_axes("x")
     rows = _grid_axes("y")
     return tuple(
@@ -1152,17 +1156,17 @@ def _pad_groove_specs():
     )
 
 
-def _pad_grooves():
+def _pad_grooves(fdm=False):
     """Eight rounded flat-bottom cuts, two faces for each grid centreline."""
-    width = params.PAD_GROOVE_W
-    depth = params.PAD_GROOVE_DEPTH
+    width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
+    depth = params.FDM_PAD_GROOVE_DEPTH if fdm else params.PAD_GROOVE_DEPTH
     if width <= 0 or depth <= 0:
         raise ValueError("pad groove width and depth must be positive")
     cuts = []
-    for orientation, centre, run0, run1 in _pad_groove_specs():
+    for orientation, centre, run0, run1 in _pad_groove_specs(fdm):
         length = run1 - run0
         if length <= width:
-            raise ValueError("pad groove edge retention leaves no groove run")
+            raise ValueError("pad groove edge treatment leaves no groove run")
         x, y = ((centre, (run0 + run1) / 2) if orientation == "vertical"
                 else ((run0 + run1) / 2, centre))
         size_x, size_y = ((width, length) if orientation == "vertical"
@@ -1326,6 +1330,6 @@ def button_pad(fdm=False):
         if name == "second":
             cuts.append(_mic_clearance())
         else:
-            cuts.extend(_pad_grooves())
+            cuts.extend(_pad_grooves(fdm))
         lobes.append(_cut(_fuse(body, *raised), *cuts))
     return _fuse(*lobes)

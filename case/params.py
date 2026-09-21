@@ -758,7 +758,7 @@ PAD_GROOVE_W = 0.8
 """Width of each press-isolation groove in the nine-button pad lobe.
 
 The grooves divide the web between adjacent buttons but leave more web than
-the 0.7 mm minimum key gap. This keeps the pad one moulded part.
+the 0.7 mm minimum key gap. This keeps the moulded pad one part.
 """
 PAD_GROOVE_DEPTH = 0.3
 """Depth cut from each face of the pad web at an isolation groove.
@@ -766,10 +766,28 @@ PAD_GROOVE_DEPTH = 0.3
 The two cuts leave PAD_WEB_T - 2 * PAD_GROOVE_DEPTH of centre material.
 """
 PAD_GROOVE_EDGE_RETENTION = 1.0
-"""Material retained between each isolation groove end and the grid-lobe edge.
+"""Material retained between each moulded-pad groove end and the grid-lobe edge.
 
-This continuous frame keeps the nine buttons in one pad and prevents a groove
+This continuous frame keeps the silicone pad together and prevents its grooves
 from opening at the perimeter.
+"""
+FDM_PAD_GROOVE_W = 1.2
+"""Width of each press-isolation relief in the rigid FDM grid lobe.
+
+Wider than the moulded pad's grooves so each printed key can flex with less
+drag from the neighbouring web while still clearing stems, cap seats, and bosses.
+"""
+FDM_PAD_GROOVE_DEPTH = 0.5
+"""Depth cut from each face of the FDM pad web at an isolation relief.
+
+The opposed cuts leave a 0.2 mm membrane through the 1.2 mm web. This gives the
+rigid print a compliant hinge without splitting its grid lobe into nine parts.
+"""
+FDM_PAD_GROOVE_EDGE_OVERTRAVEL = 0.6
+"""How far each FDM isolation relief extends past the grid-lobe bounds.
+
+Equal to half FDM_PAD_GROOVE_W so the rounded relief is at full width where it
+exits the lobe instead of tapering to a tangent point at the edge.
 """
 PAD_MARGIN = 1.0
 """Web margin around each island's outermost buttons. The mic island follows each button above a shared lower bridge."""
@@ -795,8 +813,8 @@ PLUNGER_D = 2.5
 # no flat floor and no wall anywhere. Three superellipse-bounded dishes along
 # one centreline, over the nine-key grid, over KEYPAD_ISLAND_2 and the mic
 # inlet, and around the wheel, joined into a single C1 depth field by two neck
-# channels that ramp between them. A cap still lands flush with the face, so it
-# stands proud of whatever the recess is locally deep under it.
+# channels that ramp between them. A cap stands CAP_PROTRUSION above the face,
+# plus whatever the recess is locally deep under it.
 KEYPAD_SQUIRCLE_N = 4.0
 """Exponent of the superellipse the two keyed basins are bounded by, and of the
 keycaps' own plan shape with them: one curve for everything square on the front
@@ -932,8 +950,9 @@ is given up is dish beyond the box's own corners."""
 # whole cavity on its ceiling. So this variant gives up the dish and keeps the
 # line it drew, which a slot narrow enough to bridge can carry.
 #
-# Nothing else about the shell changes. The caps are flush with the face by
-# construction (CAP_PROTRUSION), so they stay flush with a flat one; each
+# Nothing else about the shell changes. The caps follow CAP_PROTRUSION from the
+# recessed front's face, so they stand an additional FDM_FACE_DROP above this
+# lower flat one; each
 # counterbore keeps the whole of DISH_HEADROOM as land instead of giving a dish
 # depth up to it; and the mic inlet's mouth already runs at constant radius to
 # the face, so it opens as a plain hole rather than in a curved floor. What is
@@ -1073,24 +1092,23 @@ anything about cap versus keytop.
 Keep in board order if this ever grows past a pair: keypad_coverage() does
 not sort it."""
 
-CAP_PROTRUSION = 0.0
-"""How far a cap stands proud of the front face. Zero: the face is flat, so
-a cap's top is CAP_TOP = SHELL_FRONT + CAP_PROTRUSION by construction,
-flush with the surrounding face rather than proud of it. A press sinks
-the cap SWITCH_TRAVEL into its own face hole instead of dropping it from
-proud toward flush; CAP_GUIDE_CLEARANCE already leaves it room to do that
-without fouling the shell."""
+CAP_PROTRUSION = 0.25
+"""How far a released cap stands proud of the front face.
+
+Matched to SWITCH_TRAVEL so a nominal full press brings the cap top flush with
+the surrounding face. CAP_GUIDE_CLEARANCE leaves it room to move through its
+face hole without fouling the shell."""
 CAP_TOP_T = 1.0
 """Roof over the socket, now a shallow locating recess rather than a deep grip:
 the flush face left no room for the old 1.4. LEGEND_DEPTH comes out of it, and
 what is left is the translucent bridge the pad's backlight glows through, so it
 is bounded below by the legend rather than by strength."""
-CAP_TOP_FILLET = 0.4
+CAP_TOP_FILLET = 0.8
 """Radius on the exposed top perimeter of every rigid cap.
 
 This removes the sharp edge a finger meets without changing the cap's body at
-the face hole, its flange, or its captive retention geometry. It stays below
-CAP_TOP_T, so the socket roof remains below the rounded edge."""
+the face hole, its flange, or its captive retention geometry. The generous
+round is bounded below CAP_TOP_T so the socket roof remains below it."""
 CAP_WALL = 1.0
 """Thinnest wall the cap may be left with anywhere around its socket. Not a
 modelled dimension: the cap's body follows the face hole and its widest bore is
@@ -1102,8 +1120,7 @@ CAP_LIFT = 0.45
 This is the travel the cap has before the flange lands on the web, so it has to
 stay clear of SWITCH_TRAVEL. The counterbore shoulder sits CAP_FLANGE_FLOAT above
 the flange and so arrests nothing on the way down, which leaves this the only
-bottom-out guard now that CAP_PROTRUSION is 0 and a press is expected to sink
-the cap into its own face hole rather than merely toward flush.
+bottom-out guard; CAP_PROTRUSION only changes where the moving top begins.
 
 Trimmed from 0.5 to make room for the keypad recesses without deepening the
 counterbore: SWITCH_TRAVEL plus its check.py margin is 0.45 exactly, so this

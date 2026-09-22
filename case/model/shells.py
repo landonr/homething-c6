@@ -160,20 +160,45 @@ def skirt_lead_in_cuts():
         box = cut.bounding_box()
         height = box.max.Z - SKIRT_BOTTOM
         profiles.extend(
-            ((box.min.Y, SKIRT_BOTTOM, height, -1),
-             (box.max.Y, SKIRT_BOTTOM, height, 1))
+            ((box.min.Y, box.min.Y, SKIRT_BOTTOM, height, -1),
+             (box.max.Y, box.max.Y, SKIRT_BOTTOM, height, 1))
         )
     # +1: the deepened region lies on the +Y side of this edge, and a wedge's
     # own local x runs +Y, so the lead-in has to ramp into the deep skirt.
+    catch_y = catch_region().bounding_box().min.Y
     profiles.append(
-        (catch_region().bounding_box().min.Y, DEEP_BOTTOM,
-         params.SKIRT_TRANSITION_CHAMFER, 1)
+        (catch_y, catch_y, DEEP_BOTTOM, params.SKIRT_TRANSITION_CHAMFER, 1)
     )
     if not 0 < params.SKIRT_LEAD_ANGLE < 90:
         raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
     slope = math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
+
+    # The two IR-end support lead-ins and the deep-skirt lead-in are the same
+    # angle. Put them on the same plane as well, so each wall reads as one
+    # straight ramp instead of two parallel facets with a small step between.
+    # Its foot has to land where the deep lead-in's head is, which is short of
+    # the support cut's own face, so the wedge carries a flat back to that face:
+    # a bare triangle there leaves the skirt between the two as a loose block.
+    deep_top = DEEP_BOTTOM + params.SKIRT_TRANSITION_CHAMFER
+    ir_support_y = max(
+        edge_y
+        for edge_y, _, _, _, direction in profiles
+        if direction > 0 and edge_y < catch_y
+    )
+    profiles = [
+        (
+            edge_y,
+            catch_y - (bottom + height - deep_top) / slope
+            if direction > 0 and abs(edge_y - ir_support_y) < tolerance
+            else wedge_y,
+            bottom,
+            height,
+            direction,
+        )
+        for edge_y, wedge_y, bottom, height, direction in profiles
+    ]
     wedges = []
-    for y, bottom, height, direction in profiles:
+    for edge_y, wedge_y, bottom, height, direction in profiles:
         run = height / slope
         for edge in original.edges():
             box = edge.bounding_box()
@@ -182,17 +207,19 @@ def skirt_lead_in_cuts():
                 and box.size.Y < tolerance
                 and box.size.Z < tolerance
                 and abs(box.min.Z - bottom) < tolerance
-                and abs(edge.center().Y - y) < tolerance
+                and abs(edge.center().Y - edge_y) < tolerance
             ):
                 continue
             plane = Plane(
-                origin=(box.min.X - MERGE, y, bottom),
+                origin=(box.min.X - MERGE, wedge_y, bottom),
                 x_dir=(0, 1, 0), z_dir=(1, 0, 0),
             )
-            triangle = plane * Polygon(
-                (0, 0), (direction * run, 0), (0, height), align=None,
-            )
-            wedges.append(extrude(triangle, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
+            back = min(edge_y - wedge_y, 0.0)
+            points = [(back, 0), (direction * run, 0), (0, height)]
+            if back < -tolerance:
+                points.append((back, height))
+            wedge = plane * Polygon(*points, align=None)
+            wedges.append(extrude(wedge, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
     skirt = _cut(skirt, *wedges)
     # A lead-in removes material only. Keep the catch lands outside this operation.
     return _cut(original, skirt)
@@ -217,7 +244,19 @@ def catch_windows():
 
 def catch_relief():
     """The back's lap is hollowed out this much further down over the deepened
-    section, so the longer skirt has somewhere to go."""
+    section, so the longer skirt has somewhere to go. Carry the cut back to the
+    IR-end support faces so the relief and ledges meet at one flush edge rather
+    than leaving a narrow strip of lap between them."""
+    region = catch_region()
+    runs = support_runs()
+    if not runs:
+        raise ValueError("catch relief needs at least one board support run")
+    box = region.bounding_box()
+    support_end = max(run.bounding_box().max.Y for run in runs)
+    y0 = min(box.min.Y, support_end)
+    region = Pos(box.center().X, (y0 + box.max.Y) / 2, 0) * Box(
+        box.size.X, box.max.Y - y0, box.size.Z
+    )
     return _isect(
         _ring(
             params.BOARD_FIT - 6,
@@ -225,7 +264,7 @@ def catch_relief():
             DEEP_BOTTOM - params.SKIRT_FIT,
             SKIRT_BOTTOM,
         ),
-        catch_region(),
+        region,
     )
 
 

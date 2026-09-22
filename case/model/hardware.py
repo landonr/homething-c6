@@ -95,8 +95,9 @@ def end_screw_block():
     """The front's own boss for that screw, hanging behind the skirt.
 
     Two solids rather than one. The block proper stands off the back's inner
-    wall by SKIRT_FIT, so the two shells never rub over the whole depth it
-    hangs down; a block built flush to that wall would bind the fold closed.
+    wall by END_SCREW_BLOCK_GAP, so the two shells never rub over the whole
+    depth it hangs down; a block built flush to that wall would bind the fold
+    closed, and one built to SKIRT_FIT alone bore on it and bowed the case.
     That leaves it with nothing to grow from, so a web at the skirt's own
     height ties it into the skirt's inner face, which is the only front
     material within reach this far down.
@@ -122,7 +123,7 @@ def end_screw_block():
     """
     x, z = end_screw_axis()
     edge = end_wall_edge()
-    face = edge - params.BOARD_FIT + params.SKIRT_FIT
+    face = edge - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
     back = face + params.END_SCREW_BLOCK_D
     bottom = z - params.END_SCREW_BLOCK_BOTTOM
     block = _rounded_prism(
@@ -145,12 +146,12 @@ def end_screw_block():
 def end_screw_pilot():
     """The block's blind self-tapping pilot, drilled in along -Y.
 
-    END_SCREW_BLOCK_D is BOSS_PILOT_DEPTH plus half a millimetre, so this stops
-    inside the block rather than opening out of the back of it.
+    END_SCREW_BLOCK_D is END_SCREW_PILOT_DEPTH plus half a millimetre, so this
+    stops inside the block rather than opening out of the back of it.
     """
     x, z = end_screw_axis()
-    face = end_wall_edge() - params.BOARD_FIT + params.SKIRT_FIT
-    y0, y1 = face - 0.1, face + params.BOSS_PILOT_DEPTH
+    face = end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
+    y0, y1 = face - 0.1, face + params.END_SCREW_PILOT_DEPTH
     return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(
         radius=params.BOSS_PILOT_D / 2, height=y1 - y0
     )
@@ -180,8 +181,8 @@ def end_screw_length():
     fastener in one length."""
     return (
         (LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H)
-        + params.SKIRT_FIT
-        + params.BOSS_PILOT_DEPTH
+        + params.END_SCREW_BLOCK_GAP
+        + params.END_SCREW_PILOT_DEPTH
     )
 
 

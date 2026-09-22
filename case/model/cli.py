@@ -448,8 +448,9 @@ def main():
         print(f"  {name:<6} {x1 - x0:.2f} x {y1 - y0:.2f}")
     # Both derived from the same stack rather than quoted: a board screw crosses
     # the board and takes the pilot, and the end screw crosses the wall left
-    # under its head, the fit the block stands off that wall by, and the same
-    # engagement. They come out the same length, so the case takes one fastener.
+    # under its head, the gap the block stands off that wall by, and its own
+    # shorter engagement. They come out the same length, so the case takes one
+    # fastener: END_SCREW_PILOT_DEPTH is what keeps it that way.
     short_screw = params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
     end_x, end_z = end_screw_axis()
     print(
@@ -481,8 +482,9 @@ def main():
     print(
         f"grip end: no detents, closed by the one end-wall screw into a "
         f"{params.END_SCREW_BLOCK_W:.1f}x{params.END_SCREW_BLOCK_D:.1f} block, "
-        f"{params.BOSS_PILOT_DEPTH:.1f} of engagement under "
-        f"{LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.1f} of wall"
+        f"{params.END_SCREW_PILOT_DEPTH:.1f} of engagement under "
+        f"{LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.1f} of wall, "
+        f"standing {params.END_SCREW_BLOCK_GAP:.2f} off the back's inner wall"
     )
     print(
         f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick under a "

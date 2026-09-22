@@ -280,10 +280,35 @@ along its own weakest direction, the layer lines of a part printed face down.
 It is wider than that reason alone asks because the room is free: the whole
 +x span from the block to the side wall is empty, so the extra width costs
 nothing and every millimetre of it is thread the screw can pull against."""
-END_SCREW_BLOCK_D = 4.9
-"""How far the block reaches back into the cavity: BOSS_PILOT_DEPTH plus 0.5,
-so the pilot ends inside it and the thread is never drilled out the back of
-its own boss."""
+END_SCREW_BLOCK_GAP = 0.8
+"""How far the block's own -Y face stands off the back's inner end wall.
+
+Its own number rather than SKIRT_FIT, which is what this was and is too little
+for it. SKIRT_FIT is the gap between two faces that are meant to slide past one
+another and are held in register by the lap all round them. The block is held
+by nothing: it hangs off the skirt on one web, deep inside the cavity, aimed
+straight at a wall the fold brings up to meet it. If it lands, it is a hard
+stop between the two shells and the whole case bows out at that end, which is
+what a printed one did. This is that fit plus a print's worth of slop, taken
+out of the thread rather than out of the screw, so the case still closes with
+one M2 x 6."""
+END_SCREW_BLOCK_D = 4.4
+"""How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
+0.5, so the pilot ends inside it and the thread is never drilled out the back
+of its own boss.
+
+It shrank by exactly what END_SCREW_BLOCK_GAP grew, so the block's +Y back face
+has not moved: the lead-in the board lands on and the clearance to the cell are
+where they were, and only the screw-side face went inboard."""
+END_SCREW_PILOT_DEPTH = 3.9
+"""Engagement this one screw takes, against BOSS_PILOT_DEPTH for the three that
+hold the board.
+
+Shorter by what END_SCREW_BLOCK_GAP added, because the screw is the fixed
+quantity here: one M2 x 6 for the whole case, so anything the standoff takes
+comes off the far end of the thread. Still over two diameters into a
+self-tapped boss that is END_SCREW_BLOCK_W wide, and this screw only closes
+two shells rather than carrying the board."""
 END_SCREW_BLOCK_BOTTOM = 2.5
 """Material the block carries below the screw axis, matching BOSS_OD/2 so the
 wall under the thread is what it is around every other M2 in this case. Above

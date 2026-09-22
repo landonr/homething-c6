@@ -179,6 +179,11 @@ The rim runs inside the larger round. The FDM front reduces the round instead of
 The front shell holds the board. Three M2 screws fasten the V3 board to its bosses.
 
 The back lap closes over the front skirt. Two detents secure the IR end.
+Two hidden side catches keep the long seams closed near the board midpoint.
+Their front-skirt pockets are blind, rounded, and bevelled at the mouth, with
+continuous material behind them. The seam sits above the board top, leaving a
+solid skirt land above each catch.
+The back detents ramp on both sides so the shells can be opened for service.
 
 One M2 x 6 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The case uses four M2 x 6 screws in total and no long screw.
 

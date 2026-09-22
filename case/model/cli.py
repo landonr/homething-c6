@@ -98,6 +98,8 @@ from .stack import (
     PAD_WEB_BOTTOM,
     SHELL_BACK,
     SHELL_FRONT,
+    SHELL_SEAM,
+    SKIRT_BOTTOM,
     SKIRT_OUT,
     STEM_TOP,
     SUPPORT_TOP,
@@ -474,7 +476,8 @@ def main():
         f"to the back before the front closes, the reverse of V3"
     )
     print(
-        f"IR end: skirt {params.CATCH_SKIRT_H:.1f} deep over {params.CATCH_SPAN:.1f}, "
+        f"IR end: skirt {SHELL_SEAM - (BOARD_TOP - params.CATCH_SKIRT_H):.1f} deep "
+        f"over {params.CATCH_SPAN:.1f}, "
         f"with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f}, detents "
         f"{params.CATCH_D:.1f} proud of the lap behind them; the +x window is held "
         f"{params.CATCH_EMITTER_CLEAR:.1f} off D1's bore rather than mirrored"
@@ -488,6 +491,6 @@ def main():
     )
     print(
         f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick under a "
-        f"{params.SKIRT_T:.2f} lap, {params.SKIRT_H:.1f} deep"
+        f"{params.SKIRT_T:.2f} lap, {SHELL_SEAM - SKIRT_BOTTOM:.1f} deep"
     )
     print(f"written to {EXPORT}")

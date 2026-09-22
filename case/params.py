@@ -32,11 +32,10 @@ cannot move this far bottoms out before the switch makes."""
 
 # Shell
 WALL = 3.0
-"""Thicker than a plain shell needs, because the lap splits it: the back's lap, a
-fit and the front's skirt all live inside this one thickness, and the skirt then
-has a rail standing off it into a channel cut in the lap. At 2.0 the lap is left
-too thin to take that channel. It costs 2.0 on each of the case's outside
-dimensions."""
+"""Thicker than a plain shell needs, because the lap splits it: the back's lap,
+a fit and the front's skirt all live inside this one thickness. The side catch
+detents also need wall behind their roots. At 2.0 the lap is too thin for them.
+It costs 2.0 on each of the case's outside dimensions."""
 FLOOR = 2.4
 """Back shell floor, under the cavity and over the whole contoured form. No
 fastener passes through it any more: the one closure screw enters the -Y end
@@ -179,12 +178,60 @@ what it has to dodge is bottom-side parts, not anything in the front cavity."""
 # over it. The seam is the top edge of that lap, and the outer faces are flush
 # across it, so nothing of the front is visible from the side below the seam.
 SKIRT_H = 4.0
-"""How far the skirt drops below the parting plane."""
+"""How far the skirt drops below the board top. Raising the seam grows the
+skirt upward without moving its lower edge into the support ledges or screw."""
+SHELL_SEAM_RISE = 1.5
+"""Lift the back lap and visible seam above the board top. The centered blind
+catch pocket keeps about 1.08 of skirt above it and continuous wall behind it,
+while the support ledges and board mounting heights remain unchanged."""
 SKIRT_T = 1.5
 """The back's lap over the skirt. Whatever is left of WALL after this and the fit
 is the skirt, so this one number splits the wall between the two shells."""
 SKIRT_FIT = 0.30
 """Clearance between the shells. This gap lets the front fold closed and prevents a tight seal."""
+SIDE_SKIRT_THICKEN = 0.20
+"""Extra inward wall on the two long skirt runs. The nominal 0.5 board fit
+still leaves 0.3 at the board edge; this stiffens the printed side seam without
+moving either shell's visible outer wall or thinning the back lap."""
+SIDE_CATCH_CENTER_OFFSET = 3.5
+"""Position of the side catches toward the IR end from the board's lengthwise
+midpoint. The reported bow is near that midpoint; this offset centres each
+pocket under it without recording an absolute board coordinate."""
+SIDE_CATCH_W = 8.0
+"""Length of each hidden side catch along the seam. A short land limits the
+amount of PLA that must flex during the final fold closed."""
+SIDE_CATCH_H = 1.2
+"""Pocket height centered in the clear vertical band above the support ledges
+and below the raised seam, without cutting the full-length support runs."""
+SIDE_CATCH_R = 0.45
+"""Round the pocket corners to avoid sharp stress risers in the printed skirt."""
+SIDE_CATCH_POCKET_DEPTH = 0.35
+"""Blind cut inward from the skirt's outer face. The detent enters 0.15 past
+that face; this leaves 0.20 behind its tip and over 1.0 of continuous skirt
+wall at the pocket floor."""
+SIDE_CATCH_POCKET_CHAMFER = 0.15
+"""Inset of the pocket's rounded inner profile from its outer mouth. The
+resulting bevel around both lips matches the detent's insertion and release
+ramps without widening the mouth or thinning the upper skirt land."""
+SIDE_CATCH_WALL_MIN = 1.0
+"""Minimum continuous wall behind each blind catch pocket. This is the point
+of replacing the through-window: a shallow detent must not sever the skirt."""
+SIDE_CATCH_UPPER_LAND_MIN = 1.0
+"""Minimum height of intact skirt above a central pocket, checked on the built
+shell. Centering the pocket between SUPPORT_TOP and SHELL_SEAM leaves about
+1.08 nominally above its top edge."""
+SIDE_CATCH_D = 0.45
+"""How far each back-lap detent projects inward. It crosses the 0.30 shell fit
+by only 0.15, so the PLA skirt needs only a small deflection to engage."""
+SIDE_CATCH_LAND_H = 0.1
+"""Short full-depth land at the middle of each detent. The rest of its height
+ramps away on both sides so the shell can be opened and closed for service."""
+SIDE_CATCH_FIT = 0.15
+"""Inset of the back detent from every side-pocket edge to prevent a hard stop
+when a printed shell closes."""
+GRIP_SKIRT_RELIEF = 0.20
+"""Extra radial clearance on the front skirt at the -Y grip end. The end was
+hard to seat; relieving its hidden skirt leaves the outside seam unchanged."""
 SKIRT_TRANSITION_CHAMFER = 3.0
 """Vertical rise at the deep-skirt ends. Support-cut ends use their full exposed height to remove small steps. Zero disables all skirt lead-ins."""
 SKIRT_LEAD_ANGLE = 65.0
@@ -280,7 +327,7 @@ along its own weakest direction, the layer lines of a part printed face down.
 It is wider than that reason alone asks because the room is free: the whole
 +x span from the block to the side wall is empty, so the extra width costs
 nothing and every millimetre of it is thread the screw can pull against."""
-END_SCREW_BLOCK_GAP = 0.8
+END_SCREW_BLOCK_GAP = 1.0
 """How far the block's own -Y face stands off the back's inner end wall.
 
 Its own number rather than SKIRT_FIT, which is what this was and is too little
@@ -289,10 +336,10 @@ another and are held in register by the lap all round them. The block is held
 by nothing: it hangs off the skirt on one web, deep inside the cavity, aimed
 straight at a wall the fold brings up to meet it. If it lands, it is a hard
 stop between the two shells and the whole case bows out at that end, which is
-what a printed one did. This is that fit plus a print's worth of slop, taken
-out of the thread rather than out of the screw, so the case still closes with
+what a printed one did. The added 0.2 of stand-off eases the printed fold and
+comes out of the thread rather than the screw, so the case still closes with
 one M2 x 6."""
-END_SCREW_BLOCK_D = 4.4
+END_SCREW_BLOCK_D = 4.2
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
 0.5, so the pilot ends inside it and the thread is never drilled out the back
 of its own boss.
@@ -300,13 +347,13 @@ of its own boss.
 It shrank by exactly what END_SCREW_BLOCK_GAP grew, so the block's +Y back face
 has not moved: the lead-in the board lands on and the clearance to the cell are
 where they were, and only the screw-side face went inboard."""
-END_SCREW_PILOT_DEPTH = 3.9
+END_SCREW_PILOT_DEPTH = 3.7
 """Engagement this one screw takes, against BOSS_PILOT_DEPTH for the three that
 hold the board.
 
 Shorter by what END_SCREW_BLOCK_GAP added, because the screw is the fixed
 quantity here: one M2 x 6 for the whole case, so anything the standoff takes
-comes off the far end of the thread. Still over two diameters into a
+comes off the far end of the thread. It remains nearly two diameters into a
 self-tapped boss that is END_SCREW_BLOCK_W wide, and this screw only closes
 two shells rather than carrying the board."""
 END_SCREW_BLOCK_BOTTOM = 2.5

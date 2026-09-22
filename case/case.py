@@ -9,8 +9,8 @@ from the back. The two shells meet in a lap joint around the whole perimeter, th
 closing over a skirt on the front, and are held by two detents at the IR end and
 one screw at the other, driven horizontally through the back's end wall into a
 block the front carries behind its skirt. Every mounting hole keeps its own short
-screw, so the case takes four M2 x 6 and nothing longer. A rail down each side of
-the skirt runs in a channel in the lap and takes the play out of the middle.
+screw, so the case takes four M2 x 6 and nothing longer. Hidden catches in both
+long-side skirts hold the seams closed near the board midpoint.
 
 The pad is two flat soft lobes with one raised feature per switch, one lobe per
 island of keys, each padded off its own keys and so stopping short of the wheel

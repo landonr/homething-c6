@@ -10,7 +10,7 @@ import params
 from .hardware import mount_points
 from .backform import back_form
 from .shape import _cut, _fuse, _isect, _offset_face, _slab
-from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SKIRT_OUT, SUPPORT_TOP
+from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SHELL_SEAM, SKIRT_OUT, SUPPORT_TOP
 
 
 def support_top():
@@ -21,7 +21,7 @@ def support_case_envelope(inset=0.0):
     """Return the back case envelope with an optional uniform inside offset."""
     plan = _offset_face(params.BOARD_FIT + params.WALL - inset)
     return _isect(
-        _slab(plan, SHELL_BACK, BOARD_TOP),
+        _slab(plan, SHELL_BACK, SHELL_SEAM),
         back_form(inset, inset, inset),
     )
 

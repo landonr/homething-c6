@@ -93,7 +93,13 @@ from .keypad import (
     wheel_basin_shape,
 )
 from .mic import mic_fillet
-from .shells import interference, parts_are_sound, shells_mate
+from .shells import (
+    interference,
+    parts_are_sound,
+    shells_mate,
+    side_seam_retention,
+    side_skirt_lead_ins,
+)
 from .support import (
     support_board_clearance,
     support_case_containment,
@@ -406,6 +412,24 @@ def _outline_is_cut(s):
 def _shells_mate(s):
     return _report(
         shells_mate(s.front, s.back), "front and back mate with no overlap"
+    )
+
+
+@_check("shells")
+def _side_seam_retention(s):
+    return _report(
+        side_seam_retention(s.front, s.back),
+        "both blind side pockets retain a continuous skirt floor, engage "
+        "detents with insertion and release ramps, and keep upper skirt land, "
+        "board-edge clearance and grip-end relief",
+    )
+
+
+@_check("shells")
+def _side_skirt_lead_ins(s):
+    return _report(
+        side_skirt_lead_ins(s.front),
+        "side support-break ramps cut across the full reinforced skirt depth",
     )
 
 

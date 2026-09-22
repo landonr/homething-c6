@@ -163,7 +163,11 @@ merely touches at a plane fuses into a compound rather than one solid, and the
 next boolean then discards the whole shell."""
 
 SKIRT_BOTTOM = BOARD_TOP - params.SKIRT_H
-"""How far the front's skirt hangs below the parting plane."""
+"""Lower edge of the front skirt, held relative to the board top."""
+
+SHELL_SEAM = BOARD_TOP + params.SHELL_SEAM_RISE
+"""Top of the back lap and front skirt. Raising this seam grows the thin
+mating band upward without changing the board's own Z stack."""
 
 LAP_OUT = params.BOARD_FIT + params.WALL
 """Outer face of the case, which both shells share: the back's lap runs right up

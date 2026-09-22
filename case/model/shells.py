@@ -57,10 +57,12 @@ from .stack import (
     LAP_IN,
     LAP_OUT,
     MERGE,
+    SHELL_SEAM,
     SHELL_BACK,
     SHELL_FRONT,
     SKIRT_BOTTOM,
     SKIRT_OUT,
+    SUPPORT_TOP,
 )
 from .usb import usb_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
@@ -83,7 +85,7 @@ def skirt_relief():
             params.BOARD_FIT - 6,
             LAP_IN,
             SKIRT_BOTTOM - params.SKIRT_FIT,
-            BOARD_TOP + 1,
+            SHELL_SEAM + 1,
         )
     ]
 
@@ -93,9 +95,137 @@ def skirt_cuts():
     cavity carried down past it, and everything outboard of the skirt, which is
     the space the back's lap closes into."""
     return [
-        _slab(_offset_face(params.BOARD_FIT), SKIRT_BOTTOM - 1, BOARD_TOP),
-        _ring(SKIRT_OUT, LAP_OUT + 6, SKIRT_BOTTOM - 1, BOARD_TOP),
+        _slab(_offset_face(params.BOARD_FIT), SKIRT_BOTTOM - 1, SHELL_SEAM),
+        _ring(SKIRT_OUT, LAP_OUT + 6, SKIRT_BOTTOM - 1, SHELL_SEAM),
     ]
+
+
+def side_skirt_stiffeners():
+    """Inward material along both side skirts, clear of the board's edge."""
+    box = board.board_profile().bounding_box()
+    band = _ring(
+        params.BOARD_FIT - params.SIDE_SKIRT_THICKEN,
+        params.BOARD_FIT + MERGE,
+        SKIRT_BOTTOM,
+        SHELL_SEAM,
+    )
+    reach = params.BOARD_FIT + params.WALL + MERGE
+    clips = [
+        Pos(x, box.center().Y, (SKIRT_BOTTOM + SHELL_SEAM) / 2)
+        * Box(2 * reach, box.size.Y + 2 * reach, SHELL_SEAM - SKIRT_BOTTOM)
+        for x in (box.min.X - reach, box.max.X + reach)
+    ]
+    return [_isect(band, clip) for clip in clips]
+
+
+def side_catch_y():
+    """Catch station near the lengthwise centre of the board."""
+    box = board.board_profile().bounding_box()
+    y = box.center().Y + params.SIDE_CATCH_CENTER_OFFSET
+    if not box.min.Y < y - params.SIDE_CATCH_W / 2 < y + params.SIDE_CATCH_W / 2 < box.max.Y:
+        raise ValueError("side catch pocket reaches a board end")
+    return y
+
+
+def side_catch_bottom():
+    """Centre the pocket in the ledge-free height up to the raised seam."""
+    return (SUPPORT_TOP + SHELL_SEAM - params.SIDE_CATCH_H) / 2
+
+
+def side_catch_pockets():
+    """Blind rounded pockets with a bevel all around each exterior mouth."""
+    box = board.board_profile().bounding_box()
+    z0 = side_catch_bottom()
+    if z0 + params.SIDE_CATCH_H >= SHELL_SEAM:
+        raise ValueError("side catch pocket reaches the top of the skirt")
+    bevel = params.SIDE_CATCH_POCKET_CHAMFER
+    if not 0 < bevel < min(params.SIDE_CATCH_R, params.SIDE_CATCH_H / 2):
+        raise ValueError("side catch pocket chamfer does not fit its rounded profile")
+    out = []
+    for side, edge in ((-1, box.min.X), (1, box.max.X)):
+        def profile(radial, inset):
+            plane = Plane(
+                origin=(edge + side * radial, side_catch_y(), z0 + params.SIDE_CATCH_H / 2),
+                x_dir=(0, 1, 0), z_dir=(side, 0, 0),
+            )
+            return plane * RectangleRounded(
+                params.SIDE_CATCH_W - 2 * inset,
+                params.SIDE_CATCH_H - 2 * inset,
+                params.SIDE_CATCH_R - inset,
+            )
+
+        out.append(loft(
+            [
+                profile(SKIRT_OUT + MERGE, 0),
+                profile(SKIRT_OUT + 0.02, 0),
+                profile(SKIRT_OUT - params.SIDE_CATCH_POCKET_DEPTH, bevel),
+            ],
+            ruled=True,
+        ))
+    return out
+
+
+def side_catch_detents():
+    """Back-lap detents chamfered on both insertion and release sides."""
+    box = board.board_profile().bounding_box()
+    z0 = side_catch_bottom() + params.SIDE_CATCH_FIT
+    z1 = z0 + params.SIDE_CATCH_H - 2 * params.SIDE_CATCH_FIT
+    depth = params.SIDE_CATCH_D
+    fit = params.SIDE_CATCH_FIT
+    land = params.SIDE_CATCH_LAND_H
+    if not 0 < land < z1 - z0:
+        raise ValueError("side catch land must fit inside the detent height")
+    middle = (z0 + z1) / 2
+    out = []
+    for side, edge in ((-1, box.min.X), (1, box.max.X)):
+        base = edge + side * LAP_IN
+        tip = base - side * depth
+        plane = Plane(
+            origin=((base + tip) / 2, side_catch_y(), (z0 + z1) / 2),
+            x_dir=(0, 1, 0), z_dir=(-side, 0, 0),
+        )
+        profile = plane * RectangleRounded(
+            params.SIDE_CATCH_W - 2 * fit,
+            params.SIDE_CATCH_H - 2 * fit,
+            max(params.SIDE_CATCH_R - fit, 0.1),
+        )
+        prism = extrude(profile, amount=depth / 2 + MERGE, both=True)
+        wedge = loft(
+            [
+                Pos(base - side * 0.05, side_catch_y(), z0)
+                * Rectangle(0.1, params.SIDE_CATCH_W + 2),
+                Pos((base + tip) / 2, side_catch_y(), middle - land / 2)
+                * Rectangle(depth, params.SIDE_CATCH_W + 2),
+                Pos((base + tip) / 2, side_catch_y(), middle + land / 2)
+                * Rectangle(depth, params.SIDE_CATCH_W + 2),
+                Pos(base - side * 0.05, side_catch_y(), z1)
+                * Rectangle(0.1, params.SIDE_CATCH_W + 2),
+            ],
+            ruled=True,
+        )
+        out.append(_isect(prism, wedge))
+    return out
+
+
+def grip_skirt_relief():
+    """Shave the hidden skirt around the grip end for closing clearance."""
+    box = board.board_profile().bounding_box()
+    band = _ring(
+        SKIRT_OUT - params.GRIP_SKIRT_RELIEF,
+        SKIRT_OUT + MERGE,
+        SKIRT_BOTTOM - 0.1,
+        SHELL_SEAM,
+    )
+    clip = Pos(
+        box.center().X,
+        box.min.Y + (params.WALL - 2 * (params.WALL + MERGE)) / 2,
+        (SKIRT_BOTTOM + SHELL_SEAM) / 2,
+    ) * Box(
+        box.size.X + 2 * (params.WALL + MERGE),
+        params.WALL + 2 * (params.WALL + MERGE),
+        SHELL_SEAM - SKIRT_BOTTOM + 0.2,
+    )
+    return _isect(band, clip)
 
 
 DEEP_BOTTOM = BOARD_TOP - params.CATCH_SKIRT_H
@@ -148,8 +278,9 @@ def skirt_lead_in_cuts():
     if params.SKIRT_TRANSITION_CHAMFER <= 0:
         return Compound([])
     skirt = _fuse(
-        _ring(params.BOARD_FIT, SKIRT_OUT, SKIRT_BOTTOM, BOARD_TOP),
+        _ring(params.BOARD_FIT, SKIRT_OUT, SKIRT_BOTTOM, SHELL_SEAM),
         deep_skirt(),
+        *side_skirt_stiffeners(),
     )
     cuts = front_support_cuts()
     skirt = _cut(skirt, *cuts)
@@ -318,10 +449,10 @@ def back_shell():
     # around the rounded corner instead of thinning into it.
     cavity = back_form(params.WALL, params.FLOOR, params.FLOOR)
 
-    shell = _isect(_slab(outer, SHELL_BACK, BOARD_TOP), form)
+    shell = _isect(_slab(outer, SHELL_BACK, SHELL_SEAM), form)
     shell = _cut(
         shell,
-        _isect(_slab(inner, SHELL_BACK, BOARD_TOP + 1), cavity),
+        _isect(_slab(inner, SHELL_BACK, SHELL_SEAM + 1), cavity),
         *skirt_relief(),
     )
 
@@ -333,6 +464,7 @@ def back_shell():
         legacy_retention_post(),
         *support_runs(),
         *catch_detents(),
+        *side_catch_detents(),
     )
     return _cut(
         shell,
@@ -493,7 +625,7 @@ def front_shell(fdm=False):
         [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01],
         front_edge_round(fdm),
     )
-    shell = _cut(body, _slab(inner, BOARD_TOP - 0.01, CAVITY_FRONT), *skirt_cuts())
+    shell = _cut(body, _slab(inner, SHELL_SEAM - 0.01, CAVITY_FRONT), *skirt_cuts())
 
     # The mic hears through the board, so the inlet is on the front. A duct down
     # to the board keeps it coupled to the board's own port hole instead of to
@@ -524,6 +656,7 @@ def front_shell(fdm=False):
         shell,
         mic_duct(face),
         deep_skirt(),
+        *side_skirt_stiffeners(),
         end_screw_block(),
         *bosses,
     )
@@ -535,7 +668,12 @@ def front_shell(fdm=False):
     # derived breaks in the skirt so the shells can close around them.
     shell = _cut(shell, usb_pocket())
     shell = _chamfer_usb_pocket_lip(shell)
-    shell = _cut(shell, *front_support_cuts(), *skirt_lead_in_cuts().solids())
+    shell = _cut(
+        shell,
+        *front_support_cuts(),
+        *skirt_lead_in_cuts().solids(),
+        grip_skirt_relief(),
+    )
 
     parts = board.components()
     # No collar cut around the bosses. key_size() sizes each key to clear them, so
@@ -562,6 +700,7 @@ def front_shell(fdm=False):
         *pilots,
         end_screw_pilot(),
         *catch_windows(),
+        *side_catch_pockets(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(fdm),
         mic_bore(),

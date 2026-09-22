@@ -23,7 +23,7 @@ would invert between the two parts.
 Two things are deliberately left out. The keycaps carry no entries, because
 each is already one part in the export and its STL is moved to the origin rather
 than left where it was built, so a box in the case frame would not describe it.
-The skirt and the cavities carry none either: each is a cut over the whole plan
+The base skirt and the cavities carry none either: each spans the whole plan
 profile, so its box is the part's own box and says nothing that ranking can use.
 
 The FDM front does carry entries, and they are the front shell's own but for the
@@ -243,6 +243,10 @@ def _front(runs, obstacles, fdm=False):
     out = [
         _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
         _entry("deep_skirt", "shells.deep_skirt", "add", shells.deep_skirt()),
+        *_split(
+            "side_skirt_stiffener", "shells.side_skirt_stiffeners", "add",
+            shells.side_skirt_stiffeners(),
+        ),
         *[
             _entry(f"skirt_lead_in.{index}", "shells.skirt_lead_in_cuts", "cut", solid)
             for index, solid in enumerate(shells.skirt_lead_in_cuts().solids(), 1)
@@ -270,6 +274,10 @@ def _front(runs, obstacles, fdm=False):
         )
     )
     out.append(_entry("usb_pocket", "usb.usb_pocket", "cut", usb.usb_pocket()))
+    out.append(_entry(
+        "grip_skirt_relief", "shells.grip_skirt_relief", "cut",
+        shells.grip_skirt_relief(),
+    ))
     out += _support_entries(runs, "cut")
     out += _support_gaps(runs, obstacles)
     for x, y in hardware.mount_points():
@@ -298,6 +306,10 @@ def _front(runs, obstacles, fdm=False):
     )
     out += _split(
         "catch_windows", "shells.catch_windows", "cut", shells.catch_windows()
+    )
+    out += _split(
+        "side_catch_pockets", "shells.side_catch_pockets", "cut",
+        shells.side_catch_pockets(),
     )
     out += [
         _entry(
@@ -377,6 +389,10 @@ def _back(runs, obstacles):
     out += _support_gaps(runs, obstacles)
     out += _split(
         "catch_detents", "shells.catch_detents", "add", shells.catch_detents()
+    )
+    out += _split(
+        "side_catch_detents", "shells.side_catch_detents", "add",
+        shells.side_catch_detents(),
     )
     # The two end-screw cuts share one hole, so the shank and the head
     # counterbore are told apart by what each does rather than by where it is.

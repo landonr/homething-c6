@@ -318,12 +318,20 @@ def end_screw(front, back):
         )
 
     # The pilot stops inside the block, and there is block left beyond it.
+    # Against a floor rather than against zero. Both numbers come out of the
+    # same stack, so a pilot drilled level with the block's back reads a
+    # nanometre short of it rather than equal, which passes a bare >= and then
+    # asks OCC for a probe box that thick, which it refuses: the pass died on a
+    # stack trace instead of reporting the thread it had found open. A floor
+    # reads that case as what it is, and anything under it is a skin no thread
+    # would survive anyway.
+    floor = 0.1
     pilot = case.end_screw_pilot().bounding_box()
-    if pilot.max.Y >= box.max.Y:
+    if pilot.max.Y >= box.max.Y - floor:
         problems.append(
             Problem(
-                f"the pilot ends at {pilot.max.Y:.2f}, at or past the block's "
-                f"own back at {box.max.Y:.2f}, so it is not blind"
+                f"the pilot ends at {pilot.max.Y:.2f}, within {floor} of the "
+                f"block's own back at {box.max.Y:.2f}, so it is not blind"
             )
         )
     else:

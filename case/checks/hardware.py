@@ -207,11 +207,11 @@ def end_screw(front, back):
                 part="case-front",
             )
         )
-    # The top row alone probes further in than the other two: the block's back
-    # face is chamfered away at the top for END_SCREW_BLOCK_CHAMFER, so a probe
-    # at the back reads air there by construction and would fail on the lead-in
-    # rather than on a missed fuse. Stepping inboard of the chamfer puts it back
-    # on the top land the board sits over.
+    # The top and bottom rows probe further in than the middle one: the block's
+    # back face is chamfered away at both, for END_SCREW_BLOCK_CHAMFER and
+    # END_SCREW_BLOCK_BASE_CHAMFER, so a probe at the back reads air there by
+    # construction and would fail on a lead-in rather than on a missed fuse.
+    # Stepping inboard of each chamfer puts them back on the land it leaves.
     for label, probe_y, probe_z in (
         (
             "under its top",
@@ -219,7 +219,11 @@ def end_screw(front, back):
             case.SUPPORT_TOP - 0.3,
         ),
         ("at the axis", box.max.Y - 0.3, z),
-        ("above its bottom", box.max.Y - 0.3, box.min.Z + 0.3),
+        (
+            "above its bottom",
+            box.max.Y - params.END_SCREW_BLOCK_BASE_CHAMFER - 0.3,
+            box.min.Z + 0.3,
+        ),
     ):
         probe = Pos(x, probe_y, probe_z) * Box(0.3, 0.3, 0.3)
         filled = _fill_fraction(front, probe)
@@ -250,6 +254,24 @@ def end_screw(front, back):
             Problem(
                 f"the block's top back corner is {filled:.0%} material, so the "
                 "board's lead-in chamfer is not cut",
+                box=probe,
+                part="case-front",
+            )
+        )
+
+    # The twin of that one at the bottom back corner, in the wedge the fold's
+    # own lead-in takes off. Sized and placed off END_SCREW_BLOCK_BASE_CHAMFER
+    # so it stays wholly inside the removed wedge at any positive value of it.
+    base = params.END_SCREW_BLOCK_BASE_CHAMFER
+    probe = Pos(
+        x, box.max.Y - 0.25 * base, box.min.Z + 0.25 * base
+    ) * Box(0.2 * base, 0.2 * base, 0.2 * base)
+    filled = _fill_fraction(front, probe)
+    if filled > TOLERANCE:
+        problems.append(
+            Problem(
+                f"the block's bottom back corner is {filled:.0%} material, so "
+                "the fold's lead-in chamfer is not cut",
                 box=probe,
                 part="case-front",
             )

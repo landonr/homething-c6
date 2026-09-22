@@ -323,6 +323,21 @@ assembly somewhere to slide instead. Kept under half END_SCREW_BLOCK_D, which
 is the shallower plan dimension and so the bound on any plan round here. The
 two wall-side corners end up buried: the web that ties the block to the skirt
 runs past them by this radius plus MERGE, so the bridge stays full width."""
+END_SCREW_BLOCK_BASE_CHAMFER = 0.8
+"""Lead-in on the block's bottom +Y arris, the corner that leads the fold.
+
+The front hinges in at the IR end and swings down at this one, so the block
+sweeps an arc and this corner is the furthest point of it: the first thing to
+meet the back's floor if the fold comes in low or off square. It is the same
+argument as END_SCREW_BLOCK_R makes in plan, and it wants the same answer, a
+lead-in rather than a square arris.
+
+Cut as a wedge across the whole width for the reason END_SCREW_BLOCK_CHAMFER
+is: the arris is the straight edge plus the two plan rounds tangent to it, and
+an edge chamfer on that chain tore the exported mesh.
+
+Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
+below the screw and never reaches the thread."""
 END_SCREW_BLOCK_CHAMFER = 1.5
 """Lead-in on the block's top +Y arris, where the board lands on it.
 

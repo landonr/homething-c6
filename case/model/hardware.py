@@ -91,6 +91,36 @@ def _chamfer_block_lead_in(block, back):
     return _cut(block, wedge)
 
 
+def _chamfer_block_base(block, back, bottom):
+    """Cut the block's bottom +Y arris back to a ramp, the corner the fold leads
+    with. A wedge across the full width, for the same tangent-chain reason
+    _chamfer_block_lead_in is one."""
+    size = params.END_SCREW_BLOCK_BASE_CHAMFER
+    if not 0 < size < params.END_SCREW_BLOCK_BOTTOM:
+        raise ValueError(
+            f"END_SCREW_BLOCK_BASE_CHAMFER {size} is not inside the "
+            f"{params.END_SCREW_BLOCK_BOTTOM} the block carries under the screw"
+        )
+    if size >= params.END_SCREW_BLOCK_D:
+        raise ValueError(
+            f"END_SCREW_BLOCK_BASE_CHAMFER {size} is not inside the block's "
+            f"own {params.END_SCREW_BLOCK_D} depth"
+        )
+    with BuildSketch(Plane.YZ) as section:
+        with BuildLine():
+            Polyline(
+                (back - size, bottom),
+                (back, bottom),
+                (back, bottom + size),
+                close=True,
+            )
+        make_face()
+    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
+    x = block.bounding_box().center().X
+    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    return _cut(block, wedge)
+
+
 def end_screw_block():
     """The front's own boss for that screw, hanging behind the skirt.
 
@@ -110,6 +140,9 @@ def end_screw_block():
     the block's full width and reaches past the two wall-side rounds by that
     radius plus MERGE, so what bridges to the skirt is the block's whole
     section and not the narrowed waist a round would otherwise leave.
+
+    Its bottom +Y arris is cut back by END_SCREW_BLOCK_BASE_CHAMFER, which is
+    the corner the fold leads with.
 
     Its top +Y arris is cut back by END_SCREW_BLOCK_CHAMFER. That arris stands
     under the board with only SUPPORT_GAP over it and sits END_SCREW_BLOCK_D
@@ -135,6 +168,7 @@ def end_screw_block():
         SUPPORT_TOP,
     )
     block = _chamfer_block_lead_in(block, back)
+    block = _chamfer_block_base(block, back, bottom)
     web_y0 = edge - params.BOARD_FIT - MERGE
     web_y1 = face + params.END_SCREW_BLOCK_R + MERGE
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(

@@ -471,14 +471,15 @@ EDGE_R_FRONT = 2.5
 """Round on the front's top edge. Small: it is a face full of key holes, and the
 outermost sit close to the wall. The FDM front carries its own, see
 EDGE_R_FRONT_FDM."""
-EDGE_R_FRONT_FDM = 0.6
+EDGE_R_FRONT_FDM = 0.64
 """Leg length of the FDM front's 45 degree top-edge chamfer. The established
 name remains because the FDM and recessed fronts share front_edge_round() as a
 size reader; the recessed front still uses EDGE_R_FRONT as a fillet radius.
 
 The smaller FDM groove leaves room for this bevel and flat face beyond the
-groove. checks/fdm.py measures the built face's flat margin rather than trusting
-the value, and checks/shells.py guards the exported mesh against a torn edge."""
+groove. Its lower end meets the USB slot roof at the exterior wall, removing
+the 0.04 mm straight strip above that opening. checks/fdm.py measures the
+built face's flat margin, and checks/shells.py guards the exported mesh."""
 
 # Apertures in the front shell
 KEY_GAP = 1.6

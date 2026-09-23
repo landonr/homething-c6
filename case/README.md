@@ -168,7 +168,7 @@ The USB pocket roof and the USB slot roof are flush, at the connector envelope p
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
-The FDM front has a 0.6 mm, 45 degree top-edge chamfer. The recessed front keeps its round.
+The FDM front has a 0.64 mm, 45 degree top-edge chamfer. The recessed front keeps its round.
 
 The rim runs inside the recessed front's round. The FDM front keeps its groove on flat face outside the chamfer.
 

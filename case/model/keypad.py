@@ -908,8 +908,8 @@ def recess_outline():
 
     Nothing clamps it. The rim runs inside EDGE_R_FRONT, so an outline drawn on
     a front with that round would spend most of its length on the round's
-    curve; on the FDM front the round gives way instead, which is what
-    EDGE_R_FRONT_FDM is. Clamping the outline was the other way round and it
+    curve; on the FDM front a smaller chamfer leaves flat face for it.
+    Clamping the outline was the other way round and it
     showed: it flat-sided the line over most of its length and carried it into
     the LED ring channel.
     """

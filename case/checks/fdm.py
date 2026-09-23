@@ -34,13 +34,13 @@ could put the groove over the ring, and what would be left there is
 LED_RING_ROOF less the groove's own depth. The floor is set for that case
 rather than for the couple of millimetres the present layout happens to leave.
 
-Edge round is hard: the flat the built shell actually has, out to its own top
-edge round, is EDGE_R_FRONT_FDM's and not EDGE_R_FRONT's, and the groove sits
+Edge chamfer is sized: the flat the built shell actually has, out to its own
+top-edge chamfer, is EDGE_R_FRONT_FDM's and not EDGE_R_FRONT's, and the groove sits
 on that flat with FDM_OUTLINE_EDGE_CLEAR to spare. This is the pass that holds
 the trade the variant is built on. The outline is the recessed front's own rim,
-which runs inside EDGE_R_FRONT, so the round is what has to give; if it ever
-stops giving, the groove lands on the curve of the edge instead of on flat
-face, and at the limit its outer edge goes coincident with the round's own and
+which runs inside EDGE_R_FRONT, so the FDM edge treatment gives way; if it ever
+stops giving, the groove lands on the bevel instead of on flat face, and at
+the limit its outer edge goes coincident with the chamfer's inner edge and
 tears the exported mesh.
 
 Ceilings hold: the three thicknesses FDM_FACE_DROP takes from, the USB
@@ -106,9 +106,9 @@ WIDTH_TOLERANCE = 0.02
 """How far the built band's mean width may sit from FDM_OUTLINE_W."""
 
 EDGE_TOLERANCE = 0.02
-"""Slack on the two edge readings. EDGE_R_FRONT_FDM is set to exactly the bound
-the outline leaves, so both come out on their limit and this is offset and
-boolean slop only."""
+"""Slack on the built flat-face extent and three chamfer slope readings.
+The fine groove leaves room outside the 0.6 mm bevel; this covers boolean
+and ray-probe slop, not a design allowance on the edge angle."""
 
 PLANE_TOLERANCE = 1e-6
 """How flat a face has to lie to count as the front's own outer plane."""
@@ -788,12 +788,12 @@ def _wall_gap(x0, x1, y0, y1):
     return min(x0 - ex0, ex1 - x1, y0 - ey0, ey1 - y1)
 
 
-def edge_round_is_hard(front):
-    """The FDM front's top edge round is EDGE_R_FRONT_FDM's, and the groove sits
+def edge_chamfer_is_sized(front):
+    """The FDM front's top edge has a 45 degree chamfer, and the groove sits
     on the flat it leaves with FDM_OUTLINE_EDGE_CLEAR to spare.
 
     Read off the built shell's own outer plane rather than off the radius that
-    was passed to fillet(). What the round costs is flat face, and flat face is
+    was passed to chamfer(). What the bevel costs is flat face, and flat face is
     what the outline needs, so the thing worth measuring is how much of it came
     out. The groove cuts that plane into two regions, the island inside the
     outline and the field outside it, so the extent is taken over every face
@@ -825,7 +825,7 @@ def edge_round_is_hard(front):
         problems.append(
             Problem(
                 f"the FDM front's flat face stops {got:.2f} short of the wall "
-                f"where EDGE_R_FRONT_FDM says {want:.2f}: the round it was "
+                f"where EDGE_R_FRONT_FDM says {want:.2f}: the chamfer it was "
                 f"built with is not the one this front is supposed to carry",
                 part="c6remote-case-front-fdm",
             )
@@ -838,10 +838,31 @@ def edge_round_is_hard(front):
             Problem(
                 f"only {left:.2f} of flat face is left outboard of the groove, "
                 f"against FDM_OUTLINE_EDGE_CLEAR's {params.FDM_OUTLINE_EDGE_CLEAR:.2f}: "
-                f"the outline is on the shoulder of the edge round, and at zero "
-                f"its outer edge goes coincident with that round's own and tears "
+                f"the outline is on the edge chamfer, and at zero "
+                f"its outer edge goes coincident with that chamfer's own and tears "
                 f"the exported mesh",
                 part="c6remote-case-front-fdm",
             )
         )
+    # Three vertical rays across a straight side measure the actual face slope.
+    # A fillet leaves the same flat extent but curves between these sites.
+    outer_x = front.bounding_box().max.X
+    y = board.board_profile().bounding_box().center().Y
+    top = case.FDM_FACE + 0.2
+    for fraction in (0.25, 0.5, 0.75):
+        offset = want * fraction
+        x = outer_x - offset
+        runs = _ray_runs(front, (x, y, top), (x, y, case.FDM_FACE - want - 0.2))
+        surface = top - runs[0][0] if runs else None
+        expected = case.FDM_FACE - want + offset
+        if surface is None or abs(surface - expected) > EDGE_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the FDM edge at x={x:.2f} is at "
+                    f"{surface if surface is None else round(surface, 3)}, "
+                    f"where its 45 degree chamfer should be at {expected:.3f}",
+                    at=(x, y, expected),
+                    part="c6remote-case-front-fdm",
+                )
+            )
     return problems

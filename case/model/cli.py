@@ -385,8 +385,8 @@ def main():
         f"cosmetic surface"
     )
     print(
-        f"  top edge rounds at {front_edge_round(True):.2f} rather than "
-        f"{front_edge_round():.2f}, which is what leaves the outline "
+        f"  top edge has a {front_edge_round(True):.2f} 45 degree chamfer "
+        f"rather than a {front_edge_round():.2f} round, leaving the outline "
         f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it"
     )
     print(

@@ -69,9 +69,9 @@ from .wheel_ring import led_ring_channel, wheel_opening
 
 
 def front_edge_round(fdm=False):
-    """Radius on the front's top edge, which of the two fronts it is.
+    """Top-edge size: FDM chamfer leg or recessed-front fillet radius.
 
-    Here rather than read at the fillet call so checks/fdm.py can ask for the
+    Here rather than read at the edge operation so checks/fdm.py can ask for the
     number it is about to measure on the built shell without restating the
     choice."""
     return params.EDGE_R_FRONT_FDM if fdm else params.EDGE_R_FRONT
@@ -346,9 +346,16 @@ def skirt_lead_in_cuts():
                 x_dir=(0, 1, 0), z_dir=(1, 0, 0),
             )
             back = min(edge_y - wedge_y, 0.0)
-            points = [(back, 0), (direction * run, 0), (0, height)]
-            if back < -tolerance:
-                points.append((back, height))
+            # Start the same-angle ramp slightly into the skirt, with a short
+            # flat cut back to the support break. The same Y relief applies at
+            # either direction and keeps the IR-end ramps on their shared plane.
+            fit = params.SKIRT_LEAD_FIT
+            points = [
+                (back, 0),
+                (direction * (run + fit), 0),
+                (direction * fit, height),
+                (back, height),
+            ]
             wedge = plane * Polygon(*points, align=None)
             wedges.append(extrude(wedge, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
     skirt = _cut(skirt, *wedges)
@@ -609,21 +616,21 @@ def front_shell(fdm=False):
     SHELL_FRONT: flattening the dish at the raised level would keep every bit of
     material the dish removed, so the FDM face lands at the sunken level instead
     and the part comes out as slim as the one it stands in for. Its top edge
-    carries a much harder round with it, because the outline runs inside
-    EDGE_R_FRONT and the round is what gives way rather than the line. See
+    carries a 45 degree chamfer where the recessed front has a round, leaving
+    flat face outside the finer groove. See
     params.FDM_FACE_DROP, params.FDM_OUTLINE_W and params.EDGE_R_FRONT_FDM.
     """
-    # The body is built to its own face and filleted there before any key or
-    # wheel hole is cut into it: at this point the only top edge loop is the
-    # outer perimeter, so the fillet cannot land on an aperture's own edge by
-    # construction rather than by filtering for it afterwards. See back_form's
-    # docstring for why a fillet cannot be trusted against a loft's own edges.
+    # The body is built to its own face and finished there before any key or
+    # wheel hole is cut into it: the only top edge loop is the outer perimeter,
+    # so its chamfer or fillet cannot land on an aperture's own edge.
     face = front_face(fdm)
     inner, outer = _profiles()
     body = _slab(outer, SKIRT_BOTTOM, face)
-    body = fillet(
-        [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01],
-        front_edge_round(fdm),
+    top_edges = [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01]
+    body = (
+        chamfer(top_edges, front_edge_round(True))
+        if fdm
+        else fillet(top_edges, front_edge_round(False))
     )
     shell = _cut(body, _slab(inner, SHELL_SEAM - 0.01, CAVITY_FRONT), *skirt_cuts())
 

@@ -12,8 +12,8 @@ Led ring: the channel itself, on the built shell. Void all the way around
 (one blocked sector and the ring shows as arcs, which is the failure the
 feature exists to avoid), a solid web between it and the wheel opening's
 bore, and a solid roof over it everywhere, including where the keypad recess
-overlaps it in plan and the roof is at its thinnest. The inner wall is plumb, so
-the web is a full LED_RING_WALL at every height and one probe standing mid-web
+overlaps it in plan and the roof is at its thinnest. The inner wall bevels out
+near the roof, so the web is at least LED_RING_WALL and one probe standing mid-web
 answers for all of it. The channel is measured rather than sampled at one
 radius: a ray is cast out at each angle and the void between the web and
 whatever closes in on it is read off the built shell. That matters because two
@@ -147,8 +147,8 @@ ROOF_FLAT_MIN = 0.5
 
 Two passes hold it. _ring_stack_sane() applies it to the section the ring is
 revolved from, which is arithmetic and answers for the whole ring at once: the
-inner wall is plumb and the outer one rakes 45 degrees over the full height, so
-that flat is the mouth's outer radius less the height less the inner wall.
+the inner wall bevels out and the outer one rakes 45 degrees over the full
+height, so that flat is the outer roof radius less the inner roof radius.
 led_ring() then applies it again to the width it measures at each angle on the
 built shell, which is the one that catches the cavity wall chording the channel
 near the X axis, since no radius in the section knows about the clip.
@@ -223,7 +223,7 @@ def _ring_stack_sane():
     """Arithmetic bounds the probes need before they can even be built: the
     channel's ceiling has to sit above its floor and far enough below the dished
     face that a roof is left, and the raked outer wall has to still leave a roof
-    between itself and the plumb inner one, or the probe cylinders come out with
+    between itself and the beveled inner one, or the probe cylinders come out with
     non-positive heights or standing in material and the pass dies in build123d
     instead of reporting what went wrong."""
     problems = []
@@ -299,7 +299,7 @@ def led_ring(front):
     in plan.
 
     The width is measured rather than assumed. _channel_width() reads it off
-    the shell at the roof, which is the narrow end: the inner wall is plumb and
+    the shell at the roof, which is the narrow end: the inner wall bevels out and
     the outer one rakes inward going up, so a width that clears ROOF_FLAT_MIN
     there clears it over the whole height. Measuring is what lets one pass
     answer for both surfaces that close the channel. The outer wall closes it
@@ -411,6 +411,52 @@ def led_ring(front):
             )
             if crop.fill_fraction(roof) < 0.99:
                 problems.append(f"roof open over the channel at {deg} degrees")
+    return problems
+
+
+INNER_CHAMFER_TOLERANCE = 0.05
+"""Allowance when rays measure the 45 degree inner LED channel wall."""
+
+
+def inner_chamfer_is_cut(front, front_fdm):
+    """Read the new inner bevel from both built channels at three heights.
+
+    The FDM channel is only a little taller than the bevel, so probes stay
+    inside the bevel itself rather than on its nearly vanished upright foot.
+    Four bearings also catch a section clipped or omitted on one side.
+    """
+    problems = []
+    wx, wy = board.wheel_center()
+    r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
+    r_out = case.led_ring_mouth_outer_r()
+    for label, shell, fdm in (("recessed", front, False), ("FDM", front_fdm, True)):
+        top = case.led_ring_top(fdm)
+        base = top - params.LED_RING_INNER_CHAMFER
+        for i in range(4):
+            angle = i * math.pi / 2
+            crop = _Crop(
+                shell,
+                *_ring_crop_box(wx, wy, r_web, r_out, [angle], case.CAVITY_FRONT),
+            )
+            for fraction in (0.25, 0.5, 0.75):
+                z = base + fraction * params.LED_RING_INNER_CHAMFER
+                width = _channel_width(crop, angle, z)
+                if width is None:
+                    problems.append(
+                        f"{label} LED channel has no inner wall at {i * 90} "
+                        f"degrees, z={z:.2f}"
+                    )
+                    continue
+                inner = width[0]
+                want = (
+                    case.led_ring_inner_r()
+                    + fraction * params.LED_RING_INNER_CHAMFER
+                )
+                if abs(inner - want) > INNER_CHAMFER_TOLERANCE:
+                    problems.append(
+                        f"{label} LED inner chamfer stands at radius {inner:.2f} "
+                        f"at {i * 90} degrees, z={z:.2f}, wants {want:.2f}"
+                    )
     return problems
 
 

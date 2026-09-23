@@ -11,8 +11,8 @@ window off a flange that reached out over the LEDs; the translucent case
 material diffuses better than the silicone did, so the pad gets out of the
 light's way entirely and the light pipe is now a void inside the shell: an
 annular channel circling the wheel opening, open to the cavity below, roofed
-by LED_RING_ROOF of translucent shell. Its inner wall stands plumb, so the web
-to the wheel's bore is a full LED_RING_WALL at every height; its outer wall is
+by LED_RING_ROOF of translucent shell. Its inner wall is upright below a short
+top chamfer, so the web to the wheel's bore is at least LED_RING_WALL; its outer wall is
 one 45 degree plane over the whole height, widest at the mouth, so the light
 enters across a flare. The four LEDs fire up into it and the channel carries
 their light around the wheel, so the face shows a ring rather than four dots.
@@ -110,7 +110,7 @@ def _channel_clip():
     this removes rather than breaks.
 
     The ring stays continuous because the wall sits well outside the channel's
-    plumb inner wall at either end."""
+    inner wall at either end."""
     return _offset_face(params.BOARD_FIT)
 
 
@@ -163,11 +163,8 @@ def led_ring_mouth_outer_r():
 
 
 def led_ring_roof_inner_r():
-    """Channel inner wall where it meets the roof. The wall is plumb, so this is
-    led_ring_inner_r() again. Kept as a name because the roof is spoken of as a
-    pair of radii and the outer one does travel; there is no matching mouth name,
-    since the mouth's inner end is the same radius as well."""
-    return led_ring_inner_r()
+    """Inner edge of the channel roof after the shared top-wall chamfer."""
+    return led_ring_inner_r() + params.LED_RING_INNER_CHAMFER
 
 
 def led_ring_roof_outer_r(fdm=False):
@@ -176,18 +173,15 @@ def led_ring_roof_outer_r(fdm=False):
 
 
 def led_ring_roof_flat(fdm=False):
-    """Width of the flat the channel presents to its roof, once the outer wall
-    has raked in across the full height. Only that wall travels, so the flat
-    closes from one side. The surface the ring glows through, and what has to
-    stay over the LEDs: light_path is what proves it does."""
+    """Width of the flat at the roof after both wall profiles have ended.
+    This is the surface the ring glows through; light_path proves it still
+    covers the LEDs."""
     return led_ring_roof_outer_r(fdm) - led_ring_roof_inner_r()
 
 
 def led_ring_web_left():
-    """Web left between the bore and the channel: the whole of LED_RING_WALL,
-    at every height, because the inner wall is plumb and no longer rakes in
-    toward the bore at the mouth. The ring's inner light barrier; led_ring
-    probes it on the built shell rather than trusting this."""
+    """Minimum web between bore and channel, below the inner top chamfer.
+    The bevel widens it toward the roof; led_ring probes the built shell."""
     return led_ring_inner_r() - WHEEL_OPENING_R
 
 
@@ -196,8 +190,8 @@ def led_ring_wall_height(fdm=False):
     cut's own height, which starts a millimetre lower; that overrun is inside
     the cavity, where there is no wall. The outer wall rakes at 45 degrees, so
     this is also how far that wall travels radially, which is what closes the
-    roof flat down to led_ring_roof_flat(). The inner wall is plumb and travels
-    nothing."""
+    roof flat down to led_ring_roof_flat(). The inner wall is upright below its
+    short chamfer at the roof."""
     return led_ring_top(fdm) - CAVITY_FRONT
 
 
@@ -207,14 +201,11 @@ def led_ring_channel(fdm=False):
     to LED_RING_TOP, clipped by _channel_clip() where its outer radius would
     otherwise run past the cavity wall.
 
-    The two walls differ. The inner one is a plain cylinder at
-    led_ring_inner_r(), plumb over the whole height, so the web behind it is a
-    full LED_RING_WALL everywhere rather than thinnest at the mouth. That web is
-    the ring's light barrier and the wheel's own seat, and neither wants it
-    spent to flare a wall that faces the bore instead of an LED. The outer one is
-    one 45 degree plane running the whole height, widest at the mouth and raking
-    in to led_ring_roof_outer_r(), so the section is a right trapezoid that
-    closes from one side and leaves led_ring_roof_flat() at the top.
+    The inner wall stands at led_ring_inner_r() from the mouth to
+    LED_RING_INNER_CHAMFER below the roof, then bevels out 45 degrees. The web
+    behind it is at least LED_RING_WALL everywhere. The outer wall is one
+    45 degree plane running the whole height, widest at the mouth and raking
+    in to led_ring_roof_outer_r().
 
     Flaring the outer wall is what the light wants: it enters at the mouth, off
     LEDs firing up out of the cavity, and a wall raked away from them puts more
@@ -229,6 +220,8 @@ def led_ring_channel(fdm=False):
     """
     x, y = board.wheel_center()
     z0, z1 = CAVITY_FRONT - 1, led_ring_top(fdm)
+    if params.LED_RING_INNER_CHAMFER >= led_ring_wall_height(fdm):
+        raise ValueError("LED_RING_INNER_CHAMFER consumes the LED channel wall")
     inner, mouth_outer = led_ring_inner_r(), led_ring_mouth_outer_r()
     with BuildSketch(Plane.XZ) as section:
         with BuildLine():
@@ -237,7 +230,8 @@ def led_ring_channel(fdm=False):
                 (mouth_outer, z0),
                 (mouth_outer, CAVITY_FRONT),
                 (led_ring_roof_outer_r(fdm), z1),
-                (inner, z1),
+                (led_ring_roof_inner_r(), z1),
+                (inner, z1 - params.LED_RING_INNER_CHAMFER),
                 close=True,
             )
         make_face()
@@ -266,22 +260,23 @@ def fdm_wheel_mouth_r():
 
 
 def _fdm_mouth_budget():
-    """Refuse an FDM mouth that reaches the LED ring channel's inner wall.
+    """Keep the FDM bore and cone clear of the channel where their heights meet.
 
-    The FDM front's widening is taken out of the web, which is a full
-    LED_RING_WALL of shell between the bore and the channel, and the widened
-    bore plus its chamfer are both spent out of it. At LED_RING_WALL exactly
-    the mouth's outer edge goes coincident with the channel's inner wall, which
-    is the same coincident-edge trap FDM_OUTLINE_EDGE_CLEAR exists for and
-    tears an exported mesh while every solid reading still looks right, so the
-    bound is exclusive."""
-    spent = params.FDM_WHEEL_OPENING_CLEARANCE + params.FDM_WHEEL_OPENING_CHAMFER
+    The printed channel stops below the recessed front's channel. A wide mouth
+    above that roof can cross its inner radius in plan without opening the
+    channel. At the printed channel's actual top, the cone is widest of all
+    heights that can meet it. Keep that radius strictly inside its inner wall;
+    coincident edges can tear the exported mesh even when the solid is valid.
+    """
+    base = FDM_FACE - params.FDM_WHEEL_OPENING_CHAMFER
+    overlap_height = max(0, led_ring_top(True) - base)
+    spent = params.FDM_WHEEL_OPENING_CLEARANCE + overlap_height
     if spent >= params.LED_RING_WALL:
         raise ValueError(
-            f"FDM_WHEEL_OPENING_CLEARANCE {params.FDM_WHEEL_OPENING_CLEARANCE} plus "
-            f"FDM_WHEEL_OPENING_CHAMFER {params.FDM_WHEEL_OPENING_CHAMFER} spends "
-            f"{spent:.2f} of the {params.LED_RING_WALL:.2f} web LED_RING_WALL leaves "
-            "between the wheel opening and the LED ring channel's inner wall"
+            f"the FDM wheel mouth reaches {spent:.2f} into the "
+            f"{params.LED_RING_WALL:.2f} LED_RING_WALL web at the printed "
+            f"channel roof; FDM_WHEEL_OPENING_CHAMFER "
+            f"{params.FDM_WHEEL_OPENING_CHAMFER:.2f} cuts into the channel"
         )
 
 
@@ -305,7 +300,8 @@ def wheel_opening(z0, z1, fdm=False):
     lead-in. The cone carries on past the face at the same rake, so the cut
     breaks through rather than ending on a surface coincident with it.
 
-    Both are spent out of the web, which _fdm_mouth_budget() is what holds.
+    The bore stays inside the web, and _fdm_mouth_budget() holds the cone clear
+    of the shorter FDM ring channel where their heights meet.
     Neither touches WHEEL_OPENING_R, since led_ring_inner_r() is derived off it
     and the LED ring channel would travel with any change to it.
 

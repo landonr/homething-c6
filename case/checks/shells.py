@@ -205,6 +205,21 @@ def side_skirt_lead_ins(front):
                         f"expected {'solid' if should_be_material else 'open'}",
                         box=probe,
                     ))
+            # Near the top of the lead-in the original triangular ramp is
+            # almost zero-width. This site reads the added fit strip itself.
+            if params.SKIRT_LEAD_FIT > 0:
+                fit_probe = Pos(
+                    x,
+                    edge_y + 0.8 * params.SKIRT_LEAD_FIT,
+                    SKIRT_BOTTOM + height - 0.05,
+                ) * Box(0.02, 0.02, 0.02)
+                filled = cropped.fill_fraction(fit_probe)
+                if filled > 0.1:
+                    problems.append(Problem(
+                        f"{name} {position} lead-in fit strip is {filled:.0%} "
+                        "material, expected clearance for printed oversize",
+                        box=fit_probe,
+                    ))
     return problems
 
 

@@ -1,7 +1,7 @@
 """The USB-C connector's two features: the through-cut at the -Y end wall, and
 the local deeper ceiling over the connector's own footprint."""
 
-from build123d import Box, Pos
+from build123d import Box, Pos, chamfer
 
 import board
 import params
@@ -25,25 +25,47 @@ def _end_window(cx, cz, size_x, size_z, edge_y, sign, inward):
     return Pos(cx, (y0 + y1) / 2, cz) * Box(size_x, y1 - y0, size_z)
 
 
+def _chamfer_window_corners(window, length, lower):
+    """Clip the X/Z corners along the USB opening's full Y reach."""
+    box = window.bounding_box()
+    corners = [
+        edge
+        for edge in window.edges()
+        if edge.bounding_box().size.Y > box.size.Y - 1e-4
+        and (
+            abs(edge.center().Z - box.max.Z) < 1e-4
+            or (lower and abs(edge.center().Z - box.min.Z) < 1e-4)
+        )
+    ]
+    expected = 4 if lower else 2
+    if len(corners) != expected:
+        raise ValueError(f"expected {expected} USB corner edges, found {len(corners)}")
+    return chamfer(corners, length)
+
+
 def usb_slot():
     """The USB-C shell straddles the split plane and overhangs the
     board's -Y edge. A through-cut sized off board.usb_envelope() plus
-    USB_CLEARANCE, reaching well past
+    USB_CLEARANCE, with its lower edge raised by USB_SLOT_BOTTOM_RAISE and
+    its roof fixed at the connector clearance height, reaching well past
     the exterior face on both shells so the connector is reachable from
     outside the case without opening it.
     """
     box = board.usb_envelope()
     c = params.USB_CLEARANCE
     edge_y = board.board_profile().bounding_box().min.Y
-    return _end_window(
+    bottom = box.min.Z - c + params.USB_SLOT_BOTTOM_RAISE
+    top = box.max.Z + c
+    window = _end_window(
         box.center().X,
-        box.center().Z,
+        (bottom + top) / 2,
         box.size.X + 2 * c,
-        box.size.Z + 2 * c,
+        top - bottom,
         edge_y,
         -1,
         params.IR_RELIEF_DEPTH,
     )
+    return _chamfer_window_corners(window, params.USB_CORNER_CHAMFER, lower=True)
 
 
 def usb_roof():
@@ -104,8 +126,9 @@ def usb_pocket():
     bottom = CAVITY_FRONT - MERGE
     y0 = box.min.Y - c
     y1 = box.max.Y + c + params.USB_POCKET_INBOARD_REACH
-    return Pos(box.center().X, (y0 + y1) / 2, (bottom + top) / 2) * Box(
+    pocket = Pos(box.center().X, (y0 + y1) / 2, (bottom + top) / 2) * Box(
         box.size.X + 2 * c,
         y1 - y0,
         top - bottom,
     )
+    return _chamfer_window_corners(pocket, params.USB_CORNER_CHAMFER, lower=False)

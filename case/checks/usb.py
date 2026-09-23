@@ -1,5 +1,5 @@
 """USB pocket clearance: the local deeper cavity over the USB connector's own
-footprint actually clears its body by USB_CLEARANCE, probed against
+footprint clears its body at the slot's specified margins, probed against
 board.usb_envelope() on the built shell rather than trusted from
 CAVITY_FRONT_USB alone, and the ceiling left above the pocket has not gone
 below USB_CEILING_MIN.
@@ -16,7 +16,7 @@ pocket's own wall, because _chamfer_usb_pocket_lip() takes the wall off that
 solid and the whole point of the reach is that the two moved together.
 """
 
-from build123d import Box, Pos
+from build123d import Box, Pos, chamfer
 
 import board
 import case
@@ -38,8 +38,10 @@ def usb_pocket_clearance(front):
     from CAVITY_FRONT_USB and USB_CLEARANCE alone: interference() would
     eventually catch a real collision too, but reports it as a nameless
     colliding solid rather than pointing at this specific feature, and this
-    is what proves the pocket clears with USB_CLEARANCE of the margin it
-    was cut for rather than merely not touching by accident.
+    proves the specified side and roof margins. The raised slot bottom trades
+    away USB_SLOT_BOTTOM_RAISE of its original lower margin. Its four 45 degree
+    corners remove a small triangle from that clearance envelope, so the
+    probe clips those corners too before reading the built shell.
 
     Also holds the ceiling left over the pocket to USB_CEILING_MIN,
     arithmetic, the same trap recess_land() guards on the keypad side.
@@ -57,14 +59,22 @@ def usb_pocket_clearance(front):
 
     box = board.usb_envelope()
     c = params.USB_CLEARANCE
-    grown = Pos(box.center().X, box.center().Y, box.center().Z) * Box(
-        box.size.X + 2 * c, box.size.Y + 2 * c, box.size.Z + 2 * c
+    bottom = box.min.Z - c + params.USB_SLOT_BOTTOM_RAISE
+    top = box.max.Z + c
+    grown = Pos(box.center().X, box.center().Y, (bottom + top) / 2) * Box(
+        box.size.X + 2 * c, box.size.Y + 2 * c, top - bottom
     )
-    fouled = _volume(front.intersect(grown))
+    y_span = grown.bounding_box().size.Y
+    longitudinal_edges = [
+        edge for edge in grown.edges()
+        if edge.bounding_box().size.Y > y_span - 1e-4
+    ]
+    probe = chamfer(longitudinal_edges, params.USB_CORNER_CHAMFER)
+    fouled = _volume(front.intersect(probe))
     if fouled > TOLERANCE:
         problems.append(
-            f"front shell reaches inside USB_CLEARANCE of the connector by "
-            f"{fouled:.2f} mm3"
+            f"front shell reaches inside the USB slot's specified clearance "
+            f"by {fouled:.2f} mm3"
         )
     return problems
 

@@ -51,7 +51,7 @@ from .caps import (
 )
 from .fdm import (
     ceilings_hold,
-    edge_round_is_hard,
+    edge_chamfer_is_sized,
     face_is_flat,
     fdm_keytops_are_attached,
     fdm_keytops_have_top_fillets,
@@ -114,6 +114,7 @@ from .support import (
 from .usb import usb_pocket_clearance, usb_pocket_reach
 from .wheel_ring import (
     fdm_wheel_seat,
+    inner_chamfer_is_cut,
     led_ring,
     light_path,
     rotation_clearance,
@@ -343,11 +344,12 @@ def _outline_solid_sane(s):
 
 
 @_check("fdm")
-def _edge_round_is_hard(s):
+def _edge_chamfer_is_sized(s):
     return _report(
-        edge_round_is_hard(s.front_fdm),
-        f"the FDM front's top edge rounds at {case.front_edge_round(True):.2f} "
-        f"rather than {case.front_edge_round():.2f}, leaving the outline "
+        edge_chamfer_is_sized(s.front_fdm),
+        f"the FDM front's top edge has a {case.front_edge_round(True):.2f} "
+        f"45 degree chamfer rather than a {case.front_edge_round():.2f} round, "
+        f"leaving the outline "
         f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it",
     )
 
@@ -448,6 +450,15 @@ def _led_ring(s):
         led_ring(s.front),
         "ring channel is void all the way around, webbed off the wheel opening, "
         "roofed all the way to the dished face above it",
+    )
+
+
+@_check("wheel_ring")
+def _inner_chamfer_is_cut(s):
+    return _report(
+        inner_chamfer_is_cut(s.front, s.front_fdm),
+        f"both LED channels have a {params.LED_RING_INNER_CHAMFER:.2f} mm "
+        "chamfer at the inner roof edge",
     )
 
 
@@ -934,7 +945,7 @@ _FEATURE_SOLIDS = {
     "shells": ("front", "back"),
     "support": ("back",),
     "usb": ("front",),
-    "wheel_ring": ("front", "back", "pad"),
+    "wheel_ring": ("front", "front_fdm", "back", "pad"),
 }
 """Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
 

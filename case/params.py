@@ -236,6 +236,11 @@ SKIRT_TRANSITION_CHAMFER = 3.0
 """Vertical rise at the deep-skirt ends. Support-cut ends use their full exposed height to remove small steps. Zero disables all skirt lead-ins."""
 SKIRT_LEAD_ANGLE = 65.0
 """Lead-in angle in degrees from the flat skirt bottom along Y. A shallow angle reduces contact during assembly."""
+SKIRT_LEAD_FIT = 0.1
+"""Extra Y relief at every front-skirt lead-in, on both long sides. A 0.1 mm
+flat strip before the ramp accommodates printed skirt oversize without holding
+the two shells apart; the original ramp angle and support-break positions stay
+fixed."""
 
 # At the IR end the skirt runs deeper than anywhere else and carries two rounded
 # rectangular windows. The back's lap grows a detent behind each: the lap rides out
@@ -467,22 +472,13 @@ EDGE_R_FRONT = 2.5
 outermost sit close to the wall. The FDM front carries its own, see
 EDGE_R_FRONT_FDM."""
 EDGE_R_FRONT_FDM = 0.6
-"""Round on the FDM front's top edge, in place of EDGE_R_FRONT.
+"""Leg length of the FDM front's 45 degree top-edge chamfer. The established
+name remains because the FDM and recessed fronts share front_edge_round() as a
+size reader; the recessed front still uses EDGE_R_FRONT as a fillet radius.
 
-Much harder, and the outline is what makes it so. That front draws the recess's
-rim as a groove in the face, the rim sits KEYPAD_EDGE_MARGIN off the wall, and
-the groove is centred on it, so the groove's outer edge is half a width further
-out than that. What is left for the round is everything inboard of that edge
-less FDM_OUTLINE_EDGE_CLEAR, and this is exactly that bound: the softest edge
-the outline leaves room for rather than a number chosen for its own sake.
-checks/fdm.py measures the flat the built shell actually has and holds the
-relationship, so widening the groove or moving the rim fails there instead of
-quietly putting the line back on the curve.
-
-It reads better on this front anyway. A 2.5 round on a face with a dish in it
-is a continuous fall from the middle of the face to the side wall. On a flat
-face it is 2.5 of dome either side of a plane, which is the "weird" the variant
-first came back as."""
+The smaller FDM groove leaves room for this bevel and flat face beyond the
+groove. checks/fdm.py measures the built face's flat margin rather than trusting
+the value, and checks/shells.py guards the exported mesh against a torn edge."""
 
 # Apertures in the front shell
 KEY_GAP = 1.6
@@ -584,8 +580,9 @@ superellipse's exact reach.
 Two is the lower limit. Below two, the diagonals move inside the axes and can
 reduce WHEEL_RIM_LEDGE. The wheel's large KEYPAD_JOIN_REACH keeps both necks
 wide enough for their minimum outline radius."""
-WHEEL_DISH_DEPTH = 0.9
-"""Depth of the wheel basin at its own centre. The centre is inside the bore, so
+WHEEL_DISH_DEPTH = 1.1
+"""Depth of the wheel basin at its own centre. This gives a little more finger
+access around the knob. The centre is inside the bore, so
 none of it is ever cut: what the number really sets is the seat depth at the bore
 wall, which is about a third of this on the free axis and just under half on the
 diagonals, WHEEL_SQUIRCLE_N having brought the diagonals in from where the
@@ -629,16 +626,21 @@ instead."""
 LED_RING_WALL = 1.0
 """Web between the wheel opening's bore and the channel's inner wall. It is what
 keeps the opening a closed cylinder the wheel seats against, and it is the
-ring's inner light barrier, so it is not free to thin toward zero. That wall
-stands plumb, so this is the web at every height rather than a radius the wall
-crosses once. The check still probes it on the built shell rather than trusting
-the sum."""
+ring's inner light barrier, so it is not free to thin toward zero. The inner
+wall stands at this radius below its top chamfer and widens the web above it.
+The check still probes it on the built shell rather than trusting the sum."""
+LED_RING_INNER_CHAMFER = 0.7
+"""45 degree bevel at the inner wall's top edge on both LED channels. It steps
+0.7 mm out from the bore and 0.7 mm down from each channel roof, leaving the
+recessed channel's lower wall upright and nearly using the shorter FDM wall's
+height. It must remain shorter than both walls so the channel stays open to
+the cavity below."""
 LED_RING_CHAMFER = 0.0
 """How much wider than its nominal radius the channel's outer wall opens at the
 mouth. That wall rakes at 45 degrees, so this is also how far above the mouth it
 crosses led_ring_outer_r(), and the roof end is then wherever 45 degrees over
-the channel's own height leaves it rather than anything set here. The inner wall
-is plumb and this does not reach it.
+the channel's own height leaves it rather than anything set here. The inner
+wall has a separate top bevel and this does not reach it.
 
 The mouth is the flared end because that is where the light enters, off LEDs
 firing up out of the cavity: a wall raked away from them puts more of the roof
@@ -693,7 +695,7 @@ Printing. A bore near a single extrusion width does not survive slicing: the
 perimeter closes over it. This keeps the narrow end at several extrusion widths,
 which is the floor a small bore in a printed part has regardless of what it is
 for, and it is the reason not to chase the drill any closer than this."""
-MIC_MOUTH_D = 3.0
+MIC_MOUTH_D = 4.5
 """How wide the inlet's mouth opens at the face it arrives in, and so the widest
 the inlet ever is: the bore is a funnel, bell at the pocket floor and throat on
 the board's own port, and this is the bell. An outright width rather than a
@@ -712,8 +714,8 @@ leaving the arc tangent to the face above and continuous with the taper below.
 Bounded by the duct it is drilled through rather than by anything acoustic: the
 mouth is where the bore comes closest to the outside of MIC_DUCT_OD, so it is
 the one height the wall is at risk at, and check.py's mic fillet pass reports
-what is left. Raise it for a wider bell until that wall gets thin, or raise the
-duct with it."""
+what is left. The 4.5 mm mouth keeps the original 0.7 mm radial duct wall by
+growing the duct alongside it."""
 MIC_TAPER_SHARE = 0.25
 """How much of the run out from throat to mouth the taper's cone does, the
 fillet finishing the rest. So it is where the two meet, at the base of the fillet
@@ -733,9 +735,10 @@ mouth's own width, which leaves case.mic_fillet_r() at zero and the mouth with a
 square corner on the face instead of the fillet it is there for. The cone stays
 shallow across that whole range, the duct being far taller than the bore is wide,
 so what moves with this is the split rather than anything about printability."""
-MIC_DUCT_OD = 4.4
+MIC_DUCT_OD = 5.9
 """Outside of the duct, the post standing from the board up to the front face
-with the funnel drilled through it. Set outright rather than derived from the
+with the funnel drilled through it. This keeps 0.7 mm of radial post wall at
+the 4.5 mm mouth. Set outright rather than derived from the
 bore plus TUBE_WALL, the way it was while the bore was one width: the bore is a
 funnel now, so a wall referenced to it would have to name a height, and the
 post's outside answers to things that have nothing to do with which height that
@@ -796,9 +799,19 @@ IR_WINDOW_R = 1.0
 """Corner round on aperture, inherited concentrically by pane and flange."""
 USB_CLEARANCE = 0.5
 """Margin around the USB-C shell, sizing the -Y end wall's own through-cut
-past the connector's measured envelope, the same role IR_CLEARANCE plays at
-the other end. Also the plan margin usb_pocket() keeps clear of the
+past the connector's measured envelope at its sides and roof, the same role
+IR_CLEARANCE plays at the other end. USB_SLOT_BOTTOM_RAISE reduces the slot's
+lower margin separately. Also the plan margin usb_pocket() keeps clear of the
 connector's footprint in the ceiling above it."""
+USB_SLOT_BOTTOM_RAISE = 1.0
+"""Raise only the USB end-wall slot's lower edge for the requested opening
+position, leaving its roof aligned with usb_pocket(). This trades away 1 mm of
+clearance below the measured connector; the assembly checks guard whether
+that change collides with the board assembly."""
+USB_CORNER_CHAMFER = 1.0
+"""45 degree trim at both lower slot corners and both shared upper corners
+of the USB slot and pocket. The cuts meet at the same roof, so their upper
+chamfers use one size and leave one continuous opening."""
 USB_POCKET_LIP_CHAMFER = 1.6
 """Chamfer on the pocket's inboard lip, the convex corner where usb_pocket()'s
 wall meets the cavity ceiling one board width in from the end wall. The USB-C
@@ -1064,7 +1077,7 @@ half the recessed front's depth and therefore leaves a thicker roof of its own.
 This takes most of the USB bound while retaining a real margin.
 
 The drop is therefore a little short of the dish it stands in for, which runs
-0.6 to 0.9. The face lands near the shallow end of the recess rather than on
+0.6 to 1.1. The face lands near the shallow end of the recess rather than on
 its floor. Going further means raising usb_roof(), and the connector's own
 envelope is what sets that.
 
@@ -1075,19 +1088,16 @@ knob back some of the finger access a flat face takes from it.
 
 checks/fdm.py reads all three ceilings off the built shell, against the same
 floors the recessed front's own passes hold them to."""
-FDM_OUTLINE_W = 1.2
-"""Full width of the engraved outline in the FDM front's face. Two extrusions
-of a 0.6 nozzle, or three of a 0.4 nozzle: wide enough that the marking reads
-clearly after printing while still short enough for the layer above it to
-bridge without support.
+FDM_OUTLINE_W = 0.6
+"""Full width of the engraved outline in the FDM front's face. One 0.6 mm
+extrusion gives a fine marking that can bridge face down without support.
 
 The groove is centred on the rim, so it reaches half of this further out than
-the rim itself does. That is what EDGE_R_FRONT_FDM is sized against: the round
-gives way to the outline rather than the outline being moved off the rim to
-make room for the round."""
+the rim itself does. EDGE_R_FRONT_FDM keeps its outer edge on the flat of the
+top chamfer rather than moving the outline off the rim."""
 FDM_OUTLINE_EDGE_CLEAR = 0.3
-"""Flat face kept between the groove's outer edge and the tangent line of the
-FDM front's own edge round. What it bounds is EDGE_R_FRONT_FDM.
+"""Flat face kept between the groove's outer edge and the inner edge of the
+FDM front's top chamfer. What it bounds is EDGE_R_FRONT_FDM.
 
 Not cosmetic. At zero the two edges are coincident, and two coincident edges in
 one plane crack a triangulation: the solid stays valid, its bounding box and
@@ -1096,10 +1106,9 @@ along the face. checks/shells.py's parts_are_sound() is what catches that, and
 it is the only pass in the model that would. This model has already shipped
 that exact failure once. It also buys the same print-safety buffer
 KEYPAD_EDGE_MARGIN carries, and for the same reason."""
-FDM_OUTLINE_DEPTH = 0.4
-"""How far that outline is sunk into the face. Two 0.2 layers, so the slot is
-half as deep as it is wide and the bridge over it is two layers rather than a
-stack of them.
+FDM_OUTLINE_DEPTH = 0.2
+"""How far that outline is sunk into the face. One 0.2 mm layer makes a subtle
+marking and leaves more material below its bridge.
 
 It has to stay under LED_RING_ROOF as well. The recess's rim passes within a
 few hundredths of the LED ring channel's outer wall either side of the wheel,
@@ -1135,12 +1144,10 @@ channel outward with it and off the LEDs the channel is built over. So this is
 applied to the FDM shell's bore alone and is spent out of that shell's own web
 rather than out of the channel's position.
 
-The web is what bounds it. This plus FDM_WHEEL_OPENING_CHAMFER has to stay
-inside LED_RING_WALL, so the widened bore and the cone that opens it never
-reach the channel's inner wall; wheel_opening() raises if they do. Coincident
-is as bad as past: FDM_OUTLINE_EDGE_CLEAR is the note on what two coincident
-edges in one surface do to an exported mesh."""
-FDM_WHEEL_OPENING_CHAMFER = 0.6
+The web is what bounds the bore. The mouth chamfer may spread past the inner
+wall in plan only where the FDM channel has already ended below it;
+wheel_opening() checks their actual height overlap."""
+FDM_WHEEL_OPENING_CHAMFER = 1.2
 """Lead-in at the mouth of the FDM front's wheel opening, a 45 degree cone
 opening the bore out by this much over this much height, ending at the face.
 
@@ -1154,10 +1161,11 @@ hole narrows as it rises off it, so the cone is a self supporting overhang
 rather than a ceiling the slicer has to bridge or prop, which is the same trade
 FDM_FACE_DROP and the outline groove are built on.
 
-Shares FDM_WHEEL_OPENING_CLEARANCE's budget against LED_RING_WALL: the widened
-bore plus this cone stay inside the web, so the mouth's own widest radius stops
-short of the LED ring channel's inner wall. wheel_opening() raises naming both
-if that is ever untrue, and checks/fdm.py reads the cone off the built face."""
+The FDM ring channel is shorter than the recessed front's. At this depth the
+cone starts above its roof, so the mouth may be wider than LED_RING_WALL in
+plan without cutting into that channel. wheel_opening() checks the cone radius
+at the channel's actual top, and checks/fdm.py reads the cone off the built
+face."""
 
 
 # Keycaps: every switch carries a rigid translucent cap over a soft stem

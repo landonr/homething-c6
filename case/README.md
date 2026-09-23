@@ -168,9 +168,9 @@ The USB pocket roof and the USB slot roof are flush, at the connector envelope p
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
-The FDM front carries a much harder top edge round than the recessed front. `EDGE_R_FRONT_FDM` sets it, and `EDGE_R_FRONT` sets the other.
+The FDM front has a 0.6 mm, 45 degree top-edge chamfer. The recessed front keeps its round.
 
-The rim runs inside the larger round. The FDM front reduces the round instead of moving the outline, so the groove sits on flat face.
+The rim runs inside the recessed front's round. The FDM front keeps its groove on flat face outside the chamfer.
 
 `FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. The LED ring channel is half-depth on this front, leaving a thicker printable roof. Run `check.py --only fdm` to validate it.
 

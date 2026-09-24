@@ -306,13 +306,9 @@ wall is left under the head."""
 END_SCREW_X_OFFSET = 5.8
 """How far +x of the board's centreline the end screw's axis runs.
 
-Set by what is behind the wall rather than by the wall, and by which way the
-block is free to grow. R8's courtyard is the near obstacle, so the block's -x
-face is what the column has to clear; J1 sits well -x of that and nothing at
-all sits +x of the block until the side wall. So the width went on the +x side
-and the axis moved out with it by half of what was added, which leaves the -x
-face exactly where it was, clear of R8, with the block wider the other way.
-The block the screw threads into is centred on this axis."""
+This sets where the head counterbore sits on the -Y wall, +x of R8. The block
+the screw threads into is centred on this axis, so END_SCREW_BLOCK_W reaches
+half its width to each side, and that width holds the limits on both sides."""
 END_SCREW_Z = -6.5
 """Height of the end screw's axis, below the board.
 
@@ -323,15 +319,19 @@ solid wall. Below, the back's outer surface rolls away through
 CONTOUR_TIP_R toward the floor. This leaves the whole SHELL_SCREW_HEAD_D
 counterbore on flat, full-thickness wall, which checks/hardware.py's end_screw
 pass measures on the built back rather than restating here."""
-END_SCREW_BLOCK_W = 10.0
+END_SCREW_BLOCK_W = 22.0
 """Width of the block the end screw threads into, across the case.
 
-Wider than BOSS_OD for the same reason the V2 post is: it is a printed feature
-a self-tapping screw cuts its own thread into, and it is loaded in withdrawal
-along its own weakest direction, the layer lines of a part printed face down.
-It is wider than that reason alone asks because the room is free: the whole
-+x span from the block to the side wall is empty, so the extra width costs
-nothing and every millimetre of it is thread the screw can pull against."""
+A self-tapping screw cuts its own thread into this printed block. The screw
+pulls the block toward the -Y wall, so the block bends about x at the web, and
+that load goes across the layer lines of a face down print. The 45 degree ramp
+takes the depth off the upper block, so width is the only remaining lever on
+that bending section and on the web's neck to the skirt.
+
+Bounded by J1 on the -x side and by the back's side wall on the +x side. The
+-x end passes under R8, because the ramp falls well below R8's underside at
+R8's Y. checks/hardware.py's feature_clashes reads that clearance on the built
+block, not on its bounding box."""
 END_SCREW_BLOCK_GAP = 1.0
 """How far the block's own -Y face stands off the back's inner end wall.
 
@@ -349,9 +349,9 @@ END_SCREW_BLOCK_D = 4.2
 0.5, so the pilot ends inside it and the thread is never drilled out the back
 of its own boss.
 
-It shrank by exactly what END_SCREW_BLOCK_GAP grew, so the block's +Y back face
-has not moved: the lead-in the board lands on and the clearance to the cell are
-where they were, and only the screw-side face went inboard."""
+The block's +Y back face sets the clearance to the cell. The 45 degree ramp
+across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
+so a deeper block also takes more off the cover over the pilot's tip."""
 END_SCREW_PILOT_DEPTH = 3.7
 """Engagement this one screw takes, against BOSS_PILOT_DEPTH for the three that
 hold the board.
@@ -364,17 +364,17 @@ two shells rather than carrying the board."""
 END_SCREW_BLOCK_BOTTOM = 2.5
 """Material the block carries below the screw axis, matching BOSS_OD/2 so the
 wall under the thread is what it is around every other M2 in this case. Above
-the axis the block runs on up to SUPPORT_TOP, so it is not symmetric: that is
-where it meets the skirt it hangs from."""
+the axis the block rises to the ramp off the skirt it hangs from, so it is not
+symmetric."""
 END_SCREW_BLOCK_R = 1.5
-"""Round on the block's vertical edges, in plan.
+"""Round on the block's two +Y vertical edges, in plan.
 
 The block hangs alone in the back's cavity with the shells closing over it, so
-its corners are what a misaligned fold catches on first; a round gives the
-assembly somewhere to slide instead. Kept under half END_SCREW_BLOCK_D, which
-is the shallower plan dimension and so the bound on any plan round here. The
-two wall-side corners end up buried: the web that ties the block to the skirt
-runs past them by this radius plus MERGE, so the bridge stays full width."""
+its inboard corners are what a misaligned fold catches on first. A round gives
+the assembly somewhere to slide instead. Kept under half END_SCREW_BLOCK_D,
+which is the shallower plan dimension and so the bound on any plan round here.
+The two wall-side corners stay square, so the web and the root fillet run the
+block's full width."""
 END_SCREW_BLOCK_BASE_CHAMFER = 0.8
 """Lead-in on the block's bottom +Y arris, the corner that leads the fold.
 
@@ -384,30 +384,28 @@ meet the back's floor if the fold comes in low or off square. It is the same
 argument as END_SCREW_BLOCK_R makes in plan, and it wants the same answer, a
 lead-in rather than a square arris.
 
-Cut as a wedge across the whole width for the reason END_SCREW_BLOCK_CHAMFER
-is: the arris is the straight edge plus the two plan rounds tangent to it, and
-an edge chamfer on that chain tore the exported mesh.
+Cut as a wedge across the whole width for the reason the top ramp is: the
+arris is the straight edge plus the two plan rounds tangent to it, and an edge
+chamfer on that chain tore the exported mesh.
 
 Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
 below the screw and never reaches the thread."""
-END_SCREW_BLOCK_CHAMFER = 1.5
-"""Lead-in on the block's top +Y arris, where the board lands on it.
+END_SCREW_BLOCK_RAMP_LEDGE = 0.5
+"""Flat step the block's top keeps off the skirt before its 45 degree ramp.
 
-The block's top is SUPPORT_TOP, so SUPPORT_GAP is the whole of the clearance
-the board has over it, and the block reaches END_SCREW_BLOCK_D inboard of the
-board's own -Y edge. That puts a square arris under the board and well inside
-its footprint, so it is the first thing the board's end strikes when the board
-goes in at any tilt, with nothing like enough gap to clear it. The chamfer
-turns that catch into a ramp the board slides down.
+The front prints face down, so the top of the block and its web is a ceiling
+hung off the skirt in print. A flat top needs a support tower in the cavity
+that is hard to clean out. The ramp falls one for one toward +Y from the end
+of this step, so each layer stands on the one before it.
 
-Forty five degrees because the front prints face down, so this face builds
-upward and is self supporting; anything steeper would need support in the one
-orientation that keeps support off the cosmetic face.
+This step is the only flat overhang left. It is small enough to print from the
+skirt without support. It also raises the whole ramp by its own length, which
+adds that much material over the pilot's tip and in the web's neck at the
+block's -Y face, against a ramp that starts at the skirt face.
 
-Bounded twice. It has to stay well inside END_SCREW_BLOCK_D so the block keeps
-a top land for the board to sit over rather than being cut to a knife edge,
-and well inside the height between SUPPORT_TOP and the top of the pilot, which
-is END_SCREW_Z plus half BOSS_PILOT_D, so the ramp never opens the thread."""
+Bounded by END_SCREW_BLOCK_GAP. If the step reached the block's own face, the
+block would keep a flat ceiling again. checks/hardware.py reads the cover over
+the pilot and the neck on the built front."""
 
 # Cell: one AA lying along the board underneath it, horizontally, in the same
 # saddle cradle the 18650 used. Change these for another format and the cavity,

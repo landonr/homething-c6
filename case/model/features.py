@@ -401,6 +401,14 @@ def _back(runs, obstacles):
         out.append(
             _entry(f"end_screw.{name}", "hardware.end_screw_cuts", "cut", shape)
         )
+    out.append(
+        _entry(
+            "end_screw.wall_chamfer",
+            "hardware.end_screw_wall_chamfer",
+            "cut",
+            hardware.end_screw_wall_chamfer(),
+        )
+    )
     out += [
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),

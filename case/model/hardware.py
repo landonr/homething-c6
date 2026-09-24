@@ -21,7 +21,7 @@ import params
 
 from .backform import contour_depth
 from .shape import _chamfered_post, _cut, _fuse, _hole, _rounded_prism
-from .stack import LAP_OUT, MERGE, SKIRT_BOTTOM, SUPPORT_TOP
+from .stack import LAP_IN, LAP_OUT, MERGE, SKIRT_BOTTOM, SKIRT_OUT, SUPPORT_TOP
 
 
 def mount_points():
@@ -50,38 +50,40 @@ def end_screw_axis():
     return x, params.END_SCREW_Z
 
 
-def _chamfer_block_lead_in(block, back):
-    """Cut the block's top +Y arris back to a ramp, where the board lands on it.
+def _ramp_block_top(block, cavity):
+    """Cut the top of the block and its web back to one 45 degree ramp.
 
-    A straight wedge cut, not an edge chamfer. The wedge is the triangle in the
-    YZ plane on (back - s, SUPPORT_TOP), (back, SUPPORT_TOP) and
-    (back, SUPPORT_TOP - s) for s = END_SCREW_BLOCK_CHAMFER, run across the
-    block's whole width plus MERGE either side and taken off the block.
+    The front prints face down, so the top face of the block and web is a
+    ceiling hung off the skirt in print, and a flat one needs a support tower
+    in the cavity. The ramp leaves the skirt END_SCREW_BLOCK_RAMP_LEDGE
+    inboard of the cavity face and falls one for one toward +Y, so every layer
+    stands on the one before it. The same ramp is the board's lead-in: nothing
+    square stands under the board's end for a tilted board to strike.
 
-    It is a cut because the edge chamfer this replaces exported a torn mesh.
-    That arris is not one edge: it is the straight edge across the width plus
-    the two END_SCREW_BLOCK_R plan rounds tangent to it, and chamfering that
-    tangent chain tessellated to open edges at the two tangency points, leaving
-    the front shell non-manifold in both exported STLs. The solid was valid and
-    every geometric check was green, which is the whole reason this note is
-    here: do not put the edge chamfer back. See the STL discipline in AGENTS.md.
+    A straight wedge cut across the whole width plus MERGE either side, never
+    an edge chamfer. The top +Y arris is a tangent chain of the straight edge
+    and the two END_SCREW_BLOCK_R plan rounds, and an edge chamfer on that
+    chain exported a torn, non-manifold front while every geometric check was
+    green. Do not put the edge chamfer back. See the STL discipline in
+    AGENTS.md.
 
-    The wedge is one planar ramp with no tangent chain to tear, and it takes
-    the tops off the two plan rounds as well, which is if anything a better
-    lead-in for a board sliding in.
+    The wedge's top edge stands MERGE above SUPPORT_TOP on the same line, so
+    no face of it lies in the block's top face.
     """
-    if not 0 < params.END_SCREW_BLOCK_CHAMFER < params.END_SCREW_BLOCK_D:
+    ledge = params.END_SCREW_BLOCK_RAMP_LEDGE
+    if not 0 <= ledge < params.END_SCREW_BLOCK_GAP:
         raise ValueError(
-            f"END_SCREW_BLOCK_CHAMFER {params.END_SCREW_BLOCK_CHAMFER} is not "
-            f"inside the block's own {params.END_SCREW_BLOCK_D} depth"
+            f"END_SCREW_BLOCK_RAMP_LEDGE {ledge} is not between the skirt and "
+            f"the block's own face, {params.END_SCREW_BLOCK_GAP} inboard of it"
         )
-    size = params.END_SCREW_BLOCK_CHAMFER
+    start = cavity + ledge
+    far = block.bounding_box().max.Y + MERGE
     with BuildSketch(Plane.YZ) as section:
         with BuildLine():
             Polyline(
-                (back - size, SUPPORT_TOP),
-                (back, SUPPORT_TOP),
-                (back, SUPPORT_TOP - size),
+                (start - MERGE, SUPPORT_TOP + MERGE),
+                (far, SUPPORT_TOP + MERGE),
+                (far, SUPPORT_TOP - (far - start)),
                 close=True,
             )
         make_face()
@@ -94,7 +96,7 @@ def _chamfer_block_lead_in(block, back):
 def _chamfer_block_base(block, back, bottom):
     """Cut the block's bottom +Y arris back to a ramp, the corner the fold leads
     with. A wedge across the full width, for the same tangent-chain reason
-    _chamfer_block_lead_in is one."""
+    _ramp_block_top is one."""
     size = params.END_SCREW_BLOCK_BASE_CHAMFER
     if not 0 < size < params.END_SCREW_BLOCK_BOTTOM:
         raise ValueError(
@@ -121,6 +123,66 @@ def _chamfer_block_base(block, back, bottom):
     return _cut(block, wedge)
 
 
+def end_screw_fillet_start():
+    """Y where the block's root fillet leaves SKIRT_BOTTOM: the skirt's outer
+    face at the grip end, the plane grip_skirt_relief cuts it back to."""
+    return end_wall_edge() - (SKIRT_OUT - params.GRIP_SKIRT_RELIEF)
+
+
+def end_screw_root_legs():
+    """(fillet, chamfer): the legs of the block's root fillet and of the back's
+    end wall chamfer. Each runs corner to corner, so neither is a parameter.
+
+    The fillet runs from end_screw_fillet_start to the block's -Y face. The
+    chamfer runs from the lap's inner face at the relief floor to the cavity
+    wall, which is the whole floor. A wider one would notch the lap.
+    """
+    face = end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
+    return face - end_screw_fillet_start(), LAP_IN - params.BOARD_FIT
+
+
+def _block_root_fillet(x, face):
+    """The 45 degree fillet under the web, in the inside corner where the web's
+    underside at SKIRT_BOTTOM meets the block's -Y face.
+
+    The screw pulls the block toward the wall, so the web bends at its neck.
+    The ramp limits the neck from above, so the fillet deepens it from below.
+
+    Its hypotenuse starts on SKIRT_BOTTOM at the skirt's relieved outer face,
+    end_screw_fillet_start, and falls at 45 degrees to the block's face. So it
+    deepens the neck at the skirt root too, and leaves no flat strip of skirt
+    underside beside it. The start lies in the plane of the relief cut, the way
+    the back's chamfer starts on the lap's inner face. It reaches MERGE up into
+    the skirt and web and MERGE into the block, both inside material, so it
+    fuses as one solid.
+
+    It points up as the front prints, so it needs no support. It runs the
+    block's full width, because the block's -Y face is square. Bounded by the
+    pilot below it.
+    """
+    start = end_screw_fillet_start()
+    leg = face - start
+    _, z = end_screw_axis()
+    pilot_top = z + params.BOSS_PILOT_D / 2
+    if SKIRT_BOTTOM - leg <= pilot_top:
+        raise ValueError(
+            f"the root fillet reaches down to {SKIRT_BOTTOM - leg:.2f}, not "
+            f"above the pilot's top at {pilot_top:.2f}"
+        )
+    with BuildSketch(Plane.YZ) as section:
+        with BuildLine():
+            Polyline(
+                (start, SKIRT_BOTTOM + MERGE),
+                (start, SKIRT_BOTTOM),
+                (face + MERGE, SKIRT_BOTTOM - leg - MERGE),
+                (face + MERGE, SKIRT_BOTTOM + MERGE),
+                close=True,
+            )
+        make_face()
+    reach = params.END_SCREW_BLOCK_W / 2
+    return Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+
+
 def end_screw_block():
     """The front's own boss for that screw, hanging behind the skirt.
 
@@ -132,27 +194,25 @@ def end_screw_block():
     height ties it into the skirt's inner face, which is the only front
     material within reach this far down.
 
-    It carries END_SCREW_BLOCK_BOTTOM under the axis and runs up to
+    It carries END_SCREW_BLOCK_BOTTOM under the axis and rises toward
     SUPPORT_TOP, so it stops clear of the board like everything else the
     cavity holds.
 
-    The block's vertical edges carry END_SCREW_BLOCK_R in plan. The web stays
-    the block's full width and reaches past the two wall-side rounds by that
-    radius plus MERGE, so what bridges to the skirt is the block's whole
-    section and not the narrowed waist a round would otherwise leave.
+    The block's two +Y vertical edges carry END_SCREW_BLOCK_R in plan. The two
+    wall-side edges stay square, so the web and the root fillet run the block's
+    full width and nothing narrows the section that bridges to the skirt.
 
     Its bottom +Y arris is cut back by END_SCREW_BLOCK_BASE_CHAMFER, which is
     the corner the fold leads with.
 
-    Its top +Y arris is cut back by END_SCREW_BLOCK_CHAMFER. That arris stands
-    under the board with only SUPPORT_GAP over it and sits END_SCREW_BLOCK_D
-    inboard of the board's own end, so it is what a board going in at a tilt
-    strikes first; the ramp gives the board a lead-in instead. It is a wedge
-    cut across the block's full width rather than an edge chamfer, because the
-    arris is a tangent chain of the straight edge and the two plan rounds and
-    chamfering it exported a torn, non-manifold front shell while every
-    geometric check stayed green. It comes off the block before the web joins
-    it.
+    Its top is one 45 degree ramp off the skirt, cut after the web joins so the
+    web is ramped too. The ramp is the underside the face down print builds
+    without support, and the lead-in a board going in at a tilt slides down.
+    See _ramp_block_top.
+
+    The ramp limits the web's neck from above, so a 45 degree fillet under the
+    web deepens it from below. The back's end wall takes a parallel chamfer.
+    See _block_root_fillet and end_screw_wall_chamfer.
     """
     x, z = end_screw_axis()
     edge = end_wall_edge()
@@ -167,14 +227,21 @@ def end_screw_block():
         bottom,
         SUPPORT_TOP,
     )
-    block = _chamfer_block_lead_in(block, back)
+    square = params.END_SCREW_BLOCK_R + MERGE
+    block = _fuse(
+        block,
+        Pos(x, face + square / 2, (bottom + SUPPORT_TOP) / 2)
+        * Box(params.END_SCREW_BLOCK_W, square, SUPPORT_TOP - bottom),
+    )
     block = _chamfer_block_base(block, back, bottom)
-    web_y0 = edge - params.BOARD_FIT - MERGE
-    web_y1 = face + params.END_SCREW_BLOCK_R + MERGE
+    cavity = edge - params.BOARD_FIT
+    web_y0 = cavity - MERGE
+    web_y1 = face + MERGE
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
         params.END_SCREW_BLOCK_W, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
     )
-    return _fuse(block, web)
+    fillet = _block_root_fillet(x, face)
+    return _ramp_block_top(_fuse(block, web, fillet), cavity)
 
 
 def end_screw_pilot():
@@ -206,6 +273,49 @@ def end_screw_cuts():
         _y_hole(x, z, params.SHELL_SCREW_CLEAR_D, y0, edge - params.BOARD_FIT + 0.1),
         _y_hole(x, z, params.SHELL_SCREW_HEAD_D, y0, outer + params.SHELL_SCREW_HEAD_H),
     ]
+
+
+def end_screw_wall_chamfer():
+    """The chamfer on the inner top arris of the back's -Y end wall, under the
+    skirt relief, that makes room for the block's root fillet.
+
+    The fillet goes below SKIRT_BOTTOM, where this wall is. A planar wedge cut
+    at 45 degrees, so its face stays parallel to the fillet's. Its leg is the
+    relief floor's own width, see end_screw_root_legs, so the chamfer starts at
+    the lap's inner face and takes the whole floor. It cannot grow without
+    notching the lap.
+
+    The two legs differ. The horizontal gap between the faces is the skirt's
+    own clearance to the lap at the grip end, LAP_IN - SKIRT_OUT +
+    GRIP_SKIRT_RELIEF, plus SKIRT_FIT. Below the chamfer, the block's -Y face
+    keeps END_SCREW_BLOCK_GAP to the wall.
+
+    It points up as the back prints, so it needs no support. Bounded by the
+    clearance bore below it. The wedge rises from the lap corner into the
+    relief void and never cuts the lap. It runs over the block's full width
+    plus MERGE either side.
+    """
+    _, c = end_screw_root_legs()
+    x, z = end_screw_axis()
+    floor = SKIRT_BOTTOM - params.SKIRT_FIT
+    clear_top = z + params.SHELL_SCREW_CLEAR_D / 2
+    if floor - c <= clear_top:
+        raise ValueError(
+            f"the end wall chamfer reaches down to {floor - c:.2f}, not above "
+            f"the clearance bore's top at {clear_top:.2f}"
+        )
+    wall = end_wall_edge() - params.BOARD_FIT
+    with BuildSketch(Plane.YZ) as section:
+        with BuildLine():
+            Polyline(
+                (wall - c, floor),
+                (wall + MERGE, floor - c - MERGE),
+                (wall + MERGE, floor + MERGE),
+                close=True,
+            )
+        make_face()
+    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
+    return Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
 
 
 def end_screw_length():

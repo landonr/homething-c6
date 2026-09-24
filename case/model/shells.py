@@ -30,6 +30,7 @@ from .hardware import (
     end_screw_block,
     end_screw_cuts,
     end_screw_pilot,
+    end_screw_wall_chamfer,
     legacy_retention_pilot,
     legacy_retention_post,
     mount_points,
@@ -479,6 +480,7 @@ def back_shell():
         ir_window_opening(),
         ir_window_rebate(),
         *end_screw_cuts(),
+        end_screw_wall_chamfer(),
         legacy_retention_pilot(),
     )
 

@@ -11,7 +11,19 @@ shells rather than off the stack that sized it.
 
 import functools
 
-from build123d import Box, Cylinder, Pos, Rot
+from build123d import (
+    Box,
+    BuildLine,
+    BuildSketch,
+    Compound,
+    Cylinder,
+    Plane,
+    Polyline,
+    Pos,
+    Rot,
+    extrude,
+    make_face,
+)
 
 import board
 import case
@@ -73,7 +85,7 @@ def feature_clashes():
     This is the only pass that sees the switches, D2-D5 and J1, none of which
     reach the STEP assembly. Courtyards carry no height, so a part's z span comes
     from its model where it has one, and is assumed to fill its side of the cavity
-    where it does not.
+    where it does not. The end screw block is read on its built solid.
     """
     court = board.courtyards()
     features = []
@@ -104,21 +116,6 @@ def feature_clashes():
         features.append(
             ("screw head", x - h, y - h, x + h, y + h, -params.SCREW_HEAD_H, 0.0)
         )
-    # The end screw's block, which hangs off the front skirt into the back's
-    # cavity under the board's -Y end. Its box rather than a radius: it is the
-    # one cavity feature that is not a round post.
-    block = case.end_screw_block().bounding_box()
-    features.append(
-        (
-            "end screw block",
-            block.min.X,
-            block.min.Y,
-            block.max.X,
-            block.max.Y,
-            block.min.Z,
-            case.SUPPORT_TOP,
-        )
-    )
     # The V2 retention post, on both its own diameter and its root chamfer. This
     # is the pass that sees the eleven
     # switches and D2-D5, so it is what says the post clears a part with no model.
@@ -178,15 +175,37 @@ def feature_clashes():
             ]
             if min(overlap) > 0:
                 clashes.append((name, ref, min(overlap)))
+
+    # The end screw block on its built solid, not its box. Its ramp falls away
+    # under the board, so its box overstates what it reaches there.
+    block = case.end_screw_block()
+    bbox = block.bounding_box()
+    for ref, (cx0, cy0, cx1, cy1, cside) in court.items():
+        cz0, cz1 = _part_z(ref, cside)
+        if (
+            min(bbox.max.X, cx1) <= max(bbox.min.X, cx0)
+            or min(bbox.max.Y, cy1) <= max(bbox.min.Y, cy0)
+            or min(bbox.max.Z, cz1) <= max(bbox.min.Z, cz0)
+        ):
+            continue
+        region = Pos((cx0 + cx1) / 2, (cy0 + cy1) / 2, (cz0 + cz1) / 2) * Box(
+            cx1 - cx0, cy1 - cy0, cz1 - cz0
+        )
+        hit = block.intersect(region)
+        if _volume(hit) > TOLERANCE:
+            size = Compound(hit.solids()).bounding_box().size
+            clashes.append(("end screw block", ref, min(size.X, size.Y, size.Z)))
     return clashes
 
 
 def end_screw(front, back):
     """The one screw that closes the two shells, on the built shells.
 
-    Five readings, and none of them restates the stack that sized the feature.
-    The block has to have survived the front's fuse and to be standing clear of
-    both the back and the cell, or the shells will not close on it. The head
+    None of these readings restates the stack that sized the feature. The
+    block has to have survived the front's fuse and to be standing clear of
+    both the back and the cell, or the shells will not close on it. Its top has
+    to be the 45 degree ramp the face down print builds without support, with
+    thread cover and a web neck still left under it. The head
     recess has to land on flat, full-thickness wall rather than on the tip roll,
     which is why the four rim points are probed on the outer face rather than
     the axis alone: a counterbore centred on solid can still have half its rim
@@ -207,17 +226,11 @@ def end_screw(front, back):
                 part="case-front",
             )
         )
-    # The top and bottom rows probe further in than the middle one: the block's
-    # back face is chamfered away at both, for END_SCREW_BLOCK_CHAMFER and
-    # END_SCREW_BLOCK_BASE_CHAMFER, so a probe at the back reads air there by
-    # construction and would fail on a lead-in rather than on a missed fuse.
-    # Stepping inboard of each chamfer puts them back on the land it leaves.
+    # The bottom row probes further in than the axis row: the block's bottom
+    # back arris is chamfered away for END_SCREW_BLOCK_BASE_CHAMFER, so a probe
+    # at the back reads air there by construction. Stepping inboard of the
+    # chamfer puts it back on the land it leaves.
     for label, probe_y, probe_z in (
-        (
-            "under its top",
-            box.max.Y - params.END_SCREW_BLOCK_CHAMFER - 0.3,
-            case.SUPPORT_TOP - 0.3,
-        ),
         ("at the axis", box.max.Y - 0.3, z),
         (
             "above its bottom",
@@ -237,30 +250,164 @@ def end_screw(front, back):
                 )
             )
 
-    # And the lead-in itself, read as void on the built front. This box sits
-    # just inside the top back corner the lead-in takes off, and it is sized
-    # and placed off END_SCREW_BLOCK_CHAMFER rather than fixed, so it stays
-    # wholly inside the removed wedge at any positive value of it; material
-    # here means the wedge stopped being cut and the board has a square arris
-    # to land on again. It is the twin of the offset above: that one is on the
-    # land the lead-in leaves, this one is in the wedge it removes.
-    lead_in = params.END_SCREW_BLOCK_CHAMFER
-    probe = Pos(
-        x, box.max.Y - 0.25 * lead_in, case.SUPPORT_TOP - 0.25 * lead_in
-    ) * Box(0.2 * lead_in, 0.2 * lead_in, 0.2 * lead_in)
-    filled = _fill_fraction(front, probe)
+    # The ramp, read as void on the built front: a wedge across the block's
+    # width, from 0.2 above a 45 degree line off the end of the ledge up to
+    # SUPPORT_TOP and back to the block's own back face. Material in it is a
+    # ceiling the face down print has to support again.
+    cavity = edge - params.BOARD_FIT
+    start = cavity + params.END_SCREW_BLOCK_RAMP_LEDGE
+    lift = 0.2
+    top = case.SUPPORT_TOP
+    with BuildSketch(Plane.YZ) as section:
+        with BuildLine():
+            Polyline(
+                (start + lift, top),
+                (box.max.Y, top),
+                (box.max.Y, top + lift - (box.max.Y - start)),
+                close=True,
+            )
+        make_face()
+    wedge = Pos(x, 0, 0) * extrude(
+        section.sketch, amount=params.END_SCREW_BLOCK_W / 2 - 0.2, both=True
+    )
+    filled = _fill_fraction(front, wedge)
     if filled > TOLERANCE:
         problems.append(
             Problem(
-                f"the block's top back corner is {filled:.0%} material, so the "
-                "board's lead-in chamfer is not cut",
+                f"{filled:.0%} of the wedge over the block's 45 degree ramp is "
+                "material, so a flat ceiling is left that prints face down on "
+                "support",
+                box=wedge,
+                part="case-front",
+            )
+        )
+
+    # Cover over the thread where the ramp comes lowest, at the pilot's tip. A
+    # floor rather than the ramp's own height, so a steeper ramp or a higher
+    # screw that thins this skin fails here.
+    cover = 1.0
+    pilot = case.end_screw_pilot().bounding_box()
+    probe = Pos(x, pilot.max.Y - 0.1, pilot.max.Z + 0.05 + (cover - 0.05) / 2) * Box(
+        0.4, 0.2, cover - 0.05
+    )
+    filled = _fill_fraction(front, probe)
+    if filled < 1 - TOLERANCE:
+        problems.append(
+            Problem(
+                f"only {filled:.0%} of the {cover} over the pilot's tip is "
+                "material, so the ramp leaves the thread a skin it can split",
                 box=probe,
                 part="case-front",
             )
         )
 
-    # The twin of that one at the bottom back corner, in the wedge the fold's
-    # own lead-in takes off. Sized and placed off END_SCREW_BLOCK_BASE_CHAMFER
+    # The web's neck at the block's -Y face, where the ramp leaves it least
+    # height over SKIRT_BOTTOM. At least SKIRT_T, so the web that carries the
+    # block is no thinner than the skirt it hangs from.
+    neck = params.SKIRT_T
+    face = box.max.Y - params.END_SCREW_BLOCK_D
+    probe = Pos(x, face - 0.1, case.SKIRT_BOTTOM + 0.05 + (neck - 0.05) / 2) * Box(
+        params.END_SCREW_BLOCK_W - 0.4, 0.2, neck - 0.05
+    )
+    filled = _fill_fraction(front, probe)
+    if filled < 1 - TOLERANCE:
+        problems.append(
+            Problem(
+                f"only {filled:.0%} of the {neck} web neck over SKIRT_BOTTOM at "
+                "the block's -Y face is material, so the ramp cuts the web "
+                "thinner than the skirt",
+                box=probe,
+                part="case-front",
+            )
+        )
+
+    # The root fillet under the web, the skirt underside it starts on, and its
+    # start at the grip skirt relief face, all read as material on the built
+    # front. The first box is sized off the fillet's own leg, so it stays
+    # inside the fillet at any value of it.
+    start = case.end_screw_fillet_start()
+    front_leg, back_leg = case.end_screw_root_legs()
+    flat = params.END_SCREW_BLOCK_W - 0.4
+    for probe, message in (
+        (
+            Pos(x, face - 0.25 * front_leg, case.SKIRT_BOTTOM - 0.25 * front_leg)
+            * Box(flat, 0.2 * front_leg, 0.2 * front_leg),
+            "of the root fillet under the web is material, so the neck gets no "
+            "depth below SKIRT_BOTTOM",
+        ),
+        (
+            Pos(x, start + 0.1, case.SKIRT_BOTTOM + 0.15) * Box(flat, 0.2, 0.2),
+            "of the skirt is material where the root fillet starts, so the "
+            "fillet hangs off nothing",
+        ),
+        # The hypotenuse is 0.2 under SKIRT_BOTTOM at start + 0.2, so this box
+        # sits inside it. A fillet that starts inboard of the relief reads void.
+        (
+            Pos(x, start + 0.25, case.SKIRT_BOTTOM - 0.1) * Box(flat, 0.1, 0.1),
+            "of the root fillet is material next to the grip skirt relief, so "
+            "the fillet stops short of it and the skirt underside keeps a flat",
+        ),
+    ):
+        filled = _fill_fraction(front, probe)
+        if filled < 1 - TOLERANCE:
+            problems.append(
+                Problem(f"only {filled:.0%} {message}", box=probe, part="case-front")
+            )
+
+    # The back's parallel chamfer, read as void on the built back.
+    wall = edge - params.BOARD_FIT
+    relief = case.SKIRT_BOTTOM - params.SKIRT_FIT
+    probe = Pos(x, wall - 0.25 * back_leg, relief - 0.25 * back_leg) * Box(
+        flat, 0.2 * back_leg, 0.2 * back_leg
+    )
+    filled = _fill_fraction(back, probe)
+    if filled > TOLERANCE:
+        problems.append(
+            Problem(
+                f"the back's end wall is {filled:.0%} material in its root "
+                "chamfer, so the block's fillet has no room",
+                box=probe,
+                part="case-back",
+            )
+        )
+
+    # The gap between the two, level with the middle of the band both 45 degree
+    # faces share. The fillet's surface there is read off the built front. The
+    # fillet meets the skirt's outer face at its top, so it must keep at least
+    # the skirt's own clearance to the lap beside it: that much -Y of it has to
+    # be void in the built back. The reach runs from the fillet's start, as
+    # nothing else of the front hangs below SKIRT_BOTTOM there.
+    band = (relief + max(case.SKIRT_BOTTOM - front_leg, relief - back_leg)) / 2
+    reach = Pos(x, (start + face) / 2, band) * Box(0.02, face - start, 0.02)
+    hit = front.intersect(reach)
+    if not hit or not hit.solids():
+        problems.append(
+            Problem(
+                f"the built front has no root fillet at z {band:.2f} to measure "
+                "the gap to the back from",
+                box=reach,
+                part="case-front",
+            )
+        )
+    else:
+        surface = Compound(hit.solids()).bounding_box().min.Y
+        clearance = case.LAP_IN - case.SKIRT_OUT + params.GRIP_SKIRT_RELIEF
+        gap = clearance - 0.05
+        probe = Pos(x, surface - 0.02 - gap / 2, band) * Box(flat, gap, 0.2)
+        filled = _fill_fraction(back, probe)
+        if filled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the back fills {filled:.0%} of the skirt's own "
+                    f"{clearance:.2f} clearance to the lap, -Y of the block's "
+                    "root fillet, so the block can land on the wall",
+                    box=probe,
+                    part="case-back",
+                )
+            )
+
+    # The bottom back corner, in the wedge the fold's own lead-in takes off,
+    # read as void. Sized and placed off END_SCREW_BLOCK_BASE_CHAMFER
     # so it stays wholly inside the removed wedge at any positive value of it.
     base = params.END_SCREW_BLOCK_BASE_CHAMFER
     probe = Pos(
@@ -348,7 +495,6 @@ def end_screw(front, back):
     # reads that case as what it is, and anything under it is a skin no thread
     # would survive anyway.
     floor = 0.1
-    pilot = case.end_screw_pilot().bounding_box()
     if pilot.max.Y >= box.max.Y - floor:
         problems.append(
             Problem(

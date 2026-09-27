@@ -27,6 +27,14 @@ ledges and the V2 retention post alike. Here rather than in support.py so
 hardware.py can build to the same plane without importing the module that
 imports it."""
 
+LEGACY_BOARD_TOP = SUPPORT_TOP + params.BOARD_THICKNESS
+"""Top face of a V2 board. V2 clamps on the retention post at SUPPORT_TOP, not
+on the front bosses, so it sits SUPPORT_GAP lower than V3's BOARD_TOP."""
+
+LEGACY_SWITCH_TOP = LEGACY_BOARD_TOP + params.SWITCH_HEIGHT
+"""A V2 switch's actuator top, the SWITCH_TOP of a board on the retention post.
+The V2 top pad's nibs are built down to this."""
+
 KEYPAD_KEEPOUT = params.SWITCH_HEIGHT + params.KEYPAD_PLUNGER_STUB
 """Vertical clearance the keypad region of the ceiling actually needs: the
 switch, plus KEYPAD_PLUNGER_STUB standing above it before the web begins.

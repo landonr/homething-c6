@@ -26,6 +26,9 @@ LEGACY_BOARD_ONLY_STEP = (
 `kicad-cli pcb export step --board-only` the same way scripts/export-case-refs.sh
 exports the live one. It is static reference geometry: that revision is gone from
 the working tree, so nothing regenerates this file and nothing should."""
+LEGACY_POS_CSV = Path(__file__).resolve().parent / "board" / "c6remote-v2-pos.csv"
+"""The V2 placements, frozen with the STEP above: c6remote-pos.csv as release
+2026.8.0, commit d0a2c2e, committed it. Static reference, never regenerated."""
 
 WHEEL_CUTOUT_R = 2.0
 
@@ -179,6 +182,17 @@ def legacy_retention_point():
     return max(legacy_mounting_holes(), key=lambda point: (point[1], point[0]))
 
 
+def legacy_components():
+    """V2's placement rows, in the same form components() returns.
+
+    Out of LEGACY_POS_CSV, the same parse over the frozen file. A V2 xy is only
+    meaningful in the case frame because legacy_mounting_holes() holds the two
+    outlines to one frame, so this calls it first for that guard.
+    """
+    legacy_mounting_holes()
+    return _placements(LEGACY_POS_CSV)
+
+
 def wheel_center():
     pts = [
         (x, y)
@@ -188,10 +202,10 @@ def wheel_center():
     return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
 
 
-def components():
-    """Placement rows in STEP frame: {ref: (x, y, rotation, side)}."""
+def _placements(path):
+    """{ref: (x, y, rotation, side)} out of one KiCad position CSV."""
     out = {}
-    with _require(POS_CSV).open() as fh:
+    with _require(path).open() as fh:
         for row in csv.DictReader(fh):
             out[row["Ref"]] = (
                 float(row["PosX"]),
@@ -200,6 +214,11 @@ def components():
                 row["Side"],
             )
     return out
+
+
+def components():
+    """Placement rows in STEP frame: {ref: (x, y, rotation, side)}."""
+    return _placements(POS_CSV)
 
 
 def refs(prefix):

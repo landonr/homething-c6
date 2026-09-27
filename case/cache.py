@@ -2,13 +2,14 @@
 
 Every cached builder is a pure function of a fixed set of files: the geometry
 under model/, the parameters, the board readers, the legend fonts and glyphs,
-and the four KiCad exports board.py reads. Those files are hashed by content
-into one key, and the key names a directory under .cache holding a BREP blob
-per builder plus the manifest of what was hashed. Any byte change anywhere in
-that set gives a new key, so the whole cache is missed at once. One global key
-rather than a dependency graph per builder: nothing here is expensive enough to
-be worth tracking which module feeds which shape, and a graph that is subtly
-wrong caches a stale solid, which makes every check that probes it vacuous.
+and the board files board.py reads, frozen V2 ones included. Those files are
+hashed by content into one key, and the key names a directory under .cache
+holding a BREP blob per builder plus the manifest of what was hashed. Any byte
+change anywhere in that set gives a new key, so the whole cache is missed at
+once. One global key rather than a dependency graph per builder: nothing here
+is expensive enough to be worth tracking which module feeds which shape, and a
+graph that is subtly wrong caches a stale solid, which makes every check that
+probes it vacuous.
 
 STL bytes are cached beside the BREPs because a BREP round trip does not
 reproduce them: the geometry is identical to the last digit but the tessellation
@@ -66,6 +67,7 @@ def _sources():
         board.BOARD_ONLY_STEP,
         board.ASSEMBLY_STEP,
         board.LEGACY_BOARD_ONLY_STEP,
+        board.LEGACY_POS_CSV,
     ]
     return paths
 

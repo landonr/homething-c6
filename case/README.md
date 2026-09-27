@@ -16,6 +16,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).
+It also exports the V2 top pad, an FDM part for a V2 board. Read [V2 retention post](#v2-retention-post).
 
 ## Setup
 
@@ -93,10 +94,11 @@ The model reads these sources:
 - `case/board/c6remote-board-only.step` supplies the board solid.
 - `case/board/c6remote-outline.dxf` supplies the exported outline.
 - `case/board/c6remote-v2-board-only.step` supplies the fixed V2 mounting-hole reference.
+- `case/board/c6remote-v2-pos.csv` supplies the fixed V2 switch positions.
 
 Run `scripts/export-case-refs.sh` after a relevant schematic or board change. Then build and run the full check.
 
-Do not regenerate `case/board/c6remote-v2-board-only.step`. It is a static reference from release `2026.8.0`, commit `d0a2c2e`.
+Do not regenerate `case/board/c6remote-v2-board-only.step` or `case/board/c6remote-v2-pos.csv`. Both are static references from release `2026.8.0`, commit `d0a2c2e`.
 
 ## Coordinate frame
 
@@ -224,6 +226,22 @@ The V2 IR parts and upper keys do not align with the current openings. Use this 
 
 For a V2 board, fasten the board to the back shell first. Drive the M2 screw from the component side without a washer.
 
+The V2 board sits on the post, `SUPPORT_GAP` lower than the V3 board. Its SW1 and SW2 also sit nearer the grip end.
+
+For a V2 board, print `c6remote-case-pad-fdm-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad-fdm.stl`.
+
+The V2 top pad keeps the V3 SW1 and SW2 plungers. It adds one nib above each V2 switch.
+
+Each nib extends `PLUNGER_SWITCH_EXTENSION` below the V2 switch top, the same engagement that the V3 plungers get.
+
+Use the V2 top pad only with a V2 board. On a V3 board, the nibs land on the V3 switch bodies.
+
+Print the V2 top pad with the keytops down. The nibs extend below the plungers, so the part cannot stand level on its plungers.
+
+On the first print, make sure that SW1 and SW2 operate and do not bind. Each V3 plunger overlaps the edge of a V2 switch body.
+
+`SWITCH_HEIGHT` is also not a measurement, so the nib engagement is not confirmed.
+
 ## IR openings
 
 `U2` receives infrared light through the back face along negative Z. Its opening includes the receiver body and lead envelope.
@@ -258,7 +276,7 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Wheel clearance and the LED light path
 - Microphone and USB geometry
 - IR receiver clearance and window installation
-- Board supports, screws, cell clearance, and V2 retention
+- Board supports, screws, cell clearance, V2 retention, and the V2 top pad
 - Shell mating and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes

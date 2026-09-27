@@ -8,6 +8,12 @@ drilled into.
 
 Retention only. Nothing here says a V2 board works in this case: its IR parts
 and its upper keys land in the wrong place regardless, and no post moves them.
+
+The V2 top pad is the one part that answers the upper keys. It is the FDM pad's
+SW1/SW2 lobe with a nib added over each V2 switch, so its passes hold the nibs'
+engagement on a board that clamps on the post, the lobe's fit in the FDM front,
+and its clearance to the V2 screw head that the kept V3 SW1 plunger passes close
+by.
 """
 
 from build123d import Box, Cylinder, Pos
@@ -15,9 +21,13 @@ from build123d import Box, Cylinder, Pos
 import board
 import case
 import params
-from model.stack import SUPPORT_TOP
+from model.stack import LEGACY_BOARD_TOP, LEGACY_SWITCH_TOP, SUPPORT_TOP, SWITCH_TOP
 
-from .common import TOLERANCE, _fill_fraction, _volume
+from .common import TOLERANCE, Problem, _fill_fraction, _volume
+from .keypad import plunger_bottoms
+
+TOP_PAD = "case-pad-fdm-v2-top"
+"""The V2 top pad's export stem, as checks/shells.py and the viewer name parts."""
 
 
 def legacy_point_in_frame():
@@ -199,3 +209,97 @@ def legacy_post_headroom():
             f"{params.FLOOR:.1f} floor"
         )
     return problems
+
+
+def legacy_nib_contact(top):
+    """Each V2 switch gets a nib at the V3 plungers' engagement, and the V3
+    plungers the lobe keeps still reach theirs.
+
+    Probed on the built part at both sets of points, because the nibs are the
+    only thing that differs from the FDM pad's own lobe: a nib built to the V3
+    switch top would stand SUPPORT_GAP short of a V2 switch and read as present.
+    """
+    legacy = board.legacy_components()
+    parts = board.components()
+    refs = case.island_refs("second")
+    problems = plunger_bottoms(
+        top,
+        {ref: legacy[ref][:2] for ref in refs},
+        LEGACY_SWITCH_TOP,
+        what="V2 nib",
+        part=TOP_PAD,
+    )
+    problems += plunger_bottoms(
+        top,
+        {ref: parts[ref][:2] for ref in refs},
+        SWITCH_TOP,
+        what="V3 plunger",
+        part=TOP_PAD,
+    )
+    if len(top.solids()) != 1:
+        problems.append(
+            Problem(
+                f"the V2 top pad is {len(top.solids())} solids, so a nib is "
+                "not fused into the lobe",
+                part=TOP_PAD,
+            )
+        )
+    return problems
+
+
+PRESS_STATES = (("released", 0), ("pressed", -params.SWITCH_TRAVEL))
+"""The two pad positions each V2 top pad fit is probed at."""
+
+
+def legacy_top_pad_fits(front_fdm, top):
+    """The V2 top pad clears the FDM front released and through switch travel."""
+    problems = []
+    for state, offset in PRESS_STATES:
+        fouled = _volume(front_fdm.intersect(Pos(0, 0, offset) * top))
+        if fouled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the V2 top pad fouls the FDM front by {fouled:.2f} mm3 "
+                    f"when {state}",
+                    part=TOP_PAD,
+                )
+            )
+    return problems
+
+
+def legacy_screw_head():
+    """The V2 retention screw's head envelope, on the V2 board's top face."""
+    x, y = board.legacy_retention_point()
+    return Pos(x, y, LEGACY_BOARD_TOP + params.SCREW_HEAD_H / 2) * Cylinder(
+        radius=params.SCREW_HEAD_D / 2, height=params.SCREW_HEAD_H
+    )
+
+
+def legacy_top_pad_clears_screw(top):
+    """The V2 top pad stays off the V2 screw head, released and pressed.
+
+    The kept V3 SW1 plunger passes the head closest, in plan, and the press
+    takes the whole lobe down towards the head's top.
+    """
+    head = legacy_screw_head()
+    problems = []
+    for state, offset in PRESS_STATES:
+        fouled = _volume(head.intersect(Pos(0, 0, offset) * top))
+        if fouled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the V2 top pad hits the V2 screw head by {fouled:.2f} mm3 "
+                    f"when {state}",
+                    box=head,
+                    part=TOP_PAD,
+                )
+            )
+    return problems
+
+
+def legacy_screw_gaps(top):
+    """{state: the built pad's closest approach to the V2 screw head}, for the
+    pass line. Released it is the kept V3 SW1 plunger in plan, and pressed it is
+    the web over the head's top."""
+    head = legacy_screw_head()
+    return {state: head.distance_to(Pos(0, 0, offset) * top) for state, offset in PRESS_STATES}

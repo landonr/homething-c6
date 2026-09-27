@@ -51,6 +51,7 @@ from .stack import (
     CAP_BOTTOM,
     CAP_TOP,
     FDM_FACE,
+    LEGACY_SWITCH_TOP,
     MERGE,
     PAD_WEB_BOTTOM,
     PAD_WEB_TOP,
@@ -1290,9 +1291,13 @@ def _mic_clearance():
     return _hole(x, y, diameter, PAD_WEB_BOTTOM - 1, PAD_WEB_TOP + 1)
 
 
-def plunger(x, y):
-    """Build one plunger with a 45 degree lower-edge chamfer and flat contact."""
-    z0 = SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
+def plunger(x, y, contact=SWITCH_TOP):
+    """Build one plunger with a 45 degree lower-edge chamfer and flat contact.
+
+    `contact` is the switch top it engages. The V2 top pad's nibs pass
+    LEGACY_SWITCH_TOP, so they engage a V2 switch by the same extension.
+    """
+    z0 = contact - params.PLUNGER_SWITCH_EXTENSION
     size = params.PLUNGER_LOWER_CHAMFER
     radius = params.PLUNGER_D / 2
     if size <= 0 or size >= radius or size >= PAD_WEB_TOP - z0:
@@ -1315,21 +1320,37 @@ def button_pad(fdm=False):
     Both lobes stop outside the wheel clearance band. With fdm=True, the
     printed keytops and legends are fused to their lobe webs in this export.
     """
+    return _fuse(*(_pad_lobe(name, fdm) for name, *_ in pad_lobes()))
+
+
+def _pad_lobe(name, fdm, nibs=()):
+    """Build one pad lobe. Each (x, y) in `nibs` adds a plunger to a V2 switch."""
     parts = board.components()
-    lobes = []
-    for name, x0, y0, x1, y1 in pad_lobes():
-        body = _slab(pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP)
-        raised = []
-        for ref in island_refs(name):
-            x, y = parts[ref][:2]
-            raised.append(_stem(x, y))
-            raised.append(plunger(x, y))
-            if fdm:
-                raised.append(fdm_keycap(ref))
-        cuts = _boss_clearances(x0, y0, x1, y1)
-        if name == "second":
-            cuts.append(_mic_clearance())
-        else:
-            cuts.extend(_pad_grooves(fdm))
-        lobes.append(_cut(_fuse(body, *raised), *cuts))
-    return _fuse(*lobes)
+    x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
+    body = _slab(pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP)
+    raised = []
+    for ref in island_refs(name):
+        x, y = parts[ref][:2]
+        raised.append(_stem(x, y))
+        raised.append(plunger(x, y))
+        if fdm:
+            raised.append(fdm_keycap(ref))
+    raised.extend(plunger(x, y, LEGACY_SWITCH_TOP) for x, y in nibs)
+    cuts = _boss_clearances(x0, y0, x1, y1)
+    if name == "second":
+        cuts.append(_mic_clearance())
+    else:
+        cuts.extend(_pad_grooves(fdm))
+    return _cut(_fuse(body, *raised), *cuts)
+
+
+@cache.solid
+def legacy_top_pad():
+    """Build the FDM pad's SW1/SW2 lobe for a V2 board only.
+
+    It keeps the V3 plungers and adds one nib at each V2 switch, which sits
+    further -Y and lower, on the retention post.
+    """
+    legacy = board.legacy_components()
+    nibs = [legacy[ref][:2] for ref in island_refs("second")]
+    return _pad_lobe("second", fdm=True, nibs=nibs)

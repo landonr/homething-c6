@@ -70,11 +70,15 @@ from .ir import (
     window_installation,
 )
 from .legacy import (
+    legacy_nib_contact,
     legacy_pilot_blind,
     legacy_point_in_frame,
     legacy_post_clearance,
     legacy_post_headroom,
     legacy_post_merged,
+    legacy_screw_gaps,
+    legacy_top_pad_clears_screw,
+    legacy_top_pad_fits,
 )
 from .keypad import (
     groove_clearances,
@@ -155,6 +159,10 @@ class Solids:
     @functools.cached_property
     def pad_fdm(self):
         return case.button_pad(fdm=True)
+
+    @functools.cached_property
+    def pad_fdm_v2_top(self):
+        return case.legacy_top_pad()
 
     @functools.cached_property
     def window(self):
@@ -790,6 +798,33 @@ def _legacy_post_headroom(s):
     )
 
 
+@_check("legacy")
+def _legacy_nib_contact(s):
+    return _report(
+        legacy_nib_contact(s.pad_fdm_v2_top),
+        "V2 top pad is one solid, its nibs land on the V2 switch tops and its "
+        "V3 plungers on the V3 ones, each within tolerance",
+    )
+
+
+@_check("legacy")
+def _legacy_top_pad_fits(s):
+    return _report(
+        legacy_top_pad_fits(s.front_fdm, s.pad_fdm_v2_top),
+        "V2 top pad clears the FDM front released and through switch travel",
+    )
+
+
+@_check("legacy")
+def _legacy_top_pad_clears_screw(s):
+    gaps = legacy_screw_gaps(s.pad_fdm_v2_top)
+    return _report(
+        legacy_top_pad_clears_screw(s.pad_fdm_v2_top),
+        f"V2 top pad clears the V2 retention screw head by {gaps['released']:.2f} "
+        f"released and {gaps['pressed']:.2f} pressed",
+    )
+
+
 @_check("assembly")
 def _feature_clashes(s):
     clashes = feature_clashes()
@@ -842,6 +877,7 @@ def _parts_are_sound(s):
         "FDM front shell": s.front_fdm,
         "back shell": s.back,
         "button pad": s.pad,
+        "FDM V2 top pad": s.pad_fdm_v2_top,
         "IR window": s.window,
         **{f"{ref} cap": cap for ref, cap in s.caps.items()},
     }
@@ -986,13 +1022,15 @@ def _parallel_initializer():
 
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
-    "assembly": ("front", "front_fdm", "back", "pad", "window", "caps"),
+    "assembly": (
+        "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "window", "caps",
+    ),
     "caps": ("front", "pad", "caps", "caps_plain"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),
     "keypad": ("front", "pad", "keypad_recess"),
-    "legacy": ("back",),
+    "legacy": ("back", "front_fdm", "pad_fdm_v2_top"),
     "mic": ("front",),
     "shells": ("front", "back"),
     "support": ("back",),
@@ -1024,7 +1062,7 @@ To re-derive it, which is the only thing that catches drift, walk the AST:
 for each function in this module carrying an @_check decorator, collect the
 `s.<property>` reads in the pass body itself, then follow the checks/ functions
 it calls, transitively, collecting every `case.<builder>(...)` call whose
-builder carries @cache.solid (grep model/ for that decorator: there are eight).
+builder carries @cache.solid (grep model/ for that decorator: there are nine).
 Map the properties onto names here through Solids, take the builders as they
 are, and compare against the rows above. Collect properties from the pass body
 only, not through the call, or every local named `s` in checks/ reads as one.
@@ -1036,6 +1074,7 @@ _CACHED_SOLIDS = {
     "back": lambda: [functools.partial(case.back_shell)],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
+    "pad_fdm_v2_top": lambda: [functools.partial(case.legacy_top_pad)],
     "window": lambda: [functools.partial(case.ir_window)],
     "keypad_recess": lambda: [functools.partial(case.keypad_recess)],
     "keypad_outline_groove": lambda: [functools.partial(case.keypad_outline_groove)],

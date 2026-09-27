@@ -44,6 +44,7 @@ EXPORT_STEMS = {
     "front shell": "case-front",
     "back shell": "case-back",
     "button pad": "case-pad",
+    "FDM V2 top pad": "case-pad-fdm-v2-top",
     "IR window": "ir-window",
 }
 

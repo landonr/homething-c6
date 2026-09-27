@@ -53,7 +53,7 @@ import case
 from model import keypad as keypad_model
 import params
 
-from .common import PROBE_D, TOLERANCE, _fill_fraction, _ray_runs, _volume
+from .common import PROBE_D, TOLERANCE, Problem, _fill_fraction, _ray_runs, _volume
 
 
 GROOVE_TOLERANCE = 0.05
@@ -230,28 +230,44 @@ PLUNGER_PROBE_SPAN = 0.6
 """Probe height about the target plunger bottom. It finds the bottom face without reaching the web."""
 
 
-def plunger_stub_contact(pad):
-    """Check each built plunger bottom against its extension target."""
+def plunger_bottoms(pad, points, contact, what="plunger", part=None):
+    """Check the built pad's bottom at each {ref: (x, y)} against `contact`
+    less PLUNGER_SWITCH_EXTENSION. Shared by the V3 pads and the V2 top pad."""
     problems = []
-    parts = board.components()
     half = PLUNGER_PROBE_SPAN / 2
-    for ref in board.refs("SW"):
-        x, y = parts[ref][:2]
-        target = case.SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
+    target = contact - params.PLUNGER_SWITCH_EXTENSION
+    for ref, (x, y) in points.items():
         z0, z1 = target - half, target + half
         probe = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
         hit = pad.intersect(probe)
         if _volume(hit) <= TOLERANCE:
-            problems.append(f"{ref}'s plunger does not reach its bottom target")
+            problems.append(
+                Problem(
+                    f"{ref}'s {what} does not reach its bottom target",
+                    at=(x, y, target),
+                    part=part,
+                )
+            )
             continue
         bottom = min(s.bounding_box().min.Z for s in hit.solids())
         off = bottom - target
         if abs(off) > PLUNGER_CONTACT_TOLERANCE:
             problems.append(
-                f"{ref}'s plunger bottom at {bottom:.3f} against target "
-                f"{target:.3f}, off by {off:.3f}"
+                Problem(
+                    f"{ref}'s {what} bottom at {bottom:.3f} against target "
+                    f"{target:.3f}, off by {off:.3f}",
+                    at=(x, y, bottom),
+                    part=part,
+                )
             )
     return problems
+
+
+def plunger_stub_contact(pad):
+    """Check each built plunger bottom against its extension target."""
+    parts = board.components()
+    points = {ref: parts[ref][:2] for ref in board.refs("SW")}
+    return plunger_bottoms(pad, points, case.SWITCH_TOP)
 
 
 def pad_clears_wheel(pad):

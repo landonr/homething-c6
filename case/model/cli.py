@@ -48,6 +48,7 @@ from .keypad import (
     key_pitch,
     key_size,
     keypad_recess_facts,
+    legacy_top_pad,
     outline_length,
     pad_lobes,
     pad_wheel_gap,
@@ -141,9 +142,11 @@ def main():
     # The FDM front is a second copy of the same part, not a fifth part of the
     # assembly, so it is added after --show has returned: showing both would
     # draw two front shells in the same place. features.py keys its features
-    # under its own file name, since that is the file the viewer loads.
+    # under its own file name, since that is the file the viewer loads. The V2
+    # top pad replaces one lobe of the FDM pad, so it stays out of --show too.
     parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
     parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
+    parts["c6remote-case-pad-fdm-v2-top"] = legacy_top_pad()
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.

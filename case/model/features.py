@@ -53,6 +53,7 @@ from .stack import (
     BOARD_TOP,
     CAVITY_FRONT,
     COUNTERBORE_TOP,
+    LEGACY_SWITCH_TOP,
     PAD_WEB_BOTTOM,
     PAD_WEB_TOP,
     SHELL_FRONT,
@@ -448,75 +449,108 @@ def _back(runs, obstacles):
 
 def _pad():
     """The button pad, one group per lobe."""
+    out = []
+    for lobe in keypad.pad_lobes():
+        out += _pad_lobe(*lobe)
+    return out
+
+
+def _pad_lobe(name, x0, y0, x1, y1):
+    """One pad lobe: its web, its stems and plungers, and its cuts."""
     refs = board.mounting_hole_refs()
     placements = board.components()
     mounts = hardware.mount_points()
-    out = []
-    for name, x0, y0, x1, y1 in keypad.pad_lobes():
+    out = [
+        _entry(
+            f"lobe.{name}",
+            "keypad.pad_lobe_face",
+            "add",
+            _slab(keypad.pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP),
+        )
+    ]
+    for ref in keypad.island_refs(name):
+        x, y = placements[ref][:2]
+        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(x, y)))
         out.append(
             _entry(
-                f"lobe.{name}",
-                "keypad.pad_lobe_face",
+                f"plunger.{ref}",
+                "keypad.plunger",
                 "add",
-                _slab(keypad.pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP),
+                keypad.plunger(x, y),
             )
         )
-        for ref in keypad.island_refs(name):
-            x, y = placements[ref][:2]
-            out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(x, y)))
+    # A clearance cut can be an open U rather than a circle, so its box is
+    # off centre from the hole it clears. The three holes are far enough
+    # apart that the nearest one is still the right name.
+    for cut in keypad._boss_clearances(x0, y0, x1, y1):
+        centre = cut.bounding_box().center()
+        near = min(
+            mounts,
+            key=lambda p: (p[0] - centre.X) ** 2 + (p[1] - centre.Y) ** 2,
+        )
+        out.append(
+            _entry(
+                f"boss_clearance.{refs[near]}",
+                "keypad._boss_clearances",
+                "cut",
+                cut,
+            )
+        )
+    if name == "grid":
+        for index, cut in enumerate(keypad._pad_grooves()):
+            face = "top" if index % 2 == 0 else "bottom"
             out.append(
                 _entry(
-                    f"plunger.{ref}",
-                    "keypad.plunger",
-                    "add",
-                    keypad.plunger(x, y),
-                )
-            )
-        # A clearance cut can be an open U rather than a circle, so its box is
-        # off centre from the hole it clears. The three holes are far enough
-        # apart that the nearest one is still the right name.
-        for cut in keypad._boss_clearances(x0, y0, x1, y1):
-            centre = cut.bounding_box().center()
-            near = min(
-                mounts,
-                key=lambda p: (p[0] - centre.X) ** 2 + (p[1] - centre.Y) ** 2,
-            )
-            out.append(
-                _entry(
-                    f"boss_clearance.{refs[near]}",
-                    "keypad._boss_clearances",
+                    f"isolation_groove.{index // 2}.{face}",
+                    "keypad._pad_grooves",
                     "cut",
                     cut,
                 )
             )
-        if name == "grid":
-            for index, cut in enumerate(keypad._pad_grooves()):
-                face = "top" if index % 2 == 0 else "bottom"
-                out.append(
-                    _entry(
-                        f"isolation_groove.{index // 2}.{face}",
-                        "keypad._pad_grooves",
-                        "cut",
-                        cut,
-                    )
-                )
     return out
+
+
+def _keytops(refs):
+    """The printed FDM keytops over these switches."""
+    return [
+        _entry(
+            f"keytop.{ref}",
+            "keypad.fdm_keycap",
+            "add",
+            keypad.fdm_keycap(ref),
+            ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH"],
+        )
+        for ref in refs
+    ]
 
 
 def _fdm_pad():
     """The FDM pad, with printed keytops flush with its lobe webs."""
-    out = _pad()
-    for ref in board.refs("SW"):
+    return _pad() + _keytops(board.refs("SW"))
+
+
+def _fdm_v2_top():
+    """The V2 top pad: the FDM pad's second lobe, plus a nib per V2 switch."""
+    lobe = next(box for box in keypad.pad_lobes() if box[0] == "second")
+    refs = keypad.island_refs("second")
+    legacy = board.legacy_components()
+    out = _pad_lobe(*lobe)
+    reads = sorted(set(
+        _reads("keypad.plunger")
+        + ["BOARD_THICKNESS", "SUPPORT_GAP", "SWITCH_HEIGHT"]
+    ))
+    for ref in refs:
+        x, y = legacy[ref][:2]
         out.append(
             _entry(
-                f"keytop.{ref}",
-                "keypad.fdm_keycap",
+                f"nib.{ref}",
+                "keypad.plunger",
                 "add",
-                keypad.fdm_keycap(ref),
-                ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH"],
+                keypad.plunger(x, y, LEGACY_SWITCH_TOP),
+                reads,
             )
         )
-    return out
+    return out + _keytops(refs)
 
 
 def _window():
@@ -565,6 +599,7 @@ def features():
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-case-pad-fdm.stl": _fdm_pad(),
+        "c6remote-case-pad-fdm-v2-top.stl": _fdm_v2_top(),
         "c6remote-ir-window.stl": _window(),
     }
     # An id is what a viewer hands back to be acted on, so two features holding

@@ -21,6 +21,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   ButtonConfig(web_server_base::WebServerBase *base) : base_(base) {}
 
   void setup() override;
+  void loop() override;
   void dump_config() override;
   float get_setup_priority() const override;
 
@@ -35,15 +36,21 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   // missing API. The API server itself keeps running either way.
   bool ha_api_expected() const { return this->ha_api_expected_.load(std::memory_order_acquire); }
   bool set_ha_api_expected(bool expected);
+  bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
+  void toggle_temporary_wifi();
 
  protected:
   void handle_page_(AsyncWebServerRequest *request);
   void handle_state_(AsyncWebServerRequest *request);
   void handle_code_(AsyncWebServerRequest *request);
   void handle_action_(AsyncWebServerRequest *request);
+  void handle_activity_(AsyncWebServerRequest *request);
   void complete_action_(uint32_t id, bool ok);
   void load_ha_pref_();
   bool save_ha_pref_();
+  void load_wifi_pref_();
+  bool set_wifi_always_on_(bool enabled);
+  void note_activity_();
 
   // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.
   static constexpr uint32_t HA_PREF_KEY = 0x48415049U;
@@ -51,6 +58,14 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   struct HaPref {
     uint32_t magic;
     uint8_t expected;
+    uint8_t reserved[3];
+  };
+  static constexpr uint32_t WIFI_PREF_KEY = 0x5746414FU;
+  static constexpr uint32_t WIFI_PREF_MAGIC = 0x57465031U;
+  static constexpr uint32_t WIFI_IDLE_MS = 10U * 60U * 1000U;
+  struct WifiPref {
+    uint32_t magic;
+    uint8_t enabled;
     uint8_t reserved[3];
   };
 
@@ -62,7 +77,12 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> completed_action_id_{0};
   std::atomic<bool> completed_action_ok_{false};
   std::atomic<bool> ha_api_expected_{true};
+  std::atomic<bool> wifi_always_on_{false};
+  std::atomic<uint32_t> last_activity_ms_{0};
+  bool boot_wifi_always_on_{false};
+  bool temporary_wifi_{false};
   ESPPreferenceObject ha_pref_;
+  ESPPreferenceObject wifi_pref_;
 };
 
 }  // namespace esphome::button_config

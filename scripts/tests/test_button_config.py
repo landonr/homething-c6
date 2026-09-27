@@ -62,7 +62,8 @@ def page_slots() -> list:
 
 class RoutingTest(unittest.TestCase):
     def test_the_component_claims_all_four_paths(self) -> None:
-        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code", "/buttons/api/action"):
+        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code",
+                     "/buttons/api/action", "/buttons/api/activity"):
             self.assertIn(f'"{path}"', CPP)
 
     def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
@@ -74,7 +75,8 @@ class RoutingTest(unittest.TestCase):
             handler,
         )
         self.assertIn(
-            'if (method == HTTP_POST)\n    return url == "/buttons/api/action";',
+            'if (method == HTTP_POST)\n    return url == "/buttons/api/action" || '
+            'url == "/buttons/api/activity";',
             handler,
         )
         self.assertIn("return false;", handler)
@@ -98,6 +100,63 @@ class RoutingTest(unittest.TestCase):
     def test_the_page_reports_a_busy_device_from_the_409(self) -> None:
         self.assertIn("if(r.code===409)", PAGE)
         self.assertIn("if(r.code!==200)", PAGE)
+
+
+class WifiSessionTest(unittest.TestCase):
+    def test_missing_or_invalid_preference_keeps_wifi_off(self) -> None:
+        load = section(CPP, "void ButtonConfig::load_wifi_pref_() {", "\n}")
+        self.assertIn("WifiPref loaded{};", load)
+        self.assertIn("this->wifi_pref_.load(&loaded) && loaded.magic == WIFI_PREF_MAGIC", load)
+        self.assertIn("loaded.enabled <= 1", load)
+        self.assertIn("loaded.enabled == 1", load)
+        self.assertIn("this->wifi_always_on_.store(enabled", load)
+
+    def test_saved_default_only_changes_wifi_at_boot(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertLess(setup.index("this->load_wifi_pref_();"),
+                        setup.index("wifi::global_wifi_component->enable();"))
+        self.assertIn("this->boot_wifi_always_on_ = this->wifi_always_on();", setup)
+        setter = section(CPP, "bool ButtonConfig::set_wifi_always_on_(bool enabled) {", "\n}")
+        self.assertIn("this->wifi_pref_.save(&next)", setter)
+        self.assertNotIn("global_wifi_component->enable()", setter)
+        self.assertNotIn("global_wifi_component->disable()", setter)
+        toggle = section(CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
+        self.assertIn("if (this->boot_wifi_always_on_)\n    return;", toggle)
+        self.assertIn("this->note_activity_();", toggle)
+        self.assertIn("this->temporary_wifi_ = true;", toggle)
+        self.assertIn("this->temporary_wifi_ = false;", toggle)
+
+    def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
+        self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
+        loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
+        self.assertIn("if (!this->temporary_wifi_)\n    return;", loop)
+        self.assertIn("millis() - this->last_activity_ms_", loop)
+        self.assertIn("if (idle_ms < WIFI_IDLE_MS)\n    return;", loop)
+        self.assertIn("wifi::global_wifi_component->disable();", loop)
+        page = section(CPP, "void ButtonConfig::handle_page_", "\n}")
+        activity = section(CPP, "void ButtonConfig::handle_activity_", "\n}")
+        action = section(CPP, "void ButtonConfig::handle_action_", "\n}")
+        state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
+        for handler in (page, activity, action):
+            self.assertIn("this->note_activity_();", handler)
+        self.assertNotIn("note_activity_", state)
+        self.assertIn('request->send(200, "application/json", R"({"ok":true})");', activity)
+
+    def test_page_switch_and_real_interactions_refresh_the_idle_clock(self) -> None:
+        self.assertIn('aria-label="WiFi Always On"', PAGE)
+        self.assertIn('id="wfd"', PAGE)
+        self.assertIn('id="wfs"', PAGE)
+        status = section(PAGE, "function networkStatus(){", "\n\nfunction ")
+        self.assertIn("st.network.wifi_enabled===true", status)
+        self.assertIn("st.network.wifi_always_on===true", status)
+        switch = section(PAGE, "function setWifiAlwaysOn(){", "\n\nfunction ")
+        self.assertIn('post("set_wifi_always_on"', switch)
+        self.assertIn('"&enabled="+(wifiWant?"1":"0")', switch)
+        self.assertIn('fetch("/buttons/api/activity",{method:"POST"', PAGE)
+        self.assertIn('sendActivity();', PAGE)
+        self.assertIn('["click","touchstart","keydown","input","change"]', PAGE)
+        self.assertIn('document.addEventListener(type,pageActivity,true)', PAGE)
+        self.assertNotIn("pageActivity()", section(PAGE, "function stateWatch(){", "\n\nfunction "))
 
 
 class SlotTableTest(unittest.TestCase):
@@ -217,7 +276,8 @@ class EnforcementTest(unittest.TestCase):
 
     def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
+        self.assertIn('"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,'
+                      '"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
         self.assertIn("wifi::global_wifi_component->is_connected()", state)
         self.assertIn("api::global_api_server->is_connected()", state)
         self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
@@ -349,7 +409,8 @@ class PageTest(unittest.TestCase):
         calls = re.findall(r'fetch\("([^"?]+)', PAGE)
         self.assertEqual(
             sorted(set(calls)),
-            ["/buttons/api/action", "/buttons/api/code", "/buttons/api/state"],
+            ["/buttons/api/action", "/buttons/api/activity", "/buttons/api/code",
+             "/buttons/api/state"],
         )
 
     def test_the_tile_shows_the_code_name(self) -> None:
@@ -425,7 +486,7 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("function copyCode()", PAGE)
         self.assertIn('go("set_ir_code",text)', PAGE)
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
-        self.assertIn('cd=j.text||""', PAGE)
+        self.assertIn('cd=code;cdSlot=s', PAGE)
         # The block is line based, so the newlines have to survive the encode.
         self.assertIn('"&code=")+encodeURIComponent(v)', PAGE)
         self.assertNotIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
@@ -786,6 +847,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('if(r.action==="ir")return {kind:"ir",source:r.slot}', clip)
         self.assertIn('if(r.action!=="zigbee")return null;', clip)
         copy = section(PAGE, "function copyAssignment(){", "\n\nfunction pasteAssignment(")
+        self.assertIn('if(cfgAll[source]!==undefined){c.code=cfgAll[source]', copy)
         self.assertIn('fetch("/buttons/api/code?slot="+source', copy)
         self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
         self.assertIn('clip=c;', copy)
@@ -802,7 +864,8 @@ class PageTest(unittest.TestCase):
         self.assertIn('sendGroup(String(c.group),c.name||"",String(c.val||0))', paste)
         load = section(PAGE, "function loadCode(s){", "\n\n// The page")
         self.assertIn("var loadId=++codeLoad", load)
-        self.assertIn("if(loadId!==codeLoad||j.slot!==s)return;", load)
+        self.assertIn("if(loadId!==codeLoad)return;", load)
+        self.assertIn("if(cfgAll[s]!==undefined)return cfgAll[s]", load)
 
     def test_the_page_carries_one_import_and_export_card(self) -> None:
         """The whole assignment set moves as one block of text, so a remote can
@@ -843,7 +906,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('<h1 class="full secttl">Import Export</h1>\n'
                       '<section class="card full" id="cfg">\n<div id="cfgio"></div>', PAGE)
         self.assertNotIn("saveWifi", PAGE)
-        self.assertNotIn("set_wifi", PAGE)
+        self.assertIn('aria-label="WiFi Always On"', PAGE)
         # A connection card cannot sit inside the collapsed import card.
         self.assertNotIn('id="cfgb" hidden><div id="z2m">', PAGE)
         self.assertNotIn('class="sep"', PAGE)
@@ -902,33 +965,33 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("paint()", refresh)
         # The connection inputs are built once, so the repaint owns cfgio alone.
         self.assertIn('var e=document.getElementById("cfgio")', card)
-        # The startup path reads the state and the open code box, nothing more.
+        # The startup path reads state, then preloads every stored IR code.
         start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
-        self.assertNotIn("cfgRefresh", start)
+        self.assertIn("return cfgRefresh()", start)
         self.assertIn('<textarea id=cx', card)
         # The card heading names the block, so the body repeats no title.
         self.assertNotIn('Import and export</p>', card)
         self.assertNotIn("cfgMode", PAGE)
         self.assertNotIn("cfgOut", PAGE)
         self.assertNotIn('id=cs', card)
-        self.assertIn('id=cxr"+rd+">Read Current Config</button>', card)
+        self.assertNotIn('id=cxr', card)
         self.assertIn('id=cxfp"+rd+">Choose File</button>', card)
         self.assertIn('id=cxd"+em+">Download JSON</button>', card)
         self.assertIn("id=cxf type=file accept='.json,application/json'", card)
         self.assertIn('id=cxc"+em+">Copy</button>', card)
         self.assertIn('id=cxa"+wr+">Apply to the remote</button>', card)
         # Copy and download need text, so an empty box disables both.
-        self.assertIn('var em=rd||(String(cfgIn).trim()?"":" disabled")', card)
+        self.assertIn('var em=rd||(!cfgReady&&!cfgDirty?" disabled":String(cfgIn).trim()?"":" disabled")', card)
         # One buffer keeps a pasted file and manual edits through a repaint.
         self.assertIn('esc(cfgIn)', card)
         self.assertIn("box.oninput=function(){cfgIn=box.value;", card)
         self.assertIn('var off=cfgBusy||!String(cfgIn).trim()', card)
         self.assertIn('document.getElementById("cxd").onclick=cfgDownload', card)
-        self.assertIn('document.getElementById("cxr").onclick=', card)
+        self.assertIn('cfgDirty=true', card)
         self.assertIn('document.getElementById("cxfp").onclick=', card)
         self.assertIn('document.getElementById("cxf").onchange=cfgLoadFile', card)
         # An import writes flash, so it stays disabled while the remote is busy.
-        self.assertIn('wr=(cfgBusy||(st&&st.busy))?" disabled":""', card)
+        self.assertIn('wr=(cfgBusy||(st&&st.busy)||(!cfgReady&&!cfgDirty))?" disabled":""', card)
         self.assertIn("editor();cfgPaint()}", PAGE)
 
     def test_the_config_card_can_download_and_load_a_local_json_file(self) -> None:
@@ -937,7 +1000,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('a.download="c6remote-config.json"', download)
         self.assertIn("URL.createObjectURL", download)
         self.assertIn("URL.revokeObjectURL", download)
-        load = section(PAGE, "function cfgLoadFile(){", "\n\n// The box")
+        load = section(PAGE, "function cfgLoadFile(){", "\n\n// A repaint")
         self.assertIn('document.getElementById("cxf")', load)
         self.assertIn("cfgJsonFile(file)", load)
         self.assertIn("file.size>262144", load)
@@ -959,10 +1022,10 @@ class PageTest(unittest.TestCase):
         self.assertIn('e.action="ir";e.code=cfgAll[s]||""', blob)
         # The codes come from the endpoint that already serves the editor box,
         # one request at a time, and the editor read fills the same cache.
-        self.assertIn('cfgAll[s]=cd;cdSlot=s', PAGE)
+        self.assertIn('cfgAll[s]=j.text', PAGE)
         refresh = section(PAGE, "function cfgRefresh(){", "\n\n")
         self.assertIn('fetch("/buttons/api/code?slot="+slot', refresh)
-        self.assertIn("return need.reduce(function(p,slot){", refresh)
+        self.assertIn("cfgTask=need.reduce(function(p,slot){", refresh)
         self.assertIn("cfgIn=cfgBlob()", refresh)
 
     def test_an_import_is_read_in_full_before_the_first_flash_write(self) -> None:
@@ -1056,8 +1119,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("::zigbee_assignments.radio_enabled() ? \"true\" : \"false\"", CPP)
         self.assertIn('action == "set_radio"', CPP)
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
-        self.assertIn('const bool needs_slot = action != "forget_ble" '
-                      '&& action != "set_radio" && action != "pair";', CPP)
+        self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
+                      '\n                          action != "set_wifi_always_on" && action != "pair";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
         self.assertIn("this->defer(", switch)

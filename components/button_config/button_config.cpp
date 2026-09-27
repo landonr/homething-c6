@@ -367,8 +367,64 @@ static void print_json_text(AsyncResponseStream *stream, const char *text) {
 
 void ButtonConfig::setup() {
   this->load_ha_pref_();
+  this->load_wifi_pref_();
+  this->boot_wifi_always_on_ = this->wifi_always_on();
+  if (this->boot_wifi_always_on_)
+    wifi::global_wifi_component->enable();
   this->base_->init();
   this->base_->add_handler(this);
+}
+
+void ButtonConfig::loop() {
+  if (!this->temporary_wifi_)
+    return;
+  const uint32_t idle_ms = millis() - this->last_activity_ms_.load(std::memory_order_acquire);
+  if (idle_ms < WIFI_IDLE_MS)
+    return;
+  this->temporary_wifi_ = false;
+  wifi::global_wifi_component->disable();
+  ESP_LOGI(TAG, "Temporary Wi-Fi session closed after ten minutes idle");
+}
+
+void ButtonConfig::load_wifi_pref_() {
+  this->wifi_pref_ = global_preferences->make_preference<WifiPref>(WIFI_PREF_KEY, true);
+  WifiPref loaded{};
+  const bool enabled = this->wifi_pref_.load(&loaded) && loaded.magic == WIFI_PREF_MAGIC &&
+                       loaded.enabled <= 1 && loaded.reserved[0] == 0 &&
+                       loaded.reserved[1] == 0 && loaded.reserved[2] == 0 && loaded.enabled == 1;
+  this->wifi_always_on_.store(enabled, std::memory_order_release);
+}
+
+bool ButtonConfig::set_wifi_always_on_(bool enabled) {
+  if (this->wifi_always_on() == enabled)
+    return true;
+  WifiPref next{WIFI_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!this->wifi_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the Wi-Fi boot switch");
+    return false;
+  }
+  this->wifi_always_on_.store(enabled, std::memory_order_release);
+  ESP_LOGI(TAG, "Wi-Fi default on next boot: %s", enabled ? "on" : "off");
+  return true;
+}
+
+void ButtonConfig::note_activity_() {
+  this->last_activity_ms_.store(millis(), std::memory_order_release);
+}
+
+void ButtonConfig::toggle_temporary_wifi() {
+  if (this->boot_wifi_always_on_)
+    return;
+  if (wifi::global_wifi_component->is_disabled()) {
+    this->note_activity_();
+    this->temporary_wifi_ = true;
+    wifi::global_wifi_component->enable();
+    ESP_LOGI(TAG, "Temporary Wi-Fi session opened");
+  } else {
+    this->temporary_wifi_ = false;
+    wifi::global_wifi_component->disable();
+    ESP_LOGI(TAG, "Temporary Wi-Fi session closed by SW9");
+  }
 }
 
 void ButtonConfig::load_ha_pref_() {
@@ -403,6 +459,7 @@ bool ButtonConfig::set_ha_api_expected(bool expected) {
 void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "Button config page at /buttons");
   ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
+  ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
 }
 
 // init() starts the HTTP server, which asserts if it runs before the network is
@@ -416,7 +473,7 @@ bool ButtonConfig::canHandle(AsyncWebServerRequest *request) const {
   if (method == HTTP_GET)
     return url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
   if (method == HTTP_POST)
-    return url == "/buttons/api/action";
+    return url == "/buttons/api/action" || url == "/buttons/api/activity";
   return false;
 }
 
@@ -429,16 +486,24 @@ void ButtonConfig::handleRequest(AsyncWebServerRequest *request) {
     this->handle_code_(request);
   } else if (url == "/buttons/api/action") {
     this->handle_action_(request);
+  } else if (url == "/buttons/api/activity") {
+    this->handle_activity_(request);
   } else {
     this->handle_page_(request);
   }
 }
 
 void ButtonConfig::handle_page_(AsyncWebServerRequest *request) {
+  this->note_activity_();
   AsyncWebServerResponse *response =
       request->beginResponse(200, "text/html; charset=utf-8", this->page_, this->page_size_);
   response->addHeader("Content-Encoding", "gzip");
   request->send(response);
+}
+
+void ButtonConfig::handle_activity_(AsyncWebServerRequest *request) {
+  this->note_activity_();
+  request->send(200, "application/json", R"({"ok":true})");
 }
 
 // Reads only, so it runs on the httpd task without a defer.
@@ -461,12 +526,14 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
       wifi::global_wifi_component->is_connected() ? "true" : "false",
+      wifi::global_wifi_component->is_disabled() ? "false" : "true",
+      this->wifi_always_on() ? "true" : "false",
       api::global_api_server->is_connected() ? "true" : "false",
       ip, mac,
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
@@ -573,6 +640,7 @@ void ButtonConfig::handle_code_(AsyncWebServerRequest *request) {
 // The store and the state machine are main-loop owned, so every mutation is
 // deferred off the httpd task. NVS writes from the httpd task would race.
 void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
+  this->note_activity_();
   const std::string action = request->arg("action");
   if (action.empty()) {
     request->send(400, "application/json", R"({"ok":false,"error":"missing action"})");
@@ -590,7 +658,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
-                     action == "pair" || action == "clear";
+                     action == "set_wifi_always_on" || action == "pair" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
@@ -610,6 +678,16 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     radio_on = on == "1";
   }
 
+  bool wifi_default_on = false;
+  if (action == "set_wifi_always_on") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid Wi-Fi default"})");
+      return;
+    }
+    wifi_default_on = enabled == "1";
+  }
+
   // Pairing carries the same on flag, so one control can start and stop it.
   bool pair_on = false;
   if (action == "pair") {
@@ -621,7 +699,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     pair_on = on == "1";
   }
 
-  const bool needs_slot = action != "forget_ble" && action != "set_radio" && action != "pair";
+  const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
+                          action != "set_wifi_always_on" && action != "pair";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
@@ -776,6 +855,10 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       else
         ok = this->set_ha_api_expected(radio_on);
       this->complete_action_(action_id, ok);
+    });
+  } else if (action == "set_wifi_always_on") {
+    this->defer([this, action_id, wifi_default_on]() {
+      this->complete_action_(action_id, this->set_wifi_always_on_(wifi_default_on));
     });
   } else {
     this->defer([this, button, action_id]() {

@@ -59,6 +59,7 @@ external_components:
 logger:
 
 api:
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome
@@ -66,6 +67,8 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  enable_on_boot: false
+  reboot_timeout: 0s
   # The Zigbee radio shares the antenna. Coexistence needs modem power save, or
   # the STA misses beacons and the connection flaps.
   power_save_mode: light
@@ -73,6 +76,12 @@ wifi:
     - script.execute: show_idle_status
   on_disconnect:
     - script.execute: show_idle_status
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+      entity_category: diagnostic
 
 ble_hid:
   id: ble_hid_remote
@@ -271,11 +280,19 @@ binary_sensor:
       <<: *button_1
       number: 9
     on_press:
-      - lambda: ir_ui.tap(9, IrUi::Tap::FULL);
-      - if: *send_learned_code
-      - if: *start_learned_voice
+      - lambda: id(sw9_hold_consumed) = false;
+      - script.execute: detect_wifi_hold
     on_release:
-      - script.execute: {id: release_assignment, slot: 9}
+      - script.stop: detect_wifi_hold
+      - if:
+          condition:
+            lambda: return !id(sw9_hold_consumed);
+          then:
+            - lambda: ir_ui.tap(9, IrUi::Tap::FULL);
+            - if: *send_learned_code
+            - if: *start_learned_voice
+            # The short tap starts voice on release. Home Assistant VAD ends it.
+            - lambda: ir_ui.release(9);
   - platform: gpio
     name: Button 10
     pin:
@@ -431,30 +448,31 @@ light:
             }
             it.all() = Color::BLACK;
 
-            // D2 pulses red offline and orange on Wi-Fi alone when Home Assistant
-            // is expected, then holds green on the API. Turning the HA switch off
-            // keeps a solid orange while Wi-Fi is up, so a missing API is quiet.
+            // D2 stays dark while Wi-Fi is disabled. It pulses red while Wi-Fi
+            // connects and orange on Wi-Fi alone when Home Assistant is expected.
+            // Turning the HA switch off keeps solid orange while Wi-Fi is up.
             // Green is brighter than red on these 2020 parts at 3.3V, so orange
             // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). Wi-Fi only serves
             // the /buttons page, so a dark D2 does not stop a button: playback is
             // Zigbee groupcast or IR.
+            const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
             const bool ha_expected = id(button_cfg).ha_api_expected();
-            if (api_connected) {
+            if (wifi_enabled && api_connected) {
               it[0] = Color(0, 96, 24);
-            } else if (!wifi_connected) {
+            } else if (wifi_enabled && !wifi_connected) {
               const float phase = (millis() % 4800) / 4800.0f;
               // Input 98 produces 3/255 after 50% brightness and gamma correction.
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, 0, 0);
-            } else if (ha_expected) {
+            } else if (wifi_enabled && ha_expected) {
               const float phase = (millis() % 4800) / 4800.0f;
               const uint8_t level = 98 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, level / 2, 0);
-            } else {
+            } else if (wifi_enabled) {
               it[0] = Color(130, 65, 0);
             }
 
@@ -699,6 +717,13 @@ microphone:
           id(mic_level) = std::max(level, id(mic_level) * 0.82f);
 
 script:
+  - id: detect_wifi_hold
+    mode: restart
+    then:
+      - delay: 2s
+      - lambda: |-
+          id(sw9_hold_consumed) = true;
+          id(button_cfg).toggle_temporary_wifi();
   - id: release_assignment
     mode: parallel
     parameters:
@@ -806,6 +831,10 @@ voice_assistant:
     - script.execute: stop_voice_listening
 
 globals:
+  - id: sw9_hold_consumed
+    type: bool
+    restore_value: no
+    initial_value: 'false'
   - id: mic_bytes
     type: uint32_t
     restore_value: false

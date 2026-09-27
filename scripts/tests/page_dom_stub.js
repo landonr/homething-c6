@@ -55,14 +55,15 @@ function mk(tag) {
 }
 for (const id of ["remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
-                  "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfs", "has",
+                  "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
                   "wip", "wmac"])
   els[id] = mk("section");
 els.scb.checked = true;
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
-  network: {wifi: true, home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
+  network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
+            home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
@@ -79,6 +80,7 @@ const STATE = {
 };
 
 const body = mk("body");
+const events = {};
 body.classList = {
   _on: false,
   toggle(name, on) { this._on = !!on; body.className = on ? name : ""; },
@@ -88,6 +90,7 @@ global.document = {
   body,
   getElementById: (id) => els[id] || null,
   createElement: (t) => mk(t),
+  addEventListener: (type, callback) => { events[type] = callback; },
 };
 global.localStorage = {
   store: {},
@@ -116,11 +119,16 @@ global.FileReader = function () {
 };
 const CODE = {slot: 6, present: true, text: "name: Home\ntype: raw\nfrequency: 38000\ndata: 100 200 300 400"};
 
-global.fetch = (url) => Promise.resolve({
+let activityCalls = 0;
+global.fetch = (url) => {
+  if (String(url).includes("/api/activity")) activityCalls++;
+  return Promise.resolve({
   status: 200,
+  ok: true,
   json: () => Promise.resolve(String(url).indexOf("/api/code") >= 0 ? CODE : STATE),
   text: () => Promise.resolve('{"ok":true,"id":1}'),
-});
+  });
+};
 
 let failed = 0;
 function step(name, fn) {
@@ -138,6 +146,33 @@ try {
 
 // The startup path runs through a promise, so the checks wait for it.
 setTimeout(() => {
+  step("page open reports activity and state polls do not", () => {
+    if (activityCalls !== 1) throw new Error("page open sent " + activityCalls + " activity requests");
+    stateRefresh();
+    if (activityCalls !== 1) throw new Error("state poll counted as activity");
+  });
+  step("click, touch, typing, and input changes report activity", () => {
+    for (const type of ["click", "touchstart", "keydown", "input", "change"]) {
+      if (!events[type]) throw new Error(type + " listener is missing");
+      const before = activityCalls;
+      global.activitySent = 0;
+      events[type]();
+      if (activityCalls !== before + 1) throw new Error(type + " did not report activity");
+    }
+  });
+  step("startup preloads the IR code and current config", () => {
+    if (cfgAll[6] !== CODE.text || !cfgReady) throw new Error("startup cache is incomplete");
+    if (JSON.parse(cfgIn).slots.find(e => e.slot === 6).code !== CODE.text)
+      throw new Error("current config did not include the code");
+  });
+  step("selecting cached IR makes no code request", () => {
+    const realFetch = global.fetch;
+    let reads = 0;
+    global.fetch = (u, o) => { if (String(u).includes("/api/code")) reads++; return realFetch(u, o); };
+    pick(6);
+    if (cd !== CODE.text || reads) throw new Error("cached selection requested a code");
+    global.fetch = realFetch;
+  });
   step("startup labelled every button", () => {
     for (const d of S) {
       const b = keys[d.s];
@@ -201,6 +236,7 @@ setTimeout(() => {
       return realFetch(u, o);
     };
     global.sel = 3;
+    delete cfgAll[6];
     global.cd = "";
     global.cdSlot = 3;
     global.act = "ir";
@@ -213,6 +249,7 @@ setTimeout(() => {
     if (actions < 0 || actionsEnd < 0 || status <= actionsEnd)
       throw new Error("the loading state is not below the code actions");
     global.fetch = realFetch;
+    cfgAll[6] = CODE.text;
   });
   step("empty IR code disables Apply until text arrives", () => {
     global.sel = 3;
@@ -330,8 +367,13 @@ setTimeout(() => {
     paint();
     const copy = document.getElementById("bcopy");
     if (typeof copy.onclick !== "function") throw new Error("an IR input has no Copy handler");
+    const realFetch = global.fetch;
+    let reads = 0;
+    global.fetch = (u, o) => { if (String(u).includes("/api/code")) reads++; return realFetch(u, o); };
     copy.onclick();
-    if (!clipBusy) throw new Error("IR Copy did not wait for the full code");
+    global.fetch = realFetch;
+    if (clipBusy || reads || !clip || clip.code !== CODE.text)
+      throw new Error("IR Copy did not use cached code");
   });
   setTimeout(() => step("accepted Paste immediately applies an IR code", () => {
     if (!clip || clip.kind !== "ir" || clip.code !== CODE.text)
@@ -735,7 +777,8 @@ setTimeout(() => {
     global.cfgIn = "";
     cfgPaint();
     if (document.getElementById("cs")) throw new Error("the direction selector stayed");
-    for (const id of ["cxr", "cxfp", "cxf", "cxc", "cxd", "cxa"])
+    if (document.getElementById("cxr")) throw new Error("the Read button stayed");
+    for (const id of ["cxfp", "cxf", "cxc", "cxd", "cxa"])
       if (!document.getElementById(id)) throw new Error("the card has no " + id);
     document.getElementById("cxfp").onclick();
     if (!document.getElementById("cxf").clicked) throw new Error("Choose File did not open the picker");
@@ -786,6 +829,40 @@ setTimeout(() => {
     if (document.getElementById("zrb").checked !== false)
       throw new Error("the switch snapped back during the write");
     global.radioBusy = {zigbee: false, ble: false};
+  });
+  step("WiFi Always On shows saved default and current Wi-Fi separately", () => {
+    global.st = STATE;
+    STATE.network.wifi_always_on = false;
+    STATE.network.wifi_enabled = true;
+    STATE.network.wifi = false;
+    networkStatus();
+    if (document.getElementById("wfb").checked) throw new Error("saved default showed on");
+    if (!document.getElementById("wfs").innerHTML.includes("on but disconnected"))
+      throw new Error("enabled Wi-Fi showed as off");
+    STATE.network.wifi_always_on = true;
+    STATE.network.wifi_enabled = false;
+    networkStatus();
+    if (!document.getElementById("wfb").checked) throw new Error("saved default showed off");
+    if (!document.getElementById("wfs").innerHTML.includes("Wi-Fi is off"))
+      throw new Error("disabled Wi-Fi showed as connected");
+    STATE.network.wifi_always_on = false;
+    STATE.network.wifi_enabled = true;
+    STATE.network.wifi = true;
+    networkStatus();
+  });
+  step("WiFi Always On switch posts the next boot preference", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("wfb").checked = true;
+    document.getElementById("wfb").onchange();
+    global.fetch = realFetch;
+    if (!body.includes("action=set_wifi_always_on") || !body.includes("enabled=1"))
+      throw new Error("switch posted " + body);
+    if (!document.getElementById("wfb").disabled || !document.getElementById("wfb").checked)
+      throw new Error("switch lost pending preference");
+    global.wifiBusy = false;
   });
   step("an off Bluetooth radio names its bond and never reads as connected", () => {
     global.st = STATE;
@@ -1115,5 +1192,45 @@ setTimeout(() => {
     STATE.ble.host = "Landon's Mac";
   });
 
-  setTimeout(() => process.exit(failed ? 1 : 0), 200);
+  (async () => {
+    const realFetch = global.fetch;
+    if (cfgTask) await cfgTask;
+    await new Promise(done => setTimeout(done, 20));
+    step("recording refreshes its slot only after a saved code", () => {
+      const realChanged = global.cfgChanged;
+      const slots = [];
+      global.cfgChanged = s => { slots.push(s); return Promise.resolve(); };
+      global.sel = 3; global.rec = 6; global.mode = "rec"; global.seen = true;
+      finish();
+      global.mode = "cancel"; global.seen = false;
+      finish();
+      global.cfgChanged = realChanged;
+      if (slots.length !== 1 || slots[0] !== 6)
+        throw new Error("capture refreshed the selected or cancelled slot: " + slots);
+    });
+    global.cfgAll = {}; global.cfgReady = false; global.cfgDirty = false; global.cfgIn = "";
+    global.fetch = (u, o) => String(u).includes("/api/code")
+      ? Promise.resolve({ok: false, status: 503}) : realFetch(u, o);
+    await cfgRefresh();
+    step("failed code read keeps current export incomplete", () => {
+      if (cfgReady || cfgAll[6] !== undefined || !cfgBad)
+        throw new Error("failed IR read was accepted: " + JSON.stringify({ready: cfgReady, code: cfgAll[6], bad: cfgBad, action: row(6) && row(6).action}));
+      if (!document.getElementById("cxd").disabled)
+        throw new Error("incomplete current config can download");
+    });
+    global.fetch = realFetch;
+    document.getElementById("tabc").onclick();
+    await cfgTask;
+    step("opening Config retries a failed code read", () => {
+      if (!cfgReady || cfgAll[6] !== CODE.text) throw new Error("retry did not complete cache");
+    });
+    global.cfgDirty = true; global.cfgIn = "unsaved text";
+    await cfgChanged(6);
+    step("cache refresh preserves unsaved Config text", () => {
+      if (cfgIn !== "unsaved text" || cfgAll[6] !== CODE.text)
+        throw new Error("refresh replaced manual text or missed the code");
+    });
+  })().then(() => process.exit(failed ? 1 : 0), e => {
+    console.log("FAIL async checks: " + e.message); process.exit(1);
+  });
 }, 300);

@@ -62,7 +62,13 @@ from .fdm import (
     recessed_mouth_is_plain,
     wheel_mouth_is_chamfered,
 )
-from .hardware import cell_clearance, end_screw, end_screw_side_tie, feature_clashes
+from .hardware import (
+    cell_clearance,
+    end_screw,
+    end_screw_grip_corner,
+    end_screw_side_tie,
+    feature_clashes,
+)
 from .ir import (
     end_ports_open,
     receiver_clearance,
@@ -447,7 +453,7 @@ def _side_seam_retention(s):
         "both blind side pockets retain a continuous skirt floor, engage "
         "lowered detents with insertion and release ramps, preload the lower "
         "lip, clear the upper lip, and keep lower and upper skirt land, board-edge "
-        "clearance and grip-end relief",
+        "clearance and grip-end relief with its side tapers",
     )
 
 
@@ -663,6 +669,18 @@ def _end_screw_side_tie(s):
         + end_screw_side_tie(s.front_fdm, part="case-front-fdm"),
         "end screw block's web ties into the +X side skirt at web height only, "
         "on both fronts",
+    )
+
+
+@_check("hardware")
+def _end_screw_grip_corner(s):
+    return _report(
+        end_screw_grip_corner(
+            s.back, (s.front, "case-front"), (s.front_fdm, "case-front-fdm")
+        ),
+        "end screw root fillet stays inside the relieved skirt arc on both "
+        "fronts, and the back's wall chamfer leaves the lap whole at the +X "
+        "grip corner",
     )
 
 

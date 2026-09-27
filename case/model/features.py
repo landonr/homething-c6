@@ -244,6 +244,10 @@ def _front(runs, obstacles, fdm=False):
         *_split(
             "side_skirt_stiffener", "shells.side_skirt_stiffeners", "add",
             shells.side_skirt_stiffeners(),
+            reads=sorted(set(
+                _reads("shells.side_skirt_stiffeners")
+                + _reads("shells.side_skirt_taper_spans")
+            )),
         ),
         *[
             _entry(f"skirt_lead_in.{index}", "shells.skirt_lead_in_cuts", "cut", solid)

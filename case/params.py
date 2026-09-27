@@ -204,6 +204,11 @@ SIDE_SKIRT_THICKEN = 0.20
 """Extra inward wall on the two long skirt runs. The nominal 0.5 board fit
 still leaves 0.3 at the board edge; this stiffens the printed side seam without
 moving either shell's visible outer wall or thinning the back lap."""
+SIDE_SKIRT_THICKEN_RUN = 1.5
+"""Length along each long side over which the side stiffener tapers from the
+plain board fit at a corner tangent to its full thickness. The corner arcs keep
+the plain fit. The taper at the IR end must stay clear of the support-cut
+lead-in ramps, and skirt_lead_in_cuts() fails if it does not."""
 SIDE_CATCH_CENTER_OFFSET = 3.5
 """Position of the side catches toward the IR end from the board's lengthwise
 midpoint. The reported bow is near that midpoint; this offset centres each
@@ -262,6 +267,10 @@ face."""
 GRIP_SKIRT_RELIEF = 0.20
 """Extra radial clearance on the front skirt at the -Y grip end. The end was
 hard to seat; relieving its hidden skirt leaves the outside seam unchanged."""
+GRIP_SKIRT_RELIEF_RUN = 4.0
+"""Length along each long side over which the grip-end skirt relief fades from
+full depth to zero. It starts where the corner arcs end, so the relief runs back
+into the skirt face without a step."""
 SKIRT_TRANSITION_CHAMFER = 3.0
 """A value above zero enables the front-skirt lead-ins at the support-cut ends.
 Each lead-in uses the full exposed height of its cut, not this value, to remove

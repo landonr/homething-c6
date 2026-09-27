@@ -185,8 +185,11 @@ aria-label="Assignment colors" checked><span></span></label></div>
 <div class="tabgrid" id="configtab" hidden>
 <h1 class="full secttl">Connections</h1>
 <section class="card full conn" id="wificfg">
-<h2>Wi-Fi</h2>
+<h2 class="ttl">WiFi Always On<label class="sw" id="wfw"><input type="checkbox" id="wfb"
+aria-label="WiFi Always On" disabled><span></span></label></h2>
+<p class="sub st" id="wfd">WiFi Always On default is loading.</p>
 <p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
 <dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
 <dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
 <hr class="rule">
@@ -261,6 +264,7 @@ var ZA=[
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
+var wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 // One switch for each radio. The remote holds the state, so a reload and a
 // second browser both show the switch the remote is actually running with.
 // radioWant holds the position the switch was moved to, so a repaint during the
@@ -290,9 +294,8 @@ var cd="",cdSlot=null,codeLoad=0;
 // zav is the chosen action number and zvv the value it carries.
 var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="",zav=0,zvv="";
 var hkv="keyboard",huv="",hmv="0",hcust=false;
-// The config card. cfgAll caches one code text per slot, so a remote read needs
-// no second read of a code the editor already fetched.
-var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={};
+// cfgAll keeps the stored IR codes for the editor and the Config tab.
+var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={},cfgDirty=false,cfgReady=false,cfgTask=null;
 // Closed on arrival, because most visits change one input instead.
 // clip holds one selected IR or Zigbee assignment in this browser only. It
 // cannot include Voice or Clear, because those are actions and not configs.
@@ -393,8 +396,9 @@ b.innerHTML="<b></b><span></span>";
 b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
+document.getElementById("wfb").onchange=setWifiAlwaysOn;
 document.getElementById("tabb").onclick=function(){showTab(false)};
-document.getElementById("tabc").onclick=function(){showTab(true)};
+document.getElementById("tabc").onclick=function(){showTab(true);if(!cfgReady)cfgRefresh()};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
 document.getElementById("brb").onchange=function(){setRadio("ble")};
@@ -649,13 +653,20 @@ bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth ho
 
 function networkStatus(){
 var wf=document.getElementById("wfs"),ha=document.getElementById("has"),
-ip=document.getElementById("wip"),mac=document.getElementById("wmac");
+ip=document.getElementById("wip"),mac=document.getElementById("wmac"),
+boot=document.getElementById("wfd"),box=document.getElementById("wfb");
 if(!st||!st.network)return;
-var wifi=st.network.wifi,api=wifi&&st.network.home_assistant,expect=radioOn("home_assistant"),
+var enabled=st.network.wifi_enabled===true,always=st.network.wifi_always_on===true,
+wifi=enabled&&st.network.wifi,api=wifi&&st.network.home_assistant,expect=radioOn("home_assistant"),
 err=radioError.home_assistant;
-if(wf){wf.className="sub st"+(wifi?"":" bad");
-wf.innerHTML="<span class='dot "+(wifi?"":"bad")+"'></span>Wi-Fi is "+
-(wifi?"connected.":"disconnected. The config page is unavailable over the network.")}
+if(box){box.checked=wifiBusy?wifiWant:always;box.disabled=wifiBusy}
+if(boot){boot.className="sub st"+(wifiError?" bad":"");
+boot.innerHTML="<span class='dot "+(always?"":"off")+"'></span>WiFi Always On is "+
+(always?"on":"off")+" for the next boot."+(wifiError?" "+esc(wifiError):"")}
+if(wf){wf.className="sub st"+(enabled?"":" bad");
+wf.innerHTML="<span class='dot "+(wifi?"":enabled?"warn":"bad")+"'></span>Wi-Fi is "+
+(!enabled?"off. The config page is unavailable over the network.":
+wifi?"on and connected.":"on but disconnected.")}
 if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
 ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'></span>"+
 (!expect?"Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.":
@@ -664,6 +675,24 @@ ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'><
 (err?" "+esc(err):"")}
 if(ip)ip.textContent=st.network.ip||"Unavailable";
 if(mac)mac.textContent=st.network.mac||"Unavailable"}
+
+function setWifiAlwaysOn(){
+if(wifiBusy||!st||!st.network)return;
+wifiWant=document.getElementById("wfb").checked;wifiBusy=true;wifiError="";networkStatus();
+post("set_wifi_always_on",null,undefined,undefined,"&enabled="+(wifiWant?"1":"0"))
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){
+if(!ok)throw new Error("The remote could not save the Wi-Fi default.")})})
+.then(function(){wifiBusy=false;return load().then(paint)},function(e){
+wifiBusy=false;wifiError=e&&e.message?e.message:"The remote did not answer.";networkStatus()})}
+
+function sendActivity(){activityTimer=0;activitySent=Date.now();
+fetch("/buttons/api/activity",{method:"POST",cache:"no-store",keepalive:true}).catch(function(){})}
+
+function pageActivity(){
+if(Date.now()-activitySent>=5000){if(activityTimer)clearTimeout(activityTimer);sendActivity();return}
+if(activityTimer)clearTimeout(activityTimer);
+activityTimer=setTimeout(sendActivity,500)}
 
 function forgetBle(){
 if(bleForgetBusy)return;
@@ -974,11 +1003,16 @@ h+=detail(sel)+"<div class=act><button type=button id=ca"+codeDis+">Apply to thi
 return h}
 
 function loadCode(s){var loadId=++codeLoad;cdSlot=null;cd="";
+return (cfgTask||Promise.resolve()).then(function(){
+if(cfgAll[s]!==undefined)return cfgAll[s];
 return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
-.then(function(r){return r.json()})
-.then(function(j){if(loadId!==codeLoad||j.slot!==s)return;
-cd=j.text||"";cfgAll[s]=cd;cdSlot=s;if(sel===s)paint()})
-.catch(function(){})}
+.then(function(r){if(!r.ok)throw new Error();return r.json()})
+.then(function(j){if(j.slot!==s||!j.present||!j.text)throw new Error();
+cfgAll[s]=j.text;cfgRefresh();return j.text})})
+.then(function(code){if(loadId!==codeLoad)return;
+cd=code;cdSlot=s;if(sel===s)paint()})
+.catch(function(){if(loadId!==codeLoad)return;
+cdSlot=s;msg="Could not read that IR code.";bad=true;if(sel===s)paint()})}
 
 // The page is served over plain HTTP, so navigator.clipboard is undefined in
 // most browsers. execCommand still works there.
@@ -1006,6 +1040,7 @@ function copyAssignment(){
 var c=clipConfig(row(sel)),source=sel;
 if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint();return}
 if(c.kind!=="ir"){clip=c;msg="";bad=false;paint();return}
+if(cfgAll[source]!==undefined){c.code=cfgAll[source];clip=c;msg="";bad=false;paint();return}
 clipBusy=true;paint();
 fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
 .then(function(r){return r.json()}).then(function(j){
@@ -1063,20 +1098,33 @@ lines.push(JSON.stringify(e))}
 // single line hides which input an entry belongs to.
 return '{"c6remote":1,"slots":[\n'+lines.join(",\n")+"\n]}"}
 
-// Reads the code of every IR input, one request at a time, because a burst of 18
-// would outrun the connection limit of the remote.
+// Read one code at a time because a burst can outrun the remote's connection limit.
 function cfgRefresh(){
+if(cfgTask)return cfgTask.then(function(){return cfgRefresh()});
 var need=[],i,s,r;
 for(i=0;i<S.length;i++){s=S[i].s;r=row(s);
 if(r&&r.action==="ir"&&cfgAll[s]===undefined)need.push(s)}
-if(!need.length){cfgIn=cfgBlob();cfgPaint();return Promise.resolve()}
+if(!need.length){cfgReady=true;
+if(cfgMsg==="Could not read every IR code. Open Config to retry."){cfgMsg="";cfgBad=false}
+if(!cfgDirty)cfgIn=cfgBlob();cfgPaint();return Promise.resolve()}
+cfgReady=false;
 cfgBusy=true;cfgPaint();
-return need.reduce(function(p,slot){return p.then(function(){
+var failed=false;
+cfgTask=need.reduce(function(p,slot){return p.then(function(){
 return fetch("/buttons/api/code?slot="+slot,{cache:"no-store"})
-.then(function(x){return x.json()})
-.then(function(j){cfgAll[slot]=j.text||""})
-.catch(function(){cfgAll[slot]=""})})},Promise.resolve())
-.then(function(){cfgBusy=false;cfgIn=cfgBlob();cfgPaint()})}
+.then(function(x){if(!x.ok)throw new Error();return x.json()})
+.then(function(j){if(j.slot!==slot||!j.present||!j.text)throw new Error();cfgAll[slot]=j.text})
+.catch(function(){failed=true})})},Promise.resolve())
+.then(function(){cfgTask=null;cfgBusy=false;cfgReady=!failed;
+if(cfgReady){if(cfgMsg==="Could not read every IR code. Open Config to retry."){
+cfgMsg="";cfgBad=false}if(!cfgDirty)cfgIn=cfgBlob()}
+else{cfgMsg="Could not read every IR code. Open Config to retry.";cfgBad=true}
+cfgPaint()});
+return cfgTask}
+
+function cfgChanged(s){cfgReady=false;
+if(sel===s&&(!row(s)||row(s).action!=="ir")){codeLoad++;cd="";cdSlot=s}
+return (cfgTask||Promise.resolve()).then(function(){delete cfgAll[s];return cfgRefresh()})}
 
 function cfgNote(text,isBad){cfgMsg=text;cfgBad=!!isBad;cfgPaint()}
 
@@ -1182,21 +1230,23 @@ if(!list.length){cfgNote("Every input already matches this config.",false);retur
 cfgBusy=true;cfgBad=false;
 var total=j.slots.length;
 return cfgRun(list,0).then(function(){
-cfgBusy=false;cfgAll={};cdSlot=null;
+cfgBusy=false;cfgAll={};cfgReady=false;cfgDirty=false;cdSlot=null;
 cfgNote("Applied "+list.length+" of "+total+" inputs.",false);
-return load().then(function(){paint();cfgRefresh();
-if(sel!==null)loadCode(sel)})})
+return load().then(function(){if(sel!==null&&(!row(sel)||row(sel).action!=="ir")){
+codeLoad++;cd="";cdSlot=sel}paint();return cfgRefresh()}).then(function(){
+if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})})
 .catch(function(err){cfgBusy=false;
 cfgNote(err&&err.message?err.message:"The remote did not answer.",true);
-return load().then(paint)})}
+cfgAll={};cfgReady=false;
+return load().then(function(){paint();return cfgRefresh()})})}
 
 function cfgCopy(){var t=document.getElementById("cx");
-if(!t.value){cfgNote("There is nothing to copy yet.",true);return}
+if(!t.value||(!cfgReady&&!cfgDirty)){cfgNote("The current config is not ready.",true);return}
 var ok=copyBox(t);
 cfgNote(ok?"Config copied.":"Copy is blocked. Select the text and copy it by hand.",!ok)}
 
 function cfgDownload(){
-if(!cfgIn){cfgNote("Read the remote before download.",true);return}
+if(!cfgIn||(!cfgReady&&!cfgDirty)){cfgNote("The current config is not ready.",true);return}
 var url=URL.createObjectURL(new Blob([cfgIn],{type:"application/json"}));
 var a=document.createElement("a");
 a.href=url;a.download="c6remote-config.json";a.click();
@@ -1216,25 +1266,23 @@ reader.onerror=function(){cfgNote("Could not read "+name+".",true)};
 reader.onload=function(){
 var text=typeof reader.result==="string"?reader.result:"",parsed=cfgParse(text);
 if(parsed.error){cfgNote(parsed.error,true);return}
-cfgIn=text;cfgMsg="Loaded "+name+".";cfgBad=false;cfgPaint()};
+cfgIn=text;cfgDirty=true;cfgMsg="Loaded "+name+".";cfgBad=false;cfgPaint()};
 reader.readAsText(file)}
 
-// The box holds the current text, so a repaint keeps a pasted file or edit.
-// The heading is the toggle, so the card needs no control of its own.
+// A repaint keeps text from a file or a manual edit.
 function cfgPaint(){
 var e=document.getElementById("cfgio");
 if(!e)return;
-var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy))?" disabled":"";
-var h="<p class=sub>Read the remote or choose a saved JSON file. Copy, download, or "+
+var rd=cfgBusy?" disabled":"",wr=(cfgBusy||(st&&st.busy)||(!cfgReady&&!cfgDirty))?" disabled":"";
+var h="<p class=sub>The current config loads when the page opens. Choose a saved JSON file, or "+
 "edit the text, then apply it when ready.</p>"+
-"<div class=act><button type=button class=sec id=cxr"+rd+">Read Current Config</button>"+
-"<button type=button class=sec id=cxfp"+rd+">Choose File</button>"+
+"<div class=act><button type=button class=sec id=cxfp"+rd+">Choose File</button>"+
 "<input id=cxf type=file accept='.json,application/json' hidden></div>";
 if(cfgMsg)h+="<div class='note "+(cfgBad?"bad":"ok")+"'>"+esc(cfgMsg)+"</div>";
 if(cfgBusy)h+="<div class=bar><i></i></div>";
 h+="<textarea id=cx rows=12 spellcheck=false autocomplete=off"+
 (cfgBusy?" disabled":"")+">"+esc(cfgIn)+"</textarea>";
-var em=rd||(String(cfgIn).trim()?"":" disabled");
+var em=rd||(!cfgReady&&!cfgDirty?" disabled":String(cfgIn).trim()?"":" disabled");
 h+="<div class=act><button type=button class=sec id=cxc"+em+">Copy</button>"+
 "<button type=button class=sec id=cxd"+em+">Download JSON</button></div>"+
 "<p class=sub>An apply writes one input at a time. It stops on the first input "+
@@ -1242,13 +1290,12 @@ h+="<div class=act><button type=button class=sec id=cxc"+em+">Copy</button>"+
 "<div class=act><button type=button id=cxa"+wr+">Apply to the remote</button></div>";
 e.innerHTML=h;
 var box=document.getElementById("cx");
-box.oninput=function(){cfgIn=box.value;
+box.oninput=function(){cfgIn=box.value;cfgDirty=true;
 var off=cfgBusy||!String(cfgIn).trim(),c=document.getElementById("cxc"),d=document.getElementById("cxd");
 if(c)c.disabled=off;if(d)d.disabled=off};
 if(!cfgBusy){
 document.getElementById("cxc").onclick=cfgCopy;
 document.getElementById("cxd").onclick=cfgDownload;
-document.getElementById("cxr").onclick=function(){cfgAll={};cfgMsg="";cfgBad=false;cfgRefresh()};
 document.getElementById("cxfp").onclick=function(){document.getElementById("cxf").click()};
 document.getElementById("cxf").onchange=cfgLoadFile}
 if(!cfgBusy&&!(st&&st.busy))document.getElementById("cxa").onclick=cfgApply}
@@ -1364,7 +1411,7 @@ return "ir"}
 function pick(s){
 // Clear the previous input's code before paint, so its text cannot show while
 // the selected input's request is still in flight.
-if(sel!==s){cdSlot=null;cd=""}
+if(sel!==s){codeLoad++;cdSlot=null;cd=""}
 sel=s;
 if(mode!=="rec"){msg="";bad=false}
 // Every Zigbee field belongs to the slot that was open, so none of it may
@@ -1380,6 +1427,7 @@ hcust=hidCustom(hkv,huv);
 // Only IR assignments have stored code. Empty and Clear slots show a ready
 // code box, so they do not wait for a request that can only return empty text.
 if(!pr||pr.action!=="ir")cdSlot=s;
+else if(cfgAll[s]!==undefined){cd=cfgAll[s];cdSlot=s}
 paint();
 if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
 
@@ -1423,7 +1471,9 @@ if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
 a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":"Cleared.";bad=false}
 else{msg=a==="set_ir_code"?"The remote refused that code.":
 "Flash write failed. The assignment was not saved.";bad=true}
-return load().then(function(){paint();return loadCode(s)})})})
+return load().then(function(){
+if(ok)return cfgChanged(s).then(function(){paint();if(row(s)&&row(s).action==="ir")return loadCode(s)});
+paint();if(row(s)&&row(s).action==="ir")return loadCode(s)})})})
 .catch(function(){msg="The remote did not answer.";bad=true;paint()})}
 
 // The kind selector already said which target this is, so nothing here has to
@@ -1474,7 +1524,7 @@ return waitAction(r.body.id).then(function(ok){
 var A=za(zav);
 if(ok){msg=(A?A.n:"That action")+" assigned to "+(name?name:ieee)+".";bad=false}
 else{msg="The remote could not store that device.";bad=true}
-return load().then(paint)})})
+return load().then(function(){if(ok)return cfgChanged(s).then(paint);paint()})})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function sendGroup(v,name,val){
@@ -1488,7 +1538,7 @@ return waitAction(r.body.id).then(function(ok){
 var A=za(zav);
 if(ok){msg=(A?A.n:"That action")+" assigned to the Zigbee group.";bad=false}
 else{msg="The remote could not store that group.";bad=true}
-return load().then(paint)})})
+return load().then(function(){if(ok)return cfgChanged(s).then(paint);paint()})})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function waitAction(id,ms){return load().then(function(j){
@@ -1512,19 +1562,23 @@ if(mode!=="rec")paint();return}stop();finish()})
 function stop(){if(timer){clearInterval(timer);timer=0}}
 
 function finish(){
-var was=mode;mode="idle";
+var was=mode,s=rec;mode="idle";
 if(was==="cancel"){msg="Recording cancelled.";bad=true}
 else if(seen){msg="Code saved.";bad=false}
 else{msg="No code received.";bad=true}
-paint();if(sel!==null)loadCode(sel)}
+paint();if(seen&&was!=="cancel")cfgChanged(s).then(function(){
+if(sel===s&&row(s)&&row(s).action==="ir")loadCode(s)})}
 
 build();
+sendActivity();
+if(document.addEventListener)["click","touchstart","keydown","input","change"].forEach(function(type){
+document.addEventListener(type,pageActivity,true)});
 z2mBar();
 stateWatch();
 load().then(function(j){
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}
-zpjSync();paint();if(sel!==null)loadCode(sel)}).catch(function(){
+zpjSync();paint();return cfgRefresh().then(function(){if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})}).catch(function(){
 document.getElementById("ed").textContent="The remote did not answer."});
 </script>
 </body>

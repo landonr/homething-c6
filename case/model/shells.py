@@ -7,6 +7,7 @@ import math
 
 from build123d import (
     Box,
+    GeomType,
     Plane,
     Pos,
     Polygon,
@@ -102,22 +103,68 @@ def skirt_cuts():
     ]
 
 
-def side_skirt_stiffeners():
-    """Inward material along both side skirts, clear of the board's edge."""
+def corner_tangent_y():
+    """(min, max) Y of the board profile's straight long sides, where the four
+    corner arcs meet them."""
+    sides = [
+        edge.bounding_box()
+        for edge in board.board_profile().outer_wire().edges()
+        if edge.geom_type == GeomType.LINE and edge.bounding_box().size.X < 1e-6
+    ]
+    return min(b.min.Y for b in sides), max(b.max.Y for b in sides)
+
+
+def _side_strip(stations, back, z0, z1):
+    """One prism per long side, as [-x, +x], between a face through `stations`
+    and a constant `back` offset, extruded over z0..z1.
+
+    `stations` is a list of (y, offset) pairs in y order. Each offset, like
+    `back`, runs outward from that side's straight board edge. A profile-offset
+    band on a straight side is a rectangle, so this matches one exactly there,
+    and the strip cannot reach into a corner arc the way a clipped ring does.
+    """
+    if any(offset >= back for _, offset in stations):
+        raise ValueError("a side strip's face reaches its back")
     box = board.board_profile().bounding_box()
-    band = _ring(
-        params.BOARD_FIT - params.SIDE_SKIRT_THICKEN,
-        params.BOARD_FIT + MERGE,
+    y0, y1 = stations[0][0], stations[-1][0]
+    out = []
+    for side, edge in ((-1, box.min.X), (1, box.max.X)):
+        plan = Polygon(
+            *((edge + side * offset, y) for y, offset in stations),
+            (edge + side * back, y1),
+            (edge + side * back, y0),
+            align=None,
+        )
+        out.append(_slab(plan, z0, z1))
+    return out
+
+
+def side_skirt_taper_spans():
+    """The two y spans over which each side stiffener tapers in from the plain
+    board fit at a corner tangent to its full thickness."""
+    run = params.SIDE_SKIRT_THICKEN_RUN
+    yt0, yt1 = corner_tangent_y()
+    if not 0 < run < (yt1 - yt0) / 2:
+        raise ValueError(
+            f"SIDE_SKIRT_THICKEN_RUN {run} must be above zero and below half the "
+            f"{yt1 - yt0:.2f} straight side"
+        )
+    return (yt0, yt0 + run), (yt1 - run, yt1)
+
+
+def side_skirt_stiffeners():
+    """Inward material along both side skirts, clear of the board's edge.
+
+    Each stiffener stays on the straight side and tapers to the plain board fit
+    at both corner tangents, so the corner arcs keep that fit."""
+    fit, thick = params.BOARD_FIT, params.BOARD_FIT - params.SIDE_SKIRT_THICKEN
+    (yt0, ya), (yb, yt1) = side_skirt_taper_spans()
+    return _side_strip(
+        [(yt0, fit), (ya, thick), (yb, thick), (yt1, fit)],
+        fit + MERGE,
         SKIRT_BOTTOM,
         SHELL_SEAM,
     )
-    reach = params.BOARD_FIT + params.WALL + MERGE
-    clips = [
-        Pos(x, box.center().Y, (SKIRT_BOTTOM + SHELL_SEAM) / 2)
-        * Box(2 * reach, box.size.Y + 2 * reach, SHELL_SEAM - SKIRT_BOTTOM)
-        for x in (box.min.X - reach, box.max.X + reach)
-    ]
-    return [_isect(band, clip) for clip in clips]
 
 
 def side_catch_y():
@@ -297,24 +344,33 @@ def side_catch_detents():
 
 
 def grip_skirt_relief():
-    """Shave the hidden skirt around the grip end for closing clearance."""
+    """Shave the hidden skirt around the grip end for closing clearance.
+
+    The shave follows the corner arcs to where the long sides start, then fades
+    out along each side over GRIP_SKIRT_RELIEF_RUN, so it ends without a -Y
+    facing step in the skirt face."""
+    run = params.GRIP_SKIRT_RELIEF_RUN
+    if run <= 0:
+        raise ValueError("GRIP_SKIRT_RELIEF_RUN must be above zero")
     box = board.board_profile().bounding_box()
-    band = _ring(
-        SKIRT_OUT - params.GRIP_SKIRT_RELIEF,
-        SKIRT_OUT + MERGE,
-        SKIRT_BOTTOM - 0.1,
-        SHELL_SEAM,
-    )
+    side_y, _ = corner_tangent_y()
+    z0, z1 = SKIRT_BOTTOM - 0.1, SHELL_SEAM
+    relieved = SKIRT_OUT - params.GRIP_SKIRT_RELIEF
+    band = _ring(relieved, SKIRT_OUT + MERGE, z0, z1)
+    clip_y0 = box.min.Y - 2 * (params.WALL + MERGE)
     clip = Pos(
         box.center().X,
-        box.min.Y + (params.WALL - 2 * (params.WALL + MERGE)) / 2,
+        (clip_y0 + side_y) / 2,
         (SKIRT_BOTTOM + SHELL_SEAM) / 2,
     ) * Box(
         box.size.X + 2 * (params.WALL + MERGE),
-        params.WALL + 2 * (params.WALL + MERGE),
+        side_y - clip_y0,
         SHELL_SEAM - SKIRT_BOTTOM + 0.2,
     )
-    return _isect(band, clip)
+    tapers = _side_strip(
+        [(side_y, relieved), (side_y + run, SKIRT_OUT)], SKIRT_OUT + MERGE, z0, z1
+    )
+    return _fuse(_isect(band, clip), *tapers)
 
 
 CATCH_Z0 = SKIRT_BOTTOM + params.CATCH_RISE
@@ -393,6 +449,15 @@ def skirt_lead_in_cuts():
             ]
             wedge = plane * Polygon(*points, align=None)
             wedges.append(extrude(wedge, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
+    for wedge in wedges:
+        box = wedge.bounding_box()
+        for y0, y1 in side_skirt_taper_spans():
+            if box.min.Y < y1 and box.max.Y > y0:
+                raise ValueError(
+                    f"a skirt lead-in at y {box.min.Y:.3f} to {box.max.Y:.3f} "
+                    f"reaches the side stiffener taper at y {y0:.3f} to {y1:.3f}, "
+                    "so SIDE_SKIRT_THICKEN_RUN is too long"
+                )
     skirt = _cut(skirt, *wedges)
     # A lead-in removes material only. Keep the catch lands outside this operation.
     return _cut(original, skirt)

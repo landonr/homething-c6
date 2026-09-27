@@ -177,7 +177,8 @@ def _block_root_fillet(x, face):
 
     It points up as the front prints, so it needs no support. It runs the
     block's full width, because the block's -Y face is square. Bounded by the
-    pilot below it.
+    pilot below it. In plan it stops at the relieved skirt face, so at the +X
+    grip corner it ends on the arc and does not stand proud of it.
     """
     start = end_screw_fillet_start()
     leg = face - start
@@ -199,7 +200,13 @@ def _block_root_fillet(x, face):
             )
         make_face()
     reach = params.END_SCREW_BLOCK_W / 2
-    return Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    fillet = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    bound = _slab(
+        _offset_face(SKIRT_OUT - params.GRIP_SKIRT_RELIEF),
+        SKIRT_BOTTOM - leg - MERGE - 1,
+        SKIRT_BOTTOM + MERGE + 1,
+    )
+    return _isect(fillet, bound)
 
 
 def _block_side_tie(face_x, back):
@@ -342,7 +349,8 @@ def end_screw_wall_chamfer():
     It points up as the back prints, so it needs no support. Bounded by the
     clearance bore below it. The wedge rises from the lap corner into the
     relief void and never cuts the lap. It runs over the block's full width
-    plus MERGE either side.
+    plus MERGE either side. In plan it stops at the lap's inner face, so at the
+    +X grip corner it follows the arc and does not notch the lap.
     """
     _, c = end_screw_root_legs()
     x, z = end_screw_axis()
@@ -364,7 +372,9 @@ def end_screw_wall_chamfer():
             )
         make_face()
     reach = params.END_SCREW_BLOCK_W / 2 + MERGE
-    return Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    bound = _slab(_offset_face(LAP_IN), floor - c - MERGE - 1, floor + MERGE + 1)
+    return _isect(wedge, bound)
 
 
 def end_screw_length():

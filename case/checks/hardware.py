@@ -10,6 +10,9 @@ shells rather than off the stack that sized it.
 
 End screw side tie: the web's tie from that block into the +X side skirt, at
 web height only, on both built fronts.
+
+End screw grip corner: the root fillet and the back's wall chamfer follow the
++X grip corner arc, so neither stands proud of the skirt nor notches the lap.
 """
 
 import functools
@@ -32,7 +35,7 @@ import board
 import case
 import params
 
-from .common import TOLERANCE, Problem, _fill_fraction, _volume
+from .common import TOLERANCE, Problem, _Crop, _fill_fraction, _volume
 
 
 def cell_clearance():
@@ -574,4 +577,77 @@ def end_screw_side_tie(front, part="case-front"):
                 part=part,
             )
         )
+    return problems
+
+
+def end_screw_grip_corner(back, *fronts):
+    """The block's root fillet and the back's end wall chamfer at the +X grip
+    corner, on the built shells.
+
+    Both are straight wedges across the block, and the corner arc curves
+    inboard of their straight start lines. Each face is read off the built
+    shell by a ray level with it. Just outboard of the relieved skirt face,
+    below the relief ring, each front must be void, so the fillet does not
+    stand proud there. Just outboard of the lap's inner face, above and below
+    the relief floor, the back must be material, so the chamfer does not notch
+    the lap.
+    """
+    problems = []
+    x, _ = case.end_screw_axis()
+    start = case.end_screw_fillet_start()
+    fx = x + params.END_SCREW_BLOCK_W / 2 - 0.05
+    ray_z = case.SKIRT_BOTTOM - 0.05
+    for front, part in fronts:
+        crop = _Crop(
+            front,
+            (fx - 0.5, start - 0.5, case.SKIRT_BOTTOM - 1),
+            (fx + 0.5, start + 1, case.SKIRT_BOTTOM + 0.5),
+        )
+        runs = crop.ray_runs((fx, start - 0.4, ray_z), (fx, start + 0.9, ray_z))
+        if not runs:
+            problems.append(Problem(
+                f"the built front has no relieved skirt face at x {fx:.2f}, "
+                f"z {ray_z:.2f} to read the root fillet's corner from",
+                part=part,
+            ))
+            continue
+        face_y = start - 0.4 + runs[0][0]
+        probe = Pos(fx, face_y - 0.03, case.SKIRT_BOTTOM - 0.12) * Box(0.04, 0.02, 0.02)
+        filled = crop.fill_fraction(probe)
+        if filled > TOLERANCE:
+            problems.append(Problem(
+                f"the root fillet is {filled:.0%} material just outboard of the "
+                f"relieved skirt face at the +X grip corner, y {face_y:.3f}, so it "
+                "stands proud of the arc below the relief",
+                box=probe,
+                part=part,
+            ))
+
+    floor = case.SKIRT_BOTTOM - params.SKIRT_FIT
+    lap = case.end_wall_edge() - case.LAP_IN
+    bx = case.end_screw_wall_chamfer().bounding_box().max.X - 0.05
+    crop = _Crop(back, (bx - 0.5, lap - 1, floor - 1), (bx + 0.5, lap + 1, floor + 1))
+    runs = crop.ray_runs((bx, lap + 0.9, floor + 0.3), (bx, lap - 0.9, floor + 0.3))
+    if not runs:
+        problems.append(Problem(
+            f"the built back has no lap at x {bx:.2f}, z {floor + 0.3:.2f} to read "
+            "the end wall chamfer's corner from",
+            part="case-back",
+        ))
+        return problems
+    lap_y = lap + 0.9 - runs[0][0]
+    for where, z0, z1 in (
+        ("above", floor + 0.01, floor + 0.05),
+        ("below", floor - 0.2, floor - 0.05),
+    ):
+        probe = Pos(bx, lap_y - 0.08, (z0 + z1) / 2) * Box(0.04, 0.04, z1 - z0)
+        filled = crop.fill_fraction(probe)
+        if filled < 1 - TOLERANCE:
+            problems.append(Problem(
+                f"the back's lap is only {filled:.0%} material {where} the relief "
+                f"floor at the +X grip corner, 0.08 outboard of its inner face at "
+                f"y {lap_y:.3f}, so the end wall chamfer notches it",
+                box=probe,
+                part="case-back",
+            ))
     return problems

@@ -58,15 +58,21 @@ class IrLearningTest(unittest.TestCase):
         # IR, so a dark D2 must not read as a dead button.
         status = CONFIG.split("name: Status Indicators", 1)[1].split("// D3 and D4", 1)[0]
         self.assertNotIn("mqtt", status)
-        self.assertIn("if (api_connected) {", status)
+        self.assertIn("const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();", status)
+        self.assertIn("if (wifi_enabled && api_connected) {", status)
+        self.assertIn("else if (wifi_enabled && !wifi_connected) {", status)
+        self.assertIn("else if (wifi_enabled && ha_expected) {", status)
+        self.assertIn("else if (wifi_enabled) {", status)
         self.assertIn("it[0] = Color(level, level / 2, 0);", status)
         green = status.index("it[0] = Color(0, 96, 24);")
-        self.assertLess(status.index("if (api_connected) {"), green)
+        self.assertLess(status.index("if (wifi_enabled && api_connected) {"), green)
 
     def test_d2_and_d5_pulse_periods_are_slow(self) -> None:
         status = CONFIG.split("name: Status Indicators", 1)[1].split("on_turn_on:", 1)[0]
-        d2 = status.split("// D2 pulses", 1)[1].split("// D3 and D4", 1)[0]
+        d2 = status.split("// D2 stays dark", 1)[1].split("// D3 and D4", 1)[0]
         d5 = status.split("// D5 is Zigbee status", 1)[1]
+        self.assertIn("else if (wifi_enabled && !wifi_connected) {", d2)
+        self.assertIn("else if (wifi_enabled && ha_expected) {", d2)
         self.assertEqual(2, d2.count("(millis() % 4800) / 4800.0f"))
         for period in (1600, 3200, 4000):
             self.assertIn(f"(millis() % {period}) / {period}.0f", d5)

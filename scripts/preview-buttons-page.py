@@ -3,7 +3,7 @@
 
 The page is a raw string in components/button_config/button_config_page.h, so a
 browser can run it without an ESPHome build and without hardware. This server
-answers the three page endpoints from a small in-memory state, so the layout,
+answers the page endpoints from a small in-memory state, so the layout,
 the radio switches, and the assignment tiles can be checked in a browser.
 
 Slot assignments come from preview-c6remote-config.json, an export from the
@@ -39,6 +39,8 @@ STATE = {
     "action_ok": True,
     "network": {
         "wifi": True,
+        "wifi_enabled": True,
+        "wifi_always_on": False,
         "home_assistant": True,
         "ip": "192.168.1.86",
         "mac": "A4:CF:12:34:56:78",
@@ -205,7 +207,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/buttons/api/action":
+        path = urlparse(self.path).path
+        if path == "/buttons/api/activity":
+            self.send_json({"ok": True})
+            return
+        if path != "/buttons/api/action":
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -218,6 +224,8 @@ class Handler(BaseHTTPRequestHandler):
             radio = form.get("radio", [""])[0]
             if radio in STATE["radios"]:
                 STATE["radios"][radio] = form.get("on", ["1"])[0] == "1"
+        elif action == "set_wifi_always_on":
+            STATE["network"]["wifi_always_on"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "pair":
             # The real remote restarts here, so the preview only flips the flag
             # and lets the page's own countdown run against it.

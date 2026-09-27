@@ -366,11 +366,9 @@ the card is closed and **Hide** when the card is open.
 
 ### Copy the whole config
 
-The **Import and export** block holds a **Direction** selector, which holds
-Export and Import.
-
-The page reads no IR code until the card opens on the Export side. Export reads
-the remote and fills the box.
+The Config tab shows the current configuration after the page loads.
+The page reads each stored IR code in sequence and puts it in the configuration text.
+It uses the stored code when you select an input.
 
 The block holds one entry for each input, with its slot number, its label, and
 its action.
@@ -383,8 +381,10 @@ A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 
 A BLE HID entry carries `kind`, `usage`, and `mod`. Only keyboard entries use `mod`.
 
-The page reads one code at a time from `GET /buttons/api/code`. Select **Read the
-remote** to build the block again after a change.
+The page updates the configuration text after each successful assignment.
+If a code read fails, open the Config tab to retry it.
+The page does not offer an incomplete current configuration for download.
+Your edits and text from a file stay in the box until you apply or replace them.
 
 Import checks every entry before the first flash write. If one entry is bad, the
 page names the slot and writes nothing.
@@ -418,7 +418,8 @@ Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
 
 | `D2` | Meaning |
 | --- | --- |
-| Red pulse | Wi-Fi is down. |
+| Off | Wi-Fi is disabled. |
+| Red pulse | Wi-Fi is enabled but disconnected. |
 | Orange pulse | Wi-Fi is up, Home Assistant is expected, and the API is down. |
 | Solid orange | Wi-Fi is up and Home Assistant is not required (Config switch off). |
 | Solid green | The API is connected. |

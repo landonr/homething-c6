@@ -280,6 +280,57 @@ def side_seam_retention(front, back):
           (0.2, 0.08, 0.2), False)
     probe(end_crop, "grip-end skirt behind relief", (end_x, end_y + params.GRIP_SKIRT_RELIEF + 0.18, end_z),
           (0.2, 0.08, 0.2), True)
+
+    # The first site is fixed off the corner tangent, not the run, so a taper
+    # cut short, or the old dead stop, leaves it full.
+    yt0, yt1 = shells.corner_tangent_y()
+    taper_y = yt0
+    run = params.GRIP_SKIRT_RELIEF_RUN
+    taper_z = (SKIRT_BOTTOM + SHELL_SEAM) / 2
+    for side, edge, name in (
+        (-1, board_box.min.X, "-X"),
+        (1, board_box.max.X, "+X"),
+    ):
+        face = edge + side * SKIRT_OUT
+        site = edge + side * (SKIRT_OUT - params.GRIP_SKIRT_RELIEF / 2)
+        taper_crop = _Crop(
+            front,
+            (face - 1, taper_y - 0.5, SKIRT_BOTTOM - 0.1),
+            (face + 1, taper_y + run + 1.5, SHELL_SEAM + 0.1),
+        )
+        probe(taper_crop, f"{name} grip relief taper start", (site, taper_y + 0.3, taper_z),
+              (0.08, 0.2, 0.2), False)
+        probe(taper_crop, f"{name} skirt past grip relief taper", (site, taper_y + run + 0.6, taper_z),
+              (0.08, 0.2, 0.2), True)
+
+    # A ring stiffener clipped at the board edge fills this site, 1.0 past
+    # each corner tangent and inboard of the plain fit.
+    for arc in board.board_profile().outer_wire().edges():
+        if arc.geom_type != GeomType.CIRCLE:
+            continue
+        centre = arc.arc_center
+        side = 1 if centre.X > board_box.center().X else -1
+        end = 1 if centre.Y > board_box.center().Y else -1
+        y = (yt1 if end > 0 else yt0) + end * 1.0
+        radius = arc.radius + params.BOARD_FIT - 0.1
+        x = centre.X + side * math.sqrt(radius ** 2 - (y - centre.Y) ** 2)
+        label = f"{'+X' if side > 0 else '-X'} {'IR' if end > 0 else 'grip'}"
+        crop = _Crop(front, (x - 0.5, y - 0.5, taper_z - 0.5), (x + 0.5, y + 0.5, taper_z + 0.5))
+        probe(crop, f"{label} corner arc inboard of the board fit", (x, y, taper_z),
+              (0.06, 0.06, 0.2), False)
+
+    # Past each taper the stiffener is back to full thickness.
+    thick = params.BOARD_FIT - params.SIDE_SKIRT_THICKEN + 0.05
+    reach = params.SIDE_SKIRT_THICKEN_RUN + 0.5
+    for at in (yt0 + reach, yt1 - reach):
+        for side, edge, name in (
+            (-1, board_box.min.X, "-X"),
+            (1, board_box.max.X, "+X"),
+        ):
+            x = edge + side * thick
+            crop = _Crop(front, (x - 0.5, at - 0.5, taper_z - 0.5), (x + 0.5, at + 0.5, taper_z + 0.5))
+            probe(crop, f"{name} full stiffener past its taper at y {at:.2f}", (x, at, taper_z),
+                  (0.06, 0.2, 0.2), True)
     return problems
 
 

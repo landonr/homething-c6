@@ -20,6 +20,12 @@ def button_pin(config: str, button: int) -> int:
     return int(match.group(1))
 
 
+def button_entry(config: str, button: int) -> str:
+    start = config.index(f"    name: Button {button}\n")
+    end = config.find("\n  - platform: gpio", start + 1)
+    return config[start:end if end >= 0 else None]
+
+
 def status_light_entry(config: str) -> str:
     match = re.search(
         r"  - platform: esp32_rmt_led_strip\n    id: status_light(?P<entry>[\s\S]*?)\n\nswitch:",
@@ -31,6 +37,36 @@ def status_light_entry(config: str) -> str:
 
 
 class ProductionConfigTest(unittest.TestCase):
+    def test_wifi_starts_disabled_without_a_saved_preference(self) -> None:
+        config = CONFIG.read_text()
+        wifi = config.split("\nwifi:\n", 1)[1].split("\ntext_sensor:", 1)[0]
+        api = config.split("\napi:\n", 1)[1].split("\nota:", 1)[0]
+        self.assertIn("  enable_on_boot: false\n", wifi)
+        self.assertIn("  reboot_timeout: 0s\n", wifi)
+        self.assertIn("  reboot_timeout: 0s\n", api)
+
+    def test_sw9_hold_consumes_the_tap_and_toggles_temporary_wifi(self) -> None:
+        config = CONFIG.read_text()
+        sw9 = button_entry(config, 9)
+        hold = config.split("  - id: detect_wifi_hold\n", 1)[1].split("\n  - id:", 1)[0]
+        self.assertIn("id(sw9_hold_consumed) = false;", sw9)
+        self.assertIn("script.execute: detect_wifi_hold", sw9)
+        self.assertIn("script.stop: detect_wifi_hold", sw9)
+        self.assertIn("return !id(sw9_hold_consumed);", sw9)
+        self.assertIn("delay: 2s", hold)
+        self.assertLess(hold.index("id(sw9_hold_consumed) = true;"),
+                        hold.index("id(button_cfg).toggle_temporary_wifi();"))
+
+    def test_sw9_short_tap_plays_and_releases_its_assignment(self) -> None:
+        sw9 = button_entry(CONFIG.read_text(), 9)
+        self.assertLess(sw9.index("return !id(sw9_hold_consumed);"),
+                        sw9.index("ir_ui.tap(9, IrUi::Tap::FULL);"))
+        self.assertLess(sw9.index("ir_ui.tap(9, IrUi::Tap::FULL);"),
+                        sw9.index("ir_ui.release(9);"))
+        self.assertIn("if: *send_learned_code", sw9)
+        self.assertIn("if: *start_learned_voice", sw9)
+        self.assertNotIn("voice_assistant.stop:", sw9)
+
     def test_sw9_and_sw10_follow_silkscreen_wiring(self) -> None:
         """Catches swapping PCF8575 P8 and P9 under Button 9 and Button 10."""
         config = CONFIG.read_text()
@@ -123,8 +159,13 @@ class ProductionConfigTest(unittest.TestCase):
             self.assertIn(f"id(voice_led_state) == {value}", effect)
         self.assertIn("it[1] =", effect)
         self.assertIn("it[2] =", effect)
+        self.assertIn("const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();", effect)
         self.assertIn("wifi::global_wifi_component->is_connected()", effect)
         self.assertIn("api::global_api_server->is_connected()", effect)
+        self.assertIn("if (wifi_enabled && api_connected)", effect)
+        self.assertIn("else if (wifi_enabled && !wifi_connected)", effect)
+        self.assertIn("else if (wifi_enabled && ha_expected)", effect)
+        self.assertIn("else if (wifi_enabled)", effect)
         self.assertIn("id(mic_level) = 0.0f;", effect)
         for value, color in ((1, "Color(192, 48, 0)"), (2, "Color(0, 48, 255)"),
                              (3, "Color(96, 0, 96)"), (4, "Color(255, 0, 0)")):

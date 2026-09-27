@@ -7,6 +7,9 @@ STEP assembly. 2D, so it answers where a part sits, never how tall it is.
 
 End screw: the one fastener that closes the two shells, read off both built
 shells rather than off the stack that sized it.
+
+End screw side tie: the web's tie from that block into the +X side skirt, at
+web height only, on both built fronts.
 """
 
 import functools
@@ -516,4 +519,59 @@ def end_screw(front, back):
                     part="case-front",
                 )
             )
+    return problems
+
+
+def end_screw_side_tie(front, part="case-front"):
+    """The web's tie from the end screw block into the +X side skirt, on the
+    built front.
+
+    A bar at web height from the block's +X face to the side skirt's inner face
+    must be material. Without the tie the cavity's round corner leaves most of
+    it open. Halfway down the ramp's fall, so the bar stays under the ramp.
+
+    The same span just below SKIRT_BOTTOM must be void, from the fillet's start
+    to the bar. So the tie stops at web height and the root fillet at the
+    block's width, and neither grows toward the back's side wall.
+    """
+    problems = []
+    x, _ = case.end_screw_axis()
+    face = x + params.END_SCREW_BLOCK_W / 2
+    side = case.side_skirt_inner_x()
+    start = (
+        case.end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_RAMP_LEDGE
+    )
+    y = start + (case.SUPPORT_TOP - case.SKIRT_BOTTOM) / 2
+    ramp = case.SUPPORT_TOP - (y + 0.1 - start)
+    z0, z1 = case.SKIRT_BOTTOM + 0.1, ramp - 0.1
+    bar = Pos((face + side) / 2, y, (z0 + z1) / 2) * Box(
+        side - face + 0.2, 0.2, z1 - z0
+    )
+    filled = _fill_fraction(front, bar)
+    if filled < 1 - TOLERANCE:
+        problems.append(
+            Problem(
+                f"only {filled:.0%} of the bar from the end screw block's +X "
+                "face to the side skirt is material, so the web does not tie "
+                "the block into the +X side skirt",
+                box=bar,
+                part=part,
+            )
+        )
+
+    y0 = case.end_screw_fillet_start() + 0.1
+    below = Pos((face + side) / 2, (y0 + y + 0.1) / 2, case.SKIRT_BOTTOM - 0.2) * Box(
+        side - face - 0.2, y + 0.1 - y0, 0.2
+    )
+    filled = _fill_fraction(front, below)
+    if filled > TOLERANCE:
+        problems.append(
+            Problem(
+                f"{filled:.0%} of the span below SKIRT_BOTTOM between the end "
+                "screw block's +X face and the side skirt is material, so the "
+                "side tie or the root fillet grows toward the back's side wall",
+                box=below,
+                part=part,
+            )
+        )
     return problems

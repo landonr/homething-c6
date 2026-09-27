@@ -241,6 +241,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the USB slot and pocket clear of the connector shell.
 - Keep support ledges clear of board parts, screw heads, and the cell.
 - Keep the front skirt clear above the support ledge tops.
+- Keep the end screw block clear of the back shell. Its web ties it to the end skirt and the side skirt at skirt height only.
 - Keep the IR window shoulder continuous for adhesive.
 - Keep the front and back shell mating volumes separate. The side catch preload is the only exception. The checks allow this overlap only at the lower pocket lip.
 

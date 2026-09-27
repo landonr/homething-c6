@@ -62,7 +62,7 @@ from .fdm import (
     recessed_mouth_is_plain,
     wheel_mouth_is_chamfered,
 )
-from .hardware import cell_clearance, end_screw, feature_clashes
+from .hardware import cell_clearance, end_screw, end_screw_side_tie, feature_clashes
 from .ir import (
     end_ports_open,
     receiver_clearance,
@@ -632,6 +632,16 @@ def _end_screw(s):
     )
 
 
+@_check("hardware")
+def _end_screw_side_tie(s):
+    return _report(
+        end_screw_side_tie(s.front)
+        + end_screw_side_tie(s.front_fdm, part="case-front-fdm"),
+        "end screw block's web ties into the +X side skirt at web height only, "
+        "on both fronts",
+    )
+
+
 @_check("support")
 def _support_board_clearance(s):
     return _report(
@@ -963,7 +973,7 @@ _FEATURE_SOLIDS = {
     "assembly": ("front", "front_fdm", "back", "pad", "window", "caps"),
     "caps": ("front", "pad", "caps", "caps_plain"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
-    "hardware": ("back",),
+    "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),
     "keypad": ("front", "pad", "keypad_recess"),
     "legacy": ("back",),

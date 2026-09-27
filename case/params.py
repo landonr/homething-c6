@@ -354,9 +354,11 @@ takes the depth off the upper block, so width is the only remaining lever on
 that bending section and on the web's neck to the skirt.
 
 Bounded by J1 on the -x side and by the back's side wall on the +x side. The
--x end passes under R8, because the ramp falls well below R8's underside at
-R8's Y. checks/hardware.py's feature_clashes reads that clearance on the built
-block, not on its bounding box."""
+web's tie into the +x side skirt is not part of this width. It stops at
+SKIRT_BOTTOM, so the +x bound applies to the block below it. The -x end
+passes under R8, because the ramp falls well below R8's underside at R8's Y.
+checks/hardware.py's feature_clashes reads that clearance on the built block,
+not on its bounding box."""
 END_SCREW_BLOCK_GAP = 1.0
 """How far the block's own -Y face stands off the back's inner end wall.
 

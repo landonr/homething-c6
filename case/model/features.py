@@ -263,12 +263,18 @@ def _front(runs, obstacles, fdm=False):
                 ["BOSS_OD"],
             )
         )
+    # The side tie reaches to side_skirt_inner_x(), so that helper's parameters
+    # move this box too.
     out.append(
         _entry(
             "end_screw_block",
             "hardware.end_screw_block",
             "add",
             hardware.end_screw_block(),
+            sorted(set(
+                _reads("hardware.end_screw_block")
+                + _reads("hardware.side_skirt_inner_x")
+            )),
         )
     )
     out.append(_entry("usb_pocket", "usb.usb_pocket", "cut", usb.usb_pocket()))

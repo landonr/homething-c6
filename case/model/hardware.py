@@ -20,7 +20,16 @@ import board
 import params
 
 from .backform import contour_depth
-from .shape import _chamfered_post, _cut, _fuse, _hole, _rounded_prism
+from .shape import (
+    _chamfered_post,
+    _cut,
+    _fuse,
+    _hole,
+    _isect,
+    _offset_face,
+    _rounded_prism,
+    _slab,
+)
 from .stack import LAP_IN, LAP_OUT, MERGE, SKIRT_BOTTOM, SKIRT_OUT, SUPPORT_TOP
 
 
@@ -35,6 +44,14 @@ def mount_points():
 def end_wall_edge():
     """The board edge the closure screw enters through: the -Y one."""
     return board.board_profile().bounding_box().min.Y
+
+
+def side_skirt_inner_x():
+    """X of the +X side skirt's inner face on its straight run, which
+    side_skirt_stiffeners() moves SIDE_SKIRT_THICKEN inboard of the cavity
+    wall."""
+    box = board.board_profile().bounding_box()
+    return box.max.X + params.BOARD_FIT - params.SIDE_SKIRT_THICKEN
 
 
 @functools.cache
@@ -60,12 +77,12 @@ def _ramp_block_top(block, cavity):
     stands on the one before it. The same ramp is the board's lead-in: nothing
     square stands under the board's end for a tilted board to strike.
 
-    A straight wedge cut across the whole width plus MERGE either side, never
-    an edge chamfer. The top +Y arris is a tangent chain of the straight edge
-    and the two END_SCREW_BLOCK_R plan rounds, and an edge chamfer on that
-    chain exported a torn, non-manifold front while every geometric check was
-    green. Do not put the edge chamfer back. See the STL discipline in
-    AGENTS.md.
+    A straight wedge cut across the block's whole X extent, side tie included,
+    plus MERGE either side, never an edge chamfer. The top +Y arris is a
+    tangent chain of the straight edge and the two END_SCREW_BLOCK_R plan
+    rounds, and an edge chamfer on that chain exported a torn, non-manifold
+    front while every geometric check was green. Do not put the edge chamfer
+    back. See the STL discipline in AGENTS.md.
 
     The wedge's top edge stands MERGE above SUPPORT_TOP on the same line, so
     no face of it lies in the block's top face.
@@ -87,9 +104,11 @@ def _ramp_block_top(block, cavity):
                 close=True,
             )
         make_face()
-    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
-    x = block.bounding_box().center().X
-    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    box = block.bounding_box()
+    reach = box.size.X / 2 + MERGE
+    wedge = Pos(box.center().X, 0, 0) * extrude(
+        section.sketch, amount=reach, both=True
+    )
     return _cut(block, wedge)
 
 
@@ -183,6 +202,28 @@ def _block_root_fillet(x, face):
     return Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
 
 
+def _block_side_tie(face_x, back):
+    """The web carried +X from the block's +X face into the +X side skirt.
+
+    The box runs from MERGE inside the block to MERGE into the skirt. The plan
+    bound is the profile offset MERGE past the cavity wall, the depth the web
+    reaches into the -Y end skirt. The board's corner is round, so a square box
+    would stand outboard of the relieved skirt there. The box's -Y end lies past
+    that bound, so no face of the box lies on it. The ramp cuts the tie back to
+    a wedge.
+    """
+    x0 = face_x - MERGE
+    x1 = side_skirt_inner_x() + MERGE
+    y0 = end_wall_edge() - LAP_OUT
+    tie = Pos((x0 + x1) / 2, (y0 + back) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
+        x1 - x0, back - y0, SUPPORT_TOP - SKIRT_BOTTOM
+    )
+    bound = _slab(
+        _offset_face(params.BOARD_FIT + MERGE), SKIRT_BOTTOM - 1, SUPPORT_TOP + 1
+    )
+    return _isect(tie, bound)
+
+
 def end_screw_block():
     """The front's own boss for that screw, hanging behind the skirt.
 
@@ -193,6 +234,13 @@ def end_screw_block():
     That leaves it with nothing to grow from, so a web at the skirt's own
     height ties it into the skirt's inner face, which is the only front
     material within reach this far down.
+
+    The web also runs +X into the +X side skirt, a gusset in that corner, so
+    the block does not hang off the end skirt alone. The tie stays at web
+    height. Below SKIRT_BOTTOM the block keeps its +X face, and the root fillet
+    stays at the block's width. Either one carried +X would come close to the
+    back's side wall, and a block that lands on the back bows the case. See
+    _block_side_tie.
 
     It carries END_SCREW_BLOCK_BOTTOM under the axis and rises toward
     SUPPORT_TOP, so it stops clear of the board like everything else the
@@ -240,8 +288,9 @@ def end_screw_block():
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
         params.END_SCREW_BLOCK_W, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
     )
+    tie = _block_side_tie(x + params.END_SCREW_BLOCK_W / 2, back)
     fillet = _block_root_fillet(x, face)
-    return _ramp_block_top(_fuse(block, web, fillet), cavity)
+    return _ramp_block_top(_fuse(block, web, tie, fillet), cavity)
 
 
 def end_screw_pilot():

@@ -67,7 +67,7 @@ from .mic import (
     mic_taper_top,
     mic_throat_d,
 )
-from .shells import back_shell, front_edge_round, front_shell
+from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     LED_RING_TOP,
@@ -476,10 +476,9 @@ def main():
         f"to the back before the front closes, the reverse of V3"
     )
     print(
-        f"IR end: skirt {SHELL_SEAM - (BOARD_TOP - params.CATCH_SKIRT_H):.1f} deep "
-        f"over {params.CATCH_SPAN:.1f}, "
-        f"with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f}, detents "
-        f"{params.CATCH_D:.1f} proud of the lap behind them; the +x window is held "
+        f"IR end: plain skirt with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f} "
+        f"at z {CATCH_Z0:.2f} to {CATCH_Z0 + params.CATCH_H:.2f}, detents "
+        f"{params.CATCH_D:.1f} proud of the lap behind them, the +x window held "
         f"{params.CATCH_EMITTER_CLEAR:.1f} off D1's bore rather than mirrored"
     )
     print(

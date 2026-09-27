@@ -1,5 +1,5 @@
-"""The two shells and their joint features: the front skirt, the deep catch
-section, the back lap, and the detents.
+"""The two shells and their joint features: the front skirt, the end catch
+windows, the back lap, and the detents.
 """
 
 import functools
@@ -317,20 +317,8 @@ def grip_skirt_relief():
     return _isect(band, clip)
 
 
-DEEP_BOTTOM = BOARD_TOP - params.CATCH_SKIRT_H
-"""How far the skirt reaches at the IR end."""
-
-CATCH_Z0 = DEEP_BOTTOM + params.CATCH_RISE
+CATCH_Z0 = SKIRT_BOTTOM + params.CATCH_RISE
 """Bottom of each window, and so the top of the skirt that catches under a detent."""
-
-
-def catch_region():
-    """Limits the deepened skirt to the IR end."""
-    box = board.board_profile().bounding_box()
-    y0 = box.max.Y + params.BOARD_FIT + params.WALL
-    return Pos(box.center().X, y0 - params.CATCH_SPAN / 2, 0) * Box(
-        300, params.CATCH_SPAN, 300
-    )
 
 
 def catch_x():
@@ -353,14 +341,6 @@ def catch_x():
     ]
 
 
-def deep_skirt():
-    """The skirt carried further down, at the IR end only."""
-    return _isect(
-        _ring(params.BOARD_FIT, SKIRT_OUT, DEEP_BOTTOM, SKIRT_BOTTOM + MERGE),
-        catch_region(),
-    )
-
-
 @cache.solid
 def skirt_lead_in_cuts():
     """Return material removed from the skirt for the folding lead-ins."""
@@ -368,7 +348,6 @@ def skirt_lead_in_cuts():
         return Compound([])
     skirt = _fuse(
         _ring(params.BOARD_FIT, SKIRT_OUT, SKIRT_BOTTOM, SHELL_SEAM),
-        deep_skirt(),
         *side_skirt_stiffeners(),
     )
     cuts = front_support_cuts()
@@ -380,45 +359,14 @@ def skirt_lead_in_cuts():
         box = cut.bounding_box()
         height = box.max.Z - SKIRT_BOTTOM
         profiles.extend(
-            ((box.min.Y, box.min.Y, SKIRT_BOTTOM, height, -1),
-             (box.max.Y, box.max.Y, SKIRT_BOTTOM, height, 1))
+            ((box.min.Y, SKIRT_BOTTOM, height, -1),
+             (box.max.Y, SKIRT_BOTTOM, height, 1))
         )
-    # +1: the deepened region lies on the +Y side of this edge, and a wedge's
-    # own local x runs +Y, so the lead-in has to ramp into the deep skirt.
-    catch_y = catch_region().bounding_box().min.Y
-    profiles.append(
-        (catch_y, catch_y, DEEP_BOTTOM, params.SKIRT_TRANSITION_CHAMFER, 1)
-    )
     if not 0 < params.SKIRT_LEAD_ANGLE < 90:
         raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
     slope = math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
-
-    # The two IR-end support lead-ins and the deep-skirt lead-in are the same
-    # angle. Put them on the same plane as well, so each wall reads as one
-    # straight ramp instead of two parallel facets with a small step between.
-    # Its foot has to land where the deep lead-in's head is, which is short of
-    # the support cut's own face, so the wedge carries a flat back to that face:
-    # a bare triangle there leaves the skirt between the two as a loose block.
-    deep_top = DEEP_BOTTOM + params.SKIRT_TRANSITION_CHAMFER
-    ir_support_y = max(
-        edge_y
-        for edge_y, _, _, _, direction in profiles
-        if direction > 0 and edge_y < catch_y
-    )
-    profiles = [
-        (
-            edge_y,
-            catch_y - (bottom + height - deep_top) / slope
-            if direction > 0 and abs(edge_y - ir_support_y) < tolerance
-            else wedge_y,
-            bottom,
-            height,
-            direction,
-        )
-        for edge_y, wedge_y, bottom, height, direction in profiles
-    ]
     wedges = []
-    for edge_y, wedge_y, bottom, height, direction in profiles:
+    for edge_y, bottom, height, direction in profiles:
         run = height / slope
         for edge in original.edges():
             box = edge.bounding_box()
@@ -431,19 +379,17 @@ def skirt_lead_in_cuts():
             ):
                 continue
             plane = Plane(
-                origin=(box.min.X - MERGE, wedge_y, bottom),
+                origin=(box.min.X - MERGE, edge_y, bottom),
                 x_dir=(0, 1, 0), z_dir=(1, 0, 0),
             )
-            back = min(edge_y - wedge_y, 0.0)
-            # Start the same-angle ramp slightly into the skirt, with a short
-            # flat cut back to the support break. The same Y relief applies at
-            # either direction and keeps the IR-end ramps on their shared plane.
+            # Start the ramp slightly into the skirt, with a short flat cut back
+            # to the support break. The same Y relief applies in each direction.
             fit = params.SKIRT_LEAD_FIT
             points = [
-                (back, 0),
+                (0, 0),
                 (direction * (run + fit), 0),
                 (direction * fit, height),
-                (back, height),
+                (0, height),
             ]
             wedge = plane * Polygon(*points, align=None)
             wedges.append(extrude(wedge, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
@@ -453,7 +399,7 @@ def skirt_lead_in_cuts():
 
 
 def catch_windows():
-    """Two rounded rectangles through the deepened skirt."""
+    """Two rounded rectangles through the plain skirt at the IR end."""
     edge = board.board_profile().bounding_box().max.Y
     y = edge + (params.BOARD_FIT + SKIRT_OUT) / 2
     reach = (SKIRT_OUT - params.BOARD_FIT) / 2 + 0.3
@@ -467,32 +413,6 @@ def catch_windows():
         sketch = plane * RectangleRounded(params.CATCH_W, params.CATCH_H, params.CATCH_R)
         out.append(extrude(sketch, amount=reach, both=True))
     return out
-
-
-def catch_relief():
-    """The back's lap is hollowed out this much further down over the deepened
-    section, so the longer skirt has somewhere to go. Carry the cut back to the
-    IR-end support faces so the relief and ledges meet at one flush edge rather
-    than leaving a narrow strip of lap between them."""
-    region = catch_region()
-    runs = support_runs()
-    if not runs:
-        raise ValueError("catch relief needs at least one board support run")
-    box = region.bounding_box()
-    support_end = max(run.bounding_box().max.Y for run in runs)
-    y0 = min(box.min.Y, support_end)
-    region = Pos(box.center().X, (y0 + box.max.Y) / 2, 0) * Box(
-        box.size.X, box.max.Y - y0, box.size.Z
-    )
-    return _isect(
-        _ring(
-            params.BOARD_FIT - 6,
-            LAP_IN,
-            DEEP_BOTTOM - params.SKIRT_FIT,
-            SKIRT_BOTTOM,
-        ),
-        region,
-    )
 
 
 def catch_detents():
@@ -554,7 +474,6 @@ def back_shell():
 
     # U2 receives through this shell's floor. Its opening and inside flange
     # rebate stay back-only; D1 and USB retain their shared end-wall cuts.
-    shell = _cut(shell, catch_relief())
     shell = _fuse(
         shell,
         legacy_retention_post(),
@@ -752,7 +671,6 @@ def front_shell(fdm=False):
     shell = _fuse(
         shell,
         mic_duct(face),
-        deep_skirt(),
         *side_skirt_stiffeners(),
         end_screw_block(),
         *bosses,

@@ -95,6 +95,7 @@ from .keypad import (
 from .mic import mic_fillet
 from .shells import (
     interference,
+    ir_end_lap_wall,
     parts_are_sound,
     shells_mate,
     side_seam_retention,
@@ -447,6 +448,21 @@ def _side_skirt_lead_ins(s):
     return _report(
         side_skirt_lead_ins(s.front),
         "side support-break ramps cut across the full reinforced skirt depth",
+    )
+
+
+@_check("shells")
+def _ir_end_lap_wall(s):
+    problems, thinnest = ir_end_lap_wall(s.back)
+    where = (
+        f"thinnest {thinnest[0]:.2f} mm at {thinnest[1]}, z {thinnest[2]:.2f}"
+        if thinnest
+        else "no reading"
+    )
+    return _report(
+        problems,
+        f"back lap keeps LAP_MIN_WALL {params.LAP_MIN_WALL:.2f} of wall to its "
+        f"outer round around the IR end: {where}",
     )
 
 

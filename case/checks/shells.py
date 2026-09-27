@@ -5,6 +5,10 @@ every other pass measures a shell against the board.
 Interference: components the shells and the plate actually hit in 3D, each
 one either a missing aperture or a keepout parameter set too tight.
 
+IR-end lap wall: the back lap keeps LAP_MIN_WALL of wall to its outer round
+around the IR end, from the floor of the skirt relief up. The pass measures the
+built back shell, so a deeper relief behind the lap fails it.
+
 Parts are sound: every part that gets exported is a valid solid and meshes to a
 closed manifold. This is the only pass in the suite that looks at a mesh, and it
 exists because everything else looks at the BRep instead. A shell can be torn
@@ -19,13 +23,21 @@ from collections import Counter
 import board
 import params
 
-from build123d import Box, Compound, Pos
+from build123d import Box, Compound, GeomType, Pos
 
 from model import shells
-from model.stack import LAP_IN, SHELL_SEAM, SKIRT_BOTTOM, SKIRT_OUT, SUPPORT_TOP
+from model.stack import (
+    LAP_IN,
+    LAP_OUT,
+    SHELL_BACK,
+    SHELL_SEAM,
+    SKIRT_BOTTOM,
+    SKIRT_OUT,
+    SUPPORT_TOP,
+)
 from model.support import front_support_cuts
 
-from .common import TOLERANCE, Problem, _Crop, _volume
+from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _volume
 
 
 EXPORT_STEMS = {
@@ -335,6 +347,180 @@ def side_skirt_lead_ins(front):
                         box=fit_probe,
                     ))
     return problems
+
+
+LAP_CORNER_ANGLES = (15.0, 35.0, 55.0, 75.0)
+"""Plan angles of the corner stations, in degrees from the side normal toward
++Y. The four angles sample the corner round between the side and the end wall."""
+
+LAP_STUB_STEPS = (0.0, 1.5)
+"""Distances of the side stub stations back along -Y from each corner tangent.
+The IR-end support runs stop short of the second station."""
+
+LAP_FAN = tuple(range(0, 71, 10))
+"""Ray angles below horizontal, in degrees, in the plane of the plan normal. The
+shortest run of material over this fan approximates the wall normal to the
+outer round."""
+
+LAP_RISE = 1.0
+LAP_STEP = 0.2
+"""The pass reads the lap from the built relief floor up LAP_RISE, at this step."""
+
+LAP_RAY = 4.0
+"""Length of each ray. A longer run of material than this reads as this length,
+and that is well above LAP_MIN_WALL."""
+
+LAP_EPS = 0.01
+"""Distance from a face or from the relief floor to the start of each ray and
+level, so that no ray starts on a face."""
+
+
+def ir_end_lap_stations():
+    """(name, plan point, outward plan normal) for each station around the IR end.
+
+    The plan point is on the board outline. A point at offset `d` is the plan
+    point plus `d` along the normal, because the offset profiles keep the
+    board's corner centres. The corners come from the arcs of the board outline.
+    """
+    profile = board.board_profile()
+    box = profile.bounding_box()
+    corners = sorted(
+        (
+            edge
+            for edge in profile.outer_wire().edges()
+            if edge.geom_type == GeomType.CIRCLE and edge.arc_center.Y > box.center().Y
+        ),
+        key=lambda edge: edge.arc_center.X,
+    )
+    if len(corners) != 2:
+        raise ValueError(
+            f"expected two corner arcs at the IR end of the board, found {len(corners)}"
+        )
+    stations = []
+    for edge in corners:
+        centre, radius = edge.arc_center, edge.radius
+        side = 1 if centre.X > box.center().X else -1
+        label = "+X" if side > 0 else "-X"
+        for step in LAP_STUB_STEPS:
+            stations.append((
+                f"{label} side stub {step:.1f} before the corner",
+                (centre.X + side * radius, centre.Y - step),
+                (float(side), 0.0),
+            ))
+        for angle in LAP_CORNER_ANGLES:
+            a = math.radians(angle)
+            normal = (side * math.cos(a), math.sin(a))
+            stations.append((
+                f"{label} corner at {angle:.0f} degrees",
+                (centre.X + radius * normal[0], centre.Y + radius * normal[1]),
+                normal,
+            ))
+    minus_x, plus_x = shells.catch_x()
+    for label, x in (
+        ("behind the -x detent", minus_x),
+        ("at the centreline", box.center().X),
+        ("behind the +x detent", plus_x),
+    ):
+        stations.append((f"end wall {label}", (x, box.max.Y), (0.0, 1.0)))
+    return stations
+
+
+def ir_end_lap_wall(back):
+    """The thinnest wall the built back lap keeps around the IR end.
+
+    Each station starts in the skirt relief void at the skirt's inner face, at
+    SKIRT_BOTTOM. A ray along the outward plan normal finds the lap's inner
+    face. A ray down just inboard of that face finds the relief floor, so a
+    deeper relief moves every level down with it. From the floor up LAP_RISE,
+    each level finds the lap face again. Then the shortest run of material over
+    the LAP_FAN rays from that face gives the wall normal to the outer round.
+
+    Returns the problems and the thinnest reading as (wall, station, z, point).
+    """
+    stations = ir_end_lap_stations()
+    near = params.BOARD_FIT
+    far = LAP_OUT + LAP_RAY
+    xs, ys = [], []
+    for _, (px, py), (nx, ny) in stations:
+        for offset in (near - LAP_EPS, far):
+            xs.append(px + nx * offset)
+            ys.append(py + ny * offset)
+    margin = CROP_MARGIN
+    crop = _Crop(
+        back,
+        (min(xs) - margin, min(ys) - margin, SHELL_BACK - LAP_RAY - margin),
+        (max(xs) + margin, max(ys) + margin, SHELL_SEAM + margin),
+    )
+    problems = []
+    thinnest = None
+    levels = int(round(LAP_RISE / LAP_STEP)) + 1
+    for name, (px, py), (nx, ny) in stations:
+        def at(offset, z):
+            return (px + nx * offset, py + ny * offset, z)
+
+        def lap_face(z):
+            runs = crop.ray_runs(at(near, z), at(far, z))
+            if not runs or runs[0][0] < LAP_EPS:
+                return None
+            return near + runs[0][0]
+
+        face = lap_face(SKIRT_BOTTOM)
+        if face is None:
+            problems.append(Problem(
+                f"{name} has no skirt relief void at SKIRT_BOTTOM {SKIRT_BOTTOM:.2f} "
+                "with a lap face outboard of it, so the lap wall has no reading",
+                at=at(near, SKIRT_BOTTOM),
+            ))
+            continue
+        column = at(face - LAP_EPS, SKIRT_BOTTOM)
+        down = crop.ray_runs(column, (column[0], column[1], SHELL_BACK - 0.5))
+        if not down:
+            problems.append(Problem(
+                f"{name} relief has no floor under the lap face", at=column,
+            ))
+            continue
+        floor = SKIRT_BOTTOM - down[0][0]
+        worst = None
+        for level in range(levels):
+            z = floor + max(level * LAP_STEP, LAP_EPS)
+            face = lap_face(z)
+            if face is None:
+                problems.append(Problem(
+                    f"{name} has no lap face outboard of the relief at z {z:.2f}",
+                    at=at(near, z),
+                ))
+                continue
+            start = at(face - LAP_EPS, z)
+            for angle in LAP_FAN:
+                a = math.radians(angle)
+                end = (
+                    start[0] + nx * LAP_RAY * math.cos(a),
+                    start[1] + ny * LAP_RAY * math.cos(a),
+                    z - LAP_RAY * math.sin(a),
+                )
+                runs = crop.ray_runs(start, end)
+                # The ray must enter material at the face it starts beside.
+                if not runs or runs[0][0] > LAP_EPS / math.cos(a) + LAP_EPS:
+                    continue
+                wall = runs[0][1] - runs[0][0]
+                if worst is None or wall < worst[0]:
+                    worst = (wall, name, z, at(face, z))
+        if worst is None:
+            problems.append(Problem(
+                f"{name} lap has no ray reading at any level", at=column,
+            ))
+            continue
+        if thinnest is None or worst[0] < thinnest[0]:
+            thinnest = worst
+        wall, _, z, point = worst
+        if wall < params.LAP_MIN_WALL - 0.02:
+            problems.append(Problem(
+                f"{name}: back lap wall is {wall:.2f} mm at z {z:.2f}, under "
+                f"LAP_MIN_WALL {params.LAP_MIN_WALL:.2f} (relief floor at "
+                f"z {floor:.2f})",
+                at=point,
+            ))
+    return problems, thinnest
 
 
 MESH_TOLERANCE = 0.05

@@ -195,6 +195,11 @@ SKIRT_T = 1.5
 is the skirt, so this one number splits the wall between the two shells."""
 SKIRT_FIT = 0.30
 """Clearance between the shells. This gap lets the front fold closed and prevents a tight seal."""
+LAP_MIN_WALL = 1.0
+"""Thinnest wall that the back lap can keep to the outer round under the front
+skirt. The shells check measures this wall on the built back shell around the
+IR end. A deeper IR-end skirt needs a deeper lap relief. That relief left the
+lap near a third of this value, so the IR end uses the plain skirt."""
 SIDE_SKIRT_THICKEN = 0.20
 """Extra inward wall on the two long skirt runs. The nominal 0.5 board fit
 still leaves 0.3 at the board edge; this stiffens the printed side seam without
@@ -258,7 +263,9 @@ GRIP_SKIRT_RELIEF = 0.20
 """Extra radial clearance on the front skirt at the -Y grip end. The end was
 hard to seat; relieving its hidden skirt leaves the outside seam unchanged."""
 SKIRT_TRANSITION_CHAMFER = 3.0
-"""Vertical rise at the deep-skirt ends. Support-cut ends use their full exposed height to remove small steps. Zero disables all skirt lead-ins."""
+"""A value above zero enables the front-skirt lead-ins at the support-cut ends.
+Each lead-in uses the full exposed height of its cut, not this value, to remove
+small steps. Zero disables all skirt lead-ins."""
 SKIRT_LEAD_ANGLE = 65.0
 """Lead-in angle in degrees from the flat skirt bottom along Y. A shallow angle reduces contact during assembly."""
 SKIRT_LEAD_FIT = 0.1
@@ -267,24 +274,13 @@ flat strip before the ramp accommodates printed skirt oversize without holding
 the two shells apart; the original ramp angle and support-break positions stay
 fixed."""
 
-# At the IR end the skirt runs deeper than anywhere else and carries two rounded
-# rectangular windows. The back's lap grows a detent behind each: the lap rides out
-# over the taper as the front goes down, and the window's lower edge then catches
-# under the flat. That end needs no screw as a result, and the front has to be
-# hooked in there and folded down, which is the point of it. The grip end is the
-# one closed by a screw now, through its own end wall.
-CATCH_SKIRT_H = 7.0
-"""Skirt depth at the IR end, against SKIRT_H everywhere else. It has to be deep
-enough to carry a window and still leave CATCH_RISE under it."""
-CATCH_SPAN = 8.0
-"""How far the deepened section runs in from the IR end.
-
-Bounded by the board support runs rather than by the catches themselves. Both
-side runs stop at y -34.36 at that end and their own skirt lead-ins occupy the
-1.0 above that, so a deepened section reaching past -33.36 would put the deep
-skirt on top of them. This leaves its inboard face at -32.71, which clears them
-by about six tenths. It was 15.66 while the deepened section was at the grip
-end, where nothing but the plain skirt was in the way."""
+# At the IR end, the plain skirt carries two rounded rectangular windows. Each
+# window sits CATCH_RISE above the skirt bottom. The back lap has a detent behind
+# each window. When the front goes down, the lap rides out over the detent taper.
+# Then the lower edge of the window catches under the flat of the detent. As a
+# result, that end needs no screw. The front must hook in at that end and then
+# fold down, and that is the purpose of this catch. A screw through the grip end
+# wall closes the other end.
 CATCH_W = 7.0
 CATCH_H = 2.4
 CATCH_R = 1.0
@@ -293,7 +289,7 @@ CATCH_SPACING = 18.0
 CATCH_RISE = 1.6
 """Skirt left below each window. This is what actually does the catching, so it is
 not free to shrink."""
-CATCH_D = 0.8
+CATCH_D = 1.1
 """How far a detent stands in off the lap. Bounded above by the skirt it sits in:
 past the skirt thickness less the fit it breaks through into the cavity, and the
 whole end wall has to flex this far to let the front in."""

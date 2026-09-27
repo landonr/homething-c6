@@ -240,7 +240,6 @@ def _front(runs, obstacles, fdm=False):
     placements = board.components()
     out = [
         _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
-        _entry("deep_skirt", "shells.deep_skirt", "add", shells.deep_skirt()),
         *_split(
             "side_skirt_stiffener", "shells.side_skirt_stiffeners", "add",
             shells.side_skirt_stiffeners(),
@@ -395,7 +394,6 @@ def _back(runs, obstacles):
     """The back shell, in the order back_shell() builds and cuts it."""
     out = [
         _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
-        _entry("catch_relief", "shells.catch_relief", "cut", shells.catch_relief()),
         _entry(
             "legacy_retention.post",
             "hardware.legacy_retention_post",

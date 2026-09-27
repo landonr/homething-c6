@@ -164,14 +164,8 @@ def support_fragments():
         math.radians(params.SUPPORT_UNDER_ANGLE)
     )
     z1 = support_top() + MERGE
-    # The ledges have to stop short of the deepened skirt, which the front
-    # carries down to DEEP_BOTTOM and would otherwise land on top of them. That
-    # section is at the IR end now, so this is the north limit rather than the
-    # south one, and the grip end runs the full length of the plan: with a plain
-    # skirt there, nothing asks for an end trim, and AGENTS.md wants every break
-    # derived from a board obstacle instead.
     y0 = box.min.Y
-    y1 = box.max.Y + params.BOARD_FIT + params.WALL - params.CATCH_SPAN
+    y1 = box.max.Y
     clips = []
     for x in (
         box.min.X + (clip_bearing - outer_reach) / 2,

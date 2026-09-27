@@ -223,7 +223,21 @@ def support_runs(wall_offset=LAP_IN):
 
 
 def front_support_cuts():
-    return support_runs(SKIRT_OUT)
+    """The front skirt relief over each run, SUPPORT_SKIRT_FIT above its top.
+
+    Each run is fused with a copy of itself lifted by the fit. The run is far
+    taller than the fit at the skirt, so the fuse is a clean upward sweep with
+    the same ends and underside."""
+    fit = params.SUPPORT_SKIRT_FIT
+    if fit <= 0:
+        raise ValueError("SUPPORT_SKIRT_FIT must be above zero")
+    out = []
+    for run in support_runs(SKIRT_OUT):
+        swept = _fuse(run, Pos(0, 0, fit) * run).solids()
+        if len(swept) != 1:
+            raise ValueError(f"front support relief swept to {len(swept)} solids")
+        out.append(swept[0])
+    return out
 
 
 def support_run_lengths():

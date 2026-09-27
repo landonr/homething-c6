@@ -109,6 +109,7 @@ from .support import (
     support_min_run,
     support_part_clearance,
     support_printable,
+    support_skirt_fit,
     support_wall_merge,
 )
 from .usb import usb_pocket_clearance, usb_pocket_reach
@@ -412,8 +413,21 @@ def _outline_is_cut(s):
 
 @_check("shells")
 def _shells_mate(s):
+    problems, preload = shells_mate(s.front, s.back)
+    readings = []
+    for name, (volume, box) in sorted(preload.items()):
+        if box is None:
+            readings.append(f"{name} none")
+            continue
+        inner, outer, z0, z1, reach = box
+        readings.append(
+            f"{name} {volume:.3f} mm3 at r {inner:.3f}..{outer:.3f} "
+            f"z {z0:.3f}..{z1:.3f} y +/-{reach:.3f}"
+        )
     return _report(
-        shells_mate(s.front, s.back), "front and back mate with no overlap"
+        problems,
+        "front and back mate with no overlap but the side catch preload on "
+        f"the lower lip: {', '.join(readings) or 'none'}",
     )
 
 
@@ -422,8 +436,9 @@ def _side_seam_retention(s):
     return _report(
         side_seam_retention(s.front, s.back),
         "both blind side pockets retain a continuous skirt floor, engage "
-        "detents with insertion and release ramps, and keep upper skirt land, "
-        "board-edge clearance and grip-end relief",
+        "lowered detents with insertion and release ramps, preload the lower "
+        "lip, clear the upper lip, and keep lower and upper skirt land, board-edge "
+        "clearance and grip-end relief",
     )
 
 
@@ -673,6 +688,17 @@ def _support_inner_round(s):
     return _report(
         support_inner_round(case.support_ledges()),
         f"support inboard edges have a {params.SUPPORT_INNER_R:.2f} radius",
+    )
+
+
+@_check("support")
+def _support_skirt_fit(s):
+    problems, sites = support_skirt_fit(s.front, s.back)
+    return _report(
+        problems,
+        f"front skirt stands clear of the support ledge tops by more than "
+        f"SUPPORT_GAP {params.SUPPORT_GAP:.2f} (fit {params.SUPPORT_SKIRT_FIT:.2f}), "
+        f"with skirt above the fit, at {sites} sites",
     )
 
 

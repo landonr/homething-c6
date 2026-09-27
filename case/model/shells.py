@@ -2,6 +2,7 @@
 section, the back lap, and the detents.
 """
 
+import functools
 import math
 
 from build123d import (
@@ -128,9 +129,44 @@ def side_catch_y():
     return y
 
 
+@functools.cache
+def side_catch_relief_top():
+    """Top of the front skirt's support relief under either side catch.
+
+    Read off the built cuts, not SUPPORT_TOP, so a support change that lifts the
+    relief into a pocket or a detent fails here."""
+    y = side_catch_y()
+    y0, y1 = y - params.SIDE_CATCH_W / 2, y + params.SIDE_CATCH_W / 2
+    tops = [
+        cut.bounding_box().max.Z
+        for cut in front_support_cuts()
+        if cut.bounding_box().min.Y < y1 and cut.bounding_box().max.Y > y0
+    ]
+    return max(tops, default=SUPPORT_TOP)
+
+
 def side_catch_bottom():
-    """Centre the pocket in the ledge-free height up to the raised seam."""
-    return (SUPPORT_TOP + SHELL_SEAM - params.SIDE_CATCH_H) / 2
+    """Pocket bottom, SIDE_CATCH_LOWER_LAND above the built support relief.
+
+    The pocket sits as low as that lower lip allows, so the skirt land above it
+    stays long."""
+    z0 = side_catch_relief_top() + params.SIDE_CATCH_LOWER_LAND
+    land = SHELL_SEAM - (z0 + params.SIDE_CATCH_H)
+    if land < params.SIDE_CATCH_UPPER_LAND_MIN:
+        raise ValueError(
+            f"side catch pocket leaves {land:.3f} of skirt above it, below "
+            f"SIDE_CATCH_UPPER_LAND_MIN {params.SIDE_CATCH_UPPER_LAND_MIN}"
+        )
+    return z0
+
+
+def _side_catch_clear_of_relief(z, what):
+    floor = max(side_catch_relief_top(), SUPPORT_TOP)
+    if z <= floor:
+        raise ValueError(
+            f"side catch {what} at z {z:.3f} is not above the support relief "
+            f"top {floor:.3f}"
+        )
 
 
 def side_catch_pockets():
@@ -139,6 +175,7 @@ def side_catch_pockets():
     z0 = side_catch_bottom()
     if z0 + params.SIDE_CATCH_H >= SHELL_SEAM:
         raise ValueError("side catch pocket reaches the top of the skirt")
+    _side_catch_clear_of_relief(z0, "pocket bottom")
     bevel = params.SIDE_CATCH_POCKET_CHAMFER
     if not 0 < bevel < min(params.SIDE_CATCH_R, params.SIDE_CATCH_H / 2):
         raise ValueError("side catch pocket chamfer does not fit its rounded profile")
@@ -166,41 +203,92 @@ def side_catch_pockets():
     return out
 
 
+DETENT_EDGE = 0.1
+"""Radial width a side detent keeps at its bottom and top edges, so the ruled
+loft of its wedge has no zero-width section."""
+
+
+def side_catch_detent_z():
+    """Bottom, tip-land bottom, tip-land top and top of each side detent.
+
+    The lower flank crosses the pocket's lower mouth edge SIDE_CATCH_PRELOAD
+    inside the skirt face, which sets every height here. The height itself
+    comes from the flank angle, not from the pocket."""
+    angle = params.SIDE_CATCH_FLANK_ANGLE
+    if not 0 < angle < 90:
+        raise ValueError("SIDE_CATCH_FLANK_ANGLE must be between 0 and 90 degrees")
+    slope = math.tan(math.radians(angle))
+    depth = params.SIDE_CATCH_D
+    land = params.SIDE_CATCH_LAND_H
+    preload = params.SIDE_CATCH_PRELOAD
+    engage = depth - params.SKIRT_FIT
+    if not DETENT_EDGE < depth:
+        raise ValueError("SIDE_CATCH_D leaves the side detent no flank")
+    if land <= 0:
+        raise ValueError("SIDE_CATCH_LAND_H must be above zero")
+    if not 0 < preload < engage:
+        raise ValueError(
+            f"SIDE_CATCH_PRELOAD {preload} must be above zero and below the "
+            f"detent's {engage:.2f} reach past the skirt face"
+        )
+    if not engage < params.SIDE_CATCH_POCKET_DEPTH:
+        raise ValueError("side catch detent tip reaches the pocket floor")
+    pocket0 = side_catch_bottom()
+    pocket1 = pocket0 + params.SIDE_CATCH_H
+    land0 = pocket0 + (engage - preload) / slope
+    land1 = land0 + land
+    rise = (depth - DETENT_EDGE) / slope
+    crossing = land1 + engage / slope
+    if crossing > pocket1 - params.SIDE_CATCH_FIT:
+        raise ValueError(
+            f"side detent's upper flank meets the skirt face at z {crossing:.3f}, "
+            f"within SIDE_CATCH_FIT of the pocket top {pocket1:.3f}"
+        )
+    return land0 - rise, land0, land1, land1 + rise
+
+
+def side_catch_detent_centre():
+    """Height of each side detent's tip land, where it stands deepest."""
+    _, land0, land1, _ = side_catch_detent_z()
+    return (land0 + land1) / 2
+
+
 def side_catch_detents():
-    """Back-lap detents chamfered on both insertion and release sides."""
+    """Back-lap detents that ramp at SIDE_CATCH_FLANK_ANGLE on the insertion
+    and release sides. The release flank bears on the pocket's lower lip under
+    a light preload, so the catch holds the seam closed."""
     box = board.board_profile().bounding_box()
-    z0 = side_catch_bottom() + params.SIDE_CATCH_FIT
-    z1 = z0 + params.SIDE_CATCH_H - 2 * params.SIDE_CATCH_FIT
+    z0, land0, land1, z1 = side_catch_detent_z()
+    _side_catch_clear_of_relief(z0, "detent bottom edge")
     depth = params.SIDE_CATCH_D
     fit = params.SIDE_CATCH_FIT
-    land = params.SIDE_CATCH_LAND_H
-    if not 0 < land < z1 - z0:
-        raise ValueError("side catch land must fit inside the detent height")
-    middle = (z0 + z1) / 2
+    # Stop FIT short of the pocket's rounded ends. The release flank must bear
+    # on the straight lower lip only: past it the lip curls up and buries the
+    # tip, which is the hard stop FIT exists to prevent.
+    length = params.SIDE_CATCH_W - 2 * (params.SIDE_CATCH_R + fit)
+    radius = max(params.SIDE_CATCH_R - fit, 0.1)
+    if not radius < min(length, z1 - z0) / 2:
+        raise ValueError("side detent corner radius does not fit its profile")
+    y = side_catch_y()
     out = []
     for side, edge in ((-1, box.min.X), (1, box.max.X)):
         base = edge + side * LAP_IN
         tip = base - side * depth
         plane = Plane(
-            origin=((base + tip) / 2, side_catch_y(), (z0 + z1) / 2),
+            origin=((base + tip) / 2, y, (z0 + z1) / 2),
             x_dir=(0, 1, 0), z_dir=(-side, 0, 0),
         )
-        profile = plane * RectangleRounded(
-            params.SIDE_CATCH_W - 2 * fit,
-            params.SIDE_CATCH_H - 2 * fit,
-            max(params.SIDE_CATCH_R - fit, 0.1),
-        )
+        profile = plane * RectangleRounded(length, z1 - z0, radius)
         prism = extrude(profile, amount=depth / 2 + MERGE, both=True)
+        rim = base - side * DETENT_EDGE / 2
         wedge = loft(
             [
-                Pos(base - side * 0.05, side_catch_y(), z0)
-                * Rectangle(0.1, params.SIDE_CATCH_W + 2),
-                Pos((base + tip) / 2, side_catch_y(), middle - land / 2)
+                Pos(rim, y, z0) * Rectangle(DETENT_EDGE, params.SIDE_CATCH_W + 2),
+                Pos((base + tip) / 2, y, land0)
                 * Rectangle(depth, params.SIDE_CATCH_W + 2),
-                Pos((base + tip) / 2, side_catch_y(), middle + land / 2)
+                Pos((base + tip) / 2, y, land1)
                 * Rectangle(depth, params.SIDE_CATCH_W + 2),
-                Pos(base - side * 0.05, side_catch_y(), z1)
-                * Rectangle(0.1, params.SIDE_CATCH_W + 2),
+                Pos(rim, y, z1) * Rectangle(DETENT_EDGE, params.SIDE_CATCH_W + 2),
             ],
             ruled=True,
         )

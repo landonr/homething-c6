@@ -154,15 +154,13 @@ def _support_sides(runs):
     return sorted(sides.items())
 
 
-def _support_entries(runs, op):
+def _support_entries(runs, op, src="support.support_runs", reads=None):
     """The board support runs, one entry each. Per instance because one box
     around all of them would cover the whole cavity."""
     out = []
     for side, group in _support_sides(runs):
         for index, run in enumerate(group, 1):
-            out.append(
-                _entry(f"support_runs.{side}.{index}", "support.support_runs", op, run)
-            )
+            out.append(_entry(f"support_runs.{side}.{index}", src, op, run, reads))
     return out
 
 
@@ -278,7 +276,16 @@ def _front(runs, obstacles, fdm=False):
         "grip_skirt_relief", "shells.grip_skirt_relief", "cut",
         shells.grip_skirt_relief(),
     ))
-    out += _support_entries(runs, "cut")
+    # The relief is the runs lifted by SUPPORT_SKIRT_FIT, so both builders'
+    # parameters move these boxes.
+    out += _support_entries(
+        runs,
+        "cut",
+        "support.front_support_cuts",
+        sorted(set(
+            _reads("support.support_runs") + _reads("support.front_support_cuts")
+        )),
+    )
     out += _support_gaps(runs, obstacles)
     for x, y in hardware.mount_points():
         out.append(
@@ -307,9 +314,14 @@ def _front(runs, obstacles, fdm=False):
     out += _split(
         "catch_windows", "shells.catch_windows", "cut", shells.catch_windows()
     )
+    # Both catch builders take their heights from a helper, so its parameters
+    # are what moves the box and belong in the entry.
     out += _split(
         "side_catch_pockets", "shells.side_catch_pockets", "cut",
         shells.side_catch_pockets(),
+        reads=sorted(set(
+            _reads("shells.side_catch_pockets") + _reads("shells.side_catch_bottom")
+        )),
     )
     out += [
         _entry(
@@ -393,6 +405,10 @@ def _back(runs, obstacles):
     out += _split(
         "side_catch_detents", "shells.side_catch_detents", "add",
         shells.side_catch_detents(),
+        reads=sorted(set(
+            _reads("shells.side_catch_detents") + _reads("shells.side_catch_detent_z")
+            + _reads("shells.side_catch_bottom")
+        )),
     )
     # The two end-screw cuts share one hole, so the shank and the head
     # counterbore are told apart by what each does rather than by where it is.

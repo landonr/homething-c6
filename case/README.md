@@ -181,9 +181,13 @@ The front shell holds the board. Three M2 screws fasten the V3 board to its boss
 The back lap closes over the front skirt. Two detents secure the IR end.
 Two hidden side catches keep the long seams closed near the board midpoint.
 Their front-skirt pockets are blind, rounded, and bevelled at the mouth, with
-continuous material behind them. The seam sits above the board top, leaving a
-solid skirt land above each catch.
+continuous material behind them. The seam sits above the board top.
+Each pocket sits a short lower lip above the front skirt's support relief, so a long solid skirt land stays above each catch.
+The support relief stands `SUPPORT_SKIRT_FIT` above the ledge tops, so the front skirt never lands on a ledge. The seam shoulder is the only vertical stop.
 The back detents ramp on both sides so the shells can be opened for service.
+Each back detent sits lower than its pocket and bears on the lower lip with a light preload.
+The preload holds the seam closed.
+`SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
 
 One M2 x 6 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The case uses four M2 x 6 screws in total and no long screw.
 
@@ -236,8 +240,9 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the microphone funnel aligned with the board port.
 - Keep the USB slot and pocket clear of the connector shell.
 - Keep support ledges clear of board parts, screw heads, and the cell.
+- Keep the front skirt clear above the support ledge tops.
 - Keep the IR window shoulder continuous for adhesive.
-- Keep the front and back shell mating volumes separate.
+- Keep the front and back shell mating volumes separate. The side catch preload is the only exception. The checks allow this overlap only at the lower pocket lip.
 
 The checks must probe built geometry. A check must not only repeat the formula that creates the feature.
 

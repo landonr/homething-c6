@@ -48,6 +48,12 @@ The uniform offset changes case length and width by twice the clearance change."
 # Board deflection stops on the inside of the back shell side walls.
 SUPPORT_BEARING = 3.0
 SUPPORT_GAP = 0.25
+SUPPORT_SKIRT_FIT = 0.4
+"""Vertical clearance between the top of each board support ledge and the
+front skirt relief above it. The front skirt must never land on a ledge,
+because the seam shoulder is the only vertical stop. This value is larger than
+SUPPORT_GAP. As a result, when a button press pushes the board down, the board
+touches the ledges before the skirt does."""
 SUPPORT_CLEARANCE = 0.4
 SUPPORT_MIN_RUN = 8.0
 SUPPORT_SOUTH_RUNS = False
@@ -181,9 +187,9 @@ SKIRT_H = 4.0
 """How far the skirt drops below the board top. Raising the seam grows the
 skirt upward without moving its lower edge into the support ledges or screw."""
 SHELL_SEAM_RISE = 1.5
-"""Lift the back lap and visible seam above the board top. The centered blind
-catch pocket keeps about 1.08 of skirt above it and continuous wall behind it,
-while the support ledges and board mounting heights remain unchanged."""
+"""Lift the back lap and visible seam above the board top. The blind catch
+pocket keeps about 1.15 of skirt above it and continuous wall behind it. The
+support ledges and board mounting heights do not change."""
 SKIRT_T = 1.5
 """The back's lap over the skirt. Whatever is left of WALL after this and the fit
 is the skirt, so this one number splits the wall between the two shells."""
@@ -201,14 +207,19 @@ SIDE_CATCH_W = 8.0
 """Length of each hidden side catch along the seam. A short land limits the
 amount of PLA that must flex during the final fold closed."""
 SIDE_CATCH_H = 1.2
-"""Pocket height centered in the clear vertical band above the support ledges
-and below the raised seam, without cutting the full-length support runs."""
+"""Pocket height in the clear band above the front skirt's support relief and
+below the raised seam. The pocket does not cut the full-length support runs."""
+SIDE_CATCH_LOWER_LAND = 0.6
+"""Height of skirt between the top of the built support relief and the pocket
+bottom. The detent release flank bears on this lower lip. The pocket does not
+need to be central in the band. It is as low as a printable lip below it
+allows, so the upper land stays long."""
 SIDE_CATCH_R = 0.45
 """Round the pocket corners to avoid sharp stress risers in the printed skirt."""
-SIDE_CATCH_POCKET_DEPTH = 0.35
-"""Blind cut inward from the skirt's outer face. The detent enters 0.15 past
-that face; this leaves 0.20 behind its tip and over 1.0 of continuous skirt
-wall at the pocket floor."""
+SIDE_CATCH_POCKET_DEPTH = 0.40
+"""Blind cut inward from the skirt's outer face. The detent tip stops 0.05
+short of the floor. The wall behind the floor is exactly SIDE_CATCH_WALL_MIN,
+so a deeper pocket fails the wall check."""
 SIDE_CATCH_POCKET_CHAMFER = 0.15
 """Inset of the pocket's rounded inner profile from its outer mouth. The
 resulting bevel around both lips matches the detent's insertion and release
@@ -217,18 +228,32 @@ SIDE_CATCH_WALL_MIN = 1.0
 """Minimum continuous wall behind each blind catch pocket. This is the point
 of replacing the through-window: a shallow detent must not sever the skirt."""
 SIDE_CATCH_UPPER_LAND_MIN = 1.0
-"""Minimum height of intact skirt above a central pocket, checked on the built
-shell. Centering the pocket between SUPPORT_TOP and SHELL_SEAM leaves about
-1.08 nominally above its top edge."""
-SIDE_CATCH_D = 0.45
+"""Minimum height of intact skirt above the pocket, checked on the built
+shell. SIDE_CATCH_LOWER_LAND leaves about 1.15 nominally above its top edge.
+If the pocket leaves less, side_catch_bottom() fails."""
+SIDE_CATCH_D = 0.65
 """How far each back-lap detent projects inward. It crosses the 0.30 shell fit
-by only 0.15, so the PLA skirt needs only a small deflection to engage."""
+and enters the pocket by 0.35. The earlier 0.15 of engagement held too little
+on FDM prints."""
+SIDE_CATCH_FLANK_ANGLE = 45.0
+"""Angle in degrees between each detent flank and the lap face. The detent
+height comes from this angle, SIDE_CATCH_D and SIDE_CATCH_LAND_H. At this
+depth, a slope from the pocket height left the flank that faces the bed at 36
+degrees to it. 45 keeps both flanks printable in either back-shell orientation."""
+SIDE_CATCH_PRELOAD = 0.10
+"""Radial interference of the lower (release) flank at the pocket's lower mouth
+edge. This sets the detent centre below the pocket centre. The skirt stays
+slightly deflected when closed, and the flank force holds the front down on
+the seam."""
 SIDE_CATCH_LAND_H = 0.1
-"""Short full-depth land at the middle of each detent. The rest of its height
-ramps away on both sides so the shell can be opened and closed for service."""
+"""Short full-depth land at the tip of each detent. Both flanks ramp away from
+it, so the shell can be opened and closed for service."""
 SIDE_CATCH_FIT = 0.15
-"""Inset of the back detent from every side-pocket edge to prevent a hard stop
-when a printed shell closes."""
+"""Inset of each detent's two lengthwise ends from the ends of the pocket's
+straight lower lip. Past those ends the lip curls up into the rounded pocket
+ends and buries the tip, which is a hard stop. It is also the minimum
+clearance between the upper flank and the pocket's upper lip at the skirt
+face."""
 GRIP_SKIRT_RELIEF = 0.20
 """Extra radial clearance on the front skirt at the -Y grip end. The end was
 hard to seat; relieving its hidden skirt leaves the outside seam unchanged."""

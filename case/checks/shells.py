@@ -1,5 +1,6 @@
-"""Shells mate: the front and the back do not occupy the same space. Nothing else
-covers it, because every other pass measures a shell against the board.
+"""Shells mate: the front and the back do not occupy the same space, except the
+side catch preload on the lower pocket lip. Nothing else covers it, because
+every other pass measures a shell against the board.
 
 Interference: components the shells and the plate actually hit in 3D, each
 one either a missing aperture or a keepout parameter set too tight.
@@ -18,10 +19,10 @@ from collections import Counter
 import board
 import params
 
-from build123d import Box, Pos
+from build123d import Box, Compound, Pos
 
 from model import shells
-from model.stack import LAP_IN, SHELL_SEAM, SKIRT_BOTTOM, SKIRT_OUT
+from model.stack import LAP_IN, SHELL_SEAM, SKIRT_BOTTOM, SKIRT_OUT, SUPPORT_TOP
 from model.support import front_support_cuts
 
 from .common import TOLERANCE, Problem, _Crop, _volume
@@ -46,18 +47,93 @@ def _stem(name):
     return f"cap-{ref.lower()}" if kind == "cap" else None
 
 
+def _solids(shape):
+    return list(shape.solids()) if shape else []
+
+
+def side_catch_zones():
+    """One box around each side catch: the pocket's length, the skirt band from
+    the ledges to the seam, and the skirt's full thickness out to the lap."""
+    board_box = board.board_profile().bounding_box()
+    y = shells.side_catch_y()
+    zones = []
+    for side, edge, name in (
+        (-1, board_box.min.X, "-X"),
+        (1, board_box.max.X, "+X"),
+    ):
+        inner = edge + side * (params.BOARD_FIT - params.SIDE_SKIRT_THICKEN)
+        lap = edge + side * LAP_IN
+        zone = Pos((inner + lap) / 2, y, (SUPPORT_TOP + SHELL_SEAM) / 2) * Box(
+            abs(lap - inner), params.SIDE_CATCH_W, SHELL_SEAM - SUPPORT_TOP
+        )
+        zones.append((name, side, edge, zone))
+    return zones
+
+
 def shells_mate(front, back):
-    """The two shells must not occupy the same space anywhere.
+    """The two shells must not occupy the same space, except the side catch
+    preload. Returns the problems and each side's preload reading.
 
     Nothing else covers this. Every other pass measures a shell against the board,
     so a mating feature cut on the wrong side, or a fit that went negative, passes
     all of them and only shows up when the parts will not close.
+
+    The side detents overlap the skirt by design, so each catch has a box where
+    overlap is allowed. Inside it the overlap must be the designed kind: the
+    release flank on the pocket's lower lip. Its top stays below the pocket
+    centre, its inner edge short of the pocket floor, and its ends inside the
+    lip's straight run. Anywhere else TOLERANCE holds as before.
     """
-    overlap = front.intersect(back)
-    fouled = _volume(overlap)
-    if fouled <= TOLERANCE:
-        return []
-    return [Problem(f"front and back overlap by {fouled:.2f} mm3", box=overlap)]
+    pieces = _solids(front.intersect(back))
+    if not pieces:
+        return [], {}
+    overlap = Compound(pieces)
+    zones = side_catch_zones()
+    problems = []
+    outside = _solids(overlap.cut(*(zone for *_, zone in zones)))
+    fouled = sum(solid.volume for solid in outside)
+    if fouled > TOLERANCE:
+        problems.append(Problem(
+            f"front and back overlap by {fouled:.2f} mm3 outside the side catches",
+            box=Compound(outside),
+        ))
+    y = shells.side_catch_y()
+    centre = shells.side_catch_bottom() + params.SIDE_CATCH_H / 2
+    floor = SKIRT_OUT - params.SIDE_CATCH_POCKET_DEPTH
+    straight = params.SIDE_CATCH_W / 2 - params.SIDE_CATCH_R
+    readings = {}
+    for name, side, edge, zone in zones:
+        inside = _solids(overlap.intersect(zone))
+        volume = sum(solid.volume for solid in inside)
+        if not inside:
+            readings[name] = (0.0, None)
+            continue
+        found = Compound(inside)
+        box = found.bounding_box()
+        inner = box.min.X - edge if side > 0 else edge - box.max.X
+        outer = box.max.X - edge if side > 0 else edge - box.min.X
+        reach = max(abs(box.min.Y - y), abs(box.max.Y - y))
+        readings[name] = (volume, (inner, outer, box.min.Z, box.max.Z, reach))
+        if box.max.Z >= centre:
+            problems.append(Problem(
+                f"{name} side catch overlap reaches z {box.max.Z:.3f}, not below "
+                f"the pocket centre {centre:.3f}: the detent bears on the upper lip",
+                box=found,
+            ))
+        if inner <= floor:
+            problems.append(Problem(
+                f"{name} side catch overlap reaches {inner:.3f} from the board "
+                f"edge, not short of the pocket floor at {floor:.3f}",
+                box=found,
+            ))
+        if reach > straight:
+            problems.append(Problem(
+                f"{name} side catch overlap runs {reach:.3f} from the catch "
+                f"centre, past the pocket's straight lip at {straight:.3f}: the "
+                "detent tip is in a rounded pocket end",
+                box=found,
+            ))
+    return problems, readings
 
 
 def side_seam_retention(front, back):
@@ -67,6 +143,7 @@ def side_seam_retention(front, back):
     y = shells.side_catch_y()
     z0 = shells.side_catch_bottom()
     z = z0 + params.SIDE_CATCH_H / 2
+    z_detent = shells.side_catch_detent_centre()
 
     def probe(crop, label, centre, size, material):
         solid = Pos(*centre) * Box(*size)
@@ -84,7 +161,10 @@ def side_seam_retention(front, back):
     ):
         # Fixed sites inside the newly claimed material and interlock. Reading
         # the tunable itself here would let a weakened feature move its probe
-        # along with it and give a vacuous pass.
+        # along with it and give a vacuous pass. The detent sites are fixed
+        # off SKIRT_OUT and LAP_IN and the pocket's own lips. Only the
+        # engagement probes follow the detent centre, the one height at which
+        # the lowered detent is full depth.
         inner = edge + side * (params.BOARD_FIT - 0.1)
         board_gap = edge + side * 0.1
         pocket_x = edge + side * (SKIRT_OUT - 0.12)
@@ -94,6 +174,10 @@ def side_seam_retention(front, back):
         )
         lap_face = edge + side * LAP_IN
         engaged = edge + side * (SKIRT_OUT - 0.08)
+        deep = edge + side * (SKIRT_OUT - 0.30)
+        root = edge + side * (LAP_IN - 0.1)
+        skirt_face = edge + side * (SKIRT_OUT - 0.025)
+        gap_face = edge + side * (SKIRT_OUT - 0.02)
         lo_x = min(edge, lap_face) - params.WALL
         hi_x = max(edge, lap_face) + params.WALL
         lo_y = y - params.SIDE_CATCH_W / 2 - 2
@@ -122,16 +206,46 @@ def side_seam_retention(front, back):
                   (0.04, 0.12, 0.04), False)
             probe(front_crop, f"{name} {lip} pocket bevel floor", (floor_edge_x, y, lip_z),
                   (0.04, 0.12, 0.04), True)
-        probe(front_crop, f"{name} interlock opening", (engaged, y, z),
+        probe(front_crop, f"{name} interlock opening", (engaged, y, z_detent),
               (0.08, 0.2, 0.08), False)
         probe(front_crop, f"{name} skirt beside pocket", (pocket_x, y - params.SIDE_CATCH_W / 2 - 0.7, z),
               (0.2, 0.2, 0.2), True)
-        probe(back_crop, f"{name} engaged detent", (engaged, y, z),
+        probe(back_crop, f"{name} engaged detent", (engaged, y, z_detent),
               (0.08, 0.2, 0.08), True)
-        probe(back_crop, f"{name} lower release ramp", (engaged, y, z0 + params.SIDE_CATCH_FIT + 0.08),
-              (0.08, 0.2, 0.08), False)
-        probe(back_crop, f"{name} upper insertion ramp", (engaged, y, z0 + params.SIDE_CATCH_H - params.SIDE_CATCH_FIT - 0.08),
-              (0.08, 0.2, 0.08), False)
+        probe(back_crop, f"{name} detent tip depth", (deep, y, z_detent),
+              (0.08, 0.2, 0.08), True)
+        # A ramp is material at the lap and open at the tip depth at one
+        # height. A square block fills both sites, and a short block empties
+        # both.
+        for flank, flank_z in (("lower release", z0), ("upper insertion", z)):
+            probe(back_crop, f"{name} {flank} ramp root", (root, y, flank_z),
+                  (0.08, 0.2, 0.08), True)
+            probe(back_crop, f"{name} {flank} ramp", (deep, y, flank_z),
+                  (0.08, 0.2, 0.08), False)
+        # Just under the lower lip, inside the skirt face: both shells hold
+        # material there only while the release flank is preloaded on it.
+        for crop, shell in ((front_crop, "skirt"), (back_crop, "detent")):
+            probe(crop, f"{name} lower lip preload {shell}", (skirt_face, y, z0 - 0.02),
+                  (0.03, 0.2, 0.02), True)
+        # The lip the release flank bears on, from the nominal relief top to
+        # the pocket. Fixed off SUPPORT_TOP and the fit, not the built relief,
+        # so a relief that climbs into it or a pocket that drops into it
+        # fails. The thin foot and crown slabs catch a small shortfall.
+        lip0 = SUPPORT_TOP + params.SUPPORT_SKIRT_FIT
+        lip1 = lip0 + params.SIDE_CATCH_LOWER_LAND
+        lip_in = edge + side * (params.BOARD_FIT - params.SIDE_SKIRT_THICKEN + 0.05)
+        lip_out = edge + side * (SKIRT_OUT - 0.05)
+        lip_len = params.SIDE_CATCH_W - 2 * params.SIDE_CATCH_R
+        for part, part_z0, part_z1 in (
+            ("", lip0 + 0.03, lip1 - 0.03),
+            (" foot", lip0 + 0.03, lip0 + 0.07),
+            (" crown", lip1 - 0.07, lip1 - 0.03),
+        ):
+            probe(front_crop, f"{name} lower skirt lip{part}",
+                  ((lip_in + lip_out) / 2, y, (part_z0 + part_z1) / 2),
+                  (abs(lip_out - lip_in), lip_len, part_z1 - part_z0), True)
+        probe(back_crop, f"{name} upper lip clearance",
+              (gap_face, y, z0 + params.SIDE_CATCH_H - 0.08), (0.04, 0.2, 0.12), False)
         land_z = z0 + params.SIDE_CATCH_H + params.SIDE_CATCH_UPPER_LAND_MIN
         lap_x = edge + side * (LAP_IN + params.SKIRT_T / 2)
         probe(front_crop, f"{name} upper skirt land", (pocket_x, y, land_z),

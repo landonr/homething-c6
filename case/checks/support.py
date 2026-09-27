@@ -7,9 +7,9 @@ from build123d import Box, Pos
 import board
 import case
 import params
-from model.stack import LAP_IN, MERGE
+from model.stack import LAP_IN, MERGE, SKIRT_OUT, SUPPORT_TOP
 
-from .common import TOLERANCE, _volume
+from .common import TOLERANCE, Problem, _Crop, _volume
 
 
 def support_board_clearance(ledge):
@@ -113,3 +113,86 @@ def support_case_containment(back):
     return [] if outside <= TOLERANCE else [
         f"back shell extends outside the case envelope by {outside:.2f} mm3"
     ]
+
+
+SKIRT_FIT_MARGIN = 0.02
+"""Distance each skirt fit probe keeps from the plane it reads beside."""
+
+SKIRT_FIT_SLAB = 0.04
+"""Height of the material probes on either side of the skirt fit gap."""
+
+
+def support_skirt_fit(front, back):
+    """The front skirt stands clear of every ledge top by more than SUPPORT_GAP.
+
+    The open band runs SUPPORT_GAP up from SUPPORT_TOP and does not read
+    SUPPORT_SKIRT_FIT. The builder reads that parameter, so a band taken off it
+    passes any fit. Off SUPPORT_GAP, a fit that lets the skirt reach a ledge
+    before the board does fails. The skirt must be material just above the fit,
+    so a relief that removes the whole skirt fails too. Each run is read at its
+    middle, and the run under a side catch at the catch too.
+    """
+    board_box = board.board_profile().bounding_box()
+    middle = board_box.center().X
+    fit = params.SUPPORT_SKIRT_FIT
+    margin = SKIRT_FIT_MARGIN
+    slab = SKIRT_FIT_SLAB
+    catch_y = case.side_catch_y()
+    gap = (SUPPORT_TOP + margin, SUPPORT_TOP + params.SUPPORT_GAP + margin)
+    ledge = (SUPPORT_TOP - margin - slab, SUPPORT_TOP - margin)
+    above = (SUPPORT_TOP + fit + margin, SUPPORT_TOP + fit + margin + slab)
+    bands = {"skirt fit gap": gap, "ledge top": ledge, "skirt above the fit": above}
+    problems = [
+        f"{what} probe band z {z0:.3f} to {z1:.3f} collapses, "
+        f"SUPPORT_GAP {params.SUPPORT_GAP:.3f}"
+        for what, (z0, z1) in bands.items()
+        if z1 - z0 < margin
+    ]
+    if problems:
+        return problems, 0
+    z_lo = min(z0 for z0, _ in bands.values()) - 0.1
+    z_hi = max(z1 for _, z1 in bands.values()) + 0.1
+    sites = 0
+    for run in case.support_runs():
+        box = run.bounding_box()
+        side = -1 if box.center().X < middle else 1
+        edge = board_box.min.X if side < 0 else board_box.max.X
+        name = "-X" if side < 0 else "+X"
+        x0, x1 = sorted((
+            edge + side * (params.BOARD_FIT - params.SIDE_SKIRT_THICKEN + 0.05),
+            edge + side * (SKIRT_OUT - 0.05),
+        ))
+        if x1 - x0 < margin:
+            problems.append(
+                f"{name} skirt fit probe width {x1 - x0:.3f} collapses between "
+                "BOARD_FIT less SIDE_SKIRT_THICKEN and SKIRT_OUT"
+            )
+            continue
+        stations = [(f"run at y {box.center().Y:.2f}", box.center().Y)]
+        if box.min.Y < catch_y < box.max.Y:
+            stations.append(("side catch", catch_y))
+        for station, y in stations:
+            sites += 1
+            lo = (x0 - 0.1, y - 0.5, z_lo)
+            hi = (x1 + 0.1, y + 0.5, z_hi)
+            crops = {"front": _Crop(front, lo, hi), "back": _Crop(back, lo, hi)}
+            for shell, what, (z0, z1), material in (
+                ("front", "skirt fit gap", gap, False),
+                ("back", "skirt fit gap", gap, False),
+                ("back", "ledge top", ledge, True),
+                ("front", "skirt above the fit", above, True),
+            ):
+                probe = Pos((x0 + x1) / 2, y, (z0 + z1) / 2) * Box(
+                    x1 - x0, 0.4, z1 - z0
+                )
+                fraction = crops[shell].fill_fraction(probe)
+                if (material and fraction < 0.98) or (not material and fraction > 0.02):
+                    problems.append(Problem(
+                        f"{name} {station} {shell} {what} at z {z0:.2f} to "
+                        f"{z1:.2f} is {fraction:.0%} material, expected "
+                        f"{'solid' if material else 'open'}",
+                        box=probe,
+                    ))
+    if not sites and not problems:
+        problems.append("no support run to read the skirt fit over")
+    return problems, sites

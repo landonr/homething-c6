@@ -54,7 +54,7 @@ Presets sit in `~/dev/c6remote-explode/presets/`. Pose a shot in the viewer, pre
 
 ## Board support ledges
 
-Keep the support ledges in the back shell. Use the same full-length runs to cut matching relief from the front shell.
+Keep the support ledges in the back shell. Use the same full-length runs to cut matching relief from the front shell. The relief stands `SUPPORT_SKIRT_FIT` above the ledge tops, so the front skirt never lands on a ledge.
 
 Keep a 0.25 mm gap below the board and a 3 mm bearing surface. Keep one straight 45 degree underside for FDM printing.
 

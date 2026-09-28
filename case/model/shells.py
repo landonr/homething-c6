@@ -65,6 +65,7 @@ from .stack import (
     SHELL_FRONT,
     SKIRT_BOTTOM,
     SKIRT_OUT,
+    STIFFENED_WALL,
     SUPPORT_TOP,
 )
 from .usb import usb_pocket, usb_slot
@@ -139,32 +140,43 @@ def _side_strip(stations, back, z0, z1):
     return out
 
 
-def side_skirt_taper_spans():
-    """The two y spans over which each side stiffener tapers in from the plain
-    board fit at a corner tangent to its full thickness."""
+def skirt_stiffener_taper_span():
+    """The y span over which each side of the stiffener tapers out from its
+    full thickness to the plain board fit at the IR corner tangent."""
     run = params.SIDE_SKIRT_THICKEN_RUN
     yt0, yt1 = corner_tangent_y()
-    if not 0 < run < (yt1 - yt0) / 2:
+    if not 0 < run < yt1 - yt0:
         raise ValueError(
-            f"SIDE_SKIRT_THICKEN_RUN {run} must be above zero and below half the "
+            f"SIDE_SKIRT_THICKEN_RUN {run} must be above zero and below the "
             f"{yt1 - yt0:.2f} straight side"
         )
-    return (yt0, yt0 + run), (yt1 - run, yt1)
+    return yt1 - run, yt1
 
 
-def side_skirt_stiffeners():
-    """Inward material along both side skirts, clear of the board's edge.
+def skirt_stiffener():
+    """Inward wall material clear of the board's edge, round the grip end and
+    up both long sides, as one solid.
 
-    Each stiffener stays on the straight side and tapers to the plain board fit
-    at both corner tangents, so the corner arcs keep that fit."""
-    fit, thick = params.BOARD_FIT, params.BOARD_FIT - params.SIDE_SKIRT_THICKEN
-    (yt0, ya), (yb, yt1) = side_skirt_taper_spans()
-    return _side_strip(
-        [(yt0, fit), (ya, thick), (yb, thick), (yt1, fit)],
-        fit + MERGE,
-        SKIRT_BOTTOM,
-        SHELL_SEAM,
+    A constant offset band, so the grip corners carry it without a step. Short
+    of the IR corner tangents it tapers to the plain board fit, so the IR corner
+    arcs and the IR end skirt keep that fit. The clip lies on the straight
+    sides, where the band is a rectangle, so it leaves no slice.
+
+    It runs from the skirt bottom to the cavity ceiling, so the inner wall has
+    no step at the seam."""
+    fit, thick = params.BOARD_FIT, STIFFENED_WALL
+    ya, yt1 = skirt_stiffener_taper_span()
+    box = board.board_profile().bounding_box()
+    reach = fit + MERGE + 1
+    clip_y0 = box.min.Y - reach
+    clip = Pos(
+        box.center().X, (clip_y0 + ya) / 2, (SKIRT_BOTTOM + CAVITY_FRONT) / 2
+    ) * Box(box.size.X + 2 * reach, ya - clip_y0, CAVITY_FRONT - SKIRT_BOTTOM + 2)
+    band = _ring(thick, fit + MERGE, SKIRT_BOTTOM, CAVITY_FRONT)
+    tapers = _side_strip(
+        [(ya, thick), (yt1, fit)], fit + MERGE, SKIRT_BOTTOM, CAVITY_FRONT
     )
+    return _fuse(_isect(band, clip), *tapers)
 
 
 def side_catch_y():
@@ -404,7 +416,7 @@ def skirt_lead_in_cuts():
         return Compound([])
     skirt = _fuse(
         _ring(params.BOARD_FIT, SKIRT_OUT, SKIRT_BOTTOM, SHELL_SEAM),
-        *side_skirt_stiffeners(),
+        skirt_stiffener(),
     )
     cuts = front_support_cuts()
     skirt = _cut(skirt, *cuts)
@@ -449,15 +461,15 @@ def skirt_lead_in_cuts():
             ]
             wedge = plane * Polygon(*points, align=None)
             wedges.append(extrude(wedge, amount=box.size.X + 2 * MERGE, dir=(1, 0, 0)))
+    y0, y1 = skirt_stiffener_taper_span()
     for wedge in wedges:
         box = wedge.bounding_box()
-        for y0, y1 in side_skirt_taper_spans():
-            if box.min.Y < y1 and box.max.Y > y0:
-                raise ValueError(
-                    f"a skirt lead-in at y {box.min.Y:.3f} to {box.max.Y:.3f} "
-                    f"reaches the side stiffener taper at y {y0:.3f} to {y1:.3f}, "
-                    "so SIDE_SKIRT_THICKEN_RUN is too long"
-                )
+        if box.min.Y < y1 and box.max.Y > y0:
+            raise ValueError(
+                f"a skirt lead-in at y {box.min.Y:.3f} to {box.max.Y:.3f} "
+                f"reaches the stiffener's IR-end taper at y {y0:.3f} to {y1:.3f}, "
+                "so SIDE_SKIRT_THICKEN_RUN is too long"
+            )
     skirt = _cut(skirt, *wedges)
     # A lead-in removes material only. Keep the catch lands outside this operation.
     return _cut(original, skirt)
@@ -736,7 +748,7 @@ def front_shell(fdm=False):
     shell = _fuse(
         shell,
         mic_duct(face),
-        *side_skirt_stiffeners(),
+        skirt_stiffener(),
         end_screw_block(),
         *bosses,
     )

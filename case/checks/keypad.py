@@ -2,6 +2,10 @@
 switch takes a cap now, so nothing of the pad itself still has to come
 out the far side; caps_fit() covers all eleven against the shell.
 
+Pad wall fit: every pad keeps PAD_FIT to the built front's wall on both long
+sides. The fit above rejects overlap only, so it passes a lobe that nearly
+touches the wall.
+
 Plunger stub contact: every switch's plunger actually lands on SWITCH_TOP,
 not merely in the formula, probed on the built pad rather than trusted from
 KEYPAD_PLUNGER_STUB alone: a clearance cut or a wrong z reference could leave
@@ -51,9 +55,18 @@ from build123d import Axis, Box, Cylinder, Pos
 import board
 import case
 from model import keypad as keypad_model
+from model.stack import CAVITY_FRONT, LAP_OUT, SKIRT_BOTTOM
 import params
 
-from .common import PROBE_D, TOLERANCE, Problem, _fill_fraction, _ray_runs, _volume
+from .common import (
+    PROBE_D,
+    TOLERANCE,
+    Problem,
+    _Crop,
+    _fill_fraction,
+    _ray_runs,
+    _volume,
+)
 
 
 GROOVE_TOLERANCE = 0.05
@@ -183,6 +196,42 @@ def pad_fits(front, pad):
     if fouled > TOLERANCE:
         return [f"pad fouls the front shell by {fouled:.2f} mm3"]
     return []
+
+
+PAD_FIT_TOLERANCE = 0.01
+"""Allowed shortfall on PAD_FIT at the wall. This is float slop, not a margin."""
+
+
+def pad_wall_fit(pairs):
+    """Each (label, front, pad) keeps PAD_FIT to the front's wall on both long
+    sides. Returns the problems and {label: (-X gap, +X gap)}.
+
+    pad_fits rejects overlap only, so a lobe 0.1 off the wall passed it. The
+    wall is cut out of the built front outboard of each board edge and stops
+    under the ceiling, which the pad web bears on."""
+    box = board.board_profile().bounding_box()
+    z0, z1 = SKIRT_BOTTOM, CAVITY_FRONT - 0.05
+    reach = LAP_OUT + 1
+    problems, readings = [], {}
+    for label, front, pad in pairs:
+        gaps = []
+        for name, x0, x1 in (
+            ("-X", box.min.X - reach, box.min.X),
+            ("+X", box.max.X, box.max.X + reach),
+        ):
+            wall = _Crop(front, (x0, box.min.Y, z0), (x1, box.max.Y, z1)).shape
+            if wall is None:
+                problems.append(f"{label} has no {name} wall to measure against")
+                continue
+            gap = pad.distance_to(wall)
+            gaps.append(gap)
+            if gap < params.PAD_FIT - PAD_FIT_TOLERANCE:
+                problems.append(
+                    f"{label} stands {gap:.3f} off the {name} wall, under "
+                    f"PAD_FIT {params.PAD_FIT:.2f}"
+                )
+        readings[label] = tuple(gaps) if len(gaps) == 2 else None
+    return problems, readings
 
 
 def mic_pad_contour(pad):

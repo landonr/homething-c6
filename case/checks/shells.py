@@ -26,7 +26,9 @@ import params
 from build123d import Box, Compound, GeomType, Pos
 
 from model import shells
+from model.hardware import end_screw_block_span
 from model.stack import (
+    CAVITY_FRONT,
     LAP_IN,
     LAP_OUT,
     SHELL_BACK,
@@ -36,6 +38,7 @@ from model.stack import (
     SUPPORT_TOP,
 )
 from model.support import front_support_cuts
+from model.usb import usb_slot
 
 from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _volume
 
@@ -303,8 +306,9 @@ def side_seam_retention(front, back):
         probe(taper_crop, f"{name} skirt past grip relief taper", (site, taper_y + run + 0.6, taper_z),
               (0.08, 0.2, 0.2), True)
 
-    # A ring stiffener clipped at the board edge fills this site, 1.0 past
-    # each corner tangent and inboard of the plain fit.
+    # The stiffener runs round the grip corners at full thickness and stops
+    # short of the IR ones, so 1.0 past each tangent the grip arcs are
+    # material inboard of the plain fit and the IR arcs are open.
     for arc in board.board_profile().outer_wire().edges():
         if arc.geom_type != GeomType.CIRCLE:
             continue
@@ -317,20 +321,64 @@ def side_seam_retention(front, back):
         label = f"{'+X' if side > 0 else '-X'} {'IR' if end > 0 else 'grip'}"
         crop = _Crop(front, (x - 0.5, y - 0.5, taper_z - 0.5), (x + 0.5, y + 0.5, taper_z + 0.5))
         probe(crop, f"{label} corner arc inboard of the board fit", (x, y, taper_z),
-              (0.06, 0.06, 0.2), False)
+              (0.06, 0.06, 0.2), end < 0)
 
-    # Past each taper the stiffener is back to full thickness.
+    # The grip end wall, between the -X corner tangent and whichever of the
+    # USB slot and the end screw block web starts first.
+    ends = [
+        e.bounding_box()
+        for e in board.board_profile().outer_wire().edges()
+        if e.geom_type == GeomType.LINE
+        and e.bounding_box().size.Y < 1e-6
+        and abs(e.bounding_box().min.Y - board_box.min.Y) < 1e-6
+    ]
+    wall_x0 = min(b.min.X for b in ends)
+    wall_x1 = min(usb_slot().bounding_box().min.X, end_screw_block_span()[0])
+    x = (wall_x0 + wall_x1) / 2
+    y = board_box.min.Y - (params.BOARD_FIT - 0.1)
+    crop = _Crop(front, (x - 0.5, y - 0.5, taper_z - 0.5), (x + 0.5, y + 0.5, taper_z + 0.5))
+    probe(crop, f"grip end wall inboard of the board fit at x {x:.2f}", (x, y, taper_z),
+          (0.2, 0.06, 0.2), True)
+
+    # Past the IR-end taper the stiffener is back to full thickness.
     thick = params.BOARD_FIT - params.SIDE_SKIRT_THICKEN + 0.05
-    reach = params.SIDE_SKIRT_THICKEN_RUN + 0.5
-    for at in (yt0 + reach, yt1 - reach):
-        for side, edge, name in (
-            (-1, board_box.min.X, "-X"),
-            (1, board_box.max.X, "+X"),
-        ):
-            x = edge + side * thick
-            crop = _Crop(front, (x - 0.5, at - 0.5, taper_z - 0.5), (x + 0.5, at + 0.5, taper_z + 0.5))
-            probe(crop, f"{name} full stiffener past its taper at y {at:.2f}", (x, at, taper_z),
-                  (0.06, 0.2, 0.2), True)
+    at = yt1 - (params.SIDE_SKIRT_THICKEN_RUN + 0.5)
+    for side, edge, name in (
+        (-1, board_box.min.X, "-X"),
+        (1, board_box.max.X, "+X"),
+    ):
+        x = edge + side * thick
+        crop = _Crop(front, (x - 0.5, at - 0.5, taper_z - 0.5), (x + 0.5, at + 0.5, taper_z + 0.5))
+        probe(crop, f"{name} full stiffener past its taper at y {at:.2f}", (x, at, taper_z),
+              (0.06, 0.2, 0.2), True)
+
+    # The stiffener reaches the ceiling, so the wall has no step at the seam or
+    # where the LED ring channel meets it beside the wheel.
+    flush = params.BOARD_FIT - 0.1
+    flush_z = SHELL_SEAM + 0.3
+    side_y = shells.side_catch_y() - params.SIDE_CATCH_W / 2 - 0.7
+    _, wheel_y = board.wheel_center()
+    grip_x = (wall_x0 + wall_x1) / 2
+    sites = []
+    for side, edge, name in (
+        (-1, board_box.min.X, "-X"),
+        (1, board_box.max.X, "+X"),
+    ):
+        sites.append((
+            f"{name} inner wall flush above the seam at y {side_y:.2f}",
+            (edge + side * flush, side_y, flush_z), (0.06, 0.2, 0.2),
+        ))
+        sites.append((
+            f"{name} inner wall flush under the LED ring channel at y {wheel_y:.2f}",
+            (edge + side * flush, wheel_y, CAVITY_FRONT - 0.3), (0.06, 0.2, 0.2),
+        ))
+    sites.append((
+        f"grip end inner wall flush above the seam at x {grip_x:.2f}",
+        (grip_x, board_box.min.Y - flush, flush_z), (0.2, 0.06, 0.2),
+    ))
+    for label, (px, py, pz), size in sites:
+        crop = _Crop(front, (px - 0.5, py - 0.5, pz - 0.5), (px + 0.5, py + 0.5, pz + 0.5))
+        probe(crop, label, (px, py, pz), size, True)
     return problems
 
 

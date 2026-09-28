@@ -29,6 +29,7 @@ from .cell import cell_axis, cell_bay
 from .features import write_features
 from .hardware import (
     end_screw_axis,
+    end_screw_block_span,
     end_screw_length,
     legacy_retention_floors,
     legacy_screw_length,
@@ -458,6 +459,7 @@ def main():
     # fastener: END_SCREW_PILOT_DEPTH is what keeps it that way.
     short_screw = params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
     end_x, end_z = end_screw_axis()
+    block_x0, block_x1 = end_screw_block_span()
     print(
         f"screws: {len(mount_points())}x M2 x {short_screw:.0f} into the front "
         f"plate through the board's own {board.mounting_holes()[0][2]:.1f} holes, plus "
@@ -486,13 +488,15 @@ def main():
     )
     print(
         f"grip end: no detents, closed by the one end-wall screw into a "
-        f"{params.END_SCREW_BLOCK_W:.1f}x{params.END_SCREW_BLOCK_D:.1f} block, "
+        f"{block_x1 - block_x0:.1f}x{params.END_SCREW_BLOCK_D:.1f} block, "
         f"{params.END_SCREW_PILOT_DEPTH:.1f} of engagement under "
         f"{LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.1f} of wall, "
         f"standing {params.END_SCREW_BLOCK_GAP:.2f} off the back's inner wall"
     )
     print(
-        f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick under a "
-        f"{params.SKIRT_T:.2f} lap, {SHELL_SEAM - SKIRT_BOTTOM:.1f} deep"
+        f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick at the IR end and "
+        f"{SKIRT_OUT - params.BOARD_FIT + params.SIDE_SKIRT_THICKEN:.2f} round the "
+        f"grip end and sides, under a {params.SKIRT_T:.2f} lap, "
+        f"{SHELL_SEAM - SKIRT_BOTTOM:.1f} deep"
     )
     print(f"written to {EXPORT}")

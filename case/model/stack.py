@@ -189,3 +189,8 @@ SKIRT_OUT = LAP_IN - params.SKIRT_FIT
 that wall carried down rather than a rib added beside it. That matters
 structurally: put it anywhere inboard and it shares no plan area with the wall
 above, and builds as a ring floating in mid air."""
+
+STIFFENED_WALL = params.BOARD_FIT - params.SIDE_SKIRT_THICKEN
+"""Offset of the front's inner wall from the board edge wherever
+skirt_stiffener() runs, from the skirt bottom to the cavity ceiling. The IR end
+keeps BOARD_FIT."""

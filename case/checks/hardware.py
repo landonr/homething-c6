@@ -11,8 +11,9 @@ shells rather than off the stack that sized it.
 End screw side tie: the web's tie from that block into the +X side skirt, at
 web height only, on both built fronts.
 
-End screw grip corner: the root fillet and the back's wall chamfer follow the
-+X grip corner arc, so neither stands proud of the skirt nor notches the lap.
+End screw grip corner: the block and its root fillet stop at the +X grip
+corner tangent, and the back's wall chamfer follows the arc past it, so nothing
+stands in the round and the lap keeps its wall.
 """
 
 import functools
@@ -23,6 +24,7 @@ from build123d import (
     BuildSketch,
     Compound,
     Cylinder,
+    GeomType,
     Plane,
     Polyline,
     Pos,
@@ -222,6 +224,8 @@ def end_screw(front, back):
     block = case.end_screw_block()
     box = block.bounding_box()
     x, z = case.end_screw_axis()
+    x0, x1 = case.end_screw_block_span()
+    cx = (x0 + x1) / 2
     edge = case.end_wall_edge()
 
     if len(front.solids()) != 1:
@@ -273,8 +277,8 @@ def end_screw(front, back):
                 close=True,
             )
         make_face()
-    wedge = Pos(x, 0, 0) * extrude(
-        section.sketch, amount=params.END_SCREW_BLOCK_W / 2 - 0.2, both=True
+    wedge = Pos(cx, 0, 0) * extrude(
+        section.sketch, amount=(x1 - x0) / 2 - 0.2, both=True
     )
     filled = _fill_fraction(front, wedge)
     if filled > TOLERANCE:
@@ -312,8 +316,8 @@ def end_screw(front, back):
     # block is no thinner than the skirt it hangs from.
     neck = params.SKIRT_T
     face = box.max.Y - params.END_SCREW_BLOCK_D
-    probe = Pos(x, face - 0.1, case.SKIRT_BOTTOM + 0.05 + (neck - 0.05) / 2) * Box(
-        params.END_SCREW_BLOCK_W - 0.4, 0.2, neck - 0.05
+    probe = Pos(cx, face - 0.1, case.SKIRT_BOTTOM + 0.05 + (neck - 0.05) / 2) * Box(
+        x1 - x0 - 0.4, 0.2, neck - 0.05
     )
     filled = _fill_fraction(front, probe)
     if filled < 1 - TOLERANCE:
@@ -333,23 +337,23 @@ def end_screw(front, back):
     # inside the fillet at any value of it.
     start = case.end_screw_fillet_start()
     front_leg, back_leg = case.end_screw_root_legs()
-    flat = params.END_SCREW_BLOCK_W - 0.4
+    flat = x1 - x0 - 0.4
     for probe, message in (
         (
-            Pos(x, face - 0.25 * front_leg, case.SKIRT_BOTTOM - 0.25 * front_leg)
+            Pos(cx, face - 0.25 * front_leg, case.SKIRT_BOTTOM - 0.25 * front_leg)
             * Box(flat, 0.2 * front_leg, 0.2 * front_leg),
             "of the root fillet under the web is material, so the neck gets no "
             "depth below SKIRT_BOTTOM",
         ),
         (
-            Pos(x, start + 0.1, case.SKIRT_BOTTOM + 0.15) * Box(flat, 0.2, 0.2),
+            Pos(cx, start + 0.1, case.SKIRT_BOTTOM + 0.15) * Box(flat, 0.2, 0.2),
             "of the skirt is material where the root fillet starts, so the "
             "fillet hangs off nothing",
         ),
         # The hypotenuse is 0.2 under SKIRT_BOTTOM at start + 0.2, so this box
         # sits inside it. A fillet that starts inboard of the relief reads void.
         (
-            Pos(x, start + 0.25, case.SKIRT_BOTTOM - 0.1) * Box(flat, 0.1, 0.1),
+            Pos(cx, start + 0.25, case.SKIRT_BOTTOM - 0.1) * Box(flat, 0.1, 0.1),
             "of the root fillet is material next to the grip skirt relief, so "
             "the fillet stops short of it and the skirt underside keeps a flat",
         ),
@@ -363,7 +367,7 @@ def end_screw(front, back):
     # The back's parallel chamfer, read as void on the built back.
     wall = edge - params.BOARD_FIT
     relief = case.SKIRT_BOTTOM - params.SKIRT_FIT
-    probe = Pos(x, wall - 0.25 * back_leg, relief - 0.25 * back_leg) * Box(
+    probe = Pos(cx, wall - 0.25 * back_leg, relief - 0.25 * back_leg) * Box(
         flat, 0.2 * back_leg, 0.2 * back_leg
     )
     filled = _fill_fraction(back, probe)
@@ -399,7 +403,7 @@ def end_screw(front, back):
         surface = Compound(hit.solids()).bounding_box().min.Y
         clearance = case.LAP_IN - case.SKIRT_OUT + params.GRIP_SKIRT_RELIEF
         gap = clearance - 0.05
-        probe = Pos(x, surface - 0.02 - gap / 2, band) * Box(flat, gap, 0.2)
+        probe = Pos(cx, surface - 0.02 - gap / 2, band) * Box(flat, gap, 0.2)
         filled = _fill_fraction(back, probe)
         if filled > TOLERANCE:
             problems.append(
@@ -538,8 +542,7 @@ def end_screw_side_tie(front, part="case-front"):
     block's width, and neither grows toward the back's side wall.
     """
     problems = []
-    x, _ = case.end_screw_axis()
-    face = x + params.END_SCREW_BLOCK_W / 2
+    _, face = case.end_screw_block_span()
     side = case.side_skirt_inner_x()
     start = (
         case.end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_RAMP_LEDGE
@@ -581,45 +584,43 @@ def end_screw_side_tie(front, part="case-front"):
 
 
 def end_screw_grip_corner(back, *fronts):
-    """The block's root fillet and the back's end wall chamfer at the +X grip
-    corner, on the built shells.
+    """The end screw block, its root fillet and the back's end wall chamfer at
+    the +X grip corner, on the built shells.
 
-    Both are straight wedges across the block, and the corner arc curves
-    inboard of their straight start lines. Each face is read off the built
-    shell by a ray level with it. Just outboard of the relieved skirt face,
-    below the relief ring, each front must be void, so the fillet does not
-    stand proud there. Just outboard of the lap's inner face, above and below
-    the relief floor, the back must be material, so the chamfer does not notch
-    the lap.
+    The block stops at the corner tangent, where the board's -Y edge meets the
+    arc. The tangent is read off the board here, not off the block. Below
+    SKIRT_BOTTOM, over the block's depth and from just past the tangent to the
+    side skirt, each front must be void, so neither the block nor its root
+    fillet stands in the round. The chamfer runs MERGE past the block into the
+    round, where the lap's inner face curves inboard of its start line. That
+    face is read off the built back by a ray. Just outboard of it, above and
+    below the relief floor, the back must be material, so the chamfer does not
+    notch the lap.
     """
     problems = []
-    x, _ = case.end_screw_axis()
-    start = case.end_screw_fillet_start()
-    fx = x + params.END_SCREW_BLOCK_W / 2 - 0.05
-    ray_z = case.SKIRT_BOTTOM - 0.05
+    edge = case.end_wall_edge()
+    tangent = max(
+        e.bounding_box().max.X
+        for e in board.board_profile().outer_wire().edges()
+        if e.geom_type == GeomType.LINE
+        and e.bounding_box().size.Y < 1e-6
+        and abs(e.bounding_box().min.Y - edge) < 1e-6
+    )
+    block = case.end_screw_block().bounding_box()
+    lo = (tangent + 0.05, case.end_screw_fillet_start() + 0.05, block.min.Z + 0.05)
+    hi = (case.side_skirt_inner_x() - 0.05, block.max.Y - 0.05, case.SKIRT_BOTTOM - 0.05)
+    zone = Pos(*((a + b) / 2 for a, b in zip(lo, hi))) * Box(
+        *(b - a for a, b in zip(lo, hi))
+    )
     for front, part in fronts:
-        crop = _Crop(
-            front,
-            (fx - 0.5, start - 0.5, case.SKIRT_BOTTOM - 1),
-            (fx + 0.5, start + 1, case.SKIRT_BOTTOM + 0.5),
-        )
-        runs = crop.ray_runs((fx, start - 0.4, ray_z), (fx, start + 0.9, ray_z))
-        if not runs:
-            problems.append(Problem(
-                f"the built front has no relieved skirt face at x {fx:.2f}, "
-                f"z {ray_z:.2f} to read the root fillet's corner from",
-                part=part,
-            ))
-            continue
-        face_y = start - 0.4 + runs[0][0]
-        probe = Pos(fx, face_y - 0.03, case.SKIRT_BOTTOM - 0.12) * Box(0.04, 0.02, 0.02)
-        filled = crop.fill_fraction(probe)
+        crop = _Crop(front, [v - 0.1 for v in lo], [v + 0.1 for v in hi])
+        filled = crop.fill_fraction(zone) * zone.volume
         if filled > TOLERANCE:
             problems.append(Problem(
-                f"the root fillet is {filled:.0%} material just outboard of the "
-                f"relieved skirt face at the +X grip corner, y {face_y:.3f}, so it "
-                "stands proud of the arc below the relief",
-                box=probe,
+                f"the front holds {filled:.2f} mm3 below SKIRT_BOTTOM in the +X "
+                f"grip corner round, past the tangent at x {tangent:.3f}, so the "
+                "end screw block or its root fillet stands in the round",
+                box=zone,
                 part=part,
             ))
 

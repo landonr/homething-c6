@@ -94,6 +94,7 @@ from .keypad import (
     pad_clears_wheel,
     pad_fits,
     pad_isolation_grooves,
+    pad_wall_fit,
     plunger_stub_contact,
     recess_edge_clearance,
     recess_land,
@@ -230,6 +231,25 @@ def _apertures(s):
 def _pad_fits(s):
     return _report(
         pad_fits(s.front, s.pad), "pad seats in the front shell without fouling it"
+    )
+
+
+@_check("keypad")
+def _pad_wall_fit(s):
+    problems, readings = pad_wall_fit([
+        ("pad", s.front, s.pad),
+        ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+    ])
+    gaps = ", ".join(
+        f"{label} {pair[0]:.2f}/{pair[1]:.2f}"
+        for label, pair in readings.items()
+        if pair
+    )
+    return _report(
+        problems,
+        f"every pad keeps PAD_FIT {params.PAD_FIT:.2f} to the front's wall on "
+        f"both long sides, -X/+X: {gaps}",
     )
 
 
@@ -453,7 +473,9 @@ def _side_seam_retention(s):
         "both blind side pockets retain a continuous skirt floor, engage "
         "lowered detents with insertion and release ramps, preload the lower "
         "lip, clear the upper lip, and keep lower and upper skirt land, board-edge "
-        "clearance and grip-end relief with its side tapers",
+        "clearance, the stiffener round the grip end and its IR-end taper, "
+        "flush up to the ceiling past the seam and the LED ring channel, and "
+        "grip-end relief with its side tapers",
     )
 
 
@@ -678,9 +700,8 @@ def _end_screw_grip_corner(s):
         end_screw_grip_corner(
             s.back, (s.front, "case-front"), (s.front_fdm, "case-front-fdm")
         ),
-        "end screw root fillet stays inside the relieved skirt arc on both "
-        "fronts, and the back's wall chamfer leaves the lap whole at the +X "
-        "grip corner",
+        "end screw block and root fillet stay out of the +X grip corner round "
+        "on both fronts, and the back's wall chamfer leaves the lap whole there",
     )
 
 

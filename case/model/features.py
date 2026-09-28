@@ -241,12 +241,12 @@ def _front(runs, obstacles, fdm=False):
     placements = board.components()
     out = [
         _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
-        *_split(
-            "side_skirt_stiffener", "shells.side_skirt_stiffeners", "add",
-            shells.side_skirt_stiffeners(),
-            reads=sorted(set(
-                _reads("shells.side_skirt_stiffeners")
-                + _reads("shells.side_skirt_taper_spans")
+        _entry(
+            "skirt_stiffener", "shells.skirt_stiffener", "add",
+            shells.skirt_stiffener(),
+            sorted(set(
+                _reads("shells.skirt_stiffener")
+                + _reads("shells.skirt_stiffener_taper_span")
             )),
         ),
         *[
@@ -267,8 +267,8 @@ def _front(runs, obstacles, fdm=False):
                 ["BOSS_OD"],
             )
         )
-    # The side tie reaches to side_skirt_inner_x(), so that helper's parameters
-    # move this box too.
+    # The side tie reaches to side_skirt_inner_x() and the block spans
+    # end_screw_block_span(), so those helpers' parameters move this box too.
     out.append(
         _entry(
             "end_screw_block",
@@ -278,6 +278,7 @@ def _front(runs, obstacles, fdm=False):
             sorted(set(
                 _reads("hardware.end_screw_block")
                 + _reads("hardware.side_skirt_inner_x")
+                + _reads("hardware.end_screw_block_span")
             )),
         )
     )
@@ -432,6 +433,10 @@ def _back(runs, obstacles):
             "hardware.end_screw_wall_chamfer",
             "cut",
             hardware.end_screw_wall_chamfer(),
+            sorted(set(
+                _reads("hardware.end_screw_wall_chamfer")
+                + _reads("hardware.end_screw_block_span")
+            )),
         )
     )
     out += [

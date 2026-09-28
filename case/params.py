@@ -201,14 +201,23 @@ skirt. The shells check measures this wall on the built back shell around the
 IR end. A deeper IR-end skirt needs a deeper lap relief. That relief left the
 lap near a third of this value, so the IR end uses the plain skirt."""
 SIDE_SKIRT_THICKEN = 0.20
-"""Extra inward wall on the two long skirt runs. The nominal 0.5 board fit
-still leaves 0.3 at the board edge; this stiffens the printed side seam without
-moving either shell's visible outer wall or thinning the back lap."""
+"""Extra inward wall on the front skirt, round the grip end and its two corners
+and up both long runs. The nominal 0.5 board fit still leaves 0.3 at the board
+edge. This stiffens the printed seam without a change to either shell's
+visible outer wall or to the back lap. It runs up to the cavity ceiling, so the
+front's inner wall has no step at the seam.
+
+The IR end keeps the plain fit for two reasons. The catch windows' reach is
+sized off BOARD_FIT, so it passes a thicker skirt's inner face by only 0.1.
+The IR end skirt's flex also sets how the catches close, and this extra wall
+makes that skirt about 1.59 times stiffer. The grip end has no catches,
+because one screw closes it."""
 SIDE_SKIRT_THICKEN_RUN = 1.5
-"""Length along each long side over which the side stiffener tapers from the
-plain board fit at a corner tangent to its full thickness. The corner arcs keep
-the plain fit. The taper at the IR end must stay clear of the support-cut
-lead-in ramps, and skirt_lead_in_cuts() fails if it does not."""
+"""Length along each long side over which the stiffener tapers from its full
+thickness to the plain board fit at the IR corner tangent. The IR corner arcs
+keep the plain fit. The grip end has no taper, because the stiffener runs round
+it at full thickness. The taper must stay clear of the support-cut lead-in
+ramps, and skirt_lead_in_cuts() fails if it does not."""
 SIDE_CATCH_CENTER_OFFSET = 3.5
 """Position of the side catches toward the IR end from the board's lengthwise
 midpoint. The reported bow is near that midpoint; this offset centres each
@@ -337,8 +346,8 @@ END_SCREW_X_OFFSET = 5.8
 """How far +x of the board's centreline the end screw's axis runs.
 
 This sets where the head counterbore sits on the -Y wall, +x of R8. The block
-the screw threads into is centred on this axis, so END_SCREW_BLOCK_W reaches
-half its width to each side, and that width holds the limits on both sides."""
+the screw threads into reaches half END_SCREW_BLOCK_W to each side of this
+axis, but its +x side stops at the grip corner tangent."""
 END_SCREW_Z = -6.5
 """Height of the end screw's axis, below the board.
 
@@ -358,9 +367,11 @@ that load goes across the layer lines of a face down print. The 45 degree ramp
 takes the depth off the upper block, so width is the only remaining lever on
 that bending section and on the web's neck to the skirt.
 
-Bounded by J1 on the -x side and by the back's side wall on the +x side. The
-web's tie into the +x side skirt is not part of this width. It stops at
-SKIRT_BOTTOM, so the +x bound applies to the block below it. The -x end
+Bounded by J1 on the -x side. On the +x side, end_screw_block_span() stops
+the block at the grip corner tangent, where the round starts, so the block is
+narrower than this value. The web's tie into the +x side skirt is not part of
+this width. It stops at SKIRT_BOTTOM, so the +x bound applies to the block
+below it. The -x end
 passes under R8, because the ramp falls well below R8's underside at R8's Y.
 checks/hardware.py's feature_clashes reads that clearance on the built block,
 not on its bounding box."""
@@ -423,7 +434,10 @@ chamfer on that chain tore the exported mesh.
 Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
 below the screw and never reaches the thread."""
 END_SCREW_BLOCK_RAMP_LEDGE = 0.5
-"""Flat step the block's top keeps off the skirt before its 45 degree ramp.
+"""Flat step the block's top keeps before its 45 degree ramp, measured from the
+plain board fit plane, not from the skirt face. skirt_stiffener() moves that
+face SIDE_SKIRT_THICKEN inboard at the grip end, so the flat left off the
+built skirt is this step less that thickening.
 
 The front prints face down, so the top of the block and its web is a ceiling
 hung off the skirt in print. A flat top needs a support tower in the cavity
@@ -433,7 +447,7 @@ of this step, so each layer stands on the one before it.
 This step is the only flat overhang left. It is small enough to print from the
 skirt without support. It also raises the whole ramp by its own length, which
 adds that much material over the pilot's tip and in the web's neck at the
-block's -Y face, against a ramp that starts at the skirt face.
+block's -Y face, against a ramp that starts at the board fit plane.
 
 Bounded by END_SCREW_BLOCK_GAP. If the step reached the block's own face, the
 block would keep a flat ceiling again. checks/hardware.py reads the cover over
@@ -927,11 +941,11 @@ PAD_RADIUS = 4.8
 PAD_JOIN_RADIUS = 1.5
 """Round the inner corners between the two button contours and their lower connecting web."""
 PAD_FIT = 0.3
-"""Gap to the shell's inner wall. Once kept small so the pad stayed wider than
-the wheel bore; the lobes no longer reach the wheel at all (see
-PAD_LED_CLEARANCE and case.pad_wheel_gap()), so this is back to being a plain
-fit, and idle at the present layout since both lobes sit well inside the
-cavity."""
+"""Gap from each pad lobe to the front's stiffened inner wall. The lobes no
+longer reach the wheel (see PAD_LED_CLEARANCE and case.pad_wheel_gap()), so
+this is a plain fit. It is active: it trims both lobes at the long sides, where
+their key rectangles reach past it. checks/keypad.py measures it on the built
+pads."""
 PAD_BOSS_CLEARANCE = 0.4
 """Gap where a front-plate boss passes through the pad, measured off the boss's
 ceiling collar rather than the boss, so the keytop stays clear of both."""

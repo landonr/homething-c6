@@ -41,7 +41,7 @@ from .shape import (
     _cut,
     _fuse,
     _hole,
-    _profiles,
+    _offset_face,
     _rounded_prism,
     _slab,
     _squircle_points,
@@ -57,6 +57,7 @@ from .stack import (
     PAD_WEB_TOP,
     SHELL_FRONT,
     STEM_TOP,
+    STIFFENED_WALL,
     SWITCH_TOP,
     WHEEL_OPENING_R,
 )
@@ -1054,11 +1055,13 @@ def pad_wheel_gap():
 
 
 def _pad_limit():
-    """The cavity, inset by PAD_FIT: what a lobe is clipped inside if its own
-    rectangle would ever reach the wall. Idle at the present layout, both lobes
-    sitting well inboard of it."""
-    inner, _ = _profiles()
-    return Face(inner.outer_wire().offset_2d(-params.PAD_FIT, kind=Kind.INTERSECTION))
+    """The stiffened wall, inset by PAD_FIT: what each lobe is clipped inside.
+
+    Active on both lobes, whose key rectangles reach past it at the long
+    sides. Taken off STIFFENED_WALL everywhere, so the plain IR end keeps a
+    wider gap than PAD_FIT."""
+    wall = _offset_face(STIFFENED_WALL)
+    return Face(wall.outer_wire().offset_2d(-params.PAD_FIT, kind=Kind.INTERSECTION))
 
 
 def pad_bridge_top():

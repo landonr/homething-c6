@@ -41,6 +41,7 @@ from .stack import (
     LIP_CLEAR_R,
     MERGE,
     SHELL_FRONT,
+    STIFFENED_WALL,
     WHEEL_OPENING_R,
 )
 
@@ -110,8 +111,12 @@ def _channel_clip():
     this removes rather than breaks.
 
     The ring stays continuous because the wall sits well outside the channel's
-    inner wall at either end."""
-    return _offset_face(params.BOARD_FIT)
+    inner wall at either end.
+
+    The wheel sits on the long sides, where skirt_stiffener() carries the wall
+    SIDE_SKIRT_THICKEN inboard of the board fit up to the ceiling. At the fit
+    itself the channel cut a notch into that wall below the ceiling."""
+    return _offset_face(STIFFENED_WALL)
 
 
 def led_ring_clip_reach(angle):

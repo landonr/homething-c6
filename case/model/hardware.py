@@ -8,6 +8,7 @@ from build123d import (
     BuildSketch,
     Box,
     Cylinder,
+    GeomType,
     Plane,
     Polyline,
     Pos,
@@ -30,7 +31,15 @@ from .shape import (
     _rounded_prism,
     _slab,
 )
-from .stack import LAP_IN, LAP_OUT, MERGE, SKIRT_BOTTOM, SKIRT_OUT, SUPPORT_TOP
+from .stack import (
+    LAP_IN,
+    LAP_OUT,
+    MERGE,
+    SKIRT_BOTTOM,
+    SKIRT_OUT,
+    STIFFENED_WALL,
+    SUPPORT_TOP,
+)
 
 
 def mount_points():
@@ -48,10 +57,9 @@ def end_wall_edge():
 
 def side_skirt_inner_x():
     """X of the +X side skirt's inner face on its straight run, which
-    side_skirt_stiffeners() moves SIDE_SKIRT_THICKEN inboard of the cavity
-    wall."""
+    skirt_stiffener() moves SIDE_SKIRT_THICKEN inboard of the cavity wall."""
     box = board.board_profile().bounding_box()
-    return box.max.X + params.BOARD_FIT - params.SIDE_SKIRT_THICKEN
+    return box.max.X + STIFFENED_WALL
 
 
 @functools.cache
@@ -67,15 +75,36 @@ def end_screw_axis():
     return x, params.END_SCREW_Z
 
 
+@functools.cache
+def end_screw_block_span():
+    """(x0, x1) of the end screw block across the case.
+
+    END_SCREW_BLOCK_W reaches half its width each side of the screw axis, but
+    the +x side stops where the board's straight -Y edge meets the grip corner
+    arc, so no square corner of the block stands in the round.
+    """
+    x, _ = end_screw_axis()
+    half = params.END_SCREW_BLOCK_W / 2
+    ends = [
+        edge.bounding_box()
+        for edge in board.board_profile().outer_wire().edges()
+        if edge.geom_type == GeomType.LINE
+        and edge.bounding_box().size.Y < 1e-6
+        and abs(edge.bounding_box().min.Y - end_wall_edge()) < 1e-6
+    ]
+    return x - half, min(x + half, max(b.max.X for b in ends))
+
+
 def _ramp_block_top(block, cavity):
     """Cut the top of the block and its web back to one 45 degree ramp.
 
     The front prints face down, so the top face of the block and web is a
     ceiling hung off the skirt in print, and a flat one needs a support tower
     in the cavity. The ramp leaves the skirt END_SCREW_BLOCK_RAMP_LEDGE
-    inboard of the cavity face and falls one for one toward +Y, so every layer
-    stands on the one before it. The same ramp is the board's lead-in: nothing
-    square stands under the board's end for a tilted board to strike.
+    inboard of the plain board fit plane, not of the thickened skirt face, and
+    falls one for one toward +Y, so every layer stands on the one before it.
+    The same ramp is the board's lead-in: nothing square stands under the
+    board's end for a tilted board to strike.
 
     A straight wedge cut across the block's whole X extent, side tie included,
     plus MERGE either side, never an edge chamfer. The top +Y arris is a
@@ -136,9 +165,9 @@ def _chamfer_block_base(block, back, bottom):
                 close=True,
             )
         make_face()
-    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
-    x = block.bounding_box().center().X
-    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    box = block.bounding_box()
+    reach = box.size.X / 2 + MERGE
+    wedge = Pos(box.center().X, 0, 0) * extrude(section.sketch, amount=reach, both=True)
     return _cut(block, wedge)
 
 
@@ -160,7 +189,7 @@ def end_screw_root_legs():
     return face - end_screw_fillet_start(), LAP_IN - params.BOARD_FIT
 
 
-def _block_root_fillet(x, face):
+def _block_root_fillet(face):
     """The 45 degree fillet under the web, in the inside corner where the web's
     underside at SKIRT_BOTTOM meets the block's -Y face.
 
@@ -177,8 +206,8 @@ def _block_root_fillet(x, face):
 
     It points up as the front prints, so it needs no support. It runs the
     block's full width, because the block's -Y face is square. Bounded by the
-    pilot below it. In plan it stops at the relieved skirt face, so at the +X
-    grip corner it ends on the arc and does not stand proud of it.
+    pilot below it. In plan it is also bound to the relieved skirt face, a guard
+    now that the block stops at the +X grip corner tangent.
     """
     start = end_screw_fillet_start()
     leg = face - start
@@ -199,8 +228,10 @@ def _block_root_fillet(x, face):
                 close=True,
             )
         make_face()
-    reach = params.END_SCREW_BLOCK_W / 2
-    fillet = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    x0, x1 = end_screw_block_span()
+    fillet = Pos((x0 + x1) / 2, 0, 0) * extrude(
+        section.sketch, amount=(x1 - x0) / 2, both=True
+    )
     bound = _slab(
         _offset_face(SKIRT_OUT - params.GRIP_SKIRT_RELIEF),
         SKIRT_BOTTOM - leg - MERGE - 1,
@@ -242,6 +273,10 @@ def end_screw_block():
     height ties it into the skirt's inner face, which is the only front
     material within reach this far down.
 
+    Its +X face stands at the grip corner tangent, not half END_SCREW_BLOCK_W
+    off the screw axis, so the axis sits off the block's centre. See
+    end_screw_block_span.
+
     The web also runs +X into the +X side skirt, a gusset in that corner, so
     the block does not hang off the end skirt alone. The tie stays at web
     height. Below SKIRT_BOTTOM the block keeps its +X face, and the root fillet
@@ -269,7 +304,9 @@ def end_screw_block():
     web deepens it from below. The back's end wall takes a parallel chamfer.
     See _block_root_fillet and end_screw_wall_chamfer.
     """
-    x, z = end_screw_axis()
+    _, z = end_screw_axis()
+    x0, x1 = end_screw_block_span()
+    x, width = (x0 + x1) / 2, x1 - x0
     edge = end_wall_edge()
     face = edge - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
     back = face + params.END_SCREW_BLOCK_D
@@ -277,7 +314,7 @@ def end_screw_block():
     block = _rounded_prism(
         x,
         (face + back) / 2,
-        (params.END_SCREW_BLOCK_W, back - face),
+        (width, back - face),
         params.END_SCREW_BLOCK_R,
         bottom,
         SUPPORT_TOP,
@@ -286,17 +323,17 @@ def end_screw_block():
     block = _fuse(
         block,
         Pos(x, face + square / 2, (bottom + SUPPORT_TOP) / 2)
-        * Box(params.END_SCREW_BLOCK_W, square, SUPPORT_TOP - bottom),
+        * Box(width, square, SUPPORT_TOP - bottom),
     )
     block = _chamfer_block_base(block, back, bottom)
     cavity = edge - params.BOARD_FIT
     web_y0 = cavity - MERGE
     web_y1 = face + MERGE
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
-        params.END_SCREW_BLOCK_W, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
+        width, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
     )
-    tie = _block_side_tie(x + params.END_SCREW_BLOCK_W / 2, back)
-    fillet = _block_root_fillet(x, face)
+    tie = _block_side_tie(x1, back)
+    fillet = _block_root_fillet(face)
     return _ramp_block_top(_fuse(block, web, tie, fillet), cavity)
 
 
@@ -353,7 +390,7 @@ def end_screw_wall_chamfer():
     +X grip corner it follows the arc and does not notch the lap.
     """
     _, c = end_screw_root_legs()
-    x, z = end_screw_axis()
+    _, z = end_screw_axis()
     floor = SKIRT_BOTTOM - params.SKIRT_FIT
     clear_top = z + params.SHELL_SCREW_CLEAR_D / 2
     if floor - c <= clear_top:
@@ -371,8 +408,10 @@ def end_screw_wall_chamfer():
                 close=True,
             )
         make_face()
-    reach = params.END_SCREW_BLOCK_W / 2 + MERGE
-    wedge = Pos(x, 0, 0) * extrude(section.sketch, amount=reach, both=True)
+    x0, x1 = end_screw_block_span()
+    wedge = Pos((x0 + x1) / 2, 0, 0) * extrude(
+        section.sketch, amount=(x1 - x0) / 2 + MERGE, both=True
+    )
     bound = _slab(_offset_face(LAP_IN), floor - c - MERGE - 1, floor + MERGE + 1)
     return _isect(wedge, bound)
 

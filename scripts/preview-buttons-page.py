@@ -46,7 +46,7 @@ STATE = {
         "ip": "192.168.1.86",
         "mac": "A4:CF:12:34:56:78",
     },
-    # The bench build with idle_sleep. Production serves available false and zeros.
+    # Production links idle_sleep. A build without it serves available false and zeros.
     "sleep": {"available": True, "enabled": True, "after_s": 300},
     "radios": {"zigbee": True, "ble": True},
     "zigbee": {

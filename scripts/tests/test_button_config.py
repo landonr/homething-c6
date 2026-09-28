@@ -177,8 +177,7 @@ class WifiSessionTest(unittest.TestCase):
 
 
 class SleepSettingsTest(unittest.TestCase):
-    """The bench links idle_sleep and production has no idle_sleep, so the
-    component has to build both ways."""
+    """Production links idle_sleep, but the component must still build without it."""
 
     def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
         self.assertIn("from esphome.components import idle_sleep, web_server_base", INIT)

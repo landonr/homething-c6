@@ -170,6 +170,14 @@ class IdleSleepComponentTest(unittest.TestCase):
         self.assertIn("cv.Optional(CONF_SLEEP_HOLD_BIT): cv.int_range(min=0, max=15)", INIT)
         self.assertIn('CONF_SLEEP_HOLD_TIME, default="2s"', INIT)
 
+    def test_the_loop_logs_nothing_and_sleep_entry_logs_the_record(self) -> None:
+        loop = function_body(CPP, "void IdleSleep::loop()")
+        self.assertNotIn("log_record(", loop)
+        self.assertNotIn("log_timing_", loop)
+        self.assertNotIn("log_timing_", HEADER)
+        sleep = function_body(CPP, "void IdleSleep::enter_sleep_()")
+        self.assertIn('log_record("WAKE_TIMING", *s_current);', sleep)
+
     def test_setup_runs_just_after_the_i2c_bus(self) -> None:
         self.assertIn("return setup_priority::BUS - 1.0f;", HEADER)
 
@@ -233,12 +241,12 @@ class InterruptTest(unittest.TestCase):
         self.assertIn('sensor.get("use_interrupt", False)', INIT)
         self.assertIn("pins.PIN_SCHEMA_REGISTRY.get_key(pin) == CORE.target_platform", INIT)
         self.assertIn("pin.get(CONF_NUMBER) == WAKE_PIN", INIT)
-        # Production keeps its interrupt-mode sensor. Only the bench polls it.
+        # Production polls the sensor because IdleSleep owns the GPIO5 ISR.
         entry = PRODUCTION.split("name: Expander INT\n", 1)[1].split("\n\n", 1)[0]
         self.assertIn("number: GPIO5\n", entry)
-        self.assertNotIn("use_interrupt", entry)
-        self.assertIn("\nbinary_sensor:\n", BENCH)
-        self.assertIn("  - id: !extend expander_int\n    use_interrupt: false\n", BENCH)
+        self.assertIn("use_interrupt: false\n", entry)
+        self.assertNotIn("expander_int", BENCH)
+        self.assertNotIn("use_interrupt", BENCH)
 
 
 class SettingsTest(unittest.TestCase):
@@ -303,16 +311,29 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("this->default_sleep_after_s_", dump)
 
 
-class BenchConfigTest(unittest.TestCase):
-    def test_bench_includes_production_and_adds_idle_sleep(self) -> None:
-        self.assertRegex(BENCH, r"packages:\n  base: !include c6remote\.yaml\n")
-        self.assertIn("\nidle_sleep:\n", BENCH)
-        self.assertIn("wake_stub: ${sleep_wake_stub}", BENCH)
-        self.assertIn("boot_trim: ${sleep_boot_trim}", BENCH)
-        self.assertIn("return id(zigbee_radio).is_connected();", BENCH)
-        self.assertIn("zigbee_assignments.play(SLOT_OF_BIT[bit])", BENCH)
+class ProductionSleepConfigTest(unittest.TestCase):
+    def test_production_has_idle_sleep_and_the_replay_hooks(self) -> None:
+        self.assertIn("\nidle_sleep:\n", PRODUCTION)
+        self.assertIn("return id(zigbee_radio).is_connected();", PRODUCTION)
+        self.assertIn("zigbee_assignments.play(SLOT_OF_BIT[bit])", PRODUCTION)
 
-    def test_wake_pulse_is_the_last_d3_d4_state_and_the_bench_drives_it(self) -> None:
+    def test_the_sw5_hold_flashes_the_awake_led_once_when_armed(self) -> None:
+        self.assertIn("bool sleep_armed() const { return this->forced_sleep_; }", HEADER)
+        interval = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
+        for text in (
+            "id(idle).sleep_armed()",
+            "if (armed && !was_armed) {",
+            "id(awake_led).turn_on()",
+            "call.set_brightness(1.0f);",
+            "call.set_flash_length(250);",
+        ):
+            self.assertIn(text, interval)
+        self.assertLess(
+            interval.index("id(idle).sleep_armed()"),
+            interval.index("if (!id(idle).woke_from_sleep())"),
+        )
+
+    def test_wake_pulse_is_the_last_d3_d4_state_and_production_drives_it(self) -> None:
         self.assertIn("bool woke_from_sleep() const { return !this->cold_boot_; }", HEADER)
         self.assertIn("bool wake_pending() const { return this->replay_pending_; }", HEADER)
         self.assertIn("  - id: wake_pulse_until_ms\n    type: uint32_t\n", PRODUCTION)
@@ -323,41 +344,29 @@ class BenchConfigTest(unittest.TestCase):
         self.assertIn("(millis() % 800) / 800.0f", pulse)
         self.assertIn("it[1] = Color(level, level, level);", pulse)
         self.assertIn("it[2] = Color(level, level, level);", pulse)
-        self.assertNotIn("wake_pulse_until_ms) =", PRODUCTION)
-        drive = BENCH.split("\ninterval:\n", 1)[1]
-        self.assertIn("  - interval: 50ms\n", drive)
+        drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1]
         self.assertIn("if (!id(idle).woke_from_sleep())", drive)
         self.assertIn("id(idle).wake_pending() ||", drive)
         self.assertIn("id(wake_pulse_until_ms) = millis() + 100;", drive)
 
-    def test_bench_starts_the_hold_scripts_for_bits_held_at_wake(self) -> None:
+    def test_production_starts_the_sw9_hold_for_a_bit_held_at_wake(self) -> None:
         self.assertIn("uint16_t held_at_wake() const { return this->held_mask_; }", HEADER)
         setup = function_body(CPP, "void IdleSleep::setup()")
         self.assertIn("this->held_mask_ = rec.stub_down & first_down;", setup)
         self.assertIn("if (latched) {", setup)
-        drive = BENCH.split("\ninterval:\n", 1)[1]
+        drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
         once = drive.index("static bool held_checked = false;")
         self.assertLess(drive.index("if (!id(idle).woke_from_sleep())"), once)
         self.assertLess(once, drive.index("id(idle).held_at_wake()"))
         self.assertIn("if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {", drive)
-        self.assertIn("if ((held & (1u << 0)) && !id(button_expander)->digital_read(0)) {", drive)
         sw9 = statements(function_body(drive, "if ((held & (1u << 9))"))
         self.assertEqual(sw9, ["id(sw9_hold_consumed) = false;", "id(detect_wifi_hold).execute();"])
-        sw1 = statements(function_body(drive, "if ((held & (1u << 0))"))
-        self.assertEqual(sw1, [
-            "ir_ui.hold_consumed = false;",
-            "id(ble_hid_remote).set_pressed(20, true);",
-            "if (ir_ui.state != IrUi::OFF)",
-            "id(exit_receiver_hold).execute();",
-            "else",
-            "id(detect_receiver_hold).execute();",
-        ])
-        # The bench mirrors the production on_press of each button.
+        self.assertNotIn("(held & (1u << 0))", drive)
+        self.assertNotIn("detect_receiver_hold", drive)
+        self.assertNotIn("exit_receiver_hold", drive)
+        # The wake handling mirrors the on_press of each button.
         for name, bit, lines in (
             ("Button 9", 9, ["id(sw9_hold_consumed) = false;", "script.execute: detect_wifi_hold"]),
-            ("Button 1", 0, ["ir_ui.hold_consumed = false;", "id(ble_hid_remote).set_pressed(20, true);",
-                             "return ir_ui.state != IrUi::OFF;", "script.execute: exit_receiver_hold",
-                             "script.execute: detect_receiver_hold"]),
         ):
             entry = PRODUCTION.split(f"name: {name}\n", 1)[1].split("  - platform:", 1)[0]
             self.assertIn(f"number: {bit}\n", entry)
@@ -365,51 +374,34 @@ class BenchConfigTest(unittest.TestCase):
             for line in lines:
                 self.assertIn(line, on_press, name)
 
-    def test_bench_awake_led_is_the_inverted_gpio15_output(self) -> None:
-        output = BENCH.split("\noutput:\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("  - platform: ledc\n    id: awake_led_pwm\n", output)
-        self.assertIn("      number: GPIO15\n", output)
-        self.assertIn("    inverted: true\n", output)
-        light = BENCH.split("\nlight:\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("  - platform: monochromatic\n    id: awake_led\n", light)
-        self.assertIn("    output: awake_led_pwm\n", light)
-        self.assertIn("    restore_mode: ALWAYS_ON\n", light)
-        self.assertIn("      color_mode: brightness\n", light)
-        self.assertNotIn("gamma_correct", light)
-        self.assertNotIn("awake_led).turn_off", BENCH)
-        self.assertNotIn("GPIO15", PRODUCTION)
-        self.assertNotIn("awake_led", PRODUCTION)
-        self.assertIn("GPIO_NUM_15", CPP.split("HELD_FLOATING[] = ", 1)[1].split(";", 1)[0])
-
-    def test_bench_sleeps_on_a_sw5_hold(self) -> None:
-        section = BENCH.split("\nidle_sleep:\n", 1)[1].split("\ninterval:\n", 1)[0]
+    def test_production_sleeps_on_a_sw5_hold(self) -> None:
+        section = PRODUCTION.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
         self.assertIn("  sleep_hold_bit: 4\n", section)
         self.assertIn("  sleep_hold_time: 2s\n", section)
         button = PRODUCTION.split("name: Button 5\n", 1)[1].split("  - platform:", 1)[0]
         self.assertIn("number: 4\n", button)
 
-    def test_bench_defaults_to_five_minutes_and_links_the_page(self) -> None:
-        section = BENCH.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
+    def test_production_defaults_to_five_minutes_and_links_the_page(self) -> None:
+        section = PRODUCTION.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
         self.assertIn("  id: idle\n", section)
         self.assertIn("  sleep_after: 5min\n", section)
-        # Merged into the production button_config block, not a second one.
-        self.assertIn("\nbutton_config:\n  idle_sleep_id: idle\n", BENCH)
-        self.assertIn("\nbutton_config:\n  id: button_cfg\n", PRODUCTION)
-        self.assertNotIn("idle_sleep_id", PRODUCTION)
+        self.assertIn("\nbutton_config:\n  id: button_cfg\n  idle_sleep_id: idle\n", PRODUCTION)
+        self.assertNotIn("button_config", BENCH)
 
-    def test_production_has_no_sleep_yet(self) -> None:
-        self.assertNotIn("idle_sleep", PRODUCTION)
-        self.assertNotIn("deep_sleep", PRODUCTION)
+    def test_production_uses_idle_sleep_not_the_stock_deep_sleep(self) -> None:
+        self.assertIn("\nidle_sleep:\n", PRODUCTION)
+        # The stock component would fight IdleSleep.
+        self.assertNotIn("\ndeep_sleep:", PRODUCTION)
 
     def test_replay_table_matches_the_binary_sensors(self) -> None:
-        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", BENCH).group(1)
+        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", PRODUCTION).group(1)
         slots = [int(value) for value in table.split(",")]
         mapping = expander_bit_to_slot(PRODUCTION)
         self.assertEqual(sorted(mapping), list(range(16)))
         self.assertEqual(slots, [mapping[bit] for bit in range(16)])
 
     def test_only_the_release_tap_inputs_skip_a_held_replay(self) -> None:
-        self.assertIn("if (held && (bit == 0 || bit == 9))", BENCH)
+        self.assertIn("if (held && (bit == 0 || bit == 9))", PRODUCTION)
         section = PRODUCTION[PRODUCTION.index("\nbinary_sensor:\n"):PRODUCTION.index("\nsensor:\n")]
         for entry in section.split("  - platform: gpio\n")[1:]:
             if "pcf8574: button_expander" not in entry and "<<: *button_1" not in entry:
@@ -418,6 +410,38 @@ class BenchConfigTest(unittest.TestCase):
             on_release = entry[entry.index("on_release:"):]
             taps_on_release = "ir_ui.tap(" in on_release
             self.assertEqual(taps_on_release, bit in (0, 9), f"expander bit {bit}")
+
+    def test_production_awake_led_is_the_inverted_gpio15_output(self) -> None:
+        output = PRODUCTION[PRODUCTION.index("    id: awake_led_pwm\n") - len("  - platform: ledc\n"):]
+        output = output.split("\n\n", 1)[0]
+        self.assertIn("  - platform: ledc\n    id: awake_led_pwm\n", output)
+        self.assertIn("      number: GPIO15\n", output)
+        self.assertIn("    inverted: true\n", output)
+        light = PRODUCTION[PRODUCTION.index("  - platform: monochromatic\n    id: awake_led\n"):]
+        light = light.split("\n\n", 1)[0]
+        self.assertIn("  - platform: monochromatic\n    id: awake_led\n", light)
+        self.assertIn("    output: awake_led_pwm\n", light)
+        self.assertIn("    restore_mode: ALWAYS_ON\n", light)
+        self.assertIn("      color_mode: brightness\n", light)
+        self.assertNotIn("gamma_correct", light)
+        self.assertNotIn("awake_led).turn_off", PRODUCTION)
+        self.assertIn("GPIO_NUM_15", CPP.split("HELD_FLOATING[] = ", 1)[1].split(";", 1)[0])
+
+
+class BenchConfigTest(unittest.TestCase):
+    def test_bench_overlays_production_and_only_sets_the_wake_stub_and_trim(self) -> None:
+        self.assertRegex(BENCH, r"packages:\n  base: !include c6remote\.yaml\n")
+        section = BENCH.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(section.splitlines(), [
+            "  wake_stub: ${sleep_wake_stub}",
+            "  boot_trim: ${sleep_boot_trim}",
+        ])
+
+    def test_bench_defines_no_led_and_logs_the_production_awake_led(self) -> None:
+        self.assertNotIn("GPIO15", BENCH)
+        self.assertNotIn("platform: ledc", BENCH)
+        self.assertIn("  - interval: 5s\n", BENCH)
+        self.assertIn('ESP_LOGI("awake_led"', BENCH)
 
 
 if __name__ == "__main__":

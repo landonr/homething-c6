@@ -32,8 +32,6 @@ static constexpr gpio_num_t HELD_LOW[] = {GPIO_NUM_0, GPIO_NUM_2};
 
 static constexpr uint32_t POLL_MS = 100;
 static constexpr int64_t REPLAY_TIMEOUT_US = 3000000;
-static constexpr uint32_t FIRST_LOG_MS = 3000;
-static constexpr uint32_t LOG_EVERY_MS = 5000;
 // Same budget as the stock deep_sleep component.
 static constexpr uint32_t TEARDOWN_MS = 5000;
 
@@ -200,7 +198,6 @@ void IdleSleep::setup() {
   this->pressed_ = first_down;
   this->last_activity_ms_ = millis();
   this->last_poll_ms_ = this->last_activity_ms_;
-  this->next_log_ms_ = FIRST_LOG_MS;
 
   this->load_settings_();
 }
@@ -298,19 +295,6 @@ void IdleSleep::dump_config() {
   LOG_I2C_DEVICE(this);
 }
 
-void IdleSleep::log_timing_() {
-  if (s_current == nullptr)
-    return;
-  if (!this->ring_dumped_) {
-    this->ring_dumped_ = true;
-    for (uint32_t i = s_ring.count; i > 1; i--) {
-      const uint32_t index = (s_ring.head + RING_SIZE - (i - 1)) % RING_SIZE;
-      log_record("WAKE_RING", s_ring.records[index]);
-    }
-  }
-  log_record("WAKE_TIMING", *s_current);
-}
-
 void IdleSleep::loop() {
   const uint32_t now = millis();
 
@@ -362,11 +346,6 @@ void IdleSleep::loop() {
       this->set_pressed_(pressed, now);
       this->track_hold_(pressed, now);
     }
-  }
-
-  if (static_cast<int32_t>(now - this->next_log_ms_) >= 0) {
-    this->next_log_ms_ = now + LOG_EVERY_MS;
-    this->log_timing_();
   }
 
   this->try_sleep_();

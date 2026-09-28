@@ -127,6 +127,43 @@ web_server:
 # Serves the button assignment page at /buttons on the same server.
 button_config:
   id: button_cfg
+  idle_sleep_id: idle
+
+idle_sleep:
+  id: idle
+  # Default until the /buttons page stores a value.
+  sleep_after: 5min
+  cold_boot_grace: 60s
+  # SW5 held for sleep_hold_time sleeps on release. Its on_press still fires its assignment.
+  sleep_hold_bit: 4
+  sleep_hold_time: 2s
+  link_probe: !lambda return id(zigbee_radio).is_connected();
+  block_probe: !lambda |-
+    const bool ir_mode = ir_ui.state != IrUi::OFF;
+    const bool mic_running = id(board_microphone).is_running();
+    const bool meter = id(mic_meter_active);
+    const bool voice = voice_assistant::global_voice_assistant->is_running();
+    const bool pairing = zigbee_assignments.pairing();
+    const bool window = zigbee_assignments.pairing_window_open();
+    // Without Always On, an enabled Wi-Fi is the SW9 or page session.
+    const bool wifi_session = !wifi::global_wifi_component->is_disabled() && !id(button_cfg).wifi_always_on();
+    const uint8_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
+                         wifi_session << 6;
+    // 0xFF is out of range, so the first call logs the starting mask.
+    static uint8_t last_mask = 0xFF;
+    if (mask != last_mask) {
+      last_mask = mask;
+      ESP_LOGI("idle_sleep", "block=0x%02X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d at %" PRIu32 " ms",
+               mask, ir_mode, mic_running, meter, voice, pairing, window, wifi_session, millis());
+    }
+    return mask != 0;
+  replay: !lambda |-
+    // SW1 and SW9 tap on release, so their on_release owns a held bit.
+    if (held && (bit == 0 || bit == 9))
+      return false;
+    // Expander bit to slot, from the Button and Wheel binary_sensor entries.
+    static const uint8_t SLOT_OF_BIT[16] = {20, 19, 3, 4, 5, 6, 7, 8, 10, 9, 11, 12, 13, 14, 15, 16};
+    return zigbee_assignments.play(SLOT_OF_BIT[bit]);
 
 i2c:
   sda: GPIO22
@@ -377,10 +414,12 @@ binary_sensor:
   # PCF8575 nINT, R9 100k pull-up on board. ESPHome polls the expander, so this
   # is visibility only: it does not make button reads interrupt-driven. Useful
   # because an edge shows here even when the port bit itself is misrouted.
+  # IdleSleep owns the GPIO5 edge ISR, and IDF keeps one handler for each pin.
   - platform: gpio
     name: Expander INT
     id: expander_int
     entity_category: diagnostic
+    use_interrupt: false
     pin:
       number: GPIO5
       mode:
@@ -424,6 +463,18 @@ sensor:
     accuracy_decimals: 2
     device_class: voltage
     state_class: measurement
+
+output:
+  # The XIAO user LED shows the remote is awake. It is lit from 3V3 when GPIO15 is
+  # low. IdleSleep floats the pin for deep sleep.
+  - platform: ledc
+    id: awake_led_pwm
+    pin:
+      number: GPIO15
+      # Strapping is sampled only at reset.
+      ignore_strapping_warning: true
+    inverted: true
+    frequency: 1kHz
 
 light:
   - platform: esp32_rmt_led_strip
@@ -569,6 +620,17 @@ light:
             light.is_off: status_light
           then:
             - switch.turn_off: led_rail
+
+  - platform: monochromatic
+    id: awake_led
+    name: Awake LED
+    output: awake_led_pwm
+    restore_mode: ALWAYS_ON
+    default_transition_length: 0s
+    # Without color_mode the boot call drops the brightness and turns on at 100%.
+    initial_state:
+      color_mode: brightness
+      brightness: 30%
 
 switch:
   # Bench diagnostic for the missing 100k pull-down on sd (see ROADMAP). DS-000069
@@ -862,7 +924,7 @@ globals:
     type: uint8_t
     restore_value: false
     initial_value: "0"
-  # Only the deep-sleep bench config sets this. D3 and D4 pulse until it passes.
+  # The wake interval sets this after a deep-sleep wake. D3 and D4 pulse until it passes.
   - id: wake_pulse_until_ms
     type: uint32_t
     restore_value: false
@@ -905,6 +967,40 @@ interval:
                          static_cast<unsigned>(id(mic_peak)));
                 id(mic_bytes) = 0;
                 id(mic_peak) = 0;
+  - interval: 50ms
+    then:
+      - lambda: |-
+          // One flash when the SW5 hold arms sleep, so the user knows to let go.
+          static bool was_armed = false;
+          const bool armed = id(idle).sleep_armed();
+          if (armed && !was_armed) {
+            auto call = id(awake_led).turn_on();
+            call.set_brightness(1.0f);
+            call.set_flash_length(250);
+            call.perform();
+          }
+          was_armed = armed;
+          if (!id(idle).woke_from_sleep())
+            return;
+          // A button held from sleep published its first state without on_press,
+          // so run the SW9 on_press here. Its on_release stops the hold.
+          // A held SW1 taps on release like a normal press.
+          static bool held_checked = false;
+          if (!held_checked) {
+            held_checked = true;
+            const uint16_t held = id(idle).held_at_wake();
+            // Raw expander level, low is pressed. IdleSleep's last read can predate
+            // the binary sensor's first read, so read again. A hold for a button
+            // already up has no on_release to stop it.
+            if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {
+              id(sw9_hold_consumed) = false;
+              id(detect_wifi_hold).execute();
+            }
+          }
+          // Setup can run past 800 ms, so the one full pulse counts from the first tick.
+          static const uint32_t first_ms = millis();
+          if (id(idle).wake_pending() || millis() - first_ms < 800)
+            id(wake_pulse_until_ms) = millis() + 100;
 
 button:
   # The Zigbee stack starts only at boot, so turning its switch back on needs

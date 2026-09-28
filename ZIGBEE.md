@@ -40,8 +40,9 @@ starts no 802.15.4 stack and `D5` stays dark until you pair it.
 A join needs both sides. Step 1 opens the coordinator, and step 3 opens the
 remote. The page reports the coordinator state but never opens it.
 
-The remote does not sleep and does not route Zigbee traffic. Keep it powered
-while the coordinator forms or repairs the network.
+The remote does not route Zigbee traffic. It does not enter deep sleep while a
+pairing request or the pairing window is active. Keep it powered while the
+coordinator forms or repairs the network.
 
 If `D5` pulses red, the Zigbee stack has started but has no network connection.
 Pair the remote again.
@@ -444,6 +445,10 @@ Two limits follow from that:
 
 A join clears the state back to unknown. The warm-cache pass that follows a join
 is the one probe the remote makes without a press.
+
+After a deep-sleep wake, the remote rejoins the network. When the link comes up, it
+sends the wake press. If no link comes within 3 s after setup, it drops the wake press.
+See [Deep sleep](RECEIVER.md#deep-sleep) in RECEIVER.md.
 
 ## Storage
 

@@ -98,6 +98,8 @@ the **Record IR** button and the code box.
 The page is an alternative to the tap cycle, not a replacement. Both routes write
 the same flash records.
 
+The page also has a **Sleep** block for the deep-sleep settings. See [Deep sleep](#deep-sleep).
+
 ### Assign a Zigbee target from the page
 
 The page can assign a Zigbee target and the command that goes to it. It does
@@ -439,8 +441,10 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 | Voice | Blue pulse | Tap again to clear. |
 | Cleared | Amber for one second | Select an input. |
 
-`D3` and `D4` show voice-assistant state when assignment mode is closed. See
-[ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
+`D3` and `D4` show voice-assistant state when assignment mode is closed. After
+a deep-sleep wake, they pulse white (see [Deep sleep](#deep-sleep)). The amber
+XIAO user LED shows that the remote is awake (see [Deep sleep](#deep-sleep)).
+See [ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
 
 ## Normal playback
 
@@ -452,3 +456,88 @@ Outside assignment mode, an input uses its one active assignment in this order:
 4. IR playback, if assigned.
 
 An input without an assignment does not transmit a command.
+
+## Deep sleep
+
+The remote enters deep sleep to save battery. The `idle_sleep` component in
+`c6remote.yaml` controls it. The `sleep_after`, `sleep_hold_time`, and
+`cold_boot_grace` keys set the default times.
+
+### Enter sleep
+
+Two events start deep sleep: a hold on SW5, and an idle period.
+
+To sleep at once, hold SW5 for the `sleep_hold_time` value. When the hold time passes, the amber XIAO user LED flashes once. Then release SW5.
+The remote sleeps when you release all buttons. SW5 still sends its own assignment when you press it.
+The hold ignores the blocks that follow.
+
+If no activity occurs for the `sleep_after` time, the remote enters deep sleep.
+A stored page value replaces this default.
+A button press, or an edge on the expander INT line (`GPIO5`), counts as activity.
+
+After a cold boot, the remote does not use idle sleep for the `cold_boot_grace`
+time. A cold boot is a power-on, a flash, or a reset. A deep-sleep wake is not a cold boot.
+
+### What blocks idle sleep
+
+Idle sleep does not start while one of these is true:
+
+- Assignment mode is open.
+- The microphone runs, or the mic meter is active.
+- The voice assistant runs.
+- A Zigbee pairing request is active, or the pairing window is open.
+- Wi-Fi is on and Wi-Fi Always On is off, as in the SW9 or page session.
+
+A blocked remote counts as active. When the block ends, the full idle time starts again.
+
+### Wake
+
+The amber XIAO user LED is on while the remote is awake. It goes dark in deep
+sleep.
+
+Any button pulls the expander INT line (`GPIO5`) low and wakes the chip.
+Before the firmware boots, a wake stub reads the expander. As a result, the
+firmware knows which button woke it.
+
+When the Zigbee link comes up, the remote sends the wake press, which is the Zigbee assignment of that button.
+If no link comes within 3 s after setup, the remote drops the wake press.
+[ZIGBEE.md](ZIGBEE.md) describes the send path.
+
+SW9 acts when you release it. If you still hold SW9 at wake, the remote runs the
+Wi-Fi hold and does not send the wake press.
+
+If you still hold SW1 at wake, the remote does not start the assignment mode
+hold. The remote sends the assignment of SW1 when you release SW1.
+
+After a wake, `D3` and `D4` pulse white for at least one full 800 ms pulse.
+The pulse continues until the remote sends or drops the wake press.
+Assignment mode and voice states have priority over this pulse.
+
+While the remote sleeps, these conditions apply:
+
+- The `led_vdd` and `ir_vdd` rails are off, because `GPIO18` and `GPIO6` float and `R10` and `R11` pull the gates up.
+- `GPIO16` floats and `GPIO17` has a pull-down.
+- `GPIO0` and `GPIO2` stay low, so `MK1` sees no clock.
+- `GPIO15` floats, so the XIAO user LED is dark.
+
+### Sleep settings on the page
+
+The `/buttons` page has a **Sleep** block. It shows only on a build with `idle_sleep`.
+
+- The **Sleep** switch turns idle sleep on or off.
+- The **Sleep after, in minutes** box sets the idle time from 1 to 60 minutes.
+
+The remote stores both settings in flash. A change restarts the idle window.
+The SW5 hold works when **Sleep** is off.
+
+### Flash over USB
+
+USB serial disconnects while the remote sleeps. To flash the remote, do these steps:
+
+1. If this is the first build after the `idle_sleep` change, run `esphome clean c6remote.yaml`.
+2. Run `esphome compile c6remote.yaml`.
+3. Press a button to wake the remote.
+4. Run `esphome upload c6remote.yaml --device /dev/cu.usbmodem2101`.
+
+The cold boot grace after the flash reset keeps the remote awake for a while.
+A stale incremental build after a component-count change can cause a boot loop.

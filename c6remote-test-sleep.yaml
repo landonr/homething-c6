@@ -11,115 +11,18 @@ substitutions:
 packages:
   base: !include c6remote.yaml
 
+# The package merge adds these keys to the production idle_sleep block.
 idle_sleep:
-  id: idle
-  # Default until the /buttons page stores a value.
-  sleep_after: 5min
-  cold_boot_grace: 60s
-  # SW5 held for sleep_hold_time sleeps on release. Its on_press still fires its assignment.
-  sleep_hold_bit: 4
-  sleep_hold_time: 2s
   wake_stub: ${sleep_wake_stub}
   boot_trim: ${sleep_boot_trim}
-  link_probe: !lambda return id(zigbee_radio).is_connected();
-  block_probe: !lambda |-
-    const bool ir_mode = ir_ui.state != IrUi::OFF;
-    const bool mic_running = id(board_microphone).is_running();
-    const bool meter = id(mic_meter_active);
-    const bool voice = voice_assistant::global_voice_assistant->is_running();
-    const bool pairing = zigbee_assignments.pairing();
-    const bool window = zigbee_assignments.pairing_window_open();
-    // Without Always On, an enabled Wi-Fi is the SW9 or page session.
-    const bool wifi_session = !wifi::global_wifi_component->is_disabled() && !id(button_cfg).wifi_always_on();
-    const uint8_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
-                         wifi_session << 6;
-    // 0xFF is out of range, so the first call logs the starting mask.
-    static uint8_t last_mask = 0xFF;
-    if (mask != last_mask) {
-      last_mask = mask;
-      ESP_LOGI("idle_sleep", "block=0x%02X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d at %" PRIu32 " ms",
-               mask, ir_mode, mic_running, meter, voice, pairing, window, wifi_session, millis());
-    }
-    return mask != 0;
-  replay: !lambda |-
-    // SW1 and SW9 tap on release, so their on_release owns a held bit.
-    if (held && (bit == 0 || bit == 9))
-      return false;
-    // Expander bit to slot, from the Button and Wheel binary_sensor entries.
-    static const uint8_t SLOT_OF_BIT[16] = {20, 19, 3, 4, 5, 6, 7, 8, 10, 9, 11, 12, 13, 14, 15, 16};
-    return zigbee_assignments.play(SLOT_OF_BIT[bit]);
 
-# The package merge adds the key to the production button_config block.
-button_config:
-  idle_sleep_id: idle
-
-binary_sensor:
-  # IdleSleep owns the GPIO5 edge ISR, and IDF keeps one handler for each pin.
-  - id: !extend expander_int
-    use_interrupt: false
-
-# The XIAO user LED shows the remote is awake. It is lit from 3V3 when GPIO15 is
-# low. IdleSleep floats the pin for deep sleep.
-output:
-  - platform: ledc
-    id: awake_led_pwm
-    pin:
-      number: GPIO15
-      # Strapping is sampled only at reset.
-      ignore_strapping_warning: true
-    inverted: true
-    frequency: 1kHz
-
-light:
-  - platform: monochromatic
-    id: awake_led
-    name: Awake LED
-    output: awake_led_pwm
-    restore_mode: ALWAYS_ON
-    default_transition_length: 0s
-    # Without color_mode the boot call drops the brightness and turns on at 100%.
-    initial_state:
-      color_mode: brightness
-      brightness: 30%
-
-# The package merge appends this to the production intervals.
+# The package merge appends this to the production intervals. It logs the
+# production awake_led state.
 interval:
-  - interval: 50ms
+  - interval: 5s
     then:
       - lambda: |-
-          static uint32_t led_log_ms = 0;
-          if (millis() - led_log_ms >= 5000) {
-            led_log_ms = millis();
-            const auto &cv = id(awake_led)->current_values;
-            const auto &rv = id(awake_led)->remote_values;
-            ESP_LOGI("awake_led", "on=%d brightness=%.3f remote_on=%d remote=%.3f",
-                     cv.is_on(), cv.get_brightness(), rv.is_on(), rv.get_brightness());
-          }
-          if (!id(idle).woke_from_sleep())
-            return;
-          // A button held from sleep published its first state without on_press,
-          // so run the SW9 and SW1 on_press here. Their on_release stops the hold.
-          static bool held_checked = false;
-          if (!held_checked) {
-            held_checked = true;
-            const uint16_t held = id(idle).held_at_wake();
-            // Raw expander level, low is pressed. IdleSleep's last read can predate
-            // the binary sensor's first read, so read again. A hold for a button
-            // already up has no on_release to stop it.
-            if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {
-              id(sw9_hold_consumed) = false;
-              id(detect_wifi_hold).execute();
-            }
-            if ((held & (1u << 0)) && !id(button_expander)->digital_read(0)) {
-              ir_ui.hold_consumed = false;
-              id(ble_hid_remote).set_pressed(20, true);
-              if (ir_ui.state != IrUi::OFF)
-                id(exit_receiver_hold).execute();
-              else
-                id(detect_receiver_hold).execute();
-            }
-          }
-          // Setup can run past 800 ms, so the one full pulse counts from the first tick.
-          static const uint32_t first_ms = millis();
-          if (id(idle).wake_pending() || millis() - first_ms < 800)
-            id(wake_pulse_until_ms) = millis() + 100;
+          const auto &cv = id(awake_led)->current_values;
+          const auto &rv = id(awake_led)->remote_values;
+          ESP_LOGI("awake_led", "on=%d brightness=%.3f remote_on=%d remote=%.3f",
+                   cv.is_on(), cv.get_brightness(), rv.is_on(), rv.get_brightness());

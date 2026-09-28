@@ -33,6 +33,8 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   void set_replay(std::function<bool(uint8_t, bool)> replay) { this->replay_ = std::move(replay); }
 
   bool woke_from_sleep() const { return !this->cold_boot_; }
+  // True once the hold arms the forced sleep. Main loop only, like the setters.
+  bool sleep_armed() const { return this->forced_sleep_; }
   // True until the latched wake press is sent or dropped.
   bool wake_pending() const { return this->replay_pending_; }
   // Bits down at the stub read and at the first read. Zero without the stub latch.
@@ -49,7 +51,6 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   bool read_port_(uint16_t *port);
   void set_pressed_(uint16_t pressed, uint32_t now);
   void track_hold_(uint16_t pressed, uint32_t now);
-  void log_timing_();
   void try_sleep_();
   [[noreturn]] void enter_sleep_();
   void load_settings_();
@@ -90,8 +91,6 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   int64_t setup_us_{0};
   uint32_t last_activity_ms_{0};
   uint32_t last_poll_ms_{0};
-  uint32_t next_log_ms_{3000};
-  bool ring_dumped_{false};
   uint16_t pressed_{0};
   bool hold_down_{false};
   uint32_t hold_since_ms_{0};

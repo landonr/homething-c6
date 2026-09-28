@@ -117,7 +117,7 @@ zigbee:
           role: CLIENT
   on_join:
     then:
-      - lambda: zigbee_assignments.on_network_up();
+      - lambda: zigbee_assignments.on_network_up(x);
       - script.execute: show_idle_status
 
 web_server:
@@ -477,8 +477,9 @@ light:
             }
 
             // D3 and D4 show assignment mode when it is open, otherwise
-            // voice-assistant state. Assignment mode never writes D2 or D5, so a
-            // Wi-Fi or Zigbee fault stays visible while an input is trained.
+            // voice-assistant state, otherwise the deep-sleep wake pulse.
+            // Assignment mode never writes D2 or D5, so a Wi-Fi or Zigbee fault
+            // stays visible while an input is trained.
             if (ir_ui.state != IrUi::OFF) {
               if (ir_ui.state == IrUi::READING) {
                 // Two LEDs at 300 ms keep the former four-LED 600 ms chase.
@@ -514,6 +515,12 @@ light:
             } else if (id(voice_led_state) == 4) {
               it[1] = Color(255, 0, 0);
               it[2] = Color(255, 0, 0);
+            } else if (millis() < id(wake_pulse_until_ms)) {
+              const float phase = (millis() % 800) / 800.0f;
+              const uint8_t level = 24 + static_cast<uint8_t>(
+                  136.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              it[1] = Color(level, level, level);
+              it[2] = Color(level, level, level);
             }
 
             // D5 is Zigbee status during normal operation. A radio switched off
@@ -853,6 +860,11 @@ globals:
     initial_value: "false"
   - id: voice_led_state
     type: uint8_t
+    restore_value: false
+    initial_value: "0"
+  # Only the deep-sleep bench config sets this. D3 and D4 pulse until it passes.
+  - id: wake_pulse_until_ms
+    type: uint32_t
     restore_value: false
     initial_value: "0"
 

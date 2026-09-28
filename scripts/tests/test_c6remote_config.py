@@ -516,7 +516,7 @@ class ProductionConfigTest(unittest.TestCase):
         every device button waiting on a resolve that never starts."""
         config = CONFIG.read_text()
         self.assertIn("zigbee_assignments.tick();", config)
-        self.assertIn("zigbee_assignments.on_network_up();", config)
+        self.assertIn("zigbee_assignments.on_network_up(x);", config)
 
     def test_clear_only_drops_the_local_record(self) -> None:
         """Group membership lives in the light, so the remote cannot and must not
@@ -622,6 +622,74 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertLess(link, tick)
         self.assertLess(tick, erase)
         self.assertIn("id(zigbee_radio)->reset();", block)
+
+    def test_a_stored_credential_join_leaves_the_pairing_request_pending(self) -> None:
+        # A boot on the old credentials fires on_join before the tick can ask for
+        # the erase. If that join cleared the request, the remote would stay on
+        # the old network and the window would never open.
+        header = ZIGBEE_LEARNING.read_text()
+        up = re.search(
+            r"void on_network_up\(bool factory_new\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if up is None:
+            raise AssertionError("on_network_up(bool factory_new) not found")
+        body = up.group("body")
+        guard = body.index("if (pairing() && !factory_new)")
+        self.assertIn("return;", body[guard:body.index("pairing_joined();")])
+        self.assertLess(guard, body.index("pairing_joined();"))
+        self.assertLess(guard, body.index("warm_mask_ = 0;"))
+
+    @staticmethod
+    def _method(header: str, signature: str) -> str:
+        body = header.split(signature + " {", 1)[1].split("\n  }\n", 1)[0]
+        return re.sub(r"\s+", " ", body)
+
+    def test_pairing_flag_writes_are_committed_at_once(self) -> None:
+        # save() only queues, and a restart or reset() can follow a pairing step
+        # before the 60 s syncer runs.
+        write = self._method(ZIGBEE_LEARNING.read_text(), "bool write_flags_(uint16_t flags)")
+        self.assertIn("preference_.save(&record_) && esphome::global_preferences->sync()", write)
+
+    def test_a_pairing_request_lives_for_one_boot(self) -> None:
+        # A restart that the sequence did not start must come back not pairing
+        # and with the radio off, but this boot still pairs from RAM.
+        setup = self._method(ZIGBEE_LEARNING.read_text(), "void setup()")
+        radio = setup.index("radio_on_.store((boot_flags & FLAG_RADIO_OFF) == 0")
+        pairing = setup.index("pairing_.store((boot_flags & FLAG_PAIRING_PENDING) != 0")
+        consume = setup.index("if (pairing()) {")
+        self.assertLess(radio, consume)
+        self.assertLess(pairing, consume)
+        self.assertIn(
+            "write_flags_(static_cast<uint16_t>( (boot_flags & ~(FLAG_PAIRING_PENDING | "
+            "FLAG_PAIR_FAILED)) | FLAG_RADIO_OFF));",
+            setup[consume:],
+        )
+
+    def test_the_erase_waits_for_a_committed_pairing_request(self) -> None:
+        # reset() may not sync, so the request that brings the remote back
+        # factory new must be in flash before the YAML can erase.
+        tick = self._method(ZIGBEE_LEARNING.read_text(), "void pairing_tick_()")
+        rearm = tick.index(
+            "!write_flags_(static_cast<uint16_t>( (record_.flags & ~(FLAG_RADIO_OFF | "
+            "FLAG_PAIR_FAILED)) | FLAG_PAIRING_PENDING))) {"
+        )
+        erase = tick.index("erase_request_.exchange(true")
+        self.assertLess(rearm, erase)
+        # A request that cannot be stored keeps the old credentials.
+        failed = tick[rearm:erase]
+        self.assertIn("end_pairing_(", failed)
+        self.assertIn("return;", failed)
+
+    def test_a_join_turns_the_radio_back_on_in_flash(self) -> None:
+        # The boot consumed the request with the radio off, so a power cut
+        # after a join must not leave the paired remote dark.
+        joined = self._method(ZIGBEE_LEARNING.read_text(), "void pairing_joined()")
+        self.assertIn(
+            "write_flags_(static_cast<uint16_t>( record_.flags & ~(FLAG_PAIRING_PENDING | "
+            "FLAG_PAIR_FAILED | FLAG_RADIO_OFF)));",
+            joined,
+        )
 
 
 if __name__ == "__main__":

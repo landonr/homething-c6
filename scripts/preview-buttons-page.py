@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -45,6 +46,8 @@ STATE = {
         "ip": "192.168.1.86",
         "mac": "A4:CF:12:34:56:78",
     },
+    # The bench build with idle_sleep. Production serves available false and zeros.
+    "sleep": {"available": True, "enabled": True, "after_s": 300},
     "radios": {"zigbee": True, "ble": True},
     "zigbee": {
         "started": True,
@@ -58,6 +61,12 @@ STATE = {
     },
     "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
 }
+
+# A fake restart fails the state poll for a short time. Then the action ids
+# start again from zero, as they do after a real boot. The preview always comes
+# back, even when the remote would keep Wi-Fi off after the restart.
+RESTART_SECONDS = 4.0
+RESTART = {"until": 0.0}
 
 
 def reverse_bits(value: int) -> int:
@@ -194,6 +203,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == "/buttons/api/state":
+            if RESTART["until"]:
+                if time.monotonic() < RESTART["until"]:
+                    self.send_error(503)
+                    return
+                RESTART["until"] = 0.0
+                STATE["action_id"] = 0
             state = dict(STATE)
             state["slots"] = [slot_json(slot) for slot in range(3, 21)]
             self.send_json(state)
@@ -217,6 +232,10 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         form = parse_qs(self.rfile.read(length).decode())
         action = form.get("action", [""])[0]
+        seconds = form.get("seconds", [""])[0]
+        if action == "set_sleep_after" and not (seconds.isdigit() and 10 <= int(seconds) <= 3600):
+            self.send_json({"ok": False, "error": "sleep after is 10 to 3600 seconds"}, 400)
+            return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
 
@@ -226,6 +245,10 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["radios"][radio] = form.get("on", ["1"])[0] == "1"
         elif action == "set_wifi_always_on":
             STATE["network"]["wifi_always_on"] = form.get("enabled", ["0"])[0] == "1"
+        elif action == "set_sleep_enabled":
+            STATE["sleep"]["enabled"] = form.get("enabled", ["0"])[0] == "1"
+        elif action == "set_sleep_after":
+            STATE["sleep"]["after_s"] = int(seconds)
         elif action == "pair":
             # The real remote restarts here, so the preview only flips the flag
             # and lets the page's own countdown run against it.
@@ -240,6 +263,8 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "forget_ble":
             STATE["ble"]["bonded"] = False
             STATE["ble"]["host"] = ""
+        elif action == "restart":
+            RESTART["until"] = time.monotonic() + RESTART_SECONDS
         self.send_json({"ok": True, "id": STATE["action_id"]})
 
 

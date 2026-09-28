@@ -75,6 +75,11 @@ on and restart the remote. Either one clears the line above.
 **Stop pairing** ends the window the same way. The credentials are already gone
 by then, so a stopped window leaves the remote unpaired with the radio off.
 
+The pairing request lasts only through the restarts that the pairing sequence
+starts itself. Any other restart ends pairing. Examples are the **Restart**
+button, a power loss, and a crash. The remote then starts with the Zigbee radio
+off. To try again, select **Pair this remote for 3 minutes**.
+
 ### What a pairing press erases
 
 A pairing press on a remote that already holds credentials erases them first,

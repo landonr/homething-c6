@@ -122,9 +122,12 @@ class WifiSessionTest(unittest.TestCase):
         self.assertNotIn("global_wifi_component->disable()", setter)
         toggle = section(CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
         self.assertIn("if (this->boot_wifi_always_on_)\n    return;", toggle)
-        self.assertIn("this->note_activity_();", toggle)
-        self.assertIn("this->temporary_wifi_ = true;", toggle)
+        self.assertIn('this->open_temporary_wifi_("by SW9");', toggle)
         self.assertIn("this->temporary_wifi_ = false;", toggle)
+        opener = section(CPP, "void ButtonConfig::open_temporary_wifi_(const char *reason) {", "\n}")
+        self.assertIn("this->note_activity_();", opener)
+        self.assertIn("this->temporary_wifi_ = true;", opener)
+        self.assertIn("wifi::global_wifi_component->enable();", opener)
 
     def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
         self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
@@ -142,6 +145,20 @@ class WifiSessionTest(unittest.TestCase):
         self.assertNotIn("note_activity_", state)
         self.assertIn('request->send(200, "application/json", R"({"ok":true})");', activity)
 
+    def test_a_pairing_boot_opens_a_temporary_session(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        load = setup.index("this->load_wifi_pref_();")
+        gate = setup.index("if (this->boot_wifi_always_on_)\n    wifi::global_wifi_component->enable();")
+        pair = setup.index("if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())\n"
+                           '    this->open_temporary_wifi_("for Zigbee pairing");')
+        self.assertLess(load, gate)
+        self.assertLess(gate, pair)
+        # The boot decides, so a window that never opens cannot keep Wi-Fi off.
+        loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
+        self.assertNotIn("pairing_window_open", loop)
+        self.assertNotIn("zigbee_assignments", loop)
+        self.assertNotIn("pairing_wifi_checked_", CPP + HEADER)
+
     def test_page_switch_and_real_interactions_refresh_the_idle_clock(self) -> None:
         self.assertIn('aria-label="WiFi Always On"', PAGE)
         self.assertIn('id="wfd"', PAGE)
@@ -157,6 +174,171 @@ class WifiSessionTest(unittest.TestCase):
         self.assertIn('["click","touchstart","keydown","input","change"]', PAGE)
         self.assertIn('document.addEventListener(type,pageActivity,true)', PAGE)
         self.assertNotIn("pageActivity()", section(PAGE, "function stateWatch(){", "\n\nfunction "))
+
+
+class SleepSettingsTest(unittest.TestCase):
+    """The bench links idle_sleep and production has no idle_sleep, so the
+    component has to build both ways."""
+
+    def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
+        self.assertIn("from esphome.components import idle_sleep, web_server_base", INIT)
+        self.assertIn("cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep)", INIT)
+        guarded = section(INIT, "    if CONF_IDLE_SLEEP_ID in config:\n", "\n\n")
+        self.assertIn("sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])", guarded)
+        self.assertIn("cg.add(var.set_idle_sleep(sleep))", guarded)
+        self.assertIn('cg.add_define("USE_BUTTON_CONFIG_IDLE_SLEEP")', guarded)
+        self.assertEqual(INIT.count("USE_BUTTON_CONFIG_IDLE_SLEEP"), 1)
+        self.assertNotIn("idle_sleep", INIT.split("AUTO_LOAD", 1)[1].split("\n", 1)[0])
+        self.assertIn('#include "esphome/core/defines.h"', HEADER)
+        # Every idle_sleep symbol in the C++ sits inside the define.
+        for text in (HEADER, CPP):
+            outside = re.sub(r"#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP\n.*?#(?:else|endif)", "", text,
+                             flags=re.DOTALL)
+            outside = re.sub(r"//[^\n]*", "", outside)
+            for symbol in ("idle_sleep::", "idle_sleep_", "idle_sleep/"):
+                self.assertNotIn(symbol, outside)
+        self.assertIn('#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP\n#include "esphome/components/idle_sleep/idle_sleep.h"\n'
+                      '#endif', HEADER)
+
+    def test_the_state_reports_sleep_with_zeros_when_absent(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"radios":', state)
+        self.assertIn("const SleepState sleep = this->sleep_state_();", state)
+        self.assertIn('sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",', state)
+        body = section(CPP, "ButtonConfig::SleepState ButtonConfig::sleep_state_() const {", "\n}")
+        self.assertIn("return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s()};", body)
+        self.assertTrue(body.rstrip().endswith("return {false, false, 0};"))
+
+    def test_both_sleep_actions_follow_the_wifi_action_pattern(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        known = section(action, "const bool known = ", ";")
+        self.assertIn('action == "set_sleep_enabled"', known)
+        self.assertIn('action == "set_sleep_after"', known)
+        # Every refusal comes before the busy claim, so none holds action_pending_.
+        claim = action.index("compare_exchange_strong(expected, true")
+        for error in ("sleep is not configured", "invalid sleep switch", "sleep after is 10 to 3600 seconds"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', action)
+            self.assertLess(action.index(error), claim)
+        self.assertIn('if (sleep_action && !this->sleep_state_().available) {', action)
+        self.assertIn('const std::string enabled = request->arg("enabled");', section(
+            action, 'if (action == "set_sleep_enabled") {', "\n  }"))
+        self.assertIn('parse_sleep_after(request->arg("seconds"), sleep_after_s)', action)
+        self.assertIn('action != "set_wifi_always_on" && !sleep_action && action != "pair" &&', action)
+        for name, call in (("set_sleep_enabled", "this->set_sleep_enabled_(sleep_on)"),
+                           ("set_sleep_after", "this->set_sleep_after_(sleep_after_s)")):
+            branch = section(action, f'}} else if (action == "{name}") {{', "\n  } else")
+            self.assertIn("this->defer([this, action_id, ", branch)
+            self.assertIn(f"this->complete_action_(action_id, {call});", branch)
+
+    def test_the_setters_pass_through_and_the_range_matches_idle_sleep(self) -> None:
+        enabled = section(CPP, "bool ButtonConfig::set_sleep_enabled_(bool enabled) {", "\n}")
+        self.assertIn("return this->idle_sleep_ != nullptr && this->idle_sleep_->set_enabled(enabled);", enabled)
+        self.assertIn("return false;", enabled.split("#else", 1)[1])
+        after = section(CPP, "bool ButtonConfig::set_sleep_after_(uint32_t seconds) {", "\n}")
+        self.assertIn("return this->idle_sleep_ != nullptr && this->idle_sleep_->set_sleep_after_s(seconds);",
+                      after)
+        self.assertIn("return false;", after.split("#else", 1)[1])
+        parse = section(CPP, "static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {", "\n}")
+        self.assertIn("std::isdigit(static_cast<unsigned char>(text[0])) == 0", parse)
+        self.assertIn("value < SLEEP_AFTER_MIN_S || value > SLEEP_AFTER_MAX_S", parse)
+        self.assertIn("static constexpr uint32_t SLEEP_AFTER_MIN_S = 10;", CPP)
+        self.assertIn("static constexpr uint32_t SLEEP_AFTER_MAX_S = 3600;", CPP)
+        self.assertIn("static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&", CPP)
+
+    def test_the_page_block_shows_only_with_idle_sleep(self) -> None:
+        wifi = section(PAGE, '<section class="card full conn" id="wificfg">', "</section>")
+        block = section(wifi, '<div id="slpcfg" hidden>', "</div>")
+        self.assertLess(wifi.index('id="wfb"'), wifi.index('id="slpcfg"'))
+        self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="hab"'))
+        self.assertIn('<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"\n'
+                      'aria-label="Sleep" disabled>', block)
+        self.assertIn('<input type="number" id="sla" min="1" max="60" step="1"', block)
+        status = section(PAGE, "function sleepStatus(){", "\n\nfunction ")
+        self.assertIn("if(blk)blk.hidden=!(z&&z.available);", status)
+        self.assertIn("box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy", status)
+        self.assertIn("document.activeElement!==num", status)
+        switch = section(PAGE, "function setSleepEnabled(){", "\n\nfunction ")
+        self.assertIn('sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0")', switch)
+        after = section(PAGE, "function setSleepAfter(){", "\n\nfunction ")
+        self.assertIn("m<1||m>60", after)
+        self.assertIn('sleepSave("set_sleep_after","&seconds="+(m*60)', after)
+        save = section(PAGE, "function sleepSave(a,x,why){", "\n\nfunction ")
+        self.assertIn("return waitAction(r.body.id)", save)
+        self.assertIn("sleepBusy=false;return load().then(paint)", save)
+        self.assertIn('document.getElementById("slb").onchange=setSleepEnabled;', PAGE)
+        self.assertIn('document.getElementById("sla").onchange=setSleepAfter;', PAGE)
+
+    def test_the_preview_serves_the_sleep_block(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('"sleep": {"available": True, "enabled": True, "after_s": 300}', preview)
+        self.assertIn('elif action == "set_sleep_enabled":', preview)
+        self.assertIn('elif action == "set_sleep_after":', preview)
+        self.assertIn("10 <= int(seconds) <= 3600", preview)
+
+
+class RestartTest(unittest.TestCase):
+    """The page loses its socket to the reboot, so the reply has to leave first."""
+
+    def test_the_restart_action_follows_the_wifi_action_pattern(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "restart"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "restart"', section(action, "const bool needs_slot = ", ";"))
+        branch = section(action, '} else if (action == "restart") {', "\n  } else")
+        self.assertIn("this->defer([this, action_id]() {", branch)
+        self.assertIn('ESP_LOGI(TAG, "Restart requested from the page");', branch)
+        # The busy claim comes first, so a restart during a capture answers 409.
+        self.assertLess(action.index("compare_exchange_strong(expected, true"),
+                        action.index('} else if (action == "restart") {'))
+
+    def test_the_reply_leaves_before_a_delayed_safe_reboot(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        branch = section(action, '} else if (action == "restart") {', "\n  } else")
+        complete = branch.index("this->complete_action_(action_id, true);")
+        timer = branch.index('this->set_timeout("restart", RESTART_DELAY_MS, []() { App.safe_reboot(); });')
+        self.assertLess(complete, timer)
+        # The httpd task sends the reply after it queues the defer, and the
+        # reboot waits on the main loop timer.
+        self.assertLess(action.index('} else if (action == "restart") {'),
+                        action.index('R"({"ok":true,"id":%u})"'))
+        self.assertIn("static constexpr uint32_t RESTART_DELAY_MS = 500;", CPP)
+        self.assertEqual(CPP.count("safe_reboot("), 1)
+        for bare in ("esp_restart(", "App.reboot(", "arch_restart("):
+            self.assertNotIn(bare, CPP)
+        self.assertIn('#include "esphome/core/application.h"', CPP)
+
+    def test_the_page_confirms_and_posts_the_restart(self) -> None:
+        wifi = section(PAGE, '<section class="card full conn" id="wificfg">', "</section>")
+        self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="rsb"'))
+        self.assertLess(wifi.index('id="rsb"'), wifi.index('id="hab"'))
+        self.assertIn('<div class="act"><button type="button" id="rsb">Restart remote</button></div>',
+                      wifi)
+        self.assertIn('<p class="sub st" id="rss">The remote is not restarting.</p>', wifi)
+        self.assertNotIn('id="rsb"', section(PAGE, '<section class="card full conn" id="zbcfg">', "</section>"))
+        self.assertIn('document.getElementById("rsb").onclick=restartRemote;', PAGE)
+        send = section(PAGE, "function restartRemote(){", "\n\n")
+        self.assertIn("if(restartBusy)return;", send)
+        self.assertIn('if(!confirm("Restart the remote? The settings and the button assignments are kept."))return;',
+                      send)
+        self.assertIn('post("restart")', send)
+        # The reboot drops the socket, so the poll that comes back confirms it.
+        self.assertNotIn("waitAction(", send)
+        paint = section(PAGE, "function restartPaint(){", "\n\n")
+        self.assertIn('b.disabled=restartBusy;b.textContent=restartBusy?"Restarting...":"Restart remote"', paint)
+        self.assertIn("st.network.wifi_always_on===true", paint)
+        self.assertIn('" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session."',
+                      paint)
+        self.assertIn('"The remote is restarting."', paint)
+        self.assertIn("function restartLost(){if(restartBusy&&restartId)restartDown=true}", PAGE)
+        sync = section(PAGE, "function restartSync(j){", "\n\n")
+        self.assertIn("restartBusy&&restartDown&&Number(j.action_id)<restartId", sync)
+        # The page says restart everywhere, as the Zigbee pairing text does.
+        self.assertNotIn("reboot", re.sub(r"//[^\n]*", "", section(PAGE, "<body>", "</html>")).lower())
+
+    def test_the_preview_fakes_a_restart(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('elif action == "restart":', preview)
+        self.assertIn('RESTART["until"] = time.monotonic() + RESTART_SECONDS', preview)
+        self.assertIn('STATE["action_id"] = 0', preview)
 
 
 class SlotTableTest(unittest.TestCase):
@@ -714,10 +896,18 @@ class PageTest(unittest.TestCase):
         self.assertIn("::zigbee_assignments.begin_pairing()", pair)
         self.assertIn("::zigbee_assignments.cancel_pairing();", pair)
         self.assertIn("this->complete_action_(action_id, ok);", pair)
-        # A joined remote loses its network to a pairing press, so it asks first.
-        self.assertIn("if(open&&zbPaired()&&!confirm(", send)
+        # Both directions restart the remote, so every press asks first. A joined
+        # remote also loses its network to a pairing press.
+        self.assertIn("if(!confirm(open?(zbPaired()?", send)
+        self.assertLess(send.index("if(!confirm("), send.index("zpjBusy=true;"))
         self.assertIn("erases the Zigbee network credentials of this remote", send)
         self.assertIn("The button assignments are kept.", send)
+        self.assertIn('"The remote restarts to start pairing. This page reconnects when the remote '
+                      'is back. Continue?"', send)
+        self.assertIn('"The remote restarts with the Zigbee radio off."', send)
+        self.assertIn("var always=!!(st.network&&st.network.wifi_always_on===true);", send)
+        self.assertIn('(always?"":" Wi-Fi stays off after the restart. Hold Button 9 for two seconds '
+                      'to open a temporary session.")', send)
         paint = section(PAGE, "function zpjPaint(){", "\n\n// The state poll")
         self.assertIn("b.disabled=zpjBusy||!known;", paint)
         self.assertIn('b.textContent=zpjBusy?"Restarting...":zpjOn?"Stop pairing":'
@@ -753,7 +943,8 @@ class PageTest(unittest.TestCase):
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)", body)
+        self.assertIn("st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);"
+                      "radioStatus();bleStatus()}},\nfunction(){zpjLost();restartLost()})", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
         # A failed poll while a press is open is the restart, not a dead remote.
@@ -887,9 +1078,11 @@ class PageTest(unittest.TestCase):
                       '<p class="sub st" id="zpjs">Pairing state is loading.</p>\n'
                       '<p class="sub">Pairing erases the Zigbee network credentials of '
                       'this remote and restarts it.\n'
-                      'The button assignments are kept. Permit joining in Zigbee2MQTT as '
-                      'well, because a join needs\n'
-                      'both sides.</p>\n'
+                      'The button assignments are kept. If WiFi Always On is off, the '
+                      'remote opens a temporary Wi-Fi\n'
+                      'session when it restarts to pair, so this page reconnects. '
+                      'Permit joining in Zigbee2MQTT as\n'
+                      'well, because a join needs both sides.</p>\n'
                       '<div class="act"><button type="button" class="sec" id="zpj">'
                       'Pair this remote for 3 minutes</button></div>\n'
                       '<hr class="rule">\n'
@@ -1087,7 +1280,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("static constexpr uint8_t FLAG_RADIO_OFF = 0x01;", BLE_HEADER)
         self.assertIn("uint8_t flags;", BLE_HEADER)
         self.assertIn("uint8_t reserved[2];", BLE_HEADER)
-        self.assertIn("radio_on_.store((record_.flags & FLAG_RADIO_OFF) == 0", ZIGBEE)
+        self.assertIn("const uint16_t boot_flags = record_.flags;", ZIGBEE)
+        self.assertIn("radio_on_.store((boot_flags & FLAG_RADIO_OFF) == 0", ZIGBEE)
         self.assertIn("this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0", BLE)
 
     def test_an_off_radio_sends_nothing(self) -> None:
@@ -1120,7 +1314,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('action == "set_radio"', CPP)
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
         self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
-                      '\n                          action != "set_wifi_always_on" && action != "pair";', CPP)
+                      '\n                          action != "set_wifi_always_on" && !sleep_action && '
+                      'action != "pair" &&\n                          action != "restart";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
         self.assertIn("this->defer(", switch)
@@ -1152,11 +1347,11 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertNotIn("FLAG_RADIO_OFF",
                          section(ZIGBEE, "static void reset_record_(Record &record) {", "\n  }"))
         # The switch cannot lift the gate, so the page asks for the one cure.
-        self.assertIn('if(z.gated)return "The stack is down. Reboot the remote to start it.";', PAGE)
+        self.assertIn('if(z.gated)return "The stack is down. Restart the remote to start it.";', PAGE)
         self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
                       '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
         self.assertIn("::zigbee_assignments.boot_gated() ? \"true\" : \"false\"", CPP)
-        # Nothing else on the device offers a reboot.
+        # Home Assistant offers the same restart as the page.
         self.assertIn("  - platform: restart\n    name: Restart", CONFIG)
 
     def test_neither_radio_switch_acts_on_its_own_state_at_boot(self) -> None:
@@ -1236,9 +1431,10 @@ class RadioSwitchTest(unittest.TestCase):
     def test_every_radio_line_states_what_is_on_or_off(self) -> None:
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
-        # Nothing in the connection card carries a hidden attribute any more.
+        # Only the sleep block hides, because the build and not a state fixes it.
         for card_id in ("wificfg", "zbcfg", "blecfg"):
             card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
+            card = card.replace('<div id="slpcfg" hidden>', "", 1)
             self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)

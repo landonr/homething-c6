@@ -120,8 +120,9 @@ display:flex;align-items:center;justify-content:space-between;gap:8px}
 .aslist button[aria-checked=true]:after{content:"✓";color:var(--acc);font-weight:600}
 .aslist button[disabled]{opacity:.5;cursor:not-allowed}
 h3{font-size:15px;margin:14px 0 8px}
-select,input[type=text],input[type=search]{font:inherit;color:inherit;background:var(--card);
+select,input[type=text],input[type=search],input[type=number]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
+#sla{max-width:8em;margin-bottom:12px}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
 @media (prefers-color-scheme:dark){
 input[type=search]::-webkit-search-cancel-button{filter:invert(1)}}
@@ -192,6 +193,20 @@ aria-label="WiFi Always On" disabled><span></span></label></h2>
 <p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
 <dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
 <dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
+<div id="slpcfg" hidden>
+<hr class="rule">
+<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"
+aria-label="Sleep" disabled><span></span></label></h2>
+<p class="sub st" id="sls">Sleep state is loading.</p>
+<label class="hd2" for="sla">Sleep after, in minutes</label>
+<input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
+<p class="sub">Each press restarts the timer. Hold Button 5 for two seconds to sleep at once, even when Sleep is off.</p>
+</div>
+<hr class="rule">
+<h2 class="ttl">Restart</h2>
+<p class="sub st" id="rss">The remote is not restarting.</p>
+<p class="sub">A restart keeps the settings and the button assignments. It also applies WiFi Always On.</p>
+<div class="act"><button type="button" id="rsb">Restart remote</button></div>
 <hr class="rule">
 <h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
 aria-label="Home Assistant API"><span></span></label></h2>
@@ -204,8 +219,9 @@ aria-label="Zigbee radio"><span></span></label></h2>
 <p class="sub st" id="zrs">Zigbee radio state is loading.</p>
 <p class="sub st" id="zpjs">Pairing state is loading.</p>
 <p class="sub">Pairing erases the Zigbee network credentials of this remote and restarts it.
-The button assignments are kept. Permit joining in Zigbee2MQTT as well, because a join needs
-both sides.</p>
+The button assignments are kept. If WiFi Always On is off, the remote opens a temporary Wi-Fi
+session when it restarts to pair, so this page reconnects. Permit joining in Zigbee2MQTT as
+well, because a join needs both sides.</p>
 <div class="act"><button type="button" class="sec" id="zpj">Pair this remote for 3 minutes</button></div>
 <hr class="rule">
 <h3>Zigbee2MQTT</h3>
@@ -265,6 +281,10 @@ var ZA=[
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
+var sleepBusy=false,sleepWant=true,sleepError="";
+// restartBusy holds from the press until the remote is back. restartDown marks a
+// failed poll after the accepted press, which is the restart itself.
+var restartBusy=false,restartId=0,restartDown=false,restartDone=false,restartErr="";
 // One switch for each radio. The remote holds the state, so a reload and a
 // second browser both show the switch the remote is actually running with.
 // radioWant holds the position the switch was moved to, so a repaint during the
@@ -397,6 +417,9 @@ b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("wfb").onchange=setWifiAlwaysOn;
+document.getElementById("slb").onchange=setSleepEnabled;
+document.getElementById("sla").onchange=setSleepAfter;
+document.getElementById("rsb").onclick=restartRemote;
 document.getElementById("tabb").onclick=function(){showTab(false)};
 document.getElementById("tabc").onclick=function(){showTab(true);if(!cfgReady)cfgRefresh()};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
@@ -606,7 +629,7 @@ function zbLink(){
 var z=st&&st.zigbee;
 if(!z)return "";
 // The stack cannot start later, so this asks for the one thing that works.
-if(z.gated)return "The stack is down. Reboot the remote to start it.";
+if(z.gated)return "The stack is down. Restart the remote to start it.";
 if(!z.started)return "The stack has not started.";
 if(z.pairing)return "Pairing.";
 // Only a device target is acknowledged, so a remote that sends nothing but
@@ -686,6 +709,74 @@ if(!ok)throw new Error("The remote could not save the Wi-Fi default.")})})
 .then(function(){wifiBusy=false;return load().then(paint)},function(e){
 wifiBusy=false;wifiError=e&&e.message?e.message:"The remote did not answer.";networkStatus()})}
 
+function sleepSpan(s){return s%60?s+" seconds":s===60?"1 minute":(s/60)+" minutes"}
+
+// Only a build with idle_sleep has the block, so it shows once and stays. The
+// box keeps a value that is still being typed.
+function sleepStatus(){
+var blk=document.getElementById("slpcfg"),box=document.getElementById("slb"),
+num=document.getElementById("sla"),line=document.getElementById("sls");
+var z=st&&st.sleep,on=!!(z&&z.enabled===true);
+if(blk)blk.hidden=!(z&&z.available);
+if(!z||!z.available)return;
+if(box){box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy}
+if(num){if(!sleepBusy&&document.activeElement!==num)num.value=String(Math.max(1,Math.round(z.after_s/60)));
+num.disabled=sleepBusy}
+if(line){line.className="sub st"+(sleepError?" bad":"");
+line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>Sleep is "+
+(on?"on. The remote sleeps after "+sleepSpan(z.after_s)+" without a press.":"off. The remote stays awake.")+
+(sleepError?" "+esc(sleepError):"")}}
+
+function setSleepEnabled(){
+if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
+sleepWant=document.getElementById("slb").checked;
+sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0"),"The remote could not save the sleep switch.")}
+
+function setSleepAfter(){
+if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
+var v=String(document.getElementById("sla").value).replace(/^\s+|\s+$/g,""),m=Number(v);
+if(!/^\d+$/.test(v)||m<1||m>60){sleepError="Enter whole minutes from 1 to 60.";sleepStatus();return}
+sleepWant=st.sleep.enabled===true;
+sleepSave("set_sleep_after","&seconds="+(m*60),"The remote could not save the sleep time.")}
+
+function sleepSave(a,x,why){
+sleepBusy=true;sleepError="";sleepStatus();
+post(a,null,undefined,undefined,x)
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error(why)})})
+.then(function(){sleepBusy=false;return load().then(paint)},function(e){
+sleepBusy=false;sleepError=e&&e.message?e.message:"The remote did not answer.";sleepStatus()})}
+
+function restartPaint(){
+var b=document.getElementById("rsb"),e=document.getElementById("rss"),
+always=!!(st&&st.network&&st.network.wifi_always_on===true);
+if(b){b.disabled=restartBusy;b.textContent=restartBusy?"Restarting...":"Restart remote"}
+if(e){e.className="sub st"+(restartErr?" bad":"");
+e.innerHTML="<span class='dot "+(restartBusy?"warn":restartDone?"":"off")+"'></span>"+
+(!restartBusy?(restartDone?"The remote restarted.":"The remote is not restarting."):
+!restartId?"The page asked the remote to restart.":"The remote is restarting."+
+(always?" This page reconnects when the remote is back.":
+" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session."))+
+(restartErr?" "+esc(restartErr):"")}}
+
+// The remote restarts after it answers, so the press is never confirmed by an
+// action id. The poll that comes back is the confirmation.
+function restartRemote(){
+if(restartBusy)return;
+if(!confirm("Restart the remote? The settings and the button assignments are kept."))return;
+restartBusy=true;restartId=0;restartDown=false;restartDone=false;restartErr="";restartPaint();
+post("restart").then(function(r){
+if(r.code!==200){restartBusy=false;restartErr=fail(r)}else restartId=Number(r.body.id)||0;
+restartPaint()},function(){restartBusy=false;restartErr="The remote did not answer.";restartPaint()})}
+
+function restartLost(){if(restartBusy&&restartId)restartDown=true}
+
+// A boot starts the action ids from zero, so a lower id after a failed poll is
+// the restarted remote.
+function restartSync(j){
+if(restartBusy&&restartDown&&Number(j.action_id)<restartId){restartBusy=false;restartDone=true}
+restartPaint()}
+
 function sendActivity(){activityTimer=0;activitySent=Date.now();
 fetch("/buttons/api/activity",{method:"POST",cache:"no-store",keepalive:true}).catch(function(){})}
 
@@ -711,13 +802,14 @@ stBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
 .then(function(j){if(j&&j.ble){if(!st)st={};st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-zpjSync();networkStatus();radioStatus();bleStatus()}},zpjLost)
+st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);radioStatus();bleStatus()}},
+function(){zpjLost();restartLost()})
 .then(function(){stBusy=false},function(){stBusy=false})}
 
 function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-z2mStatus();networkStatus();radioStatus();bleStatus();zpjPaint();
+z2mStatus();networkStatus();sleepStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -947,12 +1039,18 @@ zpjTick()}
 function zpjLost(){if(zpjBusy)zpjDown=true;zpjPaint()}
 
 // The remote restarts to start or to stop its radio, so the answer to this
-// press arrives as the state poll coming back, not as the response to it.
+// press arrives as the state poll coming back, not as the response to it. Both
+// directions restart it, so every press asks first.
 function zpjSet(open){
 if(zpjBusy||!(st&&st.zigbee))return;
-if(open&&zbPaired()&&!confirm(
+var always=!!(st.network&&st.network.wifi_always_on===true);
+if(!confirm(open?(zbPaired()?
 "Pairing erases the Zigbee network credentials of this remote and restarts it. "+
-"The button assignments are kept. Continue?"))return;
+"The button assignments are kept. Continue?":
+"The remote restarts to start pairing. This page reconnects when the remote is back. Continue?"):
+"The remote restarts with the Zigbee radio off."+
+(always?"":" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session.")+
+" Continue?"))return;
 zpjBusy=true;zpjWant=!!open;zpjErr="";zpjDown=false;zpjPaint();
 post("pair",null,undefined,undefined,"&on="+(open?"1":"0")).then(function(r){
 if(r.code!==200){zpjBusy=false;zpjErr=fail(r);zpjPaint()}},

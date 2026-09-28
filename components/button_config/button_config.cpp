@@ -1,5 +1,6 @@
 #include "button_config.h"
 
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
 #include "ir_learning.h"
@@ -20,6 +21,17 @@
 namespace esphome::button_config {
 
 static const char *const TAG = "button_config";
+
+// The 400 check runs on the httpd task. IdleSleep checks the range again.
+static constexpr uint32_t SLEEP_AFTER_MIN_S = 10;
+static constexpr uint32_t SLEEP_AFTER_MAX_S = 3600;
+// The reply leaves on the httpd task, so the reboot waits for it to clear the socket.
+static constexpr uint32_t RESTART_DELAY_MS = 500;
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&
+                  SLEEP_AFTER_MAX_S == idle_sleep::IdleSleep::MAX_SLEEP_AFTER_S,
+              "the page range must match IdleSleep");
+#endif
 
 static const SlotInfo SLOTS[] = {
     {3, true},   {4, true},   {5, true},  {6, true},  {7, true},  {8, true},
@@ -144,6 +156,17 @@ static bool parse_action(const std::string &text, uint8_t &action) {
   if (end == text.c_str() || *end != '\0' || value >= ZigbeeAssignmentManager::ACTION_COUNT)
     return false;
   action = static_cast<uint8_t>(value);
+  return true;
+}
+
+static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {
+  if (text.empty() || text.size() > 4 || std::isdigit(static_cast<unsigned char>(text[0])) == 0)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (*end != '\0' || value < SLEEP_AFTER_MIN_S || value > SLEEP_AFTER_MAX_S)
+    return false;
+  seconds = static_cast<uint32_t>(value);
   return true;
 }
 
@@ -371,6 +394,10 @@ void ButtonConfig::setup() {
   this->boot_wifi_always_on_ = this->wifi_always_on();
   if (this->boot_wifi_always_on_)
     wifi::global_wifi_component->enable();
+  // Each pairing restart drops the page. ZigbeeAssignmentManager::setup() runs
+  // first, from on_boot at priority 600, so pairing() already reads this boot.
+  if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())
+    this->open_temporary_wifi_("for Zigbee pairing");
   this->base_->init();
   this->base_->add_handler(this);
 }
@@ -408,18 +435,49 @@ bool ButtonConfig::set_wifi_always_on_(bool enabled) {
   return true;
 }
 
+ButtonConfig::SleepState ButtonConfig::sleep_state_() const {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  if (this->idle_sleep_ != nullptr)
+    return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s()};
+#endif
+  return {false, false, 0};
+}
+
+// Main loop only. The IdleSleep setters save and restart its idle window.
+bool ButtonConfig::set_sleep_enabled_(bool enabled) {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_enabled(enabled);
+#else
+  (void) enabled;
+  return false;
+#endif
+}
+
+bool ButtonConfig::set_sleep_after_(uint32_t seconds) {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_sleep_after_s(seconds);
+#else
+  (void) seconds;
+  return false;
+#endif
+}
+
 void ButtonConfig::note_activity_() {
   this->last_activity_ms_.store(millis(), std::memory_order_release);
+}
+
+void ButtonConfig::open_temporary_wifi_(const char *reason) {
+  this->note_activity_();
+  this->temporary_wifi_ = true;
+  wifi::global_wifi_component->enable();
+  ESP_LOGI(TAG, "Temporary Wi-Fi session opened %s", reason);
 }
 
 void ButtonConfig::toggle_temporary_wifi() {
   if (this->boot_wifi_always_on_)
     return;
   if (wifi::global_wifi_component->is_disabled()) {
-    this->note_activity_();
-    this->temporary_wifi_ = true;
-    wifi::global_wifi_component->enable();
-    ESP_LOGI(TAG, "Temporary Wi-Fi session opened");
+    this->open_temporary_wifi_("by SW9");
   } else {
     this->temporary_wifi_ = false;
     wifi::global_wifi_component->disable();
@@ -460,6 +518,7 @@ void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "Button config page at /buttons");
   ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
+  ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
 }
 
 // init() starts the HTTP server, which asserts if it runs before the network is
@@ -523,10 +582,11 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   }
   char mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
   get_mac_address_pretty_into_buffer(mac);
+  const SleepState sleep = this->sleep_state_();
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -536,6 +596,8 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       this->wifi_always_on() ? "true" : "false",
       api::global_api_server->is_connected() ? "true" : "false",
       ip, mac,
+      sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",
+      static_cast<unsigned>(sleep.after_s),
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
       this->ha_api_expected() ? "true" : "false",
@@ -658,7 +720,9 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
-                     action == "set_wifi_always_on" || action == "pair" || action == "clear";
+                     action == "set_wifi_always_on" || action == "set_sleep_enabled" ||
+                     action == "set_sleep_after" || action == "pair" || action == "restart" ||
+                     action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
@@ -688,6 +752,26 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     wifi_default_on = enabled == "1";
   }
 
+  const bool sleep_action = action == "set_sleep_enabled" || action == "set_sleep_after";
+  if (sleep_action && !this->sleep_state_().available) {
+    request->send(400, "application/json", R"({"ok":false,"error":"sleep is not configured"})");
+    return;
+  }
+  bool sleep_on = false;
+  if (action == "set_sleep_enabled") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid sleep switch"})");
+      return;
+    }
+    sleep_on = enabled == "1";
+  }
+  uint32_t sleep_after_s = 0;
+  if (action == "set_sleep_after" && !parse_sleep_after(request->arg("seconds"), sleep_after_s)) {
+    request->send(400, "application/json", R"({"ok":false,"error":"sleep after is 10 to 3600 seconds"})");
+    return;
+  }
+
   // Pairing carries the same on flag, so one control can start and stop it.
   bool pair_on = false;
   if (action == "pair") {
@@ -700,7 +784,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   }
 
   const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
-                          action != "set_wifi_always_on" && action != "pair";
+                          action != "set_wifi_always_on" && !sleep_action && action != "pair" &&
+                          action != "restart";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
@@ -859,6 +944,20 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "set_wifi_always_on") {
     this->defer([this, action_id, wifi_default_on]() {
       this->complete_action_(action_id, this->set_wifi_always_on_(wifi_default_on));
+    });
+  } else if (action == "set_sleep_enabled") {
+    this->defer([this, action_id, sleep_on]() {
+      this->complete_action_(action_id, this->set_sleep_enabled_(sleep_on));
+    });
+  } else if (action == "set_sleep_after") {
+    this->defer([this, action_id, sleep_after_s]() {
+      this->complete_action_(action_id, this->set_sleep_after_(sleep_after_s));
+    });
+  } else if (action == "restart") {
+    this->defer([this, action_id]() {
+      ESP_LOGI(TAG, "Restart requested from the page");
+      this->complete_action_(action_id, true);
+      this->set_timeout("restart", RESTART_DELAY_MS, []() { App.safe_reboot(); });
     });
   } else {
     this->defer([this, button, action_id]() {

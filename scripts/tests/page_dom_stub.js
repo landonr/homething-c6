@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac"])
+                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "rss", "rsb"])
   els[id] = mk("section");
 els.scb.checked = true;
 
@@ -64,6 +64,7 @@ const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
+  sleep: {available: true, enabled: true, after_s: 300},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
@@ -864,6 +865,111 @@ setTimeout(() => {
       throw new Error("switch lost pending preference");
     global.wifiBusy = false;
   });
+  step("the sleep block shows only with idle_sleep and names its state", () => {
+    global.st = STATE;
+    const block = document.getElementById("slpcfg");
+    const box = document.getElementById("slb");
+    const minutes = document.getElementById("sla");
+    const line = document.getElementById("sls");
+    STATE.sleep = {available: false, enabled: false, after_s: 0};
+    sleepStatus();
+    if (!block.hidden) throw new Error("the block showed without idle_sleep");
+    STATE.sleep = {available: true, enabled: true, after_s: 300};
+    paint();
+    if (block.hidden) throw new Error("the block stayed hidden");
+    if (!box.checked || box.disabled) throw new Error("the switch does not show sleep on");
+    if (minutes.value !== "5" || minutes.disabled) throw new Error("minutes showed " + minutes.value);
+    if (!line.innerHTML.includes("Sleep is on. The remote sleeps after 5 minutes without a press."))
+      throw new Error("the on line reads " + line.innerHTML);
+    STATE.sleep = {available: true, enabled: false, after_s: 90};
+    sleepStatus();
+    if (box.checked) throw new Error("the switch does not show sleep off");
+    if (!line.innerHTML.includes("Sleep is off. The remote stays awake."))
+      throw new Error("the off line reads " + line.innerHTML);
+    STATE.sleep.enabled = true;
+    sleepStatus();
+    if (!line.innerHTML.includes("after 90 seconds") || minutes.value !== "2")
+      throw new Error("a YAML default in seconds reads " + line.innerHTML + " / " + minutes.value);
+    STATE.sleep = {available: true, enabled: true, after_s: 300};
+    sleepStatus();
+  });
+  step("the sleep switch posts the new state and holds it during the write", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("slb").checked = false;
+    document.getElementById("slb").onchange();
+    global.fetch = realFetch;
+    if (!body.includes("action=set_sleep_enabled") || !body.includes("enabled=0"))
+      throw new Error("switch posted " + body);
+    if (!document.getElementById("slb").disabled || document.getElementById("slb").checked)
+      throw new Error("switch lost the pending state");
+    if (!document.getElementById("sla").disabled) throw new Error("minutes stayed live during the write");
+    global.sleepBusy = false;
+    sleepStatus();
+  });
+  step("the minutes box posts seconds and refuses a value outside 1 to 60", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    const minutes = document.getElementById("sla");
+    for (const bad of ["0", "61", "2.5", "", "5m"]) {
+      minutes.value = bad;
+      minutes.onchange();
+      if (bodies.length) throw new Error(JSON.stringify(bad) + " posted " + bodies[0]);
+      if (!document.getElementById("sls").className.includes("bad") ||
+          !document.getElementById("sls").innerHTML.includes("Enter whole minutes from 1 to 60."))
+        throw new Error(JSON.stringify(bad) + " gave no reason");
+    }
+    minutes.value = "12";
+    minutes.onchange();
+    global.fetch = realFetch;
+    if (bodies.length !== 1 || !bodies[0].includes("action=set_sleep_after") ||
+        !bodies[0].includes("seconds=720"))
+      throw new Error("minutes posted " + bodies.join(" | "));
+    if (document.getElementById("sls").className.includes("bad"))
+      throw new Error("a good value kept the old error");
+    global.sleepBusy = false;
+    sleepStatus();
+  });
+  step("Restart asks first, and a refusal sends nothing", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("rsb").onclick();
+    global.fetch = realFetch;
+    confirmAnswer = true;
+    if (confirmAsked !== 1) throw new Error("the restart did not ask");
+    if (confirmText.indexOf("Restart the remote?") < 0) throw new Error("the question reads " + confirmText);
+    if (body !== null) throw new Error("a refused confirm still posted: " + body);
+    if (document.getElementById("rsb").disabled) throw new Error("a refused confirm locked the button");
+    if (document.getElementById("rss").innerHTML.indexOf("The remote is not restarting.") < 0)
+      throw new Error("the idle line reads " + document.getElementById("rss").innerHTML);
+  });
+  step("an accepted restart posts restart and locks the button", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = true;
+    const button = document.getElementById("rsb");
+    button.onclick();
+    if (confirmAsked !== 1) throw new Error("the restart did not ask");
+    if (body !== "action=restart") throw new Error("the restart posted " + body);
+    if (!button.disabled || button.textContent !== "Restarting...")
+      throw new Error("the button stayed live during the restart");
+    if (document.getElementById("rss").innerHTML.indexOf("The page asked the remote to restart.") < 0)
+      throw new Error("the open press reads " + document.getElementById("rss").innerHTML);
+    // A second press while the first is open sends nothing and asks nothing.
+    body = null; confirmAsked = 0;
+    button.onclick();
+    global.fetch = realFetch;
+    if (body !== null || confirmAsked !== 0) throw new Error("a second press posted " + body);
+  });
   step("an off Bluetooth radio names its bond and never reads as connected", () => {
     global.st = STATE;
     STATE.radios = {zigbee: true, ble: false};
@@ -950,14 +1056,25 @@ setTimeout(() => {
       throw new Error("pairing stayed locked with a known state");
     if (document.getElementById("zpj").textContent !== "Pair this remote for 3 minutes")
       throw new Error("the button does not offer a pair");
-    // An unpaired remote has no network to lose, so it is not asked about one.
+    // An unpaired remote has no network to lose, but the press still restarts it.
     const realFetch = global.fetch;
     let body = null;
     global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    wsSent = []; confirmAsked = 0;
+    wsSent = []; confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("zpj").onclick();
+    if (confirmAsked !== 1) throw new Error("an unpaired start did not ask");
+    if (confirmText.indexOf("restarts to start pairing") < 0 ||
+        confirmText.indexOf("This page reconnects when the remote is back.") < 0)
+      throw new Error("the unpaired question is wrong: " + confirmText);
+    if (confirmText.indexOf("erases") >= 0)
+      throw new Error("an unpaired remote was told about an erase: " + confirmText);
+    if (body !== null) throw new Error("a refused start still posted: " + body);
+    if (document.getElementById("zpj").disabled)
+      throw new Error("a refused start locked the button");
+    confirmAsked = 0; confirmAnswer = true;
     document.getElementById("zpj").onclick();
     global.fetch = realFetch;
-    if (confirmAsked !== 0) throw new Error("an unpaired remote was asked to confirm");
+    if (confirmAsked !== 1) throw new Error("an unpaired start did not ask");
     if (wsSent.length !== 0) throw new Error("the button wrote to Zigbee2MQTT");
     if (body !== "action=pair&on=1") throw new Error("wrong request: " + body);
     if (!document.getElementById("zpj").disabled)
@@ -982,10 +1099,30 @@ setTimeout(() => {
     paint();
     if (document.getElementById("zrs").innerHTML.indexOf("Pairing.") < 0)
       throw new Error("the link line does not name the window");
+    // A stop restarts the remote too. Without WiFi Always On the page cannot
+    // follow it back, so the question names the SW9 hold.
     body = null;
     global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    STATE.network.wifi_always_on = false;
+    confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("zpj").onclick();
+    if (confirmAsked !== 1) throw new Error("a stop did not ask");
+    if (confirmText.indexOf("The remote restarts with the Zigbee radio off.") < 0)
+      throw new Error("the stop question does not name the restart: " + confirmText);
+    if (confirmText.indexOf("Wi-Fi stays off after the restart.") < 0 ||
+        confirmText.indexOf("Hold Button 9 for two seconds") < 0)
+      throw new Error("the stop question does not name the SW9 hold: " + confirmText);
+    if (body !== null) throw new Error("a refused stop still posted: " + body);
+    if (document.getElementById("zpj").disabled)
+      throw new Error("a refused stop locked the button");
+    STATE.network.wifi_always_on = true;
+    confirmAsked = 0; confirmAnswer = true;
     document.getElementById("zpj").onclick();
     global.fetch = realFetch;
+    STATE.network.wifi_always_on = false;
+    if (confirmAsked !== 1) throw new Error("a stop did not ask");
+    if (confirmText.indexOf("Button 9") >= 0 || confirmText.indexOf("Wi-Fi stays off") >= 0)
+      throw new Error("an always-on remote was told Wi-Fi stays off: " + confirmText);
     if (body !== "action=pair&on=0") throw new Error("stop did not close the window: " + body);
     STATE.zigbee.pairing = false; STATE.zigbee.pair_left = 0;
     zpjSync();
@@ -1229,6 +1366,46 @@ setTimeout(() => {
     step("cache refresh preserves unsaved Config text", () => {
       if (cfgIn !== "unsaved text" || cfgAll[6] !== CODE.text)
         throw new Error("refresh replaced manual text or missed the code");
+    });
+    // The restart pressed above has its reply by now, and the stub answers id 1.
+    const restartLine = () => document.getElementById("rss");
+    step("the accepted restart names the Wi-Fi it comes back with", () => {
+      STATE.network.wifi_always_on = false;
+      restartPaint();
+      const off = restartLine().innerHTML;
+      if (off.indexOf("The remote is restarting.") < 0 || off.indexOf("Wi-Fi stays off after the restart.") < 0 ||
+          off.indexOf("Hold Button 9 for two seconds") < 0)
+        throw new Error("the Wi-Fi off line reads " + off);
+      STATE.network.wifi_always_on = true;
+      restartPaint();
+      const on = restartLine().innerHTML;
+      if (on.indexOf("reconnects") < 0 || on.indexOf("Wi-Fi stays off") >= 0)
+        throw new Error("the Wi-Fi on line reads " + on);
+      STATE.network.wifi_always_on = false;
+      restartPaint();
+    });
+    global.fetch = () => Promise.reject(new Error("offline"));
+    global.stBusy = false;
+    stateRefresh();
+    await new Promise(done => setTimeout(done, 20));
+    global.fetch = realFetch;
+    step("a failed poll during the restart keeps the restart line", () => {
+      const line = restartLine();
+      if (line.className.indexOf("bad") >= 0 || line.innerHTML.indexOf("The remote is restarting.") < 0)
+        throw new Error("the lost poll reads " + line.className + " / " + line.innerHTML);
+      if (!document.getElementById("rsb").disabled) throw new Error("the button unlocked while the remote was away");
+    });
+    // A boot starts the action ids from zero, and the stub serves 0.
+    STATE.action_id = 0;
+    global.stBusy = false;
+    stateRefresh();
+    await new Promise(done => setTimeout(done, 20));
+    step("the first poll after the boot unlocks the button", () => {
+      const button = document.getElementById("rsb");
+      if (restartLine().innerHTML.indexOf("The remote restarted.") < 0)
+        throw new Error("the return reads " + restartLine().innerHTML);
+      if (button.disabled || button.textContent !== "Restart remote")
+        throw new Error("the button stayed locked after the return");
     });
   })().then(() => process.exit(failed ? 1 : 0), e => {
     console.log("FAIL async checks: " + e.message); process.exit(1);

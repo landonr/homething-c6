@@ -102,8 +102,8 @@ class ZigbeeAssignmentManager {
       }
     } else {
       // A remote with no record has never been paired, so it boots with the
-      // radio off and waits for the pairing button. Only this branch sets the
-      // bit: a migrated record keeps the radio its owner already had.
+      // radio off and waits for the pairing button. Of the load branches, only
+      // this one sets the bit: a migrated record keeps the radio it already had.
       reset_record_(record_);
       record_.flags = FLAG_RADIO_OFF;
       record_.checksum = checksum_(record_);
@@ -111,9 +111,18 @@ class ZigbeeAssignmentManager {
         ESP_LOGE("zigbee_learn", "Failed to invalidate old Zigbee assignments");
     }
 
-    radio_on_.store((record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
-    pairing_.store((record_.flags & FLAG_PAIRING_PENDING) != 0, std::memory_order_release);
-    pair_failed_.store((record_.flags & FLAG_PAIR_FAILED) != 0, std::memory_order_release);
+    const uint16_t boot_flags = record_.flags;
+    radio_on_.store((boot_flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
+    pairing_.store((boot_flags & FLAG_PAIRING_PENDING) != 0, std::memory_order_release);
+    pair_failed_.store((boot_flags & FLAG_PAIR_FAILED) != 0, std::memory_order_release);
+    if (pairing()) {
+      // The request lives on in RAM for this boot only, so a restart that the
+      // sequence did not start comes back not pairing. The radio comes back off
+      // too: the credentials can be gone, and a factory-new stack steers alone.
+      write_flags_(static_cast<uint16_t>(
+          (boot_flags & ~(FLAG_PAIRING_PENDING | FLAG_PAIR_FAILED)) | FLAG_RADIO_OFF));
+      ESP_LOGI("zigbee_learn", "Pairing runs on this boot only");
+    }
 
     ir_code_store.set_assignment_clear_callback([this](uint8_t slot) { this->clear(slot); });
     ir_ui.set_zigbee_play_callback([this](uint8_t slot) { return this->play(slot); });
@@ -234,7 +243,10 @@ class ZigbeeAssignmentManager {
     pairing_.store(false, std::memory_order_release);
     pair_window_open_.store(false, std::memory_order_release);
     pair_failed_.store(false, std::memory_order_release);
-    write_flags_(static_cast<uint16_t>(record_.flags & ~(FLAG_PAIRING_PENDING | FLAG_PAIR_FAILED)));
+    // The boot consumed the request with the radio off, so a join has to turn it
+    // back on in flash.
+    write_flags_(static_cast<uint16_t>(
+        record_.flags & ~(FLAG_PAIRING_PENDING | FLAG_PAIR_FAILED | FLAG_RADIO_OFF)));
     ESP_LOGI("zigbee_learn", "Paired, so the Zigbee radio stays on");
   }
 
@@ -383,7 +395,11 @@ class ZigbeeAssignmentManager {
   // The address map is cold after a join, so this fills what it can for free and
   // asks the mesh for the rest. Each slot is warmed at most once for each join,
   // which bounds the broadcasts a boot can cause.
-  void on_network_up() {
+  void on_network_up(bool factory_new) {
+    // A boot on stored credentials also fires the join, after the binding read
+    // and ahead of the erase, so a pending pairing must not take it as the new one.
+    if (pairing() && !factory_new)
+      return;
     pairing_joined();
     // A new join says nothing about the targets, and the warm pass below is the
     // next thing that will.
@@ -1031,7 +1047,9 @@ class ZigbeeAssignmentManager {
       const std::lock_guard<std::mutex> lock(cache_mutex_);
       record_ = next;
     }
-    if (preference_.save(&record_))
+    // save() only queues the write. Every caller changes the pairing state, and
+    // a restart can follow at once, so the write is committed here.
+    if (preference_.save(&record_) && esphome::global_preferences->sync())
       return true;
     ESP_LOGE("zigbee_learn", "Failed to save the Zigbee radio flags");
     return false;
@@ -1072,7 +1090,15 @@ class ZigbeeAssignmentManager {
     }
     if (!link_factory_new()) {
       // Credentials from an older join block steering, so they go first. That
-      // erase restarts the device, and the flag brings it back here factory new.
+      // erase restarts the device, and the re-armed flag brings it back here
+      // factory new. reset() may not sync, so the flag is committed first. If it
+      // cannot be, the old credentials stay.
+      if ((record_.flags & FLAG_PAIRING_PENDING) == 0 &&
+          !write_flags_(static_cast<uint16_t>(
+              (record_.flags & ~(FLAG_RADIO_OFF | FLAG_PAIR_FAILED)) | FLAG_PAIRING_PENDING))) {
+        end_pairing_("Pairing could not store its request", false);
+        return;
+      }
       if (!erase_request_.exchange(true, std::memory_order_acq_rel))
         ESP_LOGI("zigbee_learn", "Pairing erases the Zigbee network credentials");
       return;

@@ -2,7 +2,12 @@
 
 #include "esphome/components/web_server_base/web_server_base.h"
 #include "esphome/core/component.h"
+#include "esphome/core/defines.h"
 #include "esphome/core/preferences.h"
+
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+#include "esphome/components/idle_sleep/idle_sleep.h"
+#endif
 
 #include <atomic>
 #include <cstdint>
@@ -38,6 +43,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool set_ha_api_expected(bool expected);
   bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
   void toggle_temporary_wifi();
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  void set_idle_sleep(idle_sleep::IdleSleep *sleep) { this->idle_sleep_ = sleep; }
+#endif
 
  protected:
   void handle_page_(AsyncWebServerRequest *request);
@@ -51,6 +59,16 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void load_wifi_pref_();
   bool set_wifi_always_on_(bool enabled);
   void note_activity_();
+  void open_temporary_wifi_(const char *reason);
+  // Zeros and available=false when the build has no idle_sleep_id.
+  struct SleepState {
+    bool available;
+    bool enabled;
+    uint32_t after_s;
+  };
+  SleepState sleep_state_() const;
+  bool set_sleep_enabled_(bool enabled);
+  bool set_sleep_after_(uint32_t seconds);
 
   // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.
   static constexpr uint32_t HA_PREF_KEY = 0x48415049U;
@@ -83,6 +101,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool temporary_wifi_{false};
   ESPPreferenceObject ha_pref_;
   ESPPreferenceObject wifi_pref_;
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  idle_sleep::IdleSleep *idle_sleep_{nullptr};
+#endif
 };
 
 }  // namespace esphome::button_config

@@ -213,8 +213,7 @@ aria-label="Sleep" disabled><span></span></label></h2>
 </div>
 <hr class="rule">
 <h2 class="ttl">Restart</h2>
-<p class="sub st" id="rss">The remote is not restarting.</p>
-<p class="sub">A restart keeps the settings and the button assignments. It also applies WiFi Always On.</p>
+<p class="sub st" id="rss" hidden></p>
 <div class="act"><button type="button" id="rsb">Restart remote</button></div>
 <hr class="rule">
 <h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
@@ -766,8 +765,9 @@ var b=document.getElementById("rsb"),e=document.getElementById("rss"),
 always=!!(st&&st.network&&st.network.wifi_always_on===true);
 if(b){b.disabled=restartBusy;b.textContent=restartBusy?"Restarting...":"Restart remote"}
 if(e){e.className="sub st"+(restartErr?" bad":"");
-e.innerHTML="<span class='dot "+(restartBusy?"warn":restartDone?"":"off")+"'></span>"+
-(!restartBusy?(restartDone?"The remote restarted.":"The remote is not restarting."):
+e.hidden=!restartBusy&&!restartDone&&!restartErr;
+e.innerHTML=e.hidden?"":"<span class='dot "+(restartBusy?"warn":restartDone?"":"off")+"'></span>"+
+(!restartBusy?(restartDone?"The remote restarted.":""):
 !restartId?"The page asked the remote to restart.":"The remote is restarting."+
 (always?" This page reconnects when the remote is back.":
 " Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session."))+

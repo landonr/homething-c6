@@ -15,7 +15,7 @@ let lastDownload = null;
 function mk(tag) {
   return {
     tagName: tag, children: [], _text: "", _html: "", _ids: [], attrs: {}, style: {},
-    value: "", className: "", disabled: false, onclick: null, oninput: null,
+    value: "", className: "", disabled: false, hidden: false, onclick: null, oninput: null,
     set innerHTML(v) {
       this._html = v;
       this.children = [];
@@ -949,8 +949,8 @@ setTimeout(() => {
     if (confirmText.indexOf("Restart the remote?") < 0) throw new Error("the question reads " + confirmText);
     if (body !== null) throw new Error("a refused confirm still posted: " + body);
     if (document.getElementById("rsb").disabled) throw new Error("a refused confirm locked the button");
-    if (document.getElementById("rss").innerHTML.indexOf("The remote is not restarting.") < 0)
-      throw new Error("the idle line reads " + document.getElementById("rss").innerHTML);
+    if (document.getElementById("rss").hidden !== true || document.getElementById("rss").innerHTML !== "")
+      throw new Error("the idle line shows " + document.getElementById("rss").innerHTML);
   });
   step("an accepted restart posts restart and locks the button", () => {
     global.st = STATE;
@@ -964,7 +964,7 @@ setTimeout(() => {
     if (body !== "action=restart") throw new Error("the restart posted " + body);
     if (!button.disabled || button.textContent !== "Restarting...")
       throw new Error("the button stayed live during the restart");
-    if (document.getElementById("rss").innerHTML.indexOf("The page asked the remote to restart.") < 0)
+    if (document.getElementById("rss").hidden || document.getElementById("rss").innerHTML.indexOf("The page asked the remote to restart.") < 0)
       throw new Error("the open press reads " + document.getElementById("rss").innerHTML);
     // A second press while the first is open sends nothing and asks nothing.
     body = null; confirmAsked = 0;
@@ -1404,7 +1404,7 @@ setTimeout(() => {
     await new Promise(done => setTimeout(done, 20));
     step("the first poll after the boot unlocks the button", () => {
       const button = document.getElementById("rsb");
-      if (restartLine().innerHTML.indexOf("The remote restarted.") < 0)
+      if (restartLine().hidden || restartLine().innerHTML.indexOf("The remote restarted.") < 0)
         throw new Error("the return reads " + restartLine().innerHTML);
       if (button.disabled || button.textContent !== "Restart remote")
         throw new Error("the button stayed locked after the return");

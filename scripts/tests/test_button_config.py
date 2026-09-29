@@ -312,7 +312,9 @@ class RestartTest(unittest.TestCase):
         self.assertLess(wifi.index('id="rsb"'), wifi.index('id="hab"'))
         self.assertIn('<div class="act"><button type="button" id="rsb">Restart remote</button></div>',
                       wifi)
-        self.assertIn('<p class="sub st" id="rss">The remote is not restarting.</p>', wifi)
+        self.assertIn('<p class="sub st" id="rss" hidden></p>', wifi)
+        self.assertNotIn("The remote is not restarting.", wifi)
+        self.assertNotIn("A restart keeps the settings", wifi)
         self.assertNotIn('id="rsb"', section(PAGE, '<section class="card full conn" id="zbcfg">', "</section>"))
         self.assertIn('document.getElementById("rsb").onclick=restartRemote;', PAGE)
         send = section(PAGE, "function restartRemote(){", "\n\n")
@@ -1623,10 +1625,12 @@ class RadioSwitchTest(unittest.TestCase):
     def test_every_radio_line_states_what_is_on_or_off(self) -> None:
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
-        # Only the sleep block hides, because the build and not a state fixes it.
+        # The sleep block hides because the build fixes it. The idle restart line
+        # hides because an idle remote has nothing to report.
         for card_id in ("wificfg", "zbcfg", "blecfg"):
             card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
             card = card.replace('<div id="slpcfg" hidden>', "", 1)
+            card = card.replace('<p class="sub st" id="rss" hidden></p>', "", 1)
             self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)

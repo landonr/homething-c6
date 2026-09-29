@@ -1,6 +1,7 @@
 """Regression checks for the /buttons web configurator component."""
 
 from pathlib import Path
+import importlib.util
 import re
 import unittest
 
@@ -338,6 +339,173 @@ class RestartTest(unittest.TestCase):
         self.assertIn('elif action == "restart":', preview)
         self.assertIn('RESTART["until"] = time.monotonic() + RESTART_SECONDS', preview)
         self.assertIn('STATE["action_id"] = 0', preview)
+
+
+class FriendlyNameTest(unittest.TestCase):
+    """A rename moves the friendly name only. App.get_name() is the hostname that
+    the mDNS address and the Home Assistant link use, so it never changes."""
+
+    APPLY = "void ButtonConfig::apply_friendly_name_(const std::string &name) {"
+    SETTER = "bool ButtonConfig::set_friendly_name_(const std::string &name) {"
+    PARSE = "static bool parse_friendly_name(const std::string &text, std::string &name) {"
+
+    def test_the_name_has_its_own_validated_record(self) -> None:
+        self.assertIn("static constexpr size_t FRIENDLY_NAME_MAX = 40;", HEADER)
+        self.assertIn("static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;", HEADER)
+        self.assertIn("static constexpr uint32_t NAME_PREF_MAGIC = 0x4E414D31U;", HEADER)
+        record = section(HEADER, "struct NamePref {", "};")
+        self.assertIn("uint32_t magic;", record)
+        self.assertIn("uint8_t length;", record)
+        self.assertIn("char name[FRIENDLY_NAME_MAX];", record)
+        for other in (STORE, ZIGBEE, BLE):
+            self.assertNotIn("0x4E414D45", other)
+        load = section(CPP, "void ButtonConfig::load_name_pref_() {", "\n}")
+        self.assertIn("make_preference<NamePref>(NAME_PREF_KEY, true)", load)
+        self.assertIn("loaded.magic != NAME_PREF_MAGIC || loaded.length == 0 ||", load)
+        self.assertIn("loaded.length > FRIENDLY_NAME_MAX", load)
+        # A stored name passes the same rules as a typed one before it applies.
+        self.assertIn("if (!parse_friendly_name(stored, name) || name != stored)\n    return;", load)
+        self.assertTrue(load.rstrip().endswith("this->apply_friendly_name_(name);"))
+
+    def test_setup_keeps_the_default_and_applies_a_saved_name_first(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        default = setup.index("this->default_name_ = App.get_friendly_name();")
+        self.assertLess(default, setup.index("this->load_name_pref_();"))
+        self.assertLess(setup.index("this->load_name_pref_();"), setup.index("this->base_->add_handler(this);"))
+        # mDNS builds its TXT record once at AFTER_CONNECTION, which runs later.
+        self.assertIn("float ButtonConfig::get_setup_priority() const { return setup_priority::WIFI - 2.0f; }",
+                      CPP)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());", apply)
+        self.assertIn("const_cast<StringRef &>(App.get_friendly_name()) = this->default_name_;", apply)
+        # pre_setup() reruns arch_init() and forces the MAC suffix back on.
+        code = re.sub(r"//[^\n]*", "", CPP)
+        self.assertNotIn("pre_setup(", code)
+        self.assertNotIn("App.get_name()", code)
+        self.assertEqual(code.count("const_cast<StringRef &>("), 2)
+
+    def test_the_state_reply_never_reads_a_buffer_the_loop_is_filling(self) -> None:
+        self.assertIn("char names_[2][FRIENDLY_NAME_MAX + 1]{};", HEADER)
+        self.assertIn('std::atomic<const char *> current_name_{""};', HEADER)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("== this->names_[0] ? this->names_[1] : this->names_[0];", apply)
+        fill = apply.index("std::memcpy(buffer, name.data(), name.size());")
+        swap = apply.index("this->current_name_.store(buffer, std::memory_order_release);")
+        self.assertLess(fill, apply.index("buffer[name.size()] = '\\0';"))
+        self.assertLess(fill, swap)
+        self.assertLess(swap, apply.index("= StringRef(buffer, name.size());"))
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertNotIn("names_[", state)
+        self.assertNotIn("get_friendly_name", state)
+
+    def test_the_state_prints_both_names_through_the_json_escape(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('stream->print(R"(],"name":")");\n'
+                      "  print_json_text(stream, this->current_name_.load(std::memory_order_acquire));\n"
+                      '  stream->print(R"(","default_name":")");\n'
+                      "  print_json_text(stream, this->default_name_.c_str());\n"
+                      '  stream->print("\\"}");', state)
+
+    def test_set_name_is_checked_on_the_web_task_and_saved_on_the_loop(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "set_name"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "set_name"', section(action, "const bool needs_slot = ", ";"))
+        self.assertIn('if (action == "set_name" && !parse_friendly_name(request->arg("name"), friendly_name)) {',
+                      action)
+        error = 'R"({"ok":false,"error":"a name is up to 40 bytes, with no slash or control character"})"'
+        self.assertIn(error, action)
+        # The refusal comes before the busy claim, so it holds no action_pending_.
+        self.assertLess(action.index(error), action.index("compare_exchange_strong(expected, true"))
+        branch = section(action, '} else if (action == "set_name") {', "\n  } else")
+        self.assertIn("this->defer([this, action_id, friendly_name]() {", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_friendly_name_(friendly_name));", branch)
+        setter = section(CPP, self.SETTER, "\n}")
+        self.assertLess(setter.index("this->name_pref_.save(&next)"), setter.index("this->apply_friendly_name_(name);"))
+        self.assertIn('ESP_LOGI(TAG, "Friendly name set to \\"%s\\""', setter)
+        self.assertEqual(CPP.count("Friendly name set to"), 1)
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Friendly name: %s"', CPP)
+
+    def test_the_rules_trim_cap_and_restore_the_default(self) -> None:
+        parse = section(CPP, self.PARSE, "\n}")
+        self.assertIn("while (start < end && text[start] == ' ')", parse)
+        self.assertIn("while (end > start && text[end - 1] == ' ')", parse)
+        self.assertIn("if (name.size() > ButtonConfig::FRIENDLY_NAME_MAX)\n    return false;", parse)
+        self.assertIn("if (lead < 0x20 || lead == 0x7F || lead == '/')\n      return false;", parse)
+        # A long name is refused and never cut, and a split sequence is refused too.
+        self.assertNotIn("substr(0, ", parse)
+        self.assertIn("if (i + extra >= name.size())\n      return false;", parse)
+        # An empty name saves a length 0 record and points back at the YAML name.
+        setter = section(CPP, self.SETTER, "\n}")
+        self.assertIn("next.length = static_cast<uint8_t>(name.size());", setter)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("if (name.empty()) {\n"
+                      "    this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);",
+                      apply)
+
+    def test_the_header_shows_the_name_with_a_rename_control(self) -> None:
+        header = section(PAGE, '<header class="full">', "</header>")
+        self.assertIn('<div class="act nm" id="dnv"><h1 id="dn">homeThing c6</h1>'
+                      '<button type="button" class="sec" id="dnr" disabled>Rename</button></div>', header)
+        self.assertIn('<div class="act nm" id="dne" hidden><input type="text" id="dni" maxlength="40"', header)
+        self.assertIn('<button type="button" id="dns">Save</button>'
+                      '<button type="button" class="sec" id="dnc">Cancel</button></div>', header)
+        self.assertLess(header.index('id="dne"'), header.index("github.com/landonr/homething-c6</a>"))
+        self.assertLess(header.index("github.com/landonr/homething-c6</a>"), header.index('id="dnm"'))
+        self.assertIn("<title>homeThing c6 config</title>", PAGE)
+        # .act sets display:flex, which beats the hidden attribute without this.
+        self.assertIn(".nm[hidden]{display:none}", PAGE)
+        self.assertIn("header.full>div{flex:1;min-width:0}", PAGE)
+        self.assertIn(".nm h1{margin:0;min-width:0;overflow-wrap:anywhere}", PAGE)
+        for wire in ('"dnr").onclick=nameOpen;', '"dns").onclick=nameSave;', '"dnc").onclick=nameClose;',
+                     '"dni").onkeydown=nameKey;'):
+            self.assertIn(wire, section(PAGE, "function build(){", "\n\nfunction "))
+
+    def test_the_title_follows_each_poll_and_never_the_open_box(self) -> None:
+        paint = section(PAGE, "function namePaint(){", "\n\nfunction ")
+        self.assertIn("if(t)t.textContent=n;", paint)
+        self.assertIn('if(has)document.title=n+" config";', paint)
+        self.assertIn("m.textContent=nameMsg", paint)
+        self.assertNotIn("innerHTML", paint)
+        self.assertNotIn(".value", paint)
+        refresh = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
+        self.assertIn("st.name=j.name;st.default_name=j.default_name;namePaint();", refresh)
+        self.assertIn("function paint(){\nnamePaint();", PAGE)
+        # Only the Rename press fills the box.
+        self.assertEqual(section(PAGE, "<script>", "</script>").count(".value=st.name"), 1)
+        self.assertIn("b.value=st.name;", section(PAGE, "function nameOpen(){", "\n\nfunction "))
+
+    def test_save_posts_set_name_and_follows_the_action_pattern(self) -> None:
+        save = section(PAGE, "function nameSave(){", "\n\nfunction ")
+        self.assertIn('.replace(/^ +| +$/g,"")', save)
+        self.assertIn("if(n<0||n>40||/[\\x00-\\x1f\\x7f\\/]/.test(v)){", save)
+        self.assertIn('post("set_name",null,undefined,v)', save)
+        self.assertIn("if(r.code!==200)throw new Error(fail(r));", save)
+        self.assertIn("return waitAction(r.body.id)", save)
+        self.assertIn('nameMsg="Home Assistant shows the new name when it next connects."', save)
+        self.assertIn("nameBusy=false;nameBad=true;", save)
+        key = section(PAGE, "function nameKey(e){", "\n\n")
+        self.assertIn('if(e.key==="Enter"){e.preventDefault();nameSave()}', key)
+        self.assertIn('else if(e.key==="Escape"){e.preventDefault();nameClose()}', key)
+        # maxlength counts UTF-16 units, so the byte count is checked apart.
+        self.assertIn('function nameBytes(t){try{return encodeURIComponent(t).replace(/%[0-9A-F]{2}/g,"x").length}',
+                      PAGE)
+
+    def test_the_preview_applies_the_same_rules(self) -> None:
+        path = ROOT / "scripts" / "preview-buttons-page.py"
+        spec = importlib.util.spec_from_file_location("preview_buttons_page", path)
+        preview = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(preview)
+        self.assertEqual(preview.STATE["name"], "homeThing C6 13f498")
+        self.assertEqual(preview.STATE["default_name"], "homeThing C6 13f498")
+        self.assertEqual(preview.FRIENDLY_NAME_MAX, 40)
+        self.assertEqual(preview.clean_name("  Den remote  "), "Den remote")
+        self.assertEqual(preview.clean_name("   "), "")
+        self.assertEqual(preview.clean_name("x" * 40), "x" * 40)
+        self.assertEqual(preview.clean_name("é" * 20), "é" * 20)
+        for refused in ("x" * 41, "é" * 21, "a/b", "a\tb", "a\x7fb"):
+            self.assertIsNone(preview.clean_name(refused), refused)
+        text = path.read_text()
+        self.assertIn('elif action == "set_name":\n            STATE["name"] = name or STATE["default_name"]', text)
 
 
 class SlotTableTest(unittest.TestCase):
@@ -1113,9 +1281,10 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("cfg-status", PAGE)
         self.assertNotIn('id="cxz"', PAGE)
         # The page title leads, so neither radio card pushes it down.
-        self.assertIn('<div>\n<h1>homeThing c6</h1>\n'
-                      '<p class="sub"><a href="https://github.com/landonr/homething-c6">'
+        self.assertIn('<div>\n<div class="act nm" id="dnv"><h1 id="dn">homeThing c6</h1>', PAGE)
+        self.assertIn('<p class="sub"><a href="https://github.com/landonr/homething-c6">'
                       'github.com/landonr/homething-c6</a></p>\n'
+                      '<p class="sub st" id="dnm" hidden></p>\n'
                       '</div>\n</header>', PAGE)
         # The logo is inline and uncoloured, so one copy follows the theme text
         # colour instead of shipping a light file and a dark file.
@@ -1322,7 +1491,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
         self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
                       '\n                          action != "set_wifi_always_on" && !sleep_action && '
-                      'action != "pair" &&\n                          action != "restart";', CPP)
+                      'action != "pair" &&\n                          action != "restart" && '
+                      'action != "set_name";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
         self.assertIn("this->defer(", switch)

@@ -144,6 +144,12 @@ border-radius:8px;padding:8px 14px;cursor:pointer}
 .act button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
 .act button[disabled]{opacity:.5;cursor:not-allowed}
 .act .st{margin:0;align-self:center}
+header.full>div{flex:1;min-width:0}
+.act.nm{margin:0 0 4px;align-items:center}
+.nm[hidden]{display:none}
+.nm h1{margin:0;min-width:0;overflow-wrap:anywhere}
+.nm button{font-size:13px;padding:4px 10px}
+.nm input[type=text]{flex:1 1 10em;width:auto;min-width:0;max-width:24em;margin:0;padding:4px 8px}
 dl.info{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;
 margin:0 0 12px;font-size:13px}
 dl.info dt{color:var(--mut);text-transform:uppercase;letter-spacing:.06em;
@@ -163,8 +169,10 @@ animation:sweep 1.4s ease-in-out infinite}
 <header class="full">
 <svg class=logo viewBox="0 0 805.333 795.107" fill=currentColor aria-hidden=true><path d="M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z"/><path d="M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z"/><path d="M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z"/></svg>
 <div>
-<h1>homeThing c6</h1>
+<div class="act nm" id="dnv"><h1 id="dn">homeThing c6</h1><button type="button" class="sec" id="dnr" disabled>Rename</button></div>
+<div class="act nm" id="dne" hidden><input type="text" id="dni" maxlength="40" autocomplete="off" aria-label="Remote name"><button type="button" id="dns">Save</button><button type="button" class="sec" id="dnc">Cancel</button></div>
 <p class="sub"><a href="https://github.com/landonr/homething-c6">github.com/landonr/homething-c6</a></p>
+<p class="sub st" id="dnm" hidden></p>
 </div>
 </header>
 <nav class="tabs full" aria-label="Setup sections">
@@ -281,6 +289,9 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 var sleepBusy=false,sleepWant=true,sleepError="";
+// nameEdit keeps the box open across polls, so a repaint never overwrites a
+// name that is still being typed.
+var nameEdit=false,nameBusy=false,nameMsg="",nameBad=false;
 // restartBusy holds from the press until the remote is back. restartDown marks a
 // failed poll after the accepted press, which is the restart itself.
 var restartBusy=false,restartId=0,restartDown=false,restartDone=false,restartErr="";
@@ -426,6 +437,10 @@ document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
 document.getElementById("brb").onchange=function(){setRadio("ble")};
 document.getElementById("hab").onchange=function(){setRadio("home_assistant")};
 document.getElementById("scb").onchange=setColorsToggle;
+document.getElementById("dnr").onclick=nameOpen;
+document.getElementById("dns").onclick=nameSave;
+document.getElementById("dnc").onclick=nameClose;
+document.getElementById("dni").onkeydown=nameKey;
 setColorsPaint()}
 
 function showTab(config){
@@ -776,6 +791,57 @@ function restartSync(j){
 if(restartBusy&&restartDown&&Number(j.action_id)<restartId){restartBusy=false;restartDone=true}
 restartPaint()}
 
+// An old remote sends no name, so the static title stays and Rename stays locked.
+function namePaint(){
+var t=document.getElementById("dn"),r=document.getElementById("dnr"),v=document.getElementById("dnv"),
+e=document.getElementById("dne"),b=document.getElementById("dni"),s=document.getElementById("dns"),
+c=document.getElementById("dnc"),m=document.getElementById("dnm"),
+has=!!(st&&typeof st.name==="string"),n=has&&st.name?st.name:"homeThing c6";
+if(t)t.textContent=n;
+if(has)document.title=n+" config";
+if(r)r.disabled=!has||nameBusy;
+if(v)v.hidden=nameEdit;
+if(e)e.hidden=!nameEdit;
+if(b)b.disabled=nameBusy;
+if(s){s.disabled=nameBusy;s.textContent=nameBusy?"Saving...":"Save"}
+if(c)c.disabled=nameBusy;
+if(m){m.hidden=!nameMsg;m.className="sub st"+(nameBad?" bad":"");m.textContent=nameMsg}}
+
+function nameOpen(){
+if(nameBusy||!st||typeof st.name!=="string")return;
+var b=document.getElementById("dni");
+nameEdit=true;nameMsg="";nameBad=false;
+b.value=st.name;b.placeholder=st.default_name||"";
+namePaint();b.focus();b.select()}
+
+function nameClose(){
+if(nameBusy)return;
+nameEdit=false;nameMsg="";nameBad=false;namePaint();
+document.getElementById("dnr").focus()}
+
+function nameKey(e){
+if(e.key==="Enter"){e.preventDefault();nameSave()}
+else if(e.key==="Escape"){e.preventDefault();nameClose()}}
+
+// maxlength counts UTF-16 units, but the remote counts UTF-8 bytes.
+function nameBytes(t){try{return encodeURIComponent(t).replace(/%[0-9A-F]{2}/g,"x").length}catch(x){return -1}}
+
+// The remote applies the name before it completes the action, so the poll in
+// waitAction already carries it. An empty box restores the default name.
+function nameSave(){
+if(nameBusy)return;
+var v=String(document.getElementById("dni").value).replace(/^ +| +$/g,""),n=nameBytes(v);
+if(n<0||n>40||/[\x00-\x1f\x7f\/]/.test(v)){
+nameMsg="A name is up to 40 bytes, with no slash or control character.";nameBad=true;namePaint();return}
+nameBusy=true;nameMsg="";nameBad=false;namePaint();
+post("set_name",null,undefined,v)
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the name.")})})
+.then(function(){nameBusy=false;nameEdit=false;nameBad=false;
+nameMsg="Home Assistant shows the new name when it next connects.";namePaint();
+document.getElementById("dnr").focus();return load().then(paint)},function(e){
+nameBusy=false;nameBad=true;nameMsg=e&&e.message?e.message:"The remote did not answer.";namePaint()})}
+
 function sendActivity(){activityTimer=0;activitySent=Date.now();
 fetch("/buttons/api/activity",{method:"POST",cache:"no-store",keepalive:true}).catch(function(){})}
 
@@ -800,7 +866,8 @@ if(stBusy)return;
 stBusy=true;
 fetch("/buttons/api/state",{cache:"no-store"})
 .then(function(r){return r.json()})
-.then(function(j){if(j&&j.ble){if(!st)st={};st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
+.then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
+st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
 st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);radioStatus();bleStatus()}},
 function(){zpjLost();restartLost()})
 .then(function(){stBusy=false},function(){stBusy=false})}
@@ -808,7 +875,7 @@ function(){zpjLost();restartLost()})
 function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-z2mStatus();networkStatus();sleepStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
+namePaint();z2mStatus();networkStatus();sleepStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);

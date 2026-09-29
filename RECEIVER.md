@@ -74,6 +74,18 @@ The device serves a button page at `http://homething-c6-xxxxxx.local/buttons`.
 `xxxxxx` is the last six hex digits of the remote MAC address. The page uses
 the same `web_server` as the ESPHome dashboard on port 80.
 
+The page title shows the friendly name of the remote, for example `homeThing C6 xxxxxx`.
+To change the name, select **Rename** beside the title. Type the name, then select **Save** or press Enter.
+To close the box without a change, press Escape or select **Cancel**.
+
+A name can have a maximum of 40 bytes. A character that is not ASCII uses more than one byte.
+A name cannot contain a slash or a control character.
+
+Rename changes only the friendly name. The hostname and the page address stay the same.
+As a result, the mDNS link and the Home Assistant connection continue to operate.
+Home Assistant shows the new name when it next connects. The mDNS record shows it after the next restart.
+If you save an empty name, the remote uses its default name again.
+
 The page draws the remote layout: the two top buttons, the wheel, and the nine
 keypad buttons.
 

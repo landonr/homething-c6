@@ -170,6 +170,51 @@ static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {
   return true;
 }
 
+// Home Assistant reads the name as a protobuf string, which must be valid UTF-8.
+// A long name is refused and never cut, so no multibyte sequence is split.
+// ESPHome reserves the slash in a device name. An empty result means the YAML name.
+static bool parse_friendly_name(const std::string &text, std::string &name) {
+  size_t start = 0;
+  size_t end = text.size();
+  while (start < end && text[start] == ' ')
+    start++;
+  while (end > start && text[end - 1] == ' ')
+    end--;
+  name = text.substr(start, end - start);
+  if (name.size() > ButtonConfig::FRIENDLY_NAME_MAX)
+    return false;
+  for (size_t i = 0; i < name.size();) {
+    const auto lead = static_cast<unsigned char>(name[i]);
+    if (lead < 0x20 || lead == 0x7F || lead == '/')
+      return false;
+    size_t extra = 0;
+    unsigned char low = 0x80;
+    unsigned char high = 0xBF;
+    if (lead >= 0xC2 && lead <= 0xDF) {
+      extra = 1;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
+      extra = 2;
+      low = lead == 0xE0 ? 0xA0 : 0x80;   // overlong
+      high = lead == 0xED ? 0x9F : 0xBF;  // UTF-16 surrogate
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
+      extra = 3;
+      low = lead == 0xF0 ? 0x90 : 0x80;   // overlong
+      high = lead == 0xF4 ? 0x8F : 0xBF;  // above U+10FFFF
+    } else if (lead >= 0x80) {
+      return false;
+    }
+    if (i + extra >= name.size())
+      return false;
+    for (size_t k = 1; k <= extra; k++) {
+      const auto next = static_cast<unsigned char>(name[i + k]);
+      if (next < (k == 1 ? low : 0x80) || next > (k == 1 ? high : 0xBF))
+        return false;
+    }
+    i += extra + 1;
+  }
+  return true;
+}
+
 static bool parse_param(const std::string &text, int16_t &param) {
   if (text.empty()) {
     param = 0;
@@ -389,6 +434,11 @@ static void print_json_text(AsyncResponseStream *stream, const char *text) {
 }
 
 void ButtonConfig::setup() {
+  // mDNS builds its TXT record at AFTER_CONNECTION, which runs after this, so
+  // a saved name reaches it on every boot.
+  this->default_name_ = App.get_friendly_name();
+  this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
+  this->load_name_pref_();
   this->load_ha_pref_();
   this->load_wifi_pref_();
   this->boot_wifi_always_on_ = this->wifi_always_on();
@@ -462,6 +512,56 @@ bool ButtonConfig::set_sleep_after_(uint32_t seconds) {
 #endif
 }
 
+// A missing, corrupt, or empty record keeps the YAML name.
+void ButtonConfig::load_name_pref_() {
+  this->name_pref_ = global_preferences->make_preference<NamePref>(NAME_PREF_KEY, true);
+  NamePref loaded{};
+  if (!this->name_pref_.load(&loaded) || loaded.magic != NAME_PREF_MAGIC || loaded.length == 0 ||
+      loaded.length > FRIENDLY_NAME_MAX)
+    return;
+  const std::string stored(loaded.name, loaded.length);
+  std::string name;
+  if (!parse_friendly_name(stored, name) || name != stored)
+    return;
+  this->apply_friendly_name_(name);
+}
+
+// Main loop only. An empty name saves a length 0 record, which means the YAML name.
+bool ButtonConfig::set_friendly_name_(const std::string &name) {
+  if (name.size() > FRIENDLY_NAME_MAX)
+    return false;
+  NamePref next{};
+  next.magic = NAME_PREF_MAGIC;
+  next.length = static_cast<uint8_t>(name.size());
+  std::memcpy(next.name, name.data(), name.size());
+  if (!this->name_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the friendly name");
+    return false;
+  }
+  this->apply_friendly_name_(name);
+  ESP_LOGI(TAG, "Friendly name set to \"%s\"", this->current_name_.load(std::memory_order_relaxed));
+  return true;
+}
+
+// Main loop only. App and its member are not const, so a write through the
+// const getter is defined. pre_setup() cannot run again, because it reruns
+// arch_init() and puts the MAC suffix back. App.get_name() stays unchanged.
+void ButtonConfig::apply_friendly_name_(const std::string &name) {
+  if (name.size() > FRIENDLY_NAME_MAX)
+    return;
+  if (name.empty()) {
+    this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
+    const_cast<StringRef &>(App.get_friendly_name()) = this->default_name_;
+    return;
+  }
+  char *buffer =
+      this->current_name_.load(std::memory_order_relaxed) == this->names_[0] ? this->names_[1] : this->names_[0];
+  std::memcpy(buffer, name.data(), name.size());
+  buffer[name.size()] = '\0';
+  this->current_name_.store(buffer, std::memory_order_release);
+  const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());
+}
+
 void ButtonConfig::note_activity_() {
   this->last_activity_ms_.store(millis(), std::memory_order_release);
 }
@@ -516,6 +616,7 @@ bool ButtonConfig::set_ha_api_expected(bool expected) {
 
 void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "Button config page at /buttons");
+  ESP_LOGCONFIG(TAG, "  Friendly name: %s", this->current_name_.load(std::memory_order_acquire));
   ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
   ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
@@ -656,7 +757,11 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
     stream->print("\"}");
     first = false;
   }
-  stream->print("]}");
+  stream->print(R"(],"name":")");
+  print_json_text(stream, this->current_name_.load(std::memory_order_acquire));
+  stream->print(R"(","default_name":")");
+  print_json_text(stream, this->default_name_.c_str());
+  stream->print("\"}");
   request->send(stream);
 }
 
@@ -722,7 +827,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
                      action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
                      action == "set_wifi_always_on" || action == "set_sleep_enabled" ||
                      action == "set_sleep_after" || action == "pair" || action == "restart" ||
-                     action == "clear";
+                     action == "set_name" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
@@ -783,9 +888,18 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     pair_on = on == "1";
   }
 
+  // The request dies before the defer runs, so the name is checked and copied
+  // here. An empty name restores the YAML name.
+  std::string friendly_name;
+  if (action == "set_name" && !parse_friendly_name(request->arg("name"), friendly_name)) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"a name is up to 40 bytes, with no slash or control character"})");
+    return;
+  }
+
   const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
                           action != "set_wifi_always_on" && !sleep_action && action != "pair" &&
-                          action != "restart";
+                          action != "restart" && action != "set_name";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
@@ -952,6 +1066,10 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "set_sleep_after") {
     this->defer([this, action_id, sleep_after_s]() {
       this->complete_action_(action_id, this->set_sleep_after_(sleep_after_s));
+    });
+  } else if (action == "set_name") {
+    this->defer([this, action_id, friendly_name]() {
+      this->complete_action_(action_id, this->set_friendly_name_(friendly_name));
     });
   } else if (action == "restart") {
     this->defer([this, action_id]() {

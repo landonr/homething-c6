@@ -56,7 +56,8 @@ function mk(tag) {
 for (const id of ["remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "rss", "rsb"])
+                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "rss", "rsb",
+                  "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
 
@@ -70,6 +71,7 @@ const STATE = {
   zigbee: {started: true, paired: true, "new": false, gated: false,
            pairing: false, pair_left: 0, pair_failed: false, reach: "ok"},
   ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
+  name: "homeThing C6 13f498", default_name: "homeThing C6 13f498",
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
@@ -1407,6 +1409,99 @@ setTimeout(() => {
       if (button.disabled || button.textContent !== "Restart remote")
         throw new Error("the button stayed locked after the return");
     });
+    const nameBox = () => document.getElementById("dni");
+    const title = () => document.getElementById("dn");
+    step("the title shows the remote name and Rename opens a prefilled box", () => {
+      global.st = STATE;
+      paint();
+      if (title().textContent !== "homeThing C6 13f498") throw new Error("the title reads " + title().textContent);
+      if (document.title !== "homeThing C6 13f498 config") throw new Error("the tab reads " + document.title);
+      if (document.getElementById("dnr").disabled) throw new Error("Rename stayed locked with a known name");
+      document.getElementById("dnr").onclick();
+      if (!document.getElementById("dnv").hidden || document.getElementById("dne").hidden)
+        throw new Error("Rename did not swap the title for the box");
+      if (nameBox().value !== "homeThing C6 13f498") throw new Error("the box holds " + nameBox().value);
+      if (nameBox().placeholder !== STATE.default_name) throw new Error("the box has no default placeholder");
+    });
+    nameBox().value = "Den remote typed";
+    STATE.name = "Renamed elsewhere";
+    global.stBusy = false;
+    stateRefresh();
+    await new Promise(done => setTimeout(done, 20));
+    step("a poll repaints the title but never the open box", () => {
+      if (title().textContent !== "Renamed elsewhere") throw new Error("the poll left the title at " + title().textContent);
+      if (nameBox().value !== "Den remote typed" || document.getElementById("dne").hidden)
+        throw new Error("the poll overwrote or closed the box");
+    });
+    step("Escape closes the box and sends nothing", () => {
+      let body = null, prevented = false;
+      global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+      nameBox().onkeydown({key: "Escape", preventDefault() { prevented = true; }});
+      global.fetch = realFetch;
+      if (body !== null) throw new Error("Escape posted " + body);
+      if (!prevented || !document.getElementById("dne").hidden || document.getElementById("dnv").hidden)
+        throw new Error("Escape did not bring the title back");
+    });
+    // The stub remote applies set_name as the firmware does. Empty means the default.
+    const nameBodies = [];
+    global.fetch = (u, o) => {
+      const m = o && o.body && /^action=set_name&name=(.*)$/.exec(o.body);
+      if (m) {
+        nameBodies.push(o.body);
+        STATE.name = decodeURIComponent(m[1]) || STATE.default_name;
+        STATE.action_id = 1; STATE.action_ok = true;
+      }
+      return realFetch(u, o);
+    };
+    step("Enter saves the trimmed name and locks the box during the write", () => {
+      document.getElementById("dnr").onclick();
+      nameBox().value = "  Den remote  ";
+      nameBox().onkeydown({key: "Enter", preventDefault() {}});
+      if (nameBodies.length !== 1 || nameBodies[0] !== "action=set_name&name=Den%20remote")
+        throw new Error("Save posted " + nameBodies.join(" | "));
+      if (!document.getElementById("dns").disabled || !nameBox().disabled)
+        throw new Error("the box stayed live during the write");
+    });
+    await new Promise(done => setTimeout(done, 50));
+    step("a saved name reaches the title and names the Home Assistant delay", () => {
+      if (title().textContent !== "Den remote") throw new Error("the title reads " + title().textContent);
+      if (document.title !== "Den remote config") throw new Error("the tab reads " + document.title);
+      if (!document.getElementById("dne").hidden || document.getElementById("dnv").hidden)
+        throw new Error("the box stayed open after the save");
+      const line = document.getElementById("dnm");
+      if (line.hidden || line.className.indexOf("bad") >= 0 ||
+          line.textContent !== "Home Assistant shows the new name when it next connects.")
+        throw new Error("the save line reads " + line.textContent);
+    });
+    step("a blank box posts an empty name", () => {
+      document.getElementById("dnr").onclick();
+      nameBox().value = "   ";
+      document.getElementById("dns").onclick();
+      if (nameBodies.length !== 2 || nameBodies[1] !== "action=set_name&name=")
+        throw new Error("an empty save posted " + nameBodies[1]);
+    });
+    await new Promise(done => setTimeout(done, 50));
+    step("an empty name restores the default title", () => {
+      if (title().textContent !== STATE.default_name) throw new Error("the title reads " + title().textContent);
+    });
+    step("a name over 40 bytes or with a slash never reaches the remote", () => {
+      document.getElementById("dnr").onclick();
+      // 21 characters fit maxlength, but they are 42 bytes of UTF-8.
+      nameBox().value = "é".repeat(21);
+      document.getElementById("dns").onclick();
+      if (nameBodies.length !== 2) throw new Error("a long name was posted: " + nameBodies[2]);
+      const line = document.getElementById("dnm");
+      if (line.hidden || line.className.indexOf("bad") < 0 || line.textContent.indexOf("40 bytes") < 0)
+        throw new Error("no refusal: " + line.textContent);
+      if (document.getElementById("dne").hidden) throw new Error("a refusal closed the box");
+      nameBox().value = "a/b";
+      document.getElementById("dns").onclick();
+      if (nameBodies.length !== 2) throw new Error("a slash was posted: " + nameBodies[2]);
+      document.getElementById("dnc").onclick();
+      if (!document.getElementById("dne").hidden || !document.getElementById("dnm").hidden)
+        throw new Error("Cancel left the box or the error up");
+    });
+    global.fetch = realFetch;
   })().then(() => process.exit(failed ? 1 : 0), e => {
     console.log("FAIL async checks: " + e.message); process.exit(1);
   });

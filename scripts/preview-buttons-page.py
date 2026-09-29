@@ -60,7 +60,11 @@ STATE = {
         "reach": "ok",
     },
     "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
+    "name": "homeThing C6 13f498",
+    "default_name": "homeThing C6 13f498",
 }
+
+FRIENDLY_NAME_MAX = 40
 
 # A fake restart fails the state poll for a short time. Then the action ids
 # start again from zero, as they do after a real boot. The preview always comes
@@ -108,6 +112,16 @@ def parse_ir_code(text: str) -> dict:
         "code": samsung_code(address, command),
         "name": name,
     }
+
+
+def clean_name(text: str) -> str | None:
+    """Mirrors parse_friendly_name() in button_config.cpp. Empty means the default."""
+    name = text.strip(" ")
+    if len(name.encode()) > FRIENDLY_NAME_MAX:
+        return None
+    if any(ord(c) < 0x20 or ord(c) == 0x7F or c == "/" for c in name):
+        return None
+    return name
 
 
 def load_config(path: Path) -> tuple[dict, dict]:
@@ -236,6 +250,12 @@ class Handler(BaseHTTPRequestHandler):
         if action == "set_sleep_after" and not (seconds.isdigit() and 10 <= int(seconds) <= 3600):
             self.send_json({"ok": False, "error": "sleep after is 10 to 3600 seconds"}, 400)
             return
+        # parse_qs drops a blank value, so an empty box arrives as a missing name.
+        name = clean_name(form.get("name", [""])[0]) if action == "set_name" else None
+        if action == "set_name" and name is None:
+            self.send_json(
+                {"ok": False, "error": "a name is up to 40 bytes, with no slash or control character"}, 400)
+            return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
 
@@ -249,6 +269,8 @@ class Handler(BaseHTTPRequestHandler):
             STATE["sleep"]["enabled"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_after":
             STATE["sleep"]["after_s"] = int(seconds)
+        elif action == "set_name":
+            STATE["name"] = name or STATE["default_name"]
         elif action == "pair":
             # The real remote restarts here, so the preview only flips the flag
             # and lets the page's own countdown run against it.

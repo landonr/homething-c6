@@ -335,19 +335,19 @@ class ProductionSleepConfigTest(unittest.TestCase):
 
     def test_wake_pulse_is_the_last_d3_d4_state_and_production_drives_it(self) -> None:
         self.assertIn("bool woke_from_sleep() const { return !this->cold_boot_; }", HEADER)
-        self.assertIn("bool wake_pending() const { return this->replay_pending_; }", HEADER)
         self.assertIn("  - id: wake_pulse_until_ms\n    type: uint32_t\n", PRODUCTION)
         effect = PRODUCTION.split("name: Status Indicators", 1)[1].split("// D5 is Zigbee status", 1)[0]
         wake = effect.index("} else if (millis() < id(wake_pulse_until_ms)) {")
         self.assertLess(effect.index("} else if (id(voice_led_state) == 4) {"), wake)
         pulse = effect[wake:]
-        self.assertIn("(millis() % 800) / 800.0f", pulse)
+        self.assertIn("((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f", pulse)
         self.assertIn("it[1] = Color(level, level, level);", pulse)
         self.assertIn("it[2] = Color(level, level, level);", pulse)
         drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1]
         self.assertIn("if (!id(idle).woke_from_sleep())", drive)
-        self.assertIn("id(idle).wake_pending() ||", drive)
-        self.assertIn("id(wake_pulse_until_ms) = millis() + 100;", drive)
+        # Exactly two 800 ms pulses. A pending wake press no longer extends them.
+        self.assertIn("id(wake_pulse_until_ms) = first_ms + 1600;", drive)
+        self.assertNotIn("wake_pending", drive)
 
     def test_production_starts_the_sw9_hold_for_a_bit_held_at_wake(self) -> None:
         self.assertIn("uint16_t held_at_wake() const { return this->held_mask_; }", HEADER)

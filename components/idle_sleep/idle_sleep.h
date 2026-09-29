@@ -36,7 +36,6 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   // True once the hold arms the forced sleep. Main loop only, like the setters.
   bool sleep_armed() const { return this->forced_sleep_; }
   // True until the latched wake press is sent or dropped.
-  bool wake_pending() const { return this->replay_pending_; }
   // Bits down at the stub read and at the first read. Zero without the stub latch.
   uint16_t held_at_wake() const { return this->held_mask_; }
 

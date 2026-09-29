@@ -414,6 +414,10 @@ trusted, add `web_server` authentication.
 
 ## LED meanings
 
+After a boot that is not a deep-sleep wake, rainbow pulses go clockwise round
+the wheel two times, from `D2` to `D5`. Each pulse overlaps the next. The status
+indications then start.
+
 Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
 `D5` keeps the Zigbee state. A connection fault stays visible during a capture.
 
@@ -510,8 +514,7 @@ Wi-Fi hold and does not send the wake press.
 If you still hold SW1 at wake, the remote does not start the assignment mode
 hold. The remote sends the assignment of SW1 when you release SW1.
 
-After a wake, `D3` and `D4` pulse white for at least one full 800 ms pulse.
-The pulse continues until the remote sends or drops the wake press.
+After a wake, `D3` and `D4` pulse white two times. Each pulse is 800 ms.
 Assignment mode and voice states have priority over this pulse.
 
 While the remote sleeps, these conditions apply:

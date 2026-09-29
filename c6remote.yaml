@@ -502,6 +502,30 @@ light:
             }
             it.all() = Color::BLACK;
 
+            // Boot chase: two clockwise laps before any status shows. Strip order
+            // D2 D3 D4 D5 is already clockwise round the wheel. A deep-sleep wake
+            // skips it. Eight 450 ms pulses start 150 ms apart, so each overlaps
+            // the next two. Both times are multiples of the 50 ms tick. Each pulse
+            // steps 1/8 of the hue wheel, so the two laps sweep one rainbow.
+            static bool boot_chase = !id(idle).woke_from_sleep();
+            static const uint32_t boot_chase_start = millis();
+            if (boot_chase) {
+              const uint32_t t = millis() - boot_chase_start;
+              if (t < 7 * 150 + 450) {
+                for (uint32_t n = 0; n < 8; n++) {
+                  const uint32_t start = n * 150;
+                  if (t < start || t >= start + 450)
+                    continue;
+                  const float phase = (t - start) / 450.0f;
+                  const uint8_t level = static_cast<uint8_t>(
+                      160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+                  it[n % 4] = ESPHSVColor(n * 32, 255, level);
+                }
+                return;
+              }
+              boot_chase = false;
+            }
+
             // D2 stays dark while Wi-Fi is disabled. It pulses red while Wi-Fi
             // connects and orange on Wi-Fi alone when Home Assistant is expected.
             // Turning the HA switch off keeps solid orange while Wi-Fi is up.
@@ -570,7 +594,8 @@ light:
               it[1] = Color(255, 0, 0);
               it[2] = Color(255, 0, 0);
             } else if (millis() < id(wake_pulse_until_ms)) {
-              const float phase = (millis() % 800) / 800.0f;
+              // Counts down to the end, so both pulses start and stop dim.
+              const float phase = ((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f;
               const uint8_t level = 24 + static_cast<uint8_t>(
                   136.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[1] = Color(level, level, level);
@@ -927,7 +952,7 @@ globals:
     type: uint8_t
     restore_value: false
     initial_value: "0"
-  # The wake interval sets this after a deep-sleep wake. D3 and D4 pulse until it passes.
+  # The wake interval sets this after a deep-sleep wake. D3 and D4 pulse twice until it passes.
   - id: wake_pulse_until_ms
     type: uint32_t
     restore_value: false
@@ -1000,10 +1025,9 @@ interval:
               id(detect_wifi_hold).execute();
             }
           }
-          // Setup can run past 800 ms, so the one full pulse counts from the first tick.
+          // Setup can run past 800 ms, so the two pulses count from the first tick.
           static const uint32_t first_ms = millis();
-          if (id(idle).wake_pending() || millis() - first_ms < 800)
-            id(wake_pulse_until_ms) = millis() + 100;
+          id(wake_pulse_until_ms) = first_ms + 1600;
 
 button:
   # The Zigbee stack starts only at boot, so turning its switch back on needs

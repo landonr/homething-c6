@@ -582,6 +582,17 @@ class ProductionConfigTest(unittest.TestCase):
         store = header.split("bool store_(uint8_t slot, const Entry &entry) {", 1)[1]
         self.assertIn("ir_code_store.clear_for_zigbee(slot)", store.split("\n  }", 1)[0])
 
+    def test_a_cold_boot_chases_the_ring_twice_before_status(self) -> None:
+        """A deep-sleep wake must skip the chase, so a wake press shows status at once."""
+        effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
+        chase = effect.split("// D2 stays dark", 1)[0]
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep();", chase)
+        # Eight pulses, two laps of four, each longer than the gap to the next.
+        self.assertIn("if (t < 7 * 150 + 450) {", chase)
+        self.assertIn("for (uint32_t n = 0; n < 8; n++) {", chase)
+        self.assertIn("it[n % 4] = ESPHSVColor(n * 32, 255, level);", chase)
+        self.assertIn("return;", chase)
+
     def test_d5_is_reserved_for_zigbee_status_alone(self) -> None:
         # Zigbee training used to pulse D5, which hid the radio state for the
         # whole training window. It now pulses D3 and D4 instead.

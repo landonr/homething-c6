@@ -70,7 +70,8 @@ If an IR capture fails, the old assignment remains.
 
 ## Web configurator
 
-The device serves a button page at `http://homething-c6.local/buttons`. It uses
+The device serves a button page at `http://homething-c6-xxxxxx.local/buttons`.
+`xxxxxx` is the last six hex digits of the remote MAC address. The page uses
 the same `web_server` as the ESPHome dashboard on port 80.
 
 The page draws the remote layout: the two top buttons, the wheel, and the nine

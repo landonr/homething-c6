@@ -37,6 +37,14 @@ def status_light_entry(config: str) -> str:
 
 
 class ProductionConfigTest(unittest.TestCase):
+    def test_name_carries_the_mac_suffix(self) -> None:
+        """Several remotes on one network need distinct hostnames and HA names."""
+        self.assertRegex(
+            CONFIG.read_text(),
+            r"esphome:\n  name: \$\{device_name\}\n  friendly_name: \$\{friendly_name\}\n"
+            r"(?:  #.*\n)*  name_add_mac_suffix: true\n",
+        )
+
     def test_wifi_starts_disabled_without_a_saved_preference(self) -> None:
         config = CONFIG.read_text()
         wifi = config.split("\nwifi:\n", 1)[1].split("\ntext_sensor:", 1)[0]

@@ -5,6 +5,9 @@ substitutions:
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
+  # Appends the last six MAC hex digits, so each remote gets its own hostname
+  # and Home Assistant name.
+  name_add_mac_suffix: true
   includes:
     - ir_learning.h
     - zigbee_learning.h

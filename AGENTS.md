@@ -416,7 +416,9 @@ The `TT` lens receives perpendicular to the board through the bottom face.
 
 If the carrier frequency changes, keep the AGC digit at 1.
 
-`TSOP6136` uses permissive AGC1. Both firmware variants use `remote_receiver` with `dump: all`.
+`TSOP6136` uses permissive AGC1. Both firmware variants use `remote_receiver`, and production learns raw frames through `on_raw`.
+
+Production has no `dump` option, because the protocol dumpers use too much flash. `c6remote-test-common.yaml` keeps `dump: all`.
 
 Before an AGC change, verify code acceptance with `vishay.com/en/landingpage/agcmaptool/`.
 

@@ -34,3 +34,6 @@ async def to_code(config):
     # The central role carries the GATT client that reads the host device name.
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_CENTRAL", True)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT", False)
+    # Nothing scans. The GATT client depends on the central role only, not on the observer.
+    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_OBSERVER", False)
+    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_LOG_LEVEL_NONE", True)

@@ -46,11 +46,16 @@ esp32:
   partitions: partitions.csv
   framework:
     type: esp-idf
+    advanced:
+      # A failed assert still aborts, but prints no file, line or expression.
+      assertion_level: SILENT
     sdkconfig_options:
       # A pasted IR code posts up to 512 signed values, and ESPHome rejects a
       # POST body larger than this. The httpd scratch buffer grows on demand and
       # is freed with the request, so idle RAM is unchanged.
       CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"
+      # esp_err_to_name() then returns "UNKNOWN ERROR" for every code.
+      CONFIG_ESP_ERR_TO_NAME_LOOKUP: "n"
 
 external_components:
   - source:
@@ -60,6 +65,7 @@ external_components:
     components: [zigbee]
 
 logger:
+  level: INFO
 
 api:
   reboot_timeout: 0s
@@ -414,22 +420,6 @@ binary_sensor:
     on_release:
       - script.execute: {id: release_assignment, slot: 16}
 
-  # PCF8575 nINT, R9 100k pull-up on board. ESPHome polls the expander, so this
-  # is visibility only: it does not make button reads interrupt-driven. Useful
-  # because an edge shows here even when the port bit itself is misrouted.
-  # IdleSleep owns the GPIO5 edge ISR, and IDF keeps one handler for each pin.
-  - platform: gpio
-    name: Expander INT
-    id: expander_int
-    entity_category: diagnostic
-    use_interrupt: false
-    pin:
-      number: GPIO5
-      mode:
-        input: true
-        pullup: true
-      inverted: true
-
 sensor:
   - platform: rotary_encoder
     name: Wheel
@@ -497,9 +487,6 @@ light:
           name: Status Indicators
           update_interval: 50ms
           lambda: |-
-            if (initial_run) {
-              id(mic_level) = 0.0f;
-            }
             it.all() = Color::BLACK;
 
             // Boot chase: two clockwise laps before any status shows. Strip order
@@ -662,22 +649,6 @@ light:
       brightness: 30%
 
 switch:
-  # Bench diagnostic for the missing 100k pull-down on sd (see ROADMAP). DS-000069
-  # page 12 wants one so MK1's tristated SD output cannot float; the board has
-  # none. Toggle this while the mic test runs and watch whether the reported peak
-  # moves. i2s_audio offers no pull setting for the data pin, so this reaches
-  # past it to the GPIO. Delete once the question is settled either way.
-  - platform: template
-    name: Mic SD Pulldown
-    id: sd_pulldown
-    entity_category: diagnostic
-    optimistic: true
-    restore_mode: ALWAYS_OFF
-    turn_on_action:
-      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);
-    turn_off_action:
-      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_FLOATING);
-
   # Q2 is a high-side P-FET on the LED rail: gate low powers led_vdd, so the
   # switch pin is inverted. R10 1M holds the gate at +3.3V, so the rail is off
   # whenever GPIO18 floats (boot, deep sleep).
@@ -764,7 +735,6 @@ remote_receiver:
       input: true
       pullup: true
     inverted: true
-  dump: all
   tolerance: 35%
   on_raw:
     - lambda: |-
@@ -796,23 +766,6 @@ microphone:
     channel: left
     sample_rate: 16000
     bits_per_sample: 32bit
-    on_data:
-      - lambda: |-
-          id(mic_bytes) += x.size();
-          const int32_t *samples = reinterpret_cast<const int32_t *>(x.data());
-          const size_t count = x.size() / sizeof(int32_t);
-          uint16_t peak = 0;
-          for (size_t i = 0; i < count; i++) {
-            const int32_t sample = samples[i] >> 16;
-            const uint16_t magnitude = sample < 0 ? -sample : sample;
-            if (magnitude > peak)
-              peak = magnitude;
-          }
-          if (peak > id(mic_peak))
-            id(mic_peak) = peak;
-          const float level = std::min(1.0f, std::max(0.0f,
-              (static_cast<float>(peak) - 24.0f) / (512.0f - 24.0f)));
-          id(mic_level) = std::max(level, id(mic_level) * 0.82f);
 
 script:
   - id: detect_wifi_hold
@@ -933,18 +886,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  - id: mic_bytes
-    type: uint32_t
-    restore_value: false
-    initial_value: "0"
-  - id: mic_level
-    type: float
-    restore_value: false
-    initial_value: "0.0f"
-  - id: mic_peak
-    type: uint16_t
-    restore_value: false
-    initial_value: "0"
   - id: mic_meter_active
     type: bool
     restore_value: false
@@ -983,19 +924,6 @@ interval:
           // the boot after it.
           if (zigbee_assignments.take_credential_erase_request())
             id(zigbee_radio)->reset();
-  - interval: 1s
-    then:
-      - if:
-          condition:
-            microphone.is_capturing:
-              id: board_microphone
-          then:
-            - lambda: |-
-                ESP_LOGI("microphone", "Captured %u bytes/s, level %.3f, peak %u",
-                         static_cast<unsigned>(id(mic_bytes)), id(mic_level),
-                         static_cast<unsigned>(id(mic_peak)));
-                id(mic_bytes) = 0;
-                id(mic_peak) = 0;
   - interval: 50ms
     then:
       - lambda: |-
@@ -1035,10 +963,3 @@ button:
   # this. Nothing else on the device offers a restart.
   - platform: restart
     name: Restart
-
-  - platform: template
-    name: Stop Microphone Test
-    on_press:
-      - microphone.stop_capture:
-          id: board_microphone
-      - script.execute: stop_voice_listening

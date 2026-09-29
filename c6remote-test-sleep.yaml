@@ -11,6 +11,10 @@ substitutions:
 packages:
   base: !include c6remote.yaml
 
+# Production logs at INFO. The bench keeps the DEBUG lines and the CONFIG blocks.
+logger:
+  level: DEBUG
+
 # The package merge adds these keys to the production idle_sleep block.
 idle_sleep:
   wake_stub: ${sleep_wake_stub}

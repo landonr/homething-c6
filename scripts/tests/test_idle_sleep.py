@@ -241,10 +241,11 @@ class InterruptTest(unittest.TestCase):
         self.assertIn('sensor.get("use_interrupt", False)', INIT)
         self.assertIn("pins.PIN_SCHEMA_REGISTRY.get_key(pin) == CORE.target_platform", INIT)
         self.assertIn("pin.get(CONF_NUMBER) == WAKE_PIN", INIT)
-        # Production polls the sensor because IdleSleep owns the GPIO5 ISR.
-        entry = PRODUCTION.split("name: Expander INT\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("number: GPIO5\n", entry)
-        self.assertIn("use_interrupt: false\n", entry)
+        # Production has no GPIO5 sensor. IdleSleep enables the input itself, and
+        # R9 is the pull-up.
+        self.assertNotIn("number: GPIO5\n", PRODUCTION)
+        self.assertNotIn("expander_int", PRODUCTION)
+        self.assertIn("gpio_input_enable(WAKE_PIN);", function_body(CPP, "void IdleSleep::attach_int_isr_()"))
         self.assertNotIn("expander_int", BENCH)
         self.assertNotIn("use_interrupt", BENCH)
 

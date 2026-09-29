@@ -39,7 +39,11 @@ The band that fs falls in is the only control over the mic mode, and 18.75 to 23
 
 ## First ESPHome check
 
-`c6remote.yaml` has a `Start Microphone Test` button that calls `microphone.capture`. The log line
+This section records the check of 2026-08-24. Production `c6remote.yaml` no longer has the test button, the 1 s log line, or the `Mic SD Pulldown` switch.
+
+To repeat the check, use `c6remote-test-mic-vu.yaml`. It logs `B/s` and peak each second and has the `Mic SD Pulldown` switch.
+
+On 2026-08-24, `c6remote.yaml` had a `Start Microphone Test` button that called `microphone.capture`. The log line
 
 ```text
 Captured 64512 bytes/s
@@ -47,7 +51,7 @@ Captured 64512 bytes/s
 
 proves that capture runs and DMA delivers data. `passive: false` is needed only for an ESPHome `sound_level` sensor, and this config does not use that platform. It does not explain low peaks.
 
-The logged `level` is not reliable. `mic_level` is multiplied by `0.82` on every `on_data` callback, about every 16 ms, then printed once per second. It decays near zero between lines. Use `peak`, or the standalone test.
+The logged `level` was not reliable. The config multiplied `mic_level` by `0.82` on every `on_data` callback, approximately every 16 ms. The log printed the value only once per second, so the value decreased to near zero between lines. Production `c6remote.yaml` no longer has `mic_level`. Use `peak`, or the standalone test.
 
 Convert `peak` to dB FS with `20 * log10(peak / 32768)`, because the meter is in the 16-bit domain. Landmarks:
 

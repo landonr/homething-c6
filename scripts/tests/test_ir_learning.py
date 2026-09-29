@@ -183,8 +183,19 @@ class IrLearningTest(unittest.TestCase):
     def test_receiver_rail_stays_on_for_passive_logging(self) -> None:
         entry = CONFIG.split("name: IR Rail", 1)[1].split("remote_receiver:", 1)[0]
         self.assertIn("restore_mode: ALWAYS_ON", entry)
-        self.assertIn("dump: all", CONFIG)
         self.assertNotIn("id(ir_rail).turn_off();", CONFIG)
+
+    def test_production_receiver_links_no_protocol_dumpers(self) -> None:
+        """Learning and playback use raw timings only, and the dumpers cost flash.
+        The raw frame log is INFO, so it survives the production logger level."""
+        receiver = section(CONFIG, "\nremote_receiver:\n", "\nremote_transmitter:")
+        self.assertNotIn("dump:", receiver)
+        self.assertIn("on_raw:", receiver)
+        self.assertIn("\nlogger:\n  level: INFO\n", CONFIG)
+        received = HEADER.split("void log_received(", 1)[1].split("\n  }\n", 1)[0]
+        self.assertIn('ESP_LOGI("ir_rx",\n             "Raw frame: pulses=%u', received)
+        pulses = HEADER.split("static void log_pulses_(", 1)[1].split("\n  }\n", 1)[0]
+        self.assertIn("ESP_LOGI(tag,", pulses)
 
 
 if __name__ == "__main__":

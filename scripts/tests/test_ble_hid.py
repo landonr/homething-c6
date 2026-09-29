@@ -24,6 +24,16 @@ class BleHidTest(unittest.TestCase):
         self.assertNotIn("esp32_ble", INIT)
         self.assertNotIn("esp32_ble", HEADER)
 
+    def test_the_host_drops_the_observer_role_and_its_log_text(self) -> None:
+        """The remote never scans. The GATT client needs only the central role."""
+        self.assertIn('CONFIG_BT_NIMBLE_ROLE_OBSERVER", False', INIT)
+        self.assertIn('CONFIG_BT_NIMBLE_LOG_LEVEL_NONE", True', INIT)
+        self.assertNotIn("ble_gap_disc(", CPP)
+        self.assertNotIn("ble_gap_ext_disc(", CPP)
+        self.assertNotIn("BLE_GAP_EVENT_DISC:", CPP)
+        # Wi-Fi RX on this board fails unless the BT controller is initialised.
+        self.assertNotIn("CONFIG_BT_CONTROLLER", INIT)
+
     def test_the_host_task_starts_after_the_hid_database_is_registered(self) -> None:
         """esp_hidd_dev_init() takes the sync callback, so it must run first."""
         self.assertLess(CPP.index("this->init_hid_();"), CPP.index("esp_nimble_enable("))
@@ -91,6 +101,7 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("DEVICE_NAME_UUID = 0x2A00", CPP)
         self.assertIn("ble_gattc_read_by_uuid(connection, 1, 0xFFFF, &name_uuid.u", CPP)
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", True', INIT)
+        self.assertNotIn('CONFIG_BT_NIMBLE_GATT_CLIENT", False', INIT)
         self.assertIn("std::string host_name() const;", HEADER)
         self.assertIn('ESP_LOGI(TAG, "Connected to %s", name)', CPP)
         # The name belongs to the bond, so it survives a dropped link and a

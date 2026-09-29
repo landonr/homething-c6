@@ -45,6 +45,21 @@ class ProductionConfigTest(unittest.TestCase):
             r"(?:  #.*\n)*  name_add_mac_suffix: true\n",
         )
 
+    def test_production_logs_at_info_and_the_sleep_bench_at_debug(self) -> None:
+        """DEBUG and CONFIG log text costs app partition flash. The bench that
+        includes production puts both back."""
+        self.assertIn("\nlogger:\n  level: INFO\n", CONFIG.read_text())
+        bench = (CONFIG.parent / "c6remote-test-sleep.yaml").read_text()
+        self.assertRegex(bench, r"packages:\n  base: !include c6remote\.yaml\n")
+        self.assertRegex(bench, r"\nlogger:\n  level: DEBUG\n")
+
+    def test_idf_assertions_are_silent_and_the_error_name_table_is_out(self) -> None:
+        config = CONFIG.read_text()
+        esp32 = config.split("\nesp32:\n", 1)[1].split("\nexternal_components:", 1)[0]
+        self.assertRegex(esp32, r"\n    advanced:\n(?:      #.*\n)*      assertion_level: SILENT\n")
+        self.assertIn('\n      CONFIG_ESP_ERR_TO_NAME_LOOKUP: "n"\n', esp32)
+        self.assertNotIn("CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS", config)
+
     def test_wifi_starts_disabled_without_a_saved_preference(self) -> None:
         config = CONFIG.read_text()
         wifi = config.split("\nwifi:\n", 1)[1].split("\ntext_sensor:", 1)[0]
@@ -174,7 +189,6 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("else if (wifi_enabled && !wifi_connected)", effect)
         self.assertIn("else if (wifi_enabled && ha_expected)", effect)
         self.assertIn("else if (wifi_enabled)", effect)
-        self.assertIn("id(mic_level) = 0.0f;", effect)
         for value, color in ((1, "Color(192, 48, 0)"), (2, "Color(0, 48, 255)"),
                              (3, "Color(96, 0, 96)"), (4, "Color(255, 0, 0)")):
             state = effect.split(f"id(voice_led_state) == {value}", 1)[1]
@@ -204,19 +218,26 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
-    def test_only_the_stop_microphone_button_remains(self) -> None:
-        """The bench buttons were dropped: the microphone now runs from Assist,
-        and the IR burst duplicated a learned slot."""
+    def test_production_carries_no_bench_diagnostics(self) -> None:
+        """The microphone runs from Assist, and the IR burst duplicated a learned
+        slot. The mic and expander diagnostics live in the bench configs."""
         config = CONFIG.read_text()
-        self.assertNotIn("name: Start Microphone Test", config)
-        self.assertNotIn("name: Send Short IR Test Burst", config)
+        for name in ("Start Microphone Test", "Stop Microphone Test", "Send Short IR Test Burst",
+                     "Mic SD Pulldown", "Expander INT"):
+            self.assertNotIn(f"name: {name}", config)
         self.assertNotIn("microphone.capture:", config)
-        self.assertRegex(
-            config,
-            r"name: Stop Microphone Test\n    on_press:"
-            r"\n      - microphone.stop_capture:[\s\S]*?"
-            r"\n      - script.execute: stop_voice_listening",
-        )
+        self.assertNotIn("microphone.stop_capture:", config)
+        self.assertNotIn("GPIO_NUM_21", config)
+        # The mic level only fed the removed 1 s log.
+        self.assertNotIn("mic_level", config)
+        microphone = config.split("\nmicrophone:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("id: board_microphone", microphone)
+        self.assertNotIn("on_data:", microphone)
+        mic_vu = (CONFIG.parent / "c6remote-test-mic-vu.yaml").read_text()
+        self.assertIn("name: Mic SD Pulldown", mic_vu)
+        self.assertIn("gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);", mic_vu)
+        common = (CONFIG.parent / "c6remote-test-common.yaml").read_text()
+        self.assertIn("name: Expander INT", common)
 
     def test_idle_status_defers_to_the_microphone_meter(self) -> None:
         """A meter run must survive a Wi-Fi event, which also calls this script."""
@@ -237,24 +258,15 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
-    def test_microphone_interval_reports_and_resets_raw_peak(self) -> None:
+    def test_microphone_drops_the_debug_counters(self) -> None:
+        """The level, bytes and peak values fed only the 1 s log, which the mic
+        bench configs carry."""
         config = CONFIG.read_text()
-        self.assertRegex(
-            config,
-            r"const float level = std::min\(1\.0f, std::max\(0\.0f,\s*"
-            r"\(static_cast<float>\(peak\) - 24\.0f\) / \(512\.0f - 24\.0f\)\)\);",
-        )
-        self.assertRegex(
-            config,
-            r"if \(peak > id\(mic_peak\)\)"
-            r"\n            id\(mic_peak\) = peak;",
-        )
-        self.assertRegex(
-            config,
-            r'ESP_LOGI\("microphone", "Captured %u bytes/s, level %.3f, peak %u",'
-            r"[\s\S]*?id\(mic_bytes\) = 0;"
-            r"\n                id\(mic_peak\) = 0;",
-        )
+        self.assertNotIn("const float level =", config)
+        self.assertNotIn("mic_bytes", config)
+        self.assertNotIn("mic_peak", config)
+        self.assertNotIn("Captured %u bytes/s", config)
+        self.assertNotIn("  - interval: 1s\n", config)
 
     def test_zigbee_dependency_and_client_endpoint_are_pinned(self) -> None:
         config = CONFIG.read_text()
@@ -634,7 +646,7 @@ class ProductionConfigTest(unittest.TestCase):
         # set_link_state feeds the step, and the erase restarts the remote, so
         # the order in the interval decides whether a window ever opens.
         config = CONFIG.read_text()
-        block = config.split("interval:", 1)[1].split("\n  - interval: 1s", 1)[0]
+        block = config.split("interval:", 1)[1].split("\n  - interval: 50ms", 1)[0]
         link = block.index("zigbee_assignments.set_link_state(")
         tick = block.index("zigbee_assignments.tick();")
         erase = block.index("zigbee_assignments.take_credential_erase_request()")

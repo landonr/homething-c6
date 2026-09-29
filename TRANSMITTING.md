@@ -7,7 +7,7 @@
 - The transmitter uses a 38 kHz carrier with a 50 percent duty cycle.
 - One v2 board transmitted NEC test frames to another v2 board.
 - The receiver decoded `0x1234/0x78AB` every two seconds.
-- The receiver logs raw pulse durations and decoded protocols.
+- The receiver logs raw pulse durations. Only `c6remote-test-common.yaml` sets `dump: all`, so only that bench build logs decoded protocols now.
 - The receiver decodes Samsung power as `0xE0E040BF` with 32 bits.
 - The receiver decodes Samsung volume up as `0xE0E0E01F` with 32 bits.
 - D1 and Q1 transmitted the verified NEC test frames.
@@ -50,6 +50,10 @@ The test `test_transmitter_reserves_shared_rmt_memory` now checks the LED strip 
 To identify this fault again, read two boot log blocks. The `Remote Transmitter:` block must not report `Configuring RMT driver failed`.
 
 The `ESP32 RMT LED Strip:` block must report `RMT Symbols: 48`.
+
+Production `c6remote.yaml` logs at `INFO`, so it does not print these `[C]` blocks. To read them, run `c6remote-test-sleep.yaml`, which includes production and logs at `DEBUG`.
+
+Both builds still print the `[E]` lines. They show `UNKNOWN ERROR` in place of the `ESP_ERR_*` name, because production turns off the error name table.
 
 After the fix, the SW10 and SW11 Samsung presets were removed from `c6remote.yaml`. All buttons SW3 to SW11 are now learn slots.
 

@@ -268,6 +268,20 @@ switch:
           id(lvl_rms_db) = -100.0f;
           id(lvl_peak_norm) = 0.0f;
 
+  # A/B for the 100k sd pull-down that DS-000069 page 12 requires, on a board
+  # without R12. i2s_audio has no pull setting for the data pin, so this sets
+  # the GPIO directly.
+  - platform: template
+    name: Mic SD Pulldown
+    id: sd_pulldown
+    entity_category: diagnostic
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);
+    turn_off_action:
+      - lambda: gpio_set_pull_mode(GPIO_NUM_21, GPIO_FLOATING);
+
 sensor:
   - platform: template
     name: Mic Peak Level

@@ -481,7 +481,8 @@ class FriendlyNameTest(unittest.TestCase):
         self.assertIn('post("set_name",null,undefined,v)', save)
         self.assertIn("if(r.code!==200)throw new Error(fail(r));", save)
         self.assertIn("return waitAction(r.body.id)", save)
-        self.assertIn('nameMsg="Home Assistant shows the new name when it next connects."', save)
+        self.assertIn('nameMsg="Home Assistant shows the new name when it next connects. '
+                      'A paired Bluetooth host can show the old name until it pairs again."', save)
         self.assertIn("nameBusy=false;nameBad=true;", save)
         key = section(PAGE, "function nameKey(e){", "\n\n")
         self.assertIn('if(e.key==="Enter"){e.preventDefault();nameSave()}', key)
@@ -506,6 +507,20 @@ class FriendlyNameTest(unittest.TestCase):
             self.assertIsNone(preview.clean_name(refused), refused)
         text = path.read_text()
         self.assertIn('elif action == "set_name":\n            STATE["name"] = name or STATE["default_name"]', text)
+
+    def test_every_apply_gives_the_name_to_ble_hid(self) -> None:
+        """The Bluetooth name follows the friendly name, and the default name too."""
+        apply = section(CPP, self.APPLY, "\n}")
+        push = "hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));"
+        self.assertIn("auto *hid = esphome::ble_hid::BleHid::instance();\n  if (hid != nullptr)\n    " + push, apply)
+        # Only the length check returns early, so a boot load, a rename, and a
+        # restored default all reach the push.
+        self.assertEqual(apply.count("return;"), 1)
+        self.assertLess(apply.index("= this->default_name_;"), apply.index(push))
+        self.assertLess(apply.index("= StringRef(buffer, name.size());"), apply.index(push))
+        self.assertIn("void set_device_name(const char *name);", BLE_HEADER)
+        self.assertIn("static_assert(ButtonConfig::FRIENDLY_NAME_MAX <= esphome::ble_hid::BleHid::DEVICE_NAME_MAX,",
+                      CPP)
 
 
 class SlotTableTest(unittest.TestCase):

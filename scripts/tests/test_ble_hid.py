@@ -95,7 +95,7 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("fields.uuids16 = &hid_uuid;", CPP)
         self.assertIn("ESP_HID_APPEARANCE_GAMEPAD", CPP)
         self.assertIn("ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC", CPP)
-        self.assertIn('ESP_LOGI(TAG, "Advertising as homeThing C6")', CPP)
+        self.assertIn('ESP_LOGI(TAG, "Advertising as %s", name.data())', CPP)
 
     def test_the_connected_host_name_comes_from_the_gap_service(self) -> None:
         self.assertIn("DEVICE_NAME_UUID = 0x2A00", CPP)
@@ -125,6 +125,91 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("ir_ui.release(9);", sw9)
         self.assertIn("set_pressed(20, true)", CONFIG)
         self.assertIn("set_pressed(20, false)", CONFIG)
+
+    @staticmethod
+    def body(start: str) -> str:
+        """Return the function that opens with start, up to its closing brace."""
+        text = CPP[CPP.index(start) :]
+        return text[: text.index("\n}")]
+
+    def test_the_device_name_is_the_friendly_name(self) -> None:
+        """The BLE name follows the friendly name, so the source names no remote."""
+        self.assertNotIn("homeThing C6", CPP)
+        self.assertNotIn("DEVICE_NAME =", CPP)
+        self.assertIn(".device_name = nullptr,", CPP)
+        self.assertIn("static constexpr size_t DEVICE_NAME_MAX = 40;", HEADER)
+        self.assertIn("void set_device_name(const char *name);", HEADER)
+        # A boot without a saved name starts with the YAML friendly name.
+        init = self.body("bool BleHid::init_stack_() {")
+        seed = init.index("const StringRef &friendly = App.get_friendly_name();")
+        self.assertIn("if (this->copy_device_name_(name) == 0) {", init)
+        self.assertLess(seed, init.index("this->init_hid_();"))
+        self.assertLess(seed, init.index("ble_svc_gap_device_name_set(name.data());"))
+        self.assertLess(CPP.index("App.get_friendly_name()"), CPP.index("esp_hidd_dev_init("))
+        hid = self.body("void BleHid::init_hid_() {")
+        self.assertLess(hid.index("config.device_name = name.data();"), hid.index("esp_hidd_dev_init(&config,"))
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Name: %s", name.data());', CPP)
+
+    def test_the_name_copy_is_guarded_for_the_nimble_task(self) -> None:
+        self.assertIn("mutable std::mutex device_name_mutex_;", HEADER)
+        self.assertIn("using DeviceName = std::array<char, DEVICE_NAME_MAX + 1>;", HEADER)
+        self.assertIn("DeviceName device_name_{};", HEADER)
+        lock = "const std::lock_guard<std::mutex> lock(this->device_name_mutex_);"
+        for start in ("void BleHid::store_device_name_(const char *name, size_t length) {",
+                      "uint32_t BleHid::copy_device_name_(DeviceName &name) const {",
+                      "bool BleHid::device_name_current_(uint32_t generation) const {"):
+            self.assertIn(lock, self.body(start), start)
+        store = self.body("void BleHid::store_device_name_(const char *name, size_t length) {")
+        self.assertIn("utf8_prefix_length(name, length, DEVICE_NAME_MAX)", store)
+        self.assertIn("this->device_name_generation_++;", store)
+        # The advert and the loop read the name only through the locked copy.
+        for start in ("void BleHid::start_advertising_() {", "void BleHid::apply_device_name_() {"):
+            self.assertIn("this->copy_device_name_(name);", self.body(start), start)
+            self.assertNotIn("this->device_name_.", self.body(start), start)
+
+    def test_a_rename_restarts_a_running_advert_from_the_loop(self) -> None:
+        setter = self.body("void BleHid::set_device_name(const char *name) {")
+        self.assertIn("if (this->stack_ready_)\n    this->name_update_pending_.store(true", setter)
+        self.assertNotIn("ble_gap_", setter)
+        loop = self.body("void BleHid::loop() {")
+        self.assertIn("if (this->name_update_pending_.exchange(false, std::memory_order_acq_rel))\n"
+                      "    this->apply_device_name_();", loop)
+        apply = self.body("void BleHid::apply_device_name_() {")
+        gap = apply.index("ble_svc_gap_device_name_set(name.data());")
+        # A connected host keeps its link, and only the GAP name changes.
+        self.assertLess(gap, apply.index("this->link_connected_.load("))
+        self.assertLess(apply.index("this->link_connected_.load("), apply.index("ble_gap_adv_stop();"))
+        self.assertIn("if (stopped != BLE_HS_EALREADY)", apply)
+        self.assertLess(apply.index("ble_gap_adv_stop();"), apply.index("this->start_advertising_();"))
+        self.assertNotIn("ble_gap_terminate", apply)
+        start = self.body("void BleHid::start_advertising_() {")
+        # One caller claims the advert at a time, and a failed start gives it back.
+        self.assertIn("this->advertising_.compare_exchange_strong(idle, true, std::memory_order_acq_rel)", start)
+        self.assertNotIn("this->advertising_.store(true", start)
+        self.assertIn("if (result != 0 && result != BLE_HS_EALREADY) {", start)
+        self.assertIn("const uint32_t generation = this->copy_device_name_(name);", start)
+        self.assertIn("if (!this->device_name_current_(generation))\n"
+                      "    this->name_update_pending_.store(true, std::memory_order_release);", start)
+
+    def test_the_name_fits_the_advert_and_the_scan_response(self) -> None:
+        start = self.body("void BleHid::start_advertising_() {")
+        # The advert measures its other fields, then gives the name the rest.
+        measure = start.index("ble_hs_adv_set_fields(&fields, encoded, &used, sizeof(encoded));")
+        self.assertLess(measure, start.index("fields.name = name_bytes;"))
+        self.assertIn("BLE_HS_ADV_MAX_FIELD_SZ - used", start)
+        self.assertIn("fields.name_is_complete = advert_length == name_length ? 1 : 0;", start)
+        self.assertLess(start.index("fields.name = name_bytes;"), start.index("ble_gap_adv_set_fields(&fields);"))
+        self.assertIn("utf8_prefix_length(name.data(), name_length, BLE_HS_ADV_MAX_FIELD_SZ)", start)
+        self.assertIn("response.name_is_complete = response_length == name_length ? 1 : 0;", start)
+        self.assertLess(start.index("ble_gap_adv_rsp_set_fields(&response);"), start.index("ble_gap_adv_start("))
+        self.assertNotIn("name_is_complete = 1;", CPP)
+        cut = self.body("static size_t utf8_prefix_length(const char *text, size_t length, size_t limit) {")
+        self.assertIn("while (cut > 0 && (static_cast<uint8_t>(text[cut]) & 0xC0) == 0x80)\n    cut--;", cut)
+
+    def test_the_gap_name_limit_holds_a_whole_friendly_name(self) -> None:
+        """ESP-IDF defaults the GAP name limit to 31 bytes, and a rename can take 40."""
+        self.assertIn('CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN", 40', INIT)
+        self.assertIn("static_assert(BleHid::DEVICE_NAME_MAX <= CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN,", CPP)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ class BleHid final : public Component {
   static constexpr uint8_t FIRST_SLOT = 3;
   static constexpr uint8_t LAST_SLOT = 20;
   static constexpr size_t SLOT_COUNT = LAST_SLOT - FIRST_SLOT + 1;
+  // The friendly name holds up to 40 bytes, and the GAP name is that name.
+  static constexpr size_t DEVICE_NAME_MAX = 40;
 
   enum Kind : uint8_t {
     NONE = 0,
@@ -59,6 +61,8 @@ class BleHid final : public Component {
   bool bonded() const { return bonded_.load(std::memory_order_acquire); }
   bool pairing() const { return pairing_.load(std::memory_order_acquire); }
   std::string host_name() const;
+  // Main loop only. A running advert restarts from loop() with the new name.
+  void set_device_name(const char *name);
 
   static BleHid *instance() { return global_instance_; }
 
@@ -84,6 +88,7 @@ class BleHid final : public Component {
 
   static constexpr size_t HOST_NAME_SIZE = 32;
   static constexpr uint16_t NO_CONNECTION = 0xFFFF;
+  using DeviceName = std::array<char, DEVICE_NAME_MAX + 1>;
 
   static bool slot_valid_(uint8_t slot);
   static uint32_t checksum_(const Record &record);
@@ -98,6 +103,10 @@ class BleHid final : public Component {
   void read_host_name_();
   void set_host_name_(const char *name);
   void save_host_name_();
+  void store_device_name_(const char *name, size_t length);
+  uint32_t copy_device_name_(DeviceName &name) const;
+  bool device_name_current_(uint32_t generation) const;
+  void apply_device_name_();
   int handle_gap_event_(ble_gap_event *event);
   static int gap_event_(ble_gap_event *event, void *arg);
   static int host_name_read_(uint16_t connection, const ble_gatt_error *error, ble_gatt_attr *attr,
@@ -127,6 +136,13 @@ class BleHid final : public Component {
   mutable std::mutex record_mutex_;
   mutable std::mutex host_name_mutex_;
   std::array<char, HOST_NAME_SIZE> host_name_{};
+  // The main loop writes the name, and the NimBLE and HID event tasks read it
+  // to advertise. Each write bumps the generation, so an advert that copied an
+  // older name can tell. Generation 0 means that nothing set a name yet.
+  mutable std::mutex device_name_mutex_;
+  DeviceName device_name_{};
+  uint32_t device_name_generation_{0};
+  std::atomic<bool> name_update_pending_{false};
   std::atomic<uint16_t> connection_{NO_CONNECTION};
 
   static BleHid *global_instance_;

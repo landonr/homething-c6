@@ -1,5 +1,6 @@
 #include "ble_hid.h"
 
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
 #include "esp_hid_common.h"
@@ -27,8 +28,9 @@ extern "C" void ble_store_config_init(void);
 namespace esphome::ble_hid {
 
 static const char *const TAG = "ble_hid";
-static const char *const DEVICE_NAME = "homeThing C6";
 static constexpr uint16_t HID_SERVICE_UUID = 0x1812;
+static_assert(BleHid::DEVICE_NAME_MAX <= CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN,
+              "ble_svc_gap_device_name_set() refuses a name longer than the GAP limit");
 // The host carries its own name in the GAP service, 0x1800, as characteristic
 // 0x2A00. That characteristic exists nowhere else, so one read by UUID over the
 // whole handle range finds it without a service discovery first.
@@ -64,11 +66,12 @@ static const uint8_t REPORT_MAP[] = {
 };
 
 static esp_hid_raw_report_map_t REPORT_MAPS[] = {{REPORT_MAP, sizeof(REPORT_MAP)}};
+// init_hid_() fills device_name from the stored name.
 static esp_hid_device_config_t DEVICE_CONFIG = {
     .vendor_id = 0x16C0,
     .product_id = 0x05DF,
     .version = 0x0100,
-    .device_name = DEVICE_NAME,
+    .device_name = nullptr,
     .manufacturer_name = "homeThing",
     .serial_number = "C6",
     .report_maps = REPORT_MAPS,
@@ -115,6 +118,17 @@ static bool bonded_peer(ble_addr_t *address) {
   return ble_store_util_bonded_peers(address, &count, 1) == 0 && count == 1;
 }
 
+// A cut inside a multi-byte character leaves invalid UTF-8, so the cut moves
+// back to the lead byte of that character.
+static size_t utf8_prefix_length(const char *text, size_t length, size_t limit) {
+  if (length <= limit)
+    return length;
+  size_t cut = limit;
+  while (cut > 0 && (static_cast<uint8_t>(text[cut]) & 0xC0) == 0x80)
+    cut--;
+  return cut;
+}
+
 static void host_task(void *param) {
   nimble_port_run();
   nimble_port_freertos_deinit();
@@ -148,6 +162,8 @@ void BleHid::loop() {
   // The GATT read lands on the NimBLE task, so the flash write waits for here.
   if (this->host_save_pending_.exchange(false, std::memory_order_acq_rel))
     this->save_host_name_();
+  if (this->name_update_pending_.exchange(false, std::memory_order_acq_rel))
+    this->apply_device_name_();
 }
 
 void BleHid::save_host_name_() {
@@ -162,8 +178,10 @@ void BleHid::save_host_name_() {
 
 void BleHid::dump_config() {
   const std::string host = this->host_name();
+  DeviceName name{};
+  this->copy_device_name_(name);
   ESP_LOGCONFIG(TAG, "BLE HID:");
-  ESP_LOGCONFIG(TAG, "  Name: %s", DEVICE_NAME);
+  ESP_LOGCONFIG(TAG, "  Name: %s", name.data());
   ESP_LOGCONFIG(TAG, "  Radio: %s", ONOFF(this->radio_enabled()));
   ESP_LOGCONFIG(TAG, "  Connected: %s", YESNO(this->connected()));
   ESP_LOGCONFIG(TAG, "  Connected to: %s", host.empty() ? "unknown" : host.c_str());
@@ -180,6 +198,58 @@ void BleHid::set_host_name_(const char *name) {
   this->host_name_.fill('\0');
   if (name != nullptr)
     std::strncpy(this->host_name_.data(), name, this->host_name_.size() - 1);
+}
+
+// With the stack down, the name waits for init_stack_().
+void BleHid::set_device_name(const char *name) {
+  if (name == nullptr)
+    return;
+  this->store_device_name_(name, std::strlen(name));
+  if (this->stack_ready_)
+    this->name_update_pending_.store(true, std::memory_order_release);
+}
+
+void BleHid::store_device_name_(const char *name, size_t length) {
+  const size_t kept = utf8_prefix_length(name, length, DEVICE_NAME_MAX);
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  this->device_name_.fill('\0');
+  std::memcpy(this->device_name_.data(), name, kept);
+  this->device_name_generation_++;
+}
+
+uint32_t BleHid::copy_device_name_(DeviceName &name) const {
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  name = this->device_name_;
+  return this->device_name_generation_;
+}
+
+bool BleHid::device_name_current_(uint32_t generation) const {
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  return this->device_name_generation_ == generation;
+}
+
+// Main loop only. A connected host reads the GAP name, and the advert after the
+// disconnect reads the new name, so only a running advert restarts here.
+void BleHid::apply_device_name_() {
+  DeviceName name{};
+  this->copy_device_name_(name);
+  const int named = ble_svc_gap_device_name_set(name.data());
+  if (named != 0)
+    ESP_LOGW(TAG, "Could not set the GAP device name: %d", named);
+  if (this->link_connected_.load(std::memory_order_acquire) ||
+      !this->advertising_.load(std::memory_order_acquire))
+    return;
+  // BLE_HS_EALREADY means that no advert runs yet or any more. The claim holder
+  // checks the generation after its start. After a connect or a host reset,
+  // the next advert reads the new name.
+  const int stopped = ble_gap_adv_stop();
+  if (stopped != 0) {
+    if (stopped != BLE_HS_EALREADY)
+      ESP_LOGW(TAG, "Advertising stop for the new name failed: %d", stopped);
+    return;
+  }
+  this->advertising_.store(false, std::memory_order_release);
+  this->start_advertising_();
 }
 
 void BleHid::setup_assignments() {
@@ -441,12 +511,23 @@ bool BleHid::init_stack_() {
   ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
   ble_store_config_init();
 
+  // ButtonConfig sets up after this component, so a saved name arrives later
+  // through set_device_name(). Until then the name is the YAML friendly name.
+  DeviceName name{};
+  if (this->copy_device_name_(name) == 0) {
+    const StringRef &friendly = App.get_friendly_name();
+    this->store_device_name_(friendly.c_str(), friendly.size());
+    this->copy_device_name_(name);
+  }
+
   // esp_hidd_dev_init() registers the GATT database and takes the host sync
   // callback, so it must run before the host task starts.
   this->init_hid_();
   if (this->is_failed())
     return false;
-  ble_svc_gap_device_name_set(DEVICE_NAME);
+  const int named = ble_svc_gap_device_name_set(name.data());
+  if (named != 0)
+    ESP_LOGW(TAG, "Could not set the GAP device name: %d", named);
   ble_svc_gap_device_appearance_set(ESP_HID_APPEARANCE_GAMEPAD);
 
   result = esp_nimble_enable(reinterpret_cast<void *>(host_task));
@@ -459,7 +540,12 @@ bool BleHid::init_stack_() {
 }
 
 void BleHid::init_hid_() {
-  const esp_err_t result = esp_hidd_dev_init(&DEVICE_CONFIG, ESP_HID_TRANSPORT_BLE,
+  // esp_hidd_dev_init() keeps its own copy of the name.
+  DeviceName name{};
+  this->copy_device_name_(name);
+  esp_hid_device_config_t config = DEVICE_CONFIG;
+  config.device_name = name.data();
+  const esp_err_t result = esp_hidd_dev_init(&config, ESP_HID_TRANSPORT_BLE,
                                               hidd_event_handler_, &this->device_);
   if (result != ESP_OK) {
     ESP_LOGE(TAG, "HID init failed: %s", esp_err_to_name(result));
@@ -522,9 +608,18 @@ void BleHid::release_all_() {
 
 void BleHid::start_advertising_() {
   if (!this->radio_enabled() || !this->hid_started_.load(std::memory_order_acquire) ||
-      this->advertising_.load(std::memory_order_acquire) ||
       this->link_connected_.load(std::memory_order_acquire))
     return;
+  // The main loop, the NimBLE task, and the HID event task all start adverts.
+  // The claim lets one caller through, and a failed start gives it back.
+  bool idle = false;
+  if (!this->advertising_.compare_exchange_strong(idle, true, std::memory_order_acq_rel))
+    return;
+
+  DeviceName name{};
+  const uint32_t generation = this->copy_device_name_(name);
+  const size_t name_length = std::strlen(name.data());
+  const auto *name_bytes = reinterpret_cast<const uint8_t *>(name.data());
 
   const ble_uuid16_t hid_uuid = BLE_UUID16_INIT(HID_SERVICE_UUID);
   ble_hs_adv_fields fields{};
@@ -533,15 +628,41 @@ void BleHid::start_advertising_() {
   fields.appearance_is_present = 1;
   fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
   fields.tx_pwr_lvl_is_present = 1;
-  fields.name = reinterpret_cast<const uint8_t *>(DEVICE_NAME);
-  fields.name_len = std::strlen(DEVICE_NAME);
-  fields.name_is_complete = 1;
   fields.uuids16 = &hid_uuid;
   fields.num_uuids16 = 1;
   fields.uuids16_is_complete = 1;
-  int result = ble_gap_adv_set_fields(&fields);
+  // A legacy advert holds BLE_HS_ADV_MAX_SZ bytes. The name gets the space that
+  // the other fields leave, less its own two header bytes.
+  uint8_t encoded[BLE_HS_ADV_MAX_SZ];
+  uint8_t used = 0;
+  int result = ble_hs_adv_set_fields(&fields, encoded, &used, sizeof(encoded));
+  if (result == 0) {
+    const size_t room = used < BLE_HS_ADV_MAX_FIELD_SZ ? BLE_HS_ADV_MAX_FIELD_SZ - used : 0;
+    const size_t advert_length = utf8_prefix_length(name.data(), name_length, room);
+    if (advert_length > 0) {
+      fields.name = name_bytes;
+      fields.name_len = static_cast<uint8_t>(advert_length);
+      fields.name_is_complete = advert_length == name_length ? 1 : 0;
+    }
+    result = ble_gap_adv_set_fields(&fields);
+  }
   if (result != 0) {
+    this->advertising_.store(false, std::memory_order_release);
     ESP_LOGE(TAG, "Advertising data setup failed: %d", result);
+    return;
+  }
+
+  // The scan response carries the name alone, so a host that scans gets up to
+  // BLE_HS_ADV_MAX_FIELD_SZ bytes of it.
+  ble_hs_adv_fields response{};
+  const size_t response_length = utf8_prefix_length(name.data(), name_length, BLE_HS_ADV_MAX_FIELD_SZ);
+  response.name = name_bytes;
+  response.name_len = static_cast<uint8_t>(response_length);
+  response.name_is_complete = response_length == name_length ? 1 : 0;
+  result = ble_gap_adv_rsp_set_fields(&response);
+  if (result != 0) {
+    this->advertising_.store(false, std::memory_order_release);
+    ESP_LOGE(TAG, "Scan response setup failed: %d", result);
     return;
   }
 
@@ -552,12 +673,18 @@ void BleHid::start_advertising_() {
   parameters.itvl_max = BLE_GAP_ADV_ITVL_MS(50);
   result = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &parameters,
                              &BleHid::gap_event_, this);
-  if (result != 0) {
+  // BLE_HS_EALREADY means that an advert still runs, for example after a stop
+  // that failed. The controller already took the new data above.
+  if (result != 0 && result != BLE_HS_EALREADY) {
+    this->advertising_.store(false, std::memory_order_release);
     ESP_LOGE(TAG, "Advertising start failed: %d", result);
     return;
   }
-  this->advertising_.store(true, std::memory_order_release);
-  ESP_LOGI(TAG, "Advertising as homeThing C6");
+  // A rename after the copy above left the older name on air.
+  if (!this->device_name_current_(generation))
+    this->name_update_pending_.store(true, std::memory_order_release);
+  if (result == 0)
+    ESP_LOGI(TAG, "Advertising as %s", name.data());
 }
 
 void BleHid::read_host_name_() {

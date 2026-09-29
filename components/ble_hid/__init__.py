@@ -25,6 +25,8 @@ async def to_code(config):
     esp32.add_idf_sdkconfig_option("CONFIG_BT_BLUEDROID_ENABLED", False)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ENABLED", True)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_HID_SERVICE", True)
+    # The GAP name is the friendly name, which holds up to 40 bytes. The default limit is 31.
+    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN", 40)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_SVC_HID_MAX_INSTANCES", 1)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_SVC_HID_MAX_RPTS", 3)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_MAX_CONNECTIONS", 1)
@@ -33,7 +35,7 @@ async def to_code(config):
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_MAX_BONDS", 1)
     # The central role carries the GATT client that reads the host device name.
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_CENTRAL", True)
-    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT", False)
     # Nothing scans. The GATT client depends on the central role only, not on the observer.
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_OBSERVER", False)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_LOG_LEVEL_NONE", True)
+    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT", False)

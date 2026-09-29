@@ -86,6 +86,10 @@ As a result, the mDNS link and the Home Assistant connection continue to operate
 Home Assistant shows the new name when it next connects. The mDNS record shows it after the next restart.
 If you save an empty name, the remote uses its default name again.
 
+The Bluetooth device name is also the friendly name. If no host is connected, the advertisement shows the new name at once.
+A paired Bluetooth host can show the old name until it pairs again.
+The GAP device name always holds the complete name. The advertisement and the scan response can hold a shortened name.
+
 The page draws the remote layout: the two top buttons, the wheel, and the nine
 keypad buttons.
 
@@ -152,7 +156,7 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 
 ### Assign a BLE HID control from the page
 
-1. Pair the host with `homeThing C6` in its Bluetooth settings.
+1. Pair the host with the remote in its Bluetooth settings. The remote uses its friendly name, for example `homeThing C6 xxxxxx`.
 2. Select an input, then select **BLE HID** in the Action selector.
 3. Select Keyboard, Consumer, Gamepad button, or Gamepad D-pad.
 4. Select the key from the list. Keyboard and Consumer list the common usages by name.

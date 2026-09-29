@@ -21,6 +21,8 @@
 namespace esphome::button_config {
 
 static const char *const TAG = "button_config";
+static_assert(ButtonConfig::FRIENDLY_NAME_MAX <= esphome::ble_hid::BleHid::DEVICE_NAME_MAX,
+              "BleHid must hold a whole friendly name");
 
 // The 400 check runs on the httpd task. IdleSleep checks the range again.
 static constexpr uint32_t SLEEP_AFTER_MIN_S = 10;
@@ -552,14 +554,18 @@ void ButtonConfig::apply_friendly_name_(const std::string &name) {
   if (name.empty()) {
     this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
     const_cast<StringRef &>(App.get_friendly_name()) = this->default_name_;
-    return;
+  } else {
+    char *buffer =
+        this->current_name_.load(std::memory_order_relaxed) == this->names_[0] ? this->names_[1] : this->names_[0];
+    std::memcpy(buffer, name.data(), name.size());
+    buffer[name.size()] = '\0';
+    this->current_name_.store(buffer, std::memory_order_release);
+    const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());
   }
-  char *buffer =
-      this->current_name_.load(std::memory_order_relaxed) == this->names_[0] ? this->names_[1] : this->names_[0];
-  std::memcpy(buffer, name.data(), name.size());
-  buffer[name.size()] = '\0';
-  this->current_name_.store(buffer, std::memory_order_release);
-  const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());
+  // BleHid keeps its own copy, because its NimBLE task reads the name.
+  auto *hid = esphome::ble_hid::BleHid::instance();
+  if (hid != nullptr)
+    hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));
 }
 
 void ButtonConfig::note_activity_() {

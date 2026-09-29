@@ -838,7 +838,7 @@ post("set_name",null,undefined,v)
 .then(function(r){if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the name.")})})
 .then(function(){nameBusy=false;nameEdit=false;nameBad=false;
-nameMsg="Home Assistant shows the new name when it next connects.";namePaint();
+nameMsg="Home Assistant shows the new name when it next connects. A paired Bluetooth host can show the old name until it pairs again.";namePaint();
 document.getElementById("dnr").focus();return load().then(paint)},function(e){
 nameBusy=false;nameBad=true;nameMsg=e&&e.message?e.message:"The remote did not answer.";namePaint()})}
 

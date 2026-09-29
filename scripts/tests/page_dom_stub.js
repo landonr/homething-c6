@@ -1470,7 +1470,8 @@ setTimeout(() => {
         throw new Error("the box stayed open after the save");
       const line = document.getElementById("dnm");
       if (line.hidden || line.className.indexOf("bad") >= 0 ||
-          line.textContent !== "Home Assistant shows the new name when it next connects.")
+          line.textContent !== "Home Assistant shows the new name when it next connects. " +
+            "A paired Bluetooth host can show the old name until it pairs again.")
         throw new Error("the save line reads " + line.textContent);
     });
     step("a blank box posts an empty name", () => {

@@ -670,7 +670,7 @@ setTimeout(() => {
     global.td = [{ieee: "0x94deb8fffe9db81e", name: "Office Lamp", ep: 1}];
     global.zerr = "";
     z2mStatus();
-    // One line under the card heading carries the whole link state.
+    // One line under the inputs carries the whole link state.
     const zt = document.getElementById("zsum");
     if (zt.innerHTML.indexOf("class=dot></span>This browser is connected to Zigbee2MQTT. 1 group, 1 device.") < 0)
       throw new Error("no live status: " + zt.innerHTML);

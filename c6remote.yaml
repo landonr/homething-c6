@@ -547,8 +547,9 @@ light:
               it[0] = Color(level, 0, 0);
             } else if (wifi_enabled && ha_expected) {
               const float phase = (millis() % 4800) / 4800.0f;
-              const uint8_t level = 98 + static_cast<uint8_t>(
-                  64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+              // Below input 112 the green half corrects to 0/255, so the trough reads red.
+              const uint8_t level = 112 + static_cast<uint8_t>(
+                  50.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, level / 2, 0);
             } else if (wifi_enabled) {
               it[0] = Color(130, 65, 0);

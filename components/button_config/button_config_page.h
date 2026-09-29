@@ -143,6 +143,7 @@ background:var(--bad);margin-left:6px;vertical-align:middle}
 border-radius:8px;padding:8px 14px;cursor:pointer}
 .act button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
 .act button[disabled]{opacity:.5;cursor:not-allowed}
+.act .st{margin:0;align-self:center}
 dl.info{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;
 margin:0 0 12px;font-size:13px}
 dl.info dt{color:var(--mut);text-transform:uppercase;letter-spacing:.06em;
@@ -217,15 +218,13 @@ aria-label="Home Assistant API"><span></span></label></h2>
 <h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
 aria-label="Zigbee radio"><span></span></label></h2>
 <p class="sub st" id="zrs">Zigbee radio state is loading.</p>
-<p class="sub st" id="zpjs">Pairing state is loading.</p>
 <p class="sub">Pairing erases the Zigbee network credentials of this remote and restarts it.
 The button assignments are kept. If WiFi Always On is off, the remote opens a temporary Wi-Fi
 session when it restarts to pair, so this page reconnects. Permit joining in Zigbee2MQTT as
 well, because a join needs both sides.</p>
-<div class="act"><button type="button" class="sec" id="zpj">Pair this remote for 3 minutes</button></div>
+<div class="act"><button type="button" class="sec" id="zpj">Pair this remote for 3 minutes</button><p class="sub st" id="zpjs">Pairing state is loading.</p></div>
 <hr class="rule">
 <h3>Zigbee2MQTT</h3>
-<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>
 <p class="sub st" id="zcs">Coordinator pairing state is loading.</p>
 <div id="z2m"></div>
 </section>
@@ -451,6 +450,7 @@ e.innerHTML="<p class=sub>This browser reads the group list from the bridge. The
 "<input id=zu type=search autocomplete=off placeholder='"+Z2MDEF+"'>"+
 "<input id=zk type=text autocomplete=off placeholder='Frontend token, if set'>"+
 "<button type=button id=zc>Connect</button></div>"+
+"<p class='sub st' id=zsum>Zigbee2MQTT status is loading.</p>"+
 "<p class='sub st' id=zhp></p>";
 document.getElementById("zu").value=u;
 document.getElementById("zk").value=k;
@@ -465,8 +465,7 @@ function z2mUp(){return !!(tg||td)}
 function z2mCounts(){return plural(tg?tg.length:0,"group")+", "+
 plural(td?td.length:0,"device")}
 
-// One line under the heading carries the whole link state, because the card
-// holds the connection and nothing else reports it.
+// One line under the inputs carries the whole link state, because nothing else reports it.
 function z2mLine(){
 var b=document.getElementById("zc");
 if(b)b.textContent=z2mUp()?"Disconnect":"Connect";

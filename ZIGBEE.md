@@ -54,7 +54,7 @@ The button turns the Zigbee radio on, opens a 3 minute window, and restarts the
 remote to get there. The ESP-Zigbee stack starts only at boot, so a restart is
 the only way to bring the radio up.
 
-While the window is open, the button reads **Stop pairing** and the line above it
+While the window is open, the button reads **Stop pairing** and the line next to it
 counts down, such as "The remote is pairing for 2:54." `D5` pulses blue.
 
 If the remote joins inside the window, the window closes, the radio stays on and

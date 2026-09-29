@@ -262,14 +262,15 @@ Each block keeps every line and every control on the page at all times. A line
 that hides moves the text and the buttons under it, so a state is written out
 instead. A control that does not apply is disabled, not removed.
 
-The **Zigbee** block starts with the radio switch and its line. The pairing line
-and the pairing button come next. A rule then separates that from the
-**Zigbee2MQTT** heading, because the link below it belongs to this browser.
+The **Zigbee** block starts with the radio switch and its line. The pairing text
+and the pairing button come next, with the pairing line to the right of the
+button. A rule then separates that from the **Zigbee2MQTT** heading, because the
+link below it belongs to this browser.
 
-The **Zigbee2MQTT** part holds its own line, the address, the token, and the
-**Connect** button.
+The **Zigbee2MQTT** part holds the address, the token, the **Connect** button,
+and its own line below them.
 
-The line under the **Zigbee2MQTT** heading reports the link of this browser, with
+The line below the address and the token reports the link of this browser, with
 a circle:
 
 - A green circle and the group and device counts mean a live link.

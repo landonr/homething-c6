@@ -880,8 +880,11 @@ class PageTest(unittest.TestCase):
         # to Zigbee2MQTT is a different subject and sits below it.
         self.assertIn('<hr class="rule">\n<h3>Zigbee2MQTT</h3>', PAGE)
         self.assertIn("hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}", PAGE)
+        # The pairing line sits beside the button, so the pair reads as one row.
         self.assertIn('<div class="act"><button type="button" class="sec" id="zpj">'
-                      'Pair this remote for 3 minutes</button></div>', PAGE)
+                      'Pair this remote for 3 minutes</button>'
+                      '<p class="sub st" id="zpjs">Pairing state is loading.</p></div>', PAGE)
+        self.assertIn(".act .st{margin:0;align-self:center}", PAGE)
         # The control outlives the browser block, so build() wires it.
         self.assertNotIn("id=zpj>", PAGE)
         self.assertIn('document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};', PAGE)
@@ -1074,7 +1077,6 @@ class PageTest(unittest.TestCase):
                       '<input type="checkbox" id="zrb"\naria-label="Zigbee radio">'
                       '<span></span></label></h2>\n'
                       '<p class="sub st" id="zrs">Zigbee radio state is loading.</p>\n'
-                      '<p class="sub st" id="zpjs">Pairing state is loading.</p>\n'
                       '<p class="sub">Pairing erases the Zigbee network credentials of '
                       'this remote and restarts it.\n'
                       'The button assignments are kept. If WiFi Always On is off, the '
@@ -1083,12 +1085,18 @@ class PageTest(unittest.TestCase):
                       'Permit joining in Zigbee2MQTT as\n'
                       'well, because a join needs both sides.</p>\n'
                       '<div class="act"><button type="button" class="sec" id="zpj">'
-                      'Pair this remote for 3 minutes</button></div>\n'
+                      'Pair this remote for 3 minutes</button>'
+                      '<p class="sub st" id="zpjs">Pairing state is loading.</p></div>\n'
                       '<hr class="rule">\n'
                       '<h3>Zigbee2MQTT</h3>\n'
-                      '<p class="sub st" id="zsum">Zigbee2MQTT status is loading.</p>\n'
                       '<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>\n'
                       '<div id="z2m"></div>', PAGE)
+        # The link line sits under the inputs it reports on, above the add-on hint.
+        self.assertIn('"<button type=button id=zc>Connect</button></div>"+\n'
+                      '"<p class=\'sub st\' id=zsum>Zigbee2MQTT status is loading.</p>"+\n'
+                      '"<p class=\'sub st\' id=zhp></p>";', PAGE)
+        self.assertEqual(PAGE.count("id=zsum"), 1)
+        self.assertNotIn('id="zsum"', PAGE)
         self.assertIn('<section class="card full conn" id="blecfg">\n'
                       '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
                       '<input type="checkbox" id="brb"\naria-label="Bluetooth radio">'
@@ -1134,7 +1142,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('"pairing":%s,"host":"', CPP)
         self.assertIn("print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name()", CPP)
         self.assertIn('function bleHost(){return st.ble.host?esc(st.ble.host):"a saved host"}', PAGE)
-        # One line under the heading reports the link, so no second line can
+        # One line under the inputs reports the link, so no second line can
         # disagree with it.
         status = section(PAGE, "function z2mLine(){", "\n\n// The pairing control")
         self.assertIn('var e=document.getElementById("zsum");', status)

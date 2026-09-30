@@ -32,7 +32,7 @@ A new remote boots with the Zigbee radio off. It has no record in flash, so it
 starts no 802.15.4 stack and `D5` stays dark until you pair it.
 
 1. Permit joining in Zigbee2MQTT.
-2. Open `http://homething-c6-xxxxxx.local/buttons`. `xxxxxx` is the last six
+2. Open `http://homething-c6-xxxxxx.local/`. `xxxxxx` is the last six
    hex digits of the remote MAC address.
 3. Select **Pair this remote for 3 minutes** in the Zigbee block.
 4. Wait for Zigbee2MQTT to show `homething-c6` as joined.
@@ -130,7 +130,7 @@ repeated assignment leaves no group behind.
 
 ## Assign a button from the web page
 
-1. Open `http://homething-c6-xxxxxx.local/buttons`.
+1. Open `http://homething-c6-xxxxxx.local/`.
 2. Select an input, then select **Zigbee target** in the Action selector.
 3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
    `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.

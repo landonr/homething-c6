@@ -77,7 +77,7 @@ The firmware files are in the repository root:
 
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
 - `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
-- `components/button_config/` is a local ESPHome component. It serves the `/buttons` assignment page from `web_server`.
+- `components/button_config/` is a local ESPHome component. It serves the assignment page at `/` and `/buttons` from `web_server_base`. The production config has no `web_server` entity page.
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
 - `zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.

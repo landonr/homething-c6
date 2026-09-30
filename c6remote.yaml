@@ -129,11 +129,8 @@ zigbee:
       - lambda: zigbee_assignments.on_network_up(x);
       - script.execute: show_idle_status
 
-web_server:
-  port: 80
-  version: 3
-
-# Serves the button assignment page at /buttons on the same server.
+# Serves the button assignment page at / and /buttons on port 80.
+# The ESPHome entity page (web_server) is not built.
 button_config:
   id: button_cfg
   idle_sleep_id: idle

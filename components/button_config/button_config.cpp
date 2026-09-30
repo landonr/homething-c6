@@ -637,7 +637,7 @@ bool ButtonConfig::canHandle(AsyncWebServerRequest *request) const {
   const StringRef url = request->url_to(url_buf);
   const http_method method = request->method();
   if (method == HTTP_GET)
-    return url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
+    return url == "/" || url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
   if (method == HTTP_POST)
     return url == "/buttons/api/action" || url == "/buttons/api/activity";
   return false;

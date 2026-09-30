@@ -66,12 +66,13 @@ class RoutingTest(unittest.TestCase):
         for path in ("/buttons", "/buttons/api/state", "/buttons/api/code",
                      "/buttons/api/action", "/buttons/api/activity"):
             self.assertIn(f'"{path}"', CPP)
+        self.assertIn('url == "/"', CPP)
 
     def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
         """Catches a method change that would hide an endpoint or open a new one."""
         handler = section(CPP, "bool ButtonConfig::canHandle", "void ButtonConfig::handleRequest")
         self.assertIn(
-            'if (method == HTTP_GET)\n    return url == "/buttons" || url == "/buttons/api/state"'
+            'if (method == HTTP_GET)\n    return url == "/" || url == "/buttons" || url == "/buttons/api/state"'
             ' || url == "/buttons/api/code";',
             handler,
         )
@@ -1692,11 +1693,12 @@ class RadioSwitchTest(unittest.TestCase):
 
 class WiringTest(unittest.TestCase):
     def test_the_config_loads_the_local_component(self) -> None:
+        """The button page owns the root URL, so the stock entity page must stay out."""
         block = section(CONFIG, "external_components:", "\nlogger:")
         self.assertIn("type: local", block)
         self.assertIn("path: components", block)
         self.assertRegex(CONFIG, r"\nbutton_config:")
-        self.assertRegex(CONFIG, r"web_server:\n  port: 80")
+        self.assertNotRegex(CONFIG, r"(?m)^web_server:")
 
     def test_the_interval_opens_the_rail_and_effect_for_a_web_request(self) -> None:
         """Rail and LED work needs YAML ids, so the web open lands on this tick."""

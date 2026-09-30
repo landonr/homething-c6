@@ -70,9 +70,9 @@ If an IR capture fails, the old assignment remains.
 
 ## Web configurator
 
-The device serves a button page at `http://homething-c6-xxxxxx.local/buttons`.
+The device serves a button page at `http://homething-c6-xxxxxx.local/`. The page also answers at `/buttons`.
 `xxxxxx` is the last six hex digits of the remote MAC address. The page uses
-the same `web_server` as the ESPHome dashboard on port 80.
+the `web_server_base` server on port 80. The production config has no ESPHome `web_server` entity page.
 
 The page title shows the friendly name of the remote, for example `homeThing C6 xxxxxx`.
 To change the name, select **Rename** beside the title. Type the name, then select **Save** or press Enter.
@@ -428,13 +428,13 @@ the rest of the page.
 ### Trusted-LAN warning
 
 The `/buttons` page and its three endpoints have no authentication. The
-`web_server`, `api`, and `ota` components on this device have none either.
+`api` and `ota` components on this device have none either.
 
 This is a deliberate choice for a trusted home network. Any device on that
 network can change an assignment.
 
 Do not expose port 80 of the remote to the internet. If the network is not
-trusted, add `web_server` authentication.
+trusted, add authentication to the page.
 
 ## LED meanings
 

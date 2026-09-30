@@ -283,6 +283,31 @@ read. A Tuya thermostat answers no standard command, so it needs Home Assistant.
 A lock refuses a frame the remote is not bound for, so Lock and Unlock only work
 on a lock that has this remote in its access list.
 
+## State in Zigbee2MQTT and Home Assistant
+
+The remote sends each command directly to the target. The command does not pass
+through the coordinator as a request, so Zigbee2MQTT does not learn the new
+state of the light. Home Assistant reads the state from Zigbee2MQTT, so it shows
+the old state.
+
+A group command also reaches the coordinator. Zigbee2MQTT shows it as an
+`action` with an `action_group`, but it reads no light after the command. Its
+built-in poll reads only lights from some brands, for example Signify. A device
+command does not reach the coordinator.
+
+To keep the state correct, configure reporting on each target light in
+Zigbee2MQTT. Open the device, open the **Reporting** tab, and use endpoint 1.
+These values are the Zigbee2MQTT defaults for a light.
+
+| Cluster | Attribute | Minimum | Maximum | Change | Actions |
+| --- | --- | --- | --- | --- | --- |
+| `genOnOff` | `onOff` | 0 | 3600 | 0 | Toggle, On, Off |
+| `genLevelCtrl` | `currentLevel` | 5 | 3600 | 1 | Brighter, Dimmer |
+| `lightingColorCtrl` | `colorTemperature` | 5 | 3600 | 1 | Warmer white, Cooler white |
+
+If a light accepts the configuration but sends no reports, its state stays
+stale.
+
 ## Send path
 
 `zigbee_learning.h` holds the send path. The SDK is `esp-zigbee-lib` 2.0.4, which

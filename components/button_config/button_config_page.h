@@ -122,7 +122,8 @@ display:flex;align-items:center;justify-content:space-between;gap:8px}
 h3{font-size:15px;margin:14px 0 8px}
 select,input[type=text],input[type=search],input[type=number]{font:inherit;color:inherit;background:var(--card);
 border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;margin:2px 0}
-#sla{max-width:8em;margin-bottom:12px}
+#slr{margin-top:0;margin-bottom:12px;align-items:center}
+#sla{max-width:8em;margin:0}
 input[type=search]::-webkit-search-cancel-button{cursor:pointer}
 @media (prefers-color-scheme:dark){
 input[type=search]::-webkit-search-cancel-button{filter:invert(1)}}
@@ -212,9 +213,12 @@ aria-label="WiFi Always On" disabled><span></span></label></h2>
 <h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"
 aria-label="Sleep" disabled><span></span></label></h2>
 <p class="sub st" id="sls">Sleep state is loading.</p>
-<label class="hd2" for="sla">Sleep after, in minutes</label>
-<input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
 <p class="sub">Each press restarts the timer. Hold Button 5 for two seconds to sleep at once, even when Sleep is off.</p>
+<label class="hd2" for="sla">Sleep after, in minutes</label>
+<div class="act" id="slr">
+<input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
+<button type="button" id="slap" disabled>Apply</button>
+</div>
 </div>
 <hr class="rule">
 <h2 class="ttl">Restart</h2>
@@ -239,6 +243,10 @@ well, because a join needs both sides.</p>
 <h3>Zigbee2MQTT</h3>
 <p class="sub st" id="zcs">Coordinator pairing state is loading.</p>
 <div id="z2m"></div>
+<p class="sub">The remote sends each command directly to the light, so Zigbee2MQTT and Home Assistant do not see
+the new state. To keep the state correct, open each target light in Zigbee2MQTT, open the Reporting
+tab, and add genOnOff onOff. For the brightness and white actions, also add genLevelCtrl currentLevel
+and lightingColorCtrl colorTemperature.</p>
 </section>
 <section class="card full conn" id="blecfg">
 <h2 class="ttl">Bluetooth<label class="sw" id="brw"><input type="checkbox" id="brb"
@@ -432,7 +440,8 @@ keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("wfb").onchange=setWifiAlwaysOn;
 document.getElementById("slb").onchange=setSleepEnabled;
-document.getElementById("sla").onchange=setSleepAfter;
+document.getElementById("slap").onclick=setSleepAfter;
+document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};
 document.getElementById("rsb").onclick=restartRemote;
 document.getElementById("tabb").onclick=function(){showTab(false)};
 document.getElementById("tabc").onclick=function(){showTab(true);if(!cfgReady)cfgRefresh()};
@@ -733,13 +742,14 @@ function sleepSpan(s){return s%60?s+" seconds":s===60?"1 minute":(s/60)+" minute
 // box keeps a value that is still being typed.
 function sleepStatus(){
 var blk=document.getElementById("slpcfg"),box=document.getElementById("slb"),
-num=document.getElementById("sla"),line=document.getElementById("sls");
+num=document.getElementById("sla"),ap=document.getElementById("slap"),line=document.getElementById("sls");
 var z=st&&st.sleep,on=!!(z&&z.enabled===true);
 if(blk)blk.hidden=!(z&&z.available);
 if(!z||!z.available)return;
 if(box){box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy}
-if(num){if(!sleepBusy&&document.activeElement!==num)num.value=String(Math.max(1,Math.round(z.after_s/60)));
+if(num){if(!sleepBusy&&document.activeElement!==num&&document.activeElement!==ap)num.value=String(Math.max(1,Math.round(z.after_s/60)));
 num.disabled=sleepBusy}
+if(ap)ap.disabled=sleepBusy
 if(line){line.className="sub st"+(sleepError?" bad":"");
 line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>Sleep is "+
 (on?"on. The remote sleeps after "+sleepSpan(z.after_s)+" without a press.":"off. The remote stays awake.")+
@@ -857,6 +867,7 @@ activityTimer=setTimeout(sendActivity,500)}
 
 function forgetBle(){
 if(bleForgetBusy)return;
+if(!confirm("Forget "+(st.ble.host||"a saved host")+"? The host must pair with this remote again. Remove this remote from the Bluetooth settings of the host first."))return;
 bleForgetBusy=true;bleError="";bleStatus();
 post("forget_ble").then(function(r){
 if(r.code!==200)throw new Error(fail(r));

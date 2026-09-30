@@ -248,16 +248,23 @@ class SleepSettingsTest(unittest.TestCase):
 
     def test_the_page_block_shows_only_with_idle_sleep(self) -> None:
         wifi = section(PAGE, '<section class="card full conn" id="wificfg">', "</section>")
-        block = section(wifi, '<div id="slpcfg" hidden>', "</div>")
+        block = section(wifi, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Restart</h2>')
         self.assertLess(wifi.index('id="wfb"'), wifi.index('id="slpcfg"'))
         self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="hab"'))
         self.assertIn('<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"\n'
                       'aria-label="Sleep" disabled>', block)
         self.assertIn('<input type="number" id="sla" min="1" max="60" step="1"', block)
+        self.assertIn('<div class="act" id="slr">', block)
+        row = section(block, '<div class="act" id="slr">', "</div>")
+        self.assertLess(row.index('id="sla"'), row.index('id="slap"'))
+        self.assertIn('<button type="button" id="slap" disabled>Apply</button>', row)
+        self.assertLess(block.index("Each press restarts the timer."), block.index('for="sla"'))
+        self.assertLess(block.index('for="sla"'), block.index('id="slr"'))
         status = section(PAGE, "function sleepStatus(){", "\n\nfunction ")
         self.assertIn("if(blk)blk.hidden=!(z&&z.available);", status)
         self.assertIn("box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy", status)
-        self.assertIn("document.activeElement!==num", status)
+        self.assertIn("document.activeElement!==num&&document.activeElement!==ap", status)
+        self.assertIn("if(ap)ap.disabled=sleepBusy", status)
         switch = section(PAGE, "function setSleepEnabled(){", "\n\nfunction ")
         self.assertIn('sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0")', switch)
         after = section(PAGE, "function setSleepAfter(){", "\n\nfunction ")
@@ -267,7 +274,9 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn("return waitAction(r.body.id)", save)
         self.assertIn("sleepBusy=false;return load().then(paint)", save)
         self.assertIn('document.getElementById("slb").onchange=setSleepEnabled;', PAGE)
-        self.assertIn('document.getElementById("sla").onchange=setSleepAfter;', PAGE)
+        self.assertIn('document.getElementById("slap").onclick=setSleepAfter;', PAGE)
+        self.assertIn('document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};', PAGE)
+        self.assertNotIn('document.getElementById("sla").onchange', PAGE)
 
     def test_the_preview_serves_the_sleep_block(self) -> None:
         preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
@@ -1326,6 +1335,11 @@ class PageTest(unittest.TestCase):
         # The button keeps its place and locks instead, so no line moves.
         self.assertIn('id="bfr">Forget Bluetooth host</button>', PAGE)
         self.assertIn('post("forget_ble")', PAGE)
+        forget = section(PAGE, "function forgetBle(){", "\n\n")
+        self.assertIn("if(!confirm(", forget)
+        self.assertLess(forget.index("if(bleForgetBusy)return;"), forget.index("if(!confirm("))
+        self.assertLess(forget.index("if(!confirm("), forget.index("bleForgetBusy=true;"))
+        self.assertLess(forget.index("if(!confirm("), forget.index('post("forget_ble")'))
         # The host name is free text from the peer, so it is escaped both ways.
         self.assertIn('"pairing":%s,"host":"', CPP)
         self.assertIn("print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name()", CPP)

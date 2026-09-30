@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "rss", "rsb",
+                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
@@ -883,6 +883,7 @@ setTimeout(() => {
     if (block.hidden) throw new Error("the block stayed hidden");
     if (!box.checked || box.disabled) throw new Error("the switch does not show sleep on");
     if (minutes.value !== "5" || minutes.disabled) throw new Error("minutes showed " + minutes.value);
+    if (document.getElementById("slap").disabled) throw new Error("Apply stayed disabled");
     if (!line.innerHTML.includes("Sleep is on. The remote sleeps after 5 minutes without a press."))
       throw new Error("the on line reads " + line.innerHTML);
     STATE.sleep = {available: true, enabled: false, after_s: 90};
@@ -910,6 +911,7 @@ setTimeout(() => {
     if (!document.getElementById("slb").disabled || document.getElementById("slb").checked)
       throw new Error("switch lost the pending state");
     if (!document.getElementById("sla").disabled) throw new Error("minutes stayed live during the write");
+    if (!document.getElementById("slap").disabled) throw new Error("Apply stayed live during the write");
     global.sleepBusy = false;
     sleepStatus();
   });
@@ -921,20 +923,30 @@ setTimeout(() => {
     const minutes = document.getElementById("sla");
     for (const bad of ["0", "61", "2.5", "", "5m"]) {
       minutes.value = bad;
-      minutes.onchange();
+      document.getElementById("slap").onclick();
       if (bodies.length) throw new Error(JSON.stringify(bad) + " posted " + bodies[0]);
       if (!document.getElementById("sls").className.includes("bad") ||
           !document.getElementById("sls").innerHTML.includes("Enter whole minutes from 1 to 60."))
         throw new Error(JSON.stringify(bad) + " gave no reason");
     }
     minutes.value = "12";
-    minutes.onchange();
+    document.getElementById("slap").onclick();
     global.fetch = realFetch;
     if (bodies.length !== 1 || !bodies[0].includes("action=set_sleep_after") ||
         !bodies[0].includes("seconds=720"))
       throw new Error("minutes posted " + bodies.join(" | "));
     if (document.getElementById("sls").className.includes("bad"))
       throw new Error("a good value kept the old error");
+    global.sleepBusy = false;
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    minutes.value = "7";
+    minutes.onkeydown({key: "a"});
+    if (bodies.length !== 1) throw new Error("another key posted " + bodies[1]);
+    minutes.onkeydown({key: "Enter"});
+    global.fetch = realFetch;
+    if (bodies.length !== 2 || !bodies[1].includes("action=set_sleep_after") ||
+        !bodies[1].includes("seconds=420"))
+      throw new Error("Enter posted " + bodies.join(" | "));
     global.sleepBusy = false;
     sleepStatus();
   });
@@ -973,6 +985,37 @@ setTimeout(() => {
     button.onclick();
     global.fetch = realFetch;
     if (body !== null || confirmAsked !== 0) throw new Error("a second press posted " + body);
+  });
+  step("Forget asks first, and a refusal sends nothing", () => {
+    global.st = STATE;
+    paint();
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("bfr").onclick();
+    global.fetch = realFetch;
+    confirmAnswer = true;
+    if (confirmAsked !== 1) throw new Error("Forget did not ask");
+    if (confirmText.indexOf("Forget ") !== 0 || confirmText.indexOf("Landon's Mac") < 0)
+      throw new Error("the Forget question reads " + confirmText);
+    if (body !== null) throw new Error("a refused Forget still posted: " + body);
+    if (document.getElementById("bfr").disabled) throw new Error("a refused Forget locked the button");
+    if (global.bleError !== "") throw new Error("a refused Forget showed " + global.bleError);
+  });
+  step("an accepted Forget asks once and posts forget_ble", () => {
+    global.st = STATE;
+    paint();
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = true;
+    document.getElementById("bfr").onclick();
+    global.fetch = realFetch;
+    if (confirmAsked !== 1) throw new Error("Forget did not ask once");
+    if (body !== "action=forget_ble") throw new Error("Forget posted " + body);
+    global.bleForgetBusy = false;
+    paint();
   });
   step("an off Bluetooth radio names its bond and never reads as connected", () => {
     global.st = STATE;

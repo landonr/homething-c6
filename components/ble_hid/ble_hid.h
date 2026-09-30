@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "esphome/core/hal.h"
 #include "esphome/core/preferences.h"
 
 #include "esp_hidd.h"
@@ -19,6 +20,7 @@ namespace esphome::ble_hid {
 
 class BleHid final : public Component {
  public:
+  static constexpr uint32_t PAIR_FAILED_SHOW_MS = 3000;
   static constexpr uint8_t FIRST_SLOT = 3;
   static constexpr uint8_t LAST_SLOT = 20;
   static constexpr size_t SLOT_COUNT = LAST_SLOT - FIRST_SLOT + 1;
@@ -60,6 +62,12 @@ class BleHid final : public Component {
   bool connected() const { return connected_.load(std::memory_order_acquire); }
   bool bonded() const { return bonded_.load(std::memory_order_acquire); }
   bool pairing() const { return pairing_.load(std::memory_order_acquire); }
+  // Main loop only. True when the stack never started.
+  bool stack_failed() const { return this->stack_failed_ || this->is_failed(); }
+  // Main loop only. True for PAIR_FAILED_SHOW_MS after a failed pair or a rejected host.
+  bool pair_failed_recently() const {
+    return this->pair_failed_seen_ && millis() - this->pair_failed_at_ < PAIR_FAILED_SHOW_MS;
+  }
   std::string host_name() const;
   // Main loop only. A running advert restarts from loop() with the new name.
   void set_device_name(const char *name);
@@ -128,6 +136,11 @@ class BleHid final : public Component {
   std::atomic<bool> pairing_{false};
   std::atomic<bool> disconnect_pending_{false};
   std::atomic<bool> report_sync_pending_{false};
+  // The NimBLE task sets it, and loop() stamps the time on the main loop.
+  std::atomic<bool> pair_failed_pending_{false};
+  bool pair_failed_seen_{false};
+  uint32_t pair_failed_at_{0};
+  bool stack_failed_{false};
   std::atomic<bool> advertising_{false};
   std::atomic<bool> radio_on_{true};
   bool assignments_ready_{false};

@@ -157,6 +157,7 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 ### Assign a BLE HID control from the page
 
 1. Pair the host with the remote in its Bluetooth settings. The remote uses its friendly name, for example `homeThing C6 xxxxxx`.
+   While the remote waits for a host, `D4` pulses blue. After the host pairs, `D4` is solid green.
 2. Select an input, then select **BLE HID** in the Action selector.
 3. Select Keyboard, Consumer, Gamepad button, or Gamepad D-pad.
 4. Select the key from the list. Keyboard and Consumer list the common usages by name.
@@ -437,6 +438,7 @@ indications then start.
 
 Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
 `D5` keeps the Zigbee state. A connection fault stays visible during a capture.
+When `D3` and `D4` are idle, `D4` shows the Bluetooth state.
 
 `D2` shows Wi-Fi and the API:
 
@@ -464,9 +466,22 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 | Cleared | Amber for one second | Select an input. |
 
 `D3` and `D4` show voice-assistant state when assignment mode is closed. After
-a deep-sleep wake, they pulse white (see [Deep sleep](#deep-sleep)). The amber
-XIAO user LED shows that the remote is awake (see [Deep sleep](#deep-sleep)).
-See [ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
+a deep-sleep wake, they pulse white (see [Deep sleep](#deep-sleep)).
+
+`D4` shows the Bluetooth state when assignment mode, voice state, and the wake
+pulse are all idle. `D3` stays dark then.
+
+| `D4` | Meaning |
+| --- | --- |
+| Off | The Bluetooth radio is off. |
+| Blue pulse | No host bond exists. The remote is ready to pair or is pairing. |
+| Red pulse | A host bond exists but the host is not connected. |
+| Solid green | The bonded host is connected and the link is encrypted. |
+| Red flashes for 3 seconds | Pairing or encryption failed, or the remote rejected a second host. |
+| Solid red | The Bluetooth stack did not start. |
+
+The amber XIAO user LED shows that the remote is awake (see
+[Deep sleep](#deep-sleep)). See [ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
 
 ## Normal playback
 

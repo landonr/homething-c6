@@ -630,6 +630,34 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
         self.assertIn("it[3] = Color(level, level / 3, 0);", d5)
 
+    def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
+        # Assignment mode, voice, and the wake pulse keep D3 and D4, so the
+        # Bluetooth branch is the last else of that chain and never touches D5.
+        entry = status_light_entry(CONFIG.read_text())
+        before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
+        wake = before_d5.index("wake_pulse_until_ms")
+        self.assertIn("} else {\n              auto *ble = id(ble_hid_remote);", before_d5[wake:])
+        ble = before_d5[before_d5.index("auto *ble = id(ble_hid_remote);"):]
+        self.assertGreater(before_d5.index("auto *ble = id(ble_hid_remote);"), wake)
+        self.assertIn("it[2] =", ble)
+        self.assertNotIn("it[3]", ble)
+        self.assertNotIn("it[1]", ble)
+        order = [
+            "!ble->radio_enabled()",
+            "ble->stack_failed()",
+            "ble->connected()",
+            "ble->pair_failed_recently()",
+            "ble->pairing() || !ble->bonded()",
+        ]
+        positions = [ble.index(text) for text in order]
+        self.assertEqual(positions, sorted(positions))
+        for color in ("Color(0, 128, 0)", "Color(0, 0, level)", "Color(level, 0, 0)",
+                      "Color(200, 0, 0)", "Color(255, 0, 0)"):
+            self.assertIn(color, ble)
+        self.assertIn("(millis() % 1600) / 1600.0f", ble)
+        self.assertIn("(millis() % 3200) / 3200.0f", ble)
+        self.assertIn("((millis() / 150) % 2) == 0", ble)
+
     def test_a_stopped_window_is_told_apart_from_one_that_ran_out(self) -> None:
         # Only an expiry leaves the radio off with no explanation, so only it
         # sets the flag the page reads back after the restart.

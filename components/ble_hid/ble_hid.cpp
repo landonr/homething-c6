@@ -148,9 +148,11 @@ void BleHid::setup() {
     return;
   }
   if (!this->init_stack_()) {
+    this->stack_failed_ = true;
     this->mark_failed();
     return;
   }
+  this->stack_failed_ = false;
   this->bonded_.store(bond_count() > 0, std::memory_order_release);
 }
 
@@ -164,6 +166,10 @@ void BleHid::loop() {
     this->save_host_name_();
   if (this->name_update_pending_.exchange(false, std::memory_order_acq_rel))
     this->apply_device_name_();
+  if (this->pair_failed_pending_.exchange(false, std::memory_order_acq_rel)) {
+    this->pair_failed_at_ = millis();
+    this->pair_failed_seen_ = true;
+  }
 }
 
 void BleHid::save_host_name_() {
@@ -414,8 +420,10 @@ bool BleHid::set_radio_enabled(bool enabled) {
     if (!this->stack_ready_) {
       if (!this->init_stack_()) {
         ESP_LOGE(TAG, "Bluetooth radio could not start");
+        this->stack_failed_ = true;
         return false;
       }
+      this->stack_failed_ = false;
       this->bonded_.store(bond_count() > 0, std::memory_order_release);
     } else {
       this->start_advertising_();
@@ -425,6 +433,7 @@ bool BleHid::set_radio_enabled(bool enabled) {
   }
 
   this->release_all_();
+  this->pair_failed_seen_ = false;
   if (this->stack_ready_) {
     ble_gap_adv_stop();
     this->advertising_.store(false, std::memory_order_release);
@@ -437,6 +446,7 @@ bool BleHid::set_radio_enabled(bool enabled) {
 }
 
 bool BleHid::forget_bond() {
+  this->pair_failed_seen_ = false;
   // With the stack down there is no link to close and no host to tell, so the
   // key store is dropped where it lives.
   if (!this->stack_ready_) {
@@ -752,6 +762,7 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
       if (has_bond && ble_gap_conn_find(event->connect.conn_handle, &description) == 0 &&
           ble_addr_cmp(&description.peer_id_addr, &peer) != 0) {
         ESP_LOGW(TAG, "Rejected a second HID host");
+        this->pair_failed_pending_.store(true, std::memory_order_release);
         ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
         return 0;
       }
@@ -769,6 +780,7 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
         this->report_sync_pending_.store(true, std::memory_order_release);
         this->read_host_name_();
       } else {
+        this->pair_failed_pending_.store(true, std::memory_order_release);
         ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
       }
       return 0;

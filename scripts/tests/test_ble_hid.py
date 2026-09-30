@@ -50,6 +50,30 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("0x29, 0x10", CPP)
         self.assertIn("0x09, 0x39", CPP)
 
+    def test_a_failed_pair_or_second_host_sets_the_pending_flag_for_loop(self) -> None:
+        self.assertIn("std::atomic<bool> pair_failed_pending_{false};", HEADER)
+        enc = CPP.split("case BLE_GAP_EVENT_ENC_CHANGE:", 1)[1].split("case BLE_GAP_EVENT_REPEAT_PAIRING:", 1)[0]
+        failure = enc.split("} else {", 1)[1]
+        self.assertIn("pair_failed_pending_.store(true", failure)
+        reject = CPP.split('"Rejected a second HID host");', 1)[1].split("return 0;", 1)[0]
+        self.assertIn("pair_failed_pending_.store(true", reject)
+        loop = CPP.split("void BleHid::loop() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("pair_failed_pending_.exchange(false", loop)
+        self.assertIn("this->pair_failed_at_ = millis();", loop)
+        self.assertIn("PAIR_FAILED_SHOW_MS = 3000", HEADER)
+        forget = CPP.split("bool BleHid::forget_bond() {", 1)[1].split("\n  //", 1)[0]
+        self.assertIn("pair_failed_seen_ = false;", forget)
+
+    def test_a_radio_enable_that_cannot_start_the_stack_sets_stack_failed(self) -> None:
+        self.assertIn("bool stack_failed() const { return this->stack_failed_ || this->is_failed(); }",
+                      HEADER)
+        enable = CPP.split("bool BleHid::set_radio_enabled(bool enabled) {", 1)[1].split(
+            "this->release_all_();", 1)[0]
+        failed = enable.split('"Bluetooth radio could not start");', 1)[1].split("return false;", 1)[0]
+        self.assertIn("this->stack_failed_ = true;", failed)
+        setup = CPP.split("void BleHid::setup() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("this->stack_failed_ = true;", setup.split("this->mark_failed();", 1)[0])
+
     def test_assignments_keep_the_existing_slot_range(self) -> None:
         self.assertIn("FIRST_SLOT = 3", HEADER)
         self.assertIn("LAST_SLOT = 20", HEADER)

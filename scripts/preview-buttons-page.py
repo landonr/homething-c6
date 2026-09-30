@@ -10,6 +10,12 @@ Slot assignments come from preview-c6remote-config.json, an export from the
 /buttons config card.
 
 Usage: python3 scripts/preview-buttons-page.py [--port 8123]
+
+Open http://127.0.0.1:8123/preview/offline to toggle offline mode. Each call
+flips the mode and prints the new state. While the mode is on, every
+/buttons/api request waits 8 s and then closes the connection with no answer,
+as a dead remote does. The page itself still loads. Use it to check the link
+line and the banner on the /buttons page.
 """
 
 from __future__ import annotations
@@ -71,6 +77,10 @@ FRIENDLY_NAME_MAX = 40
 # back, even when the remote would keep Wi-Fi off after the restart.
 RESTART_SECONDS = 4.0
 RESTART = {"until": 0.0}
+
+# Longer than the page's 5 s read timeout, so the page sees a dead host.
+OFFLINE = {"on": False}
+OFFLINE_HOLD_SECONDS = 8.0
 
 
 def reverse_bits(value: int) -> int:
@@ -206,8 +216,27 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def drop_if_offline(self, path: str) -> bool:
+        """Holds the request, then closes it with no response, like a dead host."""
+        if not (OFFLINE["on"] and path.startswith("/buttons/api/")):
+            return False
+        time.sleep(OFFLINE_HOLD_SECONDS)
+        self.close_connection = True
+        return True
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path == "/preview/offline":
+            OFFLINE["on"] = not OFFLINE["on"]
+            body = f"offline mode is {'on' if OFFLINE['on'] else 'off'}\n".encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.drop_if_offline(path):
+            return
         if path in ("/", "/buttons"):
             body = page_html()
             self.send_response(200)
@@ -237,6 +266,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if self.drop_if_offline(path):
+            return
         if path == "/buttons/api/activity":
             self.send_json({"ok": True})
             return

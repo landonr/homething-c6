@@ -117,6 +117,12 @@ the same flash records.
 
 The page also has a **Sleep** block for the deep-sleep settings. See [Deep sleep](#deep-sleep).
 
+The header of the page has a connection line. It shows if the page can read
+the remote. If two reads in a row fail, or one read gets no answer in time, the
+line turns red and a banner stays at the top of the page. Changes on the page do
+not get to the remote while the banner shows. The banner goes away when the
+remote answers again.
+
 ### Assign a Zigbee target from the page
 
 The page can assign a Zigbee target and the command that goes to it. It does

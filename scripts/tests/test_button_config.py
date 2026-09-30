@@ -1302,6 +1302,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('<p class="sub"><a href="https://github.com/landonr/homething-c6">'
                       'github.com/landonr/homething-c6</a></p>\n'
                       '<p class="sub st" id="dnm" hidden></p>\n'
+                      '<p class="sub st" id="lnk">Connecting to the remote.</p>\n'
                       '</div>\n</header>', PAGE)
         # The logo is inline and uncoloured, so one copy follows the theme text
         # colour instead of shipping a light file and a dark file.
@@ -1345,7 +1346,8 @@ class PageTest(unittest.TestCase):
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
         refresh = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch()")
-        self.assertIn('fetch("/buttons/api/state",{cache:"no-store"})', refresh)
+        self.assertIn("readState()", refresh)
+        self.assertIn('tfetch("/buttons/api/state",{cache:"no-store"},5000)', PAGE)
         self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
         self.assertNotIn("paint()", refresh)

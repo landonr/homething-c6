@@ -158,6 +158,9 @@ dl.info dd{margin:0;overflow-wrap:anywhere}
 .note{border-left:4px solid var(--line);padding:8px 12px;margin:12px 0;
 background:var(--bg);border-radius:0 6px 6px 0}
 .note.ok{border-color:var(--ok)}.note.bad{border-color:var(--bad)}
+.lnb{position:sticky;top:0;z-index:10;width:calc(100% - 32px);max-width:1168px;margin:16px auto 0;background:var(--card);border-left:4px solid var(--bad);
+padding:8px 12px;border-radius:0 6px 6px 0;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.lnb.warn{border-color:var(--warn)}
 .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:12px 0}
 .bar i{display:block;height:100%;width:36%;background:var(--acc);
 animation:sweep 1.4s ease-in-out infinite}
@@ -165,6 +168,7 @@ animation:sweep 1.4s ease-in-out infinite}
 </style>
 </head>
 <body>
+<div class="lnb" id="lnb" role="status" hidden></div>
 <div class="wrap">
 <header class="full">
 <svg class=logo viewBox="0 0 805.333 795.107" fill=currentColor aria-hidden=true><path d="M800.536,353.903L411.387,3.696c-5.486-4.937-13.816-4.927-19.29,.023L4.771,353.926c-9.777,8.84-3.523,25.081,9.658,25.081H90.632c7.953,0,14.4,6.447,14.4,14.4v312.49c0,7.957,6.453,14.406,14.41,14.4l94.289-.067c0,.062,0,.13,.001,.181l48.599-.313c7.953-.051,14.358-6.538,14.307-14.49-.368-57.333-1.707-279.596-1.707-296.818,0-44.512,22.953-83.982,73.7-83.982h235c34.84,0,53.203,27.315,61.6,45.632,2.358,5.145,7.461,8.47,13.121,8.47h23.355c.015,.059,.024,.098,.024,.098h109.172c13.198,0,19.443-16.275,9.633-25.104Z"/><path d="M603.938,370.807c-4.1-4.1-8.9-7.3-14.2-9.5s-11-3.3-16.7-3.3h-218.6c-5.7,0-11.4,1.1-16.7,3.3s-10.1,5.4-14.2,9.5-7.3,8.9-9.5,14.2c-2.2,5.3-3.3,11-3.3,16.7v349.7c0,5.8,1.1,11.5,3.3,16.8s5.4,10.1,9.5,14.1c4.1,4.1,8.9,7.3,14.2,9.5s11,3.3,16.7,3.3h218.6c5.7,0,11.4-1.1,16.7-3.3s10.1-5.4,14.2-9.5c4.1-4,7.3-8.8,9.5-14.1s3.3-11,3.3-16.8V401.707c0-5.7-1.1-11.4-3.3-16.7-2.2-5.3-5.4-10.1-9.5-14.2Zm-59.4,326.7c-4.4,10.6-10.8,20.3-19,28.4-8.1,8.1-17.7,14.5-28.3,18.9s-22,6.7-33.5,6.7-22.8-2.3-33.4-6.7c-10.6-4.4-20.3-10.8-28.4-18.9s-14.6-17.8-18.9-28.4c-4.4-10.6-6.7-22-6.7-33.4,0-11.5,2.3-22.9,6.7-33.5,4.3-10.6,10.8-20.2,18.9-28.4,8.1-8.1,17.8-14.5,28.4-18.9,10.6-4.4,21.9-6.7,33.4-6.7s22.9,2.3,33.5,6.7,20.2,10.8,28.3,18.9c8.2,8.2,14.6,17.8,19,28.4s6.7,22,6.7,33.5c0,11.4-2.3,22.8-6.7,33.4Zm14.1-164.6h-189.8c-7.953,0-14.4-6.447-14.4-14.4v-102.4c0-7.953,6.447-14.4,14.4-14.4h189.8c7.953,0,14.4,6.447,14.4,14.4v102.4c0,7.953-6.447,14.4-14.4,14.4Z"/><path d="M494.638,633.107c-4-4-8.8-7.2-14.1-9.4s-11-3.4-16.8-3.4c-5.7,0-11.4,1.2-16.7,3.4s-10.1,5.4-14.2,9.4c-4,4.1-7.3,8.9-9.5,14.2s-3.3,11-3.3,16.8c0,5.7,1.1,11.4,3.3,16.7s5.5,10.1,9.5,14.2c4.1,4,8.9,7.2,14.2,9.4s11,3.4,16.7,3.4c5.8,0,11.5-1.2,16.8-3.4s10.1-5.4,14.1-9.4c4.1-4.1,7.3-8.9,9.5-14.2s3.3-11,3.3-16.7c0-5.8-1.1-11.5-3.3-16.8s-5.4-10.1-9.5-14.2Z"/></svg>
@@ -173,6 +177,7 @@ animation:sweep 1.4s ease-in-out infinite}
 <div class="act nm" id="dne" hidden><input type="text" id="dni" maxlength="40" autocomplete="off" aria-label="Remote name"><button type="button" id="dns">Save</button><button type="button" class="sec" id="dnc">Cancel</button></div>
 <p class="sub"><a href="https://github.com/landonr/homething-c6">github.com/landonr/homething-c6</a></p>
 <p class="sub st" id="dnm" hidden></p>
+<p class="sub st" id="lnk">Connecting to the remote.</p>
 </div>
 </header>
 <nav class="tabs full" aria-label="Setup sections">
@@ -859,13 +864,61 @@ return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remot
 .then(function(){bleForgetBusy=false;stateRefresh()},function(e){
 bleForgetBusy=false;bleError=e&&e.message?e.message:"The remote did not answer.";bleStatus()})}
 
+// A dead host never answers, so a fetch gets a deadline where the browser can
+// abort one. The timer stays armed after the headers, so a stalled body aborts too.
+function tfetch(u,o,ms){
+if(typeof AbortController==="undefined")return fetch(u,o);
+var c=new AbortController(),t=setTimeout(function(){c.abort()},ms);
+o.signal=c.signal;
+return fetch(u,o).catch(function(e){clearTimeout(t);throw e})}
+
+// The link is lost after two fast failures in a row, so one dropped poll does
+// not flicker the page. A read that hits its deadline is 5 s of silence, so it
+// counts at once, as does a browser offline event.
+var lnkFails=0,lnkLast=0,lnkLost=false,lnkOffline=false,lnkText="";
+var booted=false,booting=false;
+
+function lnkOk(){
+var was=lnkLost;
+lnkFails=0;lnkLast=Date.now();lnkLost=false;lnkOffline=false;lnkPaint();
+lnkBack(was)}
+
+function lnkBad(e){lnkFails++;if(lnkFails>=2||(e&&e.name==="AbortError"))lnkLost=true;lnkPaint()}
+
+// Slots can change on the remote while the page is away, so a return reloads all.
+function lnkBack(was){
+if(!booted){if(!booting)boot();return}
+if(was)load().then(paint).catch(function(){})}
+
+function lnkPaint(){
+var l=document.getElementById("lnk"),b=document.getElementById("lnb"),t="",k="";
+if(l){l.className="sub st"+(lnkLost?" bad":"");
+l.innerHTML="<span class='dot "+(lnkLost?"bad":lnkLast?"":"off")+"'></span>"+
+(lnkLost?"Not connected to the remote."+(lnkLast?" Last answer "+Math.round((Date.now()-lnkLast)/1000)+" s ago.":""):
+lnkLast?"Connected to the remote.":"Connecting to the remote.")}
+if(!b)return;
+if(lnkLost){
+var a=st&&st.network?st.network.wifi_always_on:undefined;
+if(lnkOffline){k="bad";t="This browser is offline. Changes on this page are not saved until it reconnects."}
+else if(restartBusy||zpjBusy){k="warn";t="Waiting for the remote to restart."}
+else{k="bad";t="The page is not connected to the remote. Changes on this page are not saved until it reconnects."+
+(a===false?" Hold Button 9 for two seconds to open a temporary session.":
+a===true?" If the remote sleeps, press a button to wake it.":"")}}
+b.hidden=!t;
+if(t&&lnkText!==t){b.textContent=t}
+lnkText=t;
+b.className="lnb"+(k==="warn"?" warn":"")}
+
+function lnkOffEvent(){lnkOffline=true;lnkFails=2;lnkLost=true;lnkPaint()}
+function lnkOnEvent(){lnkOffline=false;lnkPaint();stateRefresh()}
+
 // The one recurring read of the remote. It carries the Zigbee half as well, so
 // the pairing clock, the link line and both switches all follow the firmware.
 function stateRefresh(){
+lnkPaint();
 if(stBusy)return;
 stBusy=true;
-fetch("/buttons/api/state",{cache:"no-store"})
-.then(function(r){return r.json()})
+readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
 st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);radioStatus();bleStatus()}},
@@ -1169,7 +1222,7 @@ return h}
 function loadCode(s){var loadId=++codeLoad;cdSlot=null;cd="";
 return (cfgTask||Promise.resolve()).then(function(){
 if(cfgAll[s]!==undefined)return cfgAll[s];
-return fetch("/buttons/api/code?slot="+s,{cache:"no-store"})
+return tfetch("/buttons/api/code?slot="+s,{cache:"no-store"},5000)
 .then(function(r){if(!r.ok)throw new Error();return r.json()})
 .then(function(j){if(j.slot!==s||!j.present||!j.text)throw new Error();
 cfgAll[s]=j.text;cfgRefresh();return j.text})})
@@ -1206,7 +1259,7 @@ if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint
 if(c.kind!=="ir"){clip=c;msg="";bad=false;paint();return}
 if(cfgAll[source]!==undefined){c.code=cfgAll[source];clip=c;msg="";bad=false;paint();return}
 clipBusy=true;paint();
-fetch("/buttons/api/code?slot="+source,{cache:"no-store"})
+tfetch("/buttons/api/code?slot="+source,{cache:"no-store"},5000)
 .then(function(r){return r.json()}).then(function(j){
 if(j.slot!==source||!j.present||!j.text)throw new Error();
 c.code=j.text;clip=c;cfgAll[source]=j.text;
@@ -1275,7 +1328,7 @@ cfgReady=false;
 cfgBusy=true;cfgPaint();
 var failed=false;
 cfgTask=need.reduce(function(p,slot){return p.then(function(){
-return fetch("/buttons/api/code?slot="+slot,{cache:"no-store"})
+return tfetch("/buttons/api/code?slot="+slot,{cache:"no-store"},5000)
 .then(function(x){if(!x.ok)throw new Error();return x.json()})
 .then(function(j){if(j.slot!==slot||!j.present||!j.text)throw new Error();cfgAll[slot]=j.text})
 .catch(function(){failed=true})})},Promise.resolve())
@@ -1595,8 +1648,14 @@ else if(cfgAll[s]!==undefined){cd=cfgAll[s];cdSlot=s}
 paint();
 if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
 
-function load(){return fetch("/buttons/api/state",{cache:"no-store"})
-.then(function(r){return r.json()}).then(function(j){st=j;return j})}
+function load(){return readState().then(function(j){st=j;return j})}
+
+// Every read of the state feeds the link tracker, so a dead remote shows on
+// whichever read notices it first.
+function readState(){return tfetch("/buttons/api/state",{cache:"no-store"},5000)
+.then(function(r){if(!r.ok)throw new Error();return r.json()})
+.then(function(j){if(!j||typeof j!=="object")throw new Error();lnkOk();return j},
+function(e){lnkBad(e);throw e})}
 
 function assignHid(){
 var usage=parseInt(String(huv).replace(/^\s+|\s+$/g,""),0);
@@ -1614,10 +1673,11 @@ go("set_hid",null,"&kind="+hkv+"&usage="+usage+"&mod="+mod)}
 function post(a,s,v,n,x){var b="action="+a+(s?"&slot="+s:"")+
 (v?(a==="set_zigbee"?"&group=":"&code=")+encodeURIComponent(v):"")+
 (n===undefined?"":"&name="+encodeURIComponent(n))+(x===undefined?"":x);
-return fetch("/buttons/api/action",{method:"POST",
-headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b})
+return tfetch("/buttons/api/action",{method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},body:b},15000)
 .then(function(r){return r.text().then(function(t){
-var j={};try{j=JSON.parse(t)}catch(x){}return{code:r.status,body:j}})})}
+var j={};try{j=JSON.parse(t)}catch(x){}return{code:r.status,body:j}})},
+function(e){lnkBad(e);throw e})}
 
 function fail(r){
 if(r.code===409)return "Another assignment is already running";
@@ -1739,11 +1799,16 @@ if(document.addEventListener)["click","touchstart","keydown","input","change"].f
 document.addEventListener(type,pageActivity,true)});
 z2mBar();
 stateWatch();
-load().then(function(j){
+function boot(){
+booting=true;
+return load().then(function(j){booted=true;
 if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
 seen=j.result==="saved"&&j.result_slot===rec;watch()}
 zpjSync();paint();return cfgRefresh().then(function(){if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})}).catch(function(){
-document.getElementById("ed").textContent="The remote did not answer."});
+document.getElementById("ed").textContent="The remote did not answer."}).then(function(){booting=false})}
+if(typeof window!=="undefined"&&window.addEventListener){
+window.addEventListener("offline",lnkOffEvent);window.addEventListener("online",lnkOnEvent)}
+boot();
 </script>
 </body>
 </html>

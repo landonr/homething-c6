@@ -53,7 +53,7 @@ function mk(tag) {
     click() { this.clicked = true; if (tag === "a") lastDownload = this; },
   };
 }
-for (const id of ["remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
+for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
                   "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "rss", "rsb",
@@ -95,6 +95,8 @@ global.document = {
   createElement: (t) => mk(t),
   addEventListener: (type, callback) => { events[type] = callback; },
 };
+const windowEvents = {};
+global.window = { addEventListener: (type, callback) => { windowEvents[type] = callback; } };
 global.localStorage = {
   store: {},
   getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null; },
@@ -1503,6 +1505,118 @@ setTimeout(() => {
         throw new Error("Cancel left the box or the error up");
     });
     global.fetch = realFetch;
+
+    // The link tracker. The poll timer would add reads of its own, so stop it.
+    clearInterval(stTimer);
+    const baseFetch = global.fetch;
+    const link = () => document.getElementById("lnk").innerHTML;
+    const banner = () => document.getElementById("lnb");
+    const settle = () => new Promise(done => setTimeout(done, 30));
+    let stateReads = 0, dead = false, signals = [];
+    let deadError = () => new Error("network");
+    const counting = (u, o) => {
+      if (String(u).includes("/api/state")) {
+        stateReads++;
+        signals.push(o && o.signal);
+        if (dead) return Promise.reject(deadError());
+      }
+      return baseFetch(u, o);
+    };
+    global.fetch = counting;
+    step("a connected page says so and hides the banner", () => {
+      if (link().indexOf("Connected to the remote.") < 0) throw new Error("the line reads " + link());
+      if (!banner().hidden) throw new Error("the banner shows on a good link");
+    });
+    dead = true;
+    stateRefresh();
+    await settle();
+    step("one failed read shows no banner", () => {
+      if (!banner().hidden) throw new Error("one failure raised the banner");
+      if (link().indexOf("Not connected") >= 0) throw new Error("one failure changed the line");
+    });
+    stateRefresh();
+    await settle();
+    step("two failed reads show the banner and the header line", () => {
+      if (banner().hidden) throw new Error("the banner stayed hidden");
+      if (banner().textContent.indexOf("The page is not connected to the remote.") !== 0)
+        throw new Error("the banner reads " + banner().textContent);
+      if (banner().textContent.indexOf("Hold Button 9 for two seconds to open a temporary session.") < 0)
+        throw new Error("no recovery hint with WiFi Always On off: " + banner().textContent);
+      if (link().indexOf("Not connected to the remote. Last answer ") < 0 || link().indexOf(" s ago.") < 0)
+        throw new Error("the line reads " + link());
+      if (link().indexOf("dot bad") < 0) throw new Error("the dot is not bad");
+    });
+    step("a restart in progress gets the warn banner", () => {
+      restartBusy = true;
+      lnkPaint();
+      const text = banner().textContent, cls = banner().className;
+      restartBusy = false;
+      lnkPaint();
+      if (text !== "Waiting for the remote to restart." || cls.indexOf("warn") < 0)
+        throw new Error("the restart banner reads " + text + " (" + cls + ")");
+    });
+    dead = false;
+    const before = stateReads;
+    stateRefresh();
+    await settle();
+    step("a good read hides the banner and reloads the state in full", () => {
+      if (!banner().hidden) throw new Error("the banner stayed up");
+      if (link().indexOf("Connected to the remote.") < 0) throw new Error("the line reads " + link());
+      // One read is the poll and one is the full load after the return.
+      if (stateReads - before < 2) throw new Error("no full load after the return");
+    });
+    step("every state read and every post passes an abort signal", () => {
+      if (!signals.length || signals.some(x => !x || typeof x.aborted !== "boolean"))
+        throw new Error("a state read had no abort signal");
+      let sig;
+      global.fetch = (u, o) => { sig = o.signal; return baseFetch(u, o); };
+      post("restart");
+      global.fetch = baseFetch;
+      if (!sig || typeof sig.aborted !== "boolean") throw new Error("post had no abort signal");
+    });
+    await settle();
+    let aborted = false;
+    global.fetch = (u, o) => new Promise((ok, no) => {
+      o.signal.addEventListener("abort", () => no(new Error("aborted")));
+    });
+    await tfetch("/x", {}, 20).then(() => {}, () => { aborted = true; });
+    step("the fetch wrapper aborts a request that never answers", () => {
+      if (!aborted) throw new Error("the wrapper never aborted");
+    });
+    global.fetch = () => Promise.reject(new Error("network"));
+    await post("restart").then(() => {}, () => {});
+    step("a network failure from post counts as one failed read", () => {
+      if (lnkFails !== 1) throw new Error("the count is " + lnkFails);
+    });
+    dead = false;
+    global.fetch = counting;
+    stateRefresh();
+    await settle();
+    step("an offline event raises the browser banner at once", () => {
+      if (!windowEvents.offline || !windowEvents.online) throw new Error("the page listens for neither event");
+      windowEvents.offline();
+      if (banner().hidden || banner().textContent.indexOf("This browser is offline.") !== 0)
+        throw new Error("the banner reads " + banner().textContent);
+      if (link().indexOf("Not connected") < 0) throw new Error("the line reads " + link());
+    });
+    step("the online event reads the state and clears the banner", () => {
+      const n = stateReads;
+      windowEvents.online();
+      if (stateReads !== n + 1) throw new Error("online did not read the state");
+    });
+    await settle();
+    step("the banner is gone after the read that follows online", () => {
+      if (!banner().hidden) throw new Error("the banner stayed up");
+    });
+    dead = true;
+    deadError = () => { const e = new Error("aborted"); e.name = "AbortError"; return e; };
+    stateRefresh();
+    await settle();
+    step("one aborted state read raises the banner", () => {
+      if (banner().hidden) throw new Error("the banner stayed hidden after a timeout");
+      if (link().indexOf("Not connected") < 0) throw new Error("the line reads " + link());
+    });
+    global.fetch = baseFetch;
   })().then(() => process.exit(failed ? 1 : 0), e => {
     console.log("FAIL async checks: " + e.message); process.exit(1);
   });

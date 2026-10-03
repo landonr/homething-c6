@@ -244,7 +244,7 @@ binary_sensor:
             - light.turn_on:
                 id: status_light
                 effect: Status Indicators
-                brightness: 50%
+                brightness: 40%
             # Home Assistant VAD ends the stream, so there is no stop on a timer.
             - voice_assistant.start:
     on_release:
@@ -525,18 +525,18 @@ light:
               it[0] = Color(0, 96, 24);
             } else if (wifi_enabled && !wifi_connected) {
               const float phase = (millis() % 4800) / 4800.0f;
-              // Input 98 produces 3/255 after 50% brightness and gamma correction.
-              const uint8_t level = 98 + static_cast<uint8_t>(
+              // Input 122 produces 3/255 after 40% brightness and gamma correction.
+              const uint8_t level = 122 + static_cast<uint8_t>(
                   64.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, 0, 0);
             } else if (wifi_enabled && ha_expected) {
               const float phase = (millis() % 4800) / 4800.0f;
-              // Below input 112 the green half corrects to 0/255, so the trough reads red.
-              const uint8_t level = 112 + static_cast<uint8_t>(
+              // Below input 140 the green half corrects to 0/255, so the trough reads red.
+              const uint8_t level = 140 + static_cast<uint8_t>(
                   50.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[0] = Color(level, level / 2, 0);
             } else if (wifi_enabled) {
-              it[0] = Color(130, 65, 0);
+              it[0] = Color(140, 70, 0);
             }
 
             // D3 and D4 show assignment mode when it is open, otherwise
@@ -562,7 +562,7 @@ light:
                 } else if (ir_ui.state == IrUi::VOICE) {
                   mode = Color(0, 0, mode_level);
                 } else if (ir_ui.state == IrUi::CLEARED) {
-                  mode = Color(160, 60, 0);
+                  mode = Color(160, 80, 0);
                 }
                 it[1] = mode;
                 it[2] = mode;
@@ -631,7 +631,7 @@ light:
               const float phase = (millis() % 4000) / 4000.0f;
               const uint8_t level = 48 + static_cast<uint8_t>(
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              it[3] = Color(level, level / 3, 0);
+              it[3] = Color(level, level / 2, 0);
             } else {
               it[3] = Color(0, 128, 0);
             }
@@ -814,7 +814,7 @@ script:
           ir_ui.open();
           ir_ui.hold_consumed = true;
           id(ir_rail).turn_on();
-          id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();
+          id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();
   - id: exit_receiver_hold
     mode: restart
     then:
@@ -836,7 +836,7 @@ script:
             - light.turn_on:
                 id: status_light
                 effect: Status Indicators
-                brightness: 50%
+                brightness: 40%
   - id: stop_voice_listening
     then:
       - lambda: id(mic_meter_active) = false;
@@ -866,7 +866,7 @@ voice_assistant:
     - light.turn_on:
         id: status_light
         effect: Status Indicators
-        brightness: 50%
+        brightness: 40%
   on_stt_vad_start:
     - logger.log: "VA: speech detected"
   on_stt_vad_end:
@@ -878,7 +878,7 @@ voice_assistant:
     - light.turn_on:
         id: status_light
         effect: Status Indicators
-        brightness: 50%
+        brightness: 40%
   on_stt_end:
     - lambda: |-
         ESP_LOGI("voice_assistant", "STT result: '%s'", x.c_str());
@@ -894,7 +894,7 @@ voice_assistant:
     - light.turn_on:
         id: status_light
         effect: Status Indicators
-        brightness: 50%
+        brightness: 40%
     - delay: 2s
     - script.execute: stop_voice_listening
   on_client_disconnected:
@@ -925,7 +925,7 @@ interval:
       - lambda: |-
           if (ir_ui.take_open_request()) {
             id(ir_rail).turn_on();
-            id(status_light).turn_on().set_brightness(0.5f).set_effect("Status Indicators").perform();
+            id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();
           }
           if (ir_ui.tick())
             id(show_idle_status).execute();

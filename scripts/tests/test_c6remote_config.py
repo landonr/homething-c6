@@ -246,7 +246,7 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("lambda: return !id(mic_meter_active);", idle)
         self.assertIn("id(voice_led_state) = 0;", idle)
         self.assertIn("effect: Status Indicators", idle)
-        self.assertIn("brightness: 50%", idle)
+        self.assertIn("brightness: 40%", idle)
         # One effect now carries the Wi-Fi state, so there is no second effect to
         # switch to and no colour choice left in the script.
         self.assertNotIn("effect: WiFi Connecting", config)
@@ -628,7 +628,7 @@ class ProductionConfigTest(unittest.TestCase):
         # Amber sits after the join test, so only a joined remote can show it.
         reach = d5.index("ZigbeeAssignmentManager::REACH_FAILED")
         self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
-        self.assertIn("it[3] = Color(level, level / 3, 0);", d5)
+        self.assertIn("it[3] = Color(level, level / 2, 0);", d5)
 
     def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
         # Assignment mode, voice, and the wake pulse keep D3 and D4, so the

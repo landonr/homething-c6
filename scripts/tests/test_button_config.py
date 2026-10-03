@@ -1592,7 +1592,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
                       CONFIG)
         self.assertIn("const bool ha_expected = id(button_cfg).ha_api_expected();", CONFIG)
-        self.assertIn("it[0] = Color(130, 65, 0);", CONFIG)
+        self.assertIn("it[0] = Color(140, 70, 0);", CONFIG)
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
@@ -1720,7 +1720,7 @@ class WiringTest(unittest.TestCase):
         self.assertIn("if (ir_ui.take_open_request()) {", block)
         self.assertIn("id(ir_rail).turn_on();", block)
         # Assignment mode shares the one effect, so a web open selects it too.
-        self.assertIn('set_brightness(0.5f).set_effect("Status Indicators")', block)
+        self.assertIn('set_brightness(0.4f).set_effect("Status Indicators")', block)
 
     def test_the_interval_restores_idle_status_on_any_close(self) -> None:
         block = section(CONFIG, "  - interval: 250ms", "  - interval: 50ms")

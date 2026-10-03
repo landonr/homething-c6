@@ -456,19 +456,23 @@ def _back(runs, obstacles):
     return out
 
 
-def _pad():
+def _pad(fdm=False, skirt=None, grooves=True):
     """The button pad, one group per lobe."""
     out = []
     for lobe in keypad.pad_lobes():
-        out += _pad_lobe(*lobe)
+        out += _pad_lobe(*lobe, fdm=fdm, skirt=skirt, grooves=grooves)
     return out
 
 
-def _pad_lobe(name, x0, y0, x1, y1):
+def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTENSION, fdm=False, skirt=None, grooves=True):
     """One pad lobe: its web, its stems and plungers, and its cuts."""
     refs = board.mounting_hole_refs()
     placements = board.components()
     mounts = hardware.mount_points()
+    v2_reads = sorted(
+        {n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"}
+        | {"LEGACY_NIB_EXTENSION"}
+    )
     out = [
         _entry(
             f"lobe.{name}",
@@ -477,6 +481,13 @@ def _pad_lobe(name, x0, y0, x1, y1):
             _slab(keypad.pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP),
         )
     ]
+    skirt = not fdm if skirt is None else skirt
+    if skirt:
+        out.append(_entry(f"skirt.{name}", "keypad.pad_skirt", "add", keypad.pad_skirt(name)))
+        out += [
+            _entry(f"skirt_break.{ref}", "keypad.pad_skirt_breaks", "cut", box, ["PAD_SKIRT_CLEARANCE"])
+            for ref, box in keypad.pad_skirt_breaks(name)
+        ]
     for ref in keypad.island_refs(name):
         x, y = placements[ref][:2]
         out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(x, y)))
@@ -485,7 +496,8 @@ def _pad_lobe(name, x0, y0, x1, y1):
                 f"plunger.{ref}",
                 "keypad.plunger",
                 "add",
-                keypad.plunger(x, y),
+                keypad.plunger(x, y, extension=plunger_extension),
+                None if plunger_extension == params.PLUNGER_SWITCH_EXTENSION else v2_reads,
             )
         )
     # A clearance cut can be an open U rather than a circle, so its box is
@@ -505,12 +517,11 @@ def _pad_lobe(name, x0, y0, x1, y1):
                 cut,
             )
         )
-    if name == "grid":
+    if name == "grid" and fdm and grooves:
         for index, cut in enumerate(keypad._pad_grooves()):
-            face = "top" if index % 2 == 0 else "bottom"
             out.append(
                 _entry(
-                    f"isolation_groove.{index // 2}.{face}",
+                    f"isolation_groove.{index}.top",
                     "keypad._pad_grooves",
                     "cut",
                     cut,
@@ -535,18 +546,69 @@ def _keytops(refs):
 
 def _fdm_pad():
     """The FDM pad, with printed keytops flush with its lobe webs."""
-    return _pad() + _keytops(board.refs("SW"))
+    return _pad(fdm=True) + _keytops(board.refs("SW"))
 
 
-def _fdm_v2_top():
-    """The V2 top pad: the FDM pad's second lobe, plus a nib per V2 switch."""
+def _tpu_pad():
+    """The one-piece TPU pad: the FDM pad with the moulded skirt, no grooves."""
+    return _pad(fdm=True, skirt=True, grooves=False) + _keytops(board.refs("SW"))
+
+
+def _tpu_v2_pad():
+    """The complete V2 TPU pad: the TPU pad's grid lobe plus the V2 top lobe."""
+    grid = next(box for box in keypad.pad_lobes() if box[0] == "grid")
+    return (
+        _pad_lobe(*grid, fdm=True, skirt=True, grooves=False)
+        + _keytops(keypad.island_refs("grid"))
+        + _v2_top(skirt=True)
+    )
+
+
+def _v2_top(skirt=False, fdm=True):
+    """The V2 top pad: the FDM pad's second lobe, plus a nib per V2 switch.
+
+    With `skirt` it is the one-piece TPU version: the V2 skirt and one break per
+    V2 obstacle. With `fdm` false it is the moulded pad's lobe: stems for the
+    separate caps, a plain web, and no keytops."""
     lobe = next(box for box in keypad.pad_lobes() if box[0] == "second")
     refs = keypad.island_refs("second")
     legacy = board.legacy_components()
-    out = _pad_lobe(*lobe)
+    out = _pad_lobe(
+        *lobe,
+        plunger_extension=params.LEGACY_NIB_EXTENSION,
+        fdm=fdm,
+        skirt=False if not fdm else None,
+    )
+    if skirt:
+        out.append(
+            _entry(
+                "skirt.second",
+                "keypad.legacy_pad_skirt",
+                "add",
+                keypad.legacy_pad_skirt(),
+                ["BOARD_THICKNESS", "PAD_SKIRT_T", "PLUNGER_SWITCH_EXTENSION",
+                 "SUPPORT_GAP", "SWITCH_HEIGHT"],
+            )
+        )
+        out += [
+            _entry(
+                f"skirt_break.{name}",
+                "keypad.legacy_skirt_breaks",
+                "cut",
+                box,
+                ["PAD_SKIRT_CLEARANCE", "PLUNGER_SWITCH_EXTENSION", "SCREW_HEAD_D",
+                 "SCREW_HEAD_H", "SUPPORT_GAP", "SWITCH_HEIGHT"],
+            )
+            for name, box in keypad.legacy_skirt_breaks()
+        ]
     reads = sorted(set(
-        _reads("keypad.plunger")
-        + ["BOARD_THICKNESS", "SUPPORT_GAP", "SWITCH_HEIGHT"]
+        [n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"]
+        + [
+            "BOARD_THICKNESS",
+            "LEGACY_NIB_EXTENSION",
+            "SUPPORT_GAP",
+            "SWITCH_HEIGHT",
+        ]
     ))
     for ref in refs:
         x, y = legacy[ref][:2]
@@ -555,10 +617,14 @@ def _fdm_v2_top():
                 f"nib.{ref}",
                 "keypad.plunger",
                 "add",
-                keypad.plunger(x, y, LEGACY_SWITCH_TOP),
+                keypad.plunger(
+                    x, y, LEGACY_SWITCH_TOP, params.LEGACY_NIB_EXTENSION
+                ),
                 reads,
             )
         )
+    if not fdm:
+        return out
     return out + _keytops(refs)
 
 
@@ -608,7 +674,12 @@ def features():
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-case-pad-fdm.stl": _fdm_pad(),
-        "c6remote-case-pad-fdm-v2-top.stl": _fdm_v2_top(),
+        "c6remote-case-pad-tpu.stl": _tpu_pad(),
+        "c6remote-case-pad-tpu-blank.stl": _tpu_pad(),
+        "c6remote-case-pad-tpu-v2-blank.stl": _tpu_v2_pad(),
+        "c6remote-case-pad-fdm-v2-top.stl": _v2_top(),
+        "c6remote-case-pad-tpu-v2-top.stl": _v2_top(skirt=True),
+        "c6remote-case-pad-v2-top.stl": _v2_top(skirt=True, fdm=False),
         "c6remote-ir-window.stl": _window(),
     }
     # An id is what a viewer hands back to be acted on, so two features holding

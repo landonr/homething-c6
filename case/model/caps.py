@@ -135,10 +135,11 @@ def keycap(ref, legend=True):
     Retention is the flange, not the stem. A cap goes in from inside the shell
     and cannot come out through the face, so swapping one means opening the case.
 
-    `legend=False` builds the same cap with its top left blank. Only check.py
-    asks for that, so it can weigh a cap against its own blank and read how
-    much the deboss actually removed, rather than intersecting the finished
-    cap with the solids that are no longer in it.
+    `legend=False` builds the same cap with its top left blank. The export
+    writes it as the `-blank` cap STL. check.py also asks for it, so it can
+    weigh a cap against its own blank and read how much the deboss actually
+    removed, rather than intersecting the finished cap with the solids that are
+    no longer in it.
     """
     x, y, _, _ = board.components()[ref]
     bore = params.STEM_W - 2 * params.STEM_GRIP

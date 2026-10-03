@@ -34,6 +34,7 @@ from .shape import (
 from .stack import (
     LAP_IN,
     LAP_OUT,
+    LEGACY_BOARD_TOP,
     MERGE,
     SKIRT_BOTTOM,
     SKIRT_OUT,
@@ -498,3 +499,14 @@ def legacy_screw_length():
     engagement. The V2 board is 0.09 thinner than BOARD_THICKNESS, which the
     same M2 x 6 absorbs."""
     return params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
+
+
+def legacy_screw_head():
+    """The V2 retention screw's head envelope, on the V2 board's top face.
+
+    The V2 top pad's passes and its TPU skirt breaks both read it.
+    """
+    x, y = board.legacy_retention_point()
+    return Pos(x, y, LEGACY_BOARD_TOP + params.SCREW_HEAD_H / 2) * Cylinder(
+        radius=params.SCREW_HEAD_D / 2, height=params.SCREW_HEAD_H
+    )

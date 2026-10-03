@@ -128,7 +128,10 @@ CHANNEL_RATIO_TOLERANCE = 0.02
 """Allowed error in the measured FDM-to-recessed LED channel depth ratio."""
 
 
-def fdm_pad_fits(front, pad):
+FDM_PART = "c6remote-case-pad-fdm"
+
+
+def fdm_pad_fits(front, pad, part=FDM_PART):
     """Probe the complete FDM button export against its matching front shell."""
     problems = []
     for state, offset in (("released", 0), ("pressed", -params.SWITCH_TRAVEL)):
@@ -137,13 +140,13 @@ def fdm_pad_fits(front, pad):
             problems.append(
                 Problem(
                     f"the FDM pad fouls the FDM front by {fouled:.2f} mm3 when {state}",
-                    part="c6remote-case-pad-fdm",
+                    part=part,
                 )
             )
     return problems
 
 
-def fdm_keytops_are_attached(pad):
+def fdm_keytops_are_attached(pad, part=FDM_PART):
     """Every printed keytop must be flush with and fused to its lobe web."""
     problems = []
     for ref in case.cap_refs():
@@ -155,7 +158,7 @@ def fdm_keytops_are_attached(pad):
                     f"{ref}'s FDM keytop starts at {bottom:.3f}, but its pad web "
                     f"ends at {case.PAD_WEB_TOP:.3f}",
                     at=(x, y, bottom),
-                    part="c6remote-case-pad-fdm",
+                    part=part,
                 )
             )
         top = Pos(x, y, (case.CAP_BOTTOM + case.CAP_TOP) / 2) * Box(
@@ -175,7 +178,7 @@ def fdm_keytops_are_attached(pad):
                 Problem(
                     f"{ref}'s FDM keytop is not fused to its pad lobe",
                     at=(x, y, case.CAP_TOP),
-                    part="c6remote-case-pad-fdm",
+                    part=part,
                 )
             )
     return problems
@@ -205,7 +208,7 @@ def fdm_keytops_have_top_fillets():
                         f"{ref}'s FDM keytop has {len(runs)} material runs at its "
                         "top-edge fillet probe",
                         at=(x, y, z),
-                        part="c6remote-case-pad-fdm",
+                        part=part,
                     )
                 )
                 break
@@ -218,7 +221,7 @@ def fdm_keytops_have_top_fillets():
                         f"{depth:.3f} below its top, where a {radius:.2f} mm "
                         f"fillet reaches {want:.3f}",
                         at=(x + got, y, z),
-                        part="c6remote-case-pad-fdm",
+                        part=part,
                     )
                 )
                 break

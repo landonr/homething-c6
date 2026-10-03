@@ -144,10 +144,19 @@ def main():
     # assembly, so it is added after --show has returned: showing both would
     # draw two front shells in the same place. features.py keys its features
     # under its own file name, since that is the file the viewer loads. The V2
-    # top pad replaces one lobe of the FDM pad, so it stays out of --show too.
+    # top pads replace one lobe of the FDM pads, so they stay out of --show too.
     parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
     parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
+    parts["c6remote-case-pad-tpu"] = button_pad(fdm=True, skirt=True, grooves=False)
+    parts["c6remote-case-pad-tpu-blank"] = button_pad(
+        fdm=True, skirt=True, grooves=False, legend=False
+    )
+    parts["c6remote-case-pad-tpu-v2-blank"] = button_pad(
+        fdm=True, skirt=True, grooves=False, legend=False, v2=True
+    )
     parts["c6remote-case-pad-fdm-v2-top"] = legacy_top_pad()
+    parts["c6remote-case-pad-tpu-v2-top"] = legacy_top_pad(skirt=True)
+    parts["c6remote-case-pad-v2-top"] = legacy_top_pad(fdm=False, skirt=True)
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.
@@ -155,13 +164,16 @@ def main():
     for name, ref in zip(caps, cap_refs()):
         x, y, _, _ = placements[ref]
         parts[name] = Pos(-x, -y, -CAP_BOTTOM) * caps[name]
+        parts[f"{name}-blank"] = Pos(-x, -y, -CAP_BOTTOM) * keycap(ref, legend=False)
 
     EXPORT.mkdir(exist_ok=True)
     # Where each cap STL goes back to in the case frame, since the file itself no
     # longer says. Anything reassembling the export reads this rather than
     # rediscovering the switch positions from the board. Caps only: the shells
     # and the IR window plate are all exported where they belong, so they need
-    # no entry here and adding one would name them keycaps.
+    # no entry here and adding one would name them keycaps. The blank caps stay
+    # out too, because the viewer loads every entry as a cap. A blank cap goes
+    # where its legend twin goes (same name less "-blank").
     with (EXPORT / "c6remote-caps.json").open("w") as f:
         json.dump(
             {
@@ -320,8 +332,8 @@ def main():
         f"stem, {params.STEM_GRIP:.2f} interference per side"
     )
     print(
-        f"  {params.CAP_LIFT:.2f} of lift under the flange against "
-        f"{params.SWITCH_TRAVEL:.2f} of switch travel"
+        f"  flange rests on the pad web with {params.CAP_LIFT:.2f} of lift, so a press "
+        f"moves cap and web together through {params.SWITCH_TRAVEL:.2f} of switch travel"
     )
     print(
         f"  legends {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "

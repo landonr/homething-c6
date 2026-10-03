@@ -27,8 +27,8 @@ printing nine of them."""
 SWITCH_TRAVEL = 0.25
 """How far a TL3315 actuator moves to make. Family typical, hand-entered from the
 datasheet and unconfirmable from the design files, the same epistemic class as
-SWITCH_HEIGHT. It is the floor under CAP_LIFT and CAP_PROTRUSION: a cap that
-cannot move this far bottoms out before the switch makes."""
+SWITCH_HEIGHT. A press must move the pad web this far to make the switch. The
+web flex gives this travel, and the switch is the bottom stop."""
 
 # Shell
 WALL = 3.0
@@ -100,6 +100,13 @@ PLUNGER_SWITCH_EXTENSION = 1.0
 """Each plunger extends 1.0 mm below SWITCH_TOP. This is approximately twice the
 previous extension, so the plunger nearly touches the switch button. It provides
 nominal switch engagement."""
+
+LEGACY_NIB_EXTENSION = 0.5
+"""Each V2 nib extends 0.5 mm below LEGACY_SWITCH_TOP, 0.5 shorter than
+PLUNGER_SWITCH_EXTENSION. The printed V2 top pad of 2026-09-28 held SW1 and SW2
+pressed with the case closed. The kept V3 plungers of that pad use it below
+SWITCH_TOP too, so they stay SUPPORT_GAP above the nibs and cannot land on a V2
+switch body before the switch makes."""
 
 PLUNGER_LOWER_CHAMFER = 0.375
 """45 degree chamfer size at the lower plunger edge. It leaves a flat switch contact."""
@@ -896,43 +903,48 @@ carries that run this much further inboard. Nothing structural is in the band;
 the nearest mounting bosses stand well past it. checks/usb.py reads the wall
 and its ramp off the built front rather than off this."""
 
-# Button pad: one soft moulding, flat web with raised keys and no skirt. Held up
-# against the ceiling by its own plungers resting on the switches.
+# Button pad: one soft moulding, flat web with raised keys. The moulded pad has a
+# skirt on each lobe's outer edge. Held up against the ceiling by its own
+# plungers resting on the switches.
 PAD_WEB_T = 1.2
-PAD_GROOVE_W = 0.8
-"""Width of each press-isolation groove in the nine-button pad lobe.
+PAD_SKIRT_T = 1.0
+"""Width of the moulded pad's skirt wall, measured inward from the lobe outer edge.
 
-The grooves divide the web between adjacent buttons but leave more web than
-the 0.7 mm minimum key gap. This keeps the moulded pad one part.
+The outer face of the wall is flush with the web edge, so the pad keeps its plan
+outline. The wall is wide enough to mould and to stiffen the lobe edge.
 """
-PAD_GROOVE_DEPTH = 0.3
-"""Depth cut from each face of the pad web at an isolation groove.
+PAD_SKIRT_CLEARANCE = 0.3
+"""Gap from the pad skirt to any board part, in plan and in height.
 
-The two cuts leave PAD_WEB_T - 2 * PAD_GROOVE_DEPTH of centre material.
-"""
-PAD_GROOVE_EDGE_RETENTION = 1.0
-"""Material retained between each moulded-pad groove end and the grid-lobe edge.
-
-This continuous frame keeps the silicone pad together and prevents its grooves
-from opening at the perimeter.
+A board part whose top is within this distance of the skirt bottom, or above it,
+and whose plan box grown by this distance reaches the skirt, breaks the skirt.
 """
 FDM_PAD_GROOVE_W = 1.2
 """Width of each press-isolation relief in the rigid FDM grid lobe.
 
-Wider than the moulded pad's grooves so each printed key can flex with less
+Wide so each printed key can flex with less
 drag from the neighbouring web while still clearing stems, cap seats, and bosses.
 """
-FDM_PAD_GROOVE_DEPTH = 0.5
-"""Depth cut from each face of the FDM pad web at an isolation relief.
+FDM_PAD_GROOVE_DEPTH = 0.8
+"""Depth cut from the keytop face only of the FDM pad web at an isolation relief.
 
-The opposed cuts leave a 0.2 mm membrane through the 1.2 mm web. This gives the
-rigid print a compliant hinge without splitting its grid lobe into nine parts.
+The plunger face stays flat, so the pad prints keytops up with clean supports
+under the web (support removal, 2026-09-29). The hinge left at the underside is
+PAD_WEB_T - FDM_PAD_GROOVE_DEPTH thick.
 """
 FDM_PAD_GROOVE_EDGE_OVERTRAVEL = 0.6
 """How far each FDM isolation relief extends past the grid-lobe bounds.
 
 Equal to half FDM_PAD_GROOVE_W so the rounded relief is at full width where it
 exits the lobe instead of tapering to a tangent point at the edge.
+"""
+FDM_PAD_GRID_CHAMFER = FDM_PAD_GROOVE_DEPTH
+"""Leg of the 45 degree chamfer on both top lips of every FDM isolation relief.
+
+The lip chamfer reaches the groove floor, so each relief has 45 degree walls
+over a flat floor FDM_PAD_GROOVE_W wide. The grid lobe's outer top edge takes
+the same leg, so every key tile slopes down to hinge level on all four sides.
+It must stay at or below FDM_PAD_GROOVE_DEPTH and short of each keytop base.
 """
 PAD_MARGIN = 1.0
 """Web margin around each island's outermost buttons. The mic island follows each button above a shared lower bridge."""
@@ -1232,17 +1244,21 @@ anything about cap versus keytop.
 Keep in board order if this ever grows past a pair: keypad_coverage() does
 not sort it."""
 
-CAP_PROTRUSION = 0.25
-"""How far a released cap stands proud of the front face.
+CAP_PROTRUSION = 0.75
+"""How far a released cap or keytop stands proud of the front face.
 
-Matched to SWITCH_TRAVEL so a nominal full press brings the cap top flush with
-the surrounding face. CAP_GUIDE_CLEARANCE leaves it room to move through its
-face hole without fouling the shell."""
-CAP_TOP_T = 1.0
-"""Roof over the socket, now a shallow locating recess rather than a deep grip:
-the flush face left no room for the old 1.4. LEGEND_DEPTH comes out of it, and
-what is left is the translucent bridge the pad's backlight glows through, so it
-is bounded below by the legend rather than by strength."""
+This value is larger than SWITCH_TRAVEL. A full nominal press leaves the top
+proud of the face by the difference, so a pressed top stays above the face.
+CAP_GUIDE_CLEARANCE leaves each cap room to move through its face hole without
+fouling the shell."""
+CAP_TOP_T = 1.5
+"""Roof over the socket, a shallow locating recess rather than a deep grip.
+
+CAP_PROTRUSION made every cap stand taller over a pad stem that did not change.
+The extra height goes into this roof, so the stems and the socket depth stay
+the same. LEGEND_DEPTH comes out of the roof. What is left is the translucent
+bridge that the pad backlight glows through, so the legend bounds the roof from
+below and strength does not."""
 CAP_TOP_FILLET = 0.8
 """Radius on the exposed top perimeter of every rigid cap.
 
@@ -1255,21 +1271,23 @@ modelled dimension: the cap's body follows the face hole and its widest bore is
 the socket mouth, which stands SOCKET_LEAD out from the bore on each side, so the
 wall is whatever falls out between them. check.py holds this floor so future
 drift in either number cannot quietly starve it."""
-CAP_LIFT = 0.45
+CAP_LIFT = 0.0
 """Air under the cap's flange, from the pad web up to the flange's bottom face.
-This is the travel the cap has before the flange lands on the web, so it has to
-stay clear of SWITCH_TRAVEL. The counterbore shoulder sits CAP_FLANGE_FLOAT above
-the flange and so arrests nothing on the way down, which leaves this the only
-bottom-out guard; CAP_PROTRUSION only changes where the moving top begins.
 
-Trimmed from 0.5 to make room for the keypad recesses without deepening the
-counterbore: SWITCH_TRAVEL plus its check.py margin is 0.45 exactly, so this
-is the least CAP_LIFT can be, zero slack rather than a chosen number."""
+At zero, the flange rests on the pad web. A press moves the cap, the stem and the
+web down together, so the web flex gives SWITCH_TRAVEL. The switch is the bottom
+stop. There is no air gap that lets the cap move alone, so a positive value here
+adds free play and no travel. The counterbore shoulder stands CAP_FLANGE_FLOAT
+above the flange, so it stops the cap only on the way up.
+"""
 
-CAP_FLANGE_T = 0.6
-"""Thickness of the flange at the cap's base. It is the whole retention feature
-and it is loaded in shear against the face land, so what bounds it below is
-strength in a printed cap rather than the counterbore it has to fit in."""
+CAP_FLANGE_T = 1.05
+"""Thickness of the flange at the cap's base. The flange rests on the pad web.
+Its height keeps the cap square on the web, so a thin flange can tilt.
+
+It takes the height that CAP_LIFT gave up when it went to zero. As a result, the
+counterbore shoulder stands where it stood before that change. The face land
+bounds it from above, and check.py's LAND_FLOOR_MIN holds that land."""
 CAP_FLANGE_OVERLAP = 0.6
 """How far the flange reaches past the face hole, per side. This is the retention
 now: pull a cap and this is the ledge the face land catches. A cap sitting off

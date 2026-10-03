@@ -47,6 +47,7 @@ from .caps import (
     caps_fit,
     caps_flush,
     caps_proud_of_pocket,
+    caps_rest_on_pad,
     legends_present,
 )
 from .fdm import (
@@ -76,24 +77,38 @@ from .ir import (
     window_installation,
 )
 from .legacy import (
+    MOULDED_TOP_PAD,
+    TPU_TOP_PAD,
+    legacy_keytops_level,
     legacy_nib_contact,
+    legacy_part_moves,
     legacy_pilot_blind,
     legacy_point_in_frame,
     legacy_post_clearance,
     legacy_post_headroom,
     legacy_post_merged,
     legacy_screw_gaps,
+    legacy_skirt_clears_board,
+    legacy_skirt_depth,
     legacy_top_pad_clears_screw,
     legacy_top_pad_fits,
+    moulded_top_pad_caps_rest,
 )
 from .keypad import (
+    TPU_PART,
+    blank_tpu_pads,
+    tpu_pad_fits,
     groove_clearances,
     mic_pad_contour,
     neck_blends_smoothly,
     neck_continuity,
+    pad_clears_board,
     pad_clears_wheel,
     pad_fits,
+    pad_skirt_depth,
+    grid_outer_edge,
     pad_isolation_grooves,
+    plain_web_problems,
     pad_wall_fit,
     plunger_stub_contact,
     recess_edge_clearance,
@@ -168,8 +183,30 @@ class Solids:
         return case.button_pad(fdm=True)
 
     @functools.cached_property
+    def pad_tpu(self):
+        return case.button_pad(fdm=True, skirt=True, grooves=False)
+
+    @functools.cached_property
+    def pad_tpu_blank(self):
+        return case.button_pad(fdm=True, skirt=True, grooves=False, legend=False)
+
+    @functools.cached_property
+    def pad_tpu_v2_blank(self):
+        return case.button_pad(
+            fdm=True, skirt=True, grooves=False, legend=False, v2=True
+        )
+
+    @functools.cached_property
     def pad_fdm_v2_top(self):
         return case.legacy_top_pad()
+
+    @functools.cached_property
+    def pad_tpu_v2_top(self):
+        return case.legacy_top_pad(skirt=True)
+
+    @functools.cached_property
+    def pad_v2_top(self):
+        return case.legacy_top_pad(fdm=False, skirt=True)
 
     @functools.cached_property
     def window(self):
@@ -178,6 +215,10 @@ class Solids:
     @functools.cached_property
     def caps(self):
         return {ref: case.keycap(ref) for ref in case.cap_refs()}
+
+    @functools.cached_property
+    def caps_plain(self):
+        return {ref: case.keycap(ref, legend=False) for ref in case.cap_refs()}
 
 
 CHECKS = []
@@ -239,7 +280,10 @@ def _pad_wall_fit(s):
     problems, readings = pad_wall_fit([
         ("pad", s.front, s.pad),
         ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("TPU pad", s.front, s.pad_tpu),
         ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+        ("V2 TPU top pad", s.front, s.pad_tpu_v2_top),
+        ("moulded V2 top pad", s.front, s.pad_v2_top),
     ])
     gaps = ", ".join(
         f"{label} {pair[0]:.2f}/{pair[1]:.2f}"
@@ -262,6 +306,27 @@ def _plunger_stub_contact(s):
 
 
 @_check("keypad")
+def _pad_skirt_depth(s):
+    problems, lines = pad_skirt_depth(s.pad)
+    more, fdm_lines = pad_skirt_depth(s.pad_tpu, True, False)
+    problems.extend(f"TPU pad: {problem}" for problem in more)
+    return _report(
+        problems,
+        "pad skirts reach the plunger bottoms, are flush with the web edge and "
+        f"{params.PAD_SKIRT_T:.2f} mm thick. "
+        "Moulded: " + ", ".join(lines) + ". TPU: " + ", ".join(fdm_lines),
+    )
+
+
+@_check("keypad")
+def _pad_clears_board(s):
+    problems, line = pad_clears_board(s.pad)
+    more, fdm_line = pad_clears_board(s.pad_tpu)
+    problems.extend(f"TPU pad: {problem}" for problem in more)
+    return _report(problems, f"moulded: {line}. TPU: {fdm_line}")
+
+
+@_check("keypad")
 def _mic_pad_contour(s):
     return _report(
         mic_pad_contour(s.pad),
@@ -271,24 +336,34 @@ def _mic_pad_contour(s):
 
 @_check("keypad")
 def _pad_isolation_grooves(s):
-    problems = pad_isolation_grooves(s.pad)
-    problems.extend(f"FDM: {problem}" for problem in pad_isolation_grooves(s.pad_fdm, True))
+    problems = pad_isolation_grooves(s.pad_fdm)
+    problems.extend(grid_outer_edge(s.pad_fdm))
     return _report(
         problems,
-        f"four built isolation grooves are {params.PAD_GROOVE_W:.2f} mm wide, "
-        f"while the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
-        f"leave {params.PAD_WEB_T - 2 * params.FDM_PAD_GROOVE_DEPTH:.2f} mm of centre web",
+        f"the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
+        f"are cut from the keytop face only, leaving a flat underside and "
+        f"{params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH:.2f} mm of hinge, "
+        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief and on the grid lobe outer top edge",
+    )
+
+
+@_check("keypad")
+def _tpu_pad_plain_web(s):
+    problems = plain_web_problems(s.pad, "moulded pad")
+    problems.extend(plain_web_problems(s.pad_tpu, "TPU pad"))
+    return _report(
+        problems,
+        "the moulded pad and the one-piece TPU pad have a plain web with square edges: "
+        "no grooves along the grid lines and no chamfer on the outer top edge",
     )
 
 
 @_check("keypad")
 def _groove_clearances(s):
-    problems = groove_clearances(s.pad)
-    problems.extend(f"FDM: {problem}" for problem in groove_clearances(s.pad_fdm, True))
     return _report(
-        problems,
-        f"grooves clear stems, cap seats and bosses; only the FDM reliefs exit "
-        f"both grid-lobe edges at full width; SW1/SW2 stay unchanged",
+        groove_clearances(s.pad_fdm),
+        "FDM grooves clear stems, keytop bases and bosses; the reliefs exit "
+        "both grid-lobe edges at full width; SW1/SW2 stay unchanged",
     )
 
 
@@ -311,10 +386,19 @@ def _cap_fits_around_perimeter(s):
 
 
 @_check("caps")
+def _caps_rest_on_pad(s):
+    return _report(
+        caps_rest_on_pad(s.pad, s.caps),
+        f"all {len(s.caps)} cap flanges rest on the pad web",
+    )
+
+
+@_check("caps")
 def _caps_flush(s):
     return _report(
         caps_flush(),
-        f"released caps stand {params.CAP_PROTRUSION:.2f} proud of the front face",
+        f"released caps stand {params.CAP_PROTRUSION:.2f} proud of the front face "
+        f"and stay at or above it through a full press",
     )
 
 
@@ -350,6 +434,45 @@ def _fdm_keytops_are_attached(s):
         fdm_keytops_are_attached(s.pad_fdm),
         f"all {len(case.cap_refs())} FDM keytops start flush with and are fused "
         "to their pad lobes",
+    )
+
+
+@_check("keypad")
+def _tpu_keytops_are_attached(s):
+    return _report(
+        fdm_keytops_are_attached(s.pad_tpu, TPU_PART),
+        f"all {len(case.cap_refs())} TPU keytops start flush with and are fused "
+        "to their pad lobes",
+    )
+
+
+@_check("keypad")
+def _blank_tpu_pads(s):
+    v2_twin = case.button_pad(fdm=True, skirt=True, grooves=False, v2=True)
+    problems, lines = blank_tpu_pads([
+        ("TPU pad", s.pad_tpu_blank, s.pad_tpu, []),
+        (
+            "V2 TPU pad",
+            s.pad_tpu_v2_blank,
+            v2_twin,
+            [("V2 lobe", case.legacy_top_pad(skirt=True, legend=False))],
+        ),
+    ])
+    return _report(
+        problems,
+        "blank TPU pads match their legend twins' extents, contain them and the V2 lobe, hold more material "
+        f"({', '.join(lines)} mm3) and are flat at all {len(case.cap_refs())} "
+        "keytop centres each",
+    )
+
+
+@_check("keypad")
+def _tpu_pad_fits(s):
+    return _report(
+        tpu_pad_fits(s.front, s.pad_tpu),
+        "the TPU pad clears the recessed front released and through switch "
+        "travel, its keytops keep FDM_CAP_GUIDE_CLEARANCE "
+        f"({params.FDM_CAP_GUIDE_CLEARANCE:.2f}) to their face holes and stand proud of the recess",
     )
 
 
@@ -840,27 +963,142 @@ def _legacy_post_headroom(s):
 @_check("legacy")
 def _legacy_nib_contact(s):
     return _report(
-        legacy_nib_contact(s.pad_fdm_v2_top),
-        "V2 top pad is one solid, its nibs land on the V2 switch tops and its "
-        "V3 plungers on the V3 ones, each within tolerance",
+        legacy_nib_contact(s.pad_fdm_v2_top)
+        + legacy_nib_contact(s.pad_tpu_v2_top, TPU_TOP_PAD),
+        "V2 top pads (FDM and TPU) are each one solid, their nibs reach LEGACY_NIB_EXTENSION "
+        f"({params.LEGACY_NIB_EXTENSION:.2f}) below the V2 switch tops and its "
+        "V3 plungers the same below the V3 ones, each within tolerance, the plungers "
+        "at least SWITCH_TRAVEL above the nibs",
+    )
+
+
+@_check("legacy")
+def _legacy_keytops_level(s):
+    return _report(
+        legacy_keytops_level(s.pad_fdm_v2_top, s.pad_fdm)
+        + legacy_keytops_level(s.pad_tpu_v2_top, s.pad_tpu, TPU_TOP_PAD),
+        "V2 top pads' SW1/SW2 keytops stand level with SW7 on the main FDM and "
+        "TPU pads, legends cut open at the keytop top",
     )
 
 
 @_check("legacy")
 def _legacy_top_pad_fits(s):
     return _report(
-        legacy_top_pad_fits(s.front_fdm, s.pad_fdm_v2_top),
-        "V2 top pad clears the FDM front released and through switch travel",
+        legacy_top_pad_fits(s.front_fdm, s.pad_fdm_v2_top)
+        + tpu_pad_fits(
+            s.front,
+            s.pad_tpu_v2_top,
+            TPU_TOP_PAD,
+            refs=case.island_refs("second"),
+            label="V2 TPU top pad",
+        ),
+        "the V2 FDM top pad clears the FDM front and the V2 TPU top pad clears "
+        "the recessed front, each released and through switch travel, and the "
+        "TPU keytops keep their face hole gap and stand proud of the recess",
     )
 
 
 @_check("legacy")
 def _legacy_top_pad_clears_screw(s):
     gaps = legacy_screw_gaps(s.pad_fdm_v2_top)
+    skirt_gaps = legacy_screw_gaps(s.pad_tpu_v2_top)
     return _report(
-        legacy_top_pad_clears_screw(s.pad_fdm_v2_top),
+        legacy_top_pad_clears_screw(s.pad_fdm_v2_top)
+        + legacy_top_pad_clears_screw(s.pad_tpu_v2_top, TPU_TOP_PAD),
         f"V2 top pad clears the V2 retention screw head by {gaps['released']:.2f} "
-        f"released and {gaps['pressed']:.2f} pressed",
+        f"released and {gaps['pressed']:.2f} pressed, TPU pad by "
+        f"{skirt_gaps['released']:.2f} and {skirt_gaps['pressed']:.2f}",
+    )
+
+
+@_check("legacy")
+def _legacy_skirt_depth(s):
+    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top, s.pad_tpu)
+    return _report(
+        problems,
+        "V2 TPU top pad skirt ends level with the TPU pad's built plunger bottoms, is flush with the "
+        f"web edge and {params.PAD_SKIRT_T:.2f} mm thick: " + ", ".join(lines),
+    )
+
+
+@_check("legacy")
+def _legacy_skirt_clears_board(s):
+    problems, line = legacy_skirt_clears_board(s.pad_tpu_v2_top)
+    return _report(problems, f"V2 TPU top pad: {line}")
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_nib_contact(s):
+    return _report(
+        legacy_nib_contact(s.pad_v2_top, MOULDED_TOP_PAD, "the moulded V2 top pad"),
+        "the moulded V2 top pad is one solid, its nibs reach LEGACY_NIB_EXTENSION "
+        f"({params.LEGACY_NIB_EXTENSION:.2f}) below the V2 switch tops and its V3 "
+        "plungers the same below the V3 ones, the plungers at least SWITCH_TRAVEL "
+        "above the nibs",
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_fits(s):
+    return _report(
+        legacy_top_pad_fits(
+            s.front,
+            s.pad_v2_top,
+            MOULDED_TOP_PAD,
+            label="the moulded V2 top pad",
+            front="the recessed front",
+        ),
+        "the moulded V2 top pad clears the recessed front, released and through "
+        "switch travel",
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_clears_screw(s):
+    gaps = legacy_screw_gaps(s.pad_v2_top)
+    return _report(
+        legacy_top_pad_clears_screw(
+            s.pad_v2_top, MOULDED_TOP_PAD, "the moulded V2 top pad"
+        ),
+        "the moulded V2 top pad clears the V2 retention screw head by "
+        f"{gaps['released']:.2f} released and {gaps['pressed']:.2f} pressed",
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_skirt_depth(s):
+    problems, lines = legacy_skirt_depth(s.pad_v2_top, s.pad, fdm=False)
+    return _report(
+        problems,
+        "the moulded V2 top pad skirt ends level with the moulded pad's built "
+        "plunger bottoms, is flush "
+        f"with the web edge and {params.PAD_SKIRT_T:.2f} mm thick: " + ", ".join(lines),
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_skirt_clears_board(s):
+    problems, line = legacy_skirt_clears_board(s.pad_v2_top)
+    return _report(problems, f"the moulded V2 top pad: {line}")
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_caps_rest(s):
+    return _report(
+        moulded_top_pad_caps_rest(s.pad_v2_top, s.caps),
+        "the SW1 and SW2 caps rest on the moulded V2 top pad web and do not "
+        "overlap it",
+    )
+
+
+@_check("legacy")
+def _legacy_part_moves(s):
+    problems, moved = legacy_part_moves()
+    return _report(
+        problems,
+        "each V2 top-side part's V3 body sits at its V2 placement; moved: "
+        + ", ".join(moved),
     )
 
 
@@ -917,8 +1155,13 @@ def _parts_are_sound(s):
         "back shell": s.back,
         "button pad": s.pad,
         "FDM V2 top pad": s.pad_fdm_v2_top,
+        "V2 TPU top pad": s.pad_tpu_v2_top,
+        "blank TPU pad": s.pad_tpu_blank,
+        "blank V2 TPU pad": s.pad_tpu_v2_blank,
+        "moulded V2 top pad": s.pad_v2_top,
         "IR window": s.window,
         **{f"{ref} cap": cap for ref, cap in s.caps.items()},
+        **{f"{ref} blank cap": cap for ref, cap in s.caps_plain.items()},
     }
     return _report(
         parts_are_sound(parts),
@@ -1062,14 +1305,22 @@ def _parallel_initializer():
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": (
-        "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "window", "caps",
+        "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "pad_tpu_v2_top",
+        "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top", "window", "caps",
+        "caps_plain",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),
-    "keypad": ("front", "pad", "keypad_recess"),
-    "legacy": ("back", "front_fdm", "pad_fdm_v2_top"),
+    "keypad": (
+        "front", "pad", "pad_fdm", "pad_tpu", "pad_tpu_blank", "pad_tpu_v2_blank",
+        "pad_tpu_v2", "pad_tpu_v2_top_blank", "keypad_recess",
+    ),
+    "legacy": (
+        "back", "front", "front_fdm", "pad_fdm_v2_top", "pad_tpu_v2_top",
+        "pad_v2_top", "pad", "pad_tpu", "caps",
+    ),
     "mic": ("front",),
     "shells": ("front", "back"),
     "support": ("back",),
@@ -1113,7 +1364,30 @@ _CACHED_SOLIDS = {
     "back": lambda: [functools.partial(case.back_shell)],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
+    "pad_tpu": lambda: [
+        functools.partial(case.button_pad, fdm=True, skirt=True, grooves=False)
+    ],
+    "pad_tpu_blank": lambda: [
+        functools.partial(
+            case.button_pad, fdm=True, skirt=True, grooves=False, legend=False
+        )
+    ],
+    "pad_tpu_v2_blank": lambda: [
+        functools.partial(
+            case.button_pad, fdm=True, skirt=True, grooves=False, legend=False, v2=True
+        )
+    ],
+    "pad_tpu_v2": lambda: [
+        functools.partial(case.button_pad, fdm=True, skirt=True, grooves=False, v2=True)
+    ],
+    "pad_tpu_v2_top_blank": lambda: [
+        functools.partial(case.legacy_top_pad, skirt=True, legend=False)
+    ],
+    "pad_tpu_v2_top": lambda: [functools.partial(case.legacy_top_pad, skirt=True)],
     "pad_fdm_v2_top": lambda: [functools.partial(case.legacy_top_pad)],
+    "pad_v2_top": lambda: [
+        functools.partial(case.legacy_top_pad, fdm=False, skirt=True)
+    ],
     "window": lambda: [functools.partial(case.ir_window)],
     "keypad_recess": lambda: [functools.partial(case.keypad_recess)],
     "keypad_outline_groove": lambda: [functools.partial(case.keypad_outline_groove)],

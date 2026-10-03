@@ -50,7 +50,7 @@ column along y and so what one spine and one loft depend on.
 
 import math
 
-from build123d import Axis, Box, Cylinder, Pos
+from build123d import Axis, Box, Compound, Cylinder, Pos
 
 import board
 import case
@@ -72,6 +72,9 @@ from .common import (
 GROOVE_TOLERANCE = 0.05
 """Allowed built-solid error at a groove wall or floor."""
 
+CLEARANCE_SLOP = 0.005
+"""Float slack on a measured clearance."""
+
 
 def _grid_pad(pad):
     """Built grid lobe, isolated from the unchanged SW1/SW2 lobe."""
@@ -81,56 +84,68 @@ def _grid_pad(pad):
     return pad.intersect(crop)
 
 
-def _groove_runs(pad, orientation, centre, run0, run1, width, depth):
-    """Built material runs across and along one top-side isolation groove."""
-    z = case.PAD_WEB_TOP - depth / 2
-    if orientation == "vertical":
-        across = ((centre - width, (run0 + run1) / 2, z),
-                  (centre + width, (run0 + run1) / 2, z))
-        along = ((centre, run0 - width, z), (centre, run1 + width, z))
-    else:
-        across = (((run0 + run1) / 2, centre - width, z),
-                  ((run0 + run1) / 2, centre + width, z))
-        along = ((run0 - width, centre, z), (run1 + width, centre, z))
-    return _ray_runs(pad, *across), _ray_runs(pad, *along)
+def _lip_problems(pad, label, orientation, centre, mid):
+    """Read the built gap of one FDM groove at three heights against the flare."""
+    chamfer = params.FDM_PAD_GRID_CHAMFER
+    width = params.FDM_PAD_GROOVE_W
+    reach = width + 2 * chamfer + 0.5
+    heights = (
+        case.PAD_WEB_TOP - params.FDM_PAD_GROOVE_DEPTH + 0.1,
+        case.PAD_WEB_TOP - 3 * chamfer / 4,
+        case.PAD_WEB_TOP - chamfer / 4,
+    )
+    problems = []
+    for z in heights:
+        wanted = width + 2 * max(0.0, chamfer - (case.PAD_WEB_TOP - z))
+        if orientation == "vertical":
+            ray = ((centre - reach, mid, z), (centre + reach, mid, z))
+        else:
+            ray = ((mid, centre - reach, z), (mid, centre + reach, z))
+        runs = _ray_runs(pad, *ray)
+        if len(runs) != 2:
+            problems.append(f"the built {label} does not have two side walls at z {z:.2f}")
+            continue
+        measured = runs[1][0] - runs[0][1]
+        if abs(measured - wanted) > GROOVE_TOLERANCE:
+            problems.append(f"the built {label} is {measured:.2f} mm wide at z {z:.2f}, wants {wanted:.2f}")
+    return problems
 
 
-def pad_isolation_grooves(pad, fdm=False):
-    """Probe every isolation groove on the built grid-lobe solid.
+def pad_isolation_grooves(pad):
+    """Probe every isolation groove on the built FDM grid-lobe solid.
 
-    Top-face rays read the actual slot width and its rounded-end run. A vertical
-    ray at each centreline reads both face cuts and the centre web they retain.
+    Rays at three heights read the slot width against the flare. The pad is cut
+    from the keytop face only: its underside must be flat along the centreline
+    and the hinge must be PAD_WEB_T - FDM_PAD_GROOVE_DEPTH thick.
     """
     problems = []
     grid = _grid_pad(pad)
     if len(grid.solids()) != 1:
         problems.append(f"the grooved nine-button lobe has {len(grid.solids())} solids, not one")
-    width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
-    depth = params.FDM_PAD_GROOVE_DEPTH if fdm else params.PAD_GROOVE_DEPTH
-    expected_core = params.PAD_WEB_T - 2 * depth
+    expected_core = params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH
     if expected_core <= 0:
-        problems.append("the two groove depths consume the complete pad web")
+        problems.append("the groove depths consume the complete pad web")
         return problems
-    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs(fdm)):
+    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs()):
         label = f"{orientation} groove {index + 1}"
-        across, along = _groove_runs(pad, orientation, centre, run0, run1, width, depth)
-        if len(across) != 2:
-            problems.append(f"the built {label} does not have two side walls")
-        else:
-            width = across[1][0] - across[0][1]
-            if abs(width - (params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W)) > GROOVE_TOLERANCE:
-                problems.append(f"the built {label} is {width:.2f} mm wide, wants {(params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W):.2f}")
-        if fdm:
-            if along:
-                problems.append(f"the built {label} leaves material across an FDM lobe edge")
-        elif len(along) != 2:
-            problems.append(f"the built {label} does not stop inside the moulded-pad frame")
+        problems.extend(_lip_problems(pad, label, orientation, centre, (run0 + run1) / 2))
         z0, z1 = case.PAD_WEB_BOTTOM - 0.1, case.PAD_WEB_TOP + 0.1
         if orientation == "vertical":
             point = (centre, (run0 + run1) / 2)
         else:
             point = ((run0 + run1) / 2, centre)
         core = _ray_runs(pad, (*point, z0), (*point, z1))
+        for fraction in (0.25, 0.5, 0.75):
+            sample = (
+                (centre, run0 + fraction * (run1 - run0))
+                if orientation == "vertical"
+                else (run0 + fraction * (run1 - run0), centre)
+            )
+            runs = _ray_runs(pad, (*sample, z0), (*sample, z1))
+            bottom = z0 + runs[0][0] if runs else None
+            if bottom is None or abs(bottom - case.PAD_WEB_BOTTOM) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} underside is not flat at the plunger face")
+                break
         if len(core) != 1:
             problems.append(f"the built {label} has {len(core)} centre-web runs, not one")
         else:
@@ -140,33 +155,138 @@ def pad_isolation_grooves(pad, fdm=False):
     return problems
 
 
-def groove_clearances(pad, fdm=False):
-    """Keep groove cuts out of every stem, cap seat, and boss, and open their ends."""
+def grid_outer_edge(pad):
+    """Read the chamfer on the built grid lobe's outer top edge, once per side."""
+    c = params.FDM_PAD_GRID_CHAMFER
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    mx = keypad_model._grid_axes("x")[1]
+    my = keypad_model._grid_axes("y")[1]
+    z_w = case.PAD_WEB_TOP - c - (params.PAD_WEB_T - c) / 2
+    boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
+    sides = (
+        ("-Y", (mx, y0), (0, -1)),
+        ("+Y", (mx, y1), (0, 1)),
+        ("-X", (x0, my), (-1, 0)),
+        ("+X", (x1, my), (1, 0)),
+    )
+    problems = []
+    for side, (ex, ey), (dx, dy) in sides:
+        if any(math.hypot(ex - bx, ey - by) < boss_r + c for bx, by in case.mount_points()):
+            problems.append(f"the {side} outer edge site is within a boss clearance, so it cannot be read")
+            continue
+
+        def inset(z):
+            start = (ex + 2 * dx, ey + 2 * dy, z)
+            end = (ex - 2 * dx, ey - 2 * dy, z)
+            runs = _ray_runs(pad, start, end)
+            return runs[0][0] if runs else None
+
+        edge = inset(z_w)
+        if edge is None:
+            problems.append(f"the built {side} outer edge has no material at z {z_w:.2f}")
+            continue
+        for fraction, extra in ((0.25, 0.75), (0.75, 0.25)):
+            z = case.PAD_WEB_TOP - fraction * c
+            hit = inset(z)
+            if hit is None:
+                problems.append(f"the built {side} outer edge has no material at z {z:.2f}")
+                continue
+            measured = hit - edge
+            if abs(measured - extra * c) > GROOVE_TOLERANCE:
+                problems.append(
+                    f"the built {side} outer edge is {measured:.2f} mm inside the wall at "
+                    f"z {z:.2f}, wants {extra * c:.2f}"
+                )
+    return problems
+
+
+def plain_web_problems(pad, label):
+    """Probe a built pad's grid web for a plain flat slab. `label` names the pad in messages.
+
+    Three vertical rays along each grid groove centreline, between keytops,
+    must read one run of PAD_WEB_T from PAD_WEB_BOTTOM to PAD_WEB_TOP. At each
+    outer edge site, horizontal rays at mid web height and just under
+    PAD_WEB_TOP must read the same edge, so the edge is square.
+    """
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    columns = keypad_model._grid_axes("x")
+    rows = keypad_model._grid_axes("y")
+    boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
+    z0, z1 = case.PAD_WEB_BOTTOM - 0.5, case.PAD_WEB_TOP + 0.5
+    problems = []
+    for index, (orientation, centre, _, _) in enumerate(keypad_model._pad_groove_specs()):
+        line = f"{orientation} groove line {index + 1}"
+        axes = rows if orientation == "vertical" else columns
+        along = ((axes[0] + axes[1]) / 2, axes[1], (axes[1] + axes[2]) / 2)
+        for a in along:
+            x, y = (centre, a) if orientation == "vertical" else (a, centre)
+            if any(math.hypot(x - bx, y - by) < boss_r for bx, by in case.mount_points()):
+                continue
+            runs = _ray_runs(pad, (x, y, z0), (x, y, z1))
+            if len(runs) != 1:
+                problems.append(Problem(
+                    f"the {label} {line} has {len(runs)} material runs at ({x:.2f}, {y:.2f}), not one",
+                    at=(x, y, case.PAD_WEB_TOP),
+                ))
+                continue
+            low, high = z0 + runs[0][0], z0 + runs[0][1]
+            if (abs(low - case.PAD_WEB_BOTTOM) > GROOVE_TOLERANCE
+                    or abs(high - case.PAD_WEB_TOP) > GROOVE_TOLERANCE
+                    or abs(high - low - params.PAD_WEB_T) > GROOVE_TOLERANCE):
+                problems.append(Problem(
+                    f"the {label} {line} web at ({x:.2f}, {y:.2f}) runs z {low:.2f} to {high:.2f}, "
+                    f"wants {case.PAD_WEB_BOTTOM:.2f} to {case.PAD_WEB_TOP:.2f}",
+                    at=(x, y, case.PAD_WEB_TOP),
+                ))
+    mx, my = columns[1], rows[1]
+    sides = (
+        ("-Y", (mx, y0), (0, -1)),
+        ("+Y", (mx, y1), (0, 1)),
+        ("-X", (x0, my), (-1, 0)),
+        ("+X", (x1, my), (1, 0)),
+    )
+    for side, (ex, ey), (dx, dy) in sides:
+        if any(math.hypot(ex - bx, ey - by) < boss_r for bx, by in case.mount_points()):
+            continue
+        edges = []
+        for z in ((case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2, case.PAD_WEB_TOP - 0.05):
+            runs = _ray_runs(pad, (ex + 2 * dx, ey + 2 * dy, z), (ex - 2 * dx, ey - 2 * dy, z))
+            if not runs:
+                problems.append(f"the {label} {side} outer edge has no material at z {z:.2f}")
+                break
+            edges.append(runs[0][0])
+        else:
+            if abs(edges[0] - edges[1]) > GROOVE_TOLERANCE:
+                problems.append(
+                    f"the {label} {side} outer edge is not square, its top edge stands "
+                    f"{edges[1] - edges[0]:+.2f} mm off the mid web edge"
+                )
+    return problems
+
+
+def groove_clearances(pad):
+    """Keep FDM groove cuts out of every stem, cap seat, and boss, and open their ends."""
     problems = []
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
-    groove_width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
-    width = groove_width / 2
-    if fdm and params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL < groove_width / 2:
+    groove_width = params.FDM_PAD_GROOVE_W
+    width = groove_width / 2 + params.FDM_PAD_GRID_CHAMFER
+    if params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL < groove_width / 2:
         problems.append("the FDM isolation reliefs do not reach full width at the lobe edge")
-    if not fdm and params.PAD_GROOVE_EDGE_RETENTION <= 0:
-        problems.append("the moulded-pad isolation grooves retain no outer frame")
-    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs(fdm):
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
         low = y0 if orientation == "vertical" else x0
         high = y1 if orientation == "vertical" else x1
-        if fdm:
-            overtravel = params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
-            if run0 > low - overtravel + GROOVE_TOLERANCE or run1 < high + overtravel - GROOVE_TOLERANCE:
-                problems.append(f"the {orientation} FDM relief does not overrun both pad edges")
-        elif min(run0 - low, high - run1) < params.PAD_GROOVE_EDGE_RETENTION - GROOVE_TOLERANCE:
-            problems.append(f"the {orientation} groove does not retain its moulded-pad frame")
+        overtravel = params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
+        if run0 > low - overtravel + GROOVE_TOLERANCE or run1 < high + overtravel - GROOVE_TOLERANCE:
+            problems.append(f"the {orientation} FDM relief does not overrun both pad edges")
         for ref in case.island_refs("grid"):
             x, y = board.components()[ref][:2]
             along = min(max((y if orientation == "vertical" else x), run0), run1)
             across = abs((x if orientation == "vertical" else y) - centre)
             distance = math.hypot(across, (y if orientation == "vertical" else x) - along)
-            needed = width + max(params.STEM_W / 2, case.cap_counterbore(ref) / 2)
+            seat = keypad_model.fdm_cap_body(ref)
+            needed = width + max(params.STEM_W / 2, seat / 2)
             if distance < needed - GROOVE_TOLERANCE:
-                problems.append(f"the {orientation} groove reaches {ref}'s stem or cap seat")
+                problems.append(f"the {orientation} groove reaches {ref}'s stem or keytop base")
         for x, y in case.mount_points():
             along = min(max((y if orientation == "vertical" else x), run0), run1)
             across = abs((x if orientation == "vertical" else y) - centre)
@@ -178,10 +298,251 @@ def groove_clearances(pad, fdm=False):
     # not create a new void in SW1/SW2's lobe.
     for ref in case.island_refs("second"):
         x, y = board.components()[ref][:2]
-        probe = Pos(x, y, case.PAD_WEB_TOP - params.PAD_GROOVE_DEPTH / 2) * Cylinder(radius=0.1, height=0.05)
+        probe = Pos(x, y, case.PAD_WEB_TOP - params.FDM_PAD_GROOVE_DEPTH / 2) * Cylinder(radius=0.1, height=0.05)
         if _fill_fraction(pad, probe) < 0.99:
             problems.append(f"the SW1/SW2 lobe is cut above {ref}")
     return problems
+
+
+SKIRT_SPACING = 1.0
+"""Distance between samples along a skirt centreline."""
+SKIRT_SITES_PER_SIDE = 3
+"""Thickness and outer-edge readings taken on each side of a lobe."""
+
+
+def _skirt_zones(solids=None, bottom=None):
+    """Plan boxes of every board part that stands up to the skirt, read off the
+    assembly itself so a skirt sample can be excused only where a part is.
+
+    `solids` and `bottom` default to the V3 assembly and PAD_SKIRT_BOTTOM. The
+    V2 top pad passes its moved V2 solids and its own skirt bottom."""
+    clear = params.PAD_SKIRT_CLEARANCE
+    solids = board.assembly_solids() if solids is None else solids
+    bottom = case.PAD_SKIRT_BOTTOM if bottom is None else bottom
+    zones = []
+    for solid in solids:
+        box = solid.bounding_box()
+        if box.max.Z > bottom - clear:
+            zones.append((box.min.X - clear, box.max.X + clear, box.min.Y - clear, box.max.Y + clear))
+    return zones
+
+
+def _built_plunger_bottom(pad, points=None, floor=None):
+    """(lowest, spread) of the built plunger bottoms, read with a ray down each.
+
+    `points` are the (x, y) contacts, default every V3 switch. `floor` is where
+    each ray ends, default one below PAD_SKIRT_BOTTOM."""
+    if points is None:
+        parts = board.components()
+        points = [parts[ref][:2] for ref in board.refs("SW")]
+    floor = case.PAD_SKIRT_BOTTOM - 1.0 if floor is None else floor
+    top = case.PAD_WEB_TOP - 0.1
+    bottoms = []
+    for x, y in points:
+        runs = _ray_runs(pad, (x, y, top), (x, y, floor))
+        if runs:
+            bottoms.append(top - runs[-1][1])
+    return (min(bottoms), max(bottoms) - min(bottoms)) if bottoms else (None, None)
+
+
+def _edge(pad, p, n, z):
+    """Distance outward of the first material on a ray in from outside at `p`,
+    and the thickness of that first run, at height z."""
+    reach = params.PAD_SKIRT_T / 2 + 0.6
+    start = (p[0] + n[0] * reach, p[1] + n[1] * reach, z)
+    end = (p[0] - n[0] * reach, p[1] - n[1] * reach, z)
+    runs = _ray_runs(pad, start, end)
+    if not runs:
+        return None, None
+    return reach - runs[0][0], runs[0][1] - runs[0][0]
+
+
+def pad_skirt_depth(
+    pad, fdm=False, grooves=True, lobes=("grid", "second"), points=None, zones=None, floor=None,
+    reference=None,
+):
+    """Walk each moulded lobe's skirt centreline on the built pad.
+
+    Returns (problems, lines). At every sample outside a board part's zone a
+    ray down must find unbroken material to the built plunger bottom. At a few
+    sites per side, rays across the wall read its thickness, and its outer
+    face against the web's, which must be flush. On the FDM pad the skirt must
+    also run unbroken across each groove exit. `grooves` False means a plain slab
+    web, with no chamfer and no groove exits.
+
+    `lobes` names the lobes walked. `points` are the contacts whose built
+    bottoms the skirt must match, `zones` the plan boxes a sample is excused
+    in, and `floor` where the contact rays end. All three default to the V3
+    pad's. `reference` is the pad whose built plunger bottoms set the level
+    the skirt must match, default `pad`.
+    """
+    from build123d import Vertex
+
+    problems, lines = [], []
+    bottom, spread = _built_plunger_bottom(pad if reference is None else reference, points, floor)
+    if bottom is None:
+        return ["no built plunger could be read, so the skirt depth has no reference"], lines
+    if spread > PLUNGER_CONTACT_TOLERANCE:
+        problems.append(f"the built plunger bottoms differ by {spread:.3f}, so the skirt has no one level to match")
+    zones = _skirt_zones() if zones is None else zones
+    z_top = case.PAD_WEB_BOTTOM + 0.1
+    flat = params.PAD_WEB_T - (params.FDM_PAD_GRID_CHAMFER if fdm and grooves else 0)
+    z_web = case.PAD_WEB_BOTTOM + flat / 2
+    z_skirt = (bottom + case.PAD_WEB_BOTTOM) / 2
+    for name in lobes:
+        face = keypad_model.pad_lobe_face(name)
+        outline = face.outer_wire()
+        centre = outline.offset_2d(-params.PAD_SKIRT_T / 2)
+        count = max(8, round(centre.length / SKIRT_SPACING))
+        step = centre.length / count
+        kept, skipped, bad = [], 0, 0
+        for i in range(count):
+            p = centre.position_at((i + 0.5) / count)
+            if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in zones):
+                skipped += 1
+                continue
+            runs = _ray_runs(pad, (p.X, p.Y, z_top), (p.X, p.Y, bottom - 1.0))
+            if not runs or runs[0][0] > 0.05 or len(runs) != 1:
+                bad += 1
+                if bad <= 3:
+                    problems.append(Problem(
+                        f"the {name} lobe skirt has no unbroken wall at ({p.X:.2f}, {p.Y:.2f})",
+                        at=(p.X, p.Y, bottom),
+                    ))
+                continue
+            low = z_top - runs[0][1]
+            if abs(low - bottom) > PLUNGER_CONTACT_TOLERANCE:
+                bad += 1
+                if bad <= 3:
+                    problems.append(Problem(
+                        f"the {name} lobe skirt bottom at {low:.3f} at ({p.X:.2f}, {p.Y:.2f}) "
+                        f"against the plunger bottoms at {bottom:.3f}, off by {low - bottom:.3f}",
+                        at=(p.X, p.Y, low),
+                    ))
+                continue
+            kept.append(p)
+        if bad > 3:
+            problems.append(f"the {name} lobe skirt fails at {bad} samples in all")
+        if not kept:
+            problems.append(f"the {name} lobe has no skirt material at any sample")
+            continue
+        lines.append(f"{name} {len(kept)} samples ({skipped} skipped) over {len(kept) * step:.0f} mm")
+        sides = {}
+        for p in kept:
+            _, near, _ = outline.distance_to_with_closest_points(Vertex(p.X, p.Y, 0))
+            n = (near.X - p.X, near.Y - p.Y)
+            norm = math.hypot(*n)
+            n = (n[0] / norm, n[1] / norm)
+            key = ("x" if abs(n[0]) > abs(n[1]) else "y", 1 if (n[0] if abs(n[0]) > abs(n[1]) else n[1]) > 0 else -1)
+            sides.setdefault(key, []).append((p, n))
+        for key, group in sorted(sides.items()):
+            picks = {round((i + 1) * (len(group) - 1) / (SKIRT_SITES_PER_SIDE + 1)) for i in range(SKIRT_SITES_PER_SIDE)}
+            for index in sorted(picks):
+                p, n = group[index]
+                where = f"the {name} lobe {key[0]}{'+' if key[1] > 0 else '-'} skirt at ({p.X:.2f}, {p.Y:.2f})"
+                out_skirt, thick = _edge(pad, (p.X, p.Y), n, z_skirt)
+                out_web, _ = _edge(pad, (p.X, p.Y), n, z_web)
+                if thick is None or out_web is None:
+                    problems.append(Problem(f"{where} could not be read across", at=(p.X, p.Y, z_skirt)))
+                    continue
+                if abs(thick - params.PAD_SKIRT_T) > GROOVE_TOLERANCE:
+                    problems.append(Problem(
+                        f"{where} is {thick:.2f} mm thick, wants {params.PAD_SKIRT_T:.2f}",
+                        at=(p.X, p.Y, z_skirt),
+                    ))
+                if abs(out_skirt - out_web) > GROOVE_TOLERANCE:
+                    problems.append(Problem(
+                        f"{where} stands {out_skirt - out_web:+.2f} mm off the web's outer edge, "
+                        "so the plan outline is not flush",
+                        at=(p.X, p.Y, z_skirt),
+                    ))
+    if fdm and grooves:
+        problems.extend(_groove_exit_problems(pad, zones, z_skirt))
+    return problems, lines
+
+
+def _groove_exit_problems(pad, zones, z):
+    """Each FDM groove exit leaves the skirt one unbroken run across the groove."""
+    width = params.FDM_PAD_GROOVE_W
+    flat = case.PAD_WEB_BOTTOM + 0.1
+    problems = []
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
+        a, b = ((centre, run0 - 2), (centre, run1 + 2)) if orientation == "vertical" \
+            else ((run0 - 2, centre), (run1 + 2, centre))
+        edges = _ray_runs(pad, (*a, flat), (*b, flat))
+        if len(edges) != 1:
+            problems.append(f"the FDM {orientation} groove line has {len(edges)} web runs at the lobe edges, not one")
+            continue
+        lo, hi = edges[0]
+        for end, offset in (("low", lo + params.PAD_SKIRT_T / 2), ("high", hi - params.PAD_SKIRT_T / 2)):
+            if orientation == "vertical":
+                y = a[1] + offset
+                x, y2 = centre, y
+                start, stop = (x - width, y2, z), (x + width, y2, z)
+            else:
+                x = a[0] + offset
+                y2 = centre
+                start, stop = (x, y2 - width, z), (x, y2 + width, z)
+            if any(p <= start[0] <= q and r <= start[1] <= t for p, q, r, t in zones) \
+                    or any(p <= stop[0] <= q and r <= stop[1] <= t for p, q, r, t in zones):
+                continue
+            runs = _ray_runs(pad, start, stop)
+            if len(runs) != 1 or runs[0][1] - runs[0][0] < 2 * width - GROOVE_TOLERANCE:
+                problems.append(Problem(
+                    f"the FDM {orientation} groove {end} exit at ({start[0] + width * (orientation == 'vertical'):.2f}, "
+                    f"{start[1] + width * (orientation != 'vertical'):.2f}) breaks the skirt into {len(runs)} runs, wants one",
+                    at=(start[0], start[1], z),
+                ))
+    return problems
+
+
+def pad_clears_board(pad, obstacles=None, columns=None, floor=None):
+    """The built pad below its web keeps PAD_SKIRT_CLEARANCE off every board part.
+
+    The plungers are meant to land on their switches, so a cylinder around each
+    is taken out first. Returns (problems, line).
+
+    `obstacles` is a list of (ref, solid) and defaults to the V3 assembly, each
+    solid named by its nearest placement. `columns` are the (x, y) of the
+    plungers and nibs, default every V3 switch. `floor` is the lowest z kept,
+    default one below PAD_SKIRT_BOTTOM.
+    """
+    parts = board.components()
+    z0 = case.PAD_SKIRT_BOTTOM - 1 if floor is None else floor
+    z1 = case.PAD_WEB_BOTTOM - case.MERGE
+    below = Compound(pad.intersect(Pos(0, 0, (z0 + z1) / 2) * Box(400, 400, z1 - z0)).solids())
+    if columns is None:
+        columns = [parts[ref][:2] for ref in board.refs("SW")]
+    for x, y in columns:
+        below = below.cut(Pos(x, y, 0) * Cylinder(radius=params.PLUNGER_D / 2 + 0.5, height=100))
+    below = below.clean()
+    box = below.bounding_box()
+    if obstacles is None:
+        placements = [(ref, x, y) for ref, (x, y, _, _) in parts.items()]
+        placements.append(("ENC1", *board.wheel_center()))
+        obstacles = []
+        for solid in board.assembly_solids():
+            c = solid.bounding_box().center()
+            ref = min(placements, key=lambda p: math.hypot(p[1] - c.X, p[2] - c.Y))[0]
+            obstacles.append((ref, solid))
+    needed = params.PAD_SKIRT_CLEARANCE
+    worst = (math.inf, None)
+    problems = []
+    for ref, solid in obstacles:
+        b = solid.bounding_box()
+        if (b.min.X > box.max.X + needed or b.max.X < box.min.X - needed
+                or b.min.Y > box.max.Y + needed or b.max.Y < box.min.Y - needed):
+            continue
+        d = below.distance_to(solid)
+        c = b.center()
+        if d < worst[0]:
+            worst = (d, ref)
+        if d < needed - CLEARANCE_SLOP:
+            problems.append(Problem(
+                f"the pad skirt is {d:.2f} mm from {ref}, under the {needed:.2f} mm clearance",
+                at=(c.X, c.Y, c.Z),
+            ))
+    return problems, f"the pad skirt is {worst[0]:.2f} mm at its closest, from {worst[1]}"
 
 
 def pad_fits(front, pad):
@@ -197,6 +558,9 @@ def pad_fits(front, pad):
         return [f"pad fouls the front shell by {fouled:.2f} mm3"]
     return []
 
+
+TPU_PART = "c6remote-case-pad-tpu"
+"""The one-piece TPU pad's export stem. It goes with the recessed front."""
 
 PAD_FIT_TOLERANCE = 0.01
 """Allowed shortfall on PAD_FIT at the wall. This is float slop, not a margin."""
@@ -279,12 +643,19 @@ PLUNGER_PROBE_SPAN = 0.6
 """Probe height about the target plunger bottom. It finds the bottom face without reaching the web."""
 
 
-def plunger_bottoms(pad, points, contact, what="plunger", part=None):
+def plunger_bottoms(
+    pad,
+    points,
+    contact,
+    what="plunger",
+    part=None,
+    extension=params.PLUNGER_SWITCH_EXTENSION,
+):
     """Check the built pad's bottom at each {ref: (x, y)} against `contact`
-    less PLUNGER_SWITCH_EXTENSION. Shared by the V3 pads and the V2 top pad."""
+    less `extension`. Shared by the V3 pads and the V2 top pad."""
     problems = []
     half = PLUNGER_PROBE_SPAN / 2
-    target = contact - params.PLUNGER_SWITCH_EXTENSION
+    target = contact - extension
     for ref, (x, y) in points.items():
         z0, z1 = target - half, target + half
         probe = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
@@ -981,3 +1352,154 @@ def recess_edge_clearance(front):
             f"wants {limit:.2f}"
         ]
     return []
+
+
+KEYTOP_GAP_TOLERANCE = 0.02
+"""Slack on a keytop's gap to its face hole. It is boolean slop, not a margin."""
+
+
+def tpu_pad_fits(front, pad, part=TPU_PART, refs=None, label="TPU pad"):
+    """A one-piece TPU pad fits the recessed front: it clears the shell released
+    and through SWITCH_TRAVEL, every keytop keeps FDM_CAP_GUIDE_CLEARANCE to its
+    face hole, and every keytop stands proud of the recess floor beside it.
+
+    The gap is the built keytop's distance to the built front, read in a crop
+    around the key, so a face hole or keytop that drifts shows here. The proud
+    reading is a ray down just outside the face hole. It reads where the dished
+    face is, then takes the keytop top from it. `refs` defaults to every
+    key and the V2 top pad passes its own.
+    """
+    from model.stack import CAP_TOP
+
+    refs = case.cap_refs() if refs is None else refs
+    top = CAP_TOP
+    problems = []
+    for state, offset in (("released", 0), ("pressed", -params.SWITCH_TRAVEL)):
+        fouled = _volume(front.intersect(Pos(0, 0, offset) * pad))
+        if fouled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the {label} fouls the recessed front by {fouled:.2f} mm3 "
+                    f"when {state}",
+                    part=part,
+                )
+            )
+    for ref in refs:
+        x, y = board.components()[ref][:2]
+        keytop = case.fdm_keycap(ref, legend=False)
+        box = keytop.bounding_box()
+        crop = _Crop(
+            front,
+            (box.min.X - 1, box.min.Y - 1, box.min.Z - 1),
+            (box.max.X + 1, box.max.Y + 1, box.max.Z + 1),
+        )
+        gap = keytop.distance_to(crop.shape) if crop.shape else float("inf")
+        if gap < params.FDM_CAP_GUIDE_CLEARANCE - KEYTOP_GAP_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"{ref}'s {label} keytop is {gap:.3f} from its face hole, "
+                    f"under FDM_CAP_GUIDE_CLEARANCE {params.FDM_CAP_GUIDE_CLEARANCE:.2f}",
+                    at=(x, y, top),
+                    part=part,
+                )
+            )
+        px = x + case.cap_face_hole(ref) / 2 + 0.3
+        start = top + 1
+        runs = crop.ray_runs((px, y, start), (px, y, box.min.Z - 0.5))
+        if not runs:
+            problems.append(
+                Problem(
+                    f"{ref} has no recessed face beside its hole to stand proud of",
+                    at=(px, y, top),
+                    part=part,
+                )
+            )
+            continue
+        proud = top - (start - runs[0][0])
+        if proud < MIN_PROUD:
+            problems.append(
+                Problem(
+                    f"{ref}'s {label} keytop stands {proud:.3f} proud of the "
+                    f"recessed face beside it, under {MIN_PROUD:.2f}",
+                    at=(px, y, top),
+                    part=part,
+                )
+            )
+    return problems
+
+
+MIN_PROUD = 0.2
+"""Least a keytop may stand proud of the recessed face beside its hole. It is
+the same floor checks/caps.py holds a rigid cap to."""
+
+
+BLANK_CONTAIN_TOLERANCE = 0.05
+"""Volume in mm3 of a part allowed to fall outside the blank pad containing it."""
+
+
+def blank_tpu_pads(pairs):
+    """Each blank TPU pad matches its legend twin's extents, holds more
+    material, contains the twin and any required lobe, and is flat at every
+    keytop centre.
+
+    `pairs` is (label, blank, twin, lobes) with `lobes` a list of (name, solid)
+    the blank must contain. Containment is volume of the part minus the blank,
+    so the blank may only add material where legends were. The volume gain must be positive and below
+    the legends' total volume, since a legend tool can reach above the cap. The
+    centre ray alone cannot prove a legend is absent, because a glyph may miss
+    the exact centre, so the volume reading backs it.
+    """
+    from model.stack import CAP_TOP
+
+    refs = case.cap_refs()
+    marks = sum(
+        _volume(shape) for ref in refs for shape in case.legend_solids(ref)
+    )
+    problems, lines = [], []
+    for label, blank, twin, lobes in pairs:
+        a, b = blank.bounding_box(), twin.bounding_box()
+        for axis in "XYZ":
+            for end in ("min", "max"):
+                got = getattr(getattr(a, end), axis)
+                want = getattr(getattr(b, end), axis)
+                if abs(got - want) > 0.01:
+                    problems.append(
+                        Problem(
+                            f"the blank {label} {end} {axis} is {got:.3f}, "
+                            f"its legend twin's is {want:.3f}",
+                            part=TPU_PART,
+                        )
+                    )
+        for name, part in [("legend twin", twin), *lobes]:
+            missing = _volume(part - blank)
+            if missing > BLANK_CONTAIN_TOLERANCE:
+                problems.append(
+                    Problem(
+                        f"the blank {label} lacks {missing:.2f} mm3 of its {name}",
+                        part=TPU_PART,
+                    )
+                )
+        gain = _volume(blank) - _volume(twin)
+        if not 0 < gain < marks:
+            problems.append(
+                Problem(
+                    f"the blank {label} holds {gain:.2f} mm3 more than its legend "
+                    f"twin, outside (0, {marks:.2f}) mm3 of legends",
+                    part=TPU_PART,
+                )
+            )
+        for ref in refs:
+            x, y = board.components()[ref][:2]
+            runs = _ray_runs(blank, (x, y, CAP_TOP + 1), (x, y, CAP_TOP - 1))
+            if not runs or abs(runs[0][0] - 1) > 0.02:
+                first = "no material" if not runs else f"{CAP_TOP + 1 - runs[0][0]:.3f}"
+                problems.append(
+                    Problem(
+                        f"the blank {label} keytop {ref} first meets material at "
+                        f"z {first}, not CAP_TOP {CAP_TOP:.3f}",
+                        part=TPU_PART,
+                        at=(x, y, CAP_TOP),
+                    )
+                )
+        lines.append(f"{label} +{gain:.2f}")
+    return problems, lines

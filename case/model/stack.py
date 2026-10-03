@@ -48,6 +48,11 @@ PAD_WEB_BOTTOM = BOARD_TOP + KEYPAD_KEEPOUT
 KEYPAD_PLUNGER_STUB, so the plunger below it is a short, real stub rather
 than a long unsupported peg standing in dead air."""
 
+PAD_SKIRT_BOTTOM = SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
+"""Bottom of the moulded pad's skirt, level with the V3 plunger contacts, so
+the pad stands level on both. The V2 top pads use it too, so every lobe's
+skirt ends on one plane whichever board it is on."""
+
 PAD_WEB_TOP = PAD_WEB_BOTTOM + params.PAD_WEB_T
 CAVITY_FRONT = PAD_WEB_TOP
 """The keypad region's own cavity ceiling: the web's own top, the same
@@ -119,7 +124,7 @@ CAP_TOP = SHELL_FRONT + params.CAP_PROTRUSION
 """Top of a released cap, proud of the flat face by CAP_PROTRUSION."""
 
 CAP_BOTTOM = PAD_WEB_TOP + params.CAP_LIFT
-"""Bottom of a cap's flange, and so the air the cap has to move down through."""
+"""Bottom of a cap's flange. With CAP_LIFT at zero it rests on the pad web."""
 
 COUNTERBORE_TOP = (
     CAVITY_FRONT + params.CAP_LIFT + params.CAP_FLANGE_T + params.CAP_FLANGE_FLOAT

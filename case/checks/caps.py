@@ -5,7 +5,8 @@ requires clearance. The solids alone cannot prove either fit mode.
 
 Caps face height: a released cap's top lands CAP_PROTRUSION above the flat front
 face, not merely close to it. It exists to catch CAP_TOP drifting away from the
-design parameter that is meant to drive it.
+design parameter that is meant to drive it. A full press must also leave the top
+at or above the face.
 
 Caps proud of pocket: a cap stands proud of the recess floor around it by
 exactly CAP_PROTRUSION plus the recess's own local depth there, the same
@@ -23,7 +24,7 @@ one of those covers the others.
 
 import math
 
-from build123d import Pos
+from build123d import Box, Pos
 from fontTools.ttLib import TTFont
 
 import board
@@ -58,10 +59,6 @@ FLANGE_FLOAT_RANGE = (0.1, 0.5)
 """How far a cap may lift before its flange meets the shoulder. Too little and
 tolerance turns the float into a clamp that stops the cap pressing; too much and
 STEM_GRIP has more slop to take up than it can."""
-TRAVEL_MARGIN = 0.2
-"""How much further than SWITCH_TRAVEL a cap has to be able to move. It covers
-the stack-up under the switch, which is SWITCH_HEIGHT and so is the least
-trustworthy number in the model."""
 PERIMETER_SAMPLES = 240
 """Points each cap curve is sampled at when the fits between them are measured
 around the whole perimeter. Dense enough that the sampled minimum lands within a
@@ -169,15 +166,6 @@ def caps_fit(front, pad, caps):
     # against every cap would test the wrong number on most of them, and a font
     # size is an em rather than an ink height in the first place.
 
-    # CAP_PROTRUSION sets the released top height but does not add travel under
-    # the flange. CAP_LIFT still has to clear the switch before anything else
-    # bottoms out.
-    if params.CAP_LIFT < params.SWITCH_TRAVEL + TRAVEL_MARGIN:
-        problems.append(
-            f"CAP_LIFT is {params.CAP_LIFT:.2f} against "
-            f"{params.SWITCH_TRAVEL:.2f} of travel"
-        )
-
     roof = params.CAP_TOP_T - params.LEGEND_DEPTH
     if roof < LEGEND_FLOOR:
         problems.append(f"legends leave {roof:.2f} of roof to glow through")
@@ -233,9 +221,64 @@ def cap_fits_around_perimeter():
     return problems
 
 
+FLANGE_PROBE = 0.1
+"""Side of the thin column used to read the cap's lowest material and the pad's
+top at one point under the flange."""
+
+
+def _column_z(solid, x, y, top):
+    """Lowest (or, with `top`, highest) Z of `solid` inside a thin column at (x, y)."""
+    hit = solid.intersect(Pos(x, y, 0) * Box(FLANGE_PROBE, FLANGE_PROBE, 100))
+    bounds = [s.bounding_box() for s in hit.solids()]
+    if not bounds:
+        return None
+    return max(b.max.Z for b in bounds) if top else min(b.min.Z for b in bounds)
+
+
+def caps_rest_on_pad(pad, caps, label="pad"):
+    """Each built cap's flange underside rests on the built pad web.
+
+    `caps` may hold only some of the caps, for a pad that covers only some
+    switches. `label` names the pad in the messages.
+
+    A vertical column through the flange, outside the socket mouth and inside the
+    body wall, reads the cap's lowest material and the pad's highest material at
+    the same x and y. They have to agree: a cap above the web leaves an air gap,
+    and a cap below it is inside the pad. Read off the built solids, so it holds
+    whatever CAP_LIFT and the stack say.
+    """
+    problems = []
+    parts = board.components()
+    widest = (params.STEM_W - 2 * params.STEM_GRIP) + 2 * params.SOCKET_LEAD
+    for ref, cap in caps.items():
+        x, y = parts[ref][:2]
+        px = x + widest / 2 + FLANGE_PROBE
+        bottom = _column_z(cap, px, y, top=False)
+        web = _column_z(pad, px, y, top=True)
+        if bottom is None or web is None:
+            problems.append(f"{ref} has no cap or no {label} material under its flange")
+            continue
+        if abs(bottom - web) > FACE_HEIGHT_TOLERANCE:
+            problems.append(
+                f"{ref}'s cap flange bottom is at {bottom:.3f} but the {label} web top "
+                f"is at {web:.3f}, so the flange does not rest on the web"
+            )
+        overlap = _volume(pad.intersect(cap))
+        if params.STEM_GRIP <= 0 and overlap > TOLERANCE:
+            problems.append(f"{ref}'s cap overlaps the {label} by {overlap:.2f} mm3")
+    return problems
+
+
 def caps_flush():
-    """A released cap's top has to land CAP_PROTRUSION above the front face."""
+    """A released cap's top has to land CAP_PROTRUSION above the front face, and a
+    full press of SWITCH_TRAVEL must leave it at or above the face."""
     off = case.CAP_TOP - case.SHELL_FRONT
+    pressed = off - params.SWITCH_TRAVEL
+    if pressed < -FACE_HEIGHT_TOLERANCE:
+        return [
+            f"a full press of {params.SWITCH_TRAVEL:.3f} leaves the cap top "
+            f"{pressed:.3f} below the front face, wants it at or above"
+        ]
     if abs(off - params.CAP_PROTRUSION) > FACE_HEIGHT_TOLERANCE:
         return [
             f"cap top {case.CAP_TOP:.3f} against face {case.SHELL_FRONT:.3f}, "

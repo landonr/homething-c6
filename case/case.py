@@ -16,8 +16,9 @@ The pad is two flat soft lobes with one raised feature per switch, one lobe per
 island of keys, each padded off its own keys and so stopping short of the wheel
 rather than being cut back from it. Neither reaches over the wheel or the status
 LEDs: the light hits the translucent shell directly instead of being piped
-through silicone. No skirt. The plungers rest on the switches and hold each lobe
-against the ceiling.
+through silicone. The moulded pad has a skirt level with the plungers, broken over
+board parts. The plungers rest on the switches and hold each lobe against the
+ceiling.
 
 SW1 and SW2 raise a moulded keytop, as every key once did. The other nine raise a
 stem instead, and a rigid translucent cap sits over each one. The caps are

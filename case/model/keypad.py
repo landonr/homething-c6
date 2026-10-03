@@ -34,7 +34,7 @@ import board
 import cache
 import params
 
-from .hardware import mount_points
+from .hardware import legacy_screw_head, mount_points
 from .legends import legend_solids
 from .mic import mic_duct_or, mic_port
 from .shape import (
@@ -53,6 +53,7 @@ from .stack import (
     FDM_FACE,
     LEGACY_SWITCH_TOP,
     MERGE,
+    PAD_SKIRT_BOTTOM,
     PAD_WEB_BOTTOM,
     PAD_WEB_TOP,
     SHELL_FRONT,
@@ -1136,21 +1137,17 @@ def _grid_axes(axis):
     return [sum(group) / len(group) for group in groups]
 
 
-def _pad_groove_specs(fdm=False):
-    """Isolation-groove plan data derived from the nine switch coordinates.
+def _pad_groove_specs():
+    """FDM isolation-groove plan data derived from the nine switch coordinates.
 
     Each tuple is (orientation, centre, run0, run1). A vertical groove runs
     along Y between adjacent switch columns. A horizontal groove runs along X
     between adjacent switch rows. Only the grid lobe appears here.
     """
     _, x0, y0, x1, y1 = next(box for box in pad_lobes() if box[0] == "grid")
-    edge = (
-        -params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
-        if fdm
-        else params.PAD_GROOVE_EDGE_RETENTION
-    )
     columns = _grid_axes("x")
     rows = _grid_axes("y")
+    edge = -params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
     return tuple(
         ("vertical", (a + b) / 2, y0 + edge, y1 - edge)
         for a, b in zip(columns, columns[1:])
@@ -1160,14 +1157,22 @@ def _pad_groove_specs(fdm=False):
     )
 
 
-def _pad_grooves(fdm=False):
-    """Eight rounded flat-bottom cuts, two faces for each grid centreline."""
-    width = params.FDM_PAD_GROOVE_W if fdm else params.PAD_GROOVE_W
-    depth = params.FDM_PAD_GROOVE_DEPTH if fdm else params.PAD_GROOVE_DEPTH
+def _pad_grooves():
+    """Rounded flat-bottom FDM cuts for each grid centreline, from the keytop face only.
+
+    The plunger face stays flat for supports.
+    """
+    width = params.FDM_PAD_GROOVE_W
+    depth = params.FDM_PAD_GROOVE_DEPTH
     if width <= 0 or depth <= 0:
         raise ValueError("pad groove width and depth must be positive")
+    if depth >= params.PAD_WEB_T:
+        raise ValueError("FDM pad groove depth leaves no web")
+    chamfer = params.FDM_PAD_GRID_CHAMFER
+    if not 0 < chamfer <= depth:
+        raise ValueError("FDM pad groove chamfer must be positive and at most the groove depth")
     cuts = []
-    for orientation, centre, run0, run1 in _pad_groove_specs(fdm):
+    for orientation, centre, run0, run1 in _pad_groove_specs():
         length = run1 - run0
         if length <= width:
             raise ValueError("pad groove edge treatment leaves no groove run")
@@ -1181,8 +1186,11 @@ def _pad_grooves(fdm=False):
                 # dimension. One micron preserves the intended semicircle.
                 RectangleRounded(size_x, size_y, width / 2 - 0.001)
         face = sketch.sketch.faces()[0]
-        cuts.append(_slab(face, PAD_WEB_TOP - depth, PAD_WEB_TOP + MERGE))
-        cuts.append(_slab(face, PAD_WEB_BOTTOM - MERGE, PAD_WEB_BOTTOM + depth))
+        cut = _slab(face, PAD_WEB_TOP - depth, PAD_WEB_TOP + MERGE)
+        # Negative taper grows the slot 1 mm per 1 mm of height (45 degrees).
+        flare = extrude(Pos(0, 0, PAD_WEB_TOP - chamfer) * face,
+                        amount=chamfer + MERGE, taper=-45)
+        cuts.append(_fuse(cut, flare))
     return cuts
 
 
@@ -1257,7 +1265,7 @@ def _boss_clearances(x0, y0, x1, y1):
     """
     clearance_d = params.BOSS_OD + 2 * (params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE)
     r = clearance_d / 2
-    bottom, top = PAD_WEB_BOTTOM - 1, STEM_TOP + 1
+    bottom, top = PAD_SKIRT_BOTTOM - 1, STEM_TOP + 1
     out = []
     for x, y in mount_points():
         if x < x0 - r or x > x1 + r or y < y0 - r or y > y1 + r:
@@ -1291,16 +1299,17 @@ def _mic_clearance():
     diameter = 2 * (
         mic_duct_or() + params.STANDOFF_CHAMFER + params.PAD_MIC_CLEARANCE
     )
-    return _hole(x, y, diameter, PAD_WEB_BOTTOM - 1, PAD_WEB_TOP + 1)
+    return _hole(x, y, diameter, PAD_SKIRT_BOTTOM - 1, PAD_WEB_TOP + 1)
 
 
-def plunger(x, y, contact=SWITCH_TOP):
+def plunger(x, y, contact=SWITCH_TOP, extension=params.PLUNGER_SWITCH_EXTENSION):
     """Build one plunger with a 45 degree lower-edge chamfer and flat contact.
 
-    `contact` is the switch top it engages. The V2 top pad's nibs pass
-    LEGACY_SWITCH_TOP, so they engage a V2 switch by the same extension.
+    `contact` is the switch top it engages and `extension` how far it reaches
+    below it. The V2 top pad's nibs pass LEGACY_SWITCH_TOP and
+    LEGACY_NIB_EXTENSION, so they engage a V2 switch by a shorter extension.
     """
-    z0 = contact - params.PLUNGER_SWITCH_EXTENSION
+    z0 = contact - extension
     size = params.PLUNGER_LOWER_CHAMFER
     radius = params.PLUNGER_D / 2
     if size <= 0 or size >= radius or size >= PAD_WEB_TOP - z0:
@@ -1315,45 +1324,214 @@ def plunger(x, y, contact=SWITCH_TOP):
     return _fuse(chamfer, shaft)
 
 
+@functools.cache
+def _skirt_ring(name, bottom=PAD_SKIRT_BOTTOM):
+    """The moulded skirt before any break: lobe outline less its PAD_SKIRT_T inset."""
+    face = pad_lobe_face(name)
+    inner = Face(face.outer_wire().offset_2d(-params.PAD_SKIRT_T, kind=Kind.ARC))
+    return _cut(
+        _slab(face, bottom, PAD_WEB_BOTTOM + MERGE),
+        _slab(inner, bottom - 1, PAD_WEB_BOTTOM + MERGE + 1),
+    )
+
+
+@functools.cache
+def _v3_skirt_obstacles():
+    """[(ref, solid)] every V3 assembly solid under the V3 placement nearest it."""
+    return [
+        (ref, solid)
+        for ref, solids in sorted(board.placement_groups().items())
+        for solid in solids
+    ]
+
+
+def _skirt_breaks(name, obstacles, bottom):
+    """[(ref, box)] cuts that open a skirt of the given `bottom` over each of
+    `obstacles`, a list of (ref, solid)."""
+    clear = params.PAD_SKIRT_CLEARANCE
+    ring = _skirt_ring(name, bottom)
+    ring_box = ring.bounding_box()
+    groups = {}
+    for ref, solid in obstacles:
+        box = solid.bounding_box()
+        if box.max.Z <= bottom - clear:
+            continue
+        if (box.max.X + clear < ring_box.min.X or box.min.X - clear > ring_box.max.X
+                or box.max.Y + clear < ring_box.min.Y or box.min.Y - clear > ring_box.max.Y):
+            continue
+        reach = Pos((box.min.X + box.max.X) / 2, (box.min.Y + box.max.Y) / 2, 0) * Box(
+            box.max.X - box.min.X + 2 * clear,
+            box.max.Y - box.min.Y + 2 * clear,
+            100,
+        )
+        hit = ring.intersect(reach)
+        if hit is None or not hit.solids():
+            continue
+        groups.setdefault(ref, []).append(box)
+    z0, z1 = bottom - 1, PAD_WEB_BOTTOM + MERGE + 1
+    out = []
+    for ref in sorted(groups):
+        boxes = groups[ref]
+        lo_x = min(b.min.X for b in boxes) - clear
+        hi_x = max(b.max.X for b in boxes) + clear
+        lo_y = min(b.min.Y for b in boxes) - clear
+        hi_y = max(b.max.Y for b in boxes) + clear
+        out.append((ref, Pos((lo_x + hi_x) / 2, (lo_y + hi_y) / 2, (z0 + z1) / 2)
+                    * Box(hi_x - lo_x, hi_y - lo_y, z1 - z0)))
+    return out
+
+
+def pad_skirt_breaks(name):
+    """[(ref, box)] cuts that open the skirt over each board part it would touch.
+
+    A part counts if its top is above PAD_SKIRT_BOTTOM less PAD_SKIRT_CLEARANCE
+    and its plan box, grown by PAD_SKIRT_CLEARANCE, reaches the skirt. One box
+    per nearest placement, over all of that part's solids.
+    """
+    return _skirt_breaks(name, _v3_skirt_obstacles(), PAD_SKIRT_BOTTOM)
+
+
+def pad_skirt(name):
+    """The moulded lobe's skirt: a PAD_SKIRT_T wall flush with the lobe outline.
+
+    It drops from the web to PAD_SKIRT_BOTTOM, level with the plungers, and is
+    cut open over each board part before it fuses to the web. The moulded and
+    TPU pads share it.
+    """
+    return _cut(_skirt_ring(name), *(box for _, box in pad_skirt_breaks(name)))
+
+
+LEGACY_SKIRT_NAME = "V2_RETENTION_HOLE"
+"""Name of the V2 skirt break over the retention screw head."""
+
+
+@functools.cache
+def legacy_skirt_obstacles():
+    """[(ref, solid)] what the V2 top pad's skirt must clear, in the case frame
+    with the V2 board in place: the V3 body of each V2 top-side part moved to
+    its V2 placement and dropped SUPPORT_GAP, and the V2 screw head.
+
+    Every V2 part on the top side that has a V3 body is moved. The break rule
+    then keeps only those that reach the second lobe's skirt.
+    """
+    legacy = board.legacy_components()
+    out = []
+    for ref in sorted(board.placement_groups()):
+        if ref not in legacy or legacy[ref][3] != "top":
+            continue
+        for solid in board.legacy_part_solids(ref):
+            out.append((ref, Pos(0, 0, -params.SUPPORT_GAP) * solid))
+    out.append((LEGACY_SKIRT_NAME, legacy_screw_head()))
+    return out
+
+
+def legacy_pad_skirt():
+    """The second lobe's skirt for the V2 top pad: bottom level with the V3
+    pad's skirt (PAD_SKIRT_BOTTOM), broken over the V2 obstacles."""
+    return _cut(
+        _skirt_ring("second", PAD_SKIRT_BOTTOM),
+        *(box for _, box in legacy_skirt_breaks()),
+    )
+
+
+def legacy_skirt_breaks():
+    """[(name, box)] the V2 top pad's skirt breaks, by the same rule as
+    pad_skirt_breaks over legacy_skirt_obstacles()."""
+    return _skirt_breaks("second", legacy_skirt_obstacles(), PAD_SKIRT_BOTTOM)
+
+
 @cache.solid
-def button_pad(fdm=False):
+def button_pad(fdm=False, skirt=None, grooves=True, legend=True, v2=False):
     """Build two pad lobes supported by their switch plungers.
 
     The mic lobe follows both buttons with a connected lower bridge.
     Both lobes stop outside the wheel clearance band. With fdm=True, the
     printed keytops and legends are fused to their lobe webs in this export.
+    `skirt` adds the perimeter skirt and defaults to the moulded pad only.
+    `grooves` applies only when `fdm` is true; False gives the FDM pad a plain grid web with no grooves and no edge chamfer.
+    `legend` False leaves every printed keytop blank. `v2` swaps the second lobe for `legacy_top_pad`, so one part fits a V2 board.
     """
-    return _fuse(*(_pad_lobe(name, fdm) for name, *_ in pad_lobes()))
+    return _fuse(
+        *(
+            legacy_top_pad(skirt=bool(skirt), fdm=fdm, legend=legend)
+            if v2 and name == "second"
+            else _pad_lobe(name, fdm, skirt=skirt, grooves=grooves, legend=legend)
+            for name, *_ in pad_lobes()
+        )
+    )
 
 
-def _pad_lobe(name, fdm, nibs=()):
-    """Build one pad lobe. Each (x, y) in `nibs` adds a plunger to a V2 switch."""
+def _pad_lobe(
+    name,
+    fdm,
+    nibs=(),
+    plunger_extension=params.PLUNGER_SWITCH_EXTENSION,
+    skirt=None,
+    grooves=True,
+    skirt_part=None,
+    legend=True,
+):
+    """Build one pad lobe. Each (x, y) in `nibs` adds a plunger to a V2 switch.
+
+    `skirt` None means a skirt only when `fdm` is false. `skirt_part` replaces
+    the lobe's own skirt solid. `plunger_extension` is how far each of the lobe's own
+    plungers reaches below SWITCH_TOP. `grooves` applies only when `fdm` is true.
+    `legend` False leaves the printed keytops blank.
+    """
     parts = board.components()
     x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
     body = _slab(pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP)
+    skirt = not fdm if skirt is None else skirt
+    if fdm and grooves and name == "grid":
+        c = params.FDM_PAD_GRID_CHAMFER
+        face = pad_lobe_face(name)
+        body = _fuse(
+            _slab(face, PAD_WEB_BOTTOM, PAD_WEB_TOP - c),
+            # The lobe face points -Z, so the taper needs an explicit +Z.
+            extrude(Pos(0, 0, PAD_WEB_TOP - c) * face, amount=c, dir=(0, 0, 1), taper=45),
+        )
+    if skirt:
+        body = _fuse(body, pad_skirt(name) if skirt_part is None else skirt_part)
     raised = []
     for ref in island_refs(name):
         x, y = parts[ref][:2]
         raised.append(_stem(x, y))
-        raised.append(plunger(x, y))
+        raised.append(plunger(x, y, extension=plunger_extension))
         if fdm:
-            raised.append(fdm_keycap(ref))
-    raised.extend(plunger(x, y, LEGACY_SWITCH_TOP) for x, y in nibs)
+            raised.append(fdm_keycap(ref, legend=legend))
+    raised.extend(
+        plunger(x, y, LEGACY_SWITCH_TOP, params.LEGACY_NIB_EXTENSION)
+        for x, y in nibs
+    )
     cuts = _boss_clearances(x0, y0, x1, y1)
     if name == "second":
         cuts.append(_mic_clearance())
-    else:
-        cuts.extend(_pad_grooves(fdm))
+    elif fdm and grooves:
+        cuts.extend(_pad_grooves())
     return _cut(_fuse(body, *raised), *cuts)
 
 
 @cache.solid
-def legacy_top_pad():
-    """Build the FDM pad's SW1/SW2 lobe for a V2 board only.
+def legacy_top_pad(skirt=False, fdm=True, legend=True):
+    """Build the pad's SW1/SW2 lobe for a V2 board only.
 
     It keeps the V3 plungers and adds one nib at each V2 switch, which sits
-    further -Y and lower, on the retention post.
+    further -Y and lower, on the retention post. Nibs and kept plungers both
+    extend LEGACY_NIB_EXTENSION below their own switch top, so the plungers
+    stay SUPPORT_GAP above the nibs.
+    `skirt` adds the one-piece TPU pad's skirt, ending level with the V3 pad's
+    skirt (PAD_SKIRT_BOTTOM) and broken over the V2 parts and the V2 screw head. With `fdm` false the lobe is the
+    moulded pad's: plain web, stems for the separate caps, no fused keytops.
+    `legend` False leaves the fused keytops blank.
     """
     legacy = board.legacy_components()
     nibs = [legacy[ref][:2] for ref in island_refs("second")]
-    return _pad_lobe("second", fdm=True, nibs=nibs)
+    return _pad_lobe(
+        "second",
+        fdm=fdm,
+        nibs=nibs,
+        plunger_extension=params.LEGACY_NIB_EXTENSION,
+        skirt=skirt,
+        skirt_part=legacy_pad_skirt() if skirt else None,
+        legend=legend,
+    )

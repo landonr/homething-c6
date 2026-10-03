@@ -12,7 +12,7 @@ import re
 from collections import defaultdict, namedtuple
 from pathlib import Path
 
-from build123d import Axis, Box, Face, Plane, Pos, import_step
+from build123d import Axis, Box, Face, Plane, Pos, Rot, import_step
 
 ROOT = Path(__file__).resolve().parent.parent
 KICAD_PCB = ROOT / "c6remote-kicad" / "c6remote.kicad_pcb"
@@ -221,6 +221,12 @@ def components():
     return _placements(POS_CSV)
 
 
+def _packages(path):
+    """{ref: footprint name} out of one KiCad position CSV."""
+    with _require(path).open() as fh:
+        return {row["Ref"]: row["Package"] for row in csv.DictReader(fh)}
+
+
 def refs(prefix):
     matches = [r for r in components() if re.fullmatch(rf"{prefix}\d+", r)]
     return sorted(matches, key=lambda r: int(re.search(r"\d+", r).group()))
@@ -247,6 +253,69 @@ def _assembly_boxes():
     per part asked for.
     """
     return [(solid, solid.bounding_box()) for solid in assembly_solids()]
+
+
+@functools.cache
+def placement_groups():
+    """{ref: [solid]} over assembly_solids(), each solid under the V3 placement
+    nearest its bounding-box centre. ENC1 has no row in the position file, so
+    wheel_center() stands in for it. A part with no 3D model has no entry."""
+    placements = {ref: (x, y) for ref, (x, y, _, _) in components().items()}
+    placements["ENC1"] = wheel_center()
+    groups = {}
+    for solid, box in _assembly_boxes():
+        c = box.center()
+        ref = min(
+            placements,
+            key=lambda r: math.hypot(placements[r][0] - c.X, placements[r][1] - c.Y),
+        )
+        groups.setdefault(ref, []).append(solid)
+    return groups
+
+
+@functools.cache
+def board_z_span():
+    """(bottom, top) of the V3 board body, read off the board-only STEP."""
+    box = import_step(_require(BOARD_ONLY_STEP)).solids()[0].bounding_box()
+    return box.min.Z, box.max.Z
+
+
+@functools.cache
+def legacy_part_solids(ref):
+    """Every V3 assembly solid of `ref`, moved from its V3 placement to its V2
+    placement, at V3's Z. The caller drops it by SUPPORT_GAP for the V2 board.
+
+    V2 has no 3D model of its own, so this is the V3 body carried over. The move
+    is a rotation about Z by the V2 rotation less the V3 rotation, then an XY
+    translation. If a part is on the other board side in V2, the body is turned
+    over first: 180 degrees about the X axis through the board mid plane, which is
+    KiCad's default top-to-bottom flip.
+
+    Raises if the package differs between the two position files, or if the ref
+    has no placement in one of them or no 3D body in V3. A different package
+    would make the carried body the wrong shape.
+    """
+    v3, v2 = components(), legacy_components()
+    if ref not in v3 or ref not in v2:
+        raise ValueError(f"{ref} has no placement in both V2 and V3")
+    pkg3, pkg2 = _packages(POS_CSV)[ref], _packages(LEGACY_POS_CSV)[ref]
+    if pkg3 != pkg2:
+        raise ValueError(f"{ref} is {pkg3} in V3 and {pkg2} in V2, so its V3 body is the wrong shape")
+    solids = placement_groups().get(ref)
+    if not solids:
+        raise ValueError(f"{ref} has no 3D body in the V3 assembly")
+    x3, y3, rot3, side3 = v3[ref]
+    x2, y2, rot2, side2 = v2[ref]
+    z_mid = sum(board_z_span()) / 2
+    out = []
+    for solid in solids:
+        moved = Pos(-x3, -y3, 0) * solid
+        moved = Rot(Z=-rot3) * moved
+        if side3 != side2:
+            moved = Pos(0, 0, z_mid) * (Rot(X=180) * (Pos(0, 0, -z_mid) * moved))
+        moved = Rot(Z=rot2) * moved
+        out.append(Pos(x2, y2, 0) * moved)
+    return tuple(out)
 
 
 MAX_ENVELOPE_OFFSET = 4.0

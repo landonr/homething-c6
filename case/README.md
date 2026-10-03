@@ -13,10 +13,10 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 </p>
 <p align="center"><sub>Front shell, caps, button pad, board, and back shell</sub></p>
 
-The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps.
+The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).
-It also exports the V2 top pad, an FDM part for a V2 board. Read [V2 retention post](#v2-retention-post).
+It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 retention post](#v2-retention-post).
 
 ## Setup
 
@@ -125,8 +125,18 @@ The IR window material must transmit 940 nm infrared light. Test the selected fi
 If the shell filament blocks too much infrared light, make the same insert from IR-pass acrylic.
 
 Prototype the button pad in TPU. Use translucent silicone for a molded part.
+The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide and its bottom is level with the plunger contacts, so the pad stands level on the plungers and the skirt.
+The skirt has a break over each board part that it would otherwise touch. `PAD_SKIRT_CLEARANCE` sets the gap.
+The molded pad and the one-piece TPU pad have a plain web without isolation grooves. Only the FDM pad has grooves.
 
-Print the caps in translucent PETG. Either orientation works.
+`c6remote-case-pad-tpu.stl` goes with the recessed front `c6remote-case-front.stl`. Print it in TPU as one piece in place of the TPU pad and the PETG caps. Do not install separate caps with it.
+
+For keytops with no legend, print `c6remote-case-pad-tpu-blank.stl` in place of `c6remote-case-pad-tpu.stl`.
+It is the FDM pad with the same skirt as the molded pad. It has no edge chamfer, because TPU flexes on its own. Its grid web is a plain slab with square edges.
+
+Print the caps in translucent PETG or PLA. Either orientation works. For a key with no legend, print `c6remote-cap-sw<n>-blank.stl` in place of `c6remote-cap-sw<n>.stl`. The blank cap has the same fit.
+
+The cap flange rests on the pad web, so a press moves the cap and the web together. `CAP_LIFT` sets any air under the flange.
 
 Top faces against the build plate gives the best finish. Top faces up needs support on the top faces. Trim the support marks after the print.
 
@@ -139,6 +149,12 @@ Print the FDM pad in either orientation. The STL exports with the keytops up.
 Keytops down puts the keytop faces on the plate. The pad then stands on 523 mm2.
 
 Keytops up puts the pad on the keytop stems. The pad then stands on 26 mm2. Use a brim and a clean plate. Set the support roof density to 80 percent, or the web sags into the support. Trim the support marks after the print.
+
+The FDM pad cuts its isolation grooves from the keytop side only. As a result, the web underside is flat, and the supports for a keytops-up print come off easily.
+
+The chamfer on both lips of each groove and on the grid lobe outer top edge runs down to the groove floor, set by `FDM_PAD_GRID_CHAMFER`.
+
+If you print keytops down, the grooves face the support. Then the supports fill the grooves and are hard to remove.
 
 ## FDM front
 
@@ -162,7 +178,7 @@ The groove is narrow, so the layer above it bridges the gap in one span. The FDM
 
 The FDM front's face sits `FDM_FACE_DROP` below the recessed front's, so the part is slimmer than a flat face at the raised level.
 
-The caps and the wheel stand proud by that much. The recessed front already stands its caps 0.47 mm to 0.80 mm proud of the dish.
+The caps and the wheel stand proud by that much. The recessed front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth.
 
 The drop thins three ceilings that the dish never reaches. The USB pocket roof is the tight one, and `check.py --only fdm` holds all three.
 
@@ -232,11 +248,21 @@ For a V2 board, print `c6remote-case-pad-fdm-v2-top.stl`. Use it in place of the
 
 The V2 top pad keeps the V3 SW1 and SW2 plungers. It adds one nib above each V2 switch.
 
-Each nib extends `PLUNGER_SWITCH_EXTENSION` below the V2 switch top, the same engagement that the V3 plungers get.
+Each nib extends `LEGACY_NIB_EXTENSION` below the V2 switch top. The kept V3 plungers use the same extension below the V3 switch top, so they stop above the nibs.
+
+The SW1 and SW2 keytops of the V2 top pad stand level with the other keys.
 
 Use the V2 top pad only with a V2 board. On a V3 board, the nibs land on the V3 switch bodies.
 
-Print the V2 top pad with the keytops down. The nibs extend below the plungers, so the part cannot stand level on its plungers.
+For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl`. On a V2 board, it replaces the SW1 and SW2 lobe of `c6remote-case-pad-tpu.stl`. Use it with the recessed front `c6remote-case-front.stl`.
+
+`c6remote-case-pad-tpu-v2-blank.stl` is a complete V2 pad with blank keytops in one STL. Print it alone, with the recessed front `c6remote-case-front.stl`.
+
+Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements, and from the V2 screw head.
+
+For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the recessed front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
+
+Print the FDM V2 top pad with the keytops down. The nibs extend below the plungers, so the part cannot stand level on its plungers.
 
 On the first print, make sure that SW1 and SW2 operate and do not bind. Each V3 plunger overlaps the edge of a V2 switch body.
 
@@ -254,6 +280,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 
 - Keep the button caps captive behind the front-shell ceiling.
 - Keep the button pad clear of the wheel and the four wheel LEDs.
+- Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.
 - Keep the USB slot and pocket clear of the connector shell.

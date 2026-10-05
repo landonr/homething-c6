@@ -24,7 +24,7 @@ one of those covers the others.
 
 import math
 
-from build123d import Box, Pos
+from build123d import Box, Compound, Face, Kind, Pos, Text, Vertex, make_face, offset
 from fontTools.ttLib import TTFont
 
 import board
@@ -354,10 +354,9 @@ def legends_present(caps):
     does not carry onto .notdef, which DejaVu draws as a hollow box with
     several times the ink of the smallest legend here, so a missing glyph
     ships as a legend that passes a volume floor and reads as a rectangle.
-    That is worth more care than usual now that SW5 carries a hollow box on
-    purpose, U+25A1, which the font does have: the two would be told apart
-    by nothing else in this file. Checked against the font file rather than
-    the rendering for that reason.
+    A .notdef box is a hollow rectangle that would pass for a legend, and
+    nothing else in this file would tell it from a deliberate outline, so the
+    cmap is checked against the font file rather than the rendering.
     fontTools is build123d's own transitive dependency, through ezdxf, so
     it is present wherever this model builds at all.
 
@@ -387,9 +386,8 @@ def legends_present(caps):
 
         # Weighed against the same cap built blank, so this is what the deboss
         # actually removed rather than what its solids measure. Not the same
-        # number: the mic's four paths overlap each other by a fraction of a
-        # millimetre so they read as one groove, and a legend whose solids sit
-        # off the cap top entirely would measure full and remove nothing.
+        # number: a legend whose solids sit off the cap top entirely would
+        # measure full and remove nothing.
         cut = case.keycap(ref, legend=False).volume - cap.volume
         if cut < LEGEND_MIN_VOLUME:
             problems.append(
@@ -415,4 +413,138 @@ def legends_present(caps):
                     f"in {flat:.2f} of flat top, under {LEGEND_INK_MARGIN:.2f} "
                     "of margin"
                 )
+    return problems
+
+
+LEGEND_STROKE_REACH = 0.75
+"""Widest a legend groove may be, as a multiple of LEGEND_STROKE_W: the farthest
+any void point on the cap's section sits from the nearest groove wall. A round-
+capped line reaches 0.5, two strokes crossing about 0.65, and an inward outline
+at a sharp tip about 0.67 (measured worst, SW6, at a 0.1 grid), so 0.75 leaves
+headroom for sampling error and none for a fill: a filled plus bar reaches 0.9
+and a filled square about 2.8."""
+
+LEGEND_PROBE_STEP = 0.15
+"""Grid step, mm, of the line-weight probe over each legend's ink box. Coarse
+enough to keep the pass near a minute; it can only under-read a reach, by less
+than the step."""
+
+LEGEND_PROBE_HALF = 0.05
+"""Distance above and below the groove floor the depth probe reads at."""
+
+
+def _legend_points(solids, per_solid=4):
+    """Up to `per_solid` (x, y) points truly inside each legend solid, off a
+    grid over its box so a concave stroke cannot hand back an outside centroid."""
+    found = []
+    for solid in solids:
+        box = solid.bounding_box()
+        zmid = (box.min.Z + box.max.Z) / 2
+        hits = []
+        steps = 14
+        for i in range(1, steps):
+            for j in range(1, steps):
+                x = box.min.X + (box.max.X - box.min.X) * i / steps
+                y = box.min.Y + (box.max.Y - box.min.Y) * j / steps
+                if solid.is_inside((x, y, zmid)):
+                    hits.append((x, y))
+        stride = max(1, len(hits) // per_solid)
+        found.extend(hits[::stride][:per_solid])
+    return found
+
+
+def _hollow_points(spec, size, x, y):
+    """(x, y) of the interior each string glyph's outline encloses, in the cap's
+    frame. For probing only: the centre of each glyph's inward offset, shifted
+    by the same ink-centring the legend gets."""
+    glyphs = Text(spec, font_size=size, font_path=str(params.LEGEND_FONT)).faces()
+    box = glyphs[0].bounding_box()
+    for glyph in glyphs[1:]:
+        box = box.add(glyph.bounding_box())
+    cx, cy = box.center().X, box.center().Y
+    points = []
+    for glyph in glyphs:
+        try:
+            inner = offset(glyph, -params.LEGEND_STROKE_W, kind=Kind.INTERSECTION).faces()
+        except (ValueError, RuntimeError):
+            inner = [make_face(glyph.outer_wire().offset_2d(-params.LEGEND_STROKE_W, kind=Kind.ARC))]
+        for face in inner:
+            c = face.center()
+            points.append((c.X - cx + x, c.Y - cy + y))
+    return points
+
+
+def legends_are_strokes(caps):
+    """Every legend is a shallow line of LEGEND_STROKE_W, read off the built cap.
+
+    Three probes, each on the finished cap solid rather than the legend
+    builder's own output.
+
+    Depth: at points on the stroke the cap is void LEGEND_PROBE_HALF above
+    LEGEND_DEPTH below CAP_TOP and material the same distance below it.
+
+    Hollow: a string legend's glyph interior, the part its outline encloses,
+    is material half a LEGEND_DEPTH below CAP_TOP. A legend that reverts to a
+    fill is void there.
+
+    Line weight: the cap is sectioned half a LEGEND_DEPTH below CAP_TOP and a
+    grid over the legend's ink box is sampled. Each void sample's distance to
+    the section is how far it sits from the nearest groove wall, and the
+    largest must stay within LEGEND_STROKE_REACH * LEGEND_STROKE_W.
+    """
+    problems = []
+    z_mid = case.CAP_TOP - params.LEGEND_DEPTH / 2
+    bound = LEGEND_STROKE_REACH * params.LEGEND_STROKE_W
+    for ref, cap in caps.items():
+        x, y = board.components()[ref][:2]
+        spec, size = case.legend_entry(ref)
+        solids = case.legend_solids(ref)
+        if not solids:
+            continue
+
+        floor = case.CAP_TOP - params.LEGEND_DEPTH
+        for px, py in _legend_points(solids):
+            above = cap.is_inside((px, py, floor + LEGEND_PROBE_HALF))
+            below = cap.is_inside((px, py, floor - LEGEND_PROBE_HALF))
+            if above or not below:
+                problems.append(
+                    f"{ref}'s legend at ({px:.2f}, {py:.2f}) is "
+                    f"{'material' if above else 'void'} {LEGEND_PROBE_HALF:.2f} above and "
+                    f"{'material' if below else 'void'} {LEGEND_PROBE_HALF:.2f} below "
+                    f"{floor:.2f}, wants void above and material below: "
+                    f"is it LEGEND_DEPTH {params.LEGEND_DEPTH:.2f} deep?"
+                )
+                break
+
+        if isinstance(spec, str):
+            for px, py in _hollow_points(spec, size, x, y):
+                if not cap.is_inside((px, py, z_mid)):
+                    problems.append(
+                        f"{ref}'s legend {spec!r} is void at its interior point "
+                        f"({px:.2f}, {py:.2f}), wants material: it is a fill, not an outline"
+                    )
+
+        box = solids[0].bounding_box()
+        for solid in solids[1:]:
+            box = box.add(solid.bounding_box())
+        sheet = Compound(list(cap.intersect(Pos(x, y, z_mid) * Face.make_rect(40, 40))))
+        worst, at = 0.0, None
+        nx = int((box.max.X - box.min.X) / LEGEND_PROBE_STEP) + 1
+        ny = int((box.max.Y - box.min.Y) / LEGEND_PROBE_STEP) + 1
+        for i in range(nx + 1):
+            for j in range(ny + 1):
+                px = box.min.X + i * LEGEND_PROBE_STEP
+                py = box.min.Y + j * LEGEND_PROBE_STEP
+                if cap.is_inside((px, py, z_mid)):
+                    continue
+                d = Vertex(px, py, z_mid).distance_to(sheet)
+                if d > worst:
+                    worst, at = d, (px, py)
+        if worst > bound:
+            problems.append(
+                f"{ref}'s legend groove reaches {worst:.2f} from a wall at "
+                f"({at[0]:.2f}, {at[1]:.2f}), wants at most {bound:.2f} "
+                f"(LEGEND_STROKE_REACH {LEGEND_STROKE_REACH:.2f} x LEGEND_STROKE_W "
+                f"{params.LEGEND_STROKE_W:.2f}): it is wider than a line"
+            )
     return problems

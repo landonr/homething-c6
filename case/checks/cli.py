@@ -48,6 +48,7 @@ from .caps import (
     caps_flush,
     caps_proud_of_pocket,
     caps_rest_on_pad,
+    legends_are_strokes,
     legends_present,
 )
 from .fdm import (
@@ -425,6 +426,15 @@ def _legends_present(s):
         legends_present(s.caps),
         f"all {len(s.caps)} legends cut a real deboss out of one solid cap, "
         "every glyph in the font",
+    )
+
+
+@_check("caps")
+def _legends_are_strokes(s):
+    return _report(
+        legends_are_strokes(s.caps),
+        f"all {len(s.caps)} legends are shallow lines read off the built caps: "
+        "right depth, hollow glyph interiors, line weight within reach",
     )
 
 

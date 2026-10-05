@@ -1368,12 +1368,16 @@ half the recess and leaves the rest as a genuinely straight, interfering bore.
 The radial width, and so the cost to CAP_WALL, is unchanged; only how quickly
 it gets there is."""
 
-LEGEND_DEPTH = 0.4
-"""How deep a legend is cut into the cap top. At least one extrusion width, or an
-FDM slicer drops the deboss entirely: a resin print cuts this crisp, but FDM is
-marginal at 0.4 and worth test-printing before committing nine caps to it.
-Bounded above by CAP_TOP_T, which shrank to 1.0 when the face flattened and left
-less roof to spend."""
+LEGEND_DEPTH = 0.2
+"""How deep a legend line is cut into the cap top: one layer, matching
+FDM_OUTLINE_DEPTH so the legends and the front's outline groove are the same
+shallow line. Width is LEGEND_STROKE_W's concern. Bounded above by CAP_TOP_T,
+which shrank to 1.0 when the face flattened and left less roof to spend."""
+LEGEND_STROKE_W = 0.6
+"""Line weight of every legend, matching FDM_OUTLINE_W: one extrusion wide, so
+an FDM slicer resolves each line as a single pass. Font glyphs are drawn as
+their inward outline of this width, SVGs as centerlines thickened to it, so
+the weight does not change with a legend's size."""
 LEGEND_SIZE = 4.5
 """Default font size for a legend, and the size an SVG's longest side is
 scaled to. Sized so a single glyph's strokes stay above what an FDM nozzle
@@ -1393,12 +1397,12 @@ and DejaVu carries the arrows and technical symbols a keypad wants."""
 
 LEGENDS = {
     "SW1": (("svg", "glyphs/power.svg"), 5.2),
-    "SW2": (("svg", "glyphs/mic.svg"), 5.0),
-    "SW3": ("✕", 5.9),
+    "SW2": (("svg", "glyphs/mic.svg"), 5.2),
+    "SW3": (("svg", "glyphs/cross.svg"), 3.5),
     "SW4": "◀",
     "SW5": "■",
     "SW6": "▲",
-    "SW7": ("○", 5.4),
+    "SW7": ("●", 5.4),
     "SW8": "▼",
     "SW9": (("svg", "glyphs/minus.svg"), 5.5),
     "SW10": "▶",
@@ -1407,41 +1411,31 @@ LEGENDS = {
 """What each cap says, one entry per cap. Three forms:
 
     "X"                     a string, set in LEGEND_FONT at LEGEND_SIZE
-    ("svg", path)           artwork, scaled so its longest side is LEGEND_SIZE
+    ("svg", path)           artwork, scaled so its inked longest side is LEGEND_SIZE
     (spec, size)            either of the above at its own size instead
 
 A two-tuple starting with the literal "svg" is the artwork form; any other
 two-tuple is the sized form, so ("svg", 5.4) is unreachable and a size
 always pairs with a spec rather than following one positionally.
 
-Prefer the string. A Unicode glyph out of a symbol-bearing font needs no
-new file and cuts the same on any machine, and DejaVu carries every arrow
-and geometric shape here: the solid arrows are U+25C0/25BC/25B6 plus the
-triangle U+25B2 and square U+25A0, the hollow circle U+25CB and the cross
-U+2715, each checked against the vendored font's own cmap rather than
-assumed. The SVGs under glyphs/ are the escape hatch, drawn as filled
-closed paths because import_svg gives wires to fill and a stroked path
-would arrive as a hairline that cuts nothing. Power and mic are SVGs
-because DejaVu carries neither U+23FB POWER SYMBOL nor any microphone;
-plus and minus are SVGs because DejaVu's own are thin text glyphs with no
-heavy variant in the font, and the bar thickness is the point.
+Every legend is a line of LEGEND_STROKE_W. A string is a solid font glyph
+drawn as its inward outline, so a solid shape reads as an outlined one and
+its interior stays standing. An SVG is a set of centerline strokes. The
+solid glyphs are the arrows U+25C0/25B6/25BC, the triangle U+25B2, the
+square U+25A0 and the disc U+25CF, each checked against the vendored font's
+cmap. A glyph too thin to hold an outline raises, so use a solid glyph or an
+SVG stroke.
 
-The arrows are a d-pad of three, left on SW4, down on SW8 and right on
-SW10, the three directions the layout actually has. SW6's triangle is a
-shape key, not a fourth direction, but it is drawn solid (U+25B2 rather
-than the hollow U+25B3) so an up-pointing triangle does not read as an
-outlined odd one out beside three filled arrows, and SW5's square follows
-it solid (U+25A0) for the same reason.
+The SVGs under glyphs/ are the escape hatch for marks the font lacks or draws
+too thin: power and mic because DejaVu carries neither U+23FB nor any
+microphone, the cross, plus and minus because DejaVu's are thin text glyphs
+that cannot hold an outline and a line is what they are anyway.
 
-The sizes are ink heights in disguise. LEGEND_SIZE is an em, and a
-hollow shape draws its outline in roughly a fifteenth of it, so
-U+25CB goes up to keep its stroke printable and to sit with the solid
-shapes; U+2715 is drawn well inside its own em, so it goes up to sit at
-the arrows' ink height rather than reading a size smaller than the key
-beside it. The SVGs are sized off their own longest side: height for
-power and mic, so they land a little under the arrows rather than over,
-and bar length for plus and minus, whose bars come from the same drawing,
-so SW9 and SW11 cut a matched pair by construction.
+The sizes are ink extents in disguise. LEGEND_SIZE is an em and a glyph
+spends it differently, so the disc carries its own size to sit with the
+arrows. The SVGs are sized off their longest inked side. Plus and minus
+share one size so SW9 and SW11 cut a matched pair, and the cross is sized to
+the arrows' ink.
 
 check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""

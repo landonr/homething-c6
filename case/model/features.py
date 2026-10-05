@@ -538,7 +538,7 @@ def _keytops(refs):
             "keypad.fdm_keycap",
             "add",
             keypad.fdm_keycap(ref),
-            ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH"],
+            ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH", "LEGEND_STROKE_W"],
         )
         for ref in refs
     ]

@@ -348,6 +348,6 @@ The STL cache absorbs one known nondeterministic tessellation result in the back
 | `model/` | Case feature builders and export metadata |
 | `checks/` | Validation modules for built geometry |
 | `fonts/` | Vendored legend font and license |
-| `glyphs/` | SVG legend artwork |
+| `glyphs/` | SVG legend centerline strokes |
 | `board/` | Generated board references and the fixed V2 reference |
 | `export/` | Generated STLs and JSON metadata |

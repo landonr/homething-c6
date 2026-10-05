@@ -336,7 +336,7 @@ def main():
         f"moves cap and web together through {params.SWITCH_TRAVEL:.2f} of switch travel"
     )
     print(
-        f"  legends {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
+        f"  legends {params.LEGEND_STROKE_W:.1f} wide lines {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
         f"so print a cap top face down, over a "
         f"{(cap_flange(full) - cap_body(full)) / 2:.2f} stepped overhang at the flange"
     )

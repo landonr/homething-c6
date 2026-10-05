@@ -1,26 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Handheld microphone, as filled outlines rather than strokes, the same
-     reasoning as power.svg: capsule, yoke, stem and base are each a closed
-     filled shape with no hole in it. The yoke is a half-annulus band, open
-     at the top, so it too is simply connected. Stem overlaps the yoke and
-     the base by a unit or two rather than touching at a line, so the four
-     debossed solids read as one groove. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <path d="M 38 20
-           A 12 12 0 0 1 62 20
-           L 62 40
-           A 12 12 0 0 1 38 40
-           Z" fill="#000000"/>
-  <path d="M 21 36
-           A 29 29 0 0 0 79 36
-           L 72 36
-           A 22 22 0 0 1 28 36
-           Z" fill="#000000"/>
-  <path d="M 46 63 L 54 63 L 54 78 L 46 78 Z" fill="#000000"/>
-  <path d="M 36 77
-           L 64 77
-           A 4 4 0 0 1 64 85
-           L 36 85
-           A 4 4 0 0 1 36 77
-           Z" fill="#000000"/>
+<!-- Handheld microphone as centerlines. import_svg ignores stroke-width and
+     legends.py thickens each centerline to LEGEND_STROKE_W, so stroke-width
+     here is a preview weight only. A closed stadium capsule, an open U yoke
+     concentric with the capsule's lower end, a stem and a base line. Capsule
+     to yoke spacing is about 1.3 mm at SW2's size, so a land of at least
+     LEGEND_STROKE_W stays standing inside the capsule and between the two.
+     The stem joins the yoke and the base on purpose. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#000000" stroke-width="12" stroke-linecap="round">
+  <path d="M 36 16 A 14 14 0 0 1 64 16 L 64 40 A 14 14 0 0 1 36 40 Z"/>
+  <path d="M 10 40 A 40 40 0 0 0 90 40"/>
+  <path d="M 50 80 L 50 96"/>
+  <path d="M 24 96 L 76 96"/>
 </svg>

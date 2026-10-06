@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "rss", "rsb",
+                  "wip", "wmac", "bat", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
@@ -66,6 +66,7 @@ const STATE = {
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   sleep: {available: true, enabled: true, after_s: 300},
+  battery: {available: true, percent: 72, volts: 3.87},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
@@ -657,6 +658,48 @@ setTimeout(() => {
     if (hcust || huv !== "0x28") throw new Error("the named key did not win: " + huv);
     if (document.getElementById("hu")) throw new Error("the box survived the named key");
   });
+  step("modifier checkboxes prefill from either hand and post the left bits", () => {
+    const html = () => els.edpanel.innerHTML;
+    global.sel = 7; global.act = "hid"; global.hkv = "keyboard"; global.huv = "0x04";
+    global.hcust = false;
+    // 0x80 is right GUI.
+    global.hmv = "128";
+    paint();
+    for (const [id, v] of [["hmc", 1], ["hms", 2], ["hma", 4], ["hmg", 8]])
+      if (html().indexOf("<label for=" + id + "><input type=checkbox id=" + id + " value=" + v) < 0)
+        throw new Error("missing checkbox " + id + ": " + html());
+    if (html().indexOf("id=hmg value=8 checked") < 0 || /id=hm[csa] value=\d checked/.test(html()))
+      throw new Error("a right-hand GUI bit did not check only Cmd: " + html());
+    if (document.getElementById("hm")) throw new Error("the free-text mask is back");
+    global.hmv = "0";
+    paint();
+    if (/id=hm[csag] value=\d+ checked/.test(html())) throw new Error("a zero mask checked a box");
+    for (const [id, v] of [["hmc", 1], ["hms", 2], ["hma", 4], ["hmg", 8]]) {
+      const b = document.getElementById(id); b.value = String(v); b.checked = false;
+    }
+    document.getElementById("hmc").checked = true;
+    document.getElementById("hmg").checked = true;
+    document.getElementById("hmc").onchange();
+    if (hmv !== "9") throw new Error("Ctrl and Cmd built " + hmv);
+    paint();
+    if (html().indexOf("id=hmc value=1 checked") < 0 || html().indexOf("id=hmg value=8 checked") < 0)
+      throw new Error("the repaint dropped the checked boxes: " + html());
+    const bodies = [];
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    global.hmv = "153";
+    assignHid();
+    global.fetch = realFetch;
+    if (bodies.length !== 1 || bodies[0].indexOf("mod=9") < 0)
+      throw new Error("the posted mask was not the left bits 9: " + bodies[0]);
+  });
+  step("hidWords names the modifiers", () => {
+    const w = hidWords("keyboard", 4, 0x13);
+    if (w !== "keyboard A, Ctrl+Shift") throw new Error("wrong words: " + w);
+    if (hidWords("keyboard", 4, 0x88) !== "keyboard A, Cmd") throw new Error("right bit unnamed");
+    if (hidWords("keyboard", 4, 0) !== "keyboard A") throw new Error("empty mask added text");
+    if (hidWords("keyboard", 0, 4) !== "keyboard Alt") throw new Error("modifier-only wrong");
+  });
   step("an unlisted usage reopens the custom box", () => {
     global.sel = 7;
     global.act = "hid";
@@ -897,6 +940,24 @@ setTimeout(() => {
       throw new Error("a YAML default in seconds reads " + line.innerHTML + " / " + minutes.value);
     STATE.sleep = {available: true, enabled: true, after_s: 300};
     sleepStatus();
+  });
+  step("the battery line shows percent and volts and names a missing reading", () => {
+    global.st = STATE;
+    const line = document.getElementById("bat");
+    paint();
+    if (line.textContent !== "Battery 72 % (3.87 V)") throw new Error("the battery line reads " + line.textContent);
+    STATE.battery = {available: false, percent: 0, volts: 0};
+    batteryStatus();
+    if (line.textContent !== "Battery reading is not available.")
+      throw new Error("the battery line did not name a missing reading: " + line.textContent);
+    delete STATE.battery;
+    batteryStatus();
+    if (line.textContent !== "Battery reading is not available.")
+      throw new Error("the battery line did not name a missing battery block: " + line.textContent);
+    if (line.hidden) throw new Error("the battery line hid");
+    STATE.battery = {available: true, percent: 72, volts: 3.87};
+    batteryStatus();
+    if (line.textContent !== "Battery 72 % (3.87 V)") throw new Error("the battery line did not return");
   });
   step("the sleep switch posts the new state and holds it during the write", () => {
     global.st = STATE;

@@ -182,7 +182,7 @@ class SleepSettingsTest(unittest.TestCase):
     """Production links idle_sleep, but the component must still build without it."""
 
     def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
-        self.assertIn("from esphome.components import idle_sleep, web_server_base", INIT)
+        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
         self.assertIn("cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep)", INIT)
         guarded = section(INIT, "    if CONF_IDLE_SLEEP_ID in config:\n", "\n\n")
         self.assertIn("sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])", guarded)
@@ -203,7 +203,7 @@ class SleepSettingsTest(unittest.TestCase):
 
     def test_the_state_reports_sleep_with_zeros_when_absent(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"radios":', state)
+        self.assertIn('"mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"battery":{', state)
         self.assertIn("const SleepState sleep = this->sleep_state_();", state)
         self.assertIn('sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",', state)
         body = section(CPP, "ButtonConfig::SleepState ButtonConfig::sleep_state_() const {", "\n}")
@@ -284,6 +284,52 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn('elif action == "set_sleep_enabled":', preview)
         self.assertIn('elif action == "set_sleep_after":', preview)
         self.assertIn("10 <= int(seconds) <= 3600", preview)
+
+
+class BatteryTest(unittest.TestCase):
+    """Bench configs have no battery sensors, so the link is optional and guarded."""
+
+    def test_the_battery_link_is_optional_and_behind_a_define(self) -> None:
+        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn('cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
+        self.assertIn('cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
+        guarded = section(INIT, "    if CONF_BATTERY_LEVEL_ID in config:\n", "\n\n")
+        self.assertIn("cg.add(var.set_battery(level, volts))", guarded)
+        self.assertIn('cg.add_define("USE_BUTTON_CONFIG_BATTERY")', guarded)
+        self.assertEqual(INIT.count("USE_BUTTON_CONFIG_BATTERY"), 1)
+        # Every sensor symbol in the C++ sits inside the define.
+        for text in (HEADER, CPP):
+            outside = re.sub(r"#ifdef USE_BUTTON_CONFIG_BATTERY\n.*?#(?:else|endif)", "", text,
+                             flags=re.DOTALL)
+            outside = re.sub(r"//[^\n]*", "", outside)
+            for symbol in ("sensor::", "battery_level_", "battery_volts_", "sensor/sensor.h"):
+                self.assertNotIn(symbol, outside)
+
+    def test_the_state_serves_the_battery_block_with_zeros_when_unavailable(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":', state)
+        self.assertIn("const BatteryState battery = this->battery_state_();", state)
+        self.assertIn('battery.available ? "true" : "false", battery.percent, '
+                      "static_cast<double>(battery.volts),", state)
+        body = section(CPP, "ButtonConfig::BatteryState ButtonConfig::battery_state_() const {", "\n}")
+        self.assertIn("if (!std::isnan(level) && !std::isnan(volts))", body)
+        self.assertIn("return {true, static_cast<int>(std::lround(level)), volts};", body)
+        self.assertTrue(body.rstrip().endswith("return {false, 0, 0.0f};"))
+
+    def test_the_page_names_a_missing_reading(self) -> None:
+        status = section(PAGE, "function batteryStatus(){", "\n\nfunction ")
+        self.assertIn('"Battery reading is not available."', status)
+        self.assertIn('line.textContent=b&&b.available?"Battery "+b.percent+" % ("+Number(b.volts).toFixed(2)+" V)":',
+                      status)
+        self.assertNotIn("hidden", status)
+        self.assertIn('<p class="sub st" id="bat">', PAGE)
+        self.assertNotIn('id="bat" hidden', PAGE)
+        self.assertIn("function paint(){\nnamePaint();z2mStatus();networkStatus();sleepStatus();batteryStatus();",
+                      PAGE)
+
+    def test_the_preview_serves_the_battery_block(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('"battery": {"available": True, "percent": 72, "volts": 3.87}', preview)
 
 
 class RestartTest(unittest.TestCase):
@@ -1140,8 +1186,9 @@ class PageTest(unittest.TestCase):
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);"
-                      "radioStatus();bleStatus()}},\nfunction(){zpjLost();restartLost()})", body)
+        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;zpjSync();networkStatus();sleepStatus();"
+                      "batteryStatus();restartSync(j);radioStatus();bleStatus()}},"
+                      "\nfunction(){zpjLost();restartLost()})", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
         # A failed poll while a press is open is the restart, not a dead remote.
@@ -1219,6 +1266,22 @@ class PageTest(unittest.TestCase):
             '(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
             PAGE,
         )
+
+    def test_the_hid_form_builds_the_modifier_mask_from_checkboxes(self) -> None:
+        """The form posts one 0 to 255 number, built from left-hand bits."""
+        panel = section(PAGE, "function hidPanel(lock){", "\n\nfunction clearPanel(")
+        for box in ('["hmc",1,"Ctrl"]', '["hms",2,"Shift"]',
+                    '["hma",4,"Alt / Option"]', '["hmg",8,"Cmd / Win"]'):
+            self.assertIn(box, panel)
+        self.assertIn("type=checkbox", panel)
+        self.assertIn("<label for=", panel)
+        self.assertIn("The remote holds the checked keys while it sends the key.", panel)
+        self.assertNotIn("Modifier mask", PAGE)
+        self.assertNotIn("id=hm ", PAGE)
+        self.assertIn("function modLeft(m){m=Number(m)||0;return (m|m>>4)&15}", PAGE)
+        self.assertIn('var mod=hkv==="keyboard"?modLeft(hmv):0;', PAGE)
+        self.assertIn('o.push(N[i])', PAGE)
+        self.assertIn('return o.join("+")', PAGE)
 
     def test_the_selected_input_title_copies_and_pastes_ir_and_zigbee_configs(self) -> None:
         """Paste asks before it writes the copied config to the selected input."""

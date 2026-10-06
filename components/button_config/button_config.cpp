@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -495,6 +496,18 @@ ButtonConfig::SleepState ButtonConfig::sleep_state_() const {
   return {false, false, 0};
 }
 
+ButtonConfig::BatteryState ButtonConfig::battery_state_() const {
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  if (this->battery_level_ != nullptr && this->battery_volts_ != nullptr) {
+    const float level = this->battery_level_->state;
+    const float volts = this->battery_volts_->state;
+    if (!std::isnan(level) && !std::isnan(volts))
+      return {true, static_cast<int>(std::lround(level)), volts};
+  }
+#endif
+  return {false, 0, 0.0f};
+}
+
 // Main loop only. The IdleSleep setters save and restart its idle window.
 bool ButtonConfig::set_sleep_enabled_(bool enabled) {
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
@@ -690,10 +703,11 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   char mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
   get_mac_address_pretty_into_buffer(mac);
   const SleepState sleep = this->sleep_state_();
+  const BatteryState battery = this->battery_state_();
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -705,6 +719,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       ip, mac,
       sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",
       static_cast<unsigned>(sleep.after_s),
+      battery.available ? "true" : "false", battery.percent, static_cast<double>(battery.volts),
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
       this->ha_api_expected() ? "true" : "false",

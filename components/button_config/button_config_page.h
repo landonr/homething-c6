@@ -109,6 +109,9 @@ header.full .sub{margin:0}
 p.hd{color:var(--mut);font-size:12px;margin:0 0 8px;
 text-transform:uppercase;letter-spacing:.06em}
 .code .load{color:var(--mut);font-size:13px;margin:8px 0 0}
+.mods{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 6px}
+.mods label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.mods input{margin:0}
 h2.hd2,label.hd2{display:block;color:var(--mut);font-size:12px;margin:14px 0 6px;
 text-transform:uppercase;letter-spacing:.06em}
 .aslist{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
@@ -205,6 +208,7 @@ aria-label="Assignment colors" checked><span></span></label></div>
 aria-label="WiFi Always On" disabled><span></span></label></h2>
 <p class="sub st" id="wfd">WiFi Always On default is loading.</p>
 <p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<p class="sub st" id="bat">Battery reading is loading.</p>
 <p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
 <dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
 <dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
@@ -394,6 +398,7 @@ var i;
 for(i=0;i<26;i++)KB.push([hx(4+i),String.fromCharCode(65+i)]);
 for(i=1;i<=9;i++)KB.push([hx(29+i),String(i)]);
 KB.push([hx(39),"0"]);
+KB.push(["0x2D","- Minus"],["0x2E","= Equals"],["0x2F","[ Left bracket"],["0x30","] Right bracket"],["0x31","\\ Backslash"],["0x33","; Semicolon"],["0x34","' Quote"],["0x35","` Backtick"],["0x36",", Comma"],["0x37",". Period"],["0x38","/ Slash"]);
 for(i=1;i<=12;i++)KB.push([hx(57+i),"F"+i]);
 // A keyboard report can carry a modifier alone, so the list needs an empty key.
 KB.push(["0x00","No key, modifiers only"]);
@@ -405,10 +410,14 @@ for(i=0;i<L.length;i++)if(parseInt(L[i][0],16)===Number(u))return L[i][1];return
 function hidCustom(k,u){var s=String(u===undefined?"":u);
 return s!==""&&!!hidList(k)&&!hidName(k,parseInt(s,0))}
 
+// A right-hand bit means the same modifier, so both halves fold to one nibble.
+function modLeft(m){m=Number(m)||0;return (m|m>>4)&15}
+function modNames(m){var N=["Ctrl","Shift","Alt","Cmd"],o=[],i;m=modLeft(m);
+for(i=0;i<4;i++)if(m&1<<i)o.push(N[i]);return o.join("+")}
 function hidWords(kind,usage,mod){
-var n=hidName(kind,usage);
-if(kind==="keyboard")return Number(usage)?"keyboard "+(n?n:"usage "+usage)+(mod?", modifiers "+mod:""):
-"keyboard modifiers "+mod;
+var n=hidName(kind,usage),w=modNames(mod);
+if(kind==="keyboard")return Number(usage)?"keyboard "+(n?n:"usage "+usage)+(w?", "+w:""):
+"keyboard "+w;
 if(kind==="consumer")return n?"media "+n:"consumer usage "+usage;
 if(kind==="gamepad_button")return "gamepad button "+usage;
 if(kind==="gamepad_dpad")return "D-pad "+["up","up-right","right","down-right","down","down-left","left","up-left"][usage];
@@ -736,6 +745,14 @@ if(!ok)throw new Error("The remote could not save the Wi-Fi default.")})})
 .then(function(){wifiBusy=false;return load().then(paint)},function(e){
 wifiBusy=false;wifiError=e&&e.message?e.message:"The remote did not answer.";networkStatus()})}
 
+// The line never hides, so the text under it does not move. A build without
+// battery sensors, or a NAN reading, serves available false.
+function batteryStatus(){
+var line=document.getElementById("bat"),b=st&&st.battery;
+if(!line)return;
+line.textContent=b&&b.available?"Battery "+b.percent+" % ("+Number(b.volts).toFixed(2)+" V)":
+"Battery reading is not available."}
+
 function sleepSpan(s){return s%60?s+" seconds":s===60?"1 minute":(s/60)+" minutes"}
 
 // Only a build with idle_sleep has the block, so it shows once and stays. The
@@ -932,14 +949,14 @@ stBusy=true;
 readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-st.sleep=j.sleep;zpjSync();networkStatus();sleepStatus();restartSync(j);radioStatus();bleStatus()}},
+st.sleep=j.sleep;st.battery=j.battery;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus()}},
 function(){zpjLost();restartLost()})
 .then(function(){stBusy=false},function(){stBusy=false})}
 
 function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
-namePaint();z2mStatus();networkStatus();sleepStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
+namePaint();z2mStatus();networkStatus();sleepStatus();batteryStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -1055,9 +1072,11 @@ if(hcust)h+="<label class=hd2 for=hu>Usage</label><input id=hu type=text autocom
 "placeholder='"+(hkv==="keyboard"?"0x04 for A":"0x00CD for Play/Pause")+"' value='"+att(huv)+"'>"}
 else h+="<label class=hd2 for=hu>Usage</label><input id=hu type=text autocomplete=off "+
 "placeholder='1 to 16' value='"+att(huv)+"'>";
-if(hkv==="keyboard")h+="<label class=hd2 for=hm>Modifier mask</label>"+
-"<input id=hm type=text autocomplete=off placeholder='0, or 0x01 for left Control' value='"+att(hmv)+"'>"+
-"<p class=sub>Bits are left Control, Shift, Alt, GUI, then right Control, Shift, Alt, GUI.</p>";
+if(hkv==="keyboard"){var ml=modLeft(hmv),MB=[["hmc",1,"Ctrl"],["hms",2,"Shift"],["hma",4,"Alt / Option"],["hmg",8,"Cmd / Win"]];
+h+="<h2 class=hd2>Modifier keys</h2><div class=mods>";
+for(j=0;j<4;j++)h+="<label for="+MB[j][0]+"><input type=checkbox id="+MB[j][0]+" value="+MB[j][1]+
+(ml&MB[j][1]?" checked":"")+dis+">"+MB[j][2]+"</label>";
+h+="</div><p class=sub>The remote holds the checked keys while it sends the key.</p>"}
 h+="<div class=act><button type=button id=hi"+dis+">Assign BLE HID</button></div>";
 return h}
 
@@ -1616,7 +1635,7 @@ msg="";bad=false;paint()};
 if(vi)vi.oninput=function(){zvv=vi.value};
 document.getElementById("zi").onclick=assignTarget}
 if(act==="hid"){
-var hk=document.getElementById("hk"),hu=document.getElementById("hu"),hm=document.getElementById("hm");
+var hk=document.getElementById("hk"),hu=document.getElementById("hu"),hmb=["hmc","hms","hma","hmg"].map(function(i){return document.getElementById(i)});
 var hp=document.getElementById("hp");
 hk.onchange=function(){hkv=this.value;huv=hkv==="gamepad_dpad"?"0":"";hmv="0";hcust=false;msg="";bad=false;paint()};
 // Only the Custom switch changes the panel, so a named key keeps the list open.
@@ -1624,7 +1643,8 @@ if(hp)hp.onchange=function(){var c=this.value==="custom";
 if(c===hcust){huv=this.value;return}
 hcust=c;huv=c?"":this.value;msg="";bad=false;paint()};
 if(hu)hu.oninput=function(){huv=this.value};
-if(hm)hm.oninput=function(){hmv=this.value};
+hmb.forEach(function(b){if(b)b.onchange=function(){var m=0;
+hmb.forEach(function(x){if(x&&x.checked)m|=Number(x.value)});hmv=String(m)}});
 if(!lock)document.getElementById("hi").onclick=assignHid}
 if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
 if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
@@ -1670,7 +1690,7 @@ function(e){lnkBad(e);throw e})}
 
 function assignHid(){
 var usage=parseInt(String(huv).replace(/^\s+|\s+$/g,""),0);
-var mod=hkv==="keyboard"?parseInt(String(hmv).replace(/^\s+|\s+$/g,""),0):0;
+var mod=hkv==="keyboard"?modLeft(hmv):0;
 var good=(hkv==="keyboard"&&usage>=0&&usage<=231&&mod>=0&&mod<=255&&(usage||mod))||
 (hkv==="consumer"&&usage>=1&&usage<=1023)||(hkv==="gamepad_button"&&usage>=1&&usage<=16)||
 (hkv==="gamepad_dpad"&&usage>=0&&usage<=7);

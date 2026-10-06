@@ -334,18 +334,55 @@ class ProductionSleepConfigTest(unittest.TestCase):
             interval.index("if (!id(idle).woke_from_sleep())"),
         )
 
-    def test_wake_pulse_is_the_last_d3_d4_state_and_production_drives_it(self) -> None:
+    def test_wake_pulse_is_a_battery_overlay_after_the_status_blocks(self) -> None:
         self.assertIn("bool woke_from_sleep() const { return !this->cold_boot_; }", HEADER)
         self.assertIn("  - id: wake_pulse_until_ms\n    type: uint32_t\n", PRODUCTION)
-        effect = PRODUCTION.split("name: Status Indicators", 1)[1].split("// D5 is Zigbee status", 1)[0]
-        wake = effect.index("} else if (millis() < id(wake_pulse_until_ms)) {")
-        self.assertLess(effect.index("} else if (id(voice_led_state) == 4) {"), wake)
-        pulse = effect[wake:]
-        self.assertIn("((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f", pulse)
-        self.assertIn("it[1] = Color(level, level, level);", pulse)
-        self.assertIn("it[2] = Color(level, level, level);", pulse)
+        self.assertIn("  - id: wake_battery_band\n    type: uint8_t\n    restore_value: false\n"
+                      '    initial_value: "0"\n', PRODUCTION)
+        effect = PRODUCTION.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        # The old D3 and D4 branch is gone, so nothing before D5 reads the window.
+        self.assertNotIn("wake_pulse_until_ms", effect.split("// D5 is Zigbee status", 1)[0])
+        overlay = effect.split("// D5 is Zigbee status", 1)[1].split("it[3] = Color(0, 128, 0);\n            }", 1)[1]
+        self.assertIn("if (millis() < id(wake_pulse_until_ms)) {", overlay)
+        self.assertIn("((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f", overlay)
+        self.assertIn("const float wave = 0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase);", overlay)
+        for text in (
+            "switch (id(wake_battery_band)) {",
+            "case 1: {\n                  const uint8_t level = 48 + static_cast<uint8_t>(144.0f * wave);\n"
+            "                  pulse = Color(0, level, 0);",
+            "case 2: {",
+            "const uint8_t level = 140 + static_cast<uint8_t>(50.0f * wave);\n"
+            "                  pulse = Color(level, level / 2, 0);",
+            "case 3: {\n                  const uint8_t level = 48 + static_cast<uint8_t>(144.0f * wave);\n"
+            "                  pulse = Color(level, 0, 0);",
+            "default: {\n                  const uint8_t level = 24 + static_cast<uint8_t>(136.0f * wave);\n"
+            "                  pulse = Color(level, level, level);",
+        ):
+            self.assertIn(text, overlay)
+        # D2 and D5 always take the pulse. D3 and D4 only when no user action owns them.
+        always = overlay.split("if (ir_ui.state == IrUi::OFF", 1)[0]
+        self.assertIn("it[0] = pulse;", always)
+        self.assertIn("it[3] = pulse;", always)
+        self.assertNotIn("it[1]", always)
+        self.assertNotIn("it[2]", always)
+        guarded = overlay.split("if (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0) {", 1)[1]
+        self.assertIn("it[1] = pulse;", guarded)
+        self.assertIn("it[2] = pulse;", guarded)
+        self.assertNotIn("it[0]", guarded)
+        self.assertNotIn("it[3]", guarded)
+
+    def test_the_wake_tick_latches_the_battery_band_before_the_window_opens(self) -> None:
         drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1]
         self.assertIn("if (!id(idle).woke_from_sleep())", drive)
+        update = drive.index("id(battery_voltage).update();")
+        self.assertIn("const float pct = id(battery_level).state;", drive)
+        self.assertIn("if (std::isnan(pct))\n              return 0;", drive)
+        self.assertIn("return pct >= 60.0f ? 1 : pct >= 30.0f ? 2 : 3;", drive)
+        # The latch is a static, so it runs on the first wake tick only.
+        self.assertIn("static const uint8_t band = []() -> uint8_t {", drive)
+        self.assertIn("id(wake_battery_band) = band;", drive)
+        self.assertLess(update, drive.index("static const uint32_t first_ms = millis();"))
+        self.assertLess(update, drive.index("id(wake_pulse_until_ms) = first_ms + 1600;"))
         # Exactly two 800 ms pulses. A pending wake press no longer extends them.
         self.assertIn("id(wake_pulse_until_ms) = first_ms + 1600;", drive)
         self.assertNotIn("wake_pending", drive)

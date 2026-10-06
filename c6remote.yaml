@@ -124,6 +124,19 @@ zigbee:
           role: CLIENT
         - id: IAS_WD
           role: CLIENT
+        - id: POWER_CONFIG
+          attributes:
+            # BatteryPercentageRemaining in 0.5 % units. 0xFF is the ZCL invalid value.
+            - attribute_id: 0x0021
+              type: UINT8
+              # No access key: the component adds `access` to `report * 4`, which
+              # fails for "force". Without it the SDK adds 0x0021 with its own flags.
+              device: battery_level
+              lambda: |-
+                if (std::isnan(x))
+                  return 0xFF;
+                return static_cast<uint8_t>(std::lround(std::min(std::max(x, 0.0f), 100.0f) * 2.0f));
+              report: force
   on_join:
     then:
       - lambda: zigbee_assignments.on_network_up(x);
@@ -134,6 +147,8 @@ zigbee:
 button_config:
   id: button_cfg
   idle_sleep_id: idle
+  battery_level_id: battery_level
+  battery_voltage_id: battery_voltage
 
 idle_sleep:
   id: idle
@@ -420,13 +435,14 @@ binary_sensor:
 sensor:
   - platform: rotary_encoder
     name: Wheel
+    # A on GPIO19 makes a clockwise turn fire on_clockwise.
     pin_a:
-      number: GPIO20
+      number: GPIO19
       mode:
         input: true
         pullup: true
     pin_b:
-      number: GPIO19
+      number: GPIO20
       mode:
         input: true
         pullup: true
@@ -443,9 +459,12 @@ sensor:
       - if: *send_learned_code
 
   - platform: adc
+    id: battery_voltage
     name: Battery Voltage
     pin: GPIO4
-    attenuation: auto
+    # Auto attenuation cannot multisample. Samples average out Zigbee TX sag.
+    attenuation: 12db
+    samples: 16
     update_interval: 5s
     filters:
       - multiply: 2.0
@@ -453,6 +472,35 @@ sensor:
     accuracy_decimals: 2
     device_class: voltage
     state_class: measurement
+
+  - platform: copy
+    source_id: battery_voltage
+    id: battery_level
+    name: Battery
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      # Resting 1S LiPo curve (V to %), so a charging cell reads high.
+      - lambda: |-
+          if (std::isnan(x))
+            return NAN;
+          static const float CURVE[][2] = {{3.30f, 0.0f},  {3.61f, 5.0f},  {3.69f, 10.0f}, {3.73f, 20.0f},
+                                           {3.76f, 30.0f}, {3.79f, 40.0f}, {3.82f, 50.0f}, {3.86f, 60.0f},
+                                           {3.92f, 70.0f}, {4.00f, 80.0f}, {4.10f, 90.0f}, {4.20f, 100.0f}};
+          const int last = sizeof(CURVE) / sizeof(CURVE[0]) - 1;
+          if (x <= CURVE[0][0])
+            return 0.0f;
+          if (x >= CURVE[last][0])
+            return 100.0f;
+          int i = 1;
+          while (x > CURVE[i][0])
+            i++;
+          const float t = (x - CURVE[i - 1][0]) / (CURVE[i][0] - CURVE[i - 1][0]);
+          return CURVE[i - 1][1] + t * (CURVE[i][1] - CURVE[i - 1][1]);
+      # Jitter must not publish, because each publish forces a Zigbee report.
+      - delta: 2
 
 output:
   # The XIAO user LED shows the remote is awake. It is lit from 3V3 when GPIO15 is
@@ -540,8 +588,8 @@ light:
             }
 
             // D3 and D4 show assignment mode when it is open, otherwise
-            // voice-assistant state, otherwise the deep-sleep wake pulse.
-            // When all three are idle, D4 shows Bluetooth and D3 stays dark.
+            // voice-assistant state. When both are idle, D4 shows Bluetooth
+            // and D3 stays dark. The wake battery overlay below can cover them.
             // Assignment mode never writes D2 or D5, so a Wi-Fi or Zigbee fault
             // stays visible while an input is trained.
             if (ir_ui.state != IrUi::OFF) {
@@ -579,13 +627,6 @@ light:
             } else if (id(voice_led_state) == 4) {
               it[1] = Color(255, 0, 0);
               it[2] = Color(255, 0, 0);
-            } else if (millis() < id(wake_pulse_until_ms)) {
-              // Counts down to the end, so both pulses start and stop dim.
-              const float phase = ((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f;
-              const uint8_t level = 24 + static_cast<uint8_t>(
-                  136.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              it[1] = Color(level, level, level);
-              it[2] = Color(level, level, level);
             } else {
               auto *ble = id(ble_hid_remote);
               if (!ble->radio_enabled()) {
@@ -634,6 +675,44 @@ light:
               it[3] = Color(level, level / 2, 0);
             } else {
               it[3] = Color(0, 128, 0);
+            }
+
+            // Deep-sleep wake: two pulses in the battery colour cover the status
+            // LEDs. Assignment mode and voice feedback keep D3 and D4, because
+            // they answer a user action. The countdown phase starts and stops dim.
+            if (millis() < id(wake_pulse_until_ms)) {
+              const float phase = ((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f;
+              const float wave = 0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase);
+              Color pulse;
+              switch (id(wake_battery_band)) {
+                case 1: {
+                  const uint8_t level = 48 + static_cast<uint8_t>(144.0f * wave);
+                  pulse = Color(0, level, 0);
+                  break;
+                }
+                case 2: {
+                  // Same envelope as the D2 orange, so the green half stays above the gamma floor.
+                  const uint8_t level = 140 + static_cast<uint8_t>(50.0f * wave);
+                  pulse = Color(level, level / 2, 0);
+                  break;
+                }
+                case 3: {
+                  const uint8_t level = 48 + static_cast<uint8_t>(144.0f * wave);
+                  pulse = Color(level, 0, 0);
+                  break;
+                }
+                default: {
+                  const uint8_t level = 24 + static_cast<uint8_t>(136.0f * wave);
+                  pulse = Color(level, level, level);
+                  break;
+                }
+              }
+              it[0] = pulse;
+              it[3] = pulse;
+              if (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0) {
+                it[1] = pulse;
+                it[2] = pulse;
+              }
             }
     on_turn_on:
       - switch.turn_on: led_rail
@@ -913,9 +992,14 @@ globals:
     type: uint8_t
     restore_value: false
     initial_value: "0"
-  # The wake interval sets this after a deep-sleep wake. D3 and D4 pulse twice until it passes.
+  # The wake interval sets this after a deep-sleep wake. All four LEDs pulse twice in the battery colour until it passes.
   - id: wake_pulse_until_ms
     type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  # Battery colour latched on the first wake tick. 0 unknown, 1 green, 2 orange, 3 red.
+  - id: wake_battery_band
+    type: uint8_t
     restore_value: false
     initial_value: "0"
 
@@ -973,6 +1057,16 @@ interval:
               id(detect_wifi_hold).execute();
             }
           }
+          // The first wake tick forces a sample, because the scheduled one can come
+          // after the pulse starts. The latch keeps the colour fixed mid-pulse.
+          static const uint8_t band = []() -> uint8_t {
+            id(battery_voltage).update();
+            const float pct = id(battery_level).state;
+            if (std::isnan(pct))
+              return 0;
+            return pct >= 60.0f ? 1 : pct >= 30.0f ? 2 : 3;
+          }();
+          id(wake_battery_band) = band;
           // Setup can run past 800 ms, so the two pulses count from the first tick.
           static const uint32_t first_ms = millis();
           id(wake_pulse_until_ms) = first_ms + 1600;

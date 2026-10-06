@@ -10,6 +10,10 @@
 #include "esphome/components/idle_sleep/idle_sleep.h"
 #endif
 
+#ifdef USE_BUTTON_CONFIG_BATTERY
+#include "esphome/components/sensor/sensor.h"
+#endif
+
 #include <atomic>
 #include <cstdint>
 #include <string>
@@ -51,6 +55,12 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   void set_idle_sleep(idle_sleep::IdleSleep *sleep) { this->idle_sleep_ = sleep; }
 #endif
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  void set_battery(sensor::Sensor *level, sensor::Sensor *volts) {
+    this->battery_level_ = level;
+    this->battery_volts_ = volts;
+  }
+#endif
 
  protected:
   void handle_page_(AsyncWebServerRequest *request);
@@ -72,6 +82,13 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
     uint32_t after_s;
   };
   SleepState sleep_state_() const;
+  // Zeros and available=false when unlinked or when either reading is NAN.
+  struct BatteryState {
+    bool available;
+    int percent;
+    float volts;
+  };
+  BatteryState battery_state_() const;
   bool set_sleep_enabled_(bool enabled);
   bool set_sleep_after_(uint32_t seconds);
   void load_name_pref_();
@@ -129,6 +146,10 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<const char *> current_name_{""};
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   idle_sleep::IdleSleep *idle_sleep_{nullptr};
+#endif
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  sensor::Sensor *battery_level_{nullptr};
+  sensor::Sensor *battery_volts_{nullptr};
 #endif
 };
 

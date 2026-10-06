@@ -168,7 +168,7 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 3. Select Keyboard, Consumer, Gamepad button, or Gamepad D-pad.
 4. Select the key from the list. Keyboard and Consumer list the common usages by name.
 5. If the usage is not in the list, select **Custom usage** and enter the number.
-6. Enter the keyboard modifier mask when applicable.
+6. Select the modifier keys to hold with the key, when applicable.
 7. Select **Assign**.
 
 A gamepad button still takes a number. A D-pad still takes a direction.
@@ -472,10 +472,11 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 | Cleared | Amber for one second | Select an input. |
 
 `D3` and `D4` show voice-assistant state when assignment mode is closed. After
-a deep-sleep wake, they pulse white (see [Deep sleep](#deep-sleep)).
+a deep-sleep wake, all four LEDs pulse in the battery colour (see
+[Deep sleep](#deep-sleep)).
 
-`D4` shows the Bluetooth state when assignment mode, voice state, and the wake
-pulse are all idle. `D3` stays dark then.
+`D4` shows the Bluetooth state when assignment mode and voice state are both
+idle. `D3` stays dark then.
 
 | `D4` | Meaning |
 | --- | --- |
@@ -552,8 +553,19 @@ Wi-Fi hold and does not send the wake press.
 If you still hold SW1 at wake, the remote does not start the assignment mode
 hold. The remote sends the assignment of SW1 when you release SW1.
 
-After a wake, `D3` and `D4` pulse white two times. Each pulse is 800 ms.
-Assignment mode and voice states have priority over this pulse.
+After a wake, all four LEDs pulse two times in the battery colour. Each pulse
+is 800 ms. The colour shows the battery level at the first moment after the wake:
+
+| Battery | Colour |
+| --- | --- |
+| 60 % or more | Green |
+| 30 % to 59 % | Orange |
+| Less than 30 % | Red |
+| No reading | White |
+
+The pulse covers the Wi-Fi, Bluetooth, and Zigbee status LEDs for 1.6 seconds.
+The status colours return when the pulse ends. Assignment mode and voice states
+have priority on `D3` and `D4`, so they stay visible during the pulse.
 
 While the remote sleeps, these conditions apply:
 

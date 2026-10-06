@@ -308,6 +308,23 @@ These values are the Zigbee2MQTT defaults for a light.
 If a light accepts the configuration but sends no reports, its state stays
 stale.
 
+## Battery level
+
+The remote has a Power Configuration server cluster on endpoint 1. Attribute
+`0x0021`, `batteryPercentageRemaining`, holds the battery level in units of
+0.5 %. The value `0xFF` means that the remote has no reading.
+
+The remote sends the value one time for each wake, after it rejoins the network.
+While it stays awake, it sends the value again only after a change of 2 % or more.
+
+Zigbee2MQTT generates a `battery` property from this cluster. No external
+converter is necessary. The same percent also shows as the `Battery` sensor in
+Home Assistant over the ESPHome API when Wi-Fi is on.
+
+After the first flash of this build, re-interview the remote one time in
+Zigbee2MQTT. Do this while the remote is awake, because Zigbee2MQTT must read the
+new cluster list.
+
 ## Send path
 
 `zigbee_learning.h` holds the send path. The SDK is `esp-zigbee-lib` 2.0.4, which

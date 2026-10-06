@@ -475,6 +475,46 @@ class ProductionConfigTest(unittest.TestCase):
         ):
             self.assertRegex(block, rf"- id: {cluster}\n          role: CLIENT")
 
+    def test_the_endpoint_serves_the_battery_percent_over_power_config(self) -> None:
+        config = CONFIG.read_text()
+        block = config.split("endpoints:", 1)[1].split("\n  on_join:", 1)[0]
+        cluster = block.split("        - id: POWER_CONFIG\n", 1)[1]
+        # Server is the default role, so no role line may turn it into a client.
+        self.assertNotIn("role:", cluster)
+        self.assertIn("- attribute_id: 0x0021", cluster)
+        self.assertIn("type: UINT8", cluster)
+        # The component config fails on access with report: force.
+        self.assertNotIn("access:", cluster)
+        self.assertIn("device: battery_level", cluster)
+        self.assertIn("report: force", cluster)
+        # Casting NAN to uint8_t is undefined, so the lambda sends ZCL invalid.
+        self.assertIn("if (std::isnan(x))\n                  return 0xFF;", cluster)
+        self.assertIn("std::lround(std::min(std::max(x, 0.0f), 100.0f) * 2.0f)", cluster)
+        self.assertNotIn("scale:", cluster)
+
+    def test_the_percent_sensor_copies_the_adc_through_the_curve_and_a_delta(self) -> None:
+        config = CONFIG.read_text()
+        adc = config.split("  - platform: adc\n", 1)[1].split("  - platform: copy\n", 1)[0]
+        self.assertIn("id: battery_voltage", adc)
+        self.assertIn("samples: 16", adc)
+        # Auto attenuation cannot multisample, so ESPHome refuses the pair.
+        self.assertNotIn("attenuation: auto", adc)
+        self.assertIn("attenuation: 12db", adc)
+        self.assertIn("multiply: 2.0", adc)
+        copy = config.split("  - platform: copy\n", 1)[1].split("\noutput:", 1)[0]
+        for text in ("source_id: battery_voltage", "id: battery_level", "name: Battery\n",
+                     'unit_of_measurement: "%"', "device_class: battery", "if (std::isnan(x))\n            return NAN;",
+                     "{3.30f, 0.0f}", "{3.76f, 30.0f}", "{3.86f, 60.0f}", "{4.20f, 100.0f}",
+                     "return 0.0f;", "return 100.0f;"):
+            self.assertIn(text, copy)
+        self.assertLess(copy.index("- lambda:"), copy.index("- delta: 2"))
+
+    def test_the_button_config_block_links_both_battery_sensors(self) -> None:
+        config = CONFIG.read_text()
+        block = config.split("\nbutton_config:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("  battery_level_id: battery_level", block.splitlines())
+        self.assertIn("  battery_voltage_id: battery_voltage", block.splitlines())
+
     def test_a_short_address_never_reaches_flash(self) -> None:
         """A device takes a new short address when it rejoins, so a stored one
         would send every press to the wrong device after a rejoin."""
@@ -631,14 +671,15 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("it[3] = Color(level, level / 2, 0);", d5)
 
     def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
-        # Assignment mode, voice, and the wake pulse keep D3 and D4, so the
+        # Assignment mode and voice keep D3 and D4, so the
         # Bluetooth branch is the last else of that chain and never touches D5.
         entry = status_light_entry(CONFIG.read_text())
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
-        wake = before_d5.index("wake_pulse_until_ms")
-        self.assertIn("} else {\n              auto *ble = id(ble_hid_remote);", before_d5[wake:])
+        # The wake pulse is an overlay after D5, so Bluetooth follows voice state 4.
+        self.assertNotIn("wake_pulse_until_ms", before_d5)
+        self.assertIn("it[2] = Color(255, 0, 0);\n            } else {\n              auto *ble = id(ble_hid_remote);",
+                      before_d5)
         ble = before_d5[before_d5.index("auto *ble = id(ble_hid_remote);"):]
-        self.assertGreater(before_d5.index("auto *ble = id(ble_hid_remote);"), wake)
         self.assertIn("it[2] =", ble)
         self.assertNotIn("it[3]", ble)
         self.assertNotIn("it[1]", ble)

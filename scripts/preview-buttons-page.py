@@ -54,6 +54,8 @@ STATE = {
     },
     # Production links idle_sleep. A build without it serves available false and zeros.
     "sleep": {"available": True, "enabled": True, "after_s": 300},
+    # Production links the battery sensors. A build without them serves available false and zeros.
+    "battery": {"available": True, "percent": 72, "volts": 3.87},
     "radios": {"zigbee": True, "ble": True},
     "zigbee": {
         "started": True,

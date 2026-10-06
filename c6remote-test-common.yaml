@@ -348,13 +348,14 @@ sensor:
   - platform: rotary_encoder
     name: Wheel
     id: wheel
+    # A on GPIO19 makes a clockwise turn fire on_clockwise.
     pin_a:
-      number: GPIO20
+      number: GPIO19
       mode:
         input: true
         pullup: true
     pin_b:
-      number: GPIO19
+      number: GPIO20
       mode:
         input: true
         pullup: true

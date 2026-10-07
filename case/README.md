@@ -13,6 +13,10 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 </p>
 <p align="center"><sub>Front shell, caps, button pad, board, and back shell</sub></p>
 
+<p align="center">
+  <img alt="The c6remote case turning as it comes apart and goes back together" src="../docs/readme-assets/case-explode-loop.webp" width="360">
+</p>
+
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).

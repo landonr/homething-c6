@@ -55,6 +55,11 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 </p>
 <p align="center"><sub>Exploded view: front shell, button caps, silicone pads, board, and back shell</sub></p>
 
+<p align="center">
+  <img alt="The case turning as it comes apart and goes back together, with the status LEDs playing the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="360">
+</p>
+<p align="center"><sub>Coming apart and going back together, with the status LEDs playing the boot animation</sub></p>
+
 ## Board ([more info](c6remote-kicad/README.md))
 
 ### PCB and hardware

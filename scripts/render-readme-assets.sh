@@ -7,10 +7,8 @@ usage() {
 Usage: scripts/render-readme-assets.sh [options]
 
 Render README board preview assets:
-  - basic top PNG
-  - basic bottom PNG
-  - rotated high-quality top PNG
-  - rotated high-quality bottom PNG
+  - top, bottom, rotated top and rotated bottom PNGs, rendered with
+    Blender by scripts/render-board-blender.py
   - flat top SVG
   - flat bottom SVG
   - schematic SVG
@@ -19,23 +17,18 @@ Options:
   --project-dir <dir>        KiCad project directory. Default: c6remote-kicad
   --output-dir <dir>         Asset output directory. Default: docs/readme-assets
   --kicad-cli <path>         KiCad CLI path. Default: bundled macOS KiCad path
-  --width <px>               3D render width. Default: 1800
-  --height <px>              3D render height. Default: 1200
-  --basic-quality <basic|high|user|job_settings>
-                             Basic 3D render quality. Default: basic
-  --rotated-quality <basic|high|user|job_settings>
-                             Rotated 3D render quality. Default: high
-  --top-rotate <x,y,z>       Rotated top render rotation. Default: -45,0,45
-  --bottom-rotate <x,y,z>    Rotated bottom render rotation. Default: -45,0,-45
-  --top-camera-side <side>   Camera side for top outputs. Default: top
-  --bottom-camera-side <side>
-                             Camera side for bottom outputs. Default: bottom
   --flat-sides <top|bottom|both>
                              Flat SVG sides to render. Default: both
   --only <board|schematic|all>
                              Subset of assets to render: board = 3D + flat board
                              views, schematic = schematic SVG only. Default: all
+  --samples <n>              Cycles samples for the 3D PNGs. Default: 1600
   -h, --help                 Show this help
+
+The PNGs are rendered from a board GLB exported from the PCB on every run, with
+Blender by scripts/render-board-blender.py. BLENDER overrides the Blender binary.
+If BLENDER is not set, the script uses blender on PATH, then the macOS app path.
+If magick is on PATH, the script trims each PNG.
 EOF
 }
 
@@ -45,14 +38,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_DIR="${REPO_ROOT}/c6remote-kicad"
 OUTPUT_DIR="${REPO_ROOT}/docs/readme-assets"
 KICAD_CLI="${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}"
-WIDTH="1800"
-HEIGHT="1200"
-BASIC_QUALITY="basic"
-ROTATED_QUALITY="high"
-TOP_ROTATE="-45,0,45"
-BOTTOM_ROTATE="-45,0,-45"
-TOP_CAMERA_SIDE="top"
-BOTTOM_CAMERA_SIDE="bottom"
+SAMPLES=1600
 FLAT_SIDES="both"
 ONLY="all"
 
@@ -70,44 +56,16 @@ while [[ $# -gt 0 ]]; do
       KICAD_CLI="${2:-}"
       shift 2
       ;;
-    --width)
-      WIDTH="${2:-}"
-      shift 2
-      ;;
-    --height)
-      HEIGHT="${2:-}"
-      shift 2
-      ;;
-    --basic-quality)
-      BASIC_QUALITY="${2:-}"
-      shift 2
-      ;;
-    --rotated-quality)
-      ROTATED_QUALITY="${2:-}"
-      shift 2
-      ;;
-    --top-rotate)
-      TOP_ROTATE="${2:-}"
-      shift 2
-      ;;
-    --bottom-rotate)
-      BOTTOM_ROTATE="${2:-}"
-      shift 2
-      ;;
-    --top-camera-side)
-      TOP_CAMERA_SIDE="${2:-}"
-      shift 2
-      ;;
-    --bottom-camera-side)
-      BOTTOM_CAMERA_SIDE="${2:-}"
-      shift 2
-      ;;
     --flat-sides)
       FLAT_SIDES="${2:-}"
       shift 2
       ;;
     --only)
       ONLY="${2:-}"
+      shift 2
+      ;;
+    --samples)
+      SAMPLES="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -138,38 +96,6 @@ case "${ONLY}" in
     ;;
 esac
 
-case "${BASIC_QUALITY}" in
-  basic|high|user|job_settings) ;;
-  *)
-    echo "Invalid basic quality: ${BASIC_QUALITY}" >&2
-    exit 1
-    ;;
-esac
-
-case "${ROTATED_QUALITY}" in
-  basic|high|user|job_settings) ;;
-  *)
-    echo "Invalid rotated quality: ${ROTATED_QUALITY}" >&2
-    exit 1
-    ;;
-esac
-
-case "${TOP_CAMERA_SIDE}" in
-  top|bottom|left|right|front|back) ;;
-  *)
-    echo "Invalid top camera side: ${TOP_CAMERA_SIDE}" >&2
-    exit 1
-    ;;
-esac
-
-case "${BOTTOM_CAMERA_SIDE}" in
-  top|bottom|left|right|front|back) ;;
-  *)
-    echo "Invalid bottom camera side: ${BOTTOM_CAMERA_SIDE}" >&2
-    exit 1
-    ;;
-esac
-
 if [[ ! -x "${KICAD_CLI}" ]]; then
   echo "KiCad CLI not executable: ${KICAD_CLI}" >&2
   exit 1
@@ -183,35 +109,42 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 
-render_3d() {
-  local output_name="$1"
-  local camera_side="$2"
-  local quality="$3"
-  local rotate="$4"
-  local output_file="${OUTPUT_DIR}/${output_name}"
-
-  "${KICAD_CLI}" pcb render "${PCB_FILE}" \
-    --output "${output_file}" \
-    --side "${camera_side}" \
-    --width "${WIDTH}" \
-    --height "${HEIGHT}" \
-    --quality "${quality}" \
-    --background transparent \
-    --rotate "${rotate}"
-
-  # Trim transparent margins so README images align instead of floating in empty canvas
-  if command -v magick >/dev/null 2>&1; then
-    magick "${output_file}" -trim +repage "${output_file}"
-  fi
-
-  echo "Wrote ${output_file}"
-}
-
 if [[ "${ONLY}" != "schematic" ]]; then
-  render_3d "board-3d-top.png" "${TOP_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
-  render_3d "board-3d-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${BASIC_QUALITY}" "0,0,0"
-  render_3d "board-3d-rotated-top.png" "${TOP_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${TOP_ROTATE}"
-  render_3d "board-3d-rotated-bottom.png" "${BOTTOM_CAMERA_SIDE}" "${ROTATED_QUALITY}" "${BOTTOM_ROTATE}"
+  BLENDER_BIN="${BLENDER:-}"
+  if [[ -z "${BLENDER_BIN}" ]]; then
+    BLENDER_BIN="$(command -v blender || true)"
+  fi
+  if [[ -z "${BLENDER_BIN}" ]]; then
+    BLENDER_BIN="/Applications/Blender.app/Contents/MacOS/Blender"
+  fi
+  if [[ ! -x "${BLENDER_BIN}" ]]; then
+    echo "Blender not executable: ${BLENDER_BIN} (set BLENDER, or put blender on PATH)" >&2
+    exit 1
+  fi
+  BOARD_DIR="$(mktemp -d)"
+  trap 'rm -rf "${BOARD_DIR}"' EXIT
+  # The export exits non-zero when a footprint names a 3D model that is not installed
+  # (see export-case-refs.sh), so check the file rather than the status.
+  "${KICAD_CLI}" pcb export glb "${PCB_FILE}" -o "${BOARD_DIR}/c6remote-board.glb" \
+    --force --include-silkscreen >/dev/null 2>&1 || true
+  if [[ ! -s "${BOARD_DIR}/c6remote-board.glb" ]]; then
+    echo "Board GLB export failed: ${PCB_FILE}" >&2
+    exit 1
+  fi
+  "${BLENDER_BIN}" -b --factory-startup -noaudio --python-exit-code 1 \
+    -P "${SCRIPT_DIR}/render-board-blender.py" -- \
+    --glb "${BOARD_DIR}/c6remote-board.glb" \
+    --hdr "${SCRIPT_DIR}/assets/env-studio.hdr" \
+    --out-dir "${OUTPUT_DIR}" \
+    --samples "${SAMPLES}"
+  if command -v magick >/dev/null 2>&1; then
+    for f in board-3d-top board-3d-bottom board-3d-rotated-top board-3d-rotated-bottom; do
+      magick "${OUTPUT_DIR}/${f}.png" -trim +repage "${OUTPUT_DIR}/${f}.png"
+    done
+  fi
+  for f in board-3d-top board-3d-bottom board-3d-rotated-top board-3d-rotated-bottom; do
+    echo "Wrote ${OUTPUT_DIR}/${f}.png"
+  done
 fi
 
 render_flat() {

@@ -172,7 +172,7 @@ Use `git commit --no-verify` to bypass the hook for one commit.
 When you stage the schematic or board, the hook performs these actions:
 
 - It runs `regen-fab.sh` and stages `export/`.
-- It runs `scripts/render-readme-assets.sh` and stages `docs/readme-assets/`.
+- It runs `scripts/render-readme-assets.sh` and stages `docs/readme-assets/`. The board PNGs render with Blender from `scripts/render-board-blender.py`.
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
 

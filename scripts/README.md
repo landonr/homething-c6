@@ -31,11 +31,16 @@ Run these commands from the repository root to regenerate the case preview asset
 
 ```bash
 ./scripts/render-readme-assets.sh
-../c6remote-explode/scripts/render-case-exploded.sh
-../c6remote-explode/scripts/render-case-spin.sh
+../c6remote-explode/scripts/render-case-assembled.sh --blender
+../c6remote-explode/scripts/render-case-exploded.sh --blender
+../c6remote-explode/scripts/render-case-explode-loop.sh
 ```
 
-The case render scripts use the sibling `c6remote-explode` checkout.
-The scripts need Node, Playwright, and `ffmpeg`.
-Run `npm install` in `c6remote-explode` one time.
-Set `C6REMOTE_REPO` if the board checkout is not in the default `homething-c6` directory.
+Every 3D render uses Blender's Cycles.
+`render-readme-assets.sh` needs Blender. Set `BLENDER` to override the binary path.
+It exports a board GLB from the PCB and renders the four `board-3d-*.png` views with `scripts/render-board-blender.py`. It writes them into `docs/readme-assets/`.
+`scripts/assets/env-studio.hdr` is the Poly Haven `studio_small_09` HDRI at 1k. Its license is CC0.
+The three case scripts use the sibling `c6remote-explode` checkout. Set `C6REMOTE_EXPLODE` if that checkout is not at `../c6remote-explode`.
+The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as well. They render the case geometry the viewer has, so run `../c6remote-explode/refresh-assets.sh` after a case or board change.
+Add `--rig` to a case script to render on the Windows Rig over SSH.
+The case scripts write dated files into `c6remote-explode`; copy them into `docs/readme-assets/` as `case-assembled.png`, `case-exploded.png`, and `case-explode-loop.webp`.

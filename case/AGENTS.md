@@ -34,9 +34,12 @@ Both entry points are thin; the code lives in the packages. After a rebuild that
 README case renders live in the explode viewer. From the board repo root:
 
 ```bash
-../c6remote-explode/scripts/render-case-exploded.sh # path-traced exploded still
-../c6remote-explode/scripts/render-case-spin.sh     # path-traced assembled spin
+../c6remote-explode/scripts/render-case-assembled.sh --blender # assembled still
+../c6remote-explode/scripts/render-case-exploded.sh --blender  # exploded still
+../c6remote-explode/scripts/render-case-explode-loop.sh        # looping explode turntable (WebP)
 ```
+
+All three render with Blender's Cycles; add `--rig` to render on the Windows Rig.
 
 Presets sit in `~/dev/c6remote-explode/presets/`. Pose a shot in the viewer, press Copy preset JSON, and overwrite the preset to lock the camera.
 

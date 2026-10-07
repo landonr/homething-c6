@@ -543,15 +543,21 @@ Any button pulls the expander INT line (`GPIO5`) low and wakes the chip.
 Before the firmware boots, a wake stub reads the expander. As a result, the
 firmware knows which button woke it.
 
-When the Zigbee link comes up, the remote sends the wake press, which is the Zigbee assignment of that button.
+The wake press replay is a setting. It is off by default.
+When it is off, the press that wakes the remote only wakes it. Press the button again to send its command.
+A held SW1 or SW9 does not tap when you release it.
+
+When the setting is on, the remote sends the wake press when the Zigbee link comes up.
+The wake press is the Zigbee assignment of that button.
 If no link comes within 3 s after setup, the remote drops the wake press.
 [ZIGBEE.md](ZIGBEE.md) describes the send path.
 
 SW9 acts when you release it. If you still hold SW9 at wake, the remote runs the
-Wi-Fi hold and does not send the wake press.
+Wi-Fi hold whether the setting is on or off. When the setting is on, the remote sends the assignment
+of SW9 when you release SW9 before the 2 s hold ends.
 
 If you still hold SW1 at wake, the remote does not start the assignment mode
-hold. The remote sends the assignment of SW1 when you release SW1.
+hold. When the setting is on, the remote sends the assignment of SW1 when you release SW1.
 
 After a wake, all four LEDs pulse two times in the battery colour. Each pulse
 is 800 ms. The colour shows the battery level at the first moment after the wake:
@@ -580,8 +586,9 @@ The `/buttons` page has a **Sleep** block. It shows only on a build with `idle_s
 
 - The **Sleep** switch turns idle sleep on or off.
 - The **Sleep after, in minutes** box sets the idle time from 1 to 60 minutes.
+- The **Send the wake press** switch turns the wake press replay on or off. It is off by default.
 
-The remote stores both settings in flash. A change restarts the idle window.
+The remote stores all three settings in flash. A change restarts the idle window.
 The SW5 hold works when **Sleep** is off.
 
 ### Flash over USB

@@ -24,6 +24,15 @@ esphome:
               zigbee_assignments.set_boot_gated(true);
               ESP_LOGI("zigbee_learn", "Zigbee radio is off, so the stack stays down");
             }
+            // Must run before any loop, so a held SW1 or SW9 cannot release first.
+            // With wake press replay off, the release must not tap. on_press clears the flag.
+            if (id(idle).woke_from_sleep() && !id(idle).wake_replay()) {
+              const uint16_t held = id(idle).held_at_wake();
+              if (held & 1u)
+                ir_ui.hold_consumed = true;
+              if (held & (1u << 9))
+                id(sw9_hold_consumed) = true;
+            }
     - priority: 600
       then:
         - lambda: ir_code_store.setup();
@@ -179,7 +188,8 @@ idle_sleep:
     }
     return mask != 0;
   replay: !lambda |-
-    // SW1 and SW9 tap on release, so their on_release owns a held bit.
+    // The wake press replay setting gates this hook. SW1 and SW9 tap on
+    // release, so their on_release owns a held bit.
     if (held && (bit == 0 || bit == 9))
       return false;
     // Expander bit to slot, from the Button and Wheel binary_sensor entries.
@@ -1044,7 +1054,9 @@ interval:
             return;
           // A button held from sleep published its first state without on_press,
           // so run the SW9 on_press here. Its on_release stops the hold.
-          // A held SW1 taps on release like a normal press.
+          // With wake press replay on, a held SW1 or SW9 taps on release like a
+          // normal press. With it off, on_boot already set the flags, so the
+          // release does not tap. SW9 still starts the Wi-Fi hold.
           static bool held_checked = false;
           if (!held_checked) {
             held_checked = true;
@@ -1053,7 +1065,8 @@ interval:
             // the binary sensor's first read, so read again. A hold for a button
             // already up has no on_release to stop it.
             if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {
-              id(sw9_hold_consumed) = false;
+              if (id(idle).wake_replay())
+                id(sw9_hold_consumed) = false;
               id(detect_wifi_hold).execute();
             }
           }

@@ -489,9 +489,10 @@ Two limits follow from that:
 A join clears the state back to unknown. The warm-cache pass that follows a join
 is the one probe the remote makes without a press.
 
-After a deep-sleep wake, the remote rejoins the network. When the link comes up, it
-sends the wake press. If no link comes within 3 s after setup, it drops the wake press.
-See [Deep sleep](RECEIVER.md#deep-sleep) in RECEIVER.md.
+After a deep-sleep wake, the remote rejoins the network. The press that wakes the remote
+only wakes it, unless the **Send the wake press** setting is on. When the setting is on and
+the link comes up, the remote sends the wake press. If no link comes within 3 s after setup,
+it drops the wake press. See [Wake](RECEIVER.md#wake) in RECEIVER.md.
 
 ## Storage
 

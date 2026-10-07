@@ -43,7 +43,10 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   // A successful set is stored in flash and restarts the idle window.
   bool enabled() const { return this->enabled_.load(std::memory_order_relaxed); }
   uint32_t sleep_after_s() const { return this->sleep_after_s_.load(std::memory_order_relaxed); }
+  // True when the press that woke the remote is also sent. Off by default.
+  bool wake_replay() const { return this->wake_replay_.load(std::memory_order_relaxed); }
   bool set_enabled(bool enabled);
+  bool set_wake_replay(bool replay);
   bool set_sleep_after_s(uint32_t seconds);
 
  protected:
@@ -53,7 +56,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   void try_sleep_();
   [[noreturn]] void enter_sleep_();
   void load_settings_();
-  bool save_settings_(bool enabled, uint32_t stored_after_s);
+  bool save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay);
   void attach_int_isr_();
   void detach_int_isr_();
 
@@ -64,12 +67,14 @@ class IdleSleep : public Component, public i2c::I2CDevice {
     uint32_t magic;
     uint32_t stored_after_s;
     uint8_t enabled;
-    uint8_t reserved[3];
+    uint8_t wake_replay;
+    uint8_t reserved[2];
   };
 
   uint32_t default_sleep_after_s_{300};
   uint32_t stored_after_s_{0};
   std::atomic<bool> enabled_{true};
+  std::atomic<bool> wake_replay_{false};
   std::atomic<uint32_t> sleep_after_s_{300};
   ESPPreferenceObject settings_pref_;
   bool int_isr_tried_{false};

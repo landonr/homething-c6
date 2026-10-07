@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac", "bat", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "rss", "rsb",
+                  "wip", "wmac", "bat", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
@@ -65,7 +65,7 @@ const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
-  sleep: {available: true, enabled: true, after_s: 300},
+  sleep: {available: true, enabled: true, after_s: 300, replay: false},
   battery: {available: true, percent: 72, volts: 3.87},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true},
@@ -974,6 +974,29 @@ setTimeout(() => {
     if (!document.getElementById("sla").disabled) throw new Error("minutes stayed live during the write");
     if (!document.getElementById("slap").disabled) throw new Error("Apply stayed live during the write");
     global.sleepBusy = false;
+    sleepStatus();
+  });
+  step("the wake press switch reflects the state and posts the new value", () => {
+    global.st = STATE;
+    global.sleepBusy = false;
+    sleepStatus();
+    const box = document.getElementById("srb");
+    if (box.checked || box.disabled) throw new Error("the wake press switch did not start off and live");
+    STATE.sleep.replay = true;
+    sleepStatus();
+    if (!box.checked) throw new Error("the wake press switch ignored replay true");
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    box.checked = false;
+    box.onchange();
+    global.fetch = realFetch;
+    if (!body.includes("action=set_sleep_replay") || !body.includes("enabled=0"))
+      throw new Error("wake press switch posted " + body);
+    if (!box.disabled || box.checked) throw new Error("wake press switch lost the pending state");
+    if (!document.getElementById("slb").checked) throw new Error("the sleep switch lost its value");
+    global.sleepBusy = false;
+    STATE.sleep.replay = false;
     sleepStatus();
   });
   step("the minutes box posts seconds and refuses a value outside 1 to 60", () => {

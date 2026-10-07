@@ -256,6 +256,9 @@ class SettingsTest(unittest.TestCase):
             "bool enabled() const { return this->enabled_.load(std::memory_order_relaxed); }",
             "uint32_t sleep_after_s() const { return this->sleep_after_s_.load(std::memory_order_relaxed); }",
             "bool set_enabled(bool enabled);",
+            "bool wake_replay() const { return this->wake_replay_.load(std::memory_order_relaxed); }",
+            "bool set_wake_replay(bool replay);",
+            "std::atomic<bool> wake_replay_{false};",
             "bool set_sleep_after_s(uint32_t seconds);",
             "static constexpr uint32_t MIN_SLEEP_AFTER_S = 10;",
             "static constexpr uint32_t MAX_SLEEP_AFTER_S = 3600;",
@@ -273,13 +276,14 @@ class SettingsTest(unittest.TestCase):
         for signature, store in (
             ("bool IdleSleep::set_enabled(bool enabled)", "this->enabled_.store(enabled"),
             ("bool IdleSleep::set_sleep_after_s(uint32_t seconds)", "this->sleep_after_s_.store(seconds"),
+            ("bool IdleSleep::set_wake_replay(bool replay)", "this->wake_replay_.store(replay"),
         ):
             body = function_body(CPP, signature)
             save = body.index("if (!this->save_settings_(")
             self.assertLess(save, body.index(store))
             self.assertLess(save, body.index("this->last_activity_ms_ = millis();"))
             self.assertIn("return true;", body)
-        save = function_body(CPP, "bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s)")
+        save = function_body(CPP, "bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay)")
         self.assertIn("this->settings_pref_.save(&next)", save)
 
     def test_settings_load_from_a_fixed_key_and_fall_back_to_yaml(self) -> None:
@@ -296,6 +300,18 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("cv.Range(min=MIN_SLEEP_AFTER, max=MAX_SLEEP_AFTER)", INIT)
         self.assertIn("MIN_SLEEP_AFTER = cv.TimePeriod(seconds=10)", INIT)
         self.assertIn("MAX_SLEEP_AFTER = cv.TimePeriod(seconds=3600)", INIT)
+
+    def test_the_wake_press_replay_is_a_stored_setting_that_defaults_off(self) -> None:
+        self.assertIn("    uint8_t wake_replay;\n    uint8_t reserved[2];", HEADER)
+        load = function_body(CPP, "void IdleSleep::load_settings_()")
+        self.assertIn("this->wake_replay_.store(valid && loaded.wake_replay == 1", load)
+        self.assertNotIn("loaded.wake_replay <= 1", load)
+        setup = function_body(CPP, "void IdleSleep::setup()")
+        self.assertLess(setup.index("this->load_settings_();"), setup.index("this->replay_pending_ ="))
+        self.assertIn("this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_) &&"
+                      " this->wake_replay();", setup)
+        self.assertIn("wake press replay is off", setup)
+        self.assertIn("YESNO(this->wake_replay())", function_body(CPP, "void IdleSleep::dump_config()"))
 
     def test_off_stops_only_the_idle_path(self) -> None:
         body = function_body(CPP, "void IdleSleep::try_sleep_()")
@@ -398,7 +414,14 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertLess(once, drive.index("id(idle).held_at_wake()"))
         self.assertIn("if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {", drive)
         sw9 = statements(function_body(drive, "if ((held & (1u << 9))"))
-        self.assertEqual(sw9, ["id(sw9_hold_consumed) = false;", "id(detect_wifi_hold).execute();"])
+        self.assertEqual(sw9, ["if (id(idle).wake_replay())", "id(sw9_hold_consumed) = false;",
+                               "id(detect_wifi_hold).execute();"])
+        self.assertNotIn("ir_ui.hold_consumed", drive)
+        boot = PRODUCTION.split("    - priority: 800\n", 1)[1].split("    - priority: 600\n", 1)[0]
+        self.assertIn("if (id(idle).woke_from_sleep() && !id(idle).wake_replay()) {", boot)
+        self.assertIn("const uint16_t held = id(idle).held_at_wake();", boot)
+        self.assertIn("if (held & 1u)\n                ir_ui.hold_consumed = true;", boot)
+        self.assertIn("if (held & (1u << 9))\n                id(sw9_hold_consumed) = true;", boot)
         self.assertNotIn("(held & (1u << 0))", drive)
         self.assertNotIn("detect_receiver_hold", drive)
         self.assertNotIn("exit_receiver_hold", drive)

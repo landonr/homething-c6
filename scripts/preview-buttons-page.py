@@ -53,7 +53,7 @@ STATE = {
         "mac": "A4:CF:12:34:56:78",
     },
     # Production links idle_sleep. A build without it serves available false and zeros.
-    "sleep": {"available": True, "enabled": True, "after_s": 300},
+    "sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False},
     # Production links the battery sensors. A build without them serves available false and zeros.
     "battery": {"available": True, "percent": 72, "volts": 3.87},
     "radios": {"zigbee": True, "ble": True},
@@ -300,6 +300,8 @@ class Handler(BaseHTTPRequestHandler):
             STATE["network"]["wifi_always_on"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_enabled":
             STATE["sleep"]["enabled"] = form.get("enabled", ["0"])[0] == "1"
+        elif action == "set_sleep_replay":
+            STATE["sleep"]["replay"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_after":
             STATE["sleep"]["after_s"] = int(seconds)
         elif action == "set_name":

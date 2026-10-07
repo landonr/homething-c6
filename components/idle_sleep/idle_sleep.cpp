@@ -194,12 +194,14 @@ void IdleSleep::setup() {
   // still down here reaches no on_press at all. The replay hook decides.
   this->replay_mask_ = rec.stub_down;
   this->held_mask_ = rec.stub_down & first_down;
-  this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_);
+  this->load_settings_();
+  // The stored wake press replay setting gates the replay.
+  this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_) && this->wake_replay();
+  if (this->replay_mask_ != 0 && !this->wake_replay())
+    ESP_LOGI(TAG, "Wake press 0x%04X not sent because wake press replay is off", this->replay_mask_);
   this->pressed_ = first_down;
   this->last_activity_ms_ = millis();
   this->last_poll_ms_ = this->last_activity_ms_;
-
-  this->load_settings_();
 }
 
 void IdleSleep::load_settings_() {
@@ -210,12 +212,14 @@ void IdleSleep::load_settings_() {
                       (loaded.stored_after_s >= MIN_SLEEP_AFTER_S && loaded.stored_after_s <= MAX_SLEEP_AFTER_S));
   this->stored_after_s_ = valid ? loaded.stored_after_s : 0;
   this->enabled_.store(!valid || loaded.enabled == 1, std::memory_order_relaxed);
+  this->wake_replay_.store(valid && loaded.wake_replay == 1, std::memory_order_relaxed);
   this->sleep_after_s_.store(this->stored_after_s_ != 0 ? this->stored_after_s_ : this->default_sleep_after_s_,
                              std::memory_order_relaxed);
 }
 
-bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s) {
-  SettingsPref next{SETTINGS_MAGIC, stored_after_s, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay) {
+  SettingsPref next{SETTINGS_MAGIC, stored_after_s, enabled ? uint8_t{1} : uint8_t{0},
+                    wake_replay ? uint8_t{1} : uint8_t{0}, {0, 0}};
   if (!this->settings_pref_.save(&next)) {
     ESP_LOGE(TAG, "Failed to save the sleep settings");
     return false;
@@ -224,7 +228,7 @@ bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s) {
 }
 
 bool IdleSleep::set_enabled(bool enabled) {
-  if (!this->save_settings_(enabled, this->stored_after_s_))
+  if (!this->save_settings_(enabled, this->stored_after_s_, this->wake_replay()))
     return false;
   this->enabled_.store(enabled, std::memory_order_relaxed);
   this->last_activity_ms_ = millis();
@@ -232,10 +236,19 @@ bool IdleSleep::set_enabled(bool enabled) {
   return true;
 }
 
+bool IdleSleep::set_wake_replay(bool replay) {
+  if (!this->save_settings_(this->enabled(), this->stored_after_s_, replay))
+    return false;
+  this->wake_replay_.store(replay, std::memory_order_relaxed);
+  this->last_activity_ms_ = millis();
+  ESP_LOGI(TAG, "Wake press replay %s, idle window restarted", replay ? "on" : "off");
+  return true;
+}
+
 bool IdleSleep::set_sleep_after_s(uint32_t seconds) {
   if (seconds < MIN_SLEEP_AFTER_S || seconds > MAX_SLEEP_AFTER_S)
     return false;
-  if (!this->save_settings_(this->enabled(), seconds))
+  if (!this->save_settings_(this->enabled(), seconds, this->wake_replay()))
     return false;
   this->stored_after_s_ = seconds;
   this->sleep_after_s_.store(seconds, std::memory_order_relaxed);
@@ -279,9 +292,10 @@ void IdleSleep::dump_config() {
                 "Idle sleep:\n"
                 "  Enabled: %s\n"
                 "  Sleep after: %" PRIu32 " s (%s, YAML default %" PRIu32 " s)\n"
+                "  Wake press replay: %s\n"
                 "  Cold boot grace: %" PRIu32 " ms",
                 YESNO(this->enabled()), this->sleep_after_s(), this->stored_after_s_ != 0 ? "stored" : "default",
-                this->default_sleep_after_s_, this->cold_boot_grace_ms_);
+                this->default_sleep_after_s_, YESNO(this->wake_replay()), this->cold_boot_grace_ms_);
   if (this->sleep_hold_bit_ != NO_BIT) {
     ESP_LOGCONFIG(TAG, "  Sleep hold: bit %u for %" PRIu32 " ms", this->sleep_hold_bit_, this->sleep_hold_time_ms_);
   } else {

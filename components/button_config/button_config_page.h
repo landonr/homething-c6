@@ -223,6 +223,9 @@ aria-label="Sleep" disabled><span></span></label></h2>
 <input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
 <button type="button" id="slap" disabled>Apply</button>
 </div>
+<h2 class="ttl">Send the wake press<label class="sw" id="srw"><input type="checkbox" id="srb"
+aria-label="Send the wake press" disabled><span></span></label></h2>
+<p class="sub">When on, the button that wakes the remote also sends its Zigbee command if the link comes up within 3 seconds. When off, the first press only wakes the remote.</p>
 </div>
 <hr class="rule">
 <h2 class="ttl">Restart</h2>
@@ -304,7 +307,7 @@ var ZA=[
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
-var sleepBusy=false,sleepWant=true,sleepError="";
+var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
 // nameEdit keeps the box open across polls, so a repaint never overwrites a
 // name that is still being typed.
 var nameEdit=false,nameBusy=false,nameMsg="",nameBad=false;
@@ -449,6 +452,7 @@ keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("wfb").onchange=setWifiAlwaysOn;
 document.getElementById("slb").onchange=setSleepEnabled;
+document.getElementById("srb").onchange=setSleepReplay;
 document.getElementById("slap").onclick=setSleepAfter;
 document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};
 document.getElementById("rsb").onclick=restartRemote;
@@ -764,6 +768,8 @@ var z=st&&st.sleep,on=!!(z&&z.enabled===true);
 if(blk)blk.hidden=!(z&&z.available);
 if(!z||!z.available)return;
 if(box){box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy}
+var rb=document.getElementById("srb");
+if(rb){rb.checked=sleepBusy?replayWant:z.replay===true;rb.disabled=sleepBusy}
 if(num){if(!sleepBusy&&document.activeElement!==num&&document.activeElement!==ap)num.value=String(Math.max(1,Math.round(z.after_s/60)));
 num.disabled=sleepBusy}
 if(ap)ap.disabled=sleepBusy
@@ -775,13 +781,21 @@ line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>Sleep is "+
 function setSleepEnabled(){
 if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
 sleepWant=document.getElementById("slb").checked;
+replayWant=st.sleep.replay===true;
 sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0"),"The remote could not save the sleep switch.")}
+
+function setSleepReplay(){
+if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
+sleepWant=st.sleep.enabled===true;
+replayWant=document.getElementById("srb").checked;
+sleepSave("set_sleep_replay","&enabled="+(replayWant?"1":"0"),"The remote could not save the wake press switch.")}
 
 function setSleepAfter(){
 if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
 var v=String(document.getElementById("sla").value).replace(/^\s+|\s+$/g,""),m=Number(v);
 if(!/^\d+$/.test(v)||m<1||m>60){sleepError="Enter whole minutes from 1 to 60.";sleepStatus();return}
 sleepWant=st.sleep.enabled===true;
+replayWant=st.sleep.replay===true;
 sleepSave("set_sleep_after","&seconds="+(m*60),"The remote could not save the sleep time.")}
 
 function sleepSave(a,x,why){

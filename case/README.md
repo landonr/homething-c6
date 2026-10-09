@@ -14,7 +14,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 <p align="center"><sub>Front shell, caps, button pad, board, and back shell</sub></p>
 
 <p align="center">
-  <img alt="The c6remote case turning as it comes apart and goes back together" src="../docs/readme-assets/case-explode-loop.webp" width="360">
+  <img alt="The c6remote case comes apart as it turns, every part spins once, and the case goes back together" src="../docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.

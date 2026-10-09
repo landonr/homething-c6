@@ -46,41 +46,31 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 ## Case
 
 <p align="center">
-  <img alt="Assembled case" src="docs/readme-assets/case-assembled.png" width="240">
+  <img alt="The case comes apart as it turns, every part spins once, and the case goes back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
-<p align="center"><sub>Assembled case</sub></p>
-
-<p align="center">
-  <img alt="Exploded view of the case, buttons, board, and back shell" src="docs/readme-assets/case-exploded.png" width="550">
-</p>
-<p align="center"><sub>Exploded view: front shell, button caps, silicone pads, board, and back shell</sub></p>
-
-<p align="center">
-  <img alt="The case turning as it comes apart and goes back together, with the status LEDs playing the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="360">
-</p>
-<p align="center"><sub>Coming apart and going back together, with the status LEDs playing the boot animation</sub></p>
+<p align="center"><sub>The case comes apart, every part spins once, and the case goes back together</sub></p>
 
 ## Board ([more info](c6remote-kicad/README.md))
 
 ### PCB and hardware
 
 <p align="center">
-  <img alt="Raytraced 3D top view of the board" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
-  <img alt="Raytraced 3D bottom view of the board" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
+  <img alt="Blender render of the board top" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
+  <img alt="Blender render of the board bottom" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
 </p>
-<p align="center"><sub>Raytraced renders, top and bottom</sub></p>
+<p align="center"><sub>Blender Cycles renders, top and bottom</sub></p>
 
 #### Top
 
 | Render | Copper |
 | :---: | :---: |
-| <img alt="Flat 3D top view" src="docs/readme-assets/board-3d-top.png" width="180"> | <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180"> |
+| <img alt="Flat Blender render of the board top" src="docs/readme-assets/board-3d-top.png" width="180"> | <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180"> |
 
 #### Bottom
 
 | Render | Copper |
 | :---: | :---: |
-| <img alt="Flat 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180"> | <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180"> |
+| <img alt="Flat Blender render of the board bottom" src="docs/readme-assets/board-3d-bottom.png" width="180"> | <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180"> |
 
 | Ref | Part | Role |
 | --- | --- | --- |
@@ -110,6 +100,12 @@ Open `http://homething-c6-xxxxxx.local/` in a browser on the same network. The p
 The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
 You can also clear the input. Hold `SW1` for two seconds to use the on-device assignment mode.
 [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
+
+<p align="center">
+  <img alt="The Buttons tab. Button 7 is selected and set to a Zigbee target" src="docs/readme-assets/buttons-page-assign.png" width="62%">
+  <img alt="The Config tab with the Wi-Fi, sleep, Home Assistant, Zigbee, and Bluetooth settings" src="docs/readme-assets/buttons-page-config.png" width="35%">
+</p>
+<p align="center"><sub>The Buttons tab with a Zigbee assignment, and the Config tab</sub></p>
 
 ## Status
 

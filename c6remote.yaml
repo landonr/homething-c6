@@ -661,10 +661,14 @@ light:
             }
 
             // D5 is Zigbee status during normal operation. A radio switched off
-            // sends nothing, so it reads the same as a stack that never started.
-            // Pairing is tested before the join, so an open window never shows
-            // the red that means a fault. A join closes the window itself.
-            if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started()) {
+            // sends nothing, and a radio the boot gate holds down never starts,
+            // so both stay dark. Pairing is tested before the join, so an open
+            // window never shows the red that means a fault. A join closes the
+            // window itself. factory_new_ reads false until the stack starts, so
+            // an unjoined radio shows the stored-network yellow until a
+            // factory-new start drops it to red. Yellow uses R:G = 3:2, between
+            // the 1:1 that reads green and the 2:1 amber.
+            if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated()) {
               it[3] = Color::BLACK;
             } else if (zigbee_assignments.pairing_window_open()) {
               const float phase = (millis() % 1600) / 1600.0f;
@@ -672,10 +676,16 @@ light:
                   144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
               it[3] = Color(0, 0, level);
             } else if (!id(zigbee_radio).is_connected()) {
-              const float phase = (millis() % 3200) / 3200.0f;
-              const uint8_t level = 48 + static_cast<uint8_t>(
-                  144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-              it[3] = Color(level, 0, 0);
+              if (!zigbee_assignments.pairing() && !id(zigbee_radio)->factory_new_.load()) {
+                it[3] = Color(192, 128, 0);
+              } else if (!id(zigbee_radio).is_started()) {
+                it[3] = Color::BLACK;
+              } else {
+                const float phase = (millis() % 3200) / 3200.0f;
+                const uint8_t level = 48 + static_cast<uint8_t>(
+                    144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
+                it[3] = Color(level, 0, 0);
+              }
             } else if (zigbee_assignments.reach() == ZigbeeAssignmentManager::REACH_FAILED) {
               // Only a device unicast is acknowledged, so a groupcast-only
               // remote never reaches this and stays solid green.

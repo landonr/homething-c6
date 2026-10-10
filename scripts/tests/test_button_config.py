@@ -1675,7 +1675,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn("zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),", CONFIG)
         self.assertIn("id(zigbee_radio)->factory_new_.load());", CONFIG)
         # D5 must not report a healthy Zigbee link that sends nothing.
-        self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())",
                       CONFIG)
         self.assertIn("const bool ha_expected = id(button_cfg).ha_api_expected();", CONFIG)
         self.assertIn("it[0] = Color(140, 70, 0);", CONFIG)

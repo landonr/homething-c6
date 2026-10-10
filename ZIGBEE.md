@@ -45,8 +45,11 @@ The remote does not route Zigbee traffic. It does not enter deep sleep while a
 pairing request or the pairing window is active. Keep it powered while the
 coordinator forms or repairs the network.
 
-If `D5` pulses red, the Zigbee stack has started but has no network connection.
+If `D5` pulses red, the Zigbee stack has started but has no stored network.
 Pair the remote again.
+
+If `D5` stays yellow, the remote has a stored network but cannot rejoin it. Make
+sure that the coordinator is on and in range.
 
 ## Pair the remote from the page
 
@@ -441,7 +444,7 @@ Select the **Restart** button entity to reboot the remote from Home Assistant or
 from the `/buttons` page. A pairing press also restarts the remote, and it turns
 the radio on first, so it lifts the gate as well.
 
-`D5` is dark while the switch is off, the same as before the stack starts.
+`D5` is dark while the switch is off. It also stays dark until a reboot lifts the gate.
 
 The switch state lives in the Zigbee assignment record, so the remote restores it
 after a reboot.
@@ -517,9 +520,10 @@ clear.
 
 | `D5` | Meaning |
 | --- | --- |
-| dark | The radio is off, or the stack has not started. |
+| dark | The radio is off, the boot gate holds the stack down, or a pairing restart has not started the stack. |
 | blue pulse, 1600 ms | A pairing window is open. |
-| red pulse, 3200 ms | The stack is up but it has not joined this boot. |
+| solid yellow | The remote has a stored network but has not joined it since the boot or wake. |
+| red pulse, 3200 ms | The stack is up with no stored network, or a pairing restart has not erased the old network yet. |
 | solid green | The remote joined a network. |
 | amber pulse, 4000 ms | Joined, but the last device command was not acknowledged. |
 

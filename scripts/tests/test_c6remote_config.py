@@ -649,8 +649,8 @@ class ProductionConfigTest(unittest.TestCase):
         # Zigbee training used to pulse D5, which hid the radio state for the
         # whole training window. It now pulses D3 and D4 instead.
         entry = status_light_entry(CONFIG.read_text())
-        # A radio the switch holds off sends nothing, so D5 stays dark for it too.
-        self.assertIn("if (!zigbee_assignments.radio_enabled() || !id(zigbee_radio).is_started())",
+        # A radio the switch or the boot gate holds off sends nothing, so D5 stays dark for it too.
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())",
                       entry)
         self.assertIn("else if (!id(zigbee_radio).is_connected())", entry)
         self.assertIn("it[3] = Color(0, 128, 0);", entry)
@@ -669,6 +669,18 @@ class ProductionConfigTest(unittest.TestCase):
         reach = d5.index("ZigbeeAssignmentManager::REACH_FAILED")
         self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
         self.assertIn("it[3] = Color(level, level / 2, 0);", d5)
+
+    def test_d5_shows_yellow_while_a_stored_network_rejoins(self) -> None:
+        # A boot on stored credentials must show yellow, not dark, before the stack starts.
+        d5 = status_light_entry(CONFIG.read_text()).split("// D5 is Zigbee status", 1)[1]
+        yellow = "if (!zigbee_assignments.pairing() && !id(zigbee_radio)->factory_new_.load()) {"
+        self.assertIn(yellow, d5)
+        self.assertIn("it[3] = Color(192, 128, 0);", d5)
+        connected = d5.index("!id(zigbee_radio).is_connected()")
+        self.assertLess(connected, d5.index(yellow))
+        self.assertLess(d5.index(yellow), d5.index("!id(zigbee_radio).is_started()"))
+        self.assertLess(d5.index("!id(zigbee_radio).is_started()"),
+                        d5.index("ZigbeeAssignmentManager::REACH_FAILED"))
 
     def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
         # Assignment mode and voice keep D3 and D4, so the

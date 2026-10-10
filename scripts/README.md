@@ -38,7 +38,8 @@ Run these commands from the repository root to regenerate the case preview asset
 
 Every 3D render uses Blender's Cycles.
 `render-readme-assets.sh` needs Blender. Set `BLENDER` to override the binary path.
-It exports a board GLB from the PCB and renders the four `board-3d-*.png` views with `scripts/render-board-blender.py`. It writes them into `docs/readme-assets/`.
+It exports a board GLB from the PCB and renders the two `board-3d-rotated-*.png` views with `scripts/render-board-blender.py`. It writes them into `docs/readme-assets/`.
+`scripts/board_extras.py` builds the J1 socket, the battery plug, and the battery for the Blender scripts. The `c6remote-explode` repository also uses it.
 `scripts/assets/env-studio.hdr` is the Poly Haven `studio_small_09` HDRI at 1k. Its license is CC0.
 The three case scripts use the sibling `c6remote-explode` checkout. Set `C6REMOTE_EXPLODE` if that checkout is not at `../c6remote-explode`.
 The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as well. They render the case geometry the viewer has, so run `../c6remote-explode/refresh-assets.sh` after a case or board change.

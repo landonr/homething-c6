@@ -1,4 +1,4 @@
-"""Render the four README board PNGs from a board GLB. Run inside Blender:
+"""Render the two README board PNGs from a board GLB. Run inside Blender:
 
 blender -b --factory-startup -noaudio --python-exit-code 1 -P scripts/render-board-blender.py -- \
     --glb <file> --hdr <file> --out-dir <dir> [--samples N]
@@ -13,24 +13,27 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Quaternion, Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import board_extras  # noqa: E402
+
 YAW = 265
 MARGIN = 0.05
 
 # (file, fwd = tgt - pos, up, width, areaWidth, areaHeight, model pos, model quat x,y,z,w)
 FLIP = ((106.67491, 0, 3.26), (0, 1, 0, 0))
 ID = ((0, 0, 0), (0, 0, 0, 1))
-ISO = (200, 200, -282.842712474619)
+# From above the encoder end, so the board stands upright and leans toward the viewer.
+ISO = (200, -200, -282.842712474619)
 VIEWS = [
-    ("board-3d-rotated-top.png", ISO, (0, 0, 1), 1200, 1200, 900, *ID),
-    ("board-3d-rotated-bottom.png", ISO, (0, 0, 1), 1200, 1200, 900, *FLIP),
-    ("board-3d-top.png", (0, 0, -1), (0, 1, 0), 400, 328, 1176, *ID),
-    ("board-3d-bottom.png", (0, 0, -1), (0, 1, 0), 400, 328, 1176, *FLIP),
+    ("board-3d-rotated-top.png", ISO, (0, 1, 0), 1200, 900, 1600, *ID),
+    ("board-3d-rotated-bottom.png", ISO, (0, 1, 0), 1200, 900, 1600, *FLIP),
 ]
 
-# Re-dress by refdes, from materials.js: color, metallic, roughness.
+# Re-dress by refdes, from materials.js: color, metallic, roughness, optional transmission.
 DRESS = {
     "ENC1": (0x101012, 0.0, 0.15),
     "U2": (0x0C0C0E, 0.0, 0.3),
+    "D1": (0xF2F4F6, 0.0, 0.02, 1.0),
 }
 
 ap = argparse.ArgumentParser()
@@ -92,7 +95,7 @@ for o in new:
                 nd.inputs["Roughness"].default_value = 0.3 if metal else 0.5
 
 # The GLB shares one material per colour across unrelated parts, so dress copies.
-for ref, (color, metallic, roughness) in DRESS.items():
+for ref, (color, metallic, roughness, *clear) in DRESS.items():
     node = next((o for o in new if o.name == ref), None)
     if node is None:
         print(f"board: no {ref} to re-dress", flush=True)
@@ -108,12 +111,42 @@ for ref, (color, metallic, roughness) in DRESS.items():
             o.data.materials.append(m)
         for slot in o.material_slots:
             if slot.material:
+                # A clear body keeps its tin leads.
+                if clear and bsdf(slot.material).inputs["Metallic"].default_value >= 0.5:
+                    continue
                 m = slot.material = slot.material.copy()
                 b = bsdf(m)
                 b.inputs["Base Color"].default_value = lin(color)
                 b.inputs["Metallic"].default_value = metallic
                 b.inputs["Roughness"].default_value = roughness
+                if clear:
+                    b.inputs["Transmission Weight"].default_value = clear[0]
+                    b.inputs["IOR"].default_value = 1.5
 print(f"board: {len(new)} objects, {len(seen)} materials", flush=True)
+
+
+# KiCad 10 ships no J1 model, and the GLB has no battery.
+extras = bpy.data.objects.new("extras", None)
+scene.collection.objects.link(extras)
+extras.parent = grp
+EXTRAS = board_extras.build(scene, extras)
+
+
+def world_pts(o):
+    co = np.empty(len(o.data.vertices) * 3, np.float32)
+    o.data.vertices.foreach_get("co", co)
+    mw = np.array(o.matrix_world)
+    return co.reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
+
+
+# The extras must not touch any GLB part below the board.
+for e in EXTRAS:
+    e_lo, e_hi = world_pts(e).min(0), world_pts(e).max(0)
+    for o in new:
+        if o.type == "MESH":
+            p = world_pts(o)
+            if (p.min(0) < e_hi).all() and (p.max(0) > e_lo).all() and p.min(0)[2] < -0.05:
+                print(f"board: extra {e.name} overlaps {o.name}", flush=True)
 
 # Blender's equirect is Z-up, so only the yaw is left.
 world = bpy.data.worlds.new("env")
@@ -183,6 +216,9 @@ scene.cycles.transmission_bounces = 16
 scene.cycles.glossy_bounces = 8
 scene.cycles.transparent_max_bounces = 16
 scene.render.film_transparent = True
+# The page shows through D1's clear dome. Only D1 is transmissive and under the cutoff.
+scene.cycles.film_transparent_glass = True
+scene.cycles.film_transparent_roughness = 0.03
 scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGBA"

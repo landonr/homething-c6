@@ -138,11 +138,11 @@ if [[ "${ONLY}" != "schematic" ]]; then
     --out-dir "${OUTPUT_DIR}" \
     --samples "${SAMPLES}"
   if command -v magick >/dev/null 2>&1; then
-    for f in board-3d-top board-3d-bottom board-3d-rotated-top board-3d-rotated-bottom; do
+    for f in board-3d-rotated-top board-3d-rotated-bottom; do
       magick "${OUTPUT_DIR}/${f}.png" -trim +repage "${OUTPUT_DIR}/${f}.png"
     done
   fi
-  for f in board-3d-top board-3d-bottom board-3d-rotated-top board-3d-rotated-bottom; do
+  for f in board-3d-rotated-top board-3d-rotated-bottom; do
     echo "Wrote ${OUTPUT_DIR}/${f}.png"
   done
 fi

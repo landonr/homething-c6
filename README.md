@@ -46,31 +46,41 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 ## Case
 
 <p align="center">
-  <img alt="The case comes apart as it turns, every part spins once, and the case goes back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-controls-annotated-dark.svg">
+    <img alt="Front of the assembled c6remote with labels for the microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
+    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the translucent enclosure, and the 800 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
+  </picture>
 </p>
-<p align="center"><sub>The case comes apart, every part spins once, and the case goes back together</sub></p>
+
+<p align="center">
+  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
+</p>
 
 ## Board ([more info](c6remote-kicad/README.md))
 
 ### PCB and hardware
 
 <p align="center">
-  <img alt="Blender render of the board top" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
-  <img alt="Blender render of the board bottom" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-front-annotated-dark.svg">
+    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder, RGB status LEDs, tactile switches, GPIO expander, and XIAO ESP32-C6 module." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-back-annotated-dark.svg">
+    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 800 mAh LiPo battery, and battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
+  </picture>
 </p>
-<p align="center"><sub>Blender Cycles renders, top and bottom</sub></p>
+<p align="center"><sub>PCB front and back</sub></p>
 
-#### Top
-
-| Render | Copper |
-| :---: | :---: |
-| <img alt="Flat Blender render of the board top" src="docs/readme-assets/board-3d-top.png" width="180"> | <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180"> |
-
-#### Bottom
-
-| Render | Copper |
-| :---: | :---: |
-| <img alt="Flat Blender render of the board bottom" src="docs/readme-assets/board-3d-bottom.png" width="180"> | <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180"> |
+<p align="center">
+  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180" hspace="25">
+  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180" hspace="25">
+</p>
+<p align="center"><sub>Copper top and bottom</sub></p>
 
 | Ref | Part | Role |
 | --- | --- | --- |

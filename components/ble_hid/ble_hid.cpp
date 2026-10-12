@@ -750,11 +750,20 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
     case BLE_GAP_EVENT_CONNECT: {
       this->advertising_.store(false, std::memory_order_release);
       if (event->connect.status != 0) {
+        ESP_LOGI(TAG, "BLE connect failed, status %d", event->connect.status);
         this->start_advertising_();
         return 0;
       }
       this->connection_.store(event->connect.conn_handle, std::memory_order_release);
       this->link_connected_.store(true, std::memory_order_release);
+
+      ble_gap_conn_desc link{};
+      if (ble_gap_conn_find(event->connect.conn_handle, &link) == 0) {
+        ESP_LOGI(TAG, "BLE link up, interval %u x1.25 ms, latency %u, timeout %u x10 ms", link.conn_itvl,
+                 link.conn_latency, link.supervision_timeout);
+      } else {
+        ESP_LOGI(TAG, "BLE link up");
+      }
 
       ble_addr_t peer{};
       ble_gap_conn_desc description{};
@@ -773,6 +782,7 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
     }
     case BLE_GAP_EVENT_ENC_CHANGE: {
       const bool ok = event->enc_change.status == 0;
+      ESP_LOGI(TAG, "BLE encryption %s, status %d", ok ? "on" : "failed", event->enc_change.status);
       this->pairing_.store(false, std::memory_order_release);
       this->bonded_.store(bond_count() > 0, std::memory_order_release);
       this->connected_.store(ok, std::memory_order_release);
@@ -793,6 +803,7 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
       return BLE_GAP_REPEAT_PAIRING_RETRY;
     }
     case BLE_GAP_EVENT_DISCONNECT:
+      ESP_LOGI(TAG, "BLE link down, reason 0x%03X", event->disconnect.reason);
       this->connected_.store(false, std::memory_order_release);
       this->link_connected_.store(false, std::memory_order_release);
       this->pairing_.store(false, std::memory_order_release);
@@ -802,6 +813,14 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
       // bond goes. The page reads connected() to say which of the two it is.
       this->start_advertising_();
       return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+      ble_gap_conn_desc link{};
+      if (ble_gap_conn_find(event->conn_update.conn_handle, &link) == 0) {
+        ESP_LOGI(TAG, "BLE link update, status %d, interval %u x1.25 ms, latency %u, timeout %u x10 ms",
+                 event->conn_update.status, link.conn_itvl, link.conn_latency, link.supervision_timeout);
+      }
+      return 0;
+    }
     default:
       return 0;
   }

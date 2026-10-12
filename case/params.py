@@ -1259,12 +1259,27 @@ The extra height goes into this roof, so the stems and the socket depth stay
 the same. LEGEND_DEPTH comes out of the roof. What is left is the translucent
 bridge that the pad backlight glows through, so the legend bounds the roof from
 below and strength does not."""
-CAP_TOP_FILLET = 0.8
-"""Radius on the exposed top perimeter of every rigid cap.
+CAP_TOP_FILLET = 1.3
+"""Radius on the exposed top perimeter of every rigid cap and every FDM or TPU
+keytop.
 
 This removes the sharp edge a finger meets without changing the cap's body at
-the face hole, its flange, or its captive retention geometry. The generous
-round is bounded below CAP_TOP_T so the socket roof remains below it."""
+the face hole, its flange, or its captive retention geometry. Three bounds:
+
+The round's lower tangent sits this far below CAP_TOP, while a released cap
+stands only CAP_PROTRUSION proud of the face. Above CAP_PROTRUSION, the round
+therefore dips into the face hole, and the cap is already curving inward where
+it meets the hole rim. At the rim the cap is pulled in from its full
+width by about 0.12 mm per side (0.002 mm at 0.8), which only widens the guide
+gap there a little and does not affect fit.
+
+It must stay below CAP_TOP_T, so the socket roof stays under the round.
+
+It shrinks the flat top that the legend sits on. legends_present() reads that
+flat off the built blank cap and holds LEGEND_INK_MARGIN of bare top around
+every legend, so a larger value that runs a legend onto the curve fails there.
+This is the binding bound: SW9 and SW11 keep about 0.3 mm of bare top at this
+value, so they reach LEGEND_INK_MARGIN near 1.4."""
 CAP_WALL = 1.0
 """Thinnest wall the cap may be left with anywhere around its socket. Not a
 modelled dimension: the cap's body follows the face hole and its widest bore is

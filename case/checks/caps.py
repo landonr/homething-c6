@@ -24,7 +24,7 @@ one of those covers the others.
 
 import math
 
-from build123d import Box, Compound, Face, Kind, Pos, Text, Vertex, make_face, offset
+from build123d import Box, Compound, Kind, Pos, Text, Vertex, make_face, offset
 from fontTools.ttLib import TTFont
 
 import board
@@ -332,11 +332,67 @@ legend cut somewhere other than the cap top; it does not catch a missing
 glyph, which is what the cmap check beside it is for."""
 
 LEGEND_INK_MARGIN = 0.2
-"""Bare cap top left around a legend's ink, per side, inside the flat the
-corner radius leaves. Measured against the built ink rather than against the
-font size it was set at: LEGENDS' sizes are ems, and a glyph spends its em
-anywhere from a tenth to three quarters, so the size alone says nothing about
-whether the mark fits."""
+"""Bare cap top left around a legend's ink, per side, inside the planar flat
+that CAP_TOP_FILLET leaves on the built blank cap. Measured against the built
+ink and the built flat rather than against the font size it was set at:
+LEGENDS' sizes are ems, and a glyph spends its em anywhere from a tenth to
+three quarters, so the size alone says nothing about whether the mark fits."""
+
+
+FLAT_SAMPLE_STEP = 0.1
+"""Spacing, mm, of the points sampled along a legend's footprint and along the
+flat's outline. The clearance can over-read by less than this."""
+
+
+def _flat_top(blank):
+    """The planar face a blank cap's fillet leaves at CAP_TOP, as a polyline."""
+    flats = [
+        face
+        for face in blank.faces()
+        if abs(face.center().Z - case.CAP_TOP) < 0.01
+        and abs(face.normal_at().Z - 1) < 1e-6
+    ]
+    if not flats:
+        raise ValueError("the blank cap has no planar top face at CAP_TOP")
+    wire = max(flats, key=lambda f: f.area).outer_wire()
+    count = max(int(wire.length / FLAT_SAMPLE_STEP), 16)
+    return [(p.X, p.Y) for p in (wire @ (i / count) for i in range(count))]
+
+
+def _flat_clearance(polygon, x, y):
+    """Signed distance from (x, y) to the flat's edge, positive inside it."""
+    inside = False
+    best = math.inf
+    n = len(polygon)
+    for i in range(n):
+        x0, y0 = polygon[i]
+        x1, y1 = polygon[(i + 1) % n]
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+        dx, dy = x1 - x0, y1 - y0
+        t = max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy)))
+        best = min(best, math.hypot(x - x0 - t * dx, y - y0 - t * dy))
+    return best if inside else -best
+
+
+def legend_flat_clearance(blank, solids):
+    """Worst clearance, mm, from any legend footprint point to the blank cap's
+    flat top edge, and that point. Negative means the ink leaves the flat."""
+    polygon = _flat_top(blank)
+    worst, at = math.inf, None
+    for solid in solids:
+        top = solid.bounding_box().max.Z
+        for face in solid.faces():
+            if abs(face.center().Z - top) > 1e-6 or abs(face.normal_at().Z - 1) > 1e-6:
+                continue
+            for edge in face.edges():
+                count = max(int(edge.length / FLAT_SAMPLE_STEP), 2)
+                for i in range(count + 1):
+                    p = edge @ (i / count)
+                    c = _flat_clearance(polygon, p.X, p.Y)
+                    if c < worst:
+                        worst, at = c, (p.X, p.Y)
+    return worst, at
 
 
 def legends_present(caps):
@@ -365,8 +421,9 @@ def legends_present(caps):
     its own solids measure, and a cap has to come out as exactly one solid,
     which is what a legend reaching past the roof would break.
 
-    And the ink has to fit the flat top the corner radius leaves, with
-    LEGEND_INK_MARGIN around it.
+    And the ink has to fit the flat top that the top fillet leaves on the
+    built blank cap, with LEGEND_INK_MARGIN between every point of every
+    legend's footprint and the flat's edge.
     """
     font = TTFont(params.LEGEND_FONT)
     cmap = font.getBestCmap()
@@ -388,7 +445,8 @@ def legends_present(caps):
         # actually removed rather than what its solids measure. Not the same
         # number: a legend whose solids sit off the cap top entirely would
         # measure full and remove nothing.
-        cut = case.keycap(ref, legend=False).volume - cap.volume
+        blank = case.keycap(ref, legend=False)
+        cut = blank.volume - cap.volume
         if cut < LEGEND_MIN_VOLUME:
             problems.append(
                 f"{ref}'s legend takes {cut:.2f} mm3 out of the cap, wants "
@@ -402,16 +460,12 @@ def legends_present(caps):
             )
 
         if solids:
-            box = solids[0].bounding_box()
-            for solid in solids[1:]:
-                box = box.add(solid.bounding_box())
-            flat = case.cap_flat(ref)
-            reach = max(box.size.X, box.size.Y) + 2 * LEGEND_INK_MARGIN
-            if reach > flat:
+            clearance, at = legend_flat_clearance(blank, solids)
+            if clearance < LEGEND_INK_MARGIN:
                 problems.append(
-                    f"{ref}'s legend ink is {box.size.X:.2f} x {box.size.Y:.2f} "
-                    f"in {flat:.2f} of flat top, under {LEGEND_INK_MARGIN:.2f} "
-                    "of margin"
+                    f"{ref}'s legend ink comes within {clearance:.2f} of the "
+                    f"edge of the cap's flat top at ({at[0]:.2f}, {at[1]:.2f}), "
+                    f"wants {LEGEND_INK_MARGIN:.2f} of margin"
                 )
     return problems
 
@@ -487,10 +541,12 @@ def legends_are_strokes(caps):
     is material half a LEGEND_DEPTH below CAP_TOP. A legend that reverts to a
     fill is void there.
 
-    Line weight: the cap is sectioned half a LEGEND_DEPTH below CAP_TOP and a
-    grid over the legend's ink box is sampled. Each void sample's distance to
-    the section is how far it sits from the nearest groove wall, and the
-    largest must stay within LEGEND_STROKE_REACH * LEGEND_STROKE_W.
+    Line weight: a grid over the legend's ink box is sampled half a
+    LEGEND_DEPTH below CAP_TOP. Each void sample's horizontal distance to the
+    groove walls, the cap faces wholly within the legend depth that are not
+    flat, is how far it sits from the nearest wall, and the largest must stay
+    within LEGEND_STROKE_REACH * LEGEND_STROKE_W. No section is cut because a
+    planar boolean through the top fillet is unreliable.
     """
     problems = []
     z_mid = case.CAP_TOP - params.LEGEND_DEPTH / 2
@@ -527,7 +583,19 @@ def legends_are_strokes(caps):
         box = solids[0].bounding_box()
         for solid in solids[1:]:
             box = box.add(solid.bounding_box())
-        sheet = Compound(list(cap.intersect(Pos(x, y, z_mid) * Face.make_rect(40, 40))))
+        walls = [
+            face for face in cap.faces()
+            if face.bounding_box().min.Z > floor - 0.01
+            and face.bounding_box().max.Z < case.CAP_TOP + 0.01
+            and face.bounding_box().size.Z > params.LEGEND_DEPTH / 2
+        ]
+        if not walls:
+            problems.append(
+                f"{ref}'s cap has no legend groove walls in the top "
+                f"{params.LEGEND_DEPTH:.2f}"
+            )
+            continue
+        walls = Compound(walls)
         worst, at = 0.0, None
         nx = int((box.max.X - box.min.X) / LEGEND_PROBE_STEP) + 1
         ny = int((box.max.Y - box.min.Y) / LEGEND_PROBE_STEP) + 1
@@ -537,7 +605,7 @@ def legends_are_strokes(caps):
                 py = box.min.Y + j * LEGEND_PROBE_STEP
                 if cap.is_inside((px, py, z_mid)):
                     continue
-                d = Vertex(px, py, z_mid).distance_to(sheet)
+                d = Vertex(px, py, z_mid).distance_to(walls)
                 if d > worst:
                     worst, at = d, (px, py)
         if worst > bound:

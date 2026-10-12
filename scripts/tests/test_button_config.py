@@ -1486,7 +1486,7 @@ class PageTest(unittest.TestCase):
     def test_the_config_card_can_download_and_load_a_local_json_file(self) -> None:
         download = section(PAGE, "function cfgDownload(){", "\n\nfunction cfgJsonFile")
         self.assertIn('new Blob([cfgIn],{type:"application/json"})', download)
-        self.assertIn('a.download="c6remote-config.json"', download)
+        self.assertIn("a.download=cfgFile()", download)
         self.assertIn("URL.createObjectURL", download)
         self.assertIn("URL.revokeObjectURL", download)
         load = section(PAGE, "function cfgLoadFile(){", "\n\n// A repaint")
@@ -1501,7 +1501,7 @@ class PageTest(unittest.TestCase):
         """An export that named the action alone would restore nothing, because
         the group ID, the address, and the code are the assignment."""
         blob = section(PAGE, "function cfgBlob(){", "\n\n")
-        self.assertIn("""return '{"c6remote":1,"slots":[""", blob)
+        self.assertIn("""return '{"c6remote":1,"settings":'+JSON.stringify(cfgSettings())+',"slots":[""", blob)
         # One line for each input, so an entry stays readable in the box.
         self.assertIn(R'lines.join(",\n")', blob)
         self.assertIn("for(i=0;i<S.length;i++){", blob)
@@ -1527,16 +1527,28 @@ class PageTest(unittest.TestCase):
         self.assertIn("if(!(ep>=1&&ep<=240))", check)
         self.assertIn("if(!(g>=1&&g<=65527))", check)
         apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
-        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[];", apply_)
+        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,skip;", apply_)
         self.assertIn("if(parsed.error){cfgNote(parsed.error,true);return}", apply_)
         self.assertLess(apply_.index("cfgParse"), apply_.index("cfgRun("))
         parse = section(PAGE, "function cfgParse(text){", "\n\n// An action")
         self.assertIn("why=cfgCheck(j.slots[i]);", parse)
         self.assertIn('j.c6remote!==1', parse)
+        self.assertIn("why=cfgSetCheck(j.settings)", parse)
         # A clear on an input that holds nothing is the one skipped write.
         self.assertIn("for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);", apply_)
         needed = section(PAGE, "function cfgNeeded(e){", "\n\n")
         self.assertIn('if(e.action!=="none")return true', needed)
+
+    def test_the_settings_block_reuses_the_requests_of_the_page_controls(self) -> None:
+        """The name stays out of the file, and each setting goes through the
+        same action as its own switch."""
+        settings = section(PAGE, "function cfgSettings(){", "\n\n")
+        self.assertNotIn("name", settings)
+        send = section(PAGE, "function cfgSetList(o){", "\n\n")
+        for action in ("set_radio", "set_wifi_always_on", "set_sleep_enabled",
+                       "set_sleep_after", "set_sleep_replay"):
+            self.assertIn('"%s"' % action, send)
+        self.assertIn("if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();", section(PAGE, "function load(){", "\n\n"))
 
     def test_an_import_reuses_the_action_endpoint_one_input_at_a_time(self) -> None:
         """The remote reserves one action at a time, so a burst would take the
@@ -1548,7 +1560,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('return post("set_zigbee",e.slot,String(parseInt(e.group,10))', send)
         run = section(PAGE, "function cfgRun(list,i){", "return cfgRun(list,i+1)})}")
         self.assertIn("return waitAction(r.body.id)", run)
-        self.assertIn('throw new Error("Slot "+list[i].slot+": "+fail(r))', run)
+        self.assertIn('throw new Error(who+": "+fail(r))', run)
         # The import adds no endpoint, so canHandle still claims four paths.
         self.assertNotIn("/buttons/api/export", PAGE)
         self.assertNotIn("/buttons/api/import", PAGE)

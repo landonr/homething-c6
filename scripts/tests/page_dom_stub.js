@@ -68,7 +68,7 @@ const STATE = {
   sleep: {available: true, enabled: true, after_s: 300, replay: false},
   battery: {available: true, percent: 72, volts: 3.87},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
-  radios: {zigbee: true, ble: true},
+  radios: {zigbee: true, ble: true, home_assistant: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
            pairing: false, pair_left: 0, pair_failed: false, reach: "ok"},
   ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
@@ -1386,10 +1386,95 @@ setTimeout(() => {
     const button = document.getElementById("cxd");
     if (typeof button.onclick !== "function") throw new Error("export has no download handler");
     button.onclick();
-    if (!lastDownload || lastDownload.download !== "c6remote-config.json" ||
+    if (!lastDownload || lastDownload.download !== "homething-c6-13f498-config.json" ||
         lastDownload.href !== "blob:config") throw new Error("download link is wrong");
     if (!downloadedBlob || downloadedBlob.type !== "application/json" ||
         downloadedBlob.parts[0] !== cfgIn) throw new Error("download body is wrong");
+  });
+  step("export falls back to the fixed file name without a friendly name", () => {
+    const prevSt = global.st;
+    global.st = {};
+    lastDownload = null;
+    document.getElementById("cxd").onclick();
+    global.st = prevSt;
+    if (!lastDownload || lastDownload.download !== "c6remote-config.json")
+      throw new Error("fallback download name is wrong");
+  });
+  step("the export carries the device settings and leaves the name out", () => {
+    const j = JSON.parse(cfgBlob());
+    const want = {zigbee: true, ble: true, home_assistant: true, wifi_always_on: false,
+                  sleep: true, sleep_after_s: 300, wake_replay: false};
+    if (JSON.stringify(j.settings) !== JSON.stringify(want))
+      throw new Error("settings are wrong: " + JSON.stringify(j.settings));
+    if ("name" in j.settings) throw new Error("the name was exported");
+    const prev = global.st.sleep;
+    global.st.sleep = {available: false, enabled: false, after_s: 0, replay: false};
+    const bare = JSON.parse(cfgBlob()).settings;
+    global.st.sleep = prev;
+    if ("sleep" in bare || "sleep_after_s" in bare || "wake_replay" in bare)
+      throw new Error("a remote without sleep exported sleep keys: " + JSON.stringify(bare));
+    if (bare.zigbee !== true) throw new Error("the radio keys went missing");
+  });
+  step("an import refuses a bad settings entry before any write", () => {
+    const base = {c6remote: 1, slots: []};
+    const bad = (settings, word) => {
+      const r = cfgParse(JSON.stringify(Object.assign({}, base, {settings: settings})));
+      if (!r.error || r.error.indexOf(word) < 0)
+        throw new Error("not refused with " + word + ": " + JSON.stringify(r));
+    };
+    bad({zigbe: true}, "zigbe");
+    bad({sleep_after_s: 5}, "sleep_after_s");
+    bad({sleep_after_s: 3601}, "sleep_after_s");
+    bad({sleep_after_s: 30.5}, "sleep_after_s");
+    bad({sleep_after_s: "300"}, "sleep_after_s");
+    bad({ble: "yes"}, "ble");
+    bad({wake_replay: 1}, "wake_replay");
+    bad([true], "object");
+    bad(null, "object");
+    const ok = cfgParse(JSON.stringify(Object.assign({}, base, {settings: {sleep_after_s: 10, ble: false}})));
+    if (ok.error) throw new Error("a valid settings entry was refused: " + ok.error);
+    if (cfgParse(JSON.stringify(base)).error) throw new Error("a file without settings was refused");
+  });
+  step("an import sends only the settings that differ", () => {
+    const l = cfgSetList({zigbee: true, ble: false, home_assistant: true, wifi_always_on: true,
+                          sleep: false, sleep_after_s: 600, wake_replay: false});
+    const got = l.list.map(e => e.action + e.args);
+    const want = ["set_radio&radio=ble&on=0", "set_wifi_always_on&enabled=1",
+                  "set_sleep_enabled&enabled=0", "set_sleep_after&seconds=600"];
+    if (JSON.stringify(got) !== JSON.stringify(want))
+      throw new Error("wrong settings list: " + JSON.stringify(got));
+    if (l.skipped) throw new Error("a sleep remote skipped a key");
+    if (cfgSetList({zigbee: true, sleep_after_s: 300}).list.length)
+      throw new Error("a matching setting was sent");
+    if (cfgSetList({wake_replay: true}).list[0].args !== "&enabled=1")
+      throw new Error("the wake press argument is wrong");
+    if (cfgSetList({home_assistant: false}).list[0].args !== "&radio=home_assistant&on=0")
+      throw new Error("the Home Assistant argument is wrong");
+  });
+  step("an import skips the sleep keys on a remote without sleep", () => {
+    const prev = global.st.sleep;
+    global.st.sleep = {available: false, enabled: false, after_s: 0, replay: false};
+    const l = cfgSetList({ble: false, sleep: true, sleep_after_s: 600, wake_replay: true});
+    global.st.sleep = prev;
+    if (l.skipped !== 3 || l.list.length !== 1 || l.list[0].action !== "set_radio")
+      throw new Error("sleep keys were not skipped: " + JSON.stringify(l));
+  });
+  step("an import with only settings posts the first setting and a matching file says so", () => {
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    global.cfgIn = JSON.stringify({c6remote: 1, settings: {ble: false}, slots: []});
+    cfgApply();
+    global.fetch = realFetch;
+    if (cfgBad) throw new Error("a valid config was refused: " + cfgMsg);
+    if (bodies.length !== 1 || bodies[0].indexOf("action=set_radio") < 0 ||
+        bodies[0].indexOf("radio=ble") < 0 || bodies[0].indexOf("on=0") < 0)
+      throw new Error("the setting was not posted: " + JSON.stringify(bodies));
+    global.cfgBusy = false;
+    global.cfgIn = JSON.stringify({c6remote: 1, settings: {ble: true}, slots: []});
+    cfgApply();
+    if (cfgMsg !== "The remote already matches this config.")
+      throw new Error("wrong nothing to do note: " + cfgMsg);
   });
   step("a JSON file picker validates and fills the import box", () => {
     global.cfgAll = {6: CODE.text};
@@ -1492,6 +1577,23 @@ setTimeout(() => {
     step("opening Config retries a failed code read", () => {
       if (!cfgReady || cfgAll[6] !== CODE.text) throw new Error("retry did not complete cache");
     });
+    {
+      const prevRadios = STATE.radios, prevDirty = global.cfgDirty;
+      STATE.radios = {zigbee: true, ble: false, home_assistant: true};
+      global.cfgDirty = false;
+      await load();
+      const fresh = JSON.parse(cfgIn).settings.ble;
+      global.cfgDirty = true; global.cfgIn = "edited";
+      STATE.radios = {zigbee: true, ble: true, home_assistant: true};
+      await load();
+      const kept = cfgIn;
+      global.cfgDirty = prevDirty; STATE.radios = prevRadios;
+      await load();
+      step("a state reload refreshes the export box unless the user edited it", () => {
+        if (fresh !== false) throw new Error("the box kept the old setting: " + fresh);
+        if (kept !== "edited") throw new Error("a reload replaced the edited text");
+      });
+    }
     global.cfgDirty = true; global.cfgIn = "unsaved text";
     await cfgChanged(6);
     step("cache refresh preserves unsaved Config text", () => {

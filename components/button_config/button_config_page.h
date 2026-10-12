@@ -1357,7 +1357,43 @@ else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
 lines.push(JSON.stringify(e))}
 // One line for each input, because an indented block runs past 100 lines and a
 // single line hides which input an entry belongs to.
-return '{"c6remote":1,"slots":[\n'+lines.join(",\n")+"\n]}"}
+return '{"c6remote":1,"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
+
+var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","sleep","wake_replay"];
+// The name stays out, because it belongs to one remote and a copy would give two the same name.
+function cfgSettings(){
+var o={zigbee:radioOn("zigbee"),ble:radioOn("ble"),home_assistant:radioOn("home_assistant"),
+wifi_always_on:!!(st&&st.network&&st.network.wifi_always_on)},z=st&&st.sleep;
+if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true}
+return o}
+
+function cfgSetCheck(o){
+if(!o||typeof o!=="object"||Array.isArray(o))return "The settings entry must be an object.";
+var k,i;
+for(k in o){if(!Object.prototype.hasOwnProperty.call(o,k))continue;
+if(CFG_BOOL.indexOf(k)<0&&k!=="sleep_after_s")return "The settings entry has the unknown key "+k+".";
+if(k==="sleep_after_s"){
+if(typeof o[k]!=="number"||o[k]%1!==0||o[k]<10||o[k]>3600)
+return "The setting sleep_after_s needs a whole number of seconds from 10 to 3600."}
+else if(typeof o[k]!=="boolean")return "The setting "+k+" must be true or false."}
+return ""}
+
+// A setting that already matches is skipped, like a clear on an empty input. A
+// remote without sleep skips the sleep keys.
+function cfgSetList(o){
+var list=[],z=st&&st.sleep,sl=!!(z&&z.available),skipped=0;
+if(!o)return {list:list,skipped:0};
+function add(k,cur,action,args){if(o[k]!==undefined&&o[k]!==cur)list.push({key:k,action:action,args:args(o[k])})}
+function en(v){return "&enabled="+(v?"1":"0")}
+["zigbee","ble","home_assistant"].forEach(function(r){
+add(r,radioOn(r),"set_radio",function(v){return "&radio="+r+"&on="+(v?"1":"0")})});
+add("wifi_always_on",!!(st&&st.network&&st.network.wifi_always_on),"set_wifi_always_on",en);
+if(sl){
+add("sleep",z.enabled===true,"set_sleep_enabled",en);
+add("sleep_after_s",z.after_s,"set_sleep_after",function(v){return "&seconds="+v});
+add("wake_replay",z.replay===true,"set_sleep_replay",en)}
+else{["sleep","sleep_after_s","wake_replay"].forEach(function(k){if(o[k]!==undefined)skipped++})}
+return {list:list,skipped:skipped}}
 
 // Read one code at a time because a burst can outrun the remote's connection limit.
 function cfgRefresh(){
@@ -1439,6 +1475,7 @@ var j,i,why;
 try{j=JSON.parse(text)}catch(x){return {error:"That text is not valid JSON."}}
 if(!j||j.c6remote!==1||!Array.isArray(j.slots))
 return {error:"A config file holds a c6remote version and a slots list."};
+if(j.settings!==undefined){why=cfgSetCheck(j.settings);if(why)return {error:why}}
 for(i=0;i<j.slots.length;i++){
 why=cfgCheck(j.slots[i]);
 if(why)return {error:why}}
@@ -1473,26 +1510,29 @@ return post("clear",e.slot)}
 
 // One input at a time, because the remote reserves one action at a time and a
 // second POST would take the 409.
+// Each item is an input or a setting. A setting carries key, action and args.
 function cfgRun(list,i){
 if(i>=list.length)return Promise.resolve();
-cfgMsg="Writing input "+(i+1)+" of "+list.length+".";cfgBad=false;cfgPaint();
-return cfgSend(list[i]).then(function(r){
-if(r.code!==200)throw new Error("Slot "+list[i].slot+": "+fail(r));
+var e=list[i],who=e.key?"Setting "+e.key:"Slot "+e.slot;
+cfgMsg="Writing change "+(i+1)+" of "+list.length+".";cfgBad=false;cfgPaint();
+return (e.key?post(e.action,null,undefined,undefined,e.args):cfgSend(e)).then(function(r){
+if(r.code!==200)throw new Error(who+": "+fail(r));
 return waitAction(r.body.id)}).then(function(ok){
-if(!ok)throw new Error("Slot "+list[i].slot+": the remote refused it.");
+if(!ok)throw new Error(who+": the remote refused it.");
 return cfgRun(list,i+1)})}
 
 function cfgApply(){
-var parsed=cfgParse(cfgIn),j,i,list=[];
+var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,skip;
 if(parsed.error){cfgNote(parsed.error,true);return}
 j=parsed.config;
 for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);
-if(!list.length){cfgNote("Every input already matches this config.",false);return}
+ins=list.length;sets=cfgSetList(j.settings);skip=sets.skipped?" The remote has no sleep, so "+(sets.skipped===1?"1 sleep setting was":sets.skipped+" sleep settings were")+" skipped.":"";
+list=list.concat(sets.list);
+if(!list.length){cfgNote("The remote already matches this config."+skip,false);return}
 cfgBusy=true;cfgBad=false;
-var total=j.slots.length;
 return cfgRun(list,0).then(function(){
 cfgBusy=false;cfgAll={};cfgReady=false;cfgDirty=false;cdSlot=null;
-cfgNote("Applied "+list.length+" of "+total+" inputs.",false);
+cfgNote("Applied "+ins+(ins===1?" input":" inputs")+" and "+sets.list.length+(sets.list.length===1?" setting.":" settings.")+skip,false);
 return load().then(function(){if(sel!==null&&(!row(sel)||row(sel).action!=="ir")){
 codeLoad++;cd="";cdSlot=sel}paint();return cfgRefresh()}).then(function(){
 if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})})
@@ -1506,11 +1546,15 @@ if(!t.value||(!cfgReady&&!cfgDirty)){cfgNote("The current config is not ready.",
 var ok=copyBox(t);
 cfgNote(ok?"Config copied.":"Copy is blocked. Select the text and copy it by hand.",!ok)}
 
+function cfgFile(){var n=st&&(typeof st.name==="string"&&st.name?st.name:st.default_name);
+n=typeof n==="string"?n.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""):"";
+return(n||"c6remote")+"-config.json"}
+
 function cfgDownload(){
 if(!cfgIn||(!cfgReady&&!cfgDirty)){cfgNote("The current config is not ready.",true);return}
 var url=URL.createObjectURL(new Blob([cfgIn],{type:"application/json"}));
 var a=document.createElement("a");
-a.href=url;a.download="c6remote-config.json";a.click();
+a.href=url;a.download=cfgFile();a.click();
 setTimeout(function(){URL.revokeObjectURL(url)},0)}
 
 function cfgJsonFile(file){
@@ -1693,7 +1737,8 @@ else if(cfgAll[s]!==undefined){cd=cfgAll[s];cdSlot=s}
 paint();
 if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
 
-function load(){return readState().then(function(j){st=j;return j})}
+function load(){return readState().then(function(j){st=j;
+if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();return j})}
 
 // Every read of the state feeds the link tracker, so a dead remote shows on
 // whichever read notices it first.

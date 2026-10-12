@@ -408,16 +408,43 @@ A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 
 A BLE HID entry carries `kind`, `usage`, and `mod`. Only keyboard entries use `mod`.
 
-The page updates the configuration text after each successful assignment.
+The block also holds a `settings` object with the device settings of the remote:
+
+```json
+{"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,
+"wifi_always_on":false,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
+```
+
+These keys are valid:
+
+- `zigbee`, `ble`, and `home_assistant` turn each radio on or off.
+- `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
+- `sleep` turns idle sleep on or off.
+- `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
+- `wake_replay` makes the press that wakes the remote replay its stored setting.
+
+Each key is optional. If a key is absent, the import leaves that setting as it is.
+A file from an older page has no `settings` object, and it still imports.
+A remote without sleep does not export the three sleep keys.
+If a file holds them, the import skips them and says so in the result note.
+
+The export does not include the friendly name. The name identifies one remote.
+If an import copied it, two remotes would have the same name.
+
+The page updates the configuration text after each successful assignment or setting.
 If a code read fails, open the Config tab to retry it.
 The page does not offer an incomplete current configuration for download.
 Your edits and text from a file stay in the box until you apply or replace them.
 
-Import checks every entry before the first flash write. If one entry is bad, the
-page names the slot and writes nothing.
+Import checks every entry and every setting before the first write. If one is
+bad, the page names the slot or the key and writes nothing. An unknown key in
+`settings` is an error, so a typing mistake cannot pass.
 
-A valid block writes one input at a time through `POST /buttons/api/action`. The
+A valid block writes one change at a time through `POST /buttons/api/action`. The
 remote reserves one action at a time, so a burst would take the 409.
+
+The import writes the inputs first and then the settings. It sends a setting only
+if the remote holds a different value. No setting restarts the remote.
 
 An import leaves an input that the block does not name alone. A `none` entry
 clears an input, but only if the input holds an action.

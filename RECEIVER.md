@@ -509,7 +509,7 @@ idle. `D3` stays dark then.
 | --- | --- |
 | Off | The Bluetooth radio is off. |
 | Blue pulse | No host bond exists. The remote is ready to pair or is pairing. |
-| Red pulse | A host bond exists but the host is not connected. |
+| Solid yellow | A host bond exists but the host is not connected. |
 | Solid green | The bonded host is connected and the link is encrypted. |
 | Red flashes for 3 seconds | Pairing or encryption failed, or the remote rejected a second host. |
 | Solid red | The Bluetooth stack did not start. |

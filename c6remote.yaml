@@ -653,10 +653,8 @@ light:
                     144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
                 it[2] = Color(0, 0, level);
               } else {
-                const float phase = (millis() % 3200) / 3200.0f;
-                const uint8_t level = 48 + static_cast<uint8_t>(
-                    144.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
-                it[2] = Color(level, 0, 0);
+                // A stored bond that has not reconnected uses the D5 stored-network yellow.
+                it[2] = Color(192, 128, 0);
               }
             }
 

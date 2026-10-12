@@ -704,11 +704,12 @@ class ProductionConfigTest(unittest.TestCase):
         ]
         positions = [ble.index(text) for text in order]
         self.assertEqual(positions, sorted(positions))
-        for color in ("Color(0, 128, 0)", "Color(0, 0, level)", "Color(level, 0, 0)",
+        for color in ("Color(0, 128, 0)", "Color(0, 0, level)", "Color(192, 128, 0)",
                       "Color(200, 0, 0)", "Color(255, 0, 0)"):
             self.assertIn(color, ble)
         self.assertIn("(millis() % 1600) / 1600.0f", ble)
-        self.assertIn("(millis() % 3200) / 3200.0f", ble)
+        # A bond that has not reconnected is solid yellow, the same as D5, not a red pulse.
+        self.assertNotIn("(millis() % 3200) / 3200.0f", ble)
         self.assertIn("((millis() / 150) % 2) == 0", ble)
 
     def test_a_stopped_window_is_told_apart_from_one_that_ran_out(self) -> None:

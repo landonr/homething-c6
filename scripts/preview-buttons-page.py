@@ -35,6 +35,7 @@ CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 CONFIG = Path(__file__).resolve().parent / "preview-c6remote-config.json"
 
 STATE = {
+    "firmware": "2026.10.0",
     "busy": False,
     "owner": "none",
     "saves": 12,
@@ -44,6 +45,8 @@ STATE = {
     "result": "none",
     "action_id": 0,
     "action_ok": True,
+    "status_leds": True,
+    "boot_leds": True,
     "network": {
         "wifi": True,
         "wifi_enabled": True,
@@ -298,6 +301,10 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["radios"][radio] = form.get("on", ["1"])[0] == "1"
         elif action == "set_wifi_always_on":
             STATE["network"]["wifi_always_on"] = form.get("enabled", ["0"])[0] == "1"
+        elif action == "set_status_leds":
+            STATE["status_leds"] = form.get("enabled", ["0"])[0] == "1"
+        elif action == "set_boot_leds":
+            STATE["boot_leds"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_enabled":
             STATE["sleep"]["enabled"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_replay":

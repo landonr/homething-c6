@@ -488,6 +488,62 @@ bool ButtonConfig::set_wifi_always_on_(bool enabled) {
   return true;
 }
 
+bool ButtonConfig::status_leds() const {
+  int8_t value = this->status_leds_.load(std::memory_order_acquire);
+  if (value < 0) {
+    // Preferences open in app_main, so this works before setup().
+    auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
+    LedPref loaded{};
+    const bool off = preference.load(&loaded) && loaded.magic == LED_PREF_MAGIC && loaded.enabled == 0 &&
+                     loaded.reserved[0] == 0 && loaded.reserved[1] == 0 && loaded.reserved[2] == 0;
+    value = off ? 0 : 1;
+    this->status_leds_.store(value, std::memory_order_release);
+  }
+  return value == 1;
+}
+
+bool ButtonConfig::set_status_leds(bool enabled) {
+  if (this->status_leds() == enabled)
+    return true;
+  auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
+  LedPref next{LED_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!preference.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the status LED switch");
+    return false;
+  }
+  this->status_leds_.store(enabled ? 1 : 0, std::memory_order_release);
+  ESP_LOGI(TAG, "Status LEDs %s", enabled ? "on" : "off");
+  this->status_leds_callbacks_.call(enabled);
+  return true;
+}
+
+bool ButtonConfig::boot_leds() const {
+  int8_t value = this->boot_leds_.load(std::memory_order_acquire);
+  if (value < 0) {
+    auto preference = global_preferences->make_preference<LedPref>(BOOT_LED_PREF_KEY, true);
+    LedPref loaded{};
+    const bool off = preference.load(&loaded) && loaded.magic == BOOT_LED_PREF_MAGIC && loaded.enabled == 0 &&
+                     loaded.reserved[0] == 0 && loaded.reserved[1] == 0 && loaded.reserved[2] == 0;
+    value = off ? 0 : 1;
+    this->boot_leds_.store(value, std::memory_order_release);
+  }
+  return value == 1;
+}
+
+bool ButtonConfig::set_boot_leds(bool enabled) {
+  if (this->boot_leds() == enabled)
+    return true;
+  auto preference = global_preferences->make_preference<LedPref>(BOOT_LED_PREF_KEY, true);
+  LedPref next{BOOT_LED_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!preference.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the boot LED switch");
+    return false;
+  }
+  this->boot_leds_.store(enabled ? 1 : 0, std::memory_order_release);
+  ESP_LOGI(TAG, "Boot and wake LEDs %s", enabled ? "on" : "off");
+  return true;
+}
+
 ButtonConfig::SleepState ButtonConfig::sleep_state_() const {
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   if (this->idle_sleep_ != nullptr)
@@ -644,9 +700,12 @@ bool ButtonConfig::set_ha_api_expected(bool expected) {
 
 void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "Button config page at /buttons");
+  ESP_LOGCONFIG(TAG, "  Firmware: %s", this->firmware_version_);
   ESP_LOGCONFIG(TAG, "  Friendly name: %s", this->current_name_.load(std::memory_order_acquire));
   ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
+  ESP_LOGCONFIG(TAG, "  Status LEDs: %s", YESNO(this->status_leds()));
+  ESP_LOGCONFIG(TAG, "  Boot and wake LEDs: %s", YESNO(this->boot_leds()));
   ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
 }
 
@@ -715,12 +774,15 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   const BatteryState battery = this->battery_state_();
 
   AsyncResponseStream *stream = request->beginResponseStream("application/json");
+  stream->print(R"({"firmware":")");
+  print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"({"busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":%s,"boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
+      this->status_leds() ? "true" : "false", this->boot_leds() ? "true" : "false",
       wifi::global_wifi_component->is_connected() ? "true" : "false",
       wifi::global_wifi_component->is_disabled() ? "false" : "true",
       this->wifi_always_on() ? "true" : "false",
@@ -855,7 +917,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
-                     action == "set_wifi_always_on" || action == "set_sleep_enabled" ||
+                     action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
+                     action == "set_sleep_enabled" ||
                      action == "set_sleep_after" || action == "set_sleep_replay" || action == "pair" || action == "restart" ||
                      action == "set_name" || action == "clear";
   if (!known) {
@@ -885,6 +948,26 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       return;
     }
     wifi_default_on = enabled == "1";
+  }
+
+  bool status_leds_on = false;
+  if (action == "set_status_leds") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid status LED switch"})");
+      return;
+    }
+    status_leds_on = enabled == "1";
+  }
+
+  bool boot_leds_on = false;
+  if (action == "set_boot_leds") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid boot LED switch"})");
+      return;
+    }
+    boot_leds_on = enabled == "1";
   }
 
   const bool sleep_action =
@@ -938,7 +1021,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   }
 
   const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
-                          action != "set_wifi_always_on" && !sleep_action && action != "pair" &&
+                          action != "set_wifi_always_on" && action != "set_status_leds" && action != "set_boot_leds" &&
+                          !sleep_action && action != "pair" &&
                           action != "restart" && action != "set_name";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
@@ -1098,6 +1182,14 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "set_wifi_always_on") {
     this->defer([this, action_id, wifi_default_on]() {
       this->complete_action_(action_id, this->set_wifi_always_on_(wifi_default_on));
+    });
+  } else if (action == "set_status_leds") {
+    this->defer([this, action_id, status_leds_on]() {
+      this->complete_action_(action_id, this->set_status_leds(status_leds_on));
+    });
+  } else if (action == "set_boot_leds") {
+    this->defer([this, action_id, boot_leds_on]() {
+      this->complete_action_(action_id, this->set_boot_leds(boot_leds_on));
     });
   } else if (action == "set_sleep_enabled") {
     this->defer([this, action_id, sleep_on]() {

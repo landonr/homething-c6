@@ -394,6 +394,10 @@ the card is closed and **Hide** when the card is open.
 ### Copy the whole config
 
 The Config tab shows the current configuration after the page loads.
+The Config tab has three sections.
+Settings shows the firmware, the battery, the IP address, sleep, the LED settings, and restart.
+Connections shows Wi-Fi, Home Assistant, Zigbee, and Bluetooth.
+Import Export is the third section.
 The page reads each stored IR code in sequence and puts it in the configuration text.
 It uses the stored code when you select an input.
 
@@ -408,17 +412,28 @@ A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 
 A BLE HID entry carries `kind`, `usage`, and `mod`. Only keyboard entries use `mod`.
 
+The block also holds a `firmware` string. It records the firmware build that wrote the file.
+The value has the form `YYYY.M.PATCH`. The build computes it at compile time from git.
+`YYYY.M` is the month of the latest commit. `PATCH` counts the commits in that month from `VERSION_BASE`.
+`VERSION_BASE` is in `components/button_config/__init__.py`. The first commit of a month is `.0`.
+A build with uncommitted tracked changes adds `-dirty`.
+The value `unknown` means that git is not available or the history does not hold the base commit.
+This version is not the board release tag. The release workflow numbers releases separately.
+The import ignores `firmware`.
+
 The block also holds a `settings` object with the device settings of the remote:
 
 ```json
 {"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,
-"wifi_always_on":false,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
+"wifi_always_on":false,"status_leds":true,"boot_leds":true,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
 ```
 
 These keys are valid:
 
 - `zigbee`, `ble`, and `home_assistant` turn each radio on or off.
 - `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
+- `status_leds` turns `D2` to `D5` and the XIAO user LED on or off.
+- `boot_leds` turns the cold-boot chase and the wake battery pulses on or off.
 - `sleep` turns idle sleep on or off.
 - `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
 - `wake_replay` makes the press that wakes the remote replay its stored setting.
@@ -516,6 +531,33 @@ idle. `D3` stays dark then.
 
 The amber XIAO user LED shows that the remote is awake (see
 [Deep sleep](#deep-sleep)). See [ZIGBEE.md](ZIGBEE.md) for the `D5` Zigbee meanings.
+
+### The LED settings
+
+Two switches in the **Config** tab control the LEDs. Both are on by default. The remote stores each one in flash.
+
+The **Status LEDs** switch covers all status light. This includes `D2` to `D5` in normal use,
+assignment mode, voice, and pairing feedback. It also covers the amber XIAO user LED.
+If **Status LEDs** is off, these LEDs stay dark. As a result, assignment and pairing give no light feedback.
+
+The **Boot and wake LEDs** switch covers only two animations. These are the rainbow chase on a cold boot
+and the battery pulses after a deep-sleep wake. If this switch is off, the status LEDs show at once.
+
+The two switches work together in this way:
+
+| Status LEDs | Boot and wake LEDs | Result |
+| --- | --- | --- |
+| on | on | The animation plays, then the status LEDs show. |
+| on | off | The status LEDs show at once. |
+| off | on | The animation plays on `D2` to `D5`, then all LEDs go dark. |
+| off | off | No LED lights. |
+
+If **Status LEDs** is off, the animation does not show assignment or voice state.
+The `led_vdd` rail is on only while the animation plays.
+A change applies at once. If you turn **Status LEDs** on, the LEDs show the current state again.
+If you turn it off during an animation, the animation finishes and then the LEDs go dark.
+The Home Assistant **Status Light** entity also stays dark while both switches are off.
+The XIAO charge LED is hardware driven. These settings cannot turn it off.
 
 ## Normal playback
 

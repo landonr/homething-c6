@@ -1,13 +1,15 @@
 import gzip
 from pathlib import Path
 import re
+import subprocess
 from urllib.parse import quote_from_bytes
 
+from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import idle_sleep, sensor, web_server_base
 from esphome.components.web_server_base import CONF_WEB_SERVER_BASE_ID
-from esphome.const import CONF_ID, CONF_RAW_DATA_ID
+from esphome.const import CONF_ID, CONF_RAW_DATA_ID, CONF_TRIGGER_ID
 from esphome.core import HexInt
 
 AUTO_LOAD = ["web_server_base"]
@@ -16,9 +18,11 @@ DEPENDENCIES = ["network"]
 CONF_IDLE_SLEEP_ID = "idle_sleep_id"
 CONF_BATTERY_LEVEL_ID = "battery_level_id"
 CONF_BATTERY_VOLTAGE_ID = "battery_voltage_id"
+CONF_ON_STATUS_LEDS = "on_status_leds"
 
 button_config_ns = cg.esphome_ns.namespace("button_config")
 ButtonConfig = button_config_ns.class_("ButtonConfig", cg.Component)
+StatusLedsTrigger = button_config_ns.class_("StatusLedsTrigger", automation.Trigger.template(bool))
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -29,14 +33,49 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep),
         cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor),
         cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor),
+        cv.Optional(CONF_ON_STATUS_LEDS): automation.validate_automation(
+            {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(StatusLedsTrigger)}
+        ),
     }
 ).extend(cv.COMPONENT_SCHEMA)
+
+
+# PATCH counts commits from this commit on, so this commit is 2026.10.0.
+VERSION_BASE = "dc560eec464c05707991582992bff0d27b0d960b"
+
+
+def firmware_version():
+    """Return YYYY.M.PATCH, plus -dirty for uncommitted tracked changes."""
+    root = Path(__file__).parents[2]
+    base = VERSION_BASE
+
+    def git(*args):
+        out = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, timeout=10, check=True
+        )
+        return out.stdout.strip()
+
+    try:
+        git("merge-base", "--is-ancestor", base, "HEAD")
+        head = git("log", "-1", "--format=%cI", "HEAD")
+        # --not base^@ also works when the base is a root commit.
+        dates = git("log", "--format=%cI", "HEAD", "--not", base + "^@").splitlines()
+        dirty = git("status", "--porcelain", "--untracked-files=no")
+        year, month = (int(part) for part in head[:7].split("-"))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return "unknown"
+    patch = sum(1 for date in dates if date[:7] == head[:7]) - 1
+    if patch < 0:
+        return "unknown"
+    return f"{year}.{month}.{patch}" + ("-dirty" if dirty else "")
 
 
 async def to_code(config):
     paren = await cg.get_variable(config[CONF_WEB_SERVER_BASE_ID])
     var = cg.new_Pvariable(config[CONF_ID], paren)
     await cg.register_component(var, config)
+    # A setter, not a define, so a new commit rebuilds only the generated main.cpp.
+    cg.add(var.set_firmware_version(firmware_version()))
 
     # A build without idle_sleep has no idle_sleep.h, so the C++ side is behind this define.
     if CONF_IDLE_SLEEP_ID in config:
@@ -50,6 +89,10 @@ async def to_code(config):
         volts = await cg.get_variable(config[CONF_BATTERY_VOLTAGE_ID])
         cg.add(var.set_battery(level, volts))
         cg.add_define("USE_BUTTON_CONFIG_BATTERY")
+
+    for conf in config.get(CONF_ON_STATUS_LEDS, []):
+        trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
+        await automation.build_automation(trigger, [(bool, "enabled")], conf)
 
     source = (Path(__file__).parent / "button_config_page.h").read_text()
     match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)

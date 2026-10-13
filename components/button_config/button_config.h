@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/components/web_server_base/web_server_base.h"
+#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/defines.h"
 #include "esphome/core/preferences.h"
@@ -41,6 +42,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
 
   bool canHandle(AsyncWebServerRequest *request) const override;
   void handleRequest(AsyncWebServerRequest *request) override;
+  void set_firmware_version(const char *version) { this->firmware_version_ = version; }
   void set_page(const uint8_t *page, size_t size) {
     this->page_ = page;
     this->page_size_ = size;
@@ -50,6 +52,17 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   // missing API. The API server itself keeps running either way.
   bool ha_api_expected() const { return this->ha_api_expected_.load(std::memory_order_acquire); }
   bool set_ha_api_expected(bool expected);
+  // Stored switch for D2 to D5 and the XIAO LED. The first call reads flash, so
+  // on_boot at priority 800 sees it before this component's own setup().
+  bool status_leds() const;
+  bool set_status_leds(bool enabled);
+  void add_on_status_leds_callback(std::function<void(bool)> &&callback) {
+    this->status_leds_callbacks_.add(std::move(callback));
+  }
+  // Stored switch for the cold-boot chase and the wake battery pulses. Same lazy
+  // flash read as status_leds().
+  bool boot_leds() const;
+  bool set_boot_leds(bool enabled);
   bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
   void toggle_temporary_wifi();
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
@@ -113,6 +126,15 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
     uint8_t enabled;
     uint8_t reserved[3];
   };
+  static constexpr uint32_t LED_PREF_KEY = 0x4C454453U;
+  static constexpr uint32_t LED_PREF_MAGIC = 0x4C454431U;
+  struct LedPref {
+    uint32_t magic;
+    uint8_t enabled;
+    uint8_t reserved[3];
+  };
+  static constexpr uint32_t BOOT_LED_PREF_KEY = 0x424C4544U;
+  static constexpr uint32_t BOOT_LED_PREF_MAGIC = 0x424C4431U;
   // 'NAM1' record under key 'NAME'. Length 0 means the YAML friendly name.
   static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;
   static constexpr uint32_t NAME_PREF_MAGIC = 0x4E414D31U;
@@ -126,12 +148,17 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   web_server_base::WebServerBase *base_;
   const uint8_t *page_{nullptr};
   size_t page_size_{0};
+  const char *firmware_version_{"unknown"};
   std::atomic<bool> action_pending_{false};
   std::atomic<uint32_t> next_action_id_{0};
   std::atomic<uint32_t> completed_action_id_{0};
   std::atomic<bool> completed_action_ok_{false};
   std::atomic<bool> ha_api_expected_{true};
   std::atomic<bool> wifi_always_on_{false};
+  // -1 until the first read of the stored value.
+  mutable std::atomic<int8_t> status_leds_{-1};
+  CallbackManager<void(bool)> status_leds_callbacks_;
+  mutable std::atomic<int8_t> boot_leds_{-1};
   std::atomic<uint32_t> last_activity_ms_{0};
   bool boot_wifi_always_on_{false};
   bool temporary_wifi_{false};
@@ -153,6 +180,13 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   sensor::Sensor *battery_level_{nullptr};
   sensor::Sensor *battery_volts_{nullptr};
 #endif
+};
+
+class StatusLedsTrigger : public Trigger<bool> {
+ public:
+  explicit StatusLedsTrigger(ButtonConfig *parent) {
+    parent->add_on_status_leds_callback([this](bool enabled) { this->trigger(enabled); });
+  }
 };
 
 }  // namespace esphome::button_config

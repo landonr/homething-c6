@@ -37,6 +37,38 @@ def status_light_entry(config: str) -> str:
 
 
 class ProductionConfigTest(unittest.TestCase):
+    def test_the_status_leds_setting_gates_both_light_sources(self) -> None:
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn("return id(button_cfg).status_leds() ||", turn_on)
+        self.assertLess(turn_on.index("status_leds()"), turn_on.index("switch.turn_on: led_rail"))
+        self.assertIn("id: status_light\n                transition_length: 0s", turn_on)
+        awake = entry[entry.index("    id: awake_led"):]
+        self.assertIn("return !id(button_cfg).status_leds();", awake)
+        self.assertIn("id: awake_led", awake)
+        self.assertIn("armed && !was_armed && id(button_cfg).status_leds()", config)
+        boot = config[config.index("    - priority: 600"):]
+        self.assertLess(boot.index("!id(button_cfg).status_leds()"), boot.index("script.execute: show_idle_status"))
+        self.assertIn("on_status_leds:", config)
+
+    def test_the_boot_leds_setting_gates_only_the_intro_animations(self) -> None:
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", entry)
+        wake = config[config.index("if (!id(button_cfg).boot_leds())\n            return;"):]
+        self.assertLess(wake.index("id(wake_pulse_until_ms) = first_ms + 1600;"), wake.index("turn_on().set_brightness(0.4f)"))
+        self.assertEqual(config.count("id(wake_pulse_until_ms) = "), 1)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        gate = turn_on[:turn_on.index("switch.turn_on: led_rail")]
+        self.assertIn("id(button_cfg).boot_leds()", gate)
+        self.assertIn("millis() < id(wake_pulse_until_ms)", gate)
+        self.assertIn("if (!status_on || (ir_ui.state == IrUi::OFF", entry)
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn("!id(button_cfg).status_leds() && id(status_light).remote_values.is_on()", tick)
+        self.assertIn("id(status_light).turn_off().set_transition_length(0).perform();", tick)
+        self.assertIn("id(boot_chase_done) = true;", config)
+
     def test_name_carries_the_mac_suffix(self) -> None:
         """Several remotes on one network need distinct hostnames and HA names."""
         self.assertRegex(
@@ -638,7 +670,7 @@ class ProductionConfigTest(unittest.TestCase):
         """A deep-sleep wake must skip the chase, so a wake press shows status at once."""
         effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
         chase = effect.split("// D2 stays dark", 1)[0]
-        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep();", chase)
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", chase)
         # Eight pulses, two laps of four, each longer than the gap to the next.
         self.assertIn("if (t < 7 * 150 + 450) {", chase)
         self.assertIn("for (uint32_t n = 0; n < 8; n++) {", chase)

@@ -202,16 +202,11 @@ aria-label="Assignment colors" checked><span></span></label></div>
 <section class="card" id="edpanel" aria-live="polite"></section>
 </div>
 <div class="tabgrid" id="configtab" hidden>
-<h1 class="full secttl">Connections</h1>
-<section class="card full conn" id="wificfg">
-<h2 class="ttl">WiFi Always On<label class="sw" id="wfw"><input type="checkbox" id="wfb"
-aria-label="WiFi Always On" disabled><span></span></label></h2>
-<p class="sub st" id="wfd">WiFi Always On default is loading.</p>
-<p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<h1 class="full secttl">Settings</h1>
+<section class="card full conn" id="devcfg">
+<dl class="info"><dt>Firmware</dt><dd id="fwv">Loading</dd></dl>
 <p class="sub st" id="bat">Battery reading is loading.</p>
-<p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
-<dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
-<dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
+<dl class="info"><dt>IP address</dt><dd id="dip">Loading</dd></dl>
 <div id="slpcfg" hidden>
 <hr class="rule">
 <h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"
@@ -228,9 +223,27 @@ aria-label="Send the wake press" disabled><span></span></label></h2>
 <p class="sub">When on, the button that wakes the remote also sends its Zigbee command if the link comes up within 3 seconds. When off, the first press only wakes the remote.</p>
 </div>
 <hr class="rule">
+<h2 class="ttl">Status LEDs<label class="sw" id="lgw"><input type="checkbox" id="lgb"
+aria-label="Status LEDs" disabled><span></span></label></h2>
+<p class="sub st" id="lgs">Status LEDs state is loading.</p>
+<hr class="rule">
+<h2 class="ttl">Boot and wake LEDs<label class="sw" id="blw"><input type="checkbox" id="blb"
+aria-label="Boot and wake LEDs" disabled><span></span></label></h2>
+<p class="sub st" id="bls">Boot and wake LEDs state is loading.</p>
+<hr class="rule">
 <h2 class="ttl">Restart</h2>
 <p class="sub st" id="rss" hidden></p>
 <div class="act"><button type="button" id="rsb">Restart remote</button></div>
+</section>
+<h1 class="full secttl">Connections</h1>
+<section class="card full conn" id="wificfg">
+<h2 class="ttl">WiFi Always On<label class="sw" id="wfw"><input type="checkbox" id="wfb"
+aria-label="WiFi Always On" disabled><span></span></label></h2>
+<p class="sub st" id="wfd">WiFi Always On default is loading.</p>
+<p class="sub st" id="wfs">Wi-Fi state is loading.</p>
+<p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
+<dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
+<dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
 <hr class="rule">
 <h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
 aria-label="Home Assistant API"><span></span></label></h2>
@@ -306,7 +319,7 @@ var ZA=[
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
-var wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
+var ledBusy=false,ledWant=true,ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
 // nameEdit keeps the box open across polls, so a repaint never overwrites a
 // name that is still being typed.
@@ -451,6 +464,8 @@ b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("wfb").onchange=setWifiAlwaysOn;
+document.getElementById("lgb").onchange=setStatusLeds;
+document.getElementById("blb").onchange=setBootLeds;
 document.getElementById("slb").onchange=setSleepEnabled;
 document.getElementById("srb").onchange=setSleepReplay;
 document.getElementById("slap").onclick=setSleepAfter;
@@ -716,7 +731,7 @@ bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth ho
 
 function networkStatus(){
 var wf=document.getElementById("wfs"),ha=document.getElementById("has"),
-ip=document.getElementById("wip"),mac=document.getElementById("wmac"),
+ip=document.getElementById("wip"),mac=document.getElementById("wmac"),fw=document.getElementById("fwv"),
 boot=document.getElementById("wfd"),box=document.getElementById("wfb");
 if(!st||!st.network)return;
 var enabled=st.network.wifi_enabled===true,always=st.network.wifi_always_on===true,
@@ -737,7 +752,49 @@ ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'><
 (api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+
 (err?" "+esc(err):"")}
 if(ip)ip.textContent=st.network.ip||"Unavailable";
-if(mac)mac.textContent=st.network.mac||"Unavailable"}
+var dip=document.getElementById("dip");
+if(dip)dip.textContent=st.network.ip||"Unavailable";
+if(mac)mac.textContent=st.network.mac||"Unavailable";
+if(fw)fw.textContent=typeof st.firmware==="string"&&st.firmware?st.firmware:"Unknown";
+ledStatus();bootLedStatus()}
+
+function bootLedStatus(){
+var line=document.getElementById("bls"),box=document.getElementById("blb");
+if(!st)return;
+var on=st.boot_leds!==false;
+if(box){box.checked=bootBusy?bootWant:on;box.disabled=bootBusy}
+if(line){line.className="sub st"+(bootError?" bad":"");
+line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>"+(on?"Boot and wake LEDs are on.":
+"Boot and wake LEDs are off. The start and wake animations do not play.")+(bootError?" "+esc(bootError):"")}}
+
+function setBootLeds(){
+if(bootBusy||!st)return;
+bootWant=document.getElementById("blb").checked;bootBusy=true;bootError="";bootLedStatus();
+post("set_boot_leds",null,undefined,undefined,"&enabled="+(bootWant?"1":"0"))
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){
+if(!ok)throw new Error("The remote could not save the boot LED switch.")})})
+.then(function(){bootBusy=false;return load().then(paint)},function(e){
+bootBusy=false;bootError=e&&e.message?e.message:"The remote did not answer.";bootLedStatus()})}
+
+function ledStatus(){
+var line=document.getElementById("lgs"),box=document.getElementById("lgb");
+if(!st)return;
+var on=st.status_leds!==false;
+if(box){box.checked=ledBusy?ledWant:on;box.disabled=ledBusy}
+if(line){line.className="sub st"+(ledError?" bad":"");
+line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>"+(on?"Status LEDs are on.":
+"Status LEDs are off. D2 to D5 and the XIAO LED stay dark.")+(ledError?" "+esc(ledError):"")}}
+
+function setStatusLeds(){
+if(ledBusy||!st)return;
+ledWant=document.getElementById("lgb").checked;ledBusy=true;ledError="";ledStatus();
+post("set_status_leds",null,undefined,undefined,"&enabled="+(ledWant?"1":"0"))
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){
+if(!ok)throw new Error("The remote could not save the status LED switch.")})})
+.then(function(){ledBusy=false;return load().then(paint)},function(e){
+ledBusy=false;ledError=e&&e.message?e.message:"The remote did not answer.";ledStatus()})}
 
 function setWifiAlwaysOn(){
 if(wifiBusy||!st||!st.network)return;
@@ -963,7 +1020,7 @@ stBusy=true;
 readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-st.sleep=j.sleep;st.battery=j.battery;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus()}},
+st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus()}},
 function(){zpjLost();restartLost()})
 .then(function(){stBusy=false},function(){stBusy=false})}
 
@@ -1357,13 +1414,15 @@ else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
 lines.push(JSON.stringify(e))}
 // One line for each input, because an indented block runs past 100 lines and a
 // single line hides which input an entry belongs to.
-return '{"c6remote":1,"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
+return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
 
-var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","sleep","wake_replay"];
+var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","status_leds","boot_leds","sleep","wake_replay"];
 // The name stays out, because it belongs to one remote and a copy would give two the same name.
 function cfgSettings(){
 var o={zigbee:radioOn("zigbee"),ble:radioOn("ble"),home_assistant:radioOn("home_assistant"),
 wifi_always_on:!!(st&&st.network&&st.network.wifi_always_on)},z=st&&st.sleep;
+if(st&&typeof st.status_leds==="boolean")o.status_leds=st.status_leds;
+if(st&&typeof st.boot_leds==="boolean")o.boot_leds=st.boot_leds;
 if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true}
 return o}
 
@@ -1388,6 +1447,8 @@ function en(v){return "&enabled="+(v?"1":"0")}
 ["zigbee","ble","home_assistant"].forEach(function(r){
 add(r,radioOn(r),"set_radio",function(v){return "&radio="+r+"&on="+(v?"1":"0")})});
 add("wifi_always_on",!!(st&&st.network&&st.network.wifi_always_on),"set_wifi_always_on",en);
+if(st&&typeof st.status_leds==="boolean")add("status_leds",st.status_leds,"set_status_leds",en);
+if(st&&typeof st.boot_leds==="boolean")add("boot_leds",st.boot_leds,"set_boot_leds",en);
 if(sl){
 add("sleep",z.enabled===true,"set_sleep_enabled",en);
 add("sleep_after_s",z.after_s,"set_sleep_after",function(v){return "&seconds="+v});

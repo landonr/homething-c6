@@ -56,13 +56,14 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "wmac", "bat", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "rss", "rsb",
+                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "lgw", "lgb", "lgs", "blw", "blb", "bls", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
+  status_leds: true, boot_leds: true,
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   sleep: {available: true, enabled: true, after_s: 300, replay: false},
@@ -764,6 +765,28 @@ setTimeout(() => {
     if (by[20].kind !== "group" || by[20].group !== 4609 || by[20].name !== "Office Lamp")
       throw new Error("a group target did not survive: " + JSON.stringify(by[20]));
   });
+  step("the export names the firmware only when the state carries one", () => {
+    const prevSt = global.st;
+    global.cfgAll = {6: CODE.text};
+    global.st = Object.assign({}, prevSt, {firmware: "2026.10.0"});
+    const withFw = cfgBlob();
+    if (withFw.indexOf('{"c6remote":1,"firmware":"2026.10.0","settings":') !== 0)
+      throw new Error("firmware missing from the export: " + withFw.slice(0, 80));
+    if (JSON.parse(withFw).firmware !== "2026.10.0") throw new Error("firmware did not parse");
+    global.st = Object.assign({}, prevSt);
+    delete global.st.firmware;
+    if (cfgBlob().indexOf("firmware") >= 0) throw new Error("firmware shown with no state value");
+    global.st = Object.assign({}, prevSt, {firmware: ""});
+    if (cfgBlob().indexOf("firmware") >= 0) throw new Error("an empty firmware was exported");
+    global.st = prevSt;
+  });
+  step("an import ignores the firmware key", () => {
+    const text = JSON.stringify({c6remote: 1, firmware: "2026.10.1-dirty", slots: [{slot: 4, action: "voice"}]});
+    const r = cfgParse(text);
+    if (r.error) throw new Error("a file with firmware was refused: " + r.error);
+    const plain = cfgParse(JSON.stringify({c6remote: 1, slots: [{slot: 4, action: "voice"}]}));
+    if (plain.error) throw new Error("a file without firmware was refused: " + plain.error);
+  });
   step("an export reads back in without a change", () => {
     global.cfgAll = {6: CODE.text};
     for (const e of JSON.parse(cfgBlob()).slots) {
@@ -898,6 +921,19 @@ setTimeout(() => {
     STATE.network.wifi = true;
     networkStatus();
   });
+  step("the Firmware row shows the served version or Unknown", () => {
+    const prevSt = global.st;
+    global.st = STATE;
+    STATE.firmware = "2026.10.1-dirty";
+    networkStatus();
+    if (document.getElementById("fwv").textContent !== "2026.10.1-dirty")
+      throw new Error("firmware row showed " + document.getElementById("fwv").textContent);
+    delete STATE.firmware;
+    networkStatus();
+    if (document.getElementById("fwv").textContent !== "Unknown")
+      throw new Error("missing firmware showed " + document.getElementById("fwv").textContent);
+    global.st = prevSt;
+  });
   step("WiFi Always On switch posts the next boot preference", () => {
     global.st = STATE;
     const realFetch = global.fetch;
@@ -911,6 +947,54 @@ setTimeout(() => {
     if (!document.getElementById("wfb").disabled || !document.getElementById("wfb").checked)
       throw new Error("switch lost pending preference");
     global.wifiBusy = false;
+  });
+  step("Status LEDs switch shows the stored state and posts the change", () => {
+    const prevSt = global.st;
+    global.st = STATE;
+    STATE.status_leds = false;
+    ledStatus();
+    if (document.getElementById("lgb").checked) throw new Error("off showed on");
+    if (!document.getElementById("lgs").innerHTML.includes("stay dark"))
+      throw new Error("off line is wrong: " + document.getElementById("lgs").innerHTML);
+    STATE.status_leds = true;
+    ledStatus();
+    if (!document.getElementById("lgb").checked) throw new Error("on showed off");
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("lgb").checked = false;
+    document.getElementById("lgb").onchange();
+    global.fetch = realFetch;
+    if (!body.includes("action=set_status_leds") || !body.includes("enabled=0"))
+      throw new Error("switch posted " + body);
+    if (!document.getElementById("lgb").disabled || document.getElementById("lgb").checked)
+      throw new Error("switch lost pending state");
+    global.ledBusy = false;
+    global.st = prevSt;
+  });
+  step("Boot and wake LEDs switch shows the stored state and posts the change", () => {
+    const prevSt = global.st;
+    global.st = STATE;
+    STATE.boot_leds = false;
+    bootLedStatus();
+    if (document.getElementById("blb").checked) throw new Error("off showed on");
+    if (!document.getElementById("bls").innerHTML.includes("do not play"))
+      throw new Error("off line is wrong: " + document.getElementById("bls").innerHTML);
+    STATE.boot_leds = true;
+    bootLedStatus();
+    if (!document.getElementById("blb").checked) throw new Error("on showed off");
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("blb").checked = false;
+    document.getElementById("blb").onchange();
+    global.fetch = realFetch;
+    if (!body.includes("action=set_boot_leds") || !body.includes("enabled=0"))
+      throw new Error("switch posted " + body);
+    if (!document.getElementById("blb").disabled || document.getElementById("blb").checked)
+      throw new Error("switch lost pending state");
+    global.bootBusy = false;
+    global.st = prevSt;
   });
   step("the sleep block shows only with idle_sleep and names its state", () => {
     global.st = STATE;
@@ -958,6 +1042,17 @@ setTimeout(() => {
     STATE.battery = {available: true, percent: 72, volts: 3.87};
     batteryStatus();
     if (line.textContent !== "Battery 72 % (3.87 V)") throw new Error("the battery line did not return");
+  });
+  step("the Settings card shows the IP address", () => {
+    const saved = global.st;
+    const dip = document.getElementById("dip");
+    global.st = {network: {ip: "192.168.1.50"}};
+    networkStatus();
+    if (dip.textContent !== "192.168.1.50") throw new Error("dip reads " + dip.textContent);
+    global.st = {network: {ip: ""}};
+    networkStatus();
+    if (dip.textContent !== "Unavailable") throw new Error("dip empty reads " + dip.textContent);
+    global.st = saved;
   });
   step("the sleep switch posts the new state and holds it during the write", () => {
     global.st = STATE;
@@ -1403,7 +1498,7 @@ setTimeout(() => {
   step("the export carries the device settings and leaves the name out", () => {
     const j = JSON.parse(cfgBlob());
     const want = {zigbee: true, ble: true, home_assistant: true, wifi_always_on: false,
-                  sleep: true, sleep_after_s: 300, wake_replay: false};
+                  status_leds: true, boot_leds: true, sleep: true, sleep_after_s: 300, wake_replay: false};
     if (JSON.stringify(j.settings) !== JSON.stringify(want))
       throw new Error("settings are wrong: " + JSON.stringify(j.settings));
     if ("name" in j.settings) throw new Error("the name was exported");
@@ -1450,6 +1545,22 @@ setTimeout(() => {
       throw new Error("the wake press argument is wrong");
     if (cfgSetList({home_assistant: false}).list[0].args !== "&radio=home_assistant&on=0")
       throw new Error("the Home Assistant argument is wrong");
+  });
+  step("an import sends status_leds only when it differs", () => {
+    if (cfgSetList({status_leds: true}).list.length) throw new Error("a matching setting was sent");
+    const l = cfgSetList({status_leds: false}).list;
+    if (l.length !== 1 || l[0].action !== "set_status_leds" || l[0].args !== "&enabled=0")
+      throw new Error("wrong status_leds entry: " + JSON.stringify(l));
+    const r = cfgParse(JSON.stringify({c6remote: 1, slots: [], settings: {status_leds: 1}}));
+    if (!r.error || r.error.indexOf("status_leds") < 0) throw new Error("a number was accepted");
+  });
+  step("an import sends boot_leds only when it differs", () => {
+    if (cfgSetList({boot_leds: true}).list.length) throw new Error("a matching setting was sent");
+    const l = cfgSetList({boot_leds: false}).list;
+    if (l.length !== 1 || l[0].action !== "set_boot_leds" || l[0].args !== "&enabled=0")
+      throw new Error("wrong boot_leds entry: " + JSON.stringify(l));
+    const r = cfgParse(JSON.stringify({c6remote: 1, slots: [], settings: {boot_leds: 1}}));
+    if (!r.error || r.error.indexOf("boot_leds") < 0) throw new Error("a number was accepted");
   });
   step("an import skips the sleep keys on a remote without sleep", () => {
     const prev = global.st.sleep;

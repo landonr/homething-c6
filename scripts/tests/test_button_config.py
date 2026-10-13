@@ -1,8 +1,13 @@
 """Regression checks for the /buttons web configurator component."""
 
 from pathlib import Path
+import ast
 import importlib.util
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 
@@ -225,12 +230,53 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn('const std::string enabled = request->arg("enabled");', section(
             action, 'if (action == "set_sleep_enabled") {', "\n  }"))
         self.assertIn('parse_sleep_after(request->arg("seconds"), sleep_after_s)', action)
-        self.assertIn('action != "set_wifi_always_on" && !sleep_action && action != "pair" &&', action)
+        self.assertIn('action != "set_wifi_always_on" && action != "set_status_leds" && action != "set_boot_leds" &&', action)
         for name, call in (("set_sleep_enabled", "this->set_sleep_enabled_(sleep_on)"),
                            ("set_sleep_after", "this->set_sleep_after_(sleep_after_s)")):
             branch = section(action, f'}} else if (action == "{name}") {{', "\n  } else")
             self.assertIn("this->defer([this, action_id, ", branch)
             self.assertIn(f"this->complete_action_(action_id, {call});", branch)
+
+    def test_the_status_leds_setting_is_stored_validated_and_exposed(self) -> None:
+        self.assertIn("bool status_leds() const;", HEADER)
+        status = section(CPP, "bool ButtonConfig::status_leds() const {", "\n}")
+        self.assertIn("make_preference<LedPref>(LED_PREF_KEY, true)", status)
+        self.assertIn("value < 0", status)
+        setter = section(CPP, "bool ButtonConfig::set_status_leds(bool enabled) {", "\n}")
+        self.assertIn("preference.save(&next)", setter)
+        self.assertIn("this->status_leds_callbacks_.call(enabled);", setter)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertIn('R"({"ok":false,"error":"invalid status LED switch"})"', action)
+        branch = section(action, '} else if (action == "set_status_leds") {', "\n  } else")
+        self.assertIn("this->set_status_leds(status_leds_on)", branch)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"status_leds":%s,"boot_leds":%s,"network"', state)
+        self.assertIn("this->status_leds() ? \"true\" : \"false\"", state)
+        self.assertIn("Status LEDs: %s", CPP)
+        self.assertIn('post("set_status_leds"', PAGE)
+        self.assertIn('id="lgb"', PAGE)
+        self.assertIn('"wifi_always_on","status_leds","boot_leds","sleep","wake_replay"', PAGE)
+        self.assertIn('add("status_leds",st.status_leds,"set_status_leds",en);', PAGE)
+        self.assertIn("o.status_leds=st.status_leds;", PAGE)
+
+    def test_the_boot_leds_setting_mirrors_the_status_leds_setting(self) -> None:
+        self.assertIn("bool boot_leds() const;", HEADER)
+        boot = section(CPP, "bool ButtonConfig::boot_leds() const {", "\n}")
+        self.assertIn("make_preference<LedPref>(BOOT_LED_PREF_KEY, true)", boot)
+        self.assertIn("value < 0", boot)
+        setter = section(CPP, "bool ButtonConfig::set_boot_leds(bool enabled) {", "\n}")
+        self.assertIn("preference.save(&next)", setter)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertIn('R"({"ok":false,"error":"invalid boot LED switch"})"', action)
+        branch = section(action, '} else if (action == "set_boot_leds") {', "\n  } else")
+        self.assertIn("this->set_boot_leds(boot_leds_on)", branch)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"status_leds":%s,"boot_leds":%s,"network"', state)
+        self.assertIn("this->boot_leds() ? \"true\" : \"false\"", state)
+        self.assertIn('post("set_boot_leds"', PAGE)
+        self.assertIn('id="blb"', PAGE)
+        self.assertIn('add("boot_leds",st.boot_leds,"set_boot_leds",en);', PAGE)
+        self.assertIn("o.boot_leds=st.boot_leds;", PAGE)
 
     def test_the_wake_replay_action_follows_the_sleep_switch_pattern(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
@@ -270,10 +316,13 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn("static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&", CPP)
 
     def test_the_page_block_shows_only_with_idle_sleep(self) -> None:
-        wifi = section(PAGE, '<section class="card full conn" id="wificfg">', "</section>")
-        block = section(wifi, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Restart</h2>')
-        self.assertLess(wifi.index('id="wfb"'), wifi.index('id="slpcfg"'))
-        self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="hab"'))
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        block = section(dev, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Status LEDs')
+        self.assertLess(dev.index('id="bat"'), dev.index('id="dip"'))
+        self.assertLess(dev.index('id="dip"'), dev.index('id="slpcfg"'))
+        self.assertIn('document.getElementById("dip")', PAGE)
+        self.assertIn('dip.textContent=st.network.ip||"Unavailable"', PAGE)
+        self.assertLess(dev.index('id="slpcfg"'), dev.index('id="lgb"'))
         self.assertIn('<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"\n'
                       'aria-label="Sleep" disabled>', block)
         self.assertIn('<input type="number" id="sla" min="1" max="60" step="1"', block)
@@ -386,9 +435,9 @@ class RestartTest(unittest.TestCase):
         self.assertIn('#include "esphome/core/application.h"', CPP)
 
     def test_the_page_confirms_and_posts_the_restart(self) -> None:
-        wifi = section(PAGE, '<section class="card full conn" id="wificfg">', "</section>")
+        wifi = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
         self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="rsb"'))
-        self.assertLess(wifi.index('id="rsb"'), wifi.index('id="hab"'))
+        self.assertLess(wifi.index('id="blb"'), wifi.index('id="rsb"'))
         self.assertIn('<div class="act"><button type="button" id="rsb">Restart remote</button></div>',
                       wifi)
         self.assertIn('<p class="sub st" id="rss" hidden></p>', wifi)
@@ -1209,7 +1258,7 @@ class PageTest(unittest.TestCase):
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;zpjSync();networkStatus();sleepStatus();"
+        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();"
                       "batteryStatus();restartSync(j);radioStatus();bleStatus()}},"
                       "\nfunction(){zpjLost();restartLost()})", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
@@ -1349,8 +1398,21 @@ class PageTest(unittest.TestCase):
         self.assertIn('<div class="tabgrid" id="buttonstab">', PAGE)
         self.assertIn('<p class="sub full">Select a button to assign an action.</p>', PAGE)
         self.assertIn('<div class="tabgrid" id="configtab" hidden>', PAGE)
-        self.assertIn('<h1 class="full secttl">Connections</h1>', PAGE)
-        self.assertIn('<section class="card full conn" id="wificfg">', PAGE)
+        order = ['<h1 class="full secttl">Settings</h1>', '<section class="card full conn" id="devcfg">',
+                 '<h1 class="full secttl">Connections</h1>', '<section class="card full conn" id="wificfg">',
+                 '<section class="card full conn" id="zbcfg">', '<section class="card full conn" id="blecfg">',
+                 '<h1 class="full secttl">Import Export</h1>']
+        marks = [PAGE.index(m) for m in order]
+        self.assertEqual(marks, sorted(marks))
+        self.assertGreater(marks[0], PAGE.index('<div class="tabgrid" id="configtab" hidden>'))
+        dev = section(PAGE, order[1], "</section>")
+        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgb"', 'id="blb"', 'id="rsb"'):
+            self.assertIn(want, dev)
+        wifi = section(PAGE, order[3], "</section>")
+        for want in ('id="wfb"', 'id="wip"', 'id="wmac"', 'id="hab"'):
+            self.assertIn(want, wifi)
+        self.assertNotIn('<hr class="rule">', dev.split("</dl>", 1)[0])
+        self.assertFalse(wifi.rstrip().endswith('<hr class="rule">'))
         self.assertIn('<p class="sub st" id="wfs">Wi-Fi state is loading.</p>', PAGE)
         self.assertIn('<p class="sub st" id="has">Home Assistant API state is loading.</p>', PAGE)
         self.assertIn('<section class="card full conn" id="zbcfg">\n'
@@ -1497,11 +1559,37 @@ class PageTest(unittest.TestCase):
         self.assertIn("cfgParse(text)", load)
         self.assertIn('cfgMsg="Loaded "+name+"."', load)
 
+    def test_the_firmware_version_is_set_at_codegen_and_served_in_the_state(self) -> None:
+        """A setter keeps the version out of defines.h, so a new commit does not
+        rebuild every file. The import ignores the key, so it needs no check."""
+        self.assertIn("cg.add(var.set_firmware_version(firmware_version()))", INIT)
+        self.assertNotIn("add_define(\"FIRMWARE", INIT)
+        self.assertIn("dc560eec464c05707991582992bff0d27b0d960b", INIT)
+        self.assertIn('"--is-ancestor"', INIT)
+        self.assertIn("%cI", INIT)
+        self.assertIn('"--untracked-files=no"', INIT)
+        self.assertIn('return "unknown"', INIT)
+        self.assertIn("void set_firmware_version(const char *version)", HEADER)
+        self.assertIn('R"({"firmware":")"', section(CPP, "void ButtonConfig::handle_state_", "\n}\n"))
+        self.assertIn('"  Firmware: %s"', section(CPP, "void ButtonConfig::dump_config()", "\n}\n"))
+        parse = section(PAGE, "function cfgParse(text){", "\n\n")
+        self.assertNotIn("firmware", parse)
+
+    def test_the_page_markup_has_no_repeated_id(self) -> None:
+        markup = PAGE.split("<script>", 1)[0]
+        ids = re.findall(r'\bid="([^"]+)"', markup)
+        self.assertTrue(ids)
+        self.assertEqual(sorted({i for i in ids if ids.count(i) > 1}), [])
+
+    def test_the_page_shows_the_firmware_version(self) -> None:
+        self.assertIn('<dt>Firmware</dt><dd id="fwv">', PAGE)
+        self.assertIn("st.firmware", section(PAGE, "function networkStatus(){", "\n\nfunction "))
+
     def test_an_export_holds_the_action_and_the_payload_of_every_input(self) -> None:
         """An export that named the action alone would restore nothing, because
         the group ID, the address, and the code are the assignment."""
         blob = section(PAGE, "function cfgBlob(){", "\n\n")
-        self.assertIn("""return '{"c6remote":1,"settings":'+JSON.stringify(cfgSettings())+',"slots":[""", blob)
+        self.assertIn("""return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[""", blob)
         # One line for each input, so an entry stays readable in the box.
         self.assertIn(R'lines.join(",\n")', blob)
         self.assertIn("for(i=0;i<S.length;i++){", blob)
@@ -1545,8 +1633,8 @@ class PageTest(unittest.TestCase):
         settings = section(PAGE, "function cfgSettings(){", "\n\n")
         self.assertNotIn("name", settings)
         send = section(PAGE, "function cfgSetList(o){", "\n\n")
-        for action in ("set_radio", "set_wifi_always_on", "set_sleep_enabled",
-                       "set_sleep_after", "set_sleep_replay"):
+        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds",
+                       "set_sleep_enabled", "set_sleep_after", "set_sleep_replay"):
             self.assertIn('"%s"' % action, send)
         self.assertIn("if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();", section(PAGE, "function load(){", "\n\n"))
 
@@ -1622,8 +1710,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('action == "set_radio"', CPP)
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
         self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
-                      '\n                          action != "set_wifi_always_on" && !sleep_action && '
-                      'action != "pair" &&\n                          action != "restart" && '
+                      '\n                          action != "set_wifi_always_on" && action != "set_status_leds" '
+                      '&& action != "set_boot_leds" &&\n                          !sleep_action && action != "pair" &&\n                          action != "restart" && '
                       'action != "set_name";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
@@ -1742,7 +1830,7 @@ class RadioSwitchTest(unittest.TestCase):
         is always rendered and always names its own subject."""
         # The sleep block hides because the build fixes it. The idle restart line
         # hides because an idle remote has nothing to report.
-        for card_id in ("wificfg", "zbcfg", "blecfg"):
+        for card_id in ("devcfg", "wificfg", "zbcfg", "blecfg"):
             card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
             card = card.replace('<div id="slpcfg" hidden>', "", 1)
             card = card.replace('<p class="sub st" id="rss" hidden></p>', "", 1)
@@ -1867,6 +1955,100 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn("cg.progmem_array", INIT)
         self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
         self.assertNotIn('#include "button_config_page.h"', CPP)
+
+
+@unittest.skipUnless(shutil.which("git"), "git is not installed")
+class FirmwareVersionTests(unittest.TestCase):
+    """Run the real firmware_version() against throwaway git repos."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name)
+        self.git("init", "-q")
+        self.n = 0
+        tree = ast.parse(INIT)
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "firmware_version")
+        self.code = compile(ast.Module(body=[func], type_ignores=[]), "firmware_version", "exec")
+
+    def git(self, *args: str, date: str | None = None) -> str:
+        env = dict(os.environ)
+        if date:
+            env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = date
+        cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", *args]
+        out = subprocess.run(cmd, cwd=self.repo, env=env, capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+
+    def commit(self, date: str) -> str:
+        self.n += 1
+        (self.repo / "f.txt").write_text(str(self.n))
+        self.git("add", "f.txt")
+        self.git("commit", "-q", "-m", f"c{self.n}", date=date)
+        return self.git("rev-parse", "HEAD")
+
+    def version(self, base: str, root: Path | None = None) -> str:
+        root = root or self.repo
+        ns = {
+            "Path": Path,
+            "subprocess": subprocess,
+            "__file__": str(root / "components" / "button_config" / "__init__.py"),
+            "VERSION_BASE": base,
+        }
+        exec(self.code, ns)
+        return ns["firmware_version"]()
+
+    def test_root_commit_base_is_patch_zero(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_earlier_same_month_commits_before_the_base_do_not_count(self) -> None:
+        self.commit("2026-10-01T10:00:00-07:00")
+        base = self.commit("2026-10-02T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_later_same_month_commits_increment_patch(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.commit("2026-10-05T10:00:00-07:00")
+        self.commit("2026-10-09T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.2")
+
+    def test_next_month_restarts_patch(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.commit("2026-10-20T10:00:00-07:00")
+        self.commit("2026-11-02T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.11.0")
+
+    def test_december_rolls_over_to_january(self) -> None:
+        base = self.commit("2026-12-01T10:00:00-07:00")
+        self.commit("2026-12-15T10:00:00-07:00")
+        self.commit("2027-01-03T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2027.1.0")
+
+    def test_modified_tracked_file_adds_dirty(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        (self.repo / "f.txt").write_text("changed")
+        self.assertEqual(self.version(base), "2026.10.0-dirty")
+
+    def test_untracked_file_is_not_dirty(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        (self.repo / "new.txt").write_text("x")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_base_that_is_not_an_ancestor_is_unknown(self) -> None:
+        first = self.commit("2026-10-01T10:00:00-07:00")
+        self.git("checkout", "-q", "-b", "side")
+        side = self.commit("2026-10-02T10:00:00-07:00")
+        self.git("checkout", "-q", first)
+        self.commit("2026-10-03T10:00:00-07:00")
+        self.assertEqual(self.version(side), "unknown")
+
+    def test_missing_base_is_unknown(self) -> None:
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.assertEqual(self.version("0" * 40), "unknown")
+
+    def test_non_git_directory_is_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as plain:
+            self.assertEqual(self.version("0" * 40, Path(plain)), "unknown")
 
 
 if __name__ == "__main__":

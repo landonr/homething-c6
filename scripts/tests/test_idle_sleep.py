@@ -339,7 +339,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         interval = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
         for text in (
             "id(idle).sleep_armed()",
-            "if (armed && !was_armed) {",
+            "if (armed && !was_armed && id(button_cfg).status_leds()) {",
             "id(awake_led).turn_on()",
             "call.set_brightness(1.0f);",
             "call.set_flash_length(250);",
@@ -375,13 +375,13 @@ class ProductionSleepConfigTest(unittest.TestCase):
             "                  pulse = Color(level, level, level);",
         ):
             self.assertIn(text, overlay)
-        # D2 and D5 always take the pulse. D3 and D4 only when no user action owns them.
-        always = overlay.split("if (ir_ui.state == IrUi::OFF", 1)[0]
+        # D2 and D5 always take the pulse. D3 and D4 only when no user action owns them or status LEDs are off.
+        always = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF", 1)[0]
         self.assertIn("it[0] = pulse;", always)
         self.assertIn("it[3] = pulse;", always)
         self.assertNotIn("it[1]", always)
         self.assertNotIn("it[2]", always)
-        guarded = overlay.split("if (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0) {", 1)[1]
+        guarded = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0)) {", 1)[1]
         self.assertIn("it[1] = pulse;", guarded)
         self.assertIn("it[2] = pulse;", guarded)
         self.assertNotIn("it[0]", guarded)

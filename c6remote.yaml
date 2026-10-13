@@ -38,6 +38,18 @@ esphome:
         - lambda: ir_code_store.setup();
         - lambda: zigbee_assignments.setup();
         - lambda: id(ble_hid_remote).setup_assignments();
+        # The awake LED restores on in its own setup, which runs after priority 800.
+        - if:
+            condition:
+              lambda: return !id(button_cfg).status_leds();
+            then:
+              - light.turn_off:
+                  id: awake_led
+                  transition_length: 0s
+        # Only a cold boot with the setting on plays the chase.
+        - lambda: |-
+            if (id(idle).woke_from_sleep() || !id(button_cfg).boot_leds())
+              id(boot_chase_done) = true;
         - script.execute: show_idle_status
   on_shutdown:
     - switch.turn_off: led_rail
@@ -158,6 +170,30 @@ button_config:
   idle_sleep_id: idle
   battery_level_id: battery_level
   battery_voltage_id: battery_voltage
+  on_status_leds:
+    - if:
+        condition:
+          lambda: return enabled;
+        then:
+          - lambda: |-
+              auto call = id(awake_led).turn_on();
+              call.set_brightness(0.3f);
+              call.perform();
+          - script.execute: show_idle_status
+        else:
+          - light.turn_off:
+              id: awake_led
+              transition_length: 0s
+          # A running intro finishes first. The 250ms interval then turns the light off.
+          - if:
+              condition:
+                lambda: |-
+                  return !((!id(idle).woke_from_sleep() && !id(boot_chase_done) && id(button_cfg).boot_leds()) ||
+                           millis() < id(wake_pulse_until_ms));
+              then:
+                - light.turn_off:
+                    id: status_light
+                    transition_length: 0s
 
 idle_sleep:
   id: idle
@@ -549,7 +585,7 @@ light:
             // skips it. Eight 450 ms pulses start 150 ms apart, so each overlaps
             // the next two. Both times are multiples of the 50 ms tick. Each pulse
             // steps 1/8 of the hue wheel, so the two laps sweep one rainbow.
-            static bool boot_chase = !id(idle).woke_from_sleep();
+            static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();
             static const uint32_t boot_chase_start = millis();
             if (boot_chase) {
               const uint32_t t = millis() - boot_chase_start;
@@ -566,7 +602,11 @@ light:
                 return;
               }
               boot_chase = false;
+              id(boot_chase_done) = true;
             }
+
+            // With status LEDs off, only an intro animation draws.
+            const bool status_on = id(button_cfg).status_leds();
 
             // D2 stays dark while Wi-Fi is disabled. It pulses red while Wi-Fi
             // connects and orange on Wi-Fi alone when Home Assistant is expected.
@@ -698,6 +738,8 @@ light:
             // Deep-sleep wake: two pulses in the battery colour cover the status
             // LEDs. Assignment mode and voice feedback keep D3 and D4, because
             // they answer a user action. The countdown phase starts and stops dim.
+            if (!status_on)
+              it.all() = Color::BLACK;
             if (millis() < id(wake_pulse_until_ms)) {
               const float phase = ((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f;
               const float wave = 0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase);
@@ -727,22 +769,35 @@ light:
               }
               it[0] = pulse;
               it[3] = pulse;
-              if (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0) {
+              if (!status_on || (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0)) {
                 it[1] = pulse;
                 it[2] = pulse;
               }
             }
     on_turn_on:
-      - switch.turn_on: led_rail
-      # The first frame is written in the same loop tick as this trigger, before
-      # led_vdd has risen at D2, so re-send it once the rail is up.
-      - delay: 20ms
-      # Guarded: a turn-off inside the 20ms window would otherwise be undone.
+      # One gate for every caller. Only a status setting or a running intro
+      # powers the rail, so GPIO17 never drives frames into a dead led_vdd.
       - if:
           condition:
-            light.is_on: status_light
+            lambda: |-
+              return id(button_cfg).status_leds() ||
+                     (!id(idle).woke_from_sleep() && !id(boot_chase_done) && id(button_cfg).boot_leds()) ||
+                     millis() < id(wake_pulse_until_ms);
           then:
-            - light.turn_on: status_light
+            - switch.turn_on: led_rail
+            # The first frame is written in the same loop tick as this trigger, before
+            # led_vdd has risen at D2, so re-send it once the rail is up.
+            - delay: 20ms
+            # Guarded: a turn-off inside the 20ms window would otherwise be undone.
+            - if:
+                condition:
+                  light.is_on: status_light
+                then:
+                  - light.turn_on: status_light
+          else:
+            - light.turn_off:
+                id: status_light
+                transition_length: 0s
     on_turn_off:
       # Fires one write before the final all-black frame, so let that frame land
       # while the LEDs still have power. GPIO17 then idles low.
@@ -759,6 +814,14 @@ light:
     output: awake_led_pwm
     restore_mode: ALWAYS_ON
     default_transition_length: 0s
+    on_turn_on:
+      - if:
+          condition:
+            lambda: return !id(button_cfg).status_leds();
+          then:
+            - light.turn_off:
+                id: awake_led
+                transition_length: 0s
     # Without color_mode the boot call drops the brightness and turns on at 100%.
     initial_state:
       color_mode: brightness
@@ -1016,6 +1079,11 @@ globals:
     restore_value: false
     initial_value: "0"
   # Battery colour latched on the first wake tick. 0 unknown, 1 green, 2 orange, 3 red.
+  # True once the cold-boot chase ended or cannot play this boot.
+  - id: boot_chase_done
+    type: bool
+    restore_value: false
+    initial_value: "false"
   - id: wake_battery_band
     type: uint8_t
     restore_value: false
@@ -1031,6 +1099,11 @@ interval:
           }
           if (ir_ui.tick())
             id(show_idle_status).execute();
+          // With status LEDs off the light stays on only for an intro.
+          if (!id(button_cfg).status_leds() && id(status_light).remote_values.is_on() &&
+              !((!id(idle).woke_from_sleep() && !id(boot_chase_done) && id(button_cfg).boot_leds()) ||
+                millis() < id(wake_pulse_until_ms)))
+            id(status_light).turn_off().set_transition_length(0).perform();
           // The Zigbee component exports no global instance, so the link state
           // is pushed from here, where the id is in scope. It comes before the
           // tick, so a pairing step reads this boot and not the last one.
@@ -1051,7 +1124,7 @@ interval:
           // One flash when the SW5 hold arms sleep, so the user knows to let go.
           static bool was_armed = false;
           const bool armed = id(idle).sleep_armed();
-          if (armed && !was_armed) {
+          if (armed && !was_armed && id(button_cfg).status_leds()) {
             auto call = id(awake_led).turn_on();
             call.set_brightness(1.0f);
             call.set_flash_length(250);
@@ -1078,6 +1151,8 @@ interval:
               id(detect_wifi_hold).execute();
             }
           }
+          if (!id(button_cfg).boot_leds())
+            return;
           // The first wake tick forces a sample, because the scheduled one can come
           // after the pulse starts. The latch keeps the colour fixed mid-pulse.
           static const uint8_t band = []() -> uint8_t {
@@ -1091,6 +1166,13 @@ interval:
           // Setup can run past 800 ms, so the two pulses count from the first tick.
           static const uint32_t first_ms = millis();
           id(wake_pulse_until_ms) = first_ms + 1600;
+          // With status LEDs off the light is dark here, and the gate now sees the pulse.
+          static bool lit = false;
+          if (!lit) {
+            lit = true;
+            if (!id(button_cfg).status_leds())
+              id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();
+          }
 
 button:
   # The Zigbee stack starts only at boot, so turning its switch back on needs

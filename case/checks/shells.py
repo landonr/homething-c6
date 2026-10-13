@@ -708,18 +708,20 @@ def parts_are_sound(parts):
     return problems
 
 
-def interference(shells):
-    shells_box = shells.bounding_box()
+def interference(parts):
+    # One part at a time: Q3's model against the fused shells made the common
+    # come back as a null shape, while each shell alone reads it cleanly.
+    z_lo = min(p.bounding_box().min.Z for p in parts)
+    z_hi = max(p.bounding_box().max.Z for p in parts)
     placements = [(ref, x, y) for ref, (x, y, _, _) in board.components().items()]
     placements.append(("ENC1", *board.wheel_center()))
 
     hits = []
     for solid in board.assembly_solids():
         box = solid.bounding_box()
-        if box.min.Z >= shells_box.max.Z or box.max.Z <= shells_box.min.Z:
+        if box.min.Z >= z_hi or box.max.Z <= z_lo:
             continue
-        overlap = shells.intersect(solid)
-        volume = _volume(overlap)
+        volume = sum(_volume(p.intersect(solid)) for p in parts)
         if volume <= TOLERANCE:
             continue
         center = box.center()

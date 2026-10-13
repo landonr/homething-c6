@@ -220,15 +220,25 @@ Prepare the back shell first:
 3. Apply adhesive to the continuous shoulder below the interior flange.
 4. Let the adhesive set.
 
+Prepare the battery before shell assembly. Stretch-release adhesive strips hold the pouch cell:
+
+1. Stick two stretch-release adhesive strips to the pouch.
+2. Put the pouch on the back face of the board in the cell position, with its leads toward J1.
+3. Keep the pull tabs free at the grip end.
+4. Connect the plug to J1.
+
+To remove the battery, pull each tab slowly along the board.
+
 Assemble the remaining parts with the front face down:
 
 1. Install all caps in the front shell.
 2. Install the button pad.
 3. Put the board on the front-shell bosses.
 4. Install the three M2 screws through the board into the front-shell bosses.
-5. Engage the two IR-end detents.
-6. Fold the back shell onto the front shell.
-7. Install the end-wall M2 screw at the grip end.
+5. Push the battery plug into J1.
+6. Engage the two IR-end detents.
+7. Fold the back shell onto the front shell.
+8. Install the end-wall M2 screw at the grip end.
 
 Install the caps before the pad. The caps are captive after pad installation.
 
@@ -289,6 +299,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the microphone funnel aligned with the board port.
 - Keep the USB slot and pocket clear of the connector shell.
 - Keep support ledges clear of board parts, screw heads, and the cell.
+- Keep the cell envelope clear of board parts, screw heads, and the end screw block.
 - Keep the front skirt clear above the support ledge tops.
 - Keep the end screw block clear of the back shell. Its web ties it to the end skirt and the side skirt at skirt height only.
 - Keep the IR window shoulder continuous for adhesive.

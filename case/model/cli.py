@@ -279,7 +279,7 @@ def main():
         f"{led_ring_clip_reach(0.0) - led_ring_inner_r():.2f} of ring there"
     )
     print(
-        f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} cell, "
+        f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} pouch, "
         f"in {hi - lo:.2f} of clear run"
     )
     lengths = support_run_lengths()

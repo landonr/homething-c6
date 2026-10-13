@@ -111,12 +111,6 @@ switch body before the switch makes."""
 PLUNGER_LOWER_CHAMFER = 0.375
 """45 degree chamfer size at the lower plunger edge. It leaves a flat switch contact."""
 
-BACK_KEEPOUT = 15.3
-"""The deepest the cavity ever gets, which is over the cell: CELL_TOP_GAP, then
-the cell diameter, then slack. Nothing else under the board comes close, because
-the cell is placed in a run with nothing hanging into it, so it sits right up
-under the board rather than below whatever is in the way."""
-
 # M2 from the back, through the board's own 2.4mm holes, into blind bosses
 # hanging off the front plate. One per hole, so three: a pair at the grip end,
 # straddling the cell rather than crossing it, and a single one on the centreline
@@ -440,6 +434,17 @@ chamfer on that chain tore the exported mesh.
 
 Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
 below the screw and never reaches the thread."""
+END_SCREW_BLOCK_END_R = 6.0
+"""Round on the block's two bottom end edges, the +X and -X ones that run along Y.
+
+It takes the square bottom corners off a block that only needs material around
+the thread, which saves material and print time. Bounded below SKIRT_BOTTOM so
+the web and the +X side tie keep their full height, and kept outside
+END_SCREW_BLOCK_BOTTOM around the screw axis at each end so the thread keeps
+its wall.
+
+Cut as a profile across the block's whole Y extent, never an edge fillet, for
+the reason END_SCREW_BLOCK_BASE_CHAMFER is (see _ramp_block_top)."""
 END_SCREW_BLOCK_RAMP_LEDGE = 0.5
 """Flat step the block's top keeps before its 45 degree ramp, measured from the
 plain board fit plane, not from the skirt face. skirt_stiffener() moves that
@@ -460,29 +465,40 @@ Bounded by END_SCREW_BLOCK_GAP. If the step reached the block's own face, the
 block would keep a flat ceiling again. checks/hardware.py reads the cover over
 the pilot and the neck on the built front."""
 
-# Cell: one AA lying along the board underneath it, horizontally, in the same
-# saddle cradle the 18650 used. Change these for another format and the cavity,
-# cradle and case thickness follow.
-CELL_D = 14.5
-CELL_L = 50.5
-"""AA at its catalogue maximum, which is also the envelope for a 14500: that cell
-is the AA form factor in single-cell lithium, so it drops into this bay with no
-change here. Electrically it is the only one of the AA chemistries that does,
-because the XIAO's charger wants 3.0 to 4.2V. See the README."""
-CELL_FIT = 0.4
-CELL_END_FIT = 1.0
+# Cell: a generic 102050 LiPo pouch lying flat along the board underneath it. Its
+# leads and JST-PH plug leave the protection-board end, which faces J1 at the -Y
+# (grip) end. The XIAO's charger wants a single-cell 3.0 to 4.2V lithium cell.
+CELL_T = 10.0
+"""Pouch thickness along Z."""
+CELL_W = 20.0
+"""Pouch width along X."""
+CELL_L = 50.0
+"""Pouch length along Y, without the leads and plug."""
+CELL_FIT = 1.0
+"""Total slack across the width, so half of it each side. Generic pouches vary
+in width, so this is looser than a machined cell would need."""
+CELL_END_FIT = 1.5
+"""Slack along the length, for the same tolerance."""
 CELL_TOP_GAP = 0.6
 """Clearance from the cell up to the board. Anything hanging below the board by
 more than this counts as an obstacle when picking the bay, so the cell never has
-to sit below a component."""
+to sit below a component. The stretch-release strips that hold the pouch to the
+board sit in this gap, between the board's back face and the pouch."""
+CELL_SWELL = 0.5
+"""Room under the pouch for thickness tolerance and swelling. A pouch must not be
+clamped between the board and the back shell."""
 
 CELL_END_MARGIN = 7.0
-"""How far the cradle sits from the near end of its bay, which is what pushes the
+"""How far the cell sits from the near end of its bay, which is what pushes the
 cell down toward the bottom edge instead of centring it. Wants to stay clear of
-CONTOUR_TIP_R, or the rounded-off end eats into the cell."""
-CRADLE_T = 1.6
-"""Saddle ribs at each end of the cell. Their notches cradle it, their faces stop
-it sliding along its axis."""
+CONTOUR_TIP_R, or the rounded-off end eats into the cell. At the -Y end it is also
+the room for the plug and the leads between J1 and the pouch."""
+
+BACK_KEEPOUT = 12.0
+"""The deepest the cavity gets, over the cell and the grip end. The pouch stack
+needs CELL_TOP_GAP + CELL_T + CELL_SWELL, but the end screw block and its
+counterbore at the grip end need more. The end_screw and shells_mate checks
+fail below this value."""
 
 # Outer form. The back is contoured along its length rather than being a slab: the
 # cell sits toward the bottom end, so the case is deep where you hold it and tapers
@@ -506,10 +522,10 @@ the end face tangentially instead of squaring off into it. Keyed to the case's o
 end, not the board's. The loft's end regions run over this radius or the plan's own
 corner, whichever reaches further in."""
 CONTOUR_BLEND = 22.0
-"""Length each taper runs over, measured out from the cradle. Long enough that
+"""Length each taper runs over, measured out from the cell. Long enough that
 the hump is a curve to hold rather than a step."""
 EDGE_R_BACK_CELL = 12.5
-"""Round on the back's bottom edge over the cell and cradle. It runs the whole way
+"""Round on the back's bottom edge over the cell. It runs the whole way
 round the plan, corners included, because each loft section is as wide as the plan
 is at that point. It makes the battery end read as a hand-held dome rather than a
 box with its corners removed. The cavity uses this radius less FLOOR, so the shell

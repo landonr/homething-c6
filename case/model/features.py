@@ -118,9 +118,8 @@ def _split(name, src, op, shapes, axis="x", reads=None):
     """One entry per solid of a pair, each labelled by which of the two it is.
 
     Against the pair's own mean rather than the middle of the case, so a pair
-    that sits entirely at one end still gets one id each. The cradle's two ribs
-    are both well into -Y, and splitting them on the case centre named them
-    both cradle.-y.
+    that sits entirely at one end still gets one id each. A pair that sits well off the case centre is
+    still split on its own mean.
     """
     centres = []
     for shape in shapes:

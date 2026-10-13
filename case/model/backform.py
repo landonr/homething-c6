@@ -14,9 +14,18 @@ from build123d import Plane, RectangleRounded, loft
 import board
 import params
 
-from .cell import cradle_span
+from .cell import cell_span
 from .shape import _offset_face
 from .stack import SHELL_BACK, SHELL_FRONT
+
+
+@functools.cache
+def deep_span():
+    """(y_min, y_max) of the back's full-depth run: from the board's grip edge to
+    the cell's +Y end. The grip end stays at full depth because the end screw
+    block and its -Y wall counterbore need the full section there."""
+    lo, hi = cell_span()
+    return min(lo, board.board_profile().bounding_box().min.Y), hi
 
 
 @functools.cache
@@ -52,8 +61,8 @@ def under_board():
 @functools.cache
 def end_depth(sign):
     """Cavity plus floor at one tapered end, from whatever hangs below the board
-    out past the cradle on that side. CONTOUR_END_DEPTH is only the fallback."""
-    lo, hi = cradle_span()
+    out past the cell on that side. CONTOUR_END_DEPTH is only the fallback."""
+    lo, hi = deep_span()
     deepest = max(
         (d for y0, y1, d in under_board() if (y1 > hi if sign > 0 else y0 < lo)),
         default=0.0,
@@ -77,12 +86,12 @@ def _tip_lift(y):
 def contour_depth(y):
     """How deep the back reaches below the board at this point along it.
 
-    Full depth over the cell and its cradle, tapering to each end's own derived
+    Full depth from the grip edge to the cell's +Y end, tapering to each end's own derived
     depth past them, then rolling up through CONTOUR_TIP_R at the very ends. The
     cell sits toward the bottom, so the deep part is where the hand is.
     """
     deep = -SHELL_BACK
-    lo, hi = cradle_span()
+    lo, hi = deep_span()
     if lo <= y <= hi:
         return deep - _tip_lift(y)
     sign = 1 if y > hi else -1
@@ -92,12 +101,12 @@ def contour_depth(y):
 
 
 def back_edge_radius(y):
-    """Bottom-edge radius at y, roundest over the cell and smallest near U2.
+    """Bottom-edge radius at y, roundest over the full-depth run and smallest near U2.
 
     The blend shares the upper contour taper. This keeps the hand-held battery
     section fully domed, then makes one C1 transition to the slimmer IR end.
     """
-    _, hi = cradle_span()
+    _, hi = deep_span()
     if y <= hi:
         return params.EDGE_R_BACK_CELL
     t = min((y - hi) / params.CONTOUR_BLEND, 1.0)
@@ -207,7 +216,7 @@ def _contour_samples():
     """Where to cut sections for the loft. Dense through the tapers and the end
     regions, sparse over the flats, because a section costs real time."""
     box = board.board_profile().bounding_box()
-    lo, hi = cradle_span()
+    lo, hi = deep_span()
     over = params.BOARD_FIT + params.WALL
     ends = (box.min.Y - over, box.max.Y + over)
     b = params.CONTOUR_BLEND

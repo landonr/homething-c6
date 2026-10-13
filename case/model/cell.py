@@ -1,19 +1,18 @@
-"""The AA cell's bay under the board, and the two saddle ribs that hold it.
+"""The pouch cell's bay under the board.
 
-Split out from hardware.py because the back's contour is sized off the
-cradle's own span: backform.py reads cradle_span() from here, and hardware.py
-reads contour_depth() from backform, so the cell has to sit below both of them
+Nothing in the shell holds the pouch: adhesive strips hold it to the board.
+Split out from hardware.py because the back's contour is sized off the cell's
+own span: backform.py reads cell_span() from here, and hardware.py reads
+contour_depth() from backform, so the cell has to sit below both of them
 rather than beside the screws it otherwise belongs with.
 """
 
 import functools
 
-from build123d import Box, Cylinder, Pos, Rot
+from build123d import Box, Pos
 
 import board
 import params
-
-from .stack import CAVITY_BACK, MERGE
 
 
 @functools.cache
@@ -52,7 +51,7 @@ def cell_bay():
     """
     x = board.board_profile().bounding_box().center().X
     top = -params.CELL_TOP_GAP
-    half = (params.CELL_D + params.CELL_FIT) / 2
+    half = (params.CELL_W + params.CELL_FIT) / 2
 
     edges = [board.board_profile().bounding_box().min.Y]
     for lo, hi in cell_obstacles(top, x - half, x + half):
@@ -68,54 +67,27 @@ def cell_bay():
 
 @functools.cache
 def cell_axis():
-    """(x, z, y_min, y_max) of the cell envelope, cradle excluded.
+    """(x, z, y_min, y_max) of the cell envelope.
 
     Pushed to the -Y end of its bay rather than centred in it, so the deep part of
     the case is the end the hand holds.
     """
     x = board.board_profile().bounding_box().center().X
-    z = -(params.CELL_TOP_GAP + params.CELL_D / 2)
+    z = -(params.CELL_TOP_GAP + params.CELL_T / 2)
     lo, hi = cell_bay()
     length = params.CELL_L + params.CELL_END_FIT
-    y0 = min(lo + params.CRADLE_T + params.CELL_END_MARGIN, hi - params.CRADLE_T - length)
+    y0 = min(lo + params.CELL_END_MARGIN, hi - length)
     return x, z, y0, y0 + length
 
 
 def cell_envelope():
     x, z, y0, y1 = cell_axis()
-    radius = (params.CELL_D + params.CELL_FIT) / 2
-    return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(radius, y1 - y0)
+    return Pos(x, (y0 + y1) / 2, z) * Box(
+        params.CELL_W + params.CELL_FIT, y1 - y0, params.CELL_T
+    )
 
 
-@functools.cache
-def cradle_footprints():
-    """2D (name, x0, y0, x1, y1) of the two saddle ribs, for the clearance check."""
-    x, _, y0, y1 = cell_axis()
-    half = (params.CELL_D + params.CELL_FIT) / 2 + params.TUBE_WALL
-    return [
-        ("cradle -y", x - half, y0 - params.CRADLE_T, x + half, y0),
-        ("cradle +y", x - half, y1, x + half, y1 + params.CRADLE_T),
-    ]
-
-
-def cradle_span():
-    ribs = cradle_footprints()
-    return min(r[2] for r in ribs), max(r[4] for r in ribs)
-
-
-def cradle_z():
-    """(z0, z1) the saddle ribs occupy, for the clearance check."""
-    _, z, _, _ = cell_axis()
-    return CAVITY_BACK - MERGE, z
-
-
-def cradle():
-    """Two saddle ribs. The notch cradles the cell, the face stops it sliding."""
-    base, z = cradle_z()
-    ribs = None
-    for _, x0, y0, x1, y1 in cradle_footprints():
-        rib = Pos((x0 + x1) / 2, (y0 + y1) / 2, (base + z) / 2) * Box(
-            x1 - x0, y1 - y0, z - base
-        )
-        ribs = rib if ribs is None else ribs + rib
-    return ribs - cell_envelope()
+def cell_span():
+    """(y_min, y_max) of the cell envelope."""
+    _, _, y0, y1 = cell_axis()
+    return y0, y1

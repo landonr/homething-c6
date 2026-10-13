@@ -64,6 +64,15 @@ def cell_clearance():
         volume = _volume(cell.intersect(footprint))
         if volume > TOLERANCE:
             hits.append((f"{ref}, assumed {params.UNMODELLED_DEPTH} deep", volume))
+    # Screw heads hang under the board, in the same worst-case size as feature_clashes.
+    h = params.SCREW_HEAD_D / 2
+    for x, y, _ in board.mounting_holes():
+        head = Pos(x, y, -params.SCREW_HEAD_H / 2) * Box(
+            2 * h, 2 * h, params.SCREW_HEAD_H
+        )
+        volume = _volume(cell.intersect(head))
+        if volume > TOLERANCE:
+            hits.append((f"screw head at ({x:.1f},{y:.1f})", volume))
     volume = _volume(case.back_shell().intersect(cell))
     if volume > TOLERANCE:
         hits.append(("the back shell", volume))
@@ -259,6 +268,29 @@ def end_screw(front, back):
                     part="case-front",
                 )
             )
+
+    # The bottom end rounds, on the 45 degree bisector of each corner at the
+    # block's mid Y, clear of the +Y base chamfer and plan rounds. Void at the
+    # corner, material just inside the arc.
+    radius = params.END_SCREW_BLOCK_END_R
+    mid = box.max.Y - params.END_SCREW_BLOCK_D / 2
+    for end, sign, face in (("+X", 1, x1), ("-X", -1, x0)):
+        for what, depth, empty in (
+            ("corner", 0.15 * radius, True),
+            ("inside the arc", 0.414 * radius + 0.8, False),
+        ):
+            probe = Pos(face - sign * depth, mid, box.min.Z + depth) * Box(0.3, 0.3, 0.3)
+            filled = _fill_fraction(front, probe)
+            if (filled > 0.1) if empty else (filled < 0.9):
+                problems.append(
+                    Problem(
+                        f"end screw block's bottom {end} end is {filled:.0%} "
+                        f"material {what}, so END_SCREW_BLOCK_END_R is "
+                        f"{'not cut' if empty else 'cut too deep'}",
+                        box=probe,
+                        part="case-front",
+                    )
+                )
 
     # The ramp, read as void on the built front: a wedge across the block's
     # width, from 0.2 above a 45 degree line off the end of the ledge up to

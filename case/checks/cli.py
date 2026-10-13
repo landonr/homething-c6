@@ -1182,7 +1182,7 @@ def _parts_are_sound(s):
 
 @_check("assembly")
 def _interference(s):
-    hits = interference(s.shells + s.window)
+    hits = interference([s.back, s.front, s.window])
     if not hits:
         print("no interference")
         return True

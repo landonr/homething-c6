@@ -70,7 +70,7 @@ def end_screw_axis():
     Off the board's own centre rather than off a mounting hole, because this
     screw passes through no board hole: it closes the two shells to each other
     behind the board's end, and END_SCREW_X_OFFSET is what puts it in the clear
-    column between R8 and the cradle on one side and J1 on the other.
+    column between R8 and the cell on one side and J1 on the other.
     """
     x = board.board_profile().bounding_box().center().X + params.END_SCREW_X_OFFSET
     return x, params.END_SCREW_Z
@@ -170,6 +170,48 @@ def _chamfer_block_base(block, back, bottom):
     reach = box.size.X / 2 + MERGE
     wedge = Pos(box.center().X, 0, 0) * extrude(section.sketch, amount=reach, both=True)
     return _cut(block, wedge)
+
+
+def _round_block_ends(block, x0, x1, bottom, radius):
+    """Round the block's two bottom end edges, the +X and -X ones along Y.
+
+    Each end loses a corner tool: a box over the corner square of side radius,
+    MERGE past the end face and below the bottom, less a Y-axis cylinder of that
+    radius. A profile cut across the block's whole Y extent, never an edge
+    fillet, for the reason _ramp_block_top is one.
+    """
+    axis_x, _ = end_screw_axis()
+    if radius <= 0:
+        raise ValueError(f"END_SCREW_BLOCK_END_R {radius} is not positive")
+    if bottom + radius > SKIRT_BOTTOM - MERGE:
+        raise ValueError(
+            f"END_SCREW_BLOCK_END_R {radius} reaches up to {bottom + radius:.2f}, "
+            f"not below SKIRT_BOTTOM {SKIRT_BOTTOM}, so it would cut the web"
+        )
+    if x1 - radius < axis_x + params.END_SCREW_BLOCK_BOTTOM:
+        raise ValueError(
+            f"END_SCREW_BLOCK_END_R {radius} cuts the +X end in to "
+            f"{x1 - radius:.2f}, inside the material around the screw axis"
+        )
+    if x0 + radius > axis_x - params.END_SCREW_BLOCK_BOTTOM:
+        raise ValueError(
+            f"END_SCREW_BLOCK_END_R {radius} cuts the -X end in to "
+            f"{x0 + radius:.2f}, inside the material around the screw axis"
+        )
+    box = block.bounding_box()
+    y0, y1 = box.min.Y - MERGE, box.max.Y + MERGE
+    cz = bottom + radius
+    for sign, face in ((1, x1), (-1, x0)):
+        cx = face - sign * radius
+        outer = face + sign * MERGE
+        corner = Pos((cx + outer) / 2, (y0 + y1) / 2, (cz + bottom - MERGE) / 2) * Box(
+            abs(outer - cx), y1 - y0, cz - (bottom - MERGE)
+        )
+        arc = Pos(cx, (y0 + y1) / 2, cz) * Rot(90, 0, 0) * Cylinder(
+            radius=radius, height=y1 - y0 + 2 * MERGE
+        )
+        block = _cut(block, _cut(corner, arc))
+    return block
 
 
 def end_screw_fillet_start():
@@ -296,6 +338,11 @@ def end_screw_block():
     Its bottom +Y arris is cut back by END_SCREW_BLOCK_BASE_CHAMFER, which is
     the corner the fold leads with.
 
+    Its two bottom end edges, +X and -X, carry END_SCREW_BLOCK_END_R as a
+    profile cut across its Y extent. That takes the square corners off a block
+    that only needs material around the thread, below the web and clear of the
+    material around the axis. See _round_block_ends.
+
     Its top is one 45 degree ramp off the skirt, cut after the web joins so the
     web is ramped too. The ramp is the underside the face down print builds
     without support, and the lead-in a board going in at a tilt slides down.
@@ -327,6 +374,7 @@ def end_screw_block():
         * Box(width, square, SUPPORT_TOP - bottom),
     )
     block = _chamfer_block_base(block, back, bottom)
+    block = _round_block_ends(block, x0, x1, bottom, params.END_SCREW_BLOCK_END_R)
     cavity = edge - params.BOARD_FIT
     web_y0 = cavity - MERGE
     web_y1 = face + MERGE

@@ -47,10 +47,9 @@ import board
 import cache
 import params
 
-from . import caps, cell, hardware, ir, keypad, mic, shells, support, usb, wheel_ring
-from .shape import _cut, _hole, _slab
+from . import caps, cell, front_ledge, hardware, ir, keypad, mic, shells, support, usb, wheel_ring
+from .shape import _cut, _slab
 from .stack import (
-    BOARD_TOP,
     CAVITY_FRONT,
     COUNTERBORE_TOP,
     LEGACY_SWITCH_TOP,
@@ -63,6 +62,7 @@ from .stack import (
 MODULES = {
     "caps": caps,
     "cell": cell,
+    "front_ledge": front_ledge,
     "hardware": hardware,
     "ir": ir,
     "keypad": keypad,
@@ -154,13 +154,13 @@ def _support_sides(runs):
     return sorted(sides.items())
 
 
-def _support_entries(runs, op, src="support.support_runs", reads=None):
+def _support_entries(runs, op, src="support.support_runs", reads=None, prefix="support_runs"):
     """The board support runs, one entry each. Per instance because one box
     around all of them would cover the whole cavity."""
     out = []
     for side, group in _support_sides(runs):
         for index, run in enumerate(group, 1):
-            out.append(_entry(f"support_runs.{side}.{index}", src, op, run, reads))
+            out.append(_entry(f"{prefix}.{side}.{index}", src, op, run, reads))
     return out
 
 
@@ -170,14 +170,18 @@ def _obstacle_ref(name):
     A bottom courtyard is already a bare refdes. The other two labels are
     sentences, and an id has to stay one token.
     """
-    if name.startswith("mount "):
-        return name.split(" ")[-1]
     if name.startswith("through-board solid "):
         return f"solid.{name.split(' ')[-1]}"
+    if name.startswith("part solid "):
+        return f"solid.{name.split(' ')[-1]}"
+    if name == "end screw block":
+        return "end_screw_block"
+    if name.startswith("V2 "):
+        return f"v2.{name.split(' ')[-1]}"
     return name
 
 
-def _support_gaps(runs, obstacles):
+def _support_gaps(runs, obstacles, prefix="support_gap", src="support.support_obstacles"):
     """The breaks between the runs, named for the obstacle that opens each.
 
     A run's box answers a click on the ledge, but the wall between two runs is
@@ -219,8 +223,8 @@ def _support_gaps(runs, obstacles):
                 )
             out.append(
                 _entry(
-                    f"support_gap.{side}.{widest[1]}",
-                    "support.support_obstacles",
+                    f"{prefix}.{side}.{widest[1]}",
+                    src,
                     "clear",
                     gap,
                 )
@@ -228,7 +232,7 @@ def _support_gaps(runs, obstacles):
     return out
 
 
-def _front(runs, obstacles, fdm=False):
+def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
     """The front shell, in the order front_shell() builds and cuts it.
 
     `fdm` swaps the two entries the fronts differ by: the outline groove the
@@ -236,7 +240,6 @@ def _front(runs, obstacles, fdm=False):
     the wheel opening, which on that build carries its own clearance and a
     chamfered mouth because it meets a flat face rather than a dish.
     """
-    refs = board.mounting_hole_refs()
     placements = board.components()
     out = [
         _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
@@ -253,19 +256,25 @@ def _front(runs, obstacles, fdm=False):
             for index, solid in enumerate(shells.skirt_lead_in_cuts().solids(), 1)
         ],
     ]
-    # The bosses and their pilots have no builder of their own: front_shell()
-    # holes them straight out of mount_points(), so the parameters are named
-    # here rather than read out of that whole function's source.
-    for x, y in hardware.mount_points():
-        out.append(
-            _entry(
-                f"boss.{refs[(x, y)]}",
-                "shells.front_shell",
-                "add",
-                _hole(x, y, params.BOSS_OD, BOARD_TOP, SHELL_FRONT),
-                ["BOSS_OD"],
-            )
-        )
+    out += _support_entries(
+        ledges,
+        "add",
+        "front_ledge.front_ledge_runs",
+        sorted(set(
+            _reads("front_ledge.front_ledge_runs")
+            + _reads("front_ledge.front_ledge_fragments")
+            + _reads("front_ledge.front_ledge_window")
+            + _reads("front_ledge.front_ledge_bottom")
+            + _reads("support._ledge_blank")
+        )),
+        prefix="front_ledge",
+    )
+    out += _support_gaps(
+        ledges,
+        ledge_obstacles,
+        "front_ledge_gap",
+        "front_ledge.front_ledge_obstacles",
+    )
     # The side tie reaches to side_skirt_inner_x() and the block spans
     # end_screw_block_span(), so those helpers' parameters move this box too.
     out.append(
@@ -297,22 +306,6 @@ def _front(runs, obstacles, fdm=False):
         )),
     )
     out += _support_gaps(runs, obstacles)
-    for x, y in hardware.mount_points():
-        out.append(
-            _entry(
-                f"pilot.{refs[(x, y)]}",
-                "shells.front_shell",
-                "cut",
-                _hole(
-                    x,
-                    y,
-                    params.BOSS_PILOT_D,
-                    BOARD_TOP - 0.1,
-                    BOARD_TOP + params.BOSS_PILOT_DEPTH,
-                ),
-                ["BOSS_PILOT_D", "BOSS_PILOT_DEPTH"],
-            )
-        )
     out.append(
         _entry(
             "end_screw_pilot",
@@ -399,12 +392,6 @@ def _back(runs, obstacles):
     """The back shell, in the order back_shell() builds and cuts it."""
     out = [
         _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
-        _entry(
-            "legacy_retention.post",
-            "hardware.legacy_retention_post",
-            "add",
-            hardware.legacy_retention_post(),
-        ),
     ]
     out += _support_entries(runs, "add")
     out += _support_gaps(runs, obstacles)
@@ -445,12 +432,6 @@ def _back(runs, obstacles):
             "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
         ),
         _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
-        _entry(
-            "legacy_retention.pilot",
-            "hardware.legacy_retention_pilot",
-            "cut",
-            hardware.legacy_retention_pilot(),
-        ),
     ]
     return out
 
@@ -465,9 +446,7 @@ def _pad(fdm=False, skirt=None, grooves=True):
 
 def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTENSION, fdm=False, skirt=None, grooves=True):
     """One pad lobe: its web, its stems and plungers, and its cuts."""
-    refs = board.mounting_hole_refs()
     placements = board.components()
-    mounts = hardware.mount_points()
     v2_reads = sorted(
         {n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"}
         | {"LEGACY_NIB_EXTENSION"}
@@ -497,23 +476,6 @@ def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTE
                 "add",
                 keypad.plunger(x, y, extension=plunger_extension),
                 None if plunger_extension == params.PLUNGER_SWITCH_EXTENSION else v2_reads,
-            )
-        )
-    # A clearance cut can be an open U rather than a circle, so its box is
-    # off centre from the hole it clears. The three holes are far enough
-    # apart that the nearest one is still the right name.
-    for cut in keypad._boss_clearances(x0, y0, x1, y1):
-        centre = cut.bounding_box().center()
-        near = min(
-            mounts,
-            key=lambda p: (p[0] - centre.X) ** 2 + (p[1] - centre.Y) ** 2,
-        )
-        out.append(
-            _entry(
-                f"boss_clearance.{refs[near]}",
-                "keypad._boss_clearances",
-                "cut",
-                cut,
             )
         )
     if name == "grid" and fdm and grooves:
@@ -595,8 +557,8 @@ def _v2_top(skirt=False, fdm=True):
                 "keypad.legacy_skirt_breaks",
                 "cut",
                 box,
-                ["PAD_SKIRT_CLEARANCE", "PLUNGER_SWITCH_EXTENSION", "SCREW_HEAD_D",
-                 "SCREW_HEAD_H", "SUPPORT_GAP", "SWITCH_HEIGHT"],
+                ["PAD_SKIRT_CLEARANCE", "PLUNGER_SWITCH_EXTENSION", "SUPPORT_GAP",
+                 "SWITCH_HEIGHT"],
             )
             for name, box in keypad.legacy_skirt_breaks()
         ]
@@ -667,9 +629,15 @@ def features():
     back_runs = support.support_runs()
     front_runs = support.front_support_cuts()
     obstacles = support.support_obstacles()
+    ledges = front_ledge.front_ledge_runs()
+    ledge_obstacles = front_ledge.front_ledge_obstacles()
     out = {
-        "c6remote-case-front.stl": _front(front_runs, obstacles),
-        "c6remote-case-front-fdm.stl": _front(front_runs, obstacles, fdm=True),
+        "c6remote-case-front.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles
+        ),
+        "c6remote-case-front-fdm.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles, fdm=True
+        ),
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-case-pad-fdm.stl": _fdm_pad(),

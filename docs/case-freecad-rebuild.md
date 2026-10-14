@@ -56,9 +56,9 @@ Convenience primitives Stage B expands into sketch geometry: `circle`, `rect`, `
 | 5 | `mic_duct()`, `mic.py:152` | Pad (circle), BOARD_TOP to SHELL_FRONT |
 | 6 | `deep_skirt()`, `shells.py:160` (ring intersect box) | Stage A clips the annulus by the box in 2D at export time, single Pad; fallback tool_body (separate Body plus PartDesign Boolean) if the clip is not reducible |
 | 7 | 2 `rails()`, `shells.py:94` (ruled 3-section loft) | Additive Loft for the lead-in plus Pad for the straight run (sections 2 and 3 identical) |
-| 8 | 3 bosses, `shells.py:297` | one sketch, 3 circles, Pad BOARD_TOP to SHELL_FRONT |
+| 8 | 2 `front_ledges()`, `front_ledge.py` | Additive Loft per run (flat underside at BOARD_TOP, sloped face toward the ceiling), clipped to the ceiling |
 | 9 | `usb_pocket()`, `usb.py:49` | Pocket (rect) |
-| 10 | 3 pilots, `shells.py:332` | one sketch, Pocket (plain pocket, not Hole feature: multi-position, blind both ends) |
+| 10 | `end_screw_pilot()`, `hardware.py` | Y-normal datum plane, Pocket (plain pocket, not Hole feature: blind) |
 | 11 | 2 `catch_windows()`, `shells.py:168` | Sketch on Y-normal datum plane, Pocket |
 | 12 | `wheel_opening()`, `wheel_ring.py:205` | Pocket circle CAVITY_FRONT - 1 to SHELL_FRONT + 1; exporter asserts the opening clip is idle at the current radius, tool_body fallback if not |
 | 13 | `led_ring_channel()`, `wheel_ring.py:161` (revolve intersect live clip) | tool_body: separate Body holding a Revolution (trapezoid about the wheel axis) intersected with a padded clip region, then PartDesign Boolean cut into the main Body |

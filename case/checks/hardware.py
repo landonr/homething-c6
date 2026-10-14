@@ -1,7 +1,8 @@
-"""Cell clearance: the cell envelope against every modelled solid, every screw
-boss, and both shells.
+"""Cell clearance: the cell envelope against every modelled solid and both
+shells.
 
-Feature clashes: bosses, ribs and the cell against every part's courtyard. The
+Feature clashes: the mic duct, the front ledges and the end screw block against
+every part's courtyard. The
 only pass that sees the eleven switches, D2-D5 and J1, none of which reach the
 STEP assembly. 2D, so it answers where a part sits, never how tall it is.
 
@@ -64,15 +65,6 @@ def cell_clearance():
         volume = _volume(cell.intersect(footprint))
         if volume > TOLERANCE:
             hits.append((f"{ref}, assumed {params.UNMODELLED_DEPTH} deep", volume))
-    # Screw heads hang under the board, in the same worst-case size as feature_clashes.
-    h = params.SCREW_HEAD_D / 2
-    for x, y, _ in board.mounting_holes():
-        head = Pos(x, y, -params.SCREW_HEAD_H / 2) * Box(
-            2 * h, 2 * h, params.SCREW_HEAD_H
-        )
-        volume = _volume(cell.intersect(head))
-        if volume > TOLERANCE:
-            hits.append((f"screw head at ({x:.1f},{y:.1f})", volume))
     volume = _volume(case.back_shell().intersect(cell))
     if volume > TOLERANCE:
         hits.append(("the back shell", volume))
@@ -106,62 +98,18 @@ def feature_clashes():
     """
     court = board.courtyards()
     features = []
-    for x, y, _ in board.mounting_holes():
-        r = params.BOSS_OD / 2
-        # The boss hangs off the ceiling above the board, the screw head sits
-        # under it. Comparing either against the wrong side of the board means
-        # comparing it against nothing it can reach. SHELL_FRONT, not
-        # CAVITY_FRONT: the boss now carries its own material past the
-        # keypad region's own (thinner) ceiling, all the way to the one
-        # flat face, so its real height would otherwise be understated here.
-        features.append(
-            ("boss", x - r, y - r, x + r, y + r, case.BOARD_TOP, case.SHELL_FRONT)
-        )
-        root_r = r + params.STANDOFF_CHAMFER
+    # Each front ledge run on its built box. The runs are cut round every
+    # courtyard with SUPPORT_CLEARANCE, so a box that overlaps one means a break
+    # is missing, and the fillet only ever pulls the box in.
+    for index, run in enumerate(case.front_ledge_runs(), 1):
+        box = run.bounding_box()
         features.append(
             (
-                "boss root",
-                x - root_r,
-                y - root_r,
-                x + root_r,
-                y + root_r,
-                case.CAVITY_FRONT - params.STANDOFF_CHAMFER,
-                case.CAVITY_FRONT,
+                f"front ledge {index}",
+                box.min.X, box.min.Y, box.max.X, box.max.Y,
+                box.min.Z, box.max.Z,
             )
         )
-        h = params.SCREW_HEAD_D / 2
-        features.append(
-            ("screw head", x - h, y - h, x + h, y + h, -params.SCREW_HEAD_H, 0.0)
-        )
-    # The V2 retention post, on both its own diameter and its root chamfer. This
-    # is the pass that sees the eleven
-    # switches and D2-D5, so it is what says the post clears a part with no model.
-    lx, ly = board.legacy_retention_point()
-    floor = case.legacy_retention_floors()[1]
-    r = params.LEGACY_RETENTION_OD / 2
-    features.append(
-        (
-            "legacy post",
-            lx - r,
-            ly - r,
-            lx + r,
-            ly + r,
-            floor,
-            case.SUPPORT_TOP,
-        )
-    )
-    root_r = r + params.STANDOFF_CHAMFER
-    features.append(
-        (
-            "legacy post root",
-            lx - root_r,
-            ly - root_r,
-            lx + root_r,
-            ly + root_r,
-            floor,
-            floor + params.STANDOFF_CHAMFER,
-        )
-    )
 
     mx, my = case.mic_port()
     r = params.MIC_DUCT_OD / 2

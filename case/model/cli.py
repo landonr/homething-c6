@@ -27,13 +27,11 @@ from .caps import (
 )
 from .cell import cell_axis, cell_bay
 from .features import write_features
+from .front_ledge import front_ledge_runs
 from .hardware import (
     end_screw_axis,
     end_screw_block_span,
     end_screw_length,
-    legacy_retention_floors,
-    legacy_screw_length,
-    mount_points,
 )
 from .ir import (
     emitter_reach,
@@ -104,7 +102,6 @@ from .stack import (
     SKIRT_BOTTOM,
     SKIRT_OUT,
     STEM_TOP,
-    SUPPORT_TOP,
     WHEEL_LIP_OD,
     WHEEL_LIP_Z0,
     WHEEL_LIP_Z1,
@@ -223,8 +220,7 @@ def main():
         f"{params.KEYPAD_PLUNGER_STUB:.2f} of plunger stub), USB region a local "
         f"pocket to {CAVITY_FRONT_USB:.2f} over {usb_box.size.X:.1f}x"
         f"{usb_box.size.Y:.1f} of connector, leaving "
-        f"{SHELL_FRONT - CAVITY_FRONT_USB:.2f} of ceiling above it; bosses carry "
-        f"their own material the rest of the way to the face regardless"
+        f"{SHELL_FRONT - CAVITY_FRONT_USB:.2f} of ceiling above it"
     )
     print(
         f"face flat at {SHELL_FRONT:.2f}; wheel top measured at {WHEEL_TOP:.3f}, "
@@ -305,9 +301,6 @@ def main():
         f"{params.KEYPAD_SQUIRCLE_N:.1f} of the recesses they sit in, on a "
         f"{key_pitch():.2f} grid with a {params.KEY_GAP:.1f} gap"
     )
-    for size, refs in sorted(sizes.items()):
-        if size < key_size() - 0.01:
-            print(f"  {', '.join(refs)} cut back from {key_size():.2f} by a screw boss")
     proud = sorted((cap_proud(ref), ref) for ref in cap_refs())
     lands = sorted((counterbore_land(ref), ref) for ref in cap_refs())
     print(
@@ -464,34 +457,24 @@ def main():
     )
     for name, x0, y0, x1, y1 in pad_lobes():
         print(f"  {name:<6} {x1 - x0:.2f} x {y1 - y0:.2f}")
-    # Both derived from the same stack rather than quoted: a board screw crosses
-    # the board and takes the pilot, and the end screw crosses the wall left
-    # under its head, the gap the block stands off that wall by, and its own
-    # shorter engagement. The end screw is one size shorter than the board screws,
-    # and END_SCREW_PILOT_DEPTH sets its length.
-    short_screw = params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
     end_x, end_z = end_screw_axis()
     block_x0, block_x1 = end_screw_block_span()
     print(
-        f"screws: {len(mount_points())}x M2 x {short_screw:.0f} into the front "
-        f"plate through the board's own {board.mounting_holes()[0][2]:.1f} holes, plus "
-        f"one M2 x {end_screw_length():.0f} through the -Y end wall at x "
-        f"{end_x:.2f}, z {end_z:.2f}, into a block behind the front skirt"
+        f"screw: one M2 x {end_screw_length():.0f} through the -Y end wall at x "
+        f"{end_x:.2f}, z {end_z:.2f}, into a block behind the front skirt, "
+        f"{params.END_SCREW_PILOT_DEPTH:.1f} of self-tapped engagement in a "
+        f"{params.END_SCREW_PILOT_D:.2f} pilot. The board has no screws"
     )
-    print(
-        f"  {params.BOSS_PILOT_DEPTH:.1f} of self-tapped engagement in a "
-        f"{params.BOSS_PILOT_D:.2f} pilot, {params.BOSS_OD:.1f} boss; heads "
-        f"{params.SCREW_HEAD_D:.1f} across sit on the board's underside"
-    )
-    legacy_point = board.legacy_retention_point()
-    _, legacy_cavity = legacy_retention_floors()
-    print(
-        f"  optional: one M2 x {legacy_screw_length():.0f} at {legacy_point} into a "
-        f"{params.LEGACY_RETENTION_OD:.1f} post standing {SUPPORT_TOP - legacy_cavity:.2f} off "
-        f"the back floor, for a V2 board's own upper-right hole. Retention only: "
-        f"V2's IR parts and upper keys still land wrong, and the V2 board fastens "
-        f"to the back before the front closes, the reverse of V3"
-    )
+    sides = {"-x": [], "+x": []}
+    middle = board.board_profile().bounding_box().center().X
+    for run in front_ledge_runs():
+        box = run.bounding_box()
+        sides["-x" if box.center().X < middle else "+x"].append(box)
+    for side, boxes in sorted(sides.items()):
+        spans = ", ".join(
+            f"y {b.min.Y:.2f} .. {b.max.Y:.2f}" for b in sorted(boxes, key=lambda b: b.min.Y)
+        )
+        print(f"front ledges {side}: {len(boxes)} run(s), {spans or 'none'}")
     print(
         f"IR end: plain skirt with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f} "
         f"at z {CATCH_Z0:.2f} to {CATCH_Z0 + params.CATCH_H:.2f}, detents "

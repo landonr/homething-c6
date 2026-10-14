@@ -162,7 +162,6 @@ def grid_outer_edge(pad):
     mx = keypad_model._grid_axes("x")[1]
     my = keypad_model._grid_axes("y")[1]
     z_w = case.PAD_WEB_TOP - c - (params.PAD_WEB_T - c) / 2
-    boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
     sides = (
         ("-Y", (mx, y0), (0, -1)),
         ("+Y", (mx, y1), (0, 1)),
@@ -171,10 +170,6 @@ def grid_outer_edge(pad):
     )
     problems = []
     for side, (ex, ey), (dx, dy) in sides:
-        if any(math.hypot(ex - bx, ey - by) < boss_r + c for bx, by in case.mount_points()):
-            problems.append(f"the {side} outer edge site is within a boss clearance, so it cannot be read")
-            continue
-
         def inset(z):
             start = (ex + 2 * dx, ey + 2 * dy, z)
             end = (ex - 2 * dx, ey - 2 * dy, z)
@@ -211,7 +206,6 @@ def plain_web_problems(pad, label):
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
     columns = keypad_model._grid_axes("x")
     rows = keypad_model._grid_axes("y")
-    boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
     z0, z1 = case.PAD_WEB_BOTTOM - 0.5, case.PAD_WEB_TOP + 0.5
     problems = []
     for index, (orientation, centre, _, _) in enumerate(keypad_model._pad_groove_specs()):
@@ -220,8 +214,6 @@ def plain_web_problems(pad, label):
         along = ((axes[0] + axes[1]) / 2, axes[1], (axes[1] + axes[2]) / 2)
         for a in along:
             x, y = (centre, a) if orientation == "vertical" else (a, centre)
-            if any(math.hypot(x - bx, y - by) < boss_r for bx, by in case.mount_points()):
-                continue
             runs = _ray_runs(pad, (x, y, z0), (x, y, z1))
             if len(runs) != 1:
                 problems.append(Problem(
@@ -246,8 +238,6 @@ def plain_web_problems(pad, label):
         ("+X", (x1, my), (1, 0)),
     )
     for side, (ex, ey), (dx, dy) in sides:
-        if any(math.hypot(ex - bx, ey - by) < boss_r for bx, by in case.mount_points()):
-            continue
         edges = []
         for z in ((case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2, case.PAD_WEB_TOP - 0.05):
             runs = _ray_runs(pad, (ex + 2 * dx, ey + 2 * dy, z), (ex - 2 * dx, ey - 2 * dy, z))
@@ -265,7 +255,7 @@ def plain_web_problems(pad, label):
 
 
 def groove_clearances(pad):
-    """Keep FDM groove cuts out of every stem, cap seat, and boss, and open their ends."""
+    """Keep FDM groove cuts out of every stem and cap seat, and open their ends."""
     problems = []
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
     groove_width = params.FDM_PAD_GROOVE_W
@@ -287,13 +277,6 @@ def groove_clearances(pad):
             needed = width + max(params.STEM_W / 2, seat / 2)
             if distance < needed - GROOVE_TOLERANCE:
                 problems.append(f"the {orientation} groove reaches {ref}'s stem or keytop base")
-        for x, y in case.mount_points():
-            along = min(max((y if orientation == "vertical" else x), run0), run1)
-            across = abs((x if orientation == "vertical" else y) - centre)
-            distance = math.hypot(across, (y if orientation == "vertical" else x) - along)
-            boss_r = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
-            if distance < width + boss_r - GROOVE_TOLERANCE:
-                problems.append(f"the {orientation} groove reaches a boss clearance")
     # Read unchanged-lobe material above and below its web. A grid-only cut must
     # not create a new void in SW1/SW2's lobe.
     for ref in case.island_refs("second"):
@@ -695,7 +678,7 @@ def pad_clears_wheel(pad):
 
     Arithmetic first, on the lobe rectangles, and then on the built pad's own
     solids, because the two can disagree: a lobe is clipped against the cavity
-    and cut for a screw boss after its rectangle is drawn, and a stem is raised
+    and a stem is raised
     on it after that. What the band protects is the lip's rotating clearance
     and the LEDs firing up past the pad, both of which the bore used to
     guarantee by construction and neither of which anything cuts for now.

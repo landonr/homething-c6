@@ -34,7 +34,6 @@ import board
 import cache
 import params
 
-from .hardware import legacy_screw_head, mount_points
 from .legends import legend_solids
 from .mic import mic_duct_or, mic_port
 from .shape import (
@@ -83,45 +82,11 @@ def key_pitch():
     )
 
 
-@functools.cache
 def key_size(ref=None):
-    """Side of the square key footprint at one switch, or the grid's own size
-    for None.
-
-    The grid pitch caps it, and a screw boss can cut it further: the collar
-    has to stay outside the key hole, or the hole swallows the boss and
-    leaves it hanging off the ceiling by nothing. All eleven take the full
-    size now: SW1 and SW2 used to sit close enough to a pair of mounting
-    holes to bind against this, back when there were four of them, but the
-    board has moved to three and neither is close enough to shrink these
-    two below the grid pitch any more. The clip stays, mechanical, in case
-    a future layout brings a boss back into range.
-    """
-    limit = key_pitch() - params.KEY_GAP
-    if ref is None:
-        return limit
-    x, y, _, _ = board.components()[ref]
-    # Two circles, not one. The hole in the ceiling has to leave the boss its
-    # collar, and the keytop has to stay out of the wider hole the pad needs where
-    # the boss passes through it. The pad's is the larger and usually binds.
-    collar = params.BOSS_OD / 2 + params.BOSS_COLLAR
-    through = collar + params.PAD_BOSS_CLEARANCE
-
-    def clears(size):
-        for half, r in ((size / 2 + params.KEY_CLEARANCE, collar), (size / 2, through)):
-            for hx, hy in mount_points():
-                gap = math.hypot(max(abs(x - hx) - half, 0), max(abs(y - hy) - half, 0))
-                if gap < r:
-                    return False
-        return True
-
-    if clears(limit):
-        return limit
-    lo, hi = 0.0, limit
-    for _ in range(40):
-        mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if clears(mid) else (lo, mid)
-    return lo
+    """Side of the square key footprint: the grid pitch less KEY_GAP. Every
+    switch takes the same size, so `ref` is accepted for the callers that name
+    a switch and does not change the answer."""
+    return key_pitch() - params.KEY_GAP
 
 
 def island_refs(name):
@@ -1066,17 +1031,10 @@ def _pad_limit():
 
 
 def pad_bridge_top():
-    """Place the lower bridge below each boss clearance between the buttons."""
+    """Y of the lower bridge's upper edge between the buttons: the lowest switch
+    row of the second island."""
     parts = board.components()
-    refs = sorted(island_refs("second"), key=lambda ref: parts[ref][0])
-    left = parts[refs[0]][0] + key_size(refs[0]) / 2 + params.PAD_MARGIN
-    right = parts[refs[-1]][0] - key_size(refs[-1]) / 2 - params.PAD_MARGIN
-    top = min(parts[ref][1] for ref in refs)
-    radius = params.BOSS_OD / 2 + params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE
-    for x, y in mount_points():
-        if left < x < right:
-            top = min(top, y - radius - params.PAD_BOSS_CLEARANCE)
-    return top
+    return min(parts[ref][1] for ref in island_refs("second"))
 
 
 def pad_lobe_face(name):
@@ -1252,47 +1210,6 @@ def fdm_keycap(ref, legend=True):
     return _cut(body, *marks)
 
 
-def _boss_clearances(x0, y0, x1, y1):
-    """The holes a lobe needs where a front-plate boss passes through it.
-
-    Off the boss's collar, not the boss, so a stem clears the ceiling the collar
-    leaves behind as well as the boss itself. A boss whose clearance circle
-    crosses the lobe's edge would leave a crescent bite ending in two cusps
-    there, so that cut gains a slot out through the edge and becomes an open U
-    instead: same rounded end, straight sides, no points. All four edges are
-    tested now that a lobe is a tight rectangle rather than the full cavity
-    width.
-    """
-    clearance_d = params.BOSS_OD + 2 * (params.BOSS_COLLAR + params.PAD_BOSS_CLEARANCE)
-    r = clearance_d / 2
-    bottom, top = PAD_SKIRT_BOTTOM - 1, STEM_TOP + 1
-    out = []
-    for x, y in mount_points():
-        if x < x0 - r or x > x1 + r or y < y0 - r or y > y1 + r:
-            continue
-        cut = _hole(x, y, clearance_d, bottom, top)
-        for edge, axis, out_dir in (
-            (x0, "x", -1),
-            (x1, "x", 1),
-            (y0, "y", -1),
-            (y1, "y", 1),
-        ):
-            here = x if axis == "x" else y
-            if abs(here - edge) >= r:
-                continue
-            reach = abs(here - edge) + 1
-            dx = out_dir * reach / 2 if axis == "x" else 0
-            dy = out_dir * reach / 2 if axis == "y" else 0
-            size = (reach, clearance_d) if axis == "x" else (clearance_d, reach)
-            cut = _fuse(
-                cut,
-                Pos(x + dx, y + dy, (bottom + top) / 2)
-                * Box(size[0], size[1], top - bottom),
-            )
-        out.append(cut)
-    return out
-
-
 def _mic_clearance():
     """Open-edge clearance around the mic duct's widest ceiling chamfer."""
     x, y = mic_port()
@@ -1401,15 +1318,11 @@ def pad_skirt(name):
     return _cut(_skirt_ring(name), *(box for _, box in pad_skirt_breaks(name)))
 
 
-LEGACY_SKIRT_NAME = "V2_RETENTION_HOLE"
-"""Name of the V2 skirt break over the retention screw head."""
-
-
 @functools.cache
 def legacy_skirt_obstacles():
     """[(ref, solid)] what the V2 top pad's skirt must clear, in the case frame
     with the V2 board in place: the V3 body of each V2 top-side part moved to
-    its V2 placement and dropped SUPPORT_GAP, and the V2 screw head.
+    its V2 placement and dropped SUPPORT_GAP.
 
     Every V2 part on the top side that has a V3 body is moved. The break rule
     then keeps only those that reach the second lobe's skirt.
@@ -1421,7 +1334,6 @@ def legacy_skirt_obstacles():
             continue
         for solid in board.legacy_part_solids(ref):
             out.append((ref, Pos(0, 0, -params.SUPPORT_GAP) * solid))
-    out.append((LEGACY_SKIRT_NAME, legacy_screw_head()))
     return out
 
 
@@ -1503,7 +1415,7 @@ def _pad_lobe(
         plunger(x, y, LEGACY_SWITCH_TOP, params.LEGACY_NIB_EXTENSION)
         for x, y in nibs
     )
-    cuts = _boss_clearances(x0, y0, x1, y1)
+    cuts = []
     if name == "second":
         cuts.append(_mic_clearance())
     elif fdm and grooves:
@@ -1516,11 +1428,11 @@ def legacy_top_pad(skirt=False, fdm=True, legend=True):
     """Build the pad's SW1/SW2 lobe for a V2 board only.
 
     It keeps the V3 plungers and adds one nib at each V2 switch, which sits
-    further -Y and lower, on the retention post. Nibs and kept plungers both
+    further -Y and lower, on the back ledges. Nibs and kept plungers both
     extend LEGACY_NIB_EXTENSION below their own switch top, so the plungers
     stay SUPPORT_GAP above the nibs.
     `skirt` adds the one-piece TPU pad's skirt, ending level with the V3 pad's
-    skirt (PAD_SKIRT_BOTTOM) and broken over the V2 parts and the V2 screw head. With `fdm` false the lobe is the
+    skirt (PAD_SKIRT_BOTTOM) and broken over the V2 parts. With `fdm` false the lobe is the
     moulded pad's: plain web, stems for the separate caps, no fused keytops.
     `legend` False leaves the fused keytops blank.
     """

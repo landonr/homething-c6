@@ -22,17 +22,17 @@ SHELL_BACK = CAVITY_BACK - params.FLOOR
 SWITCH_TOP = BOARD_TOP + params.SWITCH_HEIGHT
 
 SUPPORT_TOP = -params.SUPPORT_GAP
-"""Top of anything the back shell stands under the board: the support
-ledges and the V2 retention post alike. Here rather than in support.py so
-hardware.py can build to the same plane without importing the module that
-imports it."""
+"""Top of the back shell's support ledges, the plane under the board. Here
+rather than in support.py so hardware.py can build to the same plane without
+importing the module that imports it."""
 
 LEGACY_BOARD_TOP = SUPPORT_TOP + params.BOARD_THICKNESS
-"""Top face of a V2 board. V2 clamps on the retention post at SUPPORT_TOP, not
-on the front bosses, so it sits SUPPORT_GAP lower than V3's BOARD_TOP."""
+"""Top face of a V2 board. A V2 board rests on the back ledges at SUPPORT_TOP,
+so it sits SUPPORT_GAP lower than V3's BOARD_TOP, where the front ledges bear
+on a V3 board."""
 
 LEGACY_SWITCH_TOP = LEGACY_BOARD_TOP + params.SWITCH_HEIGHT
-"""A V2 switch's actuator top, the SWITCH_TOP of a board on the retention post.
+"""A V2 switch's actuator top, the SWITCH_TOP of a board resting on the back ledges.
 The V2 top pad's nibs are built down to this."""
 
 KEYPAD_KEEPOUT = params.SWITCH_HEIGHT + params.KEYPAD_PLUNGER_STUB

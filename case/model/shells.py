@@ -33,19 +33,15 @@ from .hardware import (
     end_screw_cuts,
     end_screw_pilot,
     end_screw_wall_chamfer,
-    legacy_retention_pilot,
-    legacy_retention_post,
-    mount_points,
 )
+from .front_ledge import front_ledge_runs
 from .support import front_support_cuts, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import face_depth_at, keypad_outline_groove, keypad_recess
 from .mic import mic_bore, mic_duct
 from .shape import (
     _cut,
-    _chamfered_post,
     _fuse,
-    _hole,
     _isect,
     _offset_face,
     _profiles,
@@ -53,7 +49,6 @@ from .shape import (
     _slab,
 )
 from .stack import (
-    BOARD_TOP,
     CAVITY_FRONT,
     COUNTERBORE_TOP,
     front_face,
@@ -553,7 +548,6 @@ def back_shell():
     # rebate stay back-only; D1 and USB retain their shared end-wall cuts.
     shell = _fuse(
         shell,
-        legacy_retention_post(),
         *support_runs(),
         *catch_detents(),
         *side_catch_detents(),
@@ -565,7 +559,6 @@ def back_shell():
         ir_window_rebate(),
         *end_screw_cuts(),
         end_screw_wall_chamfer(),
-        legacy_retention_pilot(),
     )
 
 
@@ -691,7 +684,7 @@ def front_shell(fdm=False):
     """The front shell. `fdm` swaps the one cut the face is finished with.
 
     Everything under the face is identical between the two, and deliberately
-    so: the same bosses, ceiling, holes, counterbores, ducts and skirt, so a
+    so: the same ledges, ceiling, holes, counterbores, ducts and skirt, so a
     cap, a pad and a back shell fit either one. Two things differ, both on the
     outer plane. The recessed front takes keypad_recess(), the dish the keys sit
     in; the FDM front takes keypad_outline_groove(), that same recess's plan
@@ -725,32 +718,12 @@ def front_shell(fdm=False):
     # the whole cavity, and mic_bore() drills the funnel through it as one solid,
     # opening in the keypad recess's own curved floor rather than SHELL_FRONT.
     # The duct goes in solid: see mic_duct() for why it cannot be the tube it was.
-    # Bosses reach the face, not CAVITY_FRONT: the keypad region's own
-    # ceiling is too thin now to hold BOSS_PILOT_DEPTH under it, so each
-    # boss carries its own material the rest of the way to the flat face,
-    # the "local pad" the USB pocket has on the void side instead. No
-    # overshoot past the face: the fuse already overlaps real volume
-    # over the whole keypad ceiling's own depth, and going further would
-    # poke the boss through the one outer face plane.
-    bosses = [
-        _chamfered_post(
-            x,
-            y,
-            params.BOSS_OD,
-            BOARD_TOP,
-            face,
-            params.STANDOFF_CHAMFER,
-            "upper",
-            CAVITY_FRONT,
-        )
-        for x, y in mount_points()
-    ]
     shell = _fuse(
         shell,
         mic_duct(face),
         skirt_stiffener(),
         end_screw_block(),
-        *bosses,
+        *front_ledge_runs(),
     )
     # No local pocket for D1 any more. It sat on the front of the board once,
     # its dome standing taller than the keypad region's own ceiling; on the
@@ -768,10 +741,6 @@ def front_shell(fdm=False):
     )
 
     parts = board.components()
-    # No collar cut around the bosses. key_size() sizes each key to clear them, so
-    # subtracting the collar from the hole as well only shaves a sliver off the two
-    # keys that sit at the limit, and it shows as ceiling overhanging a cap.
-    #
     # Every key takes two holes now: the counterbore its cap's flange rides in,
     # and the narrower hole through the face land above that. The face hole runs
     # the full depth rather than stopping at the shoulder, which is harmless
@@ -783,13 +752,8 @@ def front_shell(fdm=False):
             _key_prism(x, y, cap_counterbore(ref), CAVITY_FRONT - 1, COUNTERBORE_TOP)
         )
         keys.append(_cap_face_hole_cut(ref, fdm))
-    pilots = [
-        _hole(x, y, params.BOSS_PILOT_D, BOARD_TOP - 0.1, BOARD_TOP + params.BOSS_PILOT_DEPTH)
-        for x, y in mount_points()
-    ]
     return _cut(
         shell,
-        *pilots,
         end_screw_pilot(),
         *catch_windows(),
         *side_catch_pockets(),

@@ -77,21 +77,24 @@ from .ir import (
     receiver_paths,
     window_installation,
 )
+from .front_ledge import (
+    front_ledge_bearing,
+    front_ledge_clearance,
+    front_ledge_fit,
+    front_ledge_fused,
+    front_ledge_intact,
+    front_ledge_printable,
+    front_ledge_window,
+)
 from .legacy import (
     MOULDED_TOP_PAD,
     TPU_TOP_PAD,
     legacy_keytops_level,
     legacy_nib_contact,
     legacy_part_moves,
-    legacy_pilot_blind,
-    legacy_point_in_frame,
-    legacy_post_clearance,
-    legacy_post_headroom,
-    legacy_post_merged,
-    legacy_screw_gaps,
+    legacy_frame_shared,
     legacy_skirt_clears_board,
     legacy_skirt_depth,
-    legacy_top_pad_clears_screw,
     legacy_top_pad_fits,
     moulded_top_pad_caps_rest,
 )
@@ -363,7 +366,7 @@ def _tpu_pad_plain_web(s):
 def _groove_clearances(s):
     return _report(
         groove_clearances(s.pad_fdm),
-        "FDM grooves clear stems, keytop bases and bosses; the reliefs exit "
+        "FDM grooves clear stems and keytop bases; the reliefs exit "
         "both grid-lobe edges at full width; SW1/SW2 stay unchanged",
     )
 
@@ -803,7 +806,7 @@ def _cell_clearance(s):
         for what, volume in fouled:
             print(f"  {what:<28} {volume:8.2f} mm3")
         return False
-    print("cell clears the board, the bosses and the shells")
+    print("cell clears the board and the shells")
     return True
 
 
@@ -850,7 +853,7 @@ def _support_board_clearance(s):
 def _support_part_clearance(s):
     return _report(
         support_part_clearance(case.support_ledges()),
-        "support ledges clear every bottom courtyard and screw head",
+        "support ledges clear every bottom courtyard and the end screw block",
     )
 
 
@@ -924,49 +927,89 @@ def _support_case_containment(s):
     )
 
 
-@_check("legacy")
-def _legacy_point_in_frame(s):
+@_check("front_ledge")
+def _front_ledge_window(s):
     return _report(
-        legacy_point_in_frame(),
-        f"V2's three mounting holes read off its own STEP in the shared frame; "
-        f"the post takes the upper-right one at {board.legacy_retention_point()}",
+        front_ledge_window(s.front) + front_ledge_window(s.front_fdm),
+        f"both fronts have a ledge run on each side inside the first "
+        f"{params.FRONT_LEDGE_REACH:.1f} of the grip end, each at least "
+        f"{params.SUPPORT_MIN_RUN:.1f} long, and none outside it",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_fused(s):
+    return _report(
+        front_ledge_fused(s.front) + front_ledge_fused(s.front_fdm),
+        "both fronts are one solid with the ledges fused into it",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_bearing(s):
+    problems, sites = front_ledge_bearing(s.front)
+    fdm_problems, fdm_sites = front_ledge_bearing(s.front_fdm)
+    return _report(
+        problems + fdm_problems,
+        f"front ledge undersides bear at the board's top face "
+        f"+ {params.FRONT_LEDGE_GAP:.2f} over a flat of at least "
+        f"{params.SUPPORT_MIN_BEARING:.2f}, read at {sites + fdm_sites} sites",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_clearance(s):
+    problems, runs = front_ledge_clearance(s.front)
+    return _report(
+        problems,
+        f"{runs} front ledge runs stand {params.SUPPORT_CLEARANCE:.2f} off every top "
+        "courtyard, assembly solid and V2 body above the bearing plane",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_intact(s):
+    return _report(
+        front_ledge_intact(s.front) + front_ledge_intact(s.front_fdm),
+        "no cut in either front takes material out of a ledge run",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_printable(s):
+    problems, sites = front_ledge_printable(s.front)
+    fdm_problems, fdm_sites = front_ledge_printable(s.front_fdm)
+    return _report(
+        problems + fdm_problems,
+        f"front ledge ceiling-side faces rise at {params.SUPPORT_UNDER_ANGLE:.1f} "
+        f"degrees or steeper, read at {sites + fdm_sites} sites, so the face-down "
+        "print needs no support",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_fit(s):
+    pads = {
+        "moulded": s.pad,
+        "fdm": s.pad_fdm,
+        "tpu": s.pad_tpu,
+        "v2 fdm top": s.pad_fdm_v2_top,
+        "v2 tpu top": s.pad_tpu_v2_top,
+        "v2 moulded top": s.pad_v2_top,
+    }
+    problems, runs = front_ledge_fit(s.front, pads, s.caps)
+    return _report(
+        problems,
+        f"{runs} front ledge runs clear every pad and cap, released and pressed",
     )
 
 
 @_check("legacy")
-def _legacy_post_clearance(s):
+def _legacy_frame_shared(s):
     return _report(
-        legacy_post_clearance(),
-        f"V2 retention post stops {params.SUPPORT_GAP:.2f} below the V3 board and "
-        "clears every assembly solid, the cell and every V3 screw head",
-    )
-
-
-@_check("legacy")
-def _legacy_post_merged(s):
-    return _report(
-        legacy_post_merged(s.back),
-        "V2 retention post is fused into one back-shell solid, walled all the "
-        "way round its pilot",
-    )
-
-
-@_check("legacy")
-def _legacy_pilot_blind(s):
-    return _report(
-        legacy_pilot_blind(s.back),
-        f"V2 pilot is open its full {params.BOSS_PILOT_DEPTH:.1f} and blind, on "
-        "solid floor below",
-    )
-
-
-@_check("legacy")
-def _legacy_post_headroom(s):
-    return _report(
-        legacy_post_headroom(),
-        f"V2 post takes an M2 x {case.legacy_screw_length():.0f}: "
-        f"{params.BOSS_PILOT_DEPTH:.1f} of engagement in "
-        f"{(params.LEGACY_RETENTION_OD - params.BOSS_PILOT_D) / 2:.2f} of wall",
+        legacy_frame_shared(),
+        "V2's outline read off its own STEP shares the V3 frame, so its "
+        "placements mean something in the case frame",
     )
 
 
@@ -1010,19 +1053,6 @@ def _legacy_top_pad_fits(s):
 
 
 @_check("legacy")
-def _legacy_top_pad_clears_screw(s):
-    gaps = legacy_screw_gaps(s.pad_fdm_v2_top)
-    skirt_gaps = legacy_screw_gaps(s.pad_tpu_v2_top)
-    return _report(
-        legacy_top_pad_clears_screw(s.pad_fdm_v2_top)
-        + legacy_top_pad_clears_screw(s.pad_tpu_v2_top, TPU_TOP_PAD),
-        f"V2 top pad clears the V2 retention screw head by {gaps['released']:.2f} "
-        f"released and {gaps['pressed']:.2f} pressed, TPU pad by "
-        f"{skirt_gaps['released']:.2f} and {skirt_gaps['pressed']:.2f}",
-    )
-
-
-@_check("legacy")
 def _legacy_skirt_depth(s):
     problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top, s.pad_tpu)
     return _report(
@@ -1061,18 +1091,6 @@ def _moulded_v2_top_pad_fits(s):
         ),
         "the moulded V2 top pad clears the recessed front, released and through "
         "switch travel",
-    )
-
-
-@_check("legacy")
-def _moulded_v2_top_pad_clears_screw(s):
-    gaps = legacy_screw_gaps(s.pad_v2_top)
-    return _report(
-        legacy_top_pad_clears_screw(
-            s.pad_v2_top, MOULDED_TOP_PAD, "the moulded V2 top pad"
-        ),
-        "the moulded V2 top pad clears the V2 retention screw head by "
-        f"{gaps['released']:.2f} released and {gaps['pressed']:.2f} pressed",
     )
 
 
@@ -1120,7 +1138,7 @@ def _feature_clashes(s):
         for name, ref, depth in sorted(clashes, key=lambda c: -c[2]):
             print(f"  {name:<12} into {ref:<6} by {depth:5.2f} mm")
         return False
-    print("all bosses, ribs and the battery clear every courtyard")
+    print("the mic duct, front ledges and the battery clear every courtyard")
     return True
 
 
@@ -1327,8 +1345,12 @@ _FEATURE_SOLIDS = {
         "front", "pad", "pad_fdm", "pad_tpu", "pad_tpu_blank", "pad_tpu_v2_blank",
         "pad_tpu_v2", "pad_tpu_v2_top_blank", "keypad_recess",
     ),
+    "front_ledge": (
+        "front", "front_fdm", "pad", "pad_fdm", "pad_tpu", "pad_fdm_v2_top",
+        "pad_tpu_v2_top", "pad_v2_top", "caps",
+    ),
     "legacy": (
-        "back", "front", "front_fdm", "pad_fdm_v2_top", "pad_tpu_v2_top",
+        "front", "front_fdm", "pad_fdm_v2_top", "pad_tpu_v2_top",
         "pad_v2_top", "pad", "pad_tpu", "caps",
     ),
     "mic": ("front",),

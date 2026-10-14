@@ -63,7 +63,7 @@ def cap_refs():
 
 
 # Four widths, each derived from the one above it, so key_size() is the only
-# place a screw boss or the grid pitch has to be reasoned about.
+# place the grid pitch has to be reasoned about.
 def cap_flange(ref):
     """Outside of the flange at a cap's base. Drawn in from the key size so that
     the counterbore around it lands back on the keytop footprint."""

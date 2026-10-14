@@ -3,13 +3,12 @@ IR window insert.
 
 The back shell carries an AA lying along the board, which is what sets the case
 thickness where the cell is. Elsewhere it tapers to what the board needs, so the
-back is a contoured hump rather than a slab. The board hangs off the front plate,
-on one boss per mounting hole dropping from the ceiling, taking M2 screws driven
-from the back. The two shells meet in a lap joint around the whole perimeter, the back
+back is a contoured hump rather than a slab. The board has no screws. The cavity walls locate it,
+the back's support ledges carry it, and the front's ledges near the grip end and
+the mic duct post hold it down onto them. The two shells meet in a lap joint around the whole perimeter, the back
 closing over a skirt on the front, and are held by two detents at the IR end and
 one screw at the other, driven horizontally through the back's end wall into a
-block the front carries behind its skirt. Every mounting hole keeps its own short
-screw, so the case takes three M2 x 6 and one M2 x 5. Hidden catches in both
+block the front carries behind its skirt, so the case takes one M2 x 5. Hidden catches in both
 long-side skirts hold the seams closed near the board midpoint.
 
 The pad is two flat soft lobes with one raised feature per switch, one lobe per

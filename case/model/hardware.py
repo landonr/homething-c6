@@ -1,5 +1,5 @@
-"""The board's own mounting holes, the single screw that closes the two shells
-through the back's -Y end wall, and the one post the back offers a V2 board."""
+"""The single screw that closes the two shells through the back's -Y end wall,
+and the block the front carries for it to thread into."""
 
 import functools
 
@@ -20,12 +20,9 @@ from build123d import (
 import board
 import params
 
-from .backform import contour_depth
 from .shape import (
-    _chamfered_post,
     _cut,
     _fuse,
-    _hole,
     _isect,
     _offset_face,
     _rounded_prism,
@@ -34,21 +31,12 @@ from .shape import (
 from .stack import (
     LAP_IN,
     LAP_OUT,
-    LEGACY_BOARD_TOP,
     MERGE,
     SKIRT_BOTTOM,
     SKIRT_OUT,
     STIFFENED_WALL,
     SUPPORT_TOP,
 )
-
-
-def mount_points():
-    """The board holes the front plate screws into: every one of them, which is
-    three since the board went to H1-H3, a pair at the grip end and a single one
-    on the centreline at the IR end. Read rather than counted here, so a fourth
-    coming back needs no edit."""
-    return [(x, y) for x, y, _ in board.mounting_holes()]
 
 
 def end_wall_edge():
@@ -67,7 +55,7 @@ def side_skirt_inner_x():
 def end_screw_axis():
     """(x, z) of the end screw's axis, in the -Y end wall.
 
-    Off the board's own centre rather than off a mounting hole, because this
+    Off the board's own centre, because this
     screw passes through no board hole: it closes the two shells to each other
     behind the board's end, and END_SCREW_X_OFFSET is what puts it in the clear
     column between R8 and the cell on one side and J1 on the other.
@@ -255,7 +243,7 @@ def _block_root_fillet(face):
     start = end_screw_fillet_start()
     leg = face - start
     _, z = end_screw_axis()
-    pilot_top = z + params.BOSS_PILOT_D / 2
+    pilot_top = z + params.END_SCREW_PILOT_D / 2
     if SKIRT_BOTTOM - leg <= pilot_top:
         raise ValueError(
             f"the root fillet reaches down to {SKIRT_BOTTOM - leg:.2f}, not "
@@ -396,7 +384,7 @@ def end_screw_pilot():
     face = end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
     y0, y1 = face - 0.1, face + params.END_SCREW_PILOT_DEPTH
     return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(
-        radius=params.BOSS_PILOT_D / 2, height=y1 - y0
+        radius=params.END_SCREW_PILOT_D / 2, height=y1 - y0
     )
 
 
@@ -468,7 +456,7 @@ def end_screw_wall_chamfer():
 def end_screw_length():
     """What the end screw has to be: the wall left under its head, the fit the
     block stands off that wall by, and the engagement it then takes. Comes out
-    at M2 x 5, one size shorter than the three board screws."""
+    at M2 x 5."""
     return (
         (LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H)
         + params.END_SCREW_BLOCK_GAP
@@ -480,80 +468,4 @@ def _y_hole(x, z, diameter, y0, y1):
     """A Y-axis bore, the way ir.emitter_bore builds one. _hole is Z-only."""
     return Pos(x, (y0 + y1) / 2, z) * Rot(90, 0, 0) * Cylinder(
         radius=diameter / 2, height=y1 - y0
-    )
-
-
-def legacy_retention_floors():
-    """(outer, cavity) z of the back's floor under the V2 retention post."""
-    _, y = board.legacy_retention_point()
-    outer = -contour_depth(y)
-    return outer, outer + params.FLOOR
-
-
-def legacy_retention_post():
-    """Post from the back's floor to just under the board, tapped for one
-    optional M2 that retains a V2 board.
-
-    V2 and V3 share an outline but no mounting hole, so a V2 board drops into
-    this case with nothing to fasten it to. This is the one V2 hole that has a
-    clear column under it in the V3 cavity (see board.legacy_retention_point),
-    so it is the whole of the offer: retention, not compatibility. V2's IR
-    parts and its upper keys still land in the wrong place, and no post fixes
-    that.
-
-    It stops at SUPPORT_TOP, the plane the support ledges stop at, so with a V3
-    board fitted it is one more ledge under the board rather than something the
-    board rests on: the V3 board is still carried by the front shell's bosses
-    and is still SUPPORT_GAP clear of everything below it.
-
-    A 5.5 mm post leaves extra printed wall around the same 1.7 mm pilot and
-    4.4 mm engagement as the front bosses. The V2 screw is the same M2 x 6
-    that the V3 board already takes.
-    """
-    x, y = board.legacy_retention_point()
-    _, cavity = legacy_retention_floors()
-    return _chamfered_post(
-        x,
-        y,
-        params.LEGACY_RETENTION_OD,
-        cavity - MERGE,
-        SUPPORT_TOP,
-        params.STANDOFF_CHAMFER,
-        "lower",
-        cavity,
-    )
-
-
-def legacy_retention_pilot():
-    """The post's blind self-tapping pilot, drilled down from its top.
-
-    Blind by a wide margin: the post is taller than BOSS_PILOT_DEPTH by more
-    than the floor is thick, so the hole ends in the post and never reaches the
-    exterior surface. legacy_pilot_blind() in checks/legacy.py holds that.
-    """
-    x, y = board.legacy_retention_point()
-    return _hole(
-        x,
-        y,
-        params.BOSS_PILOT_D,
-        SUPPORT_TOP - params.BOSS_PILOT_DEPTH,
-        SUPPORT_TOP + 0.1,
-    )
-
-
-def legacy_screw_length():
-    """What the optional V2 screw has to be: V2's own board plus the pilot's
-    engagement. The V2 board is 0.09 thinner than BOARD_THICKNESS, which the
-    same M2 x 6 absorbs."""
-    return params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
-
-
-def legacy_screw_head():
-    """The V2 retention screw's head envelope, on the V2 board's top face.
-
-    The V2 top pad's passes and its TPU skirt breaks both read it.
-    """
-    x, y = board.legacy_retention_point()
-    return Pos(x, y, LEGACY_BOARD_TOP + params.SCREW_HEAD_H / 2) * Cylinder(
-        radius=params.SCREW_HEAD_D / 2, height=params.SCREW_HEAD_H
     )

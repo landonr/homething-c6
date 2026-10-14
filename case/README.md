@@ -20,7 +20,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).
-It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 retention post](#v2-retention-post).
+It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
 
 ## Setup
 
@@ -92,12 +92,12 @@ Do not copy a board coordinate into the case model. Add a reader to `board.py` i
 
 The model reads these sources:
 
-- `c6remote-kicad/c6remote.kicad_pcb` supplies the outline, mounting holes, courtyards, wheel center, and microphone port.
+- `c6remote-kicad/c6remote.kicad_pcb` supplies the outline, courtyards, wheel center, and microphone port.
 - `c6remote-kicad/export/c6remote-pos.csv` supplies component positions.
 - `case/board/c6remote-board.step` supplies component bodies, keepout heights, and connector geometry.
 - `case/board/c6remote-board-only.step` supplies the board solid.
 - `case/board/c6remote-outline.dxf` supplies the exported outline.
-- `case/board/c6remote-v2-board-only.step` supplies the fixed V2 mounting-hole reference.
+- `case/board/c6remote-v2-board-only.step` supplies the fixed V2 outline, which guards the shared frame.
 - `case/board/c6remote-v2-pos.csv` supplies the fixed V2 switch positions.
 
 Run `scripts/export-case-refs.sh` after a relevant schematic or board change. Then build and run the full check.
@@ -198,7 +198,10 @@ The rim runs inside the recessed front's round. The FDM front keeps its groove o
 
 ## Assembly
 
-The front shell holds the board. Three M2 screws fasten the V3 board to its bosses.
+No screw holds the board. The cavity walls locate it, `BOARD_FIT` per side. The back shell support ledges carry it from below.
+Two front-shell ledges near the grip end, one on each long side, hold it down from above. The microphone duct post also bears on the board top.
+Each front ledge has a flat underside at the board top face, `FRONT_LEDGE_GAP` above it. Its face toward the ceiling slopes back into the wall at `SUPPORT_UNDER_ANGLE`, so it prints face down without support.
+The ledge breaks come from the board top courtyards, the solids that rise above the board, and the V2 part bodies. `FRONT_LEDGE_REACH` limits them to the grip end, short of the button pad.
 
 The back lap closes over the front skirt. Two detents secure the IR end.
 Two hidden side catches keep the long seams closed near the board midpoint.
@@ -211,7 +214,7 @@ Each back detent sits lower than its pocket and bears on the lower lip with a li
 The preload holds the seam closed.
 `SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
 
-One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The three board screws are M2 x 6.
+One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt.
 
 Prepare the back shell first:
 
@@ -233,12 +236,11 @@ Assemble the remaining parts with the front face down:
 
 1. Install all caps in the front shell.
 2. Install the button pad.
-3. Put the board on the front-shell bosses.
-4. Install the three M2 screws through the board into the front-shell bosses.
-5. Push the battery plug into J1.
-6. Engage the two IR-end detents.
-7. Fold the back shell onto the front shell.
-8. Install the end-wall M2 screw at the grip end.
+3. Put the board in the front shell, with its top face on the front ledges and the microphone duct post.
+4. Push the battery plug into J1.
+5. Engage the two IR-end detents.
+6. Fold the back shell onto the front shell.
+7. Install the end-wall M2 screw at the grip end.
 
 Install the caps before the pad. The caps are captive after pad installation.
 
@@ -246,17 +248,11 @@ For the FDM pad, omit step 1 and install `c6remote-case-pad-fdm.stl` in step 2.
 
 Install the IR window before shell assembly. Its flange is not accessible after shell assembly.
 
-## V2 retention post
+## V2 board
 
-The back shell includes one retention post for a V2 board. The post uses the V2 upper-right mounting hole.
+The case does not make a V2 board compatible with the V3 case. The V2 IR parts and upper keys do not align with the current openings. Use a V2 board only as a bench aid.
 
-This post supplies retention only. It does not make the V2 board compatible with the V3 case.
-
-The V2 IR parts and upper keys do not align with the current openings. Use this feature only as a bench aid.
-
-For a V2 board, fasten the board to the back shell first. Drive the M2 screw from the component side without a washer.
-
-The V2 board sits on the post, `SUPPORT_GAP` lower than the V3 board. Its SW1 and SW2 also sit nearer the grip end.
+A V2 board rests on the back shell support ledges, `SUPPORT_GAP` lower than the V3 board. The front ledges do not touch it. Its SW1 and SW2 also sit nearer the grip end.
 
 For a V2 board, print `c6remote-case-pad-fdm-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad-fdm.stl`.
 
@@ -272,7 +268,7 @@ For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl
 
 `c6remote-case-pad-tpu-v2-blank.stl` is a complete V2 pad with blank keytops in one STL. Print it alone, with the recessed front `c6remote-case-front.stl`.
 
-Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements, and from the V2 screw head.
+Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements.
 
 For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the recessed front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
 
@@ -298,8 +294,9 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.
 - Keep the USB slot and pocket clear of the connector shell.
-- Keep support ledges clear of board parts, screw heads, and the cell.
-- Keep the cell envelope clear of board parts, screw heads, and the end screw block.
+- Keep support ledges clear of board parts, the end screw block, and the cell.
+- Keep the front ledges clear of top parts, the button pad, and the caps.
+- Keep the cell envelope clear of board parts and the end screw block.
 - Keep the front skirt clear above the support ledge tops.
 - Keep the end screw block clear of the back shell. Its web ties it to the end skirt and the side skirt at skirt height only.
 - Keep the IR window shoulder continuous for adhesive.
@@ -318,7 +315,7 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Wheel clearance and the LED light path
 - Microphone and USB geometry
 - IR receiver clearance and window installation
-- Board supports, screws, cell clearance, V2 retention, and the V2 top pad
+- Board support ledges, front ledges, the end screw, cell clearance, and the V2 top pad
 - Shell mating and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes

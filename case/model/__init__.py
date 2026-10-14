@@ -10,6 +10,7 @@ from .stack import *  # noqa: F401,F403
 from .shape import *  # noqa: F401,F403
 from .cell import *  # noqa: F401,F403
 from .support import *  # noqa: F401,F403
+from .front_ledge import *  # noqa: F401,F403
 from .backform import *  # noqa: F401,F403
 from .hardware import *  # noqa: F401,F403
 from .wheel_ring import *  # noqa: F401,F403

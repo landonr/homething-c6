@@ -58,86 +58,17 @@ def _edge_cut_circles():
     return out
 
 
-@functools.cache
-def _mounting_hole_rows():
-    """(ref, x, y, diameter) per case screw hole, in board file order.
-
-    Read off any footprint whose name contains "MountingHole", currently
-    the three MountingHole_2.4mm_M2 instances (H1-H3): a dedicated NPTH
-    footprint again, not the plain Edge.Cuts circles this briefly was, and
-    not the fixed "MountingHole" exact name the original footprint used
-    either, since the new one carries the hole size in its own name.
-    Substring match rather than an exact one, so a future size or fastener
-    change (a new MountingHole_* name) still matches with no code change
-    here. Each carries one NPTH pad centred on its own local origin, so the
-    footprint's own placement is the hole centre with no further offset.
-    """
-    src = _require(KICAD_PCB).read_text()
-    out = []
-    for name, body in re.findall(r'\(footprint "([^"]*)"(.*?)\n\t\)\n', src, re.S):
-        if "MountingHole" not in name:
-            continue
-        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)", body)
-        ref = re.search(r'\(property "Reference" "([^"]*)"', body)
-        drill = re.search(
-            r'\(pad "[^"]*" np_thru_hole \w+\s*\(at [-\d.]+ [-\d.]+\)\s*'
-            r"\(size [-\d.]+ [-\d.]+\)\s*\(drill ([-\d.]+)\)",
-            body,
-        )
-        if at and drill:
-            out.append(
-                (
-                    ref.group(1) if ref else "",
-                    float(at.group(1)),
-                    -float(at.group(2)),
-                    float(drill.group(1)),
-                )
-            )
-    return tuple(out)
-
-
-def mounting_holes():
-    """(x, y, diameter) for the case's screw holes, in STEP frame."""
-    return [(x, y, diameter) for _, x, y, diameter in _mounting_hole_rows()]
-
-
-def mounting_hole_refs():
-    """{(x, y): ref} over the same holes, so a feature built on one can carry
-    its refdes. The geometry needs no hole name, but a boss with an id of H2
-    is one a reader can find on the board."""
-    return {(x, y): ref for ref, x, y, _ in _mounting_hole_rows()}
-
-
-LEGACY_MOUNT_D = 2.9
-"""V2's mounting hole diameter, as its Edge.Cuts circles cut it. V3 went to
-2.4 mm NPTH footprints, so no reader shared between the two revisions can
-match on one size."""
-
-LEGACY_MOUNT_ROUND = 0.05
-"""How far a V2 hole may depart from LEGACY_MOUNT_D and still count. The
-STEP rounds a circle to the micron, so this only absorbs that."""
-
 LEGACY_FRAME_TOLERANCE = 0.01
 """How far the two revisions' outlines may disagree before a V2 coordinate is
 meaningless in the case frame. The two boards share an outline and an origin,
-which is the only reason a V2 hole can be built on at all."""
+which is the only reason a V2 placement can be used at all."""
 
 
 @functools.cache
-def legacy_mounting_holes():
-    """[(x, y)] for V2's 2.9 mm mounting holes, in STEP frame.
-
-    Read out of LEGACY_BOARD_ONLY_STEP rather than out of a KiCad file, because
-    V2 has no MountingHole footprint and its board file is no longer in the
-    working tree. The holes are plain circular voids in the board solid, so they
-    arrive as inner wires of its bottom face, told apart from vias and part holes
-    by diameter alone.
-
-    Raises if the two revisions no longer share an outline. A V2 coordinate is
-    only usable here because both boards sit on the same origin with the same
-    edge, and a case feature built on a hole from a board that has moved would
-    land somewhere arbitrary.
-    """
+def legacy_frame_check():
+    """Raise if V2 and V3 no longer share an outline, so a V2 placement is
+    meaningless in the case frame. Reads the V2 outline out of
+    LEGACY_BOARD_ONLY_STEP, the one thing that file is still used for."""
     solid = import_step(_require(LEGACY_BOARD_ONLY_STEP)).solids()[0]
     legacy_box = solid.bounding_box()
     live_box = board_profile().bounding_box()
@@ -153,43 +84,17 @@ def legacy_mounting_holes():
                     "they no longer share a frame, so no V2 coordinate means "
                     "anything in the case frame"
                 )
-
-    bottom = solid.faces().filter_by(Plane.XY).sort_by(Axis.Z)[0]
-    out = []
-    for wire in bottom.inner_wires():
-        box = wire.bounding_box()
-        if abs(box.size.X - box.size.Y) > LEGACY_MOUNT_ROUND:
-            continue
-        if abs(box.size.X - LEGACY_MOUNT_D) > LEGACY_MOUNT_ROUND:
-            continue
-        out.append((box.center().X, box.center().Y))
-    if len(out) != 3:
-        raise ValueError(
-            f"expected three {LEGACY_MOUNT_D} holes in the V2 board, found {len(out)}"
-        )
-    return tuple(sorted(out))
-
-
-def legacy_retention_point():
-    """(x, y) of the one V2 hole the case offers a post under: the upper-right
-    one, at the IR end.
-
-    V2 put two holes at that end and one at the grip end; V3 does the reverse.
-    So no V2 hole lands on a V3 one, and only this one has room under it in the
-    V3 cavity for a post that clears every V3 part. Upper before right, so the
-    pair at the IR end is picked first and the right of that pair second.
-    """
-    return max(legacy_mounting_holes(), key=lambda point: (point[1], point[0]))
+    return True
 
 
 def legacy_components():
     """V2's placement rows, in the same form components() returns.
 
     Out of LEGACY_POS_CSV, the same parse over the frozen file. A V2 xy is only
-    meaningful in the case frame because legacy_mounting_holes() holds the two
+    meaningful in the case frame because legacy_frame_check() holds the two
     outlines to one frame, so this calls it first for that guard.
     """
-    legacy_mounting_holes()
+    legacy_frame_check()
     return _placements(LEGACY_POS_CSV)
 
 
@@ -233,7 +138,7 @@ def refs(prefix):
 
 
 def board_profile():
-    """Outer edge of the board as a Face, cutouts and mounting holes dropped."""
+    """Outer edge of the board as a Face, cutouts dropped."""
     solid = import_step(_require(BOARD_ONLY_STEP)).solids()[0]
     bottom = solid.faces().filter_by(Plane.XY).sort_by(Axis.Z)[0]
     return Face(bottom.outer_wire())
@@ -617,8 +522,6 @@ if __name__ == "__main__":
     box = board_profile().bounding_box()
     print(f"board {box.size.X:.2f} x {box.size.Y:.2f}")
     print(f"wheel centre {wheel_center()[0]:.3f}, {wheel_center()[1]:.3f}")
-    for x, y, d in mounting_holes():
-        print(f"hole {x:.3f}, {y:.3f} dia {d:.2f}")
 
     z = keepouts()
     top = max(hi for _, hi in z.values()) - params.BOARD_THICKNESS

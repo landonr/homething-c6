@@ -42,7 +42,8 @@ fastener passes through it any more: the one closure screw enters the -Y end
 wall horizontally, so this is sized as a printed floor over a hand-held
 volume rather than against a counterbore sunk into it."""
 BOARD_FIT = 0.5
-"""Gap between the board edge and the inner wall. Board screws locate the board.
+"""Gap between the board edge and the inner wall. The cavity walls locate the
+board, so the board can sit up to this far off centre on either axis.
 The uniform offset changes case length and width by twice the clearance change."""
 
 # Board deflection stops on the inside of the back shell side walls.
@@ -56,11 +57,16 @@ SUPPORT_GAP. As a result, when a button press pushes the board down, the board
 touches the ledges before the skirt does."""
 SUPPORT_CLEARANCE = 0.4
 SUPPORT_MIN_RUN = 8.0
-SUPPORT_SOUTH_RUNS = False
-"""Include the south-most board support run on each side when true. The board
-is carried by the front plate's bosses, and the runs nearest the grip end back
-onto the cell bay rather than onto anything that deflects, so this stays
-false."""
+SUPPORT_MIN_BREAK = 4.8
+"""The shortest break, in Y, that a through-board solid opens in a back support
+run when it reaches a long side wall. The front skirt relief over each run gets
+a lead-in ramp at both ends. The skirt between two ramps must stay solid. This
+value keeps the break layout that the screw head width gave before."""
+SUPPORT_SOUTH_RUNS = True
+"""Include the south-most board support run on each side when true. The front
+ledges hold the grip end of the board down from above. The back runs under that
+end must capture the same edge from below, or the board would be pinched against
+nothing there, so this stays true."""
 SUPPORT_UNDER_ANGLE = 60.0
 SUPPORT_INNER_R = 0.6
 """Radius on the inboard support edge. It removes the sharp printed tip and
@@ -69,6 +75,19 @@ SUPPORT_MIN_BEARING = 1.5
 """Minimum flat board bearing that must remain after the inboard fillet."""
 SUPPORT_SHELL_SKIN = 0.2
 """Keep this exterior shell thickness outside the board support ledges."""
+FRONT_LEDGE_GAP = 0.0
+"""Vertical gap between the board's top face and the flat underside of each
+front ledge. Zero, because the screw bosses that these ledges replace held the
+board at exactly this plane, so the board and the ledges meet with the same
+stack as before. The back ledges stand SUPPORT_GAP below the board, so this
+leaves the board free by that gap and it never clamps."""
+FRONT_LEDGE_REACH = 31.5
+"""How far from the board's grip (-Y) edge the front ledges may run. The two
+screw bosses these replace stood 26.5 in from that edge, so this keeps their
+position inside the window with 5.0 to spare. It is bound from above by the
+button pad: the grid lobe's grip-side edge stands 32.2 in from the board edge
+and the ledges must stay clear of it, so the window ends 0.7 short of that.
+checks/front_ledge.py measures the clearance on the built pad."""
 
 # Vertical clearance measured from the board faces, not from z=0.
 FRONT_KEEPOUT = 4.5
@@ -111,73 +130,17 @@ switch body before the switch makes."""
 PLUNGER_LOWER_CHAMFER = 0.375
 """45 degree chamfer size at the lower plunger edge. It leaves a flat switch contact."""
 
-# M2 from the back, through the board's own 2.4mm holes, into blind bosses
-# hanging off the front plate. One per hole, so three: a pair at the grip end,
-# straddling the cell rather than crossing it, and a single one on the centreline
-# at the IR end. Heads sit on the board's underside. The back shell carries no
-# screw mounts at all.
-#
-# The fastener is M2 because the board says so. H1-H3 are
-# Library:MountingHole_2.4mm_M2 footprints, whose own description calls the hole
-# a loose fit on M2 and marks the 4.0mm DIN965 head as the keepout to check
-# copper against. Everything below is that decision carried into the case rather
-# than a size chosen here, so a future fastener change starts at the board.
-BOSS_OD = 5.0
-"""Boss outside diameter. Q1 set this once, the boss at the IR end passing
-within 0.21 of it, but the mounting holes moved and nothing on the board is
-near one any more: the closest top-side courtyard to any boss is U1, 6.28 from
-the +X grip-end hole, which would take an OD past 12 to reach. So what holds
-this at 5.0 now is the wall left around the pilot, 1.65 a side at BOSS_PILOT_D,
-in a printed post a self-tapping screw is cutting its own thread into. The
-smaller M2 screw would allow less, but nothing asks for less: BOSS_COLLAR's
-clip on key_size() is idle at the current layout too, so shrinking this buys
-no key size back either."""
-LEGACY_RETENTION_OD = 5.5
-"""V2 retention post outside diameter. This adds 0.25 mm of radial wall over
-the front bosses, so the tall free-standing post prints with more material
-around its M2 pilot. The extra width clears the V3 cavity components."""
 STANDOFF_CHAMFER = 1.2
-"""Height and radial reach of the root chamfer on each screw boss, the V2
-retention post, and the microphone duct. The chamfer is widest where each post
-meets its shell."""
-BOSS_COLLAR = 1.0
-"""Ceiling kept around a boss, so a key hole never swallows it and leaves it
-hanging off nothing. It is not cut out of the keys: key_size() shrinks whichever
-key would reach a boss instead, so this bounds the keys rather than notching
-them. Idle at the current layout, where all eleven keys come out full size; it
-bound SW1 and SW2 back when a mounting hole sat beside each."""
-BOSS_PILOT_D = 1.7
+"""Height and radial reach of the root chamfer where the microphone duct meets
+its shell. The chamfer is widest at the shell."""
+END_SCREW_PILOT_D = 1.7
 """Self-tapping M2 into printed plastic, near the thread's own pitch diameter
 of 1.74 rather than down at its 1.567 minor. Deliberately at the loose end of
-the 1.6 to 1.7 an M2 self-tap is usually given: the boss is a printed post
-standing free off the ceiling, so it splits along its layer lines long before
-the thread it cut would strip, and the failure that costs a whole front shell
-is the one worth designing away from. Use 3.2 for a heat-set insert, which is
-the usual M2 insert OD."""
-BOSS_PILOT_DEPTH = 4.4
-"""Thread engagement, 2.2 diameters of it at M2, comfortably past the 2 a
-self-tap in plastic wants. No longer all the depth there is, either: the boss
-carries its own material from the board right up to SHELL_FRONT now, 6.4 of
-post, so this is a chosen engagement rather than whatever the ceiling left
-over. It also sets the short screws' length, BOARD_THICKNESS plus this, which
-case.py prints.
-
-The back's V2 retention post reads this, LEGACY_RETENTION_OD,
-BOSS_PILOT_D and STANDOFF_CHAMFER too, so the optional V2 screw is the same
-fastener at the same engagement rather than a second stack to keep in step."""
-SCREW_HEAD_D = 4.0
-SCREW_HEAD_H = 1.6
-"""The largest standard M2 head, in both directions, since these two exist only
-as a keepout under the board and the cheapest way to be right about a fastener
-nobody has bought yet is to model the worst one. ISO 7045 pan head is 4.0 across
-and 1.6 tall at their maxima; DIN 965 countersunk is 3.8 and 1.2. The board
-reasons the same way and reaches the same number: H1-H3 carry a 4.0 circle on
-Cmts.User as their copper keepout, called out there as the largest standard M2
-head.
-
-The head sits on the board's underside rather than sinking into it, the hole
-being a plain 2.4 through with no countersink, so it occupies z -1.6 to 0 and
-what it has to dodge is bottom-side parts, not anything in the front cavity."""
+the 1.6 to 1.7 an M2 self-tap is usually given: the block is a printed post
+hanging off the skirt, so it splits along its layer lines long before the
+thread it cut would strip, and the failure that costs a whole front shell is
+the one worth designing away from. Use 3.2 for a heat-set insert, which is the
+usual M2 insert OD."""
 
 # The two shells lap right around the perimeter, back over front. The front's
 # cavity wall carries on past the parting plane as a single skirt, and the back's
@@ -323,23 +286,20 @@ So shells.catch_x() takes whichever is further -x of the spacing and this
 clearance, and at the present layout this one governs."""
 
 # One screw at the grip end, driven horizontally through the back's -Y end wall
-# into a block the front shell carries behind its skirt. So it closes the two
-# shells to each other; the board is held by its own three screws into the front
-# plate's bosses, and every mounting hole keeps a short screw. Its head is the
-# only hole in the back's outer surface. It is an M2 x 5, one size shorter than
-# the board screws. case.py prints the length the stack computes.
+# into a block the front shell carries behind its skirt. It closes the two
+# shells to each other and is the only screw in the case. The cavity walls and
+# the support ledges hold the board. Its head is the only hole in the back's
+# outer surface. It is an M2 x 5. case.py prints the length the stack computes.
 SHELL_SCREW_CLEAR_D = 2.4
-"""Clearance hole through the back's -Y end wall, matched to the board's own 2.4
-holes rather than chosen: the same M2 passes a 2.4 at H1-H3, so drilling the
-shell tighter than the board would hold this screw to a fit the rest of the
-stack does not. Also ISO 273 medium clearance for M2, which is where the
-board's own 2.4 comes from."""
+"""Clearance hole through the back's -Y end wall. ISO 273 medium clearance for
+M2."""
 SHELL_SCREW_HEAD_D = 4.2
-"""Counterbore in the back's -Y end face, SCREW_HEAD_D plus 0.2. Slacker than
+"""Counterbore in the back's -Y end face, the 4.0 mm largest standard M2 head
+plus 0.2. Slacker than
 the fits elsewhere in this model on purpose: a head that will not sit flush is
 the one screw feature visible from outside the case."""
 SHELL_SCREW_HEAD_H = 1.7
-"""Counterbore depth: SCREW_HEAD_H plus 0.1, so the tallest standard M2 head
+"""Counterbore depth: the 1.6 mm tallest standard M2 head plus 0.1, so the tallest standard M2 head
 lands a shade below the outer face instead of standing in it. It comes out of
 the end wall rather than out of FLOOR now, and WALL is 3.0 there, so 1.3 of
 wall is left under the head."""
@@ -399,18 +359,16 @@ The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
 so a deeper block also takes more off the cover over the pilot's tip."""
 END_SCREW_PILOT_DEPTH = 3.2
-"""Engagement this one screw takes, against BOSS_PILOT_DEPTH for the three that
-hold the board.
+"""Engagement this one screw takes.
 
-The screw is an M2 x 5, one size shorter than the board screws. The screw
-length is the fixed quantity here, so the pilot is what is left after the wall
-under the head and END_SCREW_BLOCK_GAP. It remains more than one and a half
-diameters into a self-tapped boss that is END_SCREW_BLOCK_W wide. This screw
-only closes two shells and does not carry the board."""
+The screw is an M2 x 5. The screw length is the fixed quantity here, so the
+pilot is what is left after the wall under the head and END_SCREW_BLOCK_GAP. It
+remains more than one and a half diameters into a self-tapped boss that is
+END_SCREW_BLOCK_W wide. This screw only closes two shells and does not carry the
+board."""
 END_SCREW_BLOCK_BOTTOM = 2.5
-"""Material the block carries below the screw axis, matching BOSS_OD/2 so the
-wall under the thread is what it is around every other M2 in this case. Above
-the axis the block rises to the ramp off the skirt it hangs from, so it is not
+"""Material the block carries below the screw axis, so the wall under the
+thread is 2.5 around the pilot. Above the axis the block rises to the ramp off the skirt it hangs from, so it is not
 symmetric."""
 END_SCREW_BLOCK_R = 1.5
 """Round on the block's two +Y vertical edges, in plan.
@@ -602,8 +560,7 @@ KEY_CLEARANCE = 0.3
 """Gap per side between whatever comes through a key hole and the hole itself.
 The SW1 and SW2 moulded keytops only. The nine rigid caps are gapped by
 CAP_GUIDE_CLEARANCE instead, because their hole has to guide them rather than
-merely clear them. It still bounds the counterbores: key_size() keeps a key
-clear of the screw bosses at this radius, and the counterbore sits inside it."""
+merely clear them. It still bounds the counterbores, which sit inside it."""
 WHEEL_CLEARANCE = 0.5
 """Radial gap the pad's own bore leaves around the lip, the widest disc of
 ENC1's revolved shape, since nothing under the lip is wider than the lip. The
@@ -755,25 +712,25 @@ this roof; the difference is the thinnest the roof gets anywhere, and check.py's
 ring stack guard is what holds a floor under it, walking the whole annulus rather
 than one radius."""
 # Apertures in the back shell
-MIC_THROAT_MARGIN = 0.5
+MIC_THROAT_MARGIN = 2 * BOARD_FIT
 """How much wider than the board's own acoustic port the inlet's throat is,
 where the two meet at BOARD_TOP. The throat itself is not a number here: it is
 that drill plus this, read at build time through board.npth_pads("MK1") by
 case.mic_port_drill(), because the drill belongs to the board and copying it
 into this file is how the two quietly stop agreeing.
 
-There is a margin at all for two reasons, and the tighter of the two wins.
+There is a margin at all for two reasons, and the larger of the two wins.
 
-Alignment. The case is located on the board by three M2 screws through holes the
-board itself calls a loose fit, so the duct and the drill can sit a couple of
-tenths out of concentric, and the throat still has to uncover the whole drill
-rather than shading part of it. Half of this is what that buys, per side, all the
-way round.
+Alignment. The cavity walls locate the board, so the board can sit up to
+BOARD_FIT off centre in any direction and the drill moves with it. The throat
+must still uncover the whole drill at that offset. A margin of twice BOARD_FIT
+leaves half of it, BOARD_FIT, per side all the way round, which is exactly the
+offset the board can have.
 
 Printing. A bore near a single extrusion width does not survive slicing: the
 perimeter closes over it. This keeps the narrow end at several extrusion widths,
 which is the floor a small bore in a printed part has regardless of what it is
-for, and it is the reason not to chase the drill any closer than this."""
+for. The alignment margin is already above that floor."""
 MIC_MOUTH_D = 4.5
 """How wide the inlet's mouth opens at the face it arrives in, and so the widest
 the inlet ever is: the bore is a funnel, bell at the pocket floor and throat on
@@ -927,7 +884,7 @@ and asymmetric because only the inboard side is in the plug's way.
 What it costs is reach on the thinnest roof in the model. usb_roof() up to the
 face leaves 1.04 on the recessed front and 0.64 on the FDM front, and this
 carries that run this much further inboard. Nothing structural is in the band;
-the nearest mounting bosses stand well past it. checks/usb.py reads the wall
+nothing else stands near it. checks/usb.py reads the wall
 and its ramp off the built front rather than off this."""
 
 # Button pad: one soft moulding, flat web with raised keys. The moulded pad has a
@@ -950,7 +907,7 @@ FDM_PAD_GROOVE_W = 1.2
 """Width of each press-isolation relief in the rigid FDM grid lobe.
 
 Wide so each printed key can flex with less
-drag from the neighbouring web while still clearing stems, cap seats, and bosses.
+drag from the neighbouring web while still clearing stems and cap seats.
 """
 FDM_PAD_GROOVE_DEPTH = 0.8
 """Depth cut from the keytop face only of the FDM pad web at an isolation relief.
@@ -985,9 +942,6 @@ longer reach the wheel (see PAD_LED_CLEARANCE and case.pad_wheel_gap()), so
 this is a plain fit. It is active: it trims both lobes at the long sides, where
 their key rectangles reach past it. checks/keypad.py measures it on the built
 pads."""
-PAD_BOSS_CLEARANCE = 0.4
-"""Gap where a front-plate boss passes through the pad, measured off the boss's
-ceiling collar rather than the boss, so the keytop stays clear of both."""
 PAD_MIC_CLEARANCE = 0.3
 """Gap from the pad to the mic duct's widest chamfer at the ceiling."""
 PLUNGER_D = 2.5
@@ -1338,8 +1292,8 @@ remainder rather than this number."""
 CAP_FLANGE_TRIM = 0.2
 """How far the flange is drawn in from the key size, per side. With
 CAP_FLANGE_CLEARANCE it puts the counterbore back at exactly the keytop
-footprint, so key_size()'s screw-boss logic answers for the counterbore with no
-second calculation."""
+footprint, so key_size() answers for the counterbore with no second
+calculation."""
 CAP_FLANGE_CLEARANCE = 0.2
 """Gap per side between the flange and its counterbore. Deliberately looser than
 CAP_GUIDE_CLEARANCE: the face land is what holds a cap square, and a counterbore

@@ -2,13 +2,13 @@
 
 import math
 
-from build123d import Box, Cylinder, Face, Pos, fillet, loft
+from build123d import Box, Face, Pos, fillet, loft
 
 import board
 import params
 
-from .hardware import mount_points
 from .backform import back_form
+from .hardware import end_screw_block
 from .shape import _cut, _fuse, _isect, _offset_face, _slab
 from .stack import BOARD_TOP, LAP_IN, MERGE, SHELL_BACK, SHELL_SEAM, SKIRT_OUT, SUPPORT_TOP
 
@@ -26,106 +26,82 @@ def support_case_envelope(inset=0.0):
     )
 
 
+def _break_box(x0, y0, x1, y1, z0, z1):
+    return Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * Box(
+        x1 - x0, y1 - y0, z1 - z0
+    )
+
+
+def ledge_breaks(items, wall, z0, z1, clearance=params.SUPPORT_CLEARANCE):
+    """[(name, solid)] keepout prisms over z0..z1 for plan rectangles.
+
+    `items` is [(name, x0, y0, x1, y1, wall_side)], each rectangle as the part
+    occupies it. Every prism stands `clearance` outside its rectangle. A prism
+    that comes within SUPPORT_BEARING of a long side edge, or names that side in
+    `wall_side`, is carried out through that side's wall to `wall` past the board
+    edge, so the break opens the whole ledge and leaves no sliver in front of
+    the wall. The back ledges and the front ledges share this."""
+    board_box = board.board_profile().bounding_box()
+    out = []
+    for name, x0, y0, x1, y1, wall_side in items:
+        x0, y0, x1, y1 = x0 - clearance, y0 - clearance, x1 + clearance, y1 + clearance
+        cuts = [_break_box(x0, y0, x1, y1, z0, z1)]
+        if wall_side in ("-x", "both") or x0 < board_box.min.X + params.SUPPORT_BEARING:
+            outer = board_box.min.X - wall - 2 * MERGE
+            edge = max(x1, board_box.min.X + params.SUPPORT_BEARING + MERGE)
+            cuts.append(_break_box(outer, y0, edge, y1, z0, z1))
+        if wall_side in ("+x", "both") or x1 > board_box.max.X - params.SUPPORT_BEARING:
+            outer = board_box.max.X + wall + 2 * MERGE
+            edge = min(x0, board_box.max.X - params.SUPPORT_BEARING - MERGE)
+            cuts.append(_break_box(edge, y0, outer, y1, z0, z1))
+        out.append((name, _fuse(*cuts)))
+    return out
+
+
 def support_obstacles(clearance=params.SUPPORT_CLEARANCE):
-    """Clearance volumes for bottom courtyards and board screw heads."""
+    """Clearance volumes for the board's bottom courtyards and the assembly
+    solids that reach below the ledge top, each opening a break in the runs."""
     reach = LAP_IN + MERGE + params.SUPPORT_BEARING
     z0 = support_top() - reach * math.tan(
         math.radians(params.SUPPORT_UNDER_ANGLE)
     ) - MERGE
     z1 = 0.1
-    out = []
-    board_box = board.board_profile().bounding_box()
-    def through_wall(name, solid, x0, y0, x1, y1, wall_side=None):
-        cuts = [solid]
-        if wall_side in ("-x", "both") or x0 < board_box.min.X + params.SUPPORT_BEARING:
-            outer = board_box.min.X - LAP_IN - 2 * MERGE
-            x1 = max(
-                x1,
-                board_box.min.X
-                + params.SUPPORT_BEARING
-                + MERGE,
-            )
-            cuts.append(
-                Pos((outer + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
-                * Box(x1 - outer, y1 - y0, z1 - z0)
-            )
-        if wall_side in ("+x", "both") or x1 > board_box.max.X - params.SUPPORT_BEARING:
-            outer = board_box.max.X + LAP_IN + 2 * MERGE
-            x0 = min(
-                x0,
-                board_box.max.X
-                - params.SUPPORT_BEARING
-                - MERGE,
-            )
-            cuts.append(
-                Pos((x0 + outer) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
-                * Box(outer - x0, y1 - y0, z1 - z0)
-            )
-        out.append((name, _fuse(*cuts)))
-
+    items = []
     for ref, (x0, y0, x1, y1, side) in board.courtyards().items():
-        if side != "bottom":
-            continue
-        solid = Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * Box(
-            x1 - x0 + 2 * clearance, y1 - y0 + 2 * clearance, z1 - z0
-        )
-        through_wall(
-            ref,
-            solid,
-            x0 - clearance,
-            y0 - clearance,
-            x1 + clearance,
-            y1 + clearance,
-            "both" if ref == "D1" else None,
-        )
-    assembly_obstacles = []
+        if side == "bottom":
+            items.append((ref, x0, y0, x1, y1, "both" if ref == "D1" else None))
     for index, solid in enumerate(board.assembly_solids(), 1):
         box = solid.bounding_box()
         if box.min.Z >= support_top():
             continue
-        x0 = box.min.X - clearance
-        y0 = box.min.Y - clearance
-        x1 = box.max.X + clearance
-        y1 = box.max.Y + clearance
-        assembly_obstacles.append((index, x0, y0, x1, y1))
-
-    for index, x0, y0, x1, y1 in assembly_obstacles:
-        reaches_wall = (
-            x0 < board_box.min.X + params.SUPPORT_BEARING
-            or x1 > board_box.max.X - params.SUPPORT_BEARING
-        )
-        if reaches_wall:
+        y0, y1 = box.min.Y, box.max.Y
+        board_box = board.board_profile().bounding_box()
+        if (
+            box.min.X - clearance < board_box.min.X + params.SUPPORT_BEARING
+            or box.max.X + clearance > board_box.max.X - params.SUPPORT_BEARING
+        ):
             middle = (y0 + y1) / 2
-            matching_break = params.SCREW_HEAD_D + 2 * clearance
-            half = max((y1 - y0) / 2, matching_break / 2)
+            half = max((y1 - y0) / 2, params.SUPPORT_MIN_BREAK / 2 - clearance)
             y0, y1 = middle - half, middle + half
-        obstacle = Pos(
-            (x0 + x1) / 2,
-            (y0 + y1) / 2,
-            (z0 + z1) / 2,
-        ) * Box(x1 - x0, y1 - y0, z1 - z0)
-        through_wall(f"through-board solid {index}", obstacle, x0, y0, x1, y1)
-    # By refdes, not by loop index, so a check message and a feature id both
-    # name the hole a reader can find on the board. Every hole now, H1 included:
-    # its screw head sits on the board's underside like the other two, the
-    # standoff that used to fill that column having gone with the floor screw.
-    refs = board.mounting_hole_refs()
-    for x, y in mount_points():
-        solid = Pos(x, y, (z0 + z1) / 2) * Cylinder(
-            params.SCREW_HEAD_D / 2 + clearance, z1 - z0
+        items.append(
+            (f"through-board solid {index}", box.min.X, y0, box.max.X, y1, None)
         )
-        radius = params.SCREW_HEAD_D / 2 + clearance
-        through_wall(
-            f"mount {refs[(x, y)]}", solid, x - radius, y - radius, x + radius, y + radius
-        )
-    return out
+    # The front's end-screw block and its side tie hang in the back's cavity at
+    # the grip end. A ledge round that corner would cross the tie, and the
+    # relief cut for it would cut the tie off the skirt.
+    block = end_screw_block().bounding_box()
+    items.append(
+        ("end screw block", block.min.X, block.min.Y, block.max.X, block.max.Y, None)
+    )
+    return ledge_breaks(items, LAP_IN, z0, z1, clearance)
 
 
-def _uncut_support():
-    """Flat board ledge with a filleted inboard edge and printable underside."""
-    top = support_top()
+def _ledge_blank(outer):
+    """Flat board ledge at z 0 with a filleted inboard edge and a printable
+    underside, reaching `outer` past the board edge. Built with its top face at
+    z 0 so the back lifts it and the front mirrors it."""
+    top = 0.0
     inner = -params.SUPPORT_BEARING
-    outer = LAP_IN + MERGE
     depth = (outer - inner) * math.tan(
         math.radians(params.SUPPORT_UNDER_ANGLE)
     )
@@ -152,6 +128,11 @@ def _uncut_support():
     if len(inner_edges) != 2:
         raise ValueError(f"expected two support inner edges, found {len(inner_edges)}")
     return fillet(inner_edges, params.SUPPORT_INNER_R)
+
+
+def _uncut_support():
+    """The back's ledge blank, lifted to the support plane."""
+    return Pos(0, 0, support_top()) * _ledge_blank(LAP_IN + MERGE)
 
 
 def support_fragments():

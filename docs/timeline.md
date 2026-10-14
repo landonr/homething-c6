@@ -39,7 +39,7 @@ Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 
 | Expander interrupt | Absent, no `exp_int` net and no R9 pull-up | R9 100k pull-up, nINT to GPIO5 |
 | Battery connector | J1 through-hole `S2B-PH-K` | J1 SMD `S2B-PH-SM4-TB` |
 | Board edge | Square corners, four square encoder cutouts | 3mm filleted corners, real Adafruit ANO cutout shapes |
-| Mounting | No fixing points | Three `H1`-`H3` 2.4mm NPTH holes for M2 screws |
+| Mounting | No fixing points | No mounting holes. `H1`-`H3` were removed on 2026-10-14 |
 | IR emitter | D1 on a plain 3mm LED footprint on the front (F.Cu), leads bent 90° by PCBWay at assembly | D1 on the back face (B.Cu) at 61.98,32.75 on a forked horizontal footprint with + and - silk glyphs, so the bend is designed in, and `R3` at 10R for about 150mA |
 | Via in pad | Four vias inside SMD pads, which PCBWay flagged 2026-07-30 as a solder-paste leakage risk | All four cleared |
 | Silkscreen | Front homeThing logo only | Plus back artwork (flag, OSHW gear, made-in text) and a front mic-port mark |
@@ -77,6 +77,7 @@ Unit 1 hand rework so far: `sw*` traces cut and jumpered to the free terminal on
 | 2026-08-26 | Per-unit microphone result across the five rev-B remotes: one mic works, one works with distortion, and three do not work. All five boards share one design, one firmware and one fab batch, so no design cause can produce that spread. The leading cause is a process or handling step, most likely port contamination. The investigation is open in `docs/mic-v2-debugging.md` |
 | 2026-08-29 | Firmware learns and replays IR codes on `SW3`-`SW11`, with a receiver mode that stays open until `SW2`, at `634dade`. The same commit fixed the RMT split that left the LED strip on 96 symbols and made the IR transmitter fail silently at boot, and recorded the board-to-board transmit bisect in `TRANSMITTING.md`. The stackup silkscreen then darkened from `#E5C100` to `#A98600` so the README board renders read as a deeper gold against the black soldermask, with `export/` and `docs/readme-assets/` regenerated (`ed1aee6`) |
 | 2026-09-07 | **`MK1` swapped to the PUI Audio `DMM-4026-B-I2S-R`.** The ICS-43434 left the design after three of the five rev-B microphones failed. The change also fits the two faults that the old part carried: `C5`, a 100nF VDD decoupling capacitor, and `R12`, the 100k pull-down that the `sd` line always needed. `MK1` keeps its place on `B.Cu` and hears through the same 0.5mm NPTH. New library files are `c6remote-kicad/dmm_4026_b_i2s_r.kicad_sym`, `kicad lib/Library.pretty/MIC_DMM-4026-B-I2S-R.kicad_mod` and `c6remote-kicad/3dmodels/DMM-4026-B-I2S-R.STEP`. ERC and DRC hold the documented baseline, and parity is 0 |
+| 2026-10-14 | **Mounting holes removed.** `H1`-`H3` left the board, so it now has no mounting holes. The case holds the board with side ledges and the microphone duct. Only the end-wall closure screw remains, and it passes through no board hole. The `Library:MountingHole_2.4mm_M2` footprint stays in the library |
 
 ## Design decisions and closed findings
 
@@ -146,7 +147,7 @@ Every finding here is closed. The items are grouped by subsystem, not by date. O
 
 ### Mounting
 
-- The three `H1`-`H3` instances are `board_only`, `exclude_from_pos_files` and `exclude_from_bom`, which keeps parity at 0 without tripping `lib_footprint_mismatch`, and leaves the position file at 37 rows and the BOM untouched. The footprint is a single 2.4mm `np_thru_hole` pad with no annular ring, a 2.2mm courtyard, a hidden reference so it adds no silk, and a `Cmts.User` circle at the head diameter so the keepout is visible in the editor. After the M2 change the tightest margin went from +0.112mm to +0.612mm, where `ws` runs 2.612mm from H1's centre on B.Cu, the face the screw heads bear on, with H2 at +0.900 to `ir_vdd` and H3 at +1.070 to `sw10`.
+- Until their removal on 2026-10-14, the three `H1`-`H3` instances were `board_only`, `exclude_from_pos_files` and `exclude_from_bom`, which kept parity at 0 without tripping `lib_footprint_mismatch`, and left the position file at 37 rows and the BOM untouched. The footprint is a single 2.4mm `np_thru_hole` pad with no annular ring, a 2.2mm courtyard, a hidden reference so it adds no silk, and a `Cmts.User` circle at the head diameter so the keepout is visible in the editor. After the M2 change the tightest margin went from +0.112mm to +0.612mm, where `ws` runs 2.612mm from H1's centre on B.Cu, the face the screw heads bear on, with H2 at +0.900 to `ir_vdd` and H3 at +1.070 to `sw10`.
 
 ### Back silkscreen artwork
 

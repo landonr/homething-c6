@@ -334,7 +334,7 @@ def _pad_clears_board(s):
 def _mic_pad_contour(s):
     return _report(
         mic_pad_contour(s.pad),
-        "mic pad follows both buttons with rounded inner joins and an attached lower bridge",
+        "mic pad is solid between its buttons, has an open mic notch and rounded notch corners",
     )
 
 

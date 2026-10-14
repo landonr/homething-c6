@@ -55,6 +55,7 @@ from build123d import Axis, Box, Compound, Cylinder, Pos
 import board
 import case
 from model import keypad as keypad_model
+from model.mic import mic_duct_or, mic_port
 from model.stack import CAVITY_FRONT, LAP_OUT, SKIRT_BOTTOM
 import params
 
@@ -582,12 +583,12 @@ def pad_wall_fit(pairs):
 
 
 def mic_pad_contour(pad):
-    """Probe the open upper gap, lower bridge, and rounded inner joins."""
+    """Probe the mic lobe: solid web between the keys, open mic notch, filleted corners."""
     refs = sorted(case.island_refs("second"), key=lambda ref: board.components()[ref][0])
     left, right = [board.components()[ref][:2] for ref in refs]
-    y = min(left[1], right[1])
-    bridge_top = case.pad_bridge_top()
-    x = (left[0] + right[0]) / 2
+    mx, my = mic_port()
+    lobe = next(box[1:] for box in case.pad_lobes() if box[0] == "second")
+    top = lobe[3]
     z = (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2
     problems = []
 
@@ -595,27 +596,37 @@ def mic_pad_contour(pad):
         probe = Pos(px, py, z) * Cylinder(radius=0.05, height=params.PAD_WEB_T / 2)
         return _fill_fraction(pad, probe)
 
-    if filled(x, bridge_top + params.PAD_MARGIN) > 0.01:
-        problems.append("the mic pad has a straight upper web between its buttons")
-    lower_edge = next(box[2] for box in case.pad_lobes() if box[0] == "second")
-    if filled(x, (bridge_top + lower_edge) / 2) < 0.99:
-        problems.append("the mic pad has no lower bridge between its buttons")
-    nearby = [solid for solid in pad.solids() if solid.bounding_box().min.Y <= y <= solid.bounding_box().max.Y]
-    if len(nearby) != 1:
-        problems.append(f"the mic pad has {len(nearby)} pieces instead of one attached bridge")
-    for ref, (kx, ky), direction in zip(refs, (left, right), (1, -1)):
-        inner = kx + direction * (case.key_size(ref) / 2 + params.PAD_MARGIN)
-        # A sharp join leaves this point empty. The inside round fills it.
-        offset = params.PAD_JOIN_RADIUS / 5
-        if filled(inner + direction * offset, bridge_top + offset) < 0.99:
-            problems.append(f"the mic pad inner join beside {ref} has no round")
-    start = left[0] + case.key_size(refs[0]) / 2 + params.PAD_MARGIN + params.PAD_JOIN_RADIUS
-    end = right[0] - case.key_size(refs[-1]) / 2 - params.PAD_MARGIN - params.PAD_JOIN_RADIUS
-    for fraction in (0.25, 0.5, 0.75):
-        px = start + (end - start) * fraction
-        if filled(px, bridge_top - 0.1) < 0.99 or filled(px, bridge_top + 0.1) > 0.01:
-            problems.append("the mic pad bridge floor has a clearance bite instead of a smooth edge")
-            break
+    sites = [(mx, "between the keys")]
+    for ref, (kx, _), direction in zip(refs, (left, right), (1, -1)):
+        sites.append((kx + direction * (case.key_size(ref) / 2 + 1.0), f"beside {ref}"))
+    for px, label in sites:
+        for py in (-36.5, -38.5):
+            if filled(px, py) < 0.99:
+                problems.append(f"the mic pad web is open {label} at y {py}")
+    # The duct's widest chamfer is the physical floor for the notch.
+    duct = mic_duct_or() + params.STANDOFF_CHAMFER
+    full = duct + params.PAD_MIC_CLEARANCE
+    if filled(mx, my - (duct - 0.1)) > 0.01:
+        problems.append("the mic pad has material inside the mic duct clearance")
+    if filled(mx, my - full - 0.1) < 0.99:
+        problems.append("the mic notch is wider than its clearance circle")
+    half = math.sqrt(full**2 - (top - my) ** 2)
+    for side in (-1, 1):
+        corner = (mx + side * half, top)
+        radial = ((corner[0] - mx) / full, (corner[1] - my) / full)
+        # Unit vector along the arc, heading down toward the notch floor.
+        tangent = (-side * abs(radial[1]), -abs(radial[0]))
+        norm = math.hypot(side + tangent[0], tangent[1])
+        bx, by = (side + tangent[0]) / norm, tangent[1] / norm
+        # A sharp corner is solid here. The round only takes about 0.13 off this
+        # line-to-arc corner, so the probe is small and sits well inside that.
+        probe = Pos(corner[0] + bx * 0.05, corner[1] + by * 0.05, z) * Cylinder(
+            radius=0.01, height=params.PAD_WEB_T / 2
+        )
+        if _fill_fraction(pad, probe) > 0.01:
+            problems.append(
+                f"the mic notch corner at x {corner[0]:.2f} has no PAD_JOIN_RADIUS round"
+            )
     return problems
 
 

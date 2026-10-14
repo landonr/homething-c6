@@ -931,11 +931,11 @@ the same leg, so every key tile slopes down to hinge level on all four sides.
 It must stay at or below FDM_PAD_GROOVE_DEPTH and short of each keytop base.
 """
 PAD_MARGIN = 1.0
-"""Web margin around each island's outermost buttons. The mic island follows each button above a shared lower bridge."""
+"""Web margin around each island's outermost buttons. Both lobes are full rounded rectangles around their buttons."""
 PAD_RADIUS = 4.8
-"""Corner radius on the grid lobe and each mic-island button contour. Keep it below half the smallest contour width."""
+"""Corner radius on both lobes. Keep it below half the smallest lobe width."""
 PAD_JOIN_RADIUS = 1.5
-"""Round the inner corners between the two button contours and their lower connecting web."""
+"""Round the two corners where the mic clearance circle meets the mic lobe top edge."""
 PAD_FIT = 0.3
 """Gap from each pad lobe to the front's stiffened inner wall. The lobes no
 longer reach the wheel (see PAD_LED_CLEARANCE and case.pad_wheel_gap()), so

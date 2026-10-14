@@ -15,6 +15,7 @@ from build123d import (
     Box,
     BuildLine,
     BuildSketch,
+    Circle,
     Cone,
     Face,
     Kind,
@@ -1030,47 +1031,35 @@ def _pad_limit():
     return Face(wall.outer_wire().offset_2d(-params.PAD_FIT, kind=Kind.INTERSECTION))
 
 
-def pad_bridge_top():
-    """Y of the lower bridge's upper edge between the buttons: the lowest switch
-    row of the second island."""
-    parts = board.components()
-    return min(parts[ref][1] for ref in island_refs("second"))
+def _mic_clearance_radius():
+    """Radius of the mic duct's open-edge clearance circle, shared by the 2D
+    lobe outline and the 3D `_mic_clearance()` cut so the two cannot drift."""
+    return mic_duct_or() + params.STANDOFF_CHAMFER + params.PAD_MIC_CLEARANCE
 
 
 def pad_lobe_face(name):
-    """Round each button contour near the mic and keep the lower web attached."""
+    """The lobe's rounded rectangle, clipped inside the stiffened wall.
+
+    The mic lobe also loses the mic clearance circle, and the two corners
+    where that circle meets the top edge take PAD_JOIN_RADIUS."""
     x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
     with BuildSketch() as sketch:
         with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
             RectangleRounded(x1 - x0, y1 - y0, params.PAD_RADIUS)
-    rect = sketch.sketch.faces()[0]
-    outline = extrude(rect, amount=1, dir=(0, 0, 1))
+    contour = sketch.sketch.faces()[0]
     if name == "second":
-        parts = board.components()
-        refs = island_refs(name)
-        bridge_top = pad_bridge_top()
-        lower = outline.intersect(
-            Pos((x0 + x1) / 2, (y0 + bridge_top) / 2, 0.5)
-            * Box(x1 - x0 + 2, bridge_top - y0, 1)
-        ).solids()[0]
-        keys = []
-        for ref in refs:
-            x, y = parts[ref][:2]
-            size = key_size(ref) + 2 * params.PAD_MARGIN
-            keys.append(_rounded_prism(x, y, size, params.PAD_RADIUS, 0, 1))
-            keys.append(
-                Pos(x, (bridge_top - MERGE + y) / 2, 0.5)
-                * Box(size, y - bridge_top + MERGE, 1)
-            )
-        contour = _fuse(lower, *keys).faces().sort_by()[0]
-        joins = [
+        mx, my = mic_port()
+        radius = _mic_clearance_radius()
+        with BuildSketch() as notch:
+            with Locations((mx, my)):
+                Circle(radius)
+        contour = contour - notch.sketch.faces()[0]
+        corners = [
             vertex for vertex in contour.vertices()
-            if abs(vertex.Y - bridge_top) < 1e-6
-            and x0 + params.PAD_RADIUS < vertex.X < x1 - params.PAD_RADIUS
+            if abs(vertex.Y - y1) < 1e-6 and abs(vertex.X - mx) < radius + 0.1
         ]
-        contour = contour.fillet_2d(params.PAD_JOIN_RADIUS, joins)
-        outline = extrude(contour, amount=1, dir=(0, 0, 1)).intersect(outline).solids()[0]
-    clipped = outline & extrude(
+        contour = contour.fillet_2d(params.PAD_JOIN_RADIUS, corners)
+    clipped = extrude(contour, amount=1, dir=(0, 0, 1)) & extrude(
         _pad_limit(), amount=1, dir=(0, 0, 1)
     )
     return clipped.faces().sort_by()[0]
@@ -1213,10 +1202,7 @@ def fdm_keycap(ref, legend=True):
 def _mic_clearance():
     """Open-edge clearance around the mic duct's widest ceiling chamfer."""
     x, y = mic_port()
-    diameter = 2 * (
-        mic_duct_or() + params.STANDOFF_CHAMFER + params.PAD_MIC_CLEARANCE
-    )
-    return _hole(x, y, diameter, PAD_SKIRT_BOTTOM - 1, PAD_WEB_TOP + 1)
+    return _hole(x, y, 2 * _mic_clearance_radius(), PAD_SKIRT_BOTTOM - 1, PAD_WEB_TOP + 1)
 
 
 def plunger(x, y, contact=SWITCH_TOP, extension=params.PLUNGER_SWITCH_EXTENSION):
@@ -1356,7 +1342,7 @@ def legacy_skirt_breaks():
 def button_pad(fdm=False, skirt=None, grooves=True, legend=True, v2=False):
     """Build two pad lobes supported by their switch plungers.
 
-    The mic lobe follows both buttons with a connected lower bridge.
+    The mic lobe is a full rounded rectangle with the mic clearance circle cut from its top edge.
     Both lobes stop outside the wheel clearance band. With fdm=True, the
     printed keytops and legends are fused to their lobe webs in this export.
     `skirt` adds the perimeter skirt and defaults to the moulded pad only.

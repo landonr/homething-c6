@@ -71,33 +71,40 @@ def end_depth(sign):
     return clear + params.FLOOR
 
 
-def _tip_lift(y):
+def _tip_lift(y, inset=0.0):
     """How far the back rolls up as it approaches the end of the case, so the
-    bottom meets the end face tangentially. Keyed to the case's own end, not the
-    board's, or the roll finishes before the end face and leaves a lip."""
+    bottom meets the end face tangentially. Keyed to the end of the profile at
+    this inset and to that end's radius less the inset. The cavity's roll is then
+    tangent to its own floor and its own end wall."""
     box = board.board_profile().bounding_box()
-    over = params.BOARD_FIT + params.WALL
-    r = params.CONTOUR_TIP_R
-    d = min(y - (box.min.Y - over), (box.max.Y + over) - y)
+    over = params.BOARD_FIT + params.WALL - inset
+    lo, hi = box.min.Y - over, box.max.Y + over
+    if y - lo <= hi - y:
+        d, r = y - lo, params.CONTOUR_TIP_R_GRIP - inset
+    else:
+        d, r = hi - y, params.CONTOUR_TIP_R - inset
+    if r <= 0:
+        raise ValueError(f"inset {inset} leaves no tip roll at this end")
     d = min(max(d, 0.0), r)
     return r - math.sqrt(max(r * r - (r - d) ** 2, 0.0))
 
 
-def contour_depth(y):
+def contour_depth(y, inset=0.0):
     """How deep the back reaches below the board at this point along it.
 
     Full depth from the grip edge to the cell's +Y end, tapering to each end's own derived
-    depth past them, then rolling up through CONTOUR_TIP_R at the very ends. The
-    cell sits toward the bottom, so the deep part is where the hand is.
+    depth past them, then rolling up through the tip radius of each end at the very
+    ends. The inset gives the roll of an inset profile. The cell sits toward the
+    bottom, so the deep part is where the hand is.
     """
     deep = -SHELL_BACK
     lo, hi = deep_span()
     if lo <= y <= hi:
-        return deep - _tip_lift(y)
+        return deep - _tip_lift(y, inset)
     sign = 1 if y > hi else -1
     t = min((y - hi if sign > 0 else lo - y) / params.CONTOUR_BLEND, 1.0)
     base = deep + (end_depth(sign) - deep) * t * t * (3 - 2 * t)
-    return base - _tip_lift(y)
+    return base - _tip_lift(y, inset)
 
 
 def back_edge_radius(y):
@@ -192,17 +199,15 @@ def end_reach():
     x = max(v.X for v in wire.vertices())
     ys = [v.Y for v in wire.vertices() if x - v.X < 1e-6]
     runs = (min(ys) - box.min.Y, box.max.Y - max(ys))
-    return max(params.CONTOUR_TIP_R, *runs)
+    return max(params.CONTOUR_TIP_R, params.CONTOUR_TIP_R_GRIP, *runs)
 
 
 def _end_stations(tip, step):
     """Stations through one end region, angle-spaced from the end face.
 
     Keyed to the outer profile's corner, which is where the surface that shows
-    turns. The cavity's own corner starts a wall further in and is sampled more
-    coarsely, which leaves its floor a hair proud of tangency at the corner and
-    so a hair of extra wall. Resolving that one too doubles the section count
-    for a face nobody sees.
+    turns. The cavity carries its own roll, which ends a wall further in. It has
+    its own station at its end plane, added in _contour_samples.
     """
     reach = end_reach()
     out = set()
@@ -222,7 +227,15 @@ def _contour_samples():
     b = params.CONTOUR_BLEND
     reach = end_reach()
 
-    ys = {lo, hi, ends[0] - SECTION_OVERRUN, ends[1] + SECTION_OVERRUN, *ends}
+    cavity_ends = (box.min.Y - params.BOARD_FIT, box.max.Y + params.BOARD_FIT)
+    ys = {
+        lo,
+        hi,
+        ends[0] - SECTION_OVERRUN,
+        ends[1] + SECTION_OVERRUN,
+        *ends,
+        *cavity_ends,
+    }
     for start in (lo - b, hi):
         for i in range(21):
             y = start + b * i / 20
@@ -242,6 +255,11 @@ def _contour_samples():
         if not ends[0] - SECTION_OVERRUN <= y <= ends[1] + SECTION_OVERRUN:
             continue
         gap = END_STEP if out and y in crowded and out[-1] in crowded else SECTION_GAP
+        if y in cavity_ends:
+            # The cavity's roll meets its end wall here, so this station wins
+            # over a neighbour that is too close.
+            while out and y - out[-1] < gap and out[-1] not in ends:
+                out.pop()
         if not out or y - out[-1] >= gap:
             out.append(y)
     return out
@@ -268,7 +286,7 @@ def back_form(inset, lift, corner_inset=0.0):
     top = SHELL_FRONT + 10
     sections = []
     for i, y in enumerate(ys):
-        depth = contour_depth(y) - lift
+        depth = contour_depth(y, inset) - lift
         center, half = _plan_chord(inset, y)
         half += _plan_bias(inset, ys, i)
         radius = max(

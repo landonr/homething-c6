@@ -467,8 +467,8 @@ def main():
     # Both derived from the same stack rather than quoted: a board screw crosses
     # the board and takes the pilot, and the end screw crosses the wall left
     # under its head, the gap the block stands off that wall by, and its own
-    # shorter engagement. They come out the same length, so the case takes one
-    # fastener: END_SCREW_PILOT_DEPTH is what keeps it that way.
+    # shorter engagement. The end screw is one size shorter than the board screws,
+    # and END_SCREW_PILOT_DEPTH sets its length.
     short_screw = params.BOARD_THICKNESS + params.BOSS_PILOT_DEPTH
     end_x, end_z = end_screw_axis()
     block_x0, block_x1 = end_screw_block_span()

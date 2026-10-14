@@ -326,8 +326,8 @@ clearance, and at the present layout this one governs."""
 # into a block the front shell carries behind its skirt. So it closes the two
 # shells to each other; the board is held by its own three screws into the front
 # plate's bosses, and every mounting hole keeps a short screw. Its head is the
-# only hole in the back's outer surface. Same M2 x 6 as the board screws:
-# case.py prints the length the stack computes.
+# only hole in the back's outer surface. It is an M2 x 5, one size shorter than
+# the board screws. case.py prints the length the stack computes.
 SHELL_SCREW_CLEAR_D = 2.4
 """Clearance hole through the back's -Y end wall, matched to the board's own 2.4
 holes rather than chosen: the same M2 passes a 2.4 at H1-H3, so drilling the
@@ -349,16 +349,18 @@ END_SCREW_X_OFFSET = 5.8
 This sets where the head counterbore sits on the -Y wall, +x of R8. The block
 the screw threads into reaches half END_SCREW_BLOCK_W to each side of this
 axis, but its +x side stops at the grip corner tangent."""
-END_SCREW_Z = -6.5
+END_SCREW_Z = -5.5
 """Height of the end screw's axis, below the board.
 
-Bounded both ways by the -Y wall's own section. Above, the back's lap is
-hollowed out for the skirt down to SKIRT_BOTTOM less the fit, so a head
-counterbore any higher would break into that relief instead of sinking into
-solid wall. Below, the back's outer surface rolls away through
-CONTOUR_TIP_R toward the floor. This leaves the whole SHELL_SCREW_HEAD_D
-counterbore on flat, full-thickness wall, which checks/hardware.py's end_screw
-pass measures on the built back rather than restating here."""
+Bounded above by the cover over the pilot's tip. The 45 degree ramp on top of
+the block starts at SUPPORT_TOP at the ledge and falls one for one toward +Y,
+so a higher axis leaves less cover over the tip than checks/hardware.py
+end_screw requires. Above that limit, the counterbore top would reach the
+back's lap relief, which is hollowed out for the skirt down to SKIRT_BOTTOM
+less the fit. Bounded below by the roll of the back's outer surface through
+CONTOUR_TIP_R_GRIP toward the floor. The whole SHELL_SCREW_HEAD_D counterbore
+must stay on flat, full-thickness wall. checks/hardware.py end_screw measures
+this on the built shells rather than restating it here."""
 END_SCREW_BLOCK_W = 22.0
 """Width of the block the end screw threads into, across the case.
 
@@ -376,7 +378,7 @@ below it. The -x end
 passes under R8, because the ramp falls well below R8's underside at R8's Y.
 checks/hardware.py's feature_clashes reads that clearance on the built block,
 not on its bounding box."""
-END_SCREW_BLOCK_GAP = 1.0
+END_SCREW_BLOCK_GAP = 0.5
 """How far the block's own -Y face stands off the back's inner end wall.
 
 Its own number rather than SKIRT_FIT, which is what this was and is too little
@@ -385,10 +387,10 @@ another and are held in register by the lap all round them. The block is held
 by nothing: it hangs off the skirt on one web, deep inside the cavity, aimed
 straight at a wall the fold brings up to meet it. If it lands, it is a hard
 stop between the two shells and the whole case bows out at that end, which is
-what a printed one did. The added 0.2 of stand-off eases the printed fold and
-comes out of the thread rather than the screw, so the case still closes with
-one M2 x 6."""
-END_SCREW_BLOCK_D = 4.2
+what a printed one did. The gap is 0.2 more than SKIRT_FIT. A smaller gap
+brings the pilot closer to where the ramp starts, and this lets the screw sit
+higher."""
+END_SCREW_BLOCK_D = 3.7
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
 0.5, so the pilot ends inside it and the thread is never drilled out the back
 of its own boss.
@@ -396,15 +398,15 @@ of its own boss.
 The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
 so a deeper block also takes more off the cover over the pilot's tip."""
-END_SCREW_PILOT_DEPTH = 3.7
+END_SCREW_PILOT_DEPTH = 3.2
 """Engagement this one screw takes, against BOSS_PILOT_DEPTH for the three that
 hold the board.
 
-Shorter by what END_SCREW_BLOCK_GAP added, because the screw is the fixed
-quantity here: one M2 x 6 for the whole case, so anything the standoff takes
-comes off the far end of the thread. It remains nearly two diameters into a
-self-tapped boss that is END_SCREW_BLOCK_W wide, and this screw only closes
-two shells rather than carrying the board."""
+The screw is an M2 x 5, one size shorter than the board screws. The screw
+length is the fixed quantity here, so the pilot is what is left after the wall
+under the head and END_SCREW_BLOCK_GAP. It remains more than one and a half
+diameters into a self-tapped boss that is END_SCREW_BLOCK_W wide. This screw
+only closes two shells and does not carry the board."""
 END_SCREW_BLOCK_BOTTOM = 2.5
 """Material the block carries below the screw axis, matching BOSS_OD/2 so the
 wall under the thread is what it is around every other M2 in this case. Above
@@ -434,18 +436,18 @@ chamfer on that chain tore the exported mesh.
 
 Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
 below the screw and never reaches the thread."""
-END_SCREW_BLOCK_END_R = 6.0
+END_SCREW_BLOCK_END_R = 5.0
 """Round on the block's two bottom end edges, the +X and -X ones that run along Y.
 
 It takes the square bottom corners off a block that only needs material around
 the thread, which saves material and print time. Bounded below SKIRT_BOTTOM so
 the web and the +X side tie keep their full height, and kept outside
 END_SCREW_BLOCK_BOTTOM around the screw axis at each end so the thread keeps
-its wall.
+its wall. The block bottom now sits higher, and this bounds the round.
 
 Cut as a profile across the block's whole Y extent, never an edge fillet, for
 the reason END_SCREW_BLOCK_BASE_CHAMFER is (see _ramp_block_top)."""
-END_SCREW_BLOCK_RAMP_LEDGE = 0.5
+END_SCREW_BLOCK_RAMP_LEDGE = 0.4
 """Flat step the block's top keeps before its 45 degree ramp, measured from the
 plain board fit plane, not from the skirt face. skirt_stiffener() moves that
 face SIDE_SKIRT_THICKEN inboard at the grip end, so the flat left off the
@@ -491,8 +493,8 @@ clamped between the board and the back shell."""
 CELL_END_MARGIN = 7.0
 """How far the cell sits from the near end of its bay, which is what pushes the
 cell down toward the bottom edge instead of centring it. Wants to stay clear of
-CONTOUR_TIP_R, or the rounded-off end eats into the cell. At the -Y end it is also
-the room for the plug and the leads between J1 and the pouch."""
+CONTOUR_TIP_R and CONTOUR_TIP_R_GRIP, or the rounded-off end eats into the cell.
+At the -Y end it is also the room for the plug and the leads between J1 and the pouch."""
 
 BACK_KEEPOUT = 12.0
 """The deepest the cavity gets, over the cell and the grip end. The pouch stack
@@ -517,10 +519,19 @@ depth can make the bore break out through the underside. U2's bottom aperture
 does not share that constraint; its conformal insert follows whatever back form
 this depth produces. Built end-port and receiver-path checks guard both cases."""
 CONTOUR_TIP_R = 5.0
-"""Radius the back rolls up through at each end of the case, so the bottom meets
-the end face tangentially instead of squaring off into it. Keyed to the case's own
-end, not the board's. The loft's end regions run over this radius or the plan's own
-corner, whichever reaches further in."""
+"""Radius the back rolls up through at the +Y (IR) end of the case, so the bottom
+meets the end face tangentially instead of squaring off into it. D1's bore budget
+bounds it there. Keyed to the case's own end, not the board's. The loft's end
+regions run over this radius or the plan's own corner, whichever reaches further
+in."""
+CONTOUR_TIP_R_GRIP = 7.2
+"""Radius the back rolls up through at the -Y grip end. The cavity rolls through
+this less WALL, tangent to its floor and its end wall, so the corner keeps at
+least FLOOR of wall. The end screw head counterbore bounds it, because the lower
+rim of that counterbore must stay on the flat end face. The cavity's roll does
+not reach the end screw block, because the block stands END_SCREW_BLOCK_GAP off
+the back's inner wall. At 7.0 and 7.4 the support envelope loft does not
+intersect and the build stops, so test a new value with a full build."""
 CONTOUR_BLEND = 22.0
 """Length each taper runs over, measured out from the cell. Long enough that
 the hump is a curve to hold rather than a step."""

@@ -32,6 +32,12 @@ from build123d import export_brep, export_stl, import_brep
 HERE = Path(__file__).resolve().parent
 CACHE = HERE / ".cache"
 
+STL_TOLERANCE = 0.01
+STL_ANGULAR_TOLERANCE = 0.05
+"""Mesh settings for every exported STL. The build123d default linear tolerance
+of 0.001 scatters points across the long ruled faces of the back's loft. Their
+normals then tilt enough to show as a row of bright facets."""
+
 
 def enabled():
     return not os.environ.get("CASE_NO_CACHE")
@@ -57,7 +63,7 @@ def _sources():
     """Every file whose bytes can change what a cached builder returns."""
     import board
 
-    paths = [HERE / "params.py", HERE / "board.py"]
+    paths = [HERE / "params.py", HERE / "board.py", HERE / "cache.py"]
     paths += sorted((HERE / "model").glob("*.py"))
     for directory in (HERE / "fonts", HERE / "glyphs"):
         paths += sorted(p for p in directory.rglob("*") if p.is_file())
@@ -201,13 +207,23 @@ def export_stl_cached(shape, dest):
     """Write dest, from the cached bytes if this shape has been meshed before."""
     dest = Path(dest)
     if not enabled():
-        export_stl(shape, str(dest))
+        export_stl(
+            shape,
+            str(dest),
+            tolerance=STL_TOLERANCE,
+            angular_tolerance=STL_ANGULAR_TOLERANCE,
+        )
         return
     blob = _dir() / dest.name
     if blob.exists():
         shutil.copyfile(blob, dest)
         return
-    export_stl(shape, str(dest))
+    export_stl(
+        shape,
+        str(dest),
+        tolerance=STL_TOLERANCE,
+        angular_tolerance=STL_ANGULAR_TOLERANCE,
+    )
     _open_for_write()
     partial = _partial(blob)
     shutil.copyfile(dest, partial)

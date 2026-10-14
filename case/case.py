@@ -9,7 +9,7 @@ from the back. The two shells meet in a lap joint around the whole perimeter, th
 closing over a skirt on the front, and are held by two detents at the IR end and
 one screw at the other, driven horizontally through the back's end wall into a
 block the front carries behind its skirt. Every mounting hole keeps its own short
-screw, so the case takes four M2 x 6 and nothing longer. Hidden catches in both
+screw, so the case takes three M2 x 6 and one M2 x 5. Hidden catches in both
 long-side skirts hold the seams closed near the board midpoint.
 
 The pad is two flat soft lobes with one raised feature per switch, one lobe per

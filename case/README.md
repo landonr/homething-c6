@@ -211,7 +211,7 @@ Each back detent sits lower than its pocket and bears on the lower lip with a li
 The preload holds the seam closed.
 `SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
 
-One M2 x 6 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The case uses four M2 x 6 screws in total and no long screw.
+One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt. The three board screws are M2 x 6.
 
 Prepare the back shell first:
 

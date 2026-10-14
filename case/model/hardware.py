@@ -468,8 +468,7 @@ def end_screw_wall_chamfer():
 def end_screw_length():
     """What the end screw has to be: the wall left under its head, the fit the
     block stands off that wall by, and the engagement it then takes. Comes out
-    at the same M2 x 6 as the three board screws, so the case takes one
-    fastener in one length."""
+    at M2 x 5, one size shorter than the three board screws."""
     return (
         (LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H)
         + params.END_SCREW_BLOCK_GAP

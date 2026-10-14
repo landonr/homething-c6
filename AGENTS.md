@@ -245,7 +245,7 @@ Do not use `v0.1` release URLs. The `2026.6.0` tag replaced `v0.1`.
 
 Do not use old `2026.7.0` asset URLs. The tag rename removed its unversioned BOM and position asset URLs.
 
-The PCB front silkscreen revision must equal the release version. It currently reads `2026.9`.
+The PCB front silkscreen revision must equal the release version. It currently reads `2026.10`.
 
 Every copper or silkscreen change creates a different board. The patch value changes for artwork changes.
 

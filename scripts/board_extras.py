@@ -26,6 +26,7 @@ GLYPHS = {
     "N": "10001 11001 10101 10011 10001 10001 10001",
     "J": "00111 00010 00010 00010 00010 10010 01100",
     "7": "11111 00001 00010 00100 01000 01000 01000",
+    "1": "00100 01100 00100 00100 00100 00100 01110",
     "0": "01110 10001 10011 10101 11001 10001 01110",
     "2": "01110 10001 00001 00010 00100 01000 11111",
     "5": "11111 10000 11110 00001 00001 10001 01110",
@@ -42,7 +43,7 @@ GLYPHS = {
 }
 DOT, PITCH = 0.21, 0.27
 CHAR = 6 * PITCH
-LABEL_L, LABEL_DX, LABEL_KY0 = 25.6, 6.4, 126.0
+LABEL_L, LABEL_DX, LABEL_KY0 = 25.6, 6.4, 126.55
 BARS = (0.3, 0.15, 0.45, 0.15, 0.15, 0.3, 0.3, 0.15, 0.15, 0.45, 0.3, 0.3, 0.15, 0.15, 0.15, 0.3,
         0.45, 0.15, 0.3, 0.15, 0.15, 0.45, 0.3, 0.15, 0.3, 0.3, 0.15, 0.15, 0.45, 0.15, 0.3, 0.15,
         0.45, 0.3, 0.15, 0.15, 0.3, 0.15, 0.3, 0.45, 0.15, 0.15, 0.3, 0.15, 0.45, 0.15, 0.3, 0.3)
@@ -146,11 +147,11 @@ def build(scene, board, battery=None):
     xbox("plug", JX - 2.95, JX + 2.95, 145.0, 153.0, -4.3, -1.0, white, bevel=0.25)
     xbox("plug-rib", JX - 1.5, JX + 1.5, 145.0, 147.0, -1.0, -0.7, white, bevel=0.15)
 
-    # 702050 pouch, 7 x 20 x 50, 0.6 below the bottom face, 1.5 in from the high-x edge to clear the shell.
-    PX0, PX1, PZ = 49.5, 69.5, -0.6
-    xbox("pouch", PX0, PX1, 89.0, 138.9, PZ - 7.0, PZ, pouch, bevel=1.7, seg=6)
+    # 102050 pouch, 10 x 20 x 50, 0.6 below the bottom face, centred under the board on the case model's cell axis.
+    PX0, PX1, PZ, PT = 43.337, 63.337, -0.6, 10.0
+    xbox("pouch", PX0, PX1, 89.55, 139.55, PZ - PT, PZ, pouch, bevel=1.7, seg=6)
     # Kapton wraps the PCM end, 0.05 proud of the pouch so the faces do not z-fight.
-    xbox("pouch-pcm", PX0 - 0.05, PX1 + 0.05, 133.0, 139.0, PZ - 7.05, PZ + 0.05, kapton, bevel=1.7, seg=6)
+    xbox("pouch-pcm", PX0 - 0.05, PX1 + 0.05, 133.55, 139.55, PZ - PT - 0.05, PZ + 0.05, kapton, bevel=1.7, seg=6)
 
     # Cell label replica on the outer pouch face: 5x7 dot-matrix print and a barcode. It reads
     # away from the Kapton end (toward -y) with its up toward +x, so the face reads correctly
@@ -171,8 +172,8 @@ def build(scene, board, battery=None):
 
 
     dots("- XINJ", 0, 5.5)
-    dots("702050", LABEL_L - 6 * CHAR, 5.5)
-    dots("+ 3.7V 800mAh", 0, 0)
+    dots("102050", LABEL_L - 6 * CHAR, 5.5)
+    dots("+3.7V 1000mAh", 0, 0)
     dots("CE", LABEL_L - 2 * CHAR, 0)
     u, gap = 2 * CHAR, False
     for w in BARS * 2:
@@ -185,15 +186,15 @@ def build(scene, board, battery=None):
     me = bpy.data.meshes.new("label")
     bm.to_mesh(me)
     bm.free()
-    me.transform(Matrix(((0, 1, 0, PX0 + LABEL_DX), (1, 0, 0, -LABEL_KY0), (0, 0, -1, PZ - 7.02), (0, 0, 0, 1))))
+    me.transform(Matrix(((0, 1, 0, PX0 + LABEL_DX), (1, 0, 0, -LABEL_KY0), (0, 0, -1, PZ - PT - 0.02), (0, 0, 0, 1))))
     t = bpy.data.objects.new("label", me)
     scene.collection.objects.link(t)
     bake(t, ink)
 
     # Leads leave the Kapton end 1 to 5 mm in from PX0 and enter the plug rear at the BAT and GND pads.
-    LZ, PZL = PZ - 3.6, -2.65
+    LZ, PZL = PZ - PT / 2, -2.65
     for nm, mat, x0, xp in (("lead-bat", red, PX0 + 2, JX - 1), ("lead-gnd", blk, PX0 + 4, JX + 1)):
-        xlead(nm, [((x0, 138.6, LZ), (x0, 136.6, LZ), (x0, 142.2, LZ)),
+        xlead(nm, [((x0, 139.25, LZ), (x0, 137.25, LZ), (x0, 142.85, LZ)),
                    ((xp, 145.4, PZL), (xp, 142.0, PZL), (xp, 146.4, PZL))], mat)
 
     bpy.context.view_layer.update()

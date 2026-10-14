@@ -175,6 +175,9 @@ render_schematic() {
 
   mv "${OUTPUT_DIR}/c6remote.svg" "${OUTPUT_DIR}/schematic.svg"
   echo "Wrote ${OUTPUT_DIR}/schematic.svg"
+
+  sed 's/#000000/#E6EDF3/g' "${OUTPUT_DIR}/schematic.svg" > "${OUTPUT_DIR}/schematic-dark.svg"
+  echo "Wrote ${OUTPUT_DIR}/schematic-dark.svg"
 }
 
 if [[ "${ONLY}" != "schematic" ]]; then

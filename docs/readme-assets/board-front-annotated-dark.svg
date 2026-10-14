@@ -16,6 +16,8 @@
 <text x="400" y="558" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">RGB status</text>
 <text x="400" y="613" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">LEDs</text>
 <text x="400" y="711" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">Rotary encoder</text>
+<text x="400" y="766" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">+ 5 addressable</text>
+<text x="400" y="821" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">buttons</text>
 <text x="400" y="1526" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">GPIO expander</text>
 <text x="400" y="1696" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="46" font-weight="400">XIAO ESP32-C6</text>
 </svg>

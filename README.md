@@ -52,7 +52,7 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
-    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the translucent enclosure, and the 800 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the translucent enclosure, and the 1000 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 
@@ -67,11 +67,11 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-front-annotated-dark.svg">
-    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder, RGB status LEDs, tactile switches, GPIO expander, and XIAO ESP32-C6 module." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
+    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder with 5 addressable buttons, RGB status LEDs, tactile switches, GPIO expander, and XIAO ESP32-C6 module." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-back-annotated-dark.svg">
-    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 800 mAh LiPo battery, and battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, and battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 <p align="center"><sub>PCB front and back</sub></p>
@@ -99,7 +99,12 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 
 ### Schematic
 
-![Current schematic](docs/readme-assets/schematic.svg)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
+    <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
+  </picture>
+</p>
 
 ## Firmware
 

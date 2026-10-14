@@ -126,7 +126,7 @@ case_front_callouts = [
 case_back_callouts = [
     ('emitter', [(346, 268), (1090, 268)], 'IR emitter', 1105, 299, 'start'),
     ('receiver', [(551, 685), (1090, 685)], 'IR receiver', 1105, 716, 'start'),
-    ('battery', [(480, 2300), (1090, 2300)], ('800 mAh battery', 'About a month\nper charge'), 1105, 2331, 'start'),
+    ('battery', [(480, 2300), (1090, 2300)], ('1000 mAh battery', 'About a month\nper charge'), 1105, 2331, 'start'),
     ('shell', [(904, 1980), (1090, 1980)], 'Translucent\nenclosure', 1105, 2011, 'start'),
 ]
 board_text = dict(font=46, detail_font=35, detail_dy=40)
@@ -134,7 +134,7 @@ board_canvas = (1060, 2001)
 board_front_callouts = [
     ('switches', [(618, 365), (410, 365)], '11 tactile\nswitches', 400, 381, 'end'),
     ('leds', [(600, 542), (410, 542)], 'RGB status\nLEDs', 400, 558, 'end'),
-    ('encoder', [(830, 695), (410, 695)], 'Rotary encoder', 400, 711, 'end'),
+    ('encoder', [(830, 695), (410, 695)], 'Rotary encoder\n+ 5 addressable\nbuttons', 400, 711, 'end'),
     ('expander', [(782, 1510), (410, 1510)], 'GPIO expander', 400, 1526, 'end'),
     ('module', [(814, 1680), (410, 1680)], 'XIAO ESP32-C6', 400, 1696, 'end'),
 ]
@@ -142,7 +142,7 @@ board_back_callouts = [
     ('receiver', [(435, 180), (647, 180)], 'IR receiver', 660, 196, 'start'),
     ('mic', [(303, 178), (303, 290), (647, 290)], 'I²S microphone', 660, 306, 'start'),
     ('emitter', [(192, 175), (192, 400), (647, 400)], 'IR emitter', 660, 416, 'start'),
-    ('pouch', [(250, 1250), (647, 1250)], '800 mAh LiPo\nbattery', 660, 1266, 'start'),
+    ('pouch', [(250, 1250), (647, 1250)], '1000 mAh LiPo\nbattery', 660, 1266, 'start'),
     ('connector', [(486, 1760), (647, 1760)], 'Battery\nconnector', 660, 1776, 'start'),
 ]
 for suffix, color in (('', black), ('-dark', light)):

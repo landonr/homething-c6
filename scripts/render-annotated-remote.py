@@ -142,8 +142,8 @@ board_back_callouts = [
     ('receiver', [(435, 180), (647, 180)], 'IR receiver', 660, 196, 'start'),
     ('mic', [(303, 178), (303, 290), (647, 290)], 'I²S microphone', 660, 306, 'start'),
     ('emitter', [(192, 175), (192, 400), (647, 400)], 'IR emitter', 660, 416, 'start'),
-    ('pouch', [(250, 1250), (647, 1250)], '1000 mAh LiPo\nbattery', 660, 1266, 'start'),
-    ('connector', [(486, 1760), (647, 1760)], 'Battery\nconnector', 660, 1776, 'start'),
+    ('pouch', [(760, 720), (760, 645)], '1000 mAh LiPo\nbattery', 660, 560, 'start'),
+    ('connector', [(470, 1785), (647, 1785)], 'Battery\nconnector', 660, 1801, 'start'),
 ]
 for suffix, color in (('', black), ('-dark', light)):
     render(f'remote-controls-annotated{suffix}.svg', case_canvas, 'case-annotated-front.png', (1.35, 887, 40),

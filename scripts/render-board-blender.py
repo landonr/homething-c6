@@ -23,6 +23,8 @@ MARGIN = 0.05
 FLIP = ((106.67491, 0, 3.26), (0, 1, 0, 0))
 ID = ((0, 0, 0), (0, 0, 0, 1))
 # From above the encoder end, so the board stands upright and leans toward the viewer.
+# Battery set offset in grp space (Blender mm), bottom view only, so it sits beside the board.
+BATTERY_SHIFT_BOTTOM = (-34.0, 8.0, 0.0)
 ISO = (200, -200, -282.842712474619)
 VIEWS = [
     ("board-3d-rotated-top.png", ISO, (0, 1, 0), 1200, 900, 1600, *ID),
@@ -129,7 +131,10 @@ print(f"board: {len(new)} objects, {len(seen)} materials", flush=True)
 extras = bpy.data.objects.new("extras", None)
 scene.collection.objects.link(extras)
 extras.parent = grp
-EXTRAS = board_extras.build(scene, extras)
+battery = bpy.data.objects.new("battery", None)
+scene.collection.objects.link(battery)
+battery.parent = grp
+EXTRAS = board_extras.build(scene, extras, battery)
 
 
 def world_pts(o):
@@ -227,6 +232,7 @@ scene.view_settings.view_transform = "AgX"
 os.makedirs(a.out_dir, exist_ok=True)
 for name, fwd_v, up_v, W, aw, ah, pos, (qx, qy, qz, qw) in VIEWS:
     model.location = pos
+    battery.location = BATTERY_SHIFT_BOTTOM if "bottom" in name else (0, 0, 0)
     # The presets give x,y,z,w. Blender wants w,x,y,z.
     model.rotation_quaternion = Quaternion((qw, qx, qy, qz))
     bpy.context.view_layer.update()

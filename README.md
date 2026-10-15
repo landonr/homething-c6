@@ -75,7 +75,7 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-back-annotated-dark.svg">
-    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, and battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, and JST PH battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 <p align="center"><sub>PCB front and back</sub></p>

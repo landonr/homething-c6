@@ -24,7 +24,7 @@ FLIP = ((106.67491, 0, 3.26), (0, 1, 0, 0))
 ID = ((0, 0, 0), (0, 0, 0, 1))
 # From above the encoder end, so the board stands upright and leans toward the viewer.
 # Battery set offset in grp space (Blender mm), bottom view only, so it sits beside the board.
-BATTERY_SHIFT_BOTTOM = (-34.0, 8.0, 0.0)
+BATTERY_SHIFT_BOTTOM = (-30.0, 8.0, 0.0)
 ISO = (200, -200, -282.842712474619)
 VIEWS = [
     ("board-3d-rotated-top.png", ISO, (0, 1, 0), 1200, 900, 1600, *ID),

@@ -25,6 +25,10 @@
   <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
 </p>
 
+<p align="center">
+  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+</p>
+
 ## Summary
 
 - **Case:** The [`case/` README](case/README.md) documents the enclosure files and assembly information.

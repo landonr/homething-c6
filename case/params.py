@@ -503,19 +503,24 @@ EDGE_R_BACK_IR = 8.0
 """Round on the back's bottom edge near U2. It is smaller than EDGE_R_BACK_CELL so
 the upper taper stays light and every lifted form used by the IR insert remains a
 valid rounded section. The profile blends from the cell radius over CONTOUR_BLEND."""
-EDGE_R_FRONT = 2.5
+EDGE_R_FRONT = 3.0
 """Round on the front's top edge. Small: it is a face full of key holes, and the
 outermost sit close to the wall. The FDM front carries its own, see
-EDGE_R_FRONT_FDM."""
-EDGE_R_FRONT_FDM = 0.64
+EDGE_R_FRONT_FDM.
+
+The USB pocket ceiling at the pocket's outer end bounds it. The round thins the
+roof there, and that roof must stay above USB_CEILING_MIN."""
+EDGE_R_FRONT_FDM = 0.85
 """Leg length of the FDM front's 45 degree top-edge chamfer. The established
 name remains because the FDM and recessed fronts share front_edge_round() as a
 size reader; the recessed front still uses EDGE_R_FRONT as a fillet radius.
 
 The smaller FDM groove leaves room for this bevel and flat face beyond the
-groove. Its lower end meets the USB slot roof at the exterior wall, removing
-the 0.04 mm straight strip above that opening. checks/fdm.py measures the
-built face's flat margin, and checks/shells.py guards the exported mesh."""
+groove. The bound is KEYPAD_EDGE_MARGIN less half FDM_OUTLINE_W less
+FDM_OUTLINE_EDGE_CLEAR. The leg passes below the USB slot roof at the exterior
+wall, so the slot opens a small notch into the chamfer face. The recessed
+front's round already does the same. checks/fdm.py measures the built face's
+flat margin, and checks/shells.py guards the exported mesh."""
 
 # Apertures in the front shell
 KEY_GAP = 1.6
@@ -1065,10 +1070,10 @@ grown to bound that box, so on the axes it reaches further than this and at the
 corners it reaches less; check.py holds the real floor, which is the whole of
 every counterbore staying inside its own dish."""
 KEYPAD_EDGE_MARGIN = 1.5
-"""How clear a recess's own rim is kept of the case's exterior wall. Set to
-EDGE_R_FRONT plus a 0.3 print-safety buffer, not sized off the recess geometry,
-so a future edit to the fillet is what check.py's guard would catch rather than
-the two quietly trading margin.
+"""How clear a recess's own rim is kept of the case's exterior wall. It is a
+fixed margin, not sized off the recess geometry, so a future edit to the edge
+treatment is what check.py's guard would catch rather than the two quietly
+trading margin.
 
 Live, not idle: the grid's coverage box is wide enough that the superellipse
 bounding it would reach inside this, so case.keypad_recesses() caps that half

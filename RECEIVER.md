@@ -70,11 +70,12 @@ Turn on **Allow the device to perform Home Assistant actions**. If this option i
 
 ### The Home Assistant switch
 
-The **Home Assistant** switch on the Config tab controls the Home Assistant actions and the API server.
+The **Home Assistant** switch on the Config tab controls the Home Assistant actions, the voice assistant, and the API server.
 
 If you turn the switch off, the Home Assistant buttons stop at once.
 A press sends nothing, does not turn on Wi-Fi, and does not blink `D2`. The log shows one line for each press.
 The remote also drops the actions in the queue and ends the [Wi-Fi lease](#wi-fi-lease).
+The remote also refuses a voice press at once. See [The voice assistant](#the-voice-assistant).
 
 The API server starts only at boot and has no stop. As a result, it runs until the next restart.
 After that restart, the API server does not start, and Home Assistant cannot connect to the remote.
@@ -91,11 +92,11 @@ The Home Assistant line on the Config tab tells you when the switch and the API 
 
 | Line | Cause |
 | --- | --- |
-| **Home Assistant is off. Home Assistant buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
+| **Home Assistant is off. Home Assistant and voice buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
 | **Home Assistant is on. The API is off. Restart the remote to start it.** | The switch is on, but it was off at boot. |
 
-An input that holds a Home Assistant action keeps the action while the switch is off.
-The tile shows the action in grey with a red circle, and the editor gives the reason.
+An input that holds a Home Assistant action or the voice assistant keeps it while the switch is off.
+The tile shows the assignment in grey with a red circle, and the editor gives the reason.
 
 ### Kinds and actions
 
@@ -212,6 +213,7 @@ The selector holds IR code, Zigbee target, BLE HID, Home Assistant, Voice assist
 on the action that the input already holds.
 
 If the **Zigbee**, **Bluetooth**, or **Home Assistant** switch on the Config tab is off, the selector grays out the related action.
+If the **Home Assistant** switch is off, the selector also grays out **Voice assistant**, because the voice assistant uses the API.
 To assign that action, turn on its switch first. Until then, the selector opens on IR code for an input that holds that action.
 
 The right side of the selected-input title has **Copy** and **Paste** buttons.
@@ -475,7 +477,7 @@ Radio**. It also holds the **Home Assistant API** switch. See
 An input that is assigned to a radio that is off keeps its assignment. The tile
 shows the assignment in grey with a red circle after the label, and the editor
 gives the reason. The input sends again when the switch goes back on. A Home
-Assistant input with the Home Assistant switch off shows the same marks.
+Assistant or voice input with the Home Assistant switch off shows the same marks.
 
 If the Bluetooth switch is off, the remote does not start the NimBLE stack at
 boot, and the first turn-on starts it.
@@ -620,10 +622,11 @@ The Home Assistant switch also stops the Home Assistant actions at once and the 
 If the switch is on but was off at boot, the API server is off, so `D2` pulses orange until a restart.
 See [The Home Assistant switch](#the-home-assistant-switch).
 
-Wi-Fi serves the `/buttons` page and carries Home Assistant actions. A dark `D2` does not stop a button,
-because IR and Zigbee playback need neither Wi-Fi nor the API.
+Wi-Fi serves the `/buttons` page and carries Home Assistant actions and the voice assistant.
+A dark `D2` does not stop an IR or Zigbee button, because IR and Zigbee playback need neither Wi-Fi nor the API.
 If the Home Assistant switch is on, a Home Assistant action turns Wi-Fi on when you press its button.
 See [Home Assistant actions](#home-assistant-actions).
+A voice press does not turn on Wi-Fi, so the remote refuses it while Wi-Fi is off.
 
 | State | `D3` and `D4` indication | Next action |
 | --- | --- | --- |
@@ -636,7 +639,8 @@ See [Home Assistant actions](#home-assistant-actions).
 
 `D3` and `D4` show voice-assistant state when assignment mode is closed. After
 a deep-sleep wake, all four LEDs pulse in the battery colour (see
-[Deep sleep](#deep-sleep)).
+[Deep sleep](#deep-sleep)). A refused voice press shows solid red for 2 seconds.
+See [The voice assistant](#the-voice-assistant).
 
 `D4` shows the Bluetooth state when assignment mode and voice state are both
 idle. `D3` stays dark then.
@@ -690,6 +694,24 @@ Outside assignment mode, an input uses its one active assignment in this order:
 4. IR playback, if assigned.
 
 An input without an assignment does not transmit a command.
+
+### The voice assistant
+
+A voice press starts the Home Assistant Assist pipeline over the native API.
+The remote starts it only when these conditions are true:
+
+- The **Home Assistant** switch on the Config tab is on.
+- Home Assistant is connected to the API and subscribed to voice.
+
+If a condition is false, the remote refuses the press. The log shows one line with the reason.
+`D3` and `D4` then show solid red for 2 seconds, the same as a voice-assistant error.
+
+The switch rule applies at once. If you turn the switch off, the API server runs until the next restart.
+The remote still refuses the press.
+
+A voice press does not turn on Wi-Fi. If Wi-Fi is off, the API is not connected, so the remote refuses the press.
+
+A refused press does not make the mic meter active, so it does not block idle sleep.
 
 ## Deep sleep
 

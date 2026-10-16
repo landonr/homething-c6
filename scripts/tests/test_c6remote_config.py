@@ -250,6 +250,45 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
+    def test_a_voice_press_starts_assist_only_with_the_switch_on_and_a_client_subscribed(self) -> None:
+        """Without a subscribed client, voice_assistant.start only logs and fires
+        no trigger, so a meter set first stays set and blocks sleep forever."""
+        config = CONFIG.read_text()
+        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
+        self.assertRegex(
+            start_voice,
+            r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
+            r"\n +- if:\n +condition:\n +and:\n"
+            r" +- lambda: return id\(button_cfg\)\.ha_api_expected\(\);\n"
+            r" +- voice_assistant\.connected:\n +then:\n",
+        )
+        accepted, refused = start_voice.split("\n                else:\n", 1)
+        meter = accepted.index("id(mic_meter_active) = true;")
+        for guard in ("return id(button_cfg).ha_api_expected();", "- voice_assistant.connected:"):
+            self.assertLess(accepted.index(guard), meter)
+            self.assertLess(accepted.index(guard), accepted.index("voice_assistant.start:"))
+        self.assertLess(accepted.index("script.stop: refuse_voice_start"), meter)
+        self.assertEqual(refused.strip(), "- script.execute: refuse_voice_start")
+        # Every input reuses the anchor, so no start can skip the guard.
+        self.assertEqual(config.count("voice_assistant.start:"), 1)
+        self.assertEqual(config.count("id(mic_meter_active) = true;"), 1)
+
+    def test_a_refused_voice_press_shows_the_error_state_without_the_meter(self) -> None:
+        config = CONFIG.read_text()
+        refuse = config.split("  - id: refuse_voice_start\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("    mode: restart\n", refuse)
+        self.assertNotIn("mic_meter_active", refuse)
+        self.assertNotIn("voice_assistant.start", refuse)
+        for reason in ("the Home Assistant switch is off",
+                       "the API server is off until the next restart",
+                       "no Home Assistant client is subscribed to voice"):
+            self.assertIn(f'ESP_LOGW("voice_assistant", "Voice start refused: {reason}");', refuse)
+        # The on_error sequence: state 4, the light, 2 s, then idle.
+        order = ["id(voice_led_state) = 4;", "effect: Status Indicators", "brightness: 40%",
+                 "- delay: 2s", "- script.execute: stop_voice_listening"]
+        positions = [refuse.index(step) for step in order]
+        self.assertEqual(positions, sorted(positions))
+
     def test_production_carries_no_bench_diagnostics(self) -> None:
         """The microphone runs from Assist, and the IR burst duplicated a learned
         slot. The mic and expander diagnostics live in the bench configs."""

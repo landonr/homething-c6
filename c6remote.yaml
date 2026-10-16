@@ -320,15 +320,28 @@ binary_sensor:
           condition:
             lambda: return ir_ui.take_voice_start();
           then:
-            - lambda: |-
-                id(voice_led_state) = 1;
-                id(mic_meter_active) = true;
-            - light.turn_on:
-                id: status_light
-                effect: Status Indicators
-                brightness: 40%
-            # Home Assistant VAD ends the stream, so there is no stop on a timer.
-            - voice_assistant.start:
+            # Without a subscribed client, voice_assistant.start only logs and fires
+            # no trigger, so the meter would stay set and block sleep. An off switch
+            # refuses at once, although the API server runs until the next boot.
+            - if:
+                condition:
+                  and:
+                    - lambda: return id(button_cfg).ha_api_expected();
+                    - voice_assistant.connected:
+                then:
+                  # A refusal window still open would clear the meter of this start.
+                  - script.stop: refuse_voice_start
+                  - lambda: |-
+                      id(voice_led_state) = 1;
+                      id(mic_meter_active) = true;
+                  - light.turn_on:
+                      id: status_light
+                      effect: Status Indicators
+                      brightness: 40%
+                  # Home Assistant VAD ends the stream, so there is no stop on a timer.
+                  - voice_assistant.start:
+                else:
+                  - script.execute: refuse_voice_start
     on_release:
       - script.execute:
           id: release_assignment
@@ -633,9 +646,9 @@ light:
             // connects and orange on Wi-Fi alone when Home Assistant is expected.
             // Turning the HA switch off keeps solid orange while Wi-Fi is up.
             // Green is brighter than red on these 2020 parts at 3.3V, so orange
-            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). A dark D2 does not
-            // stop a button: a Home Assistant press turns Wi-Fi on itself while
-            // the Home Assistant switch is on.
+            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). A dark D2 stops
+            // only a voice press: a Home Assistant press turns Wi-Fi on itself
+            // while the Home Assistant switch is on.
             const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
@@ -1029,6 +1042,25 @@ script:
     then:
       - lambda: id(mic_meter_active) = false;
       - script.execute: show_idle_status
+  # The on_error LED state, without the meter, so a refused press cannot block
+  # sleep. restart keeps one 2 s window when presses repeat.
+  - id: refuse_voice_start
+    mode: restart
+    then:
+      - lambda: |-
+          if (!id(button_cfg).ha_api_expected())
+            ESP_LOGW("voice_assistant", "Voice start refused: the Home Assistant switch is off");
+          else if (id(button_cfg).ha_api_gated())
+            ESP_LOGW("voice_assistant", "Voice start refused: the API server is off until the next restart");
+          else
+            ESP_LOGW("voice_assistant", "Voice start refused: no Home Assistant client is subscribed to voice");
+          id(voice_led_state) = 4;
+      - light.turn_on:
+          id: status_light
+          effect: Status Indicators
+          brightness: 40%
+      - delay: 2s
+      - script.execute: stop_voice_listening
 
 voice_assistant:
   # gain_factor is applied in the Q31 domain before the 32-to-16 bit truncation,

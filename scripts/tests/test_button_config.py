@@ -1789,9 +1789,9 @@ class RadioSwitchTest(unittest.TestCase):
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
-        # A Home Assistant press skips while its switch is off, so it is held like a radio.
+        # A Home Assistant or voice press skips while its switch is off, so it is held like a radio.
         self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
-                      'r.action==="hid"?"ble":\nr.action==="ha"?"home_assistant":""}', PAGE)
+                      'r.action==="hid"?"ble":\n(r.action==="ha"||r.action==="voice")?"home_assistant":""}', PAGE)
         self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
         # The label stays, so the tile still says what the input is assigned to.
         self.assertIn(".k.rf span{opacity:.55}", PAGE)
@@ -1805,7 +1805,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
         self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
-        self.assertIn('"Home Assistant is off. Home Assistant buttons are disabled."', PAGE)
+        self.assertIn('"Home Assistant is off. Home Assistant and voice buttons are disabled."', PAGE)
         self.assertNotIn("Home Assistant is not required.", PAGE)
 
     def test_the_home_assistant_line_names_a_switch_this_boot_does_not_follow(self) -> None:

@@ -1024,18 +1024,19 @@ setTimeout(() => {
     if (!m) throw new Error("the Action list has no " + id + " option");
     return m[0];
   };
-  step("an off Config switch grays out only its own action and names the switch", () => {
+  step("an off Config switch grays out only its own actions and names the switch", () => {
     const saved = global.st.radios;
     global.zbusy = false; global.clipBusy = false;
-    for (const [radio, id, tip] of [["zigbee", "zb", "Turn on Zigbee in Config"],
-                                    ["ble", "hid", "Turn on Bluetooth in Config"],
-                                    ["home_assistant", "ha", "Turn on Home Assistant in Config"]]) {
+    // Voice runs over the Home Assistant API, so that switch grays out two actions.
+    for (const [radio, ids, tip] of [["zigbee", ["zb"], "Turn on Zigbee in Config"],
+                                     ["ble", ["hid"], "Turn on Bluetooth in Config"],
+                                     ["home_assistant", ["ha", "va"], "Turn on Home Assistant in Config"]]) {
       global.st.radios = {zigbee: true, ble: true, home_assistant: true};
       global.st.radios[radio] = false;
       global.sel = 19; global.act = "ir";
       paint();
       for (const other of ["ir", "zb", "hid", "ha", "va", "cl"]) {
-        const off = other === id, tag = actionTag(other);
+        const off = ids.includes(other), tag = actionTag(other);
         if (document.getElementById("as-" + other).disabled !== off)
           throw new Error(radio + " off left " + other + (off ? " enabled" : " disabled"));
         if (off && tag.indexOf(" title='" + tip + "'") < 0)
@@ -1051,7 +1052,8 @@ setTimeout(() => {
   step("an input whose action needs an off switch opens on IR and recovers when it is on", () => {
     const saved = global.st.radios;
     global.zbusy = false; global.clipBusy = false;
-    for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"]]) {
+    for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"],
+                                     ["home_assistant", 4, "va"]]) {
       global.st.radios = {zigbee: true, ble: true, home_assistant: true};
       pick(slot);
       if (act !== id) throw new Error("slot " + slot + " opened " + act + " with every switch on");
@@ -1157,6 +1159,33 @@ setTimeout(() => {
     if (document.getElementById("ed").innerHTML.indexOf(
         "Home Assistant is off, so this input is disabled. The assignment is kept.") < 0)
       throw new Error("the editor gives no reason for a held Home Assistant input");
+    global.st.radios = prevRadios;
+    global.sel = null;
+    paint();
+  });
+  step("an off Home Assistant switch holds a voice input and grays out Voice assistant", () => {
+    const prevRadios = global.st.radios;
+    global.zbusy = false; global.clipBusy = false;
+    global.st.radios = {zigbee: true, ble: true, home_assistant: false};
+    global.sel = null;
+    paint();
+    // Slot 4 holds the voice assistant, and slot 6 an IR code.
+    if (keys[4].className.indexOf("rf") < 0) throw new Error("a held voice input is not marked");
+    if (keys[4].lastChild.textContent !== "Voice assistant")
+      throw new Error("a held voice input lost its assignment text: " + keys[4].lastChild.textContent);
+    if (keys[6].className.indexOf("rf") >= 0) throw new Error("an IR input was marked");
+    pick(4);
+    if (act !== "ir") throw new Error("a held voice input opened on " + act);
+    if (document.getElementById("ed").innerHTML.indexOf(
+        "Home Assistant is off, so this input is disabled. The assignment is kept.") < 0)
+      throw new Error("the editor gives no reason for a held voice input");
+    if (!document.getElementById("as-va").disabled ||
+        actionTag("va").indexOf(" title='Turn on Home Assistant in Config'") < 0)
+      throw new Error("Voice assistant is live with Home Assistant off: " + actionTag("va"));
+    global.st.radios = {zigbee: true, ble: true, home_assistant: true};
+    paint();
+    if (keys[4].className.indexOf("rf") >= 0) throw new Error("a live voice input stayed marked");
+    if (document.getElementById("as-va").disabled) throw new Error("Voice assistant stayed grayed out");
     global.st.radios = prevRadios;
     global.sel = null;
     paint();

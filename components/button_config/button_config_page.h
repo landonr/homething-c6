@@ -372,13 +372,15 @@ var clip=null,clipBusy=false;
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 // An old remote sends no radio block, so an unknown switch reads as on.
 function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
-// These actions need their Config switch. IR and voice do not.
+// These actions need their Config switch. Voice runs over the Home Assistant
+// API, so it needs the Home Assistant switch. IR needs none.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":
-r.action==="ha"?"home_assistant":""}
+(r.action==="ha"||r.action==="voice")?"home_assistant":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
 // Each of these actions needs its Config switch, so the Action list grays it out
 // while the switch is off. The second name is the switch title on the Config tab.
-var actRadio={zb:["zigbee","Zigbee"],hid:["ble","Bluetooth"],ha:["home_assistant","Home Assistant"]};
+var actRadio={zb:["zigbee","Zigbee"],hid:["ble","Bluetooth"],ha:["home_assistant","Home Assistant"],
+va:["home_assistant","Home Assistant"]};
 function actOff(a){var k=actRadio[a];return !!k&&!radioOn(k[0])}
 // paint() records the switches it drew, so a poll repaints only on a change.
 var radioSeen="";
@@ -797,7 +799,7 @@ wifi?"on and connected.":"on but disconnected.")}
 // does not follow yet.
 if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
 ha.innerHTML="<span class='dot "+(!expect?(gated?"off":"warn"):api?"":(wifi||gated)?"bad":"off")+"'></span>"+
-(!expect?"Home Assistant is off. Home Assistant buttons are disabled."+(gated?"":" The API stops at the next restart."):
+(!expect?"Home Assistant is off. Home Assistant and voice buttons are disabled."+(gated?"":" The API stops at the next restart."):
 gated?"Home Assistant is on. The API is off. Restart the remote to start it.":
 "Home Assistant API is "+
 (api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+

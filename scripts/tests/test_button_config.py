@@ -1260,7 +1260,8 @@ class PageTest(unittest.TestCase):
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
         self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();"
-                      "batteryStatus();restartSync(j);radioStatus();bleStatus()}},"
+                      "batteryStatus();restartSync(j);radioStatus();bleStatus();", body)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()}},"
                       "\nfunction(){zpjLost();restartLost()})", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
@@ -1514,7 +1515,10 @@ class PageTest(unittest.TestCase):
         self.assertIn('tfetch("/buttons/api/state",{cache:"no-store"},5000)', PAGE)
         self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
-        self.assertNotIn("paint()", refresh)
+        # A steady poll updates the status lines only. It repaints only when a
+        # Config switch changed, because the Action list grays out by switch.
+        self.assertEqual(refresh.count("paint()"), 1)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()", refresh)
         # The connection inputs are built once, so the repaint owns cfgio alone.
         self.assertIn('var e=document.getElementById("cfgio")', card)
         # The startup path reads state, then preloads every stored IR code.

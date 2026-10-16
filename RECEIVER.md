@@ -178,6 +178,9 @@ selector with the actions that the input accepts.
 The selector holds IR code, Zigbee target, BLE HID, Home Assistant, Voice assistant, and Clear. It opens
 on the action that the input already holds.
 
+If the **Zigbee**, **Bluetooth**, or **Home Assistant** switch on the Config tab is off, the selector grays out the related action.
+To assign that action, turn on its switch first. Until then, the selector opens on IR code for an input that holds that action.
+
 The right side of the selected-input title has **Copy** and **Paste** buttons.
 Use them to copy an IR code, Zigbee target, BLE HID, or Home Assistant configuration between inputs.
 

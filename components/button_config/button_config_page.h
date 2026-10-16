@@ -373,6 +373,13 @@ function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
 // Only these two actions leave the board over a radio. IR and voice do not.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
+// Each of these actions needs its Config switch, so the Action list grays it out
+// while the switch is off. The second name is the switch title on the Config tab.
+var actRadio={zb:["zigbee","Zigbee"],hid:["ble","Bluetooth"],ha:["home_assistant","Home Assistant"]};
+function actOff(a){var k=actRadio[a];return !!k&&!radioOn(k[0])}
+// paint() records the switches it drew, so a poll repaints only on a change.
+var radioSeen="";
+function radioKey(){return [radioOn("zigbee"),radioOn("ble"),radioOn("home_assistant")].join()}
 function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":a==="ha"?"set-ha":
 (a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
 // The colour overlay is a browser preference. Default on, and the remote never
@@ -1058,7 +1065,9 @@ stBusy=true;
 readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus()}},
+st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus();
+// A switch can change on another page or on the remote, and the Action list follows it.
+if(booted&&radioKey()!==radioSeen)paint()}},
 function(){zpjLost();restartLost()})
 .then(function(){stBusy=false},function(){stBusy=false})}
 
@@ -1066,6 +1075,7 @@ function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}
 
 function paint(){
 namePaint();z2mStatus();networkStatus();sleepStatus();batteryStatus();restartPaint();radioStatus();bleStatus();zpjPaint();
+radioSeen=radioKey();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
@@ -1832,12 +1842,15 @@ opts.push(["ha","Home Assistant"]);
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
+// An action with its Config switch off cannot be assigned, so the panel opens on IR.
+if(actOff(act))act="ir";
 h+="<h2 class=hd2 id=asl>Action</h2><div class=aslist role=radiogroup "+
 "aria-labelledby=asl id=as>";
-var title="",dis=lock?" disabled":"";
-for(var i=0;i<opts.length;i++){var on=act===opts[i][0];
+var title="";
+for(var i=0;i<opts.length;i++){var on=act===opts[i][0],off=actOff(opts[i][0]);
 h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
-" aria-checked="+on+dis+">"+esc(opts[i][1])+"</button>";
+" aria-checked="+on+(lock||off?" disabled":"")+
+(off?" title='Turn on "+actRadio[opts[i][0]][1]+" in Config'":"")+">"+esc(opts[i][1])+"</button>";
 if(on)title=opts[i][1]}
 h+="</div>";
 var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):

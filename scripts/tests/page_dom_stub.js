@@ -1017,6 +1017,61 @@ setTimeout(() => {
       throw new Error("the editor gives no reason for a held input");
     global.sel = null;
   });
+  // The stub keeps the disabled flag of an element but not its title, so this
+  // reads one Action option out of the editor markup.
+  const actionTag = id => {
+    const m = new RegExp("<button[^>]*\\sid=as-" + id + "\\s[^>]*>").exec(document.getElementById("ed").innerHTML);
+    if (!m) throw new Error("the Action list has no " + id + " option");
+    return m[0];
+  };
+  step("an off Config switch grays out only its own action and names the switch", () => {
+    const saved = global.st.radios;
+    global.zbusy = false; global.clipBusy = false;
+    for (const [radio, id, tip] of [["zigbee", "zb", "Turn on Zigbee in Config"],
+                                    ["ble", "hid", "Turn on Bluetooth in Config"],
+                                    ["home_assistant", "ha", "Turn on Home Assistant in Config"]]) {
+      global.st.radios = {zigbee: true, ble: true, home_assistant: true};
+      global.st.radios[radio] = false;
+      global.sel = 19; global.act = "ir";
+      paint();
+      for (const other of ["ir", "zb", "hid", "ha", "va", "cl"]) {
+        const off = other === id, tag = actionTag(other);
+        if (document.getElementById("as-" + other).disabled !== off)
+          throw new Error(radio + " off left " + other + (off ? " enabled" : " disabled"));
+        if (off && tag.indexOf(" title='" + tip + "'") < 0)
+          throw new Error(radio + " off gave " + other + " no reason: " + tag);
+        if (!off && tag.indexOf("title=") >= 0)
+          throw new Error(radio + " off put a reason on " + other + ": " + tag);
+      }
+    }
+    global.st.radios = saved;
+    global.sel = null;
+    paint();
+  });
+  step("an input whose action needs an off switch opens on IR and recovers when it is on", () => {
+    const saved = global.st.radios;
+    global.zbusy = false; global.clipBusy = false;
+    for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"]]) {
+      global.st.radios = {zigbee: true, ble: true, home_assistant: true};
+      pick(slot);
+      if (act !== id) throw new Error("slot " + slot + " opened " + act + " with every switch on");
+      global.st.radios[radio] = false;
+      paint();
+      if (act !== "ir") throw new Error("a repaint left slot " + slot + " on " + act + " with " + radio + " off");
+      if (actionTag("ir").indexOf("aria-checked=true") < 0 ||
+          document.getElementById("edpanel").innerHTML.indexOf("<h2>IR code</h2>") !== 0)
+        throw new Error("slot " + slot + " did not show the IR panel with " + radio + " off");
+      pick(slot);
+      if (act !== "ir") throw new Error("slot " + slot + " opened on " + act + " with " + radio + " off");
+      global.st.radios[radio] = true;
+      paint();
+      if (document.getElementById("as-" + id).disabled || actionTag(id).indexOf("title=") >= 0)
+        throw new Error("switching " + radio + " back on left " + id + " grayed out");
+    }
+    global.st.radios = saved;
+    global.sel = null;
+    paint();
+  });
   step("a radio switch posts the new state to the remote", () => {
     global.st.radios = {zigbee: true, ble: true};
     paint();
@@ -2089,6 +2144,39 @@ setTimeout(() => {
         throw new Error("Cancel left the box or the error up");
     });
     global.fetch = realFetch;
+
+    {
+      const realPaint = global.paint, prevRadios = STATE.radios;
+      const poll = async radios => {
+        STATE.radios = radios;
+        global.stBusy = false;
+        stateRefresh();
+        await new Promise(done => setTimeout(done, 20));
+      };
+      let paints = 0;
+      global.zbusy = false; global.clipBusy = false;
+      STATE.radios = {zigbee: true, ble: true, home_assistant: true};
+      pick(5);
+      global.paint = () => { paints++; realPaint(); };
+      await poll({zigbee: true, ble: true, home_assistant: true});
+      const steady = paints;
+      await poll({zigbee: false, ble: true, home_assistant: true});
+      const offPaints = paints, offAct = act, offGray = document.getElementById("as-zb").disabled,
+            offTag = actionTag("zb");
+      await poll({zigbee: true, ble: true, home_assistant: true});
+      const onPaints = paints, onGray = document.getElementById("as-zb").disabled;
+      global.paint = realPaint;
+      STATE.radios = prevRadios;
+      global.sel = null;
+      paint();
+      step("a state poll repaints the Action list only when a Config switch changed", () => {
+        if (steady !== 0) throw new Error("a poll with no switch change repainted " + steady + " times");
+        if (offPaints !== 1 || !offGray || offTag.indexOf("title='Turn on Zigbee in Config'") < 0)
+          throw new Error("a poll that turned Zigbee off did not gray out its action: " + offTag);
+        if (offAct !== "ir") throw new Error("a poll that turned Zigbee off left the panel on " + offAct);
+        if (onPaints !== 2 || onGray) throw new Error("a poll that turned Zigbee back on left its action grayed out");
+      });
+    }
 
     // The link tracker. The poll timer would add reads of its own, so stop it.
     clearInterval(stTimer);

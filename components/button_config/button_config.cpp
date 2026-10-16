@@ -258,6 +258,19 @@ static bool parse_hid_number(const std::string &text, uint16_t max, uint16_t &va
   return true;
 }
 
+// An empty value is 0. Anything but 1 to 3 digits is -1, which no check accepts.
+static int parse_ha_value(const std::string &text) {
+  if (text.empty())
+    return 0;
+  if (text.size() > 3)
+    return -1;
+  for (const char digit : text) {
+    if (digit < '0' || digit > '9')
+      return -1;
+  }
+  return static_cast<int>(std::strtol(text.c_str(), nullptr, 10));
+}
+
 static const char *hid_kind_name(esphome::ble_hid::BleHid::Kind kind) {
   switch (kind) {
     case esphome::ble_hid::BleHid::KEYBOARD: return "keyboard";
@@ -386,6 +399,20 @@ static bool parse_ir_text(const std::string &text, std::string &name, std::vecto
   return false;
 }
 
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+using HaAssignment = ha_action::HaAction::Assignment;
+static const char *ha_result_name(uint8_t result) { return ha_action::HaAction::result_name(result); }
+#else
+struct HaAssignment {
+  bool assigned{false};
+  const char *kind{""};
+  const char *act{""};
+  uint8_t val{0};
+  std::string entity;
+};
+static const char *ha_result_name(uint8_t) { return "none"; }
+#endif
+
 static const char *state_name(uint8_t state) {
   switch (state) {
     case IrUi::READY:
@@ -456,14 +483,26 @@ void ButtonConfig::setup() {
 }
 
 void ButtonConfig::loop() {
-  if (!this->temporary_wifi_)
+  if (!this->temporary_wifi_ && !this->action_wifi_)
     return;
-  const uint32_t idle_ms = millis() - this->last_activity_ms_.load(std::memory_order_acquire);
-  if (idle_ms < WIFI_IDLE_MS)
+  const uint32_t now = millis();
+  bool ended = false;
+  if (this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) >= WIFI_IDLE_MS) {
+    this->temporary_wifi_ = false;
+    ended = true;
+  }
+  if (this->action_wifi_ && static_cast<int32_t>(now - this->action_wifi_until_ms_) >= 0) {
+    this->action_wifi_ = false;
+    ended = true;
+    // A page opened during the lease carries on as a temporary session.
+    if (!this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) <= ACTION_WIFI_LEASE_MS)
+      this->temporary_wifi_ = true;
+  }
+  // Wi-Fi closes only when both the page session and the action lease are over.
+  if (!ended || this->temporary_wifi_ || this->action_wifi_ || this->boot_wifi_always_on_)
     return;
-  this->temporary_wifi_ = false;
   wifi::global_wifi_component->disable();
-  ESP_LOGI(TAG, "Temporary Wi-Fi session closed after ten minutes idle");
+  ESP_LOGI(TAG, "Temporary Wi-Fi session closed: no page activity for ten minutes and no Home Assistant action");
 }
 
 void ButtonConfig::load_wifi_pref_() {
@@ -660,14 +699,36 @@ void ButtonConfig::open_temporary_wifi_(const char *reason) {
 void ButtonConfig::toggle_temporary_wifi() {
   if (this->boot_wifi_always_on_)
     return;
-  if (wifi::global_wifi_component->is_disabled()) {
+  // Wi-Fi up for the action lease alone is no page session, so SW9 opens one.
+  if (wifi::global_wifi_component->is_disabled() || (this->action_wifi_ && !this->temporary_wifi_)) {
     this->open_temporary_wifi_("by SW9");
   } else {
     this->temporary_wifi_ = false;
+    // A running Home Assistant action keeps Wi-Fi until its lease ends.
+    if (this->action_wifi_) {
+      ESP_LOGI(TAG, "SW9 ended the temporary Wi-Fi session, but a Home Assistant action holds Wi-Fi");
+      return;
+    }
     wifi::global_wifi_component->disable();
     ESP_LOGI(TAG, "Temporary Wi-Fi session closed by SW9");
   }
 }
+
+void ButtonConfig::hold_wifi_for_action() {
+  this->action_wifi_ = true;
+  this->action_wifi_until_ms_ = millis() + ACTION_WIFI_LEASE_MS;
+  if (wifi::global_wifi_component->is_disabled()) {
+    wifi::global_wifi_component->enable();
+    ESP_LOGI(TAG, "Wi-Fi enabled for a Home Assistant action");
+  }
+}
+
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+void ButtonConfig::set_ha_action(ha_action::HaAction *action) {
+  this->ha_action_ = action;
+  action->set_wifi_hold([this]() { this->hold_wifi_for_action(); });
+}
+#endif
 
 void ButtonConfig::load_ha_pref_() {
   this->ha_pref_ = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
@@ -806,13 +867,34 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       esphome::ble_hid::BleHid::instance()->bonded() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->pairing() ? "true" : "false");
   print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name().c_str());
+  size_t ha_pending = 0;
+  uint8_t ha_last_slot = 0;
+  uint8_t ha_last = 0;
+  std::string ha_error;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr) {
+    ha_pending = this->ha_action_->pending();
+    ha_last_slot = this->ha_action_->last_slot();
+    ha_last = this->ha_action_->last_result();
+    this->ha_action_->last_error(ha_error);
+  }
+#endif
+  stream->printf(R"("},"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")", static_cast<unsigned>(ha_pending),
+                 static_cast<unsigned>(ha_last_slot), ha_result_name(ha_last));
+  print_json_text(stream, ha_error.c_str());
   stream->print(R"("},"slots":[)");
   bool first = true;
   for (const auto &info : SLOTS) {
     const auto zigbee = ::zigbee_assignments.assignment(info.slot);
     const auto hid = esphome::ble_hid::BleHid::instance()->assignment(info.slot);
+    HaAssignment ha;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    if (this->ha_action_ != nullptr)
+      ha = this->ha_action_->assignment(info.slot);
+#endif
     const char *action = hid.assigned                           ? "hid"
                          : zigbee.assigned                      ? "zigbee"
+                         : ha.assigned                          ? "ha"
                          : ::ir_code_store.is_voice(info.slot)  ? "voice"
                          : ::ir_code_store.has_code(info.slot) ? "ir"
                                                                : "none";
@@ -837,14 +919,16 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
                     static_cast<unsigned long long>(value));
     }
     stream->printf(
-        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":")",
+        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":")",
         first ? "" : ",", static_cast<unsigned>(info.slot), action,
         static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
         static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields,
         static_cast<unsigned>(zigbee.group_id), ieee_text,
         static_cast<unsigned>(zigbee.endpoint), static_cast<unsigned>(zigbee.action),
         static_cast<int>(zigbee.param), hid_kind_name(hid.kind), static_cast<unsigned>(hid.usage),
-        static_cast<unsigned>(hid.modifiers));
+        static_cast<unsigned>(hid.modifiers), ha.kind, ha.act, static_cast<unsigned>(ha.val));
+    print_json_text(stream, ha.entity.c_str());
+    stream->print(R"(","name":")");
     print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
     stream->print("\"}");
     first = false;
@@ -916,13 +1000,24 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
 
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
-                     action == "set_hid" || action == "forget_ble" || action == "set_radio" ||
+                     action == "set_hid" || action == "set_ha" || action == "test_ha" || action == "forget_ble" || action == "set_radio" ||
                      action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
                      action == "set_sleep_enabled" ||
                      action == "set_sleep_after" || action == "set_sleep_replay" || action == "pair" || action == "restart" ||
                      action == "set_name" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
+    return;
+  }
+
+  const bool ha_action_call = action == "set_ha" || action == "test_ha";
+  bool ha_linked = false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  ha_linked = this->ha_action_ != nullptr;
+#endif
+  if (ha_action_call && !ha_linked) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"Home Assistant actions are not configured"})");
     return;
   }
 
@@ -1105,6 +1200,47 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     }
   }
 
+  // The request dies before the defer runs, so the fields are checked and
+  // copied here.
+  std::string ha_kind;
+  std::string ha_act;
+  std::string ha_entity;
+  int ha_val = 0;
+  if (action == "set_ha") {
+    ha_kind = request->arg("kind");
+    ha_act = request->arg("act");
+    ha_entity = request->arg("entity");
+    const std::string val_text = request->arg("val");
+    ha_val = parse_ha_value(val_text);
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    switch (ha_action::HaAction::validate(ha_kind, ha_act, ha_val, ha_entity)) {
+      case ha_action::HaAction::Check::BAD_ACTION:
+        request->send(400, "application/json",
+                      R"({"ok":false,"error":"unknown Home Assistant kind or action"})");
+        return;
+      case ha_action::HaAction::Check::BAD_ENTITY:
+        request->send(400, "application/json",
+                      R"({"ok":false,"error":"an entity id is domain.object_id, up to 64 characters, and its domain must match the kind"})");
+        return;
+      case ha_action::HaAction::Check::BAD_STEP:
+        request->send(400, "application/json", R"({"ok":false,"error":"a brightness step is 1 to 100"})");
+        return;
+      default:
+        break;
+    }
+#endif
+  }
+  if (action == "test_ha") {
+    bool assigned = false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    assigned = this->ha_action_->has_assignment(info->slot);
+#endif
+    if (!assigned) {
+      request->send(400, "application/json", R"({"ok":false,"error":"slot has no Home Assistant action"})");
+      return;
+    }
+  }
+
   bool expected = false;
   if (::ir_ui.state != IrUi::OFF ||
       !this->action_pending_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -1153,6 +1289,22 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     this->defer([this, button, action_id, hid_kind, hid_usage, hid_mod]() {
       this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->assign(
                                             button, hid_kind, hid_usage, static_cast<uint8_t>(hid_mod)));
+    });
+  } else if (action == "set_ha") {
+    this->defer([this, button, action_id, ha_kind, ha_act, ha_val, ha_entity]() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+      this->complete_action_(action_id, this->ha_action_->assign(button, ha_kind, ha_act, ha_val, ha_entity));
+#else
+      this->complete_action_(action_id, false);
+#endif
+    });
+  } else if (action == "test_ha") {
+    this->defer([this, button, action_id]() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+      this->complete_action_(action_id, this->ha_action_->play(button));
+#else
+      this->complete_action_(action_id, false);
+#endif
     });
   } else if (action == "forget_ble") {
     this->defer([this, action_id]() {

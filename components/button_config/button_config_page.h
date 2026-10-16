@@ -87,6 +87,7 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 .set-zigbee{--set-bg:#38a169}
 .set-ir{--set-bg:#e5b700}
 .set-voice{--set-bg:#8b5cf6}
+.set-ha{--set-bg:#0ea5b7}
 /* Off by default in CSS. body.set-colors turns the tints on, and the switch
    stores that choice in this browser only. */
 body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 42%,transparent)}
@@ -356,6 +357,9 @@ var cd="",cdSlot=null,codeLoad=0;
 // zav is the chosen action number and zvv the value it carries.
 var act="ir",zkv="g",zsv="",zdv="",zgv="",zhv="",zpv="",zav=0,zvv="";
 var hkv="keyboard",huv="",hmv="0",hcust=false;
+// The Home Assistant fields live here for the same reason. haMsg is the Test
+// outcome, and haTok drops a poll that a new selection overtook.
+var hek="",hkd="light",hac="toggle",hvl="10",haMsg="",haBad=false,haBusy=false,haTok=0;
 // cfgAll keeps the stored IR codes for the editor and the Config tab.
 var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={},cfgDirty=false,cfgReady=false,cfgTask=null;
 // Closed on arrival, because most visits change one input instead.
@@ -369,7 +373,7 @@ function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
 // Only these two actions leave the board over a radio. IR and voice do not.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
-function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":
+function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":a==="ha"?"set-ha":
 (a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
 // The colour overlay is a browser preference. Default on, and the remote never
 // sees it.
@@ -392,7 +396,41 @@ return "Zigbee "+(A?A.n:"action "+r.act)+": "+
 (r.name?r.name:(r.ieee?r.ieee:"group "+r.group))}
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="hid")return "BLE HID: "+hidWords(r.hid_kind,r.hid_usage,r.hid_mod);
+if(r.action==="ha")return "HA: "+haWords(r.ha_kind,r.ha_act,r.ha_val,r.ha_entity);
 if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
+
+// The tokens and the actions each one allows match the firmware table.
+var T3="toggle turn_on turn_off";
+var HX={light:T3+" brightness_up brightness_down",switch:T3,input_boolean:T3,
+fan:T3+" increase_speed decrease_speed",cover:"toggle open_cover close_cover stop_cover",
+lock:"lock unlock",scene:"turn_on",script:"turn_on toggle",automation:"trigger toggle",
+button:"press",input_button:"press",
+media_player:"media_play_pause volume_up volume_down media_next_track media_previous_track",
+homeassistant:T3};
+var HK=[["light","Light"],["switch","Switch"],["input_boolean","Input boolean"],["fan","Fan"],
+["cover","Cover"],["lock","Lock"],["scene","Scene"],["script","Script"],["automation","Automation"],
+["button","Button"],["input_button","Input button"],["media_player","Media player"],
+["homeassistant","Any entity"]];
+var HL={toggle:"Toggle",turn_on:"Turn on",turn_off:"Turn off",brightness_up:"Brighten",
+brightness_down:"Dim",increase_speed:"Increase speed",decrease_speed:"Decrease speed",
+open_cover:"Open",close_cover:"Close",stop_cover:"Stop",lock:"Lock",unlock:"Unlock",
+trigger:"Trigger",press:"Press",media_play_pause:"Play/pause",volume_up:"Volume up",
+volume_down:"Volume down",media_next_track:"Next track",media_previous_track:"Previous track"};
+function haActs(k){return HX.hasOwnProperty(k)?HX[k].split(" "):[]}
+function haLabel(k,a){return k==="scene"&&a==="turn_on"?"Activate":
+k==="script"&&a==="turn_on"?"Run":HL[a]||a}
+function haStep(a){return a==="brightness_up"||a==="brightness_down"}
+function haWords(k,a,v,e){return haLabel(k,a)+(haStep(a)?" "+v+"%":"")+" "+e}
+function haDomain(e){var m=/^([a-z0-9_]+)\./.exec(e);return m?m[1]:""}
+function haKindFor(e){var d=haDomain(e);
+return !d?null:d!=="homeassistant"&&HX.hasOwnProperty(d)?d:"homeassistant"}
+// The firmware checks the same rules again and answers with the same words.
+function haCheck(e,k,a,v){
+if(haActs(k).indexOf(a)<0)return "unknown Home Assistant kind or action";
+if(e.length>64||!/^[a-z0-9_]+\.[a-z0-9_]+$/.test(e)||(k!=="homeassistant"&&haDomain(e)!==k))
+return "an entity id is domain.object_id, up to 64 characters, and its domain must match the kind";
+if(haStep(a)&&!(v>=1&&v<=100))return "a brightness step is 1 to 100";
+return ""}
 
 // The named usages the two paged reports send most often. The Usage box stays
 // for everything else, because the page cannot carry the full HID tables.
@@ -1156,6 +1194,79 @@ return "<p class=sub>The input sends nothing until it is assigned again.</p>"+
 "<div class=act><button type=button class=sec id=b3"+(lock?" disabled":"")+
 ">Clear this input</button></div>"}
 
+function haOpts(){var L=haActs(hkd),h="",i;
+for(i=0;i<L.length;i++)h+="<option value="+L[i]+(L[i]===hac?" selected":"")+">"+haLabel(hkd,L[i])+"</option>";
+return h}
+
+function haPanel(lock){
+var dis=lock?" disabled":"",h,i,saved=row(sel)&&row(sel).action==="ha";
+h="<p class=sub>Run one action on one Home Assistant entity.</p>"+
+"<label class=hd2 for=he>Entity ID</label><input id=he type=text autocomplete=off autocapitalize=off "+
+"autocorrect=off spellcheck=false placeholder=light.living_room value='"+att(hek)+"'"+dis+">"+
+"<label class=hd2 for=hd>Kind</label><select id=hd"+dis+">";
+for(i=0;i<HK.length;i++)h+="<option value="+HK[i][0]+(HK[i][0]===hkd?" selected":"")+">"+HK[i][1]+"</option>";
+h+="</select><label class=hd2 for=hc>Action</label><select id=hc"+dis+">"+haOpts()+"</select>"+
+"<div id=hsw"+(haStep(hac)?"":" hidden")+"><label class=hd2 for=hs>Step, in percent</label>"+
+"<input id=hs type=number min=1 max=100 step=1 inputmode=numeric value='"+att(hvl)+"'"+dis+"></div>"+
+"<p class=sub>The ESPHome integration needs <b>Allow the device to perform Home Assistant actions</b>. "+
+"The first press after sleep waits a few seconds for Wi-Fi and Home Assistant.</p>";
+if(haMsg)h+="<div class='note "+(haBad?"bad":"ok")+"'>"+esc(haMsg)+"</div>";
+h+="<div class=act><button type=button id=hg"+dis+">Assign Home Assistant action</button>"+
+(saved?"<button type=button class=sec id=ht"+(lock||haBusy?" disabled":"")+">Test saved action</button>":"")+"</div>";
+return h}
+
+function haFix(){var L=haActs(hkd);if(L.indexOf(hac)<0)hac=L[0]}
+
+// A typed entity id picks the kind, so the selects change without a repaint that
+// would drop the focus of the box.
+function haSync(){
+var d=document.getElementById("hd"),c=document.getElementById("hc"),w=document.getElementById("hsw");
+if(d)d.value=hkd;if(c)c.innerHTML=haOpts();if(w)w.hidden=!haStep(hac)}
+
+function haWire(lock){
+var he=document.getElementById("he"),hd=document.getElementById("hd"),hc=document.getElementById("hc"),
+hs=document.getElementById("hs"),ht=document.getElementById("ht");
+he.oninput=function(){hek=this.value.toLowerCase();if(this.value!==hek)this.value=hek;
+var k=haKindFor(hek);if(k)hkd=k;haFix();haSync()};
+hd.onchange=function(){hkd=this.value;haFix();msg="";bad=false;paint()};
+hc.onchange=function(){hac=this.value;if(haStep(hac)&&!hvl)hvl="10";msg="";bad=false;paint()};
+hs.oninput=function(){hvl=this.value};
+if(!lock)document.getElementById("hg").onclick=assignHa;
+if(ht&&!lock&&!haBusy)ht.onclick=testHa}
+
+function assignHa(){
+var e=String(hek).replace(/^\s+|\s+$/g,"").toLowerCase(),r=String(hvl).replace(/^\s+|\s+$/g,""),
+v=haStep(hac)?(/^[0-9]+$/.test(r)?parseInt(r,10):NaN):0,why=haCheck(e,hkd,hac,v);
+if(why){msg=why;bad=true;paint();return}
+go("set_ha",null,"&kind="+hkd+"&act="+hac+"&val="+v+"&entity="+encodeURIComponent(e))}
+
+var HM={ok:"Home Assistant ran the action.",
+unconfirmed:"Sent. Home Assistant did not confirm. If nothing happened, turn on \"Allow the device to perform Home Assistant actions\" in the ESPHome integration options.",
+timeout:"Home Assistant did not connect within 20 s.",dropped:"Too many presses are queued."};
+
+// queued and sent are not outcomes, so the poll goes on until another one lands.
+// An earlier press can leave last on this slot, so no result counts until the
+// action id of the test has completed. The remote sets queued before it does.
+function haPoll(s,tok,n,id){return load().then(function(j){
+if(tok!==haTok)return;
+var h=j.ha||{},l=h.last;
+if(j.action_id>=id&&j.action_id===id&&!j.action_ok){
+haBusy=false;haBad=true;haMsg="The remote could not queue the action.";paint();return}
+if(j.action_id>=id&&h.last_slot===s&&l&&l!=="none"&&l!=="queued"&&l!=="sent"){
+haBusy=false;haBad=l!=="ok";
+haMsg=l==="error"?"Home Assistant reported an error: "+(h.error||"unknown"):HM[l]||"Home Assistant gave no answer.";
+paint();return}
+if(n>=40){haBusy=false;haBad=true;haMsg="Home Assistant gave no answer.";paint();return}
+return new Promise(function(done){setTimeout(done,700)}).then(function(){return haPoll(s,tok,n+1,id)})})}
+
+function testHa(){
+var s=sel,tok=++haTok;
+haBusy=true;haBad=false;haMsg="Waiting for Home Assistant...";paint();
+post("test_ha",s).then(function(r){
+if(r.code!==200){haBusy=false;haBad=true;haMsg=fail(r);paint();return}
+return haPoll(s,tok,0,r.body.id)})
+.catch(function(){if(tok!==haTok)return;haBusy=false;haBad=true;haMsg="The remote did not answer.";paint()})}
+
 // The frontend websocket relays every MQTT message as {topic,payload} with the
 // base topic already stripped, so bridge/groups arrives without a subscribe.
 // A websocket needs no CORS grant, which a fetch to the same host would.
@@ -1346,6 +1457,8 @@ if(!r)return null;
 if(r.action==="ir")return {kind:"ir",source:r.slot};
 if(r.action==="hid")return {kind:"hid",source:r.slot,hid_kind:r.hid_kind,
 usage:r.hid_usage,mod:r.hid_mod};
+if(r.action==="ha")return {kind:"ha",source:r.slot,ha_kind:r.ha_kind,act:r.ha_act,
+val:r.ha_val,entity:r.ha_entity};
 if(r.action!=="zigbee")return null;
 return r.ieee?{kind:"zigbee",source:r.slot,device:true,ieee:r.ieee,ep:r.ep||1,
 act:r.act||0,val:r.val||0,name:r.name||""}:
@@ -1356,7 +1469,7 @@ function clipName(c){var d=info(c.source);return d?d.l:"that input"}
 
 function copyAssignment(){
 var c=clipConfig(row(sel)),source=sel;
-if(!c){msg="Only an IR, Zigbee, or BLE HID config can be copied.";bad=true;paint();return}
+if(!c){msg="Only an IR, Zigbee, BLE HID, or Home Assistant config can be copied.";bad=true;paint();return}
 if(c.kind!=="ir"){clip=c;msg="";bad=false;paint();return}
 if(cfgAll[source]!==undefined){c.code=cfgAll[source];clip=c;msg="";bad=false;paint();return}
 clipBusy=true;paint();
@@ -1370,12 +1483,14 @@ msg="";bad=false})
 
 function pasteAssignment(){
 var c=clip,target=sel;
-if(!c){msg="Copy an IR, Zigbee, or BLE HID config first.";bad=true;paint();return}
-if(!confirm("Apply the "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":"Zigbee")+
+if(!c){msg="Copy an IR, Zigbee, BLE HID, or Home Assistant config first.";bad=true;paint();return}
+if(!confirm("Apply the "+(c.kind==="ir"?"IR":c.kind==="hid"?"BLE HID":c.kind==="ha"?"Home Assistant":"Zigbee")+
 " config from "+clipName(c)+" to "+info(target).l+"?"))return;
 if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}
 else if(c.kind==="hid"){act="hid";hkv=c.hid_kind;huv=String(c.usage);hmv=String(c.mod||0);
 hcust=hidCustom(hkv,huv)}
+else if(c.kind==="ha"){act="ha";hek=c.entity;hkd=c.ha_kind;hac=c.act;
+hvl=c.val?String(c.val):"10";haFix()}
 else{
 act="zb";zkv=c.device?"d":"g";
 zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";
@@ -1386,6 +1501,8 @@ msg="";bad=false;
 if(c.kind==="ir"){paint();go("set_ir_code",c.code);return}
 if(c.kind==="hid"){paint();go("set_hid",null,"&kind="+hkv+"&usage="+c.usage+
 "&mod="+(c.mod||0));return}
+if(c.kind==="ha"){paint();go("set_ha",null,"&kind="+c.ha_kind+"&act="+c.act+
+"&val="+(haStep(c.act)?c.val:0)+"&entity="+encodeURIComponent(c.entity));return}
 if(c.device){sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0));return}
 sendGroup(String(c.group),c.name||"",String(c.val||0))}
 
@@ -1410,6 +1527,8 @@ if(r.name)e.name=r.name}
 else if(r&&r.action==="voice")e.action="voice";
 else if(r&&r.action==="hid"){e.action="hid";e.kind=r.hid_kind;
 e.usage=r.hid_usage;e.mod=r.hid_mod||0}
+else if(r&&r.action==="ha"){e.action="ha";e.kind=r.ha_kind;e.act=r.ha_act;
+e.entity=r.ha_entity;if(r.ha_val)e.val=r.ha_val}
 else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
 lines.push(JSON.stringify(e))}
 // One line for each input, because an indented block runs past 100 lines and a
@@ -1518,6 +1637,10 @@ if(e.kind==="gamepad_dpad"&&!(u>=0&&u<=7&&m===0))
 return "Slot "+e.slot+" needs D-pad direction 0 to 7.";
 if(["keyboard","consumer","gamepad_button","gamepad_dpad"].indexOf(e.kind)<0)
 return "Slot "+e.slot+" has an unknown HID report."}
+else if(a==="ha"){
+m=String(e.entity).toLowerCase();u=e.val===undefined?(haStep(e.act)?10:0):parseInt(e.val,10);
+g=haCheck(m,e.kind,e.act,u);
+if(g)return "Slot "+e.slot+" has an invalid Home Assistant action: "+g+"."}
 else if(a!=="ir"&&a!=="voice"&&a!=="none")
 return "Slot "+e.slot+" carries the unknown action "+a+".";
 if(a==="zigbee"){
@@ -1559,6 +1682,10 @@ if(e.action==="ir")return post("set_ir_code",e.slot,e.code);
 if(e.action==="hid")return post("set_hid",e.slot,null,undefined,
 "&kind="+encodeURIComponent(e.kind)+"&usage="+encodeURIComponent(e.usage)+
 "&mod="+encodeURIComponent(e.mod||0));
+if(e.action==="ha")return post("set_ha",e.slot,null,undefined,
+"&kind="+encodeURIComponent(e.kind)+"&act="+encodeURIComponent(e.act)+
+"&val="+(haStep(e.act)?(e.val===undefined?10:parseInt(e.val,10)):0)+
+"&entity="+encodeURIComponent(String(e.entity).toLowerCase()));
 if(e.action==="zigbee"&&e.kind==="device")
 return post("set_zigbee_device",e.slot,null,e.name||"",
 "&ieee=0x"+cfgHex(e.ieee).toLowerCase()+
@@ -1701,6 +1828,7 @@ else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</
 // One open list, because a slot holds one action. The panel beside it carries
 // everything that action needs, so nothing from another action is on screen.
 var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];
+opts.push(["ha","Home Assistant"]);
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
@@ -1713,7 +1841,7 @@ h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
 if(on)title=opts[i][1]}
 h+="</div>";
 var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):
-act==="hid"?hidPanel(lock):act==="va"?vaPanel(lock):
+act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock));
 e.innerHTML=h;
 p.innerHTML=panel;
@@ -1765,6 +1893,7 @@ if(hu)hu.oninput=function(){huv=this.value};
 hmb.forEach(function(b){if(b)b.onchange=function(){var m=0;
 hmb.forEach(function(x){if(x&&x.checked)m|=Number(x.value)});hmv=String(m)}});
 if(!lock)document.getElementById("hi").onclick=assignHid}
+if(act==="ha")haWire(lock);
 if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
 if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
 
@@ -1772,6 +1901,7 @@ function actFor(s){var r=row(s);
 if(!r||r.action==="none")return "ir";
 if(r.action==="zigbee")return "zb";
 if(r.action==="hid")return "hid";
+if(r.action==="ha")return "ha";
 if(r.action==="voice")return "va";
 return "ir"}
 
@@ -1791,6 +1921,11 @@ hkv=(pr&&pr.action==="hid")?pr.hid_kind:"keyboard";
 huv=(pr&&pr.action==="hid")?String(pr.hid_usage):"";
 hmv=(pr&&pr.action==="hid")?String(pr.hid_mod||0):"0";
 hcust=hidCustom(hkv,huv);
+hek=(pr&&pr.action==="ha")?pr.ha_entity:"";
+hkd=(pr&&pr.action==="ha")?pr.ha_kind:"light";
+hac=(pr&&pr.action==="ha")?pr.ha_act:"toggle";
+hvl=(pr&&pr.action==="ha"&&pr.ha_val)?String(pr.ha_val):"10";
+haFix();haMsg="";haBad=false;haBusy=false;haTok++;
 // Only IR assignments have stored code. Empty and Clear slots show a ready
 // code box, so they do not wait for a request that can only return empty text.
 if(!pr||pr.action!=="ir")cdSlot=s;
@@ -1843,7 +1978,7 @@ if(a==="record_ir"){mode="rec";rec=s;seen=false;msg="";bad=false;
 return load().then(function(){paint();watch()})}
 return waitAction(r.body.id).then(function(ok){
 if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
-a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":"Cleared.";bad=false}
+a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":a==="set_ha"?"Home Assistant action assigned.":"Cleared.";bad=false}
 else{msg=a==="set_ir_code"?"The remote refused that code.":
 "Flash write failed. The assignment was not saved.";bad=true}
 return load().then(function(){

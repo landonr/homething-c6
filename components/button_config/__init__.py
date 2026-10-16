@@ -7,7 +7,7 @@ from urllib.parse import quote_from_bytes
 from esphome import automation
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import idle_sleep, sensor, web_server_base
+from esphome.components import ha_action, idle_sleep, sensor, web_server_base
 from esphome.components.web_server_base import CONF_WEB_SERVER_BASE_ID
 from esphome.const import CONF_ID, CONF_RAW_DATA_ID, CONF_TRIGGER_ID
 from esphome.core import HexInt
@@ -16,6 +16,7 @@ AUTO_LOAD = ["web_server_base"]
 DEPENDENCIES = ["network"]
 
 CONF_IDLE_SLEEP_ID = "idle_sleep_id"
+CONF_HA_ACTION_ID = "ha_action_id"
 CONF_BATTERY_LEVEL_ID = "battery_level_id"
 CONF_BATTERY_VOLTAGE_ID = "battery_voltage_id"
 CONF_ON_STATUS_LEDS = "on_status_leds"
@@ -31,6 +32,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.GenerateID(CONF_RAW_DATA_ID): cv.declare_id(cg.uint8),
         # The import alone does not load idle_sleep, so production builds without it.
         cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep),
+        cv.Optional(CONF_HA_ACTION_ID): cv.use_id(ha_action.HaAction),
         cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor),
         cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_ON_STATUS_LEDS): automation.validate_automation(
@@ -82,6 +84,12 @@ async def to_code(config):
         sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])
         cg.add(var.set_idle_sleep(sleep))
         cg.add_define("USE_BUTTON_CONFIG_IDLE_SLEEP")
+
+    # A build without ha_action has no ha_action.h, so the C++ side is behind this define.
+    if CONF_HA_ACTION_ID in config:
+        actions = await cg.get_variable(config[CONF_HA_ACTION_ID])
+        cg.add(var.set_ha_action(actions))
+        cg.add_define("USE_BUTTON_CONFIG_HA_ACTION")
 
     # Bench configs have no battery sensors, so the C++ side is behind this define.
     if CONF_BATTERY_LEVEL_ID in config:

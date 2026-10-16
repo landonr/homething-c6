@@ -80,9 +80,16 @@ const STATE = {
     {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: ""},
     {slot: 7, action: "hid", pulses: 0, us: 0, code: "", fields: "", group: 0, hid_kind: "keyboard", hid_usage: 4, hid_mod: 2, name: ""},
+    {slot: 8, action: "ha", pulses: 0, us: 0, code: "", fields: "", group: 0, ha_kind: "light", ha_act: "brightness_up", ha_val: 10, ha_entity: "light.kitchen", name: ""},
     {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, act: 0, val: 0, name: "Office Lamp"},
   ],
 };
+
+// The firmware always serves the four ha_ fields, empty when nothing is assigned.
+for (const row of STATE.slots) {
+  if (row.action !== "ha") Object.assign(row, {ha_kind: "", ha_act: "", ha_val: 0, ha_entity: ""});
+}
+STATE.ha = {pending: 0, last_slot: 0, last: "none", error: ""};
 
 const body = mk("body");
 const events = {};
@@ -366,6 +373,132 @@ setTimeout(() => {
         bodies[0].indexOf("kind=keyboard") < 0 || bodies[0].indexOf("usage=4") < 0 ||
         bodies[0].indexOf("mod=2") < 0)
       throw new Error("accepted BLE HID Paste sent the wrong payload: " + bodies[0]);
+  });
+  step("the Home Assistant panel offers the entity, kind, action and step fields", () => {
+    pick(8);
+    if (act !== "ha") throw new Error("a Home Assistant slot opened the " + act + " panel");
+    if (hek !== "light.kitchen" || hkd !== "light" || hac !== "brightness_up" || hvl !== "10")
+      throw new Error("pick did not load the saved action");
+    const html = document.getElementById("edpanel").innerHTML;
+    for (const id of ["he", "hd", "hc", "hs", "hg", "ht"])
+      if (!document.getElementById(id)) throw new Error("the panel has no " + id);
+    for (const text of ["placeholder=light.living_room", "autocapitalize=off", "autocorrect=off",
+                        "spellcheck=false", "Any entity", "Input boolean", "Media player", "Brighten",
+                        "Allow the device to perform Home Assistant actions", "first press after sleep"])
+      if (html.indexOf(text) < 0) throw new Error("the panel lacks " + text);
+    if (/id=hsw hidden/.test(html)) throw new Error("the step is hidden for Brighten");
+    if (html.indexOf("value=brightness_down") < 0) throw new Error("light lost its Dim action");
+    if (typeof document.getElementById("ht").onclick !== "function")
+      throw new Error("a saved Home Assistant slot has no Test handler");
+    pick(3); act = "ha"; paint();
+    if (document.getElementById("ht")) throw new Error("an empty slot offers Test");
+  });
+  step("the action list follows the kind and the step shows only for Brighten and Dim", () => {
+    pick(3); act = "ha"; hkd = "scene"; haFix(); paint();
+    if (hac !== "turn_on" || haOpts().indexOf(">Activate<") < 0) throw new Error("scene reads " + haOpts());
+    hkd = "script"; haFix(); hac = "turn_on";
+    if (haOpts().indexOf(">Run<") < 0) throw new Error("script reads " + haOpts());
+    hkd = "media_player"; haFix();
+    if (haOpts().indexOf(">Previous track<") < 0 || haOpts().indexOf(">Toggle<") >= 0)
+      throw new Error("media player reads " + haOpts());
+    hkd = "light"; hac = "toggle"; paint();
+    if (!/id=hsw hidden/.test(document.getElementById("edpanel").innerHTML))
+      throw new Error("the step shows for Toggle");
+    hac = "brightness_down"; paint();
+    if (/id=hsw hidden/.test(document.getElementById("edpanel").innerHTML))
+      throw new Error("the step is hidden for Dim");
+  });
+  step("typing an entity id lowercases it and selects the kind", () => {
+    pick(3); act = "ha"; paint();
+    const he = document.getElementById("he");
+    he.value = "Switch.Porch"; he.oninput.call(he);
+    if (hek !== "switch.porch" || he.value !== "switch.porch") throw new Error("the id was not lowercased: " + hek);
+    if (hkd !== "switch") throw new Error("a switch id left the kind on " + hkd);
+    hkd = "light"; hac = "brightness_up";
+    he.value = "fan.bedroom"; he.oninput.call(he);
+    if (hkd !== "fan" || haActs("fan").indexOf(hac) < 0)
+      throw new Error("kind and action did not follow: " + hkd + " " + hac);
+    he.value = "light.x"; he.oninput.call(he); hac = "brightness_up";
+    he.value = "switch.x"; he.oninput.call(he);
+    if (hac !== "toggle") throw new Error("an action the kind lacks stayed: " + hac);
+    he.value = "vacuum.robot"; he.oninput.call(he);
+    if (hkd !== "homeassistant") throw new Error("an unknown domain gave " + hkd);
+    he.value = "vacuum"; he.oninput.call(he);
+    if (hkd !== "homeassistant") throw new Error("a half typed id changed the kind to " + hkd);
+  });
+  step("the slot summary names the action, the step and the entity", () => {
+    if (words(8) !== "HA: Brighten 10% light.kitchen") throw new Error("slot 8 reads " + words(8));
+    const r = row(8), prev = Object.assign({}, r);
+    Object.assign(r, {ha_kind: "light", ha_act: "toggle", ha_val: 0, ha_entity: "light.kitchen"});
+    if (words(8) !== "HA: Toggle light.kitchen") throw new Error("a toggle reads " + words(8));
+    Object.assign(r, {ha_kind: "scene", ha_act: "turn_on", ha_entity: "scene.movie"});
+    if (words(8) !== "HA: Activate scene.movie") throw new Error("a scene reads " + words(8));
+    Object.assign(r, prev);
+    paint();
+    if (keys[8].className.indexOf("set-ha") < 0) throw new Error("the tile has no HA colour class");
+  });
+  step("Assign checks the firmware rules before it posts", () => {
+    const realFetch = global.fetch, bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    pick(3); act = "ha";
+    hek = "switch.x"; hkd = "light"; hac = "toggle"; assignHa();
+    if (!bad || msg.indexOf("its domain must match the kind") < 0) throw new Error("a kind mismatch gave: " + msg);
+    hek = "light"; assignHa();
+    if (msg.indexOf("an entity id is domain.object_id") < 0) throw new Error("a bare name gave: " + msg);
+    hek = "light." + "a".repeat(60); assignHa();
+    if (msg.indexOf("up to 64 characters") < 0) throw new Error("a long id gave: " + msg);
+    hek = "light.kitchen"; hac = "brightness_up"; hvl = "0"; assignHa();
+    if (msg !== "a brightness step is 1 to 100") throw new Error("step 0 gave: " + msg);
+    hvl = "101"; assignHa();
+    if (msg !== "a brightness step is 1 to 100") throw new Error("step 101 gave: " + msg);
+    hvl = "abc"; assignHa();
+    if (msg !== "a brightness step is 1 to 100") throw new Error("a letter step gave: " + msg);
+    if (bodies.length) throw new Error("a bad entry was posted: " + bodies[0]);
+    hvl = "25"; assignHa();
+    if (bodies.length !== 1 || bodies[0] !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=25&entity=light.kitchen")
+      throw new Error("Assign sent: " + bodies[0]);
+    hac = "toggle"; hvl = "25"; hek = " Light.Kitchen "; assignHa();
+    if (bodies[1] !== "action=set_ha&slot=3&kind=light&act=toggle&val=0&entity=light.kitchen")
+      throw new Error("a toggle did not send val 0 and a trimmed id: " + bodies[1]);
+    global.fetch = realFetch;
+  });
+  step("accepted Paste immediately assigns a Home Assistant action", () => {
+    global.sel = 8; global.clip = null; global.clipBusy = false;
+    paint();
+    document.getElementById("bcopy").onclick();
+    if (!clip || clip.kind !== "ha" || clip.entity !== "light.kitchen" || clip.act !== "brightness_up")
+      throw new Error("the Home Assistant assignment was not copied: " + JSON.stringify(clip));
+    pick(3);
+    const bodies = [], realFetch = global.fetch;
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    confirmAnswer = true; confirmAsked = 0;
+    document.getElementById("bpaste").onclick();
+    global.fetch = realFetch;
+    if (confirmAsked !== 1 || confirmText.indexOf("Home Assistant config from Button 8") < 0)
+      throw new Error("Paste did not name the config: " + confirmText);
+    if (act !== "ha" || hek !== "light.kitchen") throw new Error("Paste did not fill the panel");
+    if (bodies.length !== 1 || bodies[0] !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=10&entity=light.kitchen")
+      throw new Error("Paste sent: " + bodies[0]);
+  });
+  step("a backup carries Home Assistant actions out and back in", () => {
+    global.cfgAll = {6: CODE.text};
+    const e = JSON.parse(cfgBlob()).slots.find(x => x.slot === 8);
+    if (e.action !== "ha" || e.kind !== "light" || e.act !== "brightness_up" || e.val !== 10 || e.entity !== "light.kitchen")
+      throw new Error("the export holds " + JSON.stringify(e));
+    if (cfgCheck(e)) throw new Error("the export did not read back: " + cfgCheck(e));
+    const toggle = {slot: 8, action: "ha", kind: "switch", act: "toggle", entity: "switch.porch"};
+    if (cfgCheck(toggle)) throw new Error("a toggle was refused: " + cfgCheck(toggle));
+    for (const bad of [{entity: "light"}, {entity: "switch.x"}, {act: "open_cover"}, {kind: "tv"}, {val: 0}])
+      if (!cfgCheck(Object.assign({}, e, bad))) throw new Error("a bad entry passed: " + JSON.stringify(bad));
+    if (cfgParse(JSON.stringify({c6remote: 1, slots: [e]})).error) throw new Error("the parser refused an HA entry");
+    const realFetch = global.fetch, bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    cfgSend(e); cfgSend(toggle);
+    global.fetch = realFetch;
+    if (bodies[0] !== "action=set_ha&slot=8&kind=light&act=brightness_up&val=10&entity=light.kitchen")
+      throw new Error("the restore sent: " + bodies[0]);
+    if (bodies[1] !== "action=set_ha&slot=8&kind=switch&act=toggle&val=0&entity=switch.porch")
+      throw new Error("a toggle restore sent: " + bodies[1]);
   });
   step("the title starts a full IR config copy", () => {
     global.sel = 6;
@@ -1688,6 +1821,117 @@ setTimeout(() => {
     step("opening Config retries a failed code read", () => {
       if (!cfgReady || cfgAll[6] !== CODE.text) throw new Error("retry did not complete cache");
     });
+    {
+      const realF = global.fetch, posts = [];
+      let haIds = 1000;
+      const haSettle = () => new Promise(done => setTimeout(done, 30));
+      const answer = last => { STATE.ha = {pending: 0, last_slot: 8, last, error: last === "error" ? "service not found" : ""}; };
+      global.fetch = (u, o) => {
+        if (o && /action=set_ha/.test(o.body || "") && global.haSetStatus)
+          return Promise.resolve({status: 400, ok: false, text: () => Promise.resolve('{"ok":false,"error":"Home Assistant actions are not configured"}')});
+        if (o && /action=test_ha/.test(o.body || "")) {
+          posts.push(o.body);
+          if (global.haTestStatus) return Promise.resolve({status: 400, ok: false, text: () => Promise.resolve('{"ok":false,"error":"slot has no Home Assistant action"}')});
+          const id = ++haIds;
+          global.haLastId = id;
+          if (global.haNext) global.haNext();
+          if (!global.haHold) { STATE.action_id = id; STATE.action_ok = !global.haFailQueue; }
+          return Promise.resolve({status: 200, ok: true, text: () => Promise.resolve('{"ok":true,"id":' + id + '}')});
+        }
+        return realF(u, o);
+      };
+      const expected = {
+        ok: "Home Assistant ran the action.",
+        error: "Home Assistant reported an error: service not found",
+        unconfirmed: "Sent. Home Assistant did not confirm. If nothing happened, turn on \"Allow the device to perform Home Assistant actions\" in the ESPHome integration options.",
+        timeout: "Home Assistant did not connect within 20 s.",
+        dropped: "Too many presses are queued.",
+      };
+      global.haSetStatus = true;
+      pick(3); global.act = "ha"; global.hek = "light.kitchen"; global.hkd = "light"; global.hac = "toggle";
+      assignHa();
+      await haSettle();
+      step("a 400 from set_ha shows the firmware text", () => {
+        if (msg !== "Home Assistant actions are not configured" || !bad) throw new Error("the 400 showed: " + msg);
+      });
+      global.haSetStatus = false;
+      for (const last of Object.keys(expected)) {
+        pick(8);
+        global.haNext = () => answer(last);
+        testHa();
+        await haSettle();
+        step("Test shows the " + last + " outcome", () => {
+          if (posts[posts.length - 1] !== "action=test_ha&slot=8") throw new Error("Test posted " + posts[posts.length - 1]);
+          if (haMsg !== expected[last]) throw new Error("the outcome reads " + haMsg);
+          if (haBad !== (last !== "ok")) throw new Error("the tone is wrong for " + last);
+          if (haBusy) throw new Error("Test stayed busy");
+          if (document.getElementById("edpanel").innerHTML.indexOf("Waiting for Home Assistant") >= 0)
+            throw new Error("the panel still waits");
+        });
+      }
+      pick(8);
+      global.haNext = () => { STATE.ha = {pending: 1, last_slot: 8, last: "queued", error: ""}; };
+      testHa();
+      await haSettle();
+      step("Test waits while the action is queued and ignores another slot", () => {
+        if (haMsg !== "Waiting for Home Assistant..." || !haBusy) throw new Error("the wait reads " + haMsg);
+        if (!document.getElementById("ht").disabled) throw new Error("Test is not disabled while it waits");
+        STATE.ha = {pending: 0, last_slot: 5, last: "ok", error: ""};
+      });
+      await new Promise(done => setTimeout(done, 800));
+      step("a result for another slot does not end the wait", () => {
+        if (!haBusy || haMsg !== "Waiting for Home Assistant...") throw new Error("the wait ended: " + haMsg);
+        answer("ok");
+      });
+      await new Promise(done => setTimeout(done, 800));
+      step("the outcome shows once the slot reports it", () => {
+        if (haBusy || haMsg !== expected.ok) throw new Error("the outcome reads " + haMsg);
+      });
+      pick(8);
+      global.haHold = true;
+      global.haNext = () => { STATE.ha = {pending: 0, last_slot: 8, last: "ok", error: ""}; };
+      STATE.ha = {pending: 0, last_slot: 8, last: "ok", error: ""};
+      testHa();
+      await haSettle();
+      step("a stale result for the slot is ignored until the action id completes", () => {
+        if (!haBusy || haMsg !== "Waiting for Home Assistant...") throw new Error("the stale ok was shown: " + haMsg);
+        STATE.ha = {pending: 0, last_slot: 8, last: "error", error: "late"};
+        STATE.action_id = global.haLastId; STATE.action_ok = true;
+      });
+      await new Promise(done => setTimeout(done, 800));
+      step("the result counts once the action id completes", () => {
+        if (haBusy || haMsg !== "Home Assistant reported an error: late") throw new Error("the outcome reads " + haMsg);
+      });
+      global.haHold = false;
+      global.haNext = null;
+      global.haFailQueue = true;
+      pick(8);
+      testHa();
+      await haSettle();
+      step("a failed action id reports that the action was not queued", () => {
+        if (haMsg !== "The remote could not queue the action." || haBusy || !haBad) throw new Error("it reads " + haMsg);
+      });
+      global.haFailQueue = false;
+      pick(8);
+      global.haNext = null; global.haTestStatus = true;
+      testHa();
+      await haSettle();
+      step("a 400 from test_ha shows the firmware text", () => {
+        if (haMsg !== "slot has no Home Assistant action" || !haBad || haBusy) throw new Error("the 400 showed " + haMsg);
+      });
+      global.haTestStatus = false;
+      pick(8);
+      global.haNext = () => { STATE.ha = {pending: 1, last_slot: 8, last: "queued", error: ""}; };
+      testHa();
+      pick(5);
+      await new Promise(done => setTimeout(done, 800));
+      step("a new selection drops a poll in flight", () => {
+        if (haMsg !== "" || haBusy) throw new Error("the old poll wrote " + haMsg);
+      });
+      STATE.ha = {pending: 0, last_slot: 0, last: "none", error: ""};
+      STATE.action_id = 0; STATE.action_ok = false;
+      global.fetch = realF;
+    }
     {
       const prevRadios = STATE.radios, prevDirty = global.cfgDirty;
       STATE.radios = {zigbee: true, ble: false, home_assistant: true};

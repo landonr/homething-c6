@@ -73,9 +73,46 @@ STATE = {
     "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
     "name": "homeThing C6 13f498",
     "default_name": "homeThing C6 13f498",
+    "ha": {"pending": 0, "last_slot": 0, "last": "none", "error": ""},
 }
 
 FRIENDLY_NAME_MAX = 40
+
+# Mirrors the kind and action table of the firmware.
+_T3 = ["toggle", "turn_on", "turn_off"]
+HA_ACTIONS = {
+    "light": _T3 + ["brightness_up", "brightness_down"],
+    "switch": _T3,
+    "input_boolean": _T3,
+    "fan": _T3 + ["increase_speed", "decrease_speed"],
+    "cover": ["toggle", "open_cover", "close_cover", "stop_cover"],
+    "lock": ["lock", "unlock"],
+    "scene": ["turn_on"],
+    "script": ["turn_on", "toggle"],
+    "automation": ["trigger", "toggle"],
+    "button": ["press"],
+    "input_button": ["press"],
+    "media_player": ["media_play_pause", "volume_up", "volume_down",
+                     "media_next_track", "media_previous_track"],
+    "homeassistant": _T3,
+}
+HA_ENTITY = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+# A test shows queued, then ok this long after the press.
+HA_TEST_SECONDS = 2.0
+HA_TEST = {"slot": 0, "at": 0.0}
+
+
+def ha_error(kind: str, act: str, val: str, entity: str) -> str | None:
+    """Mirrors the validation of set_ha in button_config.cpp."""
+    if act not in HA_ACTIONS.get(kind, []):
+        return "unknown Home Assistant kind or action"
+    if (len(entity) > 64 or not HA_ENTITY.match(entity)
+            or (kind != "homeassistant" and entity.split(".")[0] != kind)):
+        return "an entity id is domain.object_id, up to 64 characters, and its domain must match the kind"
+    step = act in ("brightness_up", "brightness_down")
+    if not val.isdigit() or int(val) > 100 or (step and int(val) < 1):
+        return "a brightness step is 1 to 100"
+    return None
 
 # A fake restart fails the state poll for a short time. Then the action ids
 # start again from zero, as they do after a real boot. The preview always comes
@@ -156,6 +193,14 @@ def load_config(path: Path) -> tuple[dict, dict]:
                 "hid_usage": int(entry.get("usage", 0)),
                 "hid_mod": int(entry.get("mod", 0)),
             }
+        elif action == "ha":
+            slots[slot] = {
+                "action": "ha",
+                "ha_kind": entry.get("kind", "light"),
+                "ha_act": entry.get("act", "toggle"),
+                "ha_val": int(entry.get("val", 0)),
+                "ha_entity": entry.get("entity", ""),
+            }
         elif action == "zigbee":
             row = {
                 "action": "zigbee",
@@ -177,6 +222,8 @@ def load_config(path: Path) -> tuple[dict, dict]:
 
 
 SLOTS, IR_CODES = load_config(CONFIG)
+SLOTS.setdefault(8, {"action": "ha", "ha_kind": "light", "ha_act": "brightness_up",
+                     "ha_val": 10, "ha_entity": "light.kitchen"})
 
 
 def page_html() -> bytes:
@@ -206,6 +253,10 @@ def slot_json(slot: int) -> dict:
         "hid_usage": entry.get("hid_usage", 0),
         "hid_mod": entry.get("hid_mod", 0),
         "name": entry.get("name", ""),
+        "ha_kind": entry.get("ha_kind", ""),
+        "ha_act": entry.get("ha_act", ""),
+        "ha_val": entry.get("ha_val", 0),
+        "ha_entity": entry.get("ha_entity", ""),
     }
 
 
@@ -257,6 +308,9 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 RESTART["until"] = 0.0
                 STATE["action_id"] = 0
+            if HA_TEST["slot"] and time.monotonic() >= HA_TEST["at"]:
+                STATE["ha"].update({"pending": 0, "last_slot": HA_TEST["slot"], "last": "ok"})
+                HA_TEST["slot"] = 0
             state = dict(STATE)
             state["slots"] = [slot_json(slot) for slot in range(3, 21)]
             self.send_json(state)
@@ -292,6 +346,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(
                 {"ok": False, "error": "a name is up to 40 bytes, with no slash or control character"}, 400)
             return
+        slot_text = form.get("slot", ["0"])[0]
+        slot = int(slot_text) if slot_text.isdigit() else 0
+        if action == "set_ha":
+            why = ha_error(form.get("kind", [""])[0], form.get("act", [""])[0],
+                           form.get("val", [""])[0], form.get("entity", [""])[0])
+            if why:
+                self.send_json({"ok": False, "error": why}, 400)
+                return
+        if action == "test_ha":
+            if SLOTS.get(slot, {}).get("action") != "ha":
+                self.send_json({"ok": False, "error": "slot has no Home Assistant action"}, 400)
+                return
+            # The firmware sets queued, then completes the action id.
+            STATE["ha"].update({"pending": 1, "last_slot": slot, "last": "queued", "error": ""})
+            HA_TEST.update({"slot": slot, "at": time.monotonic() + HA_TEST_SECONDS})
+            STATE["action_id"] += 1
+            STATE["action_ok"] = True
+            self.send_json({"ok": True, "id": STATE["action_id"]})
+            return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
 
@@ -324,6 +397,16 @@ class Handler(BaseHTTPRequestHandler):
             if on:
                 STATE["zigbee"]["paired"] = False
                 STATE["zigbee"]["new"] = True
+        elif action == "set_ha":
+            SLOTS[slot] = {
+                "action": "ha",
+                "ha_kind": form["kind"][0],
+                "ha_act": form["act"][0],
+                "ha_val": int(form["val"][0]),
+                "ha_entity": form["entity"][0],
+            }
+        elif action == "clear" and SLOTS.get(slot, {}).get("action") == "ha":
+            del SLOTS[slot]
         elif action == "forget_ble":
             STATE["ble"]["bonded"] = False
             STATE["ble"]["host"] = ""

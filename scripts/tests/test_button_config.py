@@ -139,9 +139,9 @@ class WifiSessionTest(unittest.TestCase):
     def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
         self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
         loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
-        self.assertIn("if (!this->temporary_wifi_)\n    return;", loop)
-        self.assertIn("millis() - this->last_activity_ms_", loop)
-        self.assertIn("if (idle_ms < WIFI_IDLE_MS)\n    return;", loop)
+        self.assertIn("if (!this->temporary_wifi_ && !this->action_wifi_)\n    return;", loop)
+        self.assertIn("this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) >= "
+                      "WIFI_IDLE_MS", loop)
         self.assertIn("wifi::global_wifi_component->disable();", loop)
         page = section(CPP, "void ButtonConfig::handle_page_", "\n}")
         activity = section(CPP, "void ButtonConfig::handle_activity_", "\n}")
@@ -187,7 +187,7 @@ class SleepSettingsTest(unittest.TestCase):
     """Production links idle_sleep, but the component must still build without it."""
 
     def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
-        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
         self.assertIn("cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep)", INIT)
         guarded = section(INIT, "    if CONF_IDLE_SLEEP_ID in config:\n", "\n\n")
         self.assertIn("sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])", guarded)
@@ -362,7 +362,7 @@ class BatteryTest(unittest.TestCase):
     """Bench configs have no battery sensors, so the link is optional and guarded."""
 
     def test_the_battery_link_is_optional_and_behind_a_define(self) -> None:
-        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
         self.assertIn('cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
         self.assertIn('cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
         guarded = section(INIT, "    if CONF_BATTERY_LEVEL_ID in config:\n", "\n\n")
@@ -785,7 +785,7 @@ class EnforcementTest(unittest.TestCase):
             r'hid\.assigned\s+\? "hid"[\s\S]*?zigbee\.assigned\s+\? "zigbee"'
             r'[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"', state)
+        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
@@ -875,7 +875,8 @@ class ZigbeeTargetTest(unittest.TestCase):
         clear = section(STORE, "bool clear_for_zigbee(uint8_t button) {", "\n  }")
         self.assertIn('write_name_(button, "")', clear)
         # The reverse direction is the store's callback, set up in setup().
-        self.assertIn("ir_code_store.set_assignment_clear_callback(", ZIGBEE)
+        self.assertIn("ir_code_store.add_assignment_clear_callback(", ZIGBEE)
+        self.assertIn("ir_code_store.release_others(slot, IrCodeStore::OWNER_ZIGBEE);", body)
 
 
 class PageTest(unittest.TestCase):
@@ -943,7 +944,7 @@ class PageTest(unittest.TestCase):
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
         self.assertIn(
-            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"',
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"',
             state,
         )
         self.assertIn("::ir_code_store.name(info.slot)", state)

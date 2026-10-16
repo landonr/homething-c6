@@ -333,6 +333,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertIn("\nidle_sleep:\n", PRODUCTION)
         self.assertIn("return id(zigbee_radio).is_connected();", PRODUCTION)
         self.assertIn("zigbee_assignments.play(SLOT_OF_BIT[bit])", PRODUCTION)
+        self.assertIn("id(ha_actions).play(SLOT_OF_BIT[bit])", PRODUCTION)
 
     def test_the_sw5_hold_flashes_the_awake_led_once_when_armed(self) -> None:
         self.assertIn("bool sleep_armed() const { return this->forced_sleep_; }", HEADER)
@@ -503,6 +504,21 @@ class BenchConfigTest(unittest.TestCase):
         self.assertNotIn("platform: ledc", BENCH)
         self.assertIn("  - interval: 5s\n", BENCH)
         self.assertIn('ESP_LOGI("awake_led"', BENCH)
+
+
+
+class HomeAssistantSleepTest(unittest.TestCase):
+    def test_the_block_probe_has_a_home_assistant_bit(self) -> None:
+        probe = PRODUCTION.split("  block_probe: !lambda |-\n", 1)[1].split("  replay: !lambda", 1)[0]
+        self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
+        self.assertIn("wifi_session << 6 | ha_busy << 7;", probe)
+        self.assertIn("ha=%d", probe)
+
+    def test_the_replay_settles_a_bit_without_the_link_only_when_it_sends(self) -> None:
+        self.assertIn("this->replay_(bit, held, this->link_seen_)", CPP)
+        self.assertIn("if (!this_sent && !this->link_seen_)", CPP)
+        self.assertIn("bool, bool)> replay_{};", HEADER)
+        self.assertIn("return link && zigbee_assignments.play(SLOT_OF_BIT[bit]);", PRODUCTION)
 
 
 if __name__ == "__main__":

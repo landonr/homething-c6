@@ -279,13 +279,8 @@ void BleHid::setup_assignments() {
     this->set_host_name_(host.data());
   }
 
-  ::ir_code_store.set_assignment_clear_callback([](uint8_t slot) {
-    ::zigbee_assignments.clear(slot);
-    if (BleHid::instance() != nullptr)
-      BleHid::instance()->clear(slot);
-  });
-  ::zigbee_assignments.set_assignment_store_callback([](uint8_t slot) {
-    if (BleHid::instance() != nullptr)
+  ::ir_code_store.add_assignment_clear_callback([](uint8_t slot, IrCodeStore::Owner keep) {
+    if (keep != IrCodeStore::OWNER_BLE && BleHid::instance() != nullptr)
       BleHid::instance()->clear(slot);
   });
   ::ir_ui.set_hid_play_callback([](uint8_t slot, bool pressed) {
@@ -311,7 +306,7 @@ bool BleHid::assign(uint8_t slot, Kind kind, uint16_t usage, uint8_t modifiers) 
   const bool local_cleared = ::ir_code_store.clear_for_zigbee(slot);
   if (!local_cleared)
     return false;
-  ::zigbee_assignments.clear(slot);
+  ::ir_code_store.release_others(slot, IrCodeStore::OWNER_BLE);
   bool stored;
   {
     const std::lock_guard<std::mutex> lock(this->record_mutex_);

@@ -11,6 +11,10 @@
 #include "esphome/components/idle_sleep/idle_sleep.h"
 #endif
 
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+#include "esphome/components/ha_action/ha_action.h"
+#endif
+
 #ifdef USE_BUTTON_CONFIG_BATTERY
 #include "esphome/components/sensor/sensor.h"
 #endif
@@ -65,6 +69,12 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool set_boot_leds(bool enabled);
   bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
   void toggle_temporary_wifi();
+  // Main loop only. Enables Wi-Fi if it is off and keeps it up for
+  // ACTION_WIFI_LEASE_MS from now. Call it again to extend the lease.
+  void hold_wifi_for_action();
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  void set_ha_action(ha_action::HaAction *action);
+#endif
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   void set_idle_sleep(idle_sleep::IdleSleep *sleep) { this->idle_sleep_ = sleep; }
 #endif
@@ -121,6 +131,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   static constexpr uint32_t WIFI_PREF_KEY = 0x5746414FU;
   static constexpr uint32_t WIFI_PREF_MAGIC = 0x57465031U;
   static constexpr uint32_t WIFI_IDLE_MS = 10U * 60U * 1000U;
+  // Wi-Fi stays up this long after the last Home Assistant action finished.
+  static constexpr uint32_t ACTION_WIFI_LEASE_MS = 60U * 1000U;
   struct WifiPref {
     uint32_t magic;
     uint8_t enabled;
@@ -162,6 +174,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> last_activity_ms_{0};
   bool boot_wifi_always_on_{false};
   bool temporary_wifi_{false};
+  bool action_wifi_{false};
+  uint32_t action_wifi_until_ms_{0};
   ESPPreferenceObject ha_pref_;
   ESPPreferenceObject wifi_pref_;
   ESPPreferenceObject name_pref_;
@@ -175,6 +189,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<const char *> current_name_{""};
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   idle_sleep::IdleSleep *idle_sleep_{nullptr};
+#endif
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  ha_action::HaAction *ha_action_{nullptr};
 #endif
 #ifdef USE_BUTTON_CONFIG_BATTERY
   sensor::Sensor *battery_level_{nullptr};

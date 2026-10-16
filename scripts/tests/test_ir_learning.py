@@ -54,8 +54,8 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn("it[3] = Color(0, 128, 0);", status)
 
     def test_d2_reports_wifi_and_api_only(self) -> None:
-        # Wi-Fi only serves the /buttons page. Playback is Zigbee groupcast or
-        # IR, so a dark D2 must not read as a dead button.
+        # A Home Assistant press turns Wi-Fi on itself, so a dark D2 must not
+        # read as a dead button.
         status = CONFIG.split("name: Status Indicators", 1)[1].split("// D3 and D4", 1)[0]
         self.assertNotIn("mqtt", status)
         self.assertIn("const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();", status)
@@ -196,6 +196,27 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn('ESP_LOGI("ir_rx",\n             "Raw frame: pulses=%u', received)
         pulses = HEADER.split("static void log_pulses_(", 1)[1].split("\n  }\n", 1)[0]
         self.assertIn("ESP_LOGI(tag,", pulses)
+
+
+
+class AssignmentOwnershipTest(unittest.TestCase):
+    def test_the_clear_hook_is_a_listener_list_that_names_the_new_owner(self) -> None:
+        self.assertIn("std::vector<std::function<void(uint8_t, Owner)>> assignment_clear_callbacks_{};", HEADER)
+        self.assertIn("void add_assignment_clear_callback(std::function<void(uint8_t, Owner)> callback) {", HEADER)
+        self.assertIn("assignment_clear_callbacks_.push_back(std::move(callback));", HEADER)
+        self.assertNotIn("set_assignment_clear_callback", HEADER)
+
+    def test_capture_voice_and_clear_all_release_the_other_kinds(self) -> None:
+        self.assertEqual(HEADER.count("release_others(button, OWNER_IR);"), 2)
+        self.assertEqual(HEADER.count("release_others(button, OWNER_NONE);"), 1)
+
+    def test_a_press_tries_voice_hid_zigbee_home_assistant_then_ir(self) -> None:
+        play = section(HEADER, "void play_(uint8_t button) {", "\n  }")
+        order = ["is_voice(button)", "hid_play_callback_(button, true)", "zigbee_play_callback_(button)",
+                 "ha_play_callback_(button)", "ir_code_store.load(button, code_)"]
+        positions = [play.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("void set_ha_play_callback(std::function<bool(uint8_t)> play) {", HEADER)
 
 
 if __name__ == "__main__":

@@ -837,5 +837,19 @@ class ProductionConfigTest(unittest.TestCase):
         )
 
 
+
+class HomeAssistantActionConfigTest(unittest.TestCase):
+    def test_production_declares_the_component_and_keeps_wifi_off_by_default(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("\nha_action:\n  id: ha_actions\n", config)
+        self.assertIn("  enable_on_boot: false\n", config)
+        self.assertIn("  ha_action_id: ha_actions\n", config)
+
+    def test_a_failed_action_blinks_d2_at_150_ms(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("id(ha_actions).failed_recently()", config)
+        self.assertIn("it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;", config)
+
+
 if __name__ == "__main__":
     unittest.main()

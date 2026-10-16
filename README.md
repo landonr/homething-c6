@@ -52,11 +52,11 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-controls-annotated-dark.svg">
-    <img alt="Front of the assembled c6remote with labels for the microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
+    <img alt="Front of the assembled c6remote with labels for the voice assistant microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
-    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the translucent enclosure, and the 1000 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the parametric 3D printed case (SLS and FDM versions), and the 1000 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 

@@ -97,3 +97,6 @@ c6remote-kicad/renders/
 .windsurf/
 .opencode/
 .clinerules/
+
+# Local drag editor for the README callout dots. It writes scripts/annotation-callouts.json.
+scripts/annotation-editor.py

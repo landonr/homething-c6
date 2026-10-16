@@ -1,0 +1,30 @@
+{
+  "case_front": [
+    {"name": "mic", "points": [[1335, 205], [740, 205]], "label": ["Microphone", "for voice assistant"], "tx": 727, "ty": 236, "anchor": "end"},
+    {"name": "wheel", "points": [[1162, 821], [740, 821]], "label": ["Scroll wheel", "+ 5-way control"], "tx": 727, "ty": 852, "anchor": "end"},
+    {"name": "leds", "points": [[1060, 1184], [740, 1184]], "label": "RGB status LEDs", "tx": 727, "ty": 1215, "anchor": "end"},
+    {"name": "keypad", "points": [[1138, 1685], [740, 1685]], "label": "11 assignable\nbuttons", "tx": 727, "ty": 1716, "anchor": "end"},
+    {"name": "radios", "points": [[1427, 2474], [740, 2474]], "label": ["XIAO ESP32-C6", "Zigbee · Wi-Fi · BLE"], "tx": 727, "ty": 2505, "anchor": "end"},
+    {"name": "USB-C", "points": [[1427, 2760], [740, 2760]], "label": "USB-C", "tx": 727, "ty": 2791, "anchor": "end"}
+  ],
+  "case_back": [
+    {"name": "emitter", "points": [[365, 276], [1090, 276]], "label": "IR emitter", "tx": 1105, "ty": 307, "anchor": "start"},
+    {"name": "receiver", "points": [[605, 709], [1090, 709]], "label": "IR receiver", "tx": 1105, "ty": 740, "anchor": "start"},
+    {"name": "battery", "points": [[455, 2300], [1090, 2300]], "label": ["1000 mAh battery", "About a month\nper charge"], "tx": 1105, "ty": 2331, "anchor": "start"},
+    {"name": "shell", "points": [[698, 1638], [1090, 1638]], "label": ["Parametric 3D\nprinted case", "SLS and FDM\nversions available"], "tx": 1105, "ty": 1669, "anchor": "start"}
+  ],
+  "board_front": [
+    {"name": "switches", "points": [[564, 365], [410, 365]], "label": "11 tactile\nswitches", "tx": 400, "ty": 381, "anchor": "end"},
+    {"name": "leds", "points": [[582, 579], [410, 579]], "label": "RGB status\nLEDs", "tx": 400, "ty": 595, "anchor": "end"},
+    {"name": "encoder", "points": [[808, 829], [410, 829]], "label": "Rotary encoder\n+ 5 addressable\nbuttons", "tx": 400, "ty": 845, "anchor": "end"},
+    {"name": "expander", "points": [[781, 1538], [410, 1538]], "label": "GPIO expander", "tx": 400, "ty": 1554, "anchor": "end"},
+    {"name": "module", "points": [[832, 1744], [410, 1744]], "label": "XIAO ESP32-C6", "tx": 400, "ty": 1760, "anchor": "end"}
+  ],
+  "board_back": [
+    {"name": "receiver", "points": [[471, 184], [647, 184]], "label": "IR receiver", "tx": 660, "ty": 200, "anchor": "start"},
+    {"name": "mic", "points": [[307, 229], [307, 290], [647, 290]], "label": "I²S microphone", "tx": 660, "ty": 306, "anchor": "start"},
+    {"name": "emitter", "points": [[188, 266], [188, 400], [647, 400]], "label": "IR emitter", "tx": 660, "ty": 416, "anchor": "start"},
+    {"name": "pouch", "points": [[740, 875], [740, 645]], "label": "1000 mAh LiPo\nbattery", "tx": 660, "ty": 560, "anchor": "start"},
+    {"name": "connector", "points": [[516, 1774], [647, 1774]], "label": ["Battery\nconnector", "JST PH 2-pin"], "tx": 660, "ty": 1790, "anchor": "start"}
+  ]
+}

@@ -38,6 +38,11 @@ DRESS = {
     "D1": (0xF2F4F6, 0.0, 0.02, 1.0),
 }
 
+# Status LEDs lit as the viewer's readme-annotated-front preset lights them: its ledColors
+# at led 70 of the viewer's 400 emission strength.
+LED_COLORS = {"D2": 0xFF0000, "D3": 0xABAA00, "D4": 0x00FF00, "D5": 0x0000FF}
+LED_STRENGTH = 280
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--glb", required=True)
 ap.add_argument("--hdr", required=True)
@@ -124,6 +129,18 @@ for ref, (color, metallic, roughness, *clear) in DRESS.items():
                 if clear:
                     b.inputs["Transmission Weight"].default_value = clear[0]
                     b.inputs["IOR"].default_value = 1.5
+for ref, color in LED_COLORS.items():
+    node = next((o for o in new if o.name == ref), None)
+    if node is None:
+        print(f"board: no {ref} to light", flush=True)
+        continue
+    for o in [node, *node.children_recursive]:
+        for slot in o.material_slots if o.type == "MESH" else []:
+            if slot.material:
+                m = slot.material = slot.material.copy()
+                b = bsdf(m)
+                b.inputs["Emission Color"].default_value = lin(color)
+                b.inputs["Emission Strength"].default_value = LED_STRENGTH
 print(f"board: {len(new)} objects, {len(seen)} materials", flush=True)
 
 

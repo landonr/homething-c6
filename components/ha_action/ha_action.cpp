@@ -287,6 +287,10 @@ void HaAction::request_wifi_() {
 bool HaAction::play(uint8_t slot) {
   if (!this->has_assignment(slot))
     return false;
+  if (!this->enabled()) {
+    ESP_LOGI(TAG, "Button %u not sent: Home Assistant actions are off", slot);
+    return true;
+  }
   if (this->count_ >= QUEUE_MAX) {
     ESP_LOGW(TAG, "Button %u dropped: %u actions already wait", slot, static_cast<unsigned>(this->count_));
     this->set_result_(slot, RESULT_DROPPED, "");
@@ -311,6 +315,19 @@ bool HaAction::play(uint8_t slot) {
   this->request_wifi_();
   ESP_LOGI(TAG, "Button %u queued %s.%s", slot, KINDS[entry.kind].name, KINDS[entry.kind].acts[entry.act]);
   return true;
+}
+
+void HaAction::set_enabled(bool enabled) {
+  if (this->enabled_.exchange(enabled, std::memory_order_relaxed) == enabled || enabled)
+    return;
+  ESP_LOGI(TAG, "Home Assistant actions off, %u queued actions dropped", static_cast<unsigned>(this->count_));
+  // A sent call keeps its reply callback until a late reply removes it.
+  for (size_t i = 0; i < this->count_; i++) {
+    if (this->queue_[i].sent && this->queue_[i].call_id != 0)
+      this->stale_callbacks_++;
+  }
+  this->count_ = 0;
+  this->pending_.store(0, std::memory_order_relaxed);
 }
 
 void HaAction::finish_(size_t index, Result result, const char *error) {

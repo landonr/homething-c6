@@ -249,7 +249,9 @@ aria-label="WiFi Always On" disabled><span></span></label></h2>
 <h2 class="ttl">Home Assistant<label class="sw" id="haw"><input type="checkbox" id="hab"
 aria-label="Home Assistant API"><span></span></label></h2>
 <p class="sub st" id="has">Home Assistant API state is loading.</p>
-<p class="sub">Off keeps D2 solid orange while Wi-Fi is up. On pulses until the API connects.</p>
+<p class="sub">Off disables the Home Assistant buttons at once and stops the API at the next restart.
+Home Assistant then cannot turn this switch on again, so use this page.
+Off keeps D2 solid orange while Wi-Fi is up. On pulses until the API connects.</p>
 </section>
 <section class="card full conn" id="zbcfg">
 <h2 class="ttl">Zigbee<label class="sw" id="zrw"><input type="checkbox" id="zrb"
@@ -370,8 +372,9 @@ var clip=null,clipBusy=false;
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 // An old remote sends no radio block, so an unknown switch reads as on.
 function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
-// Only these two actions leave the board over a radio. IR and voice do not.
-function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":""}
+// These actions need their Config switch. IR and voice do not.
+function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":
+r.action==="ha"?"home_assistant":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
 // Each of these actions needs its Config switch, so the Action list grays it out
 // while the switch is off. The second name is the switch title on the Config tab.
@@ -781,7 +784,7 @@ boot=document.getElementById("wfd"),box=document.getElementById("wfb");
 if(!st||!st.network)return;
 var enabled=st.network.wifi_enabled===true,always=st.network.wifi_always_on===true,
 wifi=enabled&&st.network.wifi,api=wifi&&st.network.home_assistant,expect=radioOn("home_assistant"),
-err=radioError.home_assistant;
+gated=st.network.api_gated===true,err=radioError.home_assistant;
 if(box){box.checked=wifiBusy?wifiWant:always;box.disabled=wifiBusy}
 if(boot){boot.className="sub st"+(wifiError?" bad":"");
 boot.innerHTML="<span class='dot "+(always?"":"off")+"'></span>WiFi Always On is "+
@@ -790,9 +793,12 @@ if(wf){wf.className="sub st"+(enabled?"":" bad");
 wf.innerHTML="<span class='dot "+(wifi?"":enabled?"warn":"bad")+"'></span>Wi-Fi is "+
 (!enabled?"off. The config page is unavailable over the network.":
 wifi?"on and connected.":"on but disconnected.")}
+// The API server starts only at boot, so the line names a switch that this boot
+// does not follow yet.
 if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
-ha.innerHTML="<span class='dot "+(api?"":(expect?(wifi?"bad":"off"):"off"))+"'></span>"+
-(!expect?"Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.":
+ha.innerHTML="<span class='dot "+(!expect?(gated?"off":"warn"):api?"":(wifi||gated)?"bad":"off")+"'></span>"+
+(!expect?"Home Assistant is off. Home Assistant buttons are disabled."+(gated?"":" The API stops at the next restart."):
+gated?"Home Assistant is on. The API is off. Restart the remote to start it.":
 "Home Assistant API is "+
 (api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+
 (err?" "+esc(err):"")}
@@ -1817,9 +1823,10 @@ var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
 "</span></h2>";
 // The assignment is intact, so this says why the press reaches nothing.
-if(slotRadioOff(sel))h+="<div class='note bad'>The "+
-(slotRadio(row(sel))==="zigbee"?"Zigbee":"Bluetooth")+
-" radio is off, so this input is disabled. The assignment is kept.</div>";
+var sk=slotRadio(row(sel));
+if(slotRadioOff(sel))h+="<div class='note bad'>"+
+(sk==="home_assistant"?"Home Assistant is":"The "+(sk==="zigbee"?"Zigbee":"Bluetooth")+" radio is")+
+" off, so this input is disabled. The assignment is kept.</div>";
 if(mode==="rec"&&rec===sel){
 e.innerHTML=h+"<h2 class=hd2 id=asl>Action</h2>"+
 "<div class=aslist role=radiogroup aria-labelledby=asl id=as>"+

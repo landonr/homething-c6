@@ -52,6 +52,8 @@ STATE = {
         "wifi_enabled": True,
         "wifi_always_on": False,
         "home_assistant": True,
+        # True when the Home Assistant switch was off at boot, so the API server did not start.
+        "api_gated": False,
         "ip": "192.168.1.86",
         "mac": "A4:CF:12:34:56:78",
     },
@@ -308,6 +310,9 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 RESTART["until"] = 0.0
                 STATE["action_id"] = 0
+                # The boot gate reads the switch, so the API follows it after a restart.
+                STATE["network"]["api_gated"] = not STATE["radios"]["home_assistant"]
+                STATE["network"]["home_assistant"] = STATE["radios"]["home_assistant"]
             if HA_TEST["slot"] and time.monotonic() >= HA_TEST["at"]:
                 STATE["ha"].update({"pending": 0, "last_slot": HA_TEST["slot"], "last": "ok"})
                 HA_TEST["slot"] = 0
@@ -357,6 +362,13 @@ class Handler(BaseHTTPRequestHandler):
         if action == "test_ha":
             if SLOTS.get(slot, {}).get("action") != "ha":
                 self.send_json({"ok": False, "error": "slot has no Home Assistant action"}, 400)
+                return
+            if not STATE["radios"]["home_assistant"]:
+                self.send_json({"ok": False, "error": "Home Assistant is off in Config"}, 400)
+                return
+            if STATE["network"]["api_gated"]:
+                self.send_json(
+                    {"ok": False, "error": "Home Assistant API is off until the remote restarts"}, 400)
                 return
             # The firmware sets queued, then completes the action id.
             STATE["ha"].update({"pending": 1, "last_slot": slot, "last": "queued", "error": ""})

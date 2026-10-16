@@ -65,7 +65,7 @@ const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   status_leds: true, boot_leds: true,
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
-            home_assistant: true, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
+            home_assistant: true, api_gated: false, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   sleep: {available: true, enabled: true, after_s: 300, replay: false},
   battery: {available: true, percent: 72, volts: 3.87},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
@@ -1108,6 +1108,58 @@ setTimeout(() => {
     STATE.network.wifi_enabled = true;
     STATE.network.wifi = true;
     networkStatus();
+  });
+  step("the Home Assistant line names a switch that this boot does not follow yet", () => {
+    const prevSt = global.st, prevRadios = STATE.radios;
+    global.st = STATE;
+    const line = () => document.getElementById("has").innerHTML;
+    const show = (on, gated, connected) => {
+      STATE.radios = {zigbee: true, ble: true, home_assistant: on};
+      STATE.network.api_gated = gated;
+      STATE.network.home_assistant = connected;
+      networkStatus();
+      return line();
+    };
+    // On, but the switch was off at boot, so the API server never started.
+    let text = show(true, true, false);
+    if (text.indexOf("The API is off. Restart the remote to start it.") < 0)
+      throw new Error("a gated API reads " + text);
+    if (text.indexOf("dot bad") < 0) throw new Error("a gated API has no fault dot: " + text);
+    // Off, but the API server started this boot and runs until the next one.
+    text = show(false, false, true);
+    if (text.indexOf("Home Assistant is off.") < 0 || text.indexOf("The API stops at the next restart.") < 0)
+      throw new Error("a running API with the switch off reads " + text);
+    if (text.indexOf("dot warn") < 0) throw new Error("a pending stop has no warn dot: " + text);
+    // The two agree, so neither restart note shows.
+    text = show(false, true, false);
+    if (text.indexOf("Home Assistant is off.") < 0 || text.indexOf("restart") >= 0)
+      throw new Error("an off switch and a stopped API read " + text);
+    text = show(true, false, true);
+    if (text.indexOf("Home Assistant API is connected.") < 0 || text.indexOf("estart") >= 0)
+      throw new Error("an on switch and a running API read " + text);
+    STATE.radios = prevRadios;
+    STATE.network.api_gated = false;
+    STATE.network.home_assistant = true;
+    global.st = prevSt;
+    networkStatus();
+  });
+  step("an off Home Assistant switch marks its inputs and keeps their assignment", () => {
+    const prevRadios = global.st.radios;
+    global.st.radios = {zigbee: true, ble: true, home_assistant: false};
+    global.sel = null;
+    paint();
+    // Slot 8 sends a Home Assistant action, slot 20 Zigbee, and slot 6 IR.
+    if (keys[8].className.indexOf("rf") < 0) throw new Error("a held Home Assistant input is not marked");
+    if (keys[20].className.indexOf("rf") >= 0) throw new Error("a live Zigbee input was marked");
+    if (keys[6].className.indexOf("rf") >= 0) throw new Error("an IR input was marked");
+    global.sel = 8;
+    paint();
+    if (document.getElementById("ed").innerHTML.indexOf(
+        "Home Assistant is off, so this input is disabled. The assignment is kept.") < 0)
+      throw new Error("the editor gives no reason for a held Home Assistant input");
+    global.st.radios = prevRadios;
+    global.sel = null;
+    paint();
   });
   step("the Firmware row shows the served version or Unknown", () => {
     const prevSt = global.st;

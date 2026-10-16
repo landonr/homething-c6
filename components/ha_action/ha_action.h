@@ -70,7 +70,12 @@ class HaAction final : public Component {
   bool assign(uint8_t slot, const std::string &kind, const std::string &act, int val,
               const std::string &entity);
   void clear(uint8_t slot);
+  // True for every slot that holds an action, also when the action is off and
+  // nothing is queued, so the caller does not fall through to another kind.
   bool play(uint8_t slot);
+  // Off drops the queue, and a press then queues nothing and asks for no Wi-Fi.
+  void set_enabled(bool enabled);
+  bool enabled() const { return this->enabled_.load(std::memory_order_relaxed); }
 
   // The HTTP task reads these while the main loop writes.
   Assignment assignment(uint8_t slot) const;
@@ -146,6 +151,7 @@ class HaAction final : public Component {
   std::atomic<uint8_t> last_result_{RESULT_NONE};
   std::atomic<uint32_t> failed_at_ms_{0};
   std::atomic<bool> failed_{false};
+  std::atomic<bool> enabled_{true};
   mutable std::mutex error_mutex_;
   char error_[ERROR_MAX + 1]{};
   std::function<void()> wifi_hold_{};

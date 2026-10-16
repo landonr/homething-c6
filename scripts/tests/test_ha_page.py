@@ -63,6 +63,14 @@ class HaPageTest(unittest.TestCase):
         self.assertIn('action == "test_ha"', PREVIEW)
         self.assertIn('action == "set_ha"', PREVIEW)
 
+    def test_the_preview_serves_the_api_gate_and_refuses_a_test_like_the_firmware(self) -> None:
+        cpp = (ROOT / "components" / "button_config" / "button_config.cpp").read_text()
+        self.assertIn('"api_gated": False,', PREVIEW)
+        self.assertIn('STATE["network"]["api_gated"] = not STATE["radios"]["home_assistant"]', PREVIEW)
+        for text in ("Home Assistant is off in Config", "Home Assistant API is off until the remote restarts"):
+            self.assertIn(f'"error":"{text}"', cpp)
+            self.assertIn(f'"error": "{text}"', PREVIEW)
+
 
 if __name__ == "__main__":
     unittest.main()

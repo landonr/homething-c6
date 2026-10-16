@@ -470,6 +470,7 @@ void ButtonConfig::setup() {
   this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
   this->load_name_pref_();
   this->load_ha_pref_();
+  this->sync_ha_action_();
   this->load_wifi_pref_();
   this->boot_wifi_always_on_ = this->wifi_always_on();
   if (this->boot_wifi_always_on_)
@@ -730,14 +731,30 @@ void ButtonConfig::set_ha_action(ha_action::HaAction *action) {
 }
 #endif
 
+// Preferences open in app_main, ahead of every component, so this works at any
+// boot priority.
+bool ButtonConfig::ha_api_expected_from_flash() {
+  auto preference = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
+  HaPref loaded{};
+  return !preference.load(&loaded) || loaded.magic != HA_PREF_MAGIC || loaded.expected != 0;
+}
+
 void ButtonConfig::load_ha_pref_() {
   this->ha_pref_ = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
-  HaPref loaded{};
-  if (this->ha_pref_.load(&loaded) && loaded.magic == HA_PREF_MAGIC) {
-    this->ha_api_expected_.store(loaded.expected != 0, std::memory_order_release);
-  } else {
-    this->ha_api_expected_.store(true, std::memory_order_release);
-  }
+  this->ha_api_expected_.store(ha_api_expected_from_flash(), std::memory_order_release);
+}
+
+void ButtonConfig::set_ha_api_gated(bool gated) {
+  this->ha_api_gated_.store(gated, std::memory_order_release);
+  this->sync_ha_action_();
+}
+
+// A held-down API server reaches nobody, so the gate turns the actions off too.
+void ButtonConfig::sync_ha_action_() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr)
+    this->ha_action_->set_enabled(this->ha_api_expected() && !this->ha_api_gated());
+#endif
 }
 
 bool ButtonConfig::save_ha_pref_() {
@@ -749,13 +766,18 @@ bool ButtonConfig::save_ha_pref_() {
   return true;
 }
 
+// The API server runs on until the next boot, because it has no stop.
 bool ButtonConfig::set_ha_api_expected(bool expected) {
   if (this->ha_api_expected() == expected)
     return true;
   this->ha_api_expected_.store(expected, std::memory_order_release);
+  this->sync_ha_action_();
+  // The lease only keeps Wi-Fi up for later presses, and none can send now.
+  if (!expected && this->action_wifi_)
+    this->action_wifi_until_ms_ = millis();
   if (!this->save_ha_pref_())
     return false;
-  ESP_LOGI(TAG, "Home Assistant API expected %s", expected ? "on" : "off");
+  ESP_LOGI(TAG, "Home Assistant switch %s", expected ? "on" : "off");
   return true;
 }
 
@@ -763,7 +785,8 @@ void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "Button config page at /buttons");
   ESP_LOGCONFIG(TAG, "  Firmware: %s", this->firmware_version_);
   ESP_LOGCONFIG(TAG, "  Friendly name: %s", this->current_name_.load(std::memory_order_acquire));
-  ESP_LOGCONFIG(TAG, "  Home Assistant API expected: %s", YESNO(this->ha_api_expected()));
+  ESP_LOGCONFIG(TAG, "  Home Assistant switch: %s", YESNO(this->ha_api_expected()));
+  ESP_LOGCONFIG(TAG, "  API server held down this boot: %s", YESNO(this->ha_api_gated()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
   ESP_LOGCONFIG(TAG, "  Status LEDs: %s", YESNO(this->status_leds()));
   ESP_LOGCONFIG(TAG, "  Boot and wake LEDs: %s", YESNO(this->boot_leds()));
@@ -838,7 +861,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   stream->print(R"({"firmware":")");
   print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":%s,"boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":%s,"boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -848,6 +871,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       wifi::global_wifi_component->is_disabled() ? "false" : "true",
       this->wifi_always_on() ? "true" : "false",
       api::global_api_server->is_connected() ? "true" : "false",
+      this->ha_api_gated() ? "true" : "false",
       ip, mac,
       sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",
       static_cast<unsigned>(sleep.after_s), sleep.replay ? "true" : "false",
@@ -1239,6 +1263,15 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       request->send(400, "application/json", R"({"ok":false,"error":"slot has no Home Assistant action"})");
       return;
     }
+    if (!this->ha_api_expected()) {
+      request->send(400, "application/json", R"({"ok":false,"error":"Home Assistant is off in Config"})");
+      return;
+    }
+    if (this->ha_api_gated()) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"Home Assistant API is off until the remote restarts"})");
+      return;
+    }
   }
 
   bool expected = false;
@@ -1301,7 +1334,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   } else if (action == "test_ha") {
     this->defer([this, button, action_id]() {
 #ifdef USE_BUTTON_CONFIG_HA_ACTION
-      this->complete_action_(action_id, this->ha_action_->play(button));
+      // play() is true for a skipped press, and the switch can go off before this runs.
+      this->complete_action_(action_id, this->ha_action_->enabled() && this->ha_action_->play(button));
 #else
       this->complete_action_(action_id, false);
 #endif

@@ -850,6 +850,29 @@ class HomeAssistantActionConfigTest(unittest.TestCase):
         self.assertIn("id(ha_actions).failed_recently()", config)
         self.assertIn("it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;", config)
 
+    def test_an_off_home_assistant_switch_holds_the_api_server_down_at_boot(self) -> None:
+        """The API server has no stop and no restart, so like the Zigbee stack it
+        must fail before its own setup runs, or Home Assistant connects anyway."""
+        config = CONFIG.read_text()
+        gate = config[config.index("    - priority: 800\n"):config.index("    - priority: 600\n")]
+        block = gate[gate.index("if (!button_config::ButtonConfig::ha_api_expected_from_flash()) {"):]
+        block = block[:block.index("\n            }\n")]
+        self.assertIn("api::global_api_server->mark_failed();", block)
+        self.assertIn("id(button_cfg).set_ha_api_gated(true);", block)
+        self.assertIn('ESP_LOGI("button_config", "Home Assistant is off, so the API server stays down");', block)
+        # The Zigbee gate stays first and keeps its own block.
+        self.assertLess(gate.index("ZigbeeAssignmentManager::radio_enabled_from_flash()"),
+                        gate.index("ha_api_expected_from_flash()"))
+        self.assertNotIn("zigbee", block.lower())
+
+    def test_the_home_assistant_entity_says_only_the_page_can_turn_it_back_on(self) -> None:
+        config = CONFIG.read_text()
+        entity = config[config.index("    name: Home Assistant API\n") - 400:config.index("    name: Home Assistant API\n")]
+        comment = entity[entity.rindex("\n\n") + 2:]
+        self.assertIn("API server from the\n  # next boot on.", comment)
+        self.assertIn("only the\n  # /buttons page can turn it back on.", comment)
+        self.assertNotIn("stays up", comment)
+
 
 if __name__ == "__main__":
     unittest.main()

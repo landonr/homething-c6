@@ -234,6 +234,52 @@ class SendTest(unittest.TestCase):
         self.assertIn("this->wifi_hold_()", section(CPP, "void HaAction::request_wifi_() {", "\n}"))
 
 
+class SwitchTest(unittest.TestCase):
+    """Off means off: the Home Assistant switch stops every press at once."""
+
+    def test_an_off_switch_skips_a_press_with_no_queue_no_wifi_and_no_result(self) -> None:
+        play = section(CPP, "bool HaAction::play(uint8_t slot) {", "\n}")
+        skip = section(play, "  if (!this->enabled()) {", "\n  }")
+        self.assertIn('ESP_LOGI(TAG, "Button %u not sent: Home Assistant actions are off", slot);', skip)
+        # True keeps the IR fallback and the replay hook off this slot, and settles the bit.
+        self.assertIn("return true;", skip)
+        for call in ("request_wifi_", "set_result_", "count_++", "queue_["):
+            self.assertNotIn(call, skip)
+        # Another kind's slot still falls through, so the skip comes after the owner check.
+        self.assertLess(play.index("if (!this->has_assignment(slot))"), play.index("if (!this->enabled())"))
+        self.assertLess(play.index("if (!this->enabled())"), play.index("if (this->count_ >= QUEUE_MAX)"))
+        self.assertLess(play.index("if (!this->enabled())"), play.index("this->request_wifi_();"))
+        self.assertIn("std::atomic<bool> enabled_{true};", HEADER)
+
+    def test_turning_the_switch_off_drops_the_queue(self) -> None:
+        drop = section(CPP, "void HaAction::set_enabled(bool enabled) {", "\n}")
+        self.assertIn("if (this->enabled_.exchange(enabled, std::memory_order_relaxed) == enabled || enabled)\n"
+                      "    return;", drop)
+        self.assertIn("this->count_ = 0;", drop)
+        self.assertIn("this->pending_.store(0, std::memory_order_relaxed);", drop)
+        # A dropped call that went out keeps its callback, so it counts as stale.
+        self.assertIn("if (this->queue_[i].sent && this->queue_[i].call_id != 0)\n      this->stale_callbacks_++;",
+                      drop)
+        self.assertLess(drop.index("this->stale_callbacks_++;"), drop.index("this->count_ = 0;"))
+        self.assertNotIn("request_wifi_", drop)
+
+    def test_the_page_owner_drives_the_flag_from_the_switch_and_the_boot_gate(self) -> None:
+        sync = section(BUTTON_CPP, "void ButtonConfig::sync_ha_action_() {", "\n}")
+        self.assertIn("this->ha_action_->set_enabled(this->ha_api_expected() && !this->ha_api_gated());", sync)
+        setup = section(BUTTON_CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertLess(setup.index("this->load_ha_pref_();"), setup.index("this->sync_ha_action_();"))
+        switch = section(BUTTON_CPP, "bool ButtonConfig::set_ha_api_expected(bool expected) {", "\n}")
+        self.assertLess(switch.index("this->ha_api_expected_.store(expected"), switch.index("this->sync_ha_action_();"))
+        # A failed flash write still stops the presses, because RAM holds the switch.
+        self.assertLess(switch.index("this->sync_ha_action_();"), switch.index("if (!this->save_ha_pref_())"))
+        gate = section(BUTTON_CPP, "void ButtonConfig::set_ha_api_gated(bool gated) {", "\n}")
+        self.assertIn("this->sync_ha_action_();", gate)
+
+    def test_switching_off_ends_the_wifi_lease(self) -> None:
+        switch = section(BUTTON_CPP, "bool ButtonConfig::set_ha_api_expected(bool expected) {", "\n}")
+        self.assertIn("if (!expected && this->action_wifi_)\n    this->action_wifi_until_ms_ = millis();", switch)
+
+
 class StaleCallbackTest(unittest.TestCase):
     def test_an_unconfirmed_call_counts_as_a_stale_callback(self) -> None:
         self.assertIn("STALE_MAX = 8;", HEADER)
@@ -324,10 +370,13 @@ class ReplayTest(unittest.TestCase):
 
     def test_production_sends_an_ha_slot_without_the_link_and_zigbee_with_it(self) -> None:
         replay = section(CONFIG, "  replay: !lambda |-\n", "\n\ni2c:")
-        ha = replay.index("if (id(ha_actions).play(SLOT_OF_BIT[bit]))")
+        ha = replay.index("if (id(ha_actions).play(SLOT_OF_BIT[bit]))\n      return true;")
         zigbee = replay.index("return link && zigbee_assignments.play(SLOT_OF_BIT[bit]);")
         self.assertLess(ha, zigbee)
         self.assertNotIn("return zigbee_assignments.play(", replay)
+        # A skipped press settles its bit, so the hook does not call it again every loop.
+        self.assertIn("play() is also\n    // true when the Home Assistant switch skips the press, so the bit settles.",
+                      replay)
 
     def test_a_bit_settles_when_it_sends_or_when_the_link_is_up(self) -> None:
         loop = section(IDLE_CPP, "void IdleSleep::loop() {", "\n}")
@@ -435,7 +484,9 @@ class WebContractTest(unittest.TestCase):
                       "ha_val, ha_entity));", branch)
         test = section(self.ACTION, '} else if (action == "test_ha") {', "  } else if")
         self.assertIn("this->defer([this, button, action_id]() {", test)
-        self.assertIn("this->complete_action_(action_id, this->ha_action_->play(button));", test)
+        # play() is true for a skipped press, so the flag decides what the page hears.
+        self.assertIn("this->complete_action_(action_id, this->ha_action_->enabled() && "
+                      "this->ha_action_->play(button));", test)
 
     def test_the_value_parser_takes_three_digits_or_nothing(self) -> None:
         parse = section(BUTTON_CPP, "static int parse_ha_value(const std::string &text) {", "\n}")

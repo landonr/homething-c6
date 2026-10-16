@@ -322,7 +322,7 @@ While it stays awake, it sends the value again only after a change of 2 % or mor
 
 Zigbee2MQTT generates a `battery` property from this cluster. No external
 converter is necessary. The same percent also shows as the `Battery` sensor in
-Home Assistant over the ESPHome API when Wi-Fi is on.
+Home Assistant over the ESPHome API when Wi-Fi and the API server are on.
 
 After the first flash of this build, re-interview the remote one time in
 Zigbee2MQTT. Do this while the remote is awake, because Zigbee2MQTT must read the

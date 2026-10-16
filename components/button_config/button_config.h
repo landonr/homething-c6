@@ -52,10 +52,17 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
     this->page_size_ = size;
   }
 
-  // When false, D2 stays solid orange on Wi-Fi alone instead of pulsing for a
-  // missing API. The API server itself keeps running either way.
+  // The Home Assistant switch. Off turns the Home Assistant actions off at once,
+  // and D2 stays solid orange on Wi-Fi alone. The API server has no stop, so
+  // off holds it down from the next boot on.
   bool ha_api_expected() const { return this->ha_api_expected_.load(std::memory_order_acquire); }
   bool set_ha_api_expected(bool expected);
+  // Reads the switch before setup() runs, so on_boot at priority 800 can hold
+  // the API server down before its own setup. A missing record means on.
+  static bool ha_api_expected_from_flash();
+  // True when that gate held the API server down for this boot.
+  void set_ha_api_gated(bool gated);
+  bool ha_api_gated() const { return this->ha_api_gated_.load(std::memory_order_acquire); }
   // Stored switch for D2 to D5 and the XIAO LED. The first call reads flash, so
   // on_boot at priority 800 sees it before this component's own setup().
   bool status_leds() const;
@@ -94,6 +101,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void complete_action_(uint32_t id, bool ok);
   void load_ha_pref_();
   bool save_ha_pref_();
+  void sync_ha_action_();
   void load_wifi_pref_();
   bool set_wifi_always_on_(bool enabled);
   void note_activity_();
@@ -166,6 +174,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> completed_action_id_{0};
   std::atomic<bool> completed_action_ok_{false};
   std::atomic<bool> ha_api_expected_{true};
+  std::atomic<bool> ha_api_gated_{false};
   std::atomic<bool> wifi_always_on_{false};
   // -1 until the first read of the stored value.
   mutable std::atomic<int8_t> status_leds_{-1};

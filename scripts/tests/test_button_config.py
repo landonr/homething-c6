@@ -771,9 +771,11 @@ class EnforcementTest(unittest.TestCase):
     def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         self.assertIn('"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,'
-                      '"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
+                      '"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"}', state)
         self.assertIn("wifi::global_wifi_component->is_connected()", state)
-        self.assertIn("api::global_api_server->is_connected()", state)
+        # The gate flag follows the connection flag, as the format string orders them.
+        self.assertIn('api::global_api_server->is_connected() ? "true" : "false",\n'
+                      '      this->ha_api_gated() ? "true" : "false",\n      ip, mac,', state)
         self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
         self.assertIn("get_mac_address_pretty_into_buffer(mac)", state)
 
@@ -1787,14 +1789,15 @@ class RadioSwitchTest(unittest.TestCase):
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
+        # A Home Assistant press skips while its switch is off, so it is held like a radio.
         self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
-                      'r.action==="hid"?"ble":""}', PAGE)
+                      'r.action==="hid"?"ble":\nr.action==="ha"?"home_assistant":""}', PAGE)
         self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
         # The label stays, so the tile still says what the input is assigned to.
         self.assertIn(".k.rf span{opacity:.55}", PAGE)
         self.assertIn("background:var(--bad);margin-left:6px;vertical-align:middle}", PAGE)
-        self.assertIn('" radio is off, so this input is disabled. The assignment is kept.</div>"',
-                      PAGE)
+        self.assertIn('(sk==="home_assistant"?"Home Assistant is":"The "+(sk==="zigbee"?"Zigbee":"Bluetooth")'
+                      '+" radio is")+\n" off, so this input is disabled. The assignment is kept.</div>";', PAGE)
         self.assertIn('b.checked=radioBusy[kind]?radioWant[kind]:radioOn(kind);', PAGE)
         self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
         self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
@@ -1802,7 +1805,45 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
         self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
-        self.assertIn("Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.", PAGE)
+        self.assertIn('"Home Assistant is off. Home Assistant buttons are disabled."', PAGE)
+        self.assertNotIn("Home Assistant is not required.", PAGE)
+
+    def test_the_home_assistant_line_names_a_switch_this_boot_does_not_follow(self) -> None:
+        """The API server starts only at boot, so the switch and the API can
+        disagree until a restart. The line says which way and what cures it."""
+        status = section(PAGE, "function networkStatus(){", "\n\nfunction ")
+        self.assertIn("gated=st.network.api_gated===true", status)
+        self.assertIn('(gated?"":" The API stops at the next restart.")', status)
+        self.assertIn('gated?"Home Assistant is on. The API is off. Restart the remote to start it.":', status)
+        self.assertLess(status.index("!expect?"), status.index('gated?"Home Assistant is on.'))
+        self.assertIn("Home Assistant then cannot turn this switch on again, so use this page.", PAGE)
+
+    def test_the_api_gate_reads_flash_before_setup_and_reaches_the_state(self) -> None:
+        self.assertIn("static bool ha_api_expected_from_flash();", HEADER)
+        self.assertIn("void set_ha_api_gated(bool gated);", HEADER)
+        self.assertIn("std::atomic<bool> ha_api_gated_{false};", HEADER)
+        read = section(CPP, "bool ButtonConfig::ha_api_expected_from_flash() {", "\n}")
+        self.assertIn("global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);", read)
+        # A missing or corrupt record means on, the same rule setup() applies.
+        self.assertIn("return !preference.load(&loaded) || loaded.magic != HA_PREF_MAGIC || "
+                      "loaded.expected != 0;", read)
+        load = section(CPP, "void ButtonConfig::load_ha_pref_() {", "\n}")
+        self.assertIn("this->ha_api_expected_.store(ha_api_expected_from_flash(), std::memory_order_release);", load)
+        self.assertNotIn("loaded.magic", load)
+
+    def test_test_ha_refuses_while_home_assistant_is_off_or_gated(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        test = section(action, '  if (action == "test_ha") {', "\n  }\n")
+        off = test.index("if (!this->ha_api_expected()) {")
+        gated = test.index("if (this->ha_api_gated()) {")
+        self.assertLess(test.index('"slot has no Home Assistant action"'), off)
+        self.assertLess(off, gated)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant is off in Config"})"', test)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant API is off until the remote restarts"})"', test)
+        # A refusal must not claim the action slot or queue anything.
+        self.assertLess(action.index("Home Assistant API is off until the remote restarts"),
+                        action.index("compare_exchange_strong"))
+        self.assertNotIn("play(", test)
 
     def test_set_inputs_have_action_background_colors(self) -> None:
         self.assertIn('.set-ble{--set-bg:#2f80ed}', PAGE)

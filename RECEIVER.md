@@ -68,6 +68,35 @@ The remote sends the action over the ESPHome native API. The remote stores no Ho
 In Home Assistant, open the ESPHome integration options for this device.
 Turn on **Allow the device to perform Home Assistant actions**. If this option is off, Home Assistant ignores the request.
 
+### The Home Assistant switch
+
+The **Home Assistant** switch on the Config tab controls the Home Assistant actions and the API server.
+
+If you turn the switch off, the Home Assistant buttons stop at once.
+A press sends nothing, does not turn on Wi-Fi, and does not blink `D2`. The log shows one line for each press.
+The remote also drops the actions in the queue and ends the [Wi-Fi lease](#wi-fi-lease).
+
+The API server starts only at boot and has no stop. As a result, it runs until the next restart.
+After that restart, the API server does not start, and Home Assistant cannot connect to the remote.
+The ESPHome network log also uses the API server. While it is off, read the log over USB. OTA updates do not use it.
+
+Home Assistant shows the switch as the **Home Assistant API** entity. Home Assistant can turn the switch off.
+After the next restart, Home Assistant cannot reach the remote, so it cannot turn the switch on again.
+To turn the switch on, use the `/buttons` page. Then select **Restart**.
+
+If you turn the switch on in a boot that started with the switch off, the buttons stay off.
+They start after the next restart, together with the API server.
+
+The Home Assistant line on the Config tab tells you when the switch and the API server do not agree:
+
+| Line | Cause |
+| --- | --- |
+| **Home Assistant is off. Home Assistant buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
+| **Home Assistant is on. The API is off. Restart the remote to start it.** | The switch is on, but it was off at boot. |
+
+An input that holds a Home Assistant action keeps the action while the switch is off.
+The tile shows the action in grey with a red circle, and the editor gives the reason.
+
 ### Kinds and actions
 
 The action tokens are Home Assistant service names.
@@ -101,9 +130,12 @@ The domain of the entity must match the kind. The kind Any entity accepts an ent
 5. To test the action, select **Test saved action**.
 
 The test queues the saved action and shows the result: ok, error with the Home Assistant message, unconfirmed, timeout, or dropped.
+If the Home Assistant switch is off, or the API server is off for this boot, the test fails and shows the reason.
 Copy, Paste, export, and import carry Home Assistant assignments.
 
 ### Press flow
+
+If the Home Assistant switch is off, a press sends nothing. See [The Home Assistant switch](#the-home-assistant-switch).
 
 A press queues the action. The queue holds a maximum of 8 actions. The remote drops extra presses.
 
@@ -136,6 +168,7 @@ It also accepts `action=test_ha` with `slot`.
 
 The state has `ha_kind`, `ha_act`, `ha_val`, and `ha_entity` for each slot.
 It also has a top-level `ha` object with `pending`, `last_slot`, `last`, and `error`.
+`radios.home_assistant` is the switch. `network.api_gated` is true if the switch was off at boot, so the API server did not start.
 
 ## Clear and replace an assignment
 
@@ -436,11 +469,13 @@ bond.** with **Ready to pair.** while the radio is on.
 The remote holds the state, so a reload and a second browser both show what the
 remote runs with. The switch is disabled until the remote answers with the state.
 Home Assistant holds the same two switches, **Zigbee Radio** and **Bluetooth
-Radio**.
+Radio**. It also holds the **Home Assistant API** switch. See
+[The Home Assistant switch](#the-home-assistant-switch).
 
 An input that is assigned to a radio that is off keeps its assignment. The tile
 shows the assignment in grey with a red circle after the label, and the editor
-gives the reason. The input sends again when the switch goes back on.
+gives the reason. The input sends again when the switch goes back on. A Home
+Assistant input with the Home Assistant switch off shows the same marks.
 
 If the Bluetooth switch is off, the remote does not start the NimBLE stack at
 boot, and the first turn-on starts it.
@@ -576,17 +611,19 @@ When `D3` and `D4` are idle, `D4` shows the Bluetooth state.
 | --- | --- |
 | Off | Wi-Fi is disabled. |
 | Red pulse | Wi-Fi is enabled but disconnected. |
-| Orange pulse | Wi-Fi is up, Home Assistant is expected, and the API is down. |
-| Solid orange | Wi-Fi is up and Home Assistant is not required (Config switch off). |
+| Orange pulse | Wi-Fi is up, the Home Assistant switch is on, and the API is down. |
+| Solid orange | Wi-Fi is up and the Home Assistant switch on the Config tab is off. |
 | Solid green | The API is connected. |
 | Red blink, 2 s | A Home Assistant action failed with an error reply or a timeout. |
 
-The Home Assistant switch on `/buttons` Config only changes this LED. The API
-server keeps running either way.
+The Home Assistant switch also stops the Home Assistant actions at once and the API server at the next restart.
+If the switch is on but was off at boot, the API server is off, so `D2` pulses orange until a restart.
+See [The Home Assistant switch](#the-home-assistant-switch).
 
 Wi-Fi serves the `/buttons` page and carries Home Assistant actions. A dark `D2` does not stop a button,
 because IR and Zigbee playback need neither Wi-Fi nor the API.
-A Home Assistant action turns Wi-Fi on when you press its button. See [Home Assistant actions](#home-assistant-actions).
+If the Home Assistant switch is on, a Home Assistant action turns Wi-Fi on when you press its button.
+See [Home Assistant actions](#home-assistant-actions).
 
 | State | `D3` and `D4` indication | Next action |
 | --- | --- | --- |
@@ -705,6 +742,7 @@ When the setting is on, the remote sends the wake press when the Zigbee link com
 The wake press is the Zigbee assignment of that button.
 If no link comes within 3 s after setup, the remote drops the wake press.
 A Home Assistant assignment does not wait for the Zigbee link. The wake press queues its action at once.
+If the Home Assistant switch is off, the remote drops that wake press at once.
 [ZIGBEE.md](ZIGBEE.md) describes the send path.
 
 SW9 acts when you release it. If you still hold SW9 at wake, the remote runs the

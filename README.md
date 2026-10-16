@@ -33,7 +33,7 @@
 
 - **Case:** The [`case/` README](case/README.md) documents the enclosure files and assembly information.
 - **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
-- **Firmware:** The [firmware section](#firmware) documents the ESPHome configuration and local components.
+- **Firmware:** The [firmware section](#firmware-more-info) documents the ESPHome configuration and local components.
 - **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
 
 The prototype uses a Seeed Studio XIAO ESP32-C6.
@@ -47,7 +47,7 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 - Assign every button from a web page on the remote itself
 - Run for a long time between charges
 
-## Case
+## Case ([more info](case/README.md))
 
 <p align="center">
   <picture>
@@ -110,7 +110,7 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
   </picture>
 </p>
 
-## Firmware
+## Firmware ([more info](RECEIVER.md))
 
 ### Button assignment
 
@@ -126,11 +126,11 @@ You can also clear the input. Hold `SW1` for two seconds to use the on-device as
 </p>
 <p align="center"><sub>The Buttons tab with a Zigbee assignment, and the Config tab</sub></p>
 
-## Status
+## Status ([more info](docs/timeline.md))
 
 The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus current design comparison are in [`docs/timeline.md`](docs/timeline.md). Open work is in [`ROADMAP.md`](ROADMAP.md). The power budget is in [`docs/power-budget.md`](docs/power-budget.md).
 
-## Relationship to homeThing
+## Relationship to homeThing ([more info](https://github.com/landonr/homeThing))
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.
 

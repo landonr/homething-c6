@@ -19,8 +19,38 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 
 The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
-It also exports a second front shell for a filament printer. Read [FDM front](#fdm-front).
+It also exports a second front shell for a filament printer. Read [SLS and FDM versions](#sls-and-fdm-versions).
 It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
+
+## SLS and FDM versions
+
+<p align="center">
+  <img alt="Plan of the SLS front face. Shading shows the depth of the dish around the keys and the wheel. The top edge is round." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
+  <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="260">
+</p>
+<p align="center"><sub>The SLS face (left) shows the dish as a depth gradient. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
+
+<p align="center">
+  <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the top edge is round." src="../docs/readme-assets/case-front-iso-sls.png" width="400">
+  <img alt="Isometric view of the FDM front shell alone. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-iso-fdm.png" width="400">
+</p>
+<p align="center"><sub>SLS front (left) and FDM front (right), isometric</sub></p>
+
+Both versions use the same back shell, IR window, interior, and board position. Only the front face and the button pad change.
+
+| | SLS | FDM |
+| --- | --- | --- |
+| Front shell | `c6remote-case-front.stl` | `c6remote-case-front-fdm.stl` |
+| Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
+| Face height | Base level | `FDM_FACE_DROP` lower |
+| Top edge | Round, `EDGE_R_FRONT` | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
+| LED ring channel | Full depth | Half depth, for a thicker roof |
+| Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
+| Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
+| Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
+| Assembly | Install the caps before the pad. The one-piece TPU pad has no caps. | Install the pad from inside, before the board |
+
+Read [FDM front](#fdm-front) for the FDM face details.
 
 ## Setup
 
@@ -190,7 +220,7 @@ The USB pocket roof and the USB slot roof are flush, at the connector envelope p
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
-The FDM front has a 0.64 mm, 45 degree top-edge chamfer. The recessed front keeps its round.
+The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed front keeps its round.
 
 The rim runs inside the recessed front's round. The FDM front keeps its groove on flat face outside the chamfer.
 

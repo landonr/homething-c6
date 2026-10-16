@@ -45,3 +45,12 @@ The three case scripts use the sibling `c6remote-explode` checkout. Set `C6REMOT
 The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as well. They render the case geometry the viewer has, so run `../c6remote-explode/refresh-assets.sh` after a case or board change.
 Add `--rig` to a case script to render on the Windows Rig over SSH.
 The case scripts write dated files into `c6remote-explode`; copy them into `docs/readme-assets/` as `case-assembled.png`, `case-exploded.png`, and `case-explode-loop.webp`.
+
+Run `case/.venv/bin/python scripts/render-face-svg.py --version sls` and `--version fdm` to draw the two front faces for `case/README.md`.
+The script reads the case model. It writes `case-front-face-sls.svg` and `case-front-face-fdm.svg` into `docs/readme-assets/`.
+Without `--version`, it writes `case-front-face.svg` for the `/buttons` page. Keep that file small, because the firmware embeds it.
+
+Run `python3 scripts/render-case-fronts-blender.py` to render the two front shells in isometric view for `case/README.md`.
+The script needs Blender, and it runs itself under Blender. Set `BLENDER` to override the binary path.
+It reads `case/export/c6remote-case-front.stl` and `c6remote-case-front-fdm.stl`. It writes `case-front-iso-sls.png` and `case-front-iso-fdm.png` into `docs/readme-assets/`.
+Both renders use one camera and one light set, so they show the same scale.

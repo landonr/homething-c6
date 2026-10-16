@@ -31,6 +31,23 @@ PLAN_STROKE_PAD = 0.7  # half the shell outline stroke, so the crop does not cli
 # Path simplification tolerance in sheet px. The /buttons page embeds this SVG
 # in firmware flash, so its size matters.
 SIMPLIFY_TOL = 0.1
+COORD_PLACES = 1
+
+# The README versions are not embedded in flash, so they trade size for detail.
+DETAIL = dict(OUTLINE_STEPS=2400, CONTOUR_STEPS=1600, LEGEND_PTS_PER_MM=12.0,
+              CIRCLE_PTS=180, SIMPLIFY_TOL=0.01, COORD_PLACES=2)
+DISH_LEVELS = 72
+ROUND_BANDS = 32
+DISH_MAX = 0.92  # dish tone coverage at the deepest point
+DISH_GAMMA = 1.1  # near linear, so the shallow dish near the rim shades too
+TOPO_LINES = 12  # evenly spaced depth contour lines drawn over the shading
+ROUND_MAX = 0.8  # round tone coverage where the edge turns vertical
+LABELS = {"web": "", "sls": "SLS ", "fdm": "FDM "}
+OUTPUTS = {
+    "web": "case-front-face.svg",
+    "sls": "case-front-face-sls.svg",
+    "fdm": "case-front-face-fdm.svg",
+}
 
 # Palette. Every rule states its light value first and then the token, so a
 # renderer without CSS custom properties still gets the light theme.
@@ -59,6 +76,16 @@ DARK = {
     "glyph": "#ffffff",
 }
 
+# Shading tones for the README versions. The face is white in both themes, so
+# one set serves both.
+DETAIL_TONES = {
+    "dish": "#5b5348",
+    "topo": "#3a342c",
+    "round": "#4f493f",
+    "chamfer": "#e3ddd2",
+    "groove": "#8a8174",
+}
+
 
 # --- the model ------------------------------------------------------------
 
@@ -66,6 +93,15 @@ DARK = {
 def shell_outline():
     """Plan outline of the shell's outer wall, as points."""
     wire = _offset_face(params.BOARD_FIT + params.WALL).outer_wire()
+    return [
+        (lambda p: (p.X, p.Y))(wire.position_at(i / OUTLINE_STEPS))
+        for i in range(OUTLINE_STEPS)
+    ]
+
+
+def inset_outline(d):
+    """Plan outline d inboard of the shell's outer wall, as points."""
+    wire = _offset_face(params.BOARD_FIT + params.WALL - d).outer_wire()
     return [
         (lambda p: (p.X, p.Y))(wire.position_at(i / OUTLINE_STEPS))
         for i in range(OUTLINE_STEPS)
@@ -217,7 +253,7 @@ def path_d(loops, project):
         pts = simplify(pts + pts[:1], SIMPLIFY_TOL)[:-1]
         coords = []
         for a, b in pts:
-            c = f"{fmt(a, 1)} {fmt(b, 1)}"
+            c = f"{fmt(a, COORD_PLACES)} {fmt(b, COORD_PLACES)}"
             if not coords or coords[-1] != c:
                 coords.append(c)
         out.append("M" + " L".join(coords) + "Z")
@@ -259,10 +295,77 @@ def wheel_controls(P, cx, cy):
 # --- the sheet ------------------------------------------------------------
 
 
-def plan_view(P):
+def stacked_alphas(coverage):
+    """Fill opacities for nested layers, each painted over the last, that reach
+    the given cumulative coverages in order."""
+    out, prev = [], 0.0
+    for c in coverage:
+        out.append(1 - (1 - c) / (1 - prev))
+        prev = c
+    return out
+
+
+def dish_gradient(P):
+    """The recess as nested depth contours, shallow first, each a little
+    darker, so the basins read as smooth shading."""
+    y0, y1 = kp.recess_span()
+    deepest = max(spine_depth(y0 + (y1 - y0) * i / 2000) for i in range(2001))
+    levels = [deepest * k / DISH_LEVELS for k in range(1, DISH_LEVELS)]
+    alphas = stacked_alphas([DISH_MAX * (lv / deepest) ** DISH_GAMMA for lv in levels])
+    out, topo = [], []
+    every = DISH_LEVELS // TOPO_LINES
+    for k, (level, alpha) in enumerate(zip(levels, alphas), start=1):
+        loops = contour_loops(level)
+        if loops:
+            d = path_d(loops, P)
+            out.append(f'<path class="dish" fill-opacity="{fmt(alpha, 4)}" d="{d}"/>')
+            if k % every == 0:
+                topo.append(f'<path class="topo" d="{d}"/>')
+    return "".join(out + topo)
+
+
+def round_band(P, outer):
+    """The top edge round as rings from the outer wall to ever deeper insets.
+    Stacked, they darken toward the wall as the round turns away from a light
+    straight above."""
+    r = params.EDGE_R_FRONT
+    edges = [r * k / ROUND_BANDS for k in range(1, ROUND_BANDS + 1)]
+    mids = [r * (k - 0.5) / ROUND_BANDS for k in range(1, ROUND_BANDS + 1)]
+    cover = [ROUND_MAX * (1 - math.sqrt(1 - ((r - s) / r) ** 2)) for s in mids]
+    alphas, inner = [0.0] * ROUND_BANDS, 0.0
+    for k in reversed(range(ROUND_BANDS)):
+        alphas[k] = 1 - (1 - cover[k]) / (1 - inner)
+        inner = cover[k]
+    return "".join(
+        f'<path class="round" fill-rule="evenodd" fill-opacity="{fmt(a, 4)}" '
+        f'd="{path_d([outer, inset_outline(d)], P)}"/>'
+        for d, a in zip(edges, alphas)
+    )
+
+
+def chamfer_band(P, outer):
+    """The FDM top edge chamfer as one flat band with a crisp inner line."""
+    inner = inset_outline(params.EDGE_R_FRONT_FDM)
+    return (
+        f'<path class="chamfer" fill-rule="evenodd" d="{path_d([outer, inner], P)}"/>'
+        f'<path class="chamferline" d="{path_d([inner], P)}"/>'
+    )
+
+
+def plan_view(P, version="web"):
+    outer = shell_outline()
     out = ['<g id="plan">']
-    out.append(f'<path class="face" d="{path_d([shell_outline()], P)}"/>')
-    out.append(f'<path class="rim" d="{path_d(contour_loops(0.0), P)}"/>')
+    out.append(f'<path class="face" d="{path_d([outer], P)}"/>')
+    if version == "sls":
+        out.append(round_band(P, outer))
+        out.append(dish_gradient(P))
+    if version == "fdm":
+        out.append(chamfer_band(P, outer))
+        out.append(f'<path class="groove" d="{path_d(contour_loops(0.0), P)}"/>')
+    else:
+        out.append(f'<path class="rim" d="{path_d(contour_loops(0.0), P)}"/>')
+    if version != "web":
+        out.append(f'<path class="outline" d="{path_d([outer], P)}"/>')
 
     wx, wy = board.wheel_center()
     out.append(
@@ -299,7 +402,7 @@ def plan_view(P):
     return "".join(out)
 
 
-def build_plan():
+def build_plan(version="web"):
     ex0, ex1 = kp.exterior_x_bounds()
     ey0, ey1 = kp.exterior_y_bounds()
     plan_w, plan_h = (ex1 - ex0) * SCALE, (ey1 - ey0) * SCALE
@@ -314,20 +417,21 @@ def build_plan():
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {fmt(sheet_w)} '
         f'{fmt(sheet_h)}" width="{fmt(sheet_w)}" height="{fmt(sheet_h)}" role="img" '
-        f'aria-label="Plan of the c6remote front face">'
-        + _style()
-        + plan_view(P)
+        f'aria-label="Plan of the c6remote {LABELS[version]}front face">'
+        + _style(version)
+        + plan_view(P, version)
         + "</svg>\n"
     )
     return svg, sheet_w, sheet_h
 
 
-def _style():
+def _style(version="web"):
     def tok(prop, key):
         return f"{prop}:{LIGHT[key]};{prop}:var(--{key})"
 
+    tokens = dict(LIGHT, **DETAIL_TONES) if version != "web" else LIGHT
     rules = [
-        ":root{" + ";".join(f"--{k}:{v}" for k, v in LIGHT.items()) + "}",
+        ":root{" + ";".join(f"--{k}:{v}" for k, v in tokens.items()) + "}",
         "@media (prefers-color-scheme: dark){:root{"
         + ";".join(f"--{k}:{v}" for k, v in DARK.items())
         + "}}",
@@ -345,20 +449,37 @@ def _style():
         f".cap{{{tok('fill', 'cap')};{tok('stroke', 'cap-edge')};stroke-width:1}}",
         f".glyph{{{tok('fill', 'glyph')}}}",
     ]
+    if version != "web":
+        def dtok(prop, key):
+            return f"{prop}:{DETAIL_TONES[key]};{prop}:var(--{key})"
+
+        groove_w = fmt(params.FDM_OUTLINE_W * SCALE)
+        rules += [
+            f".dish{{{dtok('fill', 'dish')}}}",
+            f".topo{{{dtok('stroke', 'topo')};stroke-width:.6;stroke-opacity:.55}}",
+            f".round{{{dtok('fill', 'round')}}}",
+            f".chamfer{{{dtok('fill', 'chamfer')}}}",
+            f".chamferline{{{tok('stroke', 'edge')};stroke-width:.5}}",
+            f".groove{{{dtok('stroke', 'groove')};stroke-width:{groove_w};stroke-linejoin:round}}",
+            f".outline{{{tok('stroke', 'edge')};stroke-width:1.4}}",
+        ]
     return "<style>" + "".join(rules) + "</style>"
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "-o",
-        "--out",
-        default=str(ROOT / "docs" / "readme-assets" / "case-front-face.svg"),
-        help="where to write the SVG",
+        "--version",
+        choices=sorted(OUTPUTS),
+        default="web",
+        help="web: the /buttons page plan. sls, fdm: detailed README faces",
     )
+    ap.add_argument("-o", "--out", help="where to write the SVG")
     args = ap.parse_args()
-    svg, w, h = build_plan()
-    out = Path(args.out)
+    if args.version != "web":
+        globals().update(DETAIL)
+    svg, w, h = build_plan(args.version)
+    out = Path(args.out or ROOT / "docs" / "readme-assets" / OUTPUTS[args.version])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(svg)
     print(f"wrote {out}, {fmt(w)} by {fmt(h)} px, {len(svg) / 1024:.0f} kB")

@@ -50,7 +50,8 @@ case/.cache/
 c6remote-kicad/_restore_backup_2026-05-28T19-10-25-806
 
 # Python virtualenv for the case model scripts. Rebuilt from case/requirements.
-case/.venv/
+# No trailing slash, so the rule also matches a worktree symlink to the venv.
+case/.venv
 
 # VS Code Local History extension snapshots of the KiCad sources.
 c6remote-kicad/.history/

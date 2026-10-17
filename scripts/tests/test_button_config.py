@@ -7,8 +7,11 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).parents[2]
@@ -2001,6 +2004,44 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn("cg.progmem_array", INIT)
         self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
         self.assertNotIn('#include "button_config_page.h"', CPP)
+
+    def test_the_schema_reserves_lwip_sockets_for_the_page(self) -> None:
+        """Production has no web_server, so nothing else sizes CONFIG_LWIP_MAX_SOCKETS
+        for browser connections. At the old pool of 10, accept failed with ENFILE (23)
+        before httpd reached its own limit and could purge the oldest connection."""
+        tree = ast.parse(INIT)
+        schema = next(
+            n for n in tree.body
+            if isinstance(n, ast.Assign) and [ast.unparse(t) for t in n.targets] == ["CONFIG_SCHEMA"]
+        )
+        self.assertEqual(ast.unparse(schema.value.func), "cv.All")
+        self.assertIn("_consume_page_sockets", [ast.unparse(arg) for arg in schema.value.args])
+
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_consume_page_sockets")
+        calls = []
+
+        def consume_sockets(value, consumer, socket_type="tcp"):
+            calls.append((value, consumer, socket_type))
+            return lambda config: config
+
+        socket = types.ModuleType("esphome.components.socket")
+        socket.consume_sockets = consume_sockets
+        socket.SocketType = types.SimpleNamespace(TCP="tcp", UDP="udp", TCP_LISTEN="tcp_listen")
+        components = types.ModuleType("esphome.components")
+        components.socket = socket
+        stubs = {
+            "esphome": types.ModuleType("esphome"),
+            "esphome.components": components,
+            "esphome.components.socket": socket,
+        }
+        ns = {}
+        exec(compile(ast.Module(body=[func], type_ignores=[]), "_consume_page_sockets", "exec"), ns)
+        config = {}
+        with mock.patch.dict(sys.modules, stubs):
+            self.assertIs(ns["_consume_page_sockets"](config), config)
+        # 7 matches HTTPD_DEFAULT_CONFIG max_open_sockets. The 2 UDP sockets are the
+        # httpd control pair. The production pool is then 17 (api 3+1, ota 1, mdns 2, base 1).
+        self.assertEqual(calls, [(7, "button_config", "tcp"), (2, "button_config", "udp")])
 
 
 @unittest.skipUnless(shutil.which("git"), "git is not installed")

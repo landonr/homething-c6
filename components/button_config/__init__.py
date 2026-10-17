@@ -25,21 +25,35 @@ button_config_ns = cg.esphome_ns.namespace("button_config")
 ButtonConfig = button_config_ns.class_("ButtonConfig", cg.Component)
 StatusLedsTrigger = button_config_ns.class_("StatusLedsTrigger", automation.Trigger.template(bool))
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(): cv.declare_id(ButtonConfig),
-        cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(web_server_base.WebServerBase),
-        cv.GenerateID(CONF_RAW_DATA_ID): cv.declare_id(cg.uint8),
-        # The import alone does not load idle_sleep, so production builds without it.
-        cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep),
-        cv.Optional(CONF_HA_ACTION_ID): cv.use_id(ha_action.HaAction),
-        cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor),
-        cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor),
-        cv.Optional(CONF_ON_STATUS_LEDS): automation.validate_automation(
-            {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(StatusLedsTrigger)}
-        ),
-    }
-).extend(cv.COMPONENT_SCHEMA)
+
+def _consume_page_sockets(config):
+    from esphome.components import socket
+
+    # No web_server reserves page sockets. 7 is httpd max_open_sockets, so LRU purge beats ENFILE.
+    socket.consume_sockets(7, "button_config")(config)
+    # httpd's UDP control socket pair, which web_server_base does not register.
+    socket.consume_sockets(2, "button_config", socket.SocketType.UDP)(config)
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(ButtonConfig),
+            cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(web_server_base.WebServerBase),
+            cv.GenerateID(CONF_RAW_DATA_ID): cv.declare_id(cg.uint8),
+            # The import alone does not load idle_sleep, so production builds without it.
+            cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep),
+            cv.Optional(CONF_HA_ACTION_ID): cv.use_id(ha_action.HaAction),
+            cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor),
+            cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_ON_STATUS_LEDS): automation.validate_automation(
+                {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(StatusLedsTrigger)}
+            ),
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    _consume_page_sockets,
+)
 
 
 # PATCH counts commits from this commit on, so this commit is 2026.10.0.

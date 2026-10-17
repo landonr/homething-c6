@@ -142,11 +142,13 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("hid_play_callback_(button, false)", (ROOT / "ir_learning.h").read_text())
-        for slot in [slot for slot in range(3, 17) if slot != 9] + [19]:
+        for slot in [slot for slot in range(3, 17) if slot not in (8, 9)] + [19]:
             self.assertIn(f"slot: {slot}", CONFIG)
-        sw9 = CONFIG.split("    name: Button 9\n", 1)[1].split("    name: Button 10\n", 1)[0]
-        self.assertIn("ir_ui.tap(9, IrUi::Tap::FULL);", sw9)
-        self.assertIn("ir_ui.release(9);", sw9)
+        # SW8 and SW9 tap on release, so each releases its own slot after the tap.
+        for button in (8, 9):
+            entry = CONFIG.split(f"    name: Button {button}\n", 1)[1].split(f"    name: Button {button + 1}\n", 1)[0]
+            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL);", entry)
+            self.assertIn(f"ir_ui.release({button});", entry)
         self.assertIn("set_pressed(20, true)", CONFIG)
         self.assertIn("set_pressed(20, false)", CONFIG)
 

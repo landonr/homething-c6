@@ -432,7 +432,7 @@ These keys are valid:
 
 - `zigbee`, `ble`, and `home_assistant` turn each radio on or off.
 - `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
-- `status_leds` turns `D2` to `D5` and the XIAO user LED on or off.
+- `status_leds` turns `D2` to `D5` and the XIAO user LED on or off. See [The LED settings](#the-led-settings) for the radio switch pulse, the status peek, and the sleep lap.
 - `boot_leds` turns the cold-boot chase and the wake battery pulses on or off.
 - `sleep` turns idle sleep on or off.
 - `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
@@ -540,6 +540,28 @@ The **Status LEDs** switch covers all status light. This includes `D2` to `D5` i
 assignment mode, voice, and pairing feedback. It also covers the amber XIAO user LED.
 If **Status LEDs** is off, these LEDs stay dark. As a result, assignment and pairing give no light feedback.
 
+One exception applies while **Status LEDs** is off. When a radio turns on or off, the LED of that radio gives one radio switch pulse.
+The radio switch pulse is 800 ms long. It is green when the radio turns on and red when the radio turns off.
+`D2` pulses for Wi-Fi, `D4` pulses for Bluetooth, and `D5` pulses for Zigbee. `D3` does not pulse.
+If two or more radios change at the same time, each LED gives its own pulse.
+Each source of the change gives the pulse. For example, a Wi-Fi session that closes when idle gives a red pulse on `D2`.
+If **Status LEDs** is on, no pulse plays. The status colour of the LED shows the new radio state.
+
+The `D5` pulse shows the Zigbee switch, not the stack. If the Zigbee switch was off at boot and you turn it on, `D5` gives a green pulse.
+But the stack starts only after a reboot. See [The radio switches](#the-radio-switches).
+
+The status peek is the second exception. While **Status LEDs** is off, hold SW8 for 1 s.
+`D2` to `D5` then show the same status as with **Status LEDs** on. When you release SW8, the LEDs go dark again.
+The XIAO user LED stays dark during a status peek. No radio switch pulse plays during a status peek.
+If **Status LEDs** is on, a hold of SW8 does not start a status peek.
+
+The sleep lap is the third exception. When the SW5 hold arms sleep, `D2` to `D5` give one sleep lap.
+The sleep lap plays with either LED setting. See [Enter sleep](#enter-sleep).
+
+SW8 sends its assignment when you release it, not when you press it. As a result, a status peek does not send the SW8 assignment.
+A voice assignment on SW8 starts at the release, and Home Assistant ends it when your speech stops.
+A BLE HID assignment on SW8 sends the key press and the key release together at the release.
+
 The **Boot and wake LEDs** switch covers only two animations. These are the rainbow chase on a cold boot
 and the battery pulses after a deep-sleep wake. If this switch is off, the status LEDs show at once.
 
@@ -549,14 +571,14 @@ The two switches work together in this way:
 | --- | --- | --- |
 | on | on | The animation plays, then the status LEDs show. |
 | on | off | The status LEDs show at once. |
-| off | on | The animation plays on `D2` to `D5`, then all LEDs go dark. |
-| off | off | No LED lights. |
+| off | on | The animation plays on `D2` to `D5`, then the LEDs stay dark except for a radio switch pulse, a status peek, or a sleep lap. |
+| off | off | The LEDs stay dark except for a radio switch pulse, a status peek, or a sleep lap. |
 
 If **Status LEDs** is off, the animation does not show assignment or voice state.
-The `led_vdd` rail is on only while the animation plays.
+The `led_vdd` rail is on only during an animation, a radio switch pulse, a status peek, or a sleep lap.
 A change applies at once. If you turn **Status LEDs** on, the LEDs show the current state again.
 If you turn it off during an animation, the animation finishes and then the LEDs go dark.
-The Home Assistant **Status Light** entity also stays dark while both switches are off.
+While both switches are off, the Home Assistant **Status Light** entity is on only for a radio switch pulse, a status peek, or a sleep lap.
 The XIAO charge LED is hardware driven. These settings cannot turn it off.
 
 ## Normal playback
@@ -580,8 +602,12 @@ The remote enters deep sleep to save battery. The `idle_sleep` component in
 
 Two events start deep sleep: a hold on SW5, and an idle period.
 
-To sleep at once, hold SW5 for the `sleep_hold_time` value. When the hold time passes, the amber XIAO user LED flashes once. Then release SW5.
-The remote sleeps when you release all buttons. SW5 still sends its own assignment when you press it.
+To sleep at once, hold SW5 for the `sleep_hold_time` value. When the hold time passes, the remote arms sleep. Then release SW5.
+When the remote arms sleep, `D2` to `D5` give one sleep lap. The sleep lap is one anticlockwise lap of blue-white light, from `D5` to `D2`.
+The sleep lap plays with either LED setting. If **Status LEDs** is on, the amber XIAO user LED also flashes once.
+After the sleep lap, `D2` to `D5` stay dark until the remote sleeps.
+The remote sleeps when you release all buttons. If you release all buttons during the sleep lap, the remote sleeps at once.
+SW5 still sends its own assignment when you press it.
 The hold ignores the blocks that follow.
 
 If no activity occurs for the `sleep_after` time, the remote enters deep sleep.
@@ -614,16 +640,19 @@ firmware knows which button woke it.
 
 The wake press replay is a setting. It is off by default.
 When it is off, the press that wakes the remote only wakes it. Press the button again to send its command.
-A held SW1 or SW9 does not tap when you release it.
+A held SW1, SW8, or SW9 does not tap when you release it.
 
 When the setting is on, the remote sends the wake press when the Zigbee link comes up.
 The wake press is the Zigbee assignment of that button.
 If no link comes within 3 s after setup, the remote drops the wake press.
 [ZIGBEE.md](ZIGBEE.md) describes the send path.
 
-SW9 acts when you release it. If you still hold SW9 at wake, the remote runs the
+SW8 and SW9 act when you release them. If you still hold SW9 at wake, the remote runs the
 Wi-Fi hold whether the setting is on or off. When the setting is on, the remote sends the assignment
 of SW9 when you release SW9 before the 2 s hold ends.
+
+If you still hold SW8 at wake, the remote runs the status peek hold whether the setting is on or off.
+When the setting is on, the remote sends the assignment of SW8 when you release SW8 before the 1 s hold ends.
 
 If you still hold SW1 at wake, the remote does not start the assignment mode
 hold. When the setting is on, the remote sends the assignment of SW1 when you release SW1.

@@ -403,7 +403,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertIn("id(wake_pulse_until_ms) = first_ms + 1600;", drive)
         self.assertNotIn("wake_pending", drive)
 
-    def test_production_starts_the_sw9_hold_for_a_bit_held_at_wake(self) -> None:
+    def test_production_starts_the_sw8_and_sw9_holds_for_a_bit_held_at_wake(self) -> None:
         self.assertIn("uint16_t held_at_wake() const { return this->held_mask_; }", HEADER)
         setup = function_body(CPP, "void IdleSleep::setup()")
         self.assertIn("this->held_mask_ = rec.stub_down & first_down;", setup)
@@ -412,6 +412,10 @@ class ProductionSleepConfigTest(unittest.TestCase):
         once = drive.index("static bool held_checked = false;")
         self.assertLess(drive.index("if (!id(idle).woke_from_sleep())"), once)
         self.assertLess(once, drive.index("id(idle).held_at_wake()"))
+        self.assertIn("if ((held & (1u << 7)) && !id(button_expander)->digital_read(7)) {", drive)
+        sw8 = statements(function_body(drive, "if ((held & (1u << 7))"))
+        self.assertEqual(sw8, ["if (id(idle).wake_replay())", "id(sw8_hold_consumed) = false;",
+                               "id(detect_peek_hold).execute();"])
         self.assertIn("if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {", drive)
         sw9 = statements(function_body(drive, "if ((held & (1u << 9))"))
         self.assertEqual(sw9, ["if (id(idle).wake_replay())", "id(sw9_hold_consumed) = false;",
@@ -421,12 +425,14 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertIn("if (id(idle).woke_from_sleep() && !id(idle).wake_replay()) {", boot)
         self.assertIn("const uint16_t held = id(idle).held_at_wake();", boot)
         self.assertIn("if (held & 1u)\n                ir_ui.hold_consumed = true;", boot)
+        self.assertIn("if (held & (1u << 7))\n                id(sw8_hold_consumed) = true;", boot)
         self.assertIn("if (held & (1u << 9))\n                id(sw9_hold_consumed) = true;", boot)
         self.assertNotIn("(held & (1u << 0))", drive)
         self.assertNotIn("detect_receiver_hold", drive)
         self.assertNotIn("exit_receiver_hold", drive)
         # The wake handling mirrors the on_press of each button.
         for name, bit, lines in (
+            ("Button 8", 7, ["id(sw8_hold_consumed) = false;", "script.execute: detect_peek_hold"]),
             ("Button 9", 9, ["id(sw9_hold_consumed) = false;", "script.execute: detect_wifi_hold"]),
         ):
             entry = PRODUCTION.split(f"name: {name}\n", 1)[1].split("  - platform:", 1)[0]
@@ -462,7 +468,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertEqual(slots, [mapping[bit] for bit in range(16)])
 
     def test_only_the_release_tap_inputs_skip_a_held_replay(self) -> None:
-        self.assertIn("if (held && (bit == 0 || bit == 9))", PRODUCTION)
+        self.assertIn("if (held && (bit == 0 || bit == 7 || bit == 9))", PRODUCTION)
         section = PRODUCTION[PRODUCTION.index("\nbinary_sensor:\n"):PRODUCTION.index("\nsensor:\n")]
         for entry in section.split("  - platform: gpio\n")[1:]:
             if "pcf8574: button_expander" not in entry and "<<: *button_1" not in entry:
@@ -470,7 +476,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
             bit = int(re.search(r"number: (\d+)", entry).group(1))
             on_release = entry[entry.index("on_release:"):]
             taps_on_release = "ir_ui.tap(" in on_release
-            self.assertEqual(taps_on_release, bit in (0, 9), f"expander bit {bit}")
+            self.assertEqual(taps_on_release, bit in (0, 7, 9), f"expander bit {bit}")
 
     def test_production_awake_led_is_the_inverted_gpio15_output(self) -> None:
         output = PRODUCTION[PRODUCTION.index("    id: awake_led_pwm\n") - len("  - platform: ledc\n"):]

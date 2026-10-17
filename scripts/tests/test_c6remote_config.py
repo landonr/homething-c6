@@ -69,6 +69,105 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("id(status_light).turn_off().set_transition_length(0).perform();", tick)
         self.assertIn("id(boot_chase_done) = true;", config)
 
+    def test_a_radio_switch_pulses_its_own_led_while_status_leds_are_off(self) -> None:
+        """With Status LEDs off, a radio switch still gives one pulse on the LED of that radio."""
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        term = "millis() < id(led_event_until_ms)"
+        # Each gate that holds the light on with status LEDs off must see the pulse.
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        self.assertIn(term, status_off)
+        # The radio pulse and the sleep lap each extend the gate end, and neither shortens it.
+        self.assertEqual(config.count("id(led_event_until_ms) = "), 2)
+        self.assertEqual(config.count("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + "), 2)
+        # The wake step returns early after a cold boot, so the poll is an earlier step of its own.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        poll = next(i for i, step in enumerate(steps) if "zigbee_assignments.radio_enabled()" in step)
+        wake = next(i for i, step in enumerate(steps) if "if (!id(idle).woke_from_sleep())\n            return;" in step)
+        self.assertLess(poll, wake)
+        step = steps[poll]
+        # Strip index per radio: D2 Wi-Fi, D4 Bluetooth, D5 Zigbee. D3 has no radio.
+        self.assertIn("on[0] = !wifi::global_wifi_component->is_disabled();", step)
+        self.assertIn("on[2] = id(ble_hid_remote).radio_enabled();", step)
+        self.assertIn("on[3] = zigbee_assignments.radio_enabled();", step)
+        self.assertNotIn("on[1] =", step)
+        # The switch, not the boot gate, so a turn-on after a gated boot still pulses green.
+        self.assertNotIn("boot_gated()", step)
+        # The first poll is the baseline, so a boot or a wake plays no pulse.
+        self.assertIn("static bool last[4] = {on[0], on[1], on[2], on[3]};", step)
+        # Setup can tick intervals before ButtonConfig::setup() enables Wi-Fi.
+        self.assertLess(step.index("if (!App.is_setup_complete())\n            return;"),
+                        step.index("static bool last[4]"))
+        # The baseline moves while status LEDs are on, but no pulse starts.
+        self.assertLess(step.index("last[n] = on[n];"),
+                        step.index("if (id(button_cfg).status_leds())\n              continue;"))
+        self.assertLess(step.index("if (id(button_cfg).status_leds())\n              continue;"),
+                        step.index("id(radio_pulse_end_ms)[n] = now + 800;"))
+        self.assertIn("if (on[n])\n              id(radio_pulse_red) &= ~(1u << n);", step)
+        # The gate end is set first, so on_turn_on powers the rail.
+        self.assertLess(step.index("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + 800);"),
+                        step.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators")'))
+        # The pulse draws after the wake overlay, and only with status LEDs off.
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        # The newline pins the indent, so a block nested inside the wake overlay fails.
+        radio = effect.index("\n            if (!status_on) {\n")
+        self.assertLess(effect.index("if (millis() < id(wake_pulse_until_ms)) {"), radio)
+        # Up to the close of the block, because the sleep lap draws after it.
+        draw = effect[radio:].split("\n            }\n", 1)[0]
+        self.assertIn("const uint32_t end = id(radio_pulse_end_ms)[n];", draw)
+        self.assertIn("const float phase = (end - now) / 800.0f;", draw)
+        self.assertIn("192.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
+        self.assertIn("it[n] = ((id(radio_pulse_red) >> n) & 1) ? Color(level, 0, 0) : Color(0, level, 0);", draw)
+        self.assertNotIn("it[0]", draw)
+        self.assertNotIn("it.all()", draw)
+
+    def test_the_sw5_sleep_arm_plays_one_anticlockwise_lap_then_goes_dark(self) -> None:
+        """The arm must show with either LED setting, and the LEDs stay dark until the release sleeps."""
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        # The lap shares the short LED event gate, so no gate needs a term of its own.
+        self.assertNotIn("radio_pulse_until_ms", config)
+        term = "millis() < id(led_event_until_ms)"
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        self.assertIn(term, status_off)
+        self.assertIn("  - id: led_event_until_ms\n    type: uint32_t\n", config)
+        self.assertIn("  - id: sleep_lap_start_ms\n    type: uint32_t\n", config)
+        # The arm edge sets both globals before the turn-on, so on_turn_on powers the rail.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        step = next(step for step in steps if "id(idle).sleep_armed()" in step)
+        lap = step[step.index("if (armed && !was_armed) {"):step.index("was_armed = armed;")]
+        self.assertNotIn("status_leds()", lap)
+        self.assertNotIn("boot_leds()", lap)
+        light = lap.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();')
+        self.assertLess(lap.index("id(sleep_lap_start_ms) = now;"), light)
+        self.assertLess(lap.index("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + 900);"),
+                        light)
+        # The draw is the last block, so it covers status, the wake pulse, a radio pulse and a peek.
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        block = effect.index("\n            if (id(idle).sleep_armed()) {\n")
+        self.assertLess(effect.index("\n            if (!status_on) {\n"), block)
+        draw = effect[block:].rstrip("\n")
+        self.assertEqual(draw.count("\n            }"), 1)
+        self.assertTrue(draw.endswith("\n            }"))
+        self.assertNotIn("status_on", draw)
+        self.assertNotIn("status_leds()", draw)
+        # Black first, so all four LEDs stay dark after the lap while sleep stays armed.
+        self.assertLess(draw.index("it.all() = Color::BLACK;"), draw.index("for (uint32_t n = 0; n < 4; n++) {"))
+        self.assertIn("const uint32_t t = millis() - id(sleep_lap_start_ms);", draw)
+        self.assertIn("const uint32_t start = n * 150;", draw)
+        self.assertIn("if (t < start || t >= start + 450)", draw)
+        self.assertIn("160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
+        # Strip order D2 D3 D4 D5 is clockwise, so the lap runs D5 D4 D3 D2.
+        self.assertIn("it[3 - n] = Color(level / 3, level / 3, level);", draw)
+
     def test_name_carries_the_mac_suffix(self) -> None:
         """Several remotes on one network need distinct hostnames and HA names."""
         self.assertRegex(
@@ -121,6 +220,62 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("if: *send_learned_code", sw9)
         self.assertIn("if: *start_learned_voice", sw9)
         self.assertNotIn("voice_assistant.stop:", sw9)
+
+    def test_sw8_taps_on_release_behind_its_peek_hold(self) -> None:
+        """A peek hold must not send the SW8 assignment, so SW8 taps on release like SW9."""
+        config = CONFIG.read_text()
+        self.assertEqual(button_pin(config, 8), 7)
+        sw8 = button_entry(config, 8)
+        on_press = sw8[sw8.index("on_press:"):sw8.index("on_release:")]
+        on_release = sw8[sw8.index("on_release:"):]
+        self.assertIn("id(sw8_hold_consumed) = false;", on_press)
+        self.assertIn("script.execute: detect_peek_hold", on_press)
+        self.assertNotIn("ir_ui.tap(", on_press)
+        # The peek ends on every release, also a release that taps.
+        self.assertLess(on_release.index("script.stop: detect_peek_hold"),
+                        on_release.index("id(status_peek) = false;"))
+        self.assertLess(on_release.index("id(status_peek) = false;"),
+                        on_release.index("return !id(sw8_hold_consumed);"))
+        self.assertLess(on_release.index("return !id(sw8_hold_consumed);"),
+                        on_release.index("ir_ui.tap(8, IrUi::Tap::FULL);"))
+        self.assertLess(on_release.index("ir_ui.tap(8, IrUi::Tap::FULL);"),
+                        on_release.index("ir_ui.release(8);"))
+        self.assertIn("if: *send_learned_code", on_release)
+        self.assertIn("if: *start_learned_voice", on_release)
+        # Home Assistant VAD ends a voice tap, so nothing stops Assist on release.
+        self.assertNotIn("release_assignment", sw8)
+        self.assertNotIn("{id: release_assignment, slot: 8}", config)
+        hold = config.split("  - id: detect_peek_hold\n", 1)[1].split("\n  - id:", 1)[0]
+        self.assertIn("    mode: restart\n", hold)
+        self.assertIn("delay: 1s", hold)
+        early = hold.index("if (id(button_cfg).status_leds())\n            return;")
+        consumed = hold.index("id(sw8_hold_consumed) = true;")
+        peek = hold.index("id(status_peek) = true;")
+        light = hold.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();')
+        self.assertLess(early, consumed)
+        self.assertLess(consumed, peek)
+        self.assertLess(peek, light)
+
+    def test_an_sw8_peek_holds_the_status_light_on_with_status_leds_off(self) -> None:
+        """Each status_light gate must see the peek, or the rail stays off or the 250 ms tick blanks the light."""
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        term = "id(status_peek)"
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        self.assertIn(term, status_off)
+        # A negated term would turn the light off during a peek instead.
+        self.assertNotIn("!id(status_peek)", config)
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        self.assertIn("const bool status_on = id(button_cfg).status_leds() || id(status_peek);", effect)
+        self.assertIn("if (!status_on)\n              it.all() = Color::BLACK;", effect)
+        # Only the hold script sets the peek and only the SW8 release clears it.
+        self.assertEqual(config.count("id(status_peek) = true;"), 1)
+        self.assertEqual(config.count("id(status_peek) = false;"), 1)
+        self.assertIn("  - id: status_peek\n    type: bool\n    restore_value: false\n", config)
 
     def test_sw9_and_sw10_follow_silkscreen_wiring(self) -> None:
         """Catches swapping PCF8575 P8 and P9 under Button 9 and Button 10."""

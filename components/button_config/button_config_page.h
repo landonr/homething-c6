@@ -784,7 +784,7 @@ var on=st.status_leds!==false;
 if(box){box.checked=ledBusy?ledWant:on;box.disabled=ledBusy}
 if(line){line.className="sub st"+(ledError?" bad":"");
 line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>"+(on?"Status LEDs are on.":
-"Status LEDs are off. D2 to D5 and the XIAO LED stay dark.")+(ledError?" "+esc(ledError):"")}}
+"Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse. Hold Button 8 for one second to see the status.")+(ledError?" "+esc(ledError):"")}}
 
 function setStatusLeds(){
 if(ledBusy||!st)return;

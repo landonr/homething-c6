@@ -954,7 +954,9 @@ setTimeout(() => {
     STATE.status_leds = false;
     ledStatus();
     if (document.getElementById("lgb").checked) throw new Error("off showed on");
-    if (!document.getElementById("lgs").innerHTML.includes("stay dark"))
+    if (!document.getElementById("lgs").innerHTML.includes("stay dark") ||
+        !document.getElementById("lgs").innerHTML.includes("A radio switch still gives one pulse.") ||
+        !document.getElementById("lgs").innerHTML.includes("Hold Button 8 for one second to see the status."))
       throw new Error("off line is wrong: " + document.getElementById("lgs").innerHTML);
     STATE.status_leds = true;
     ledStatus();

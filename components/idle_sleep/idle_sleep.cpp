@@ -193,6 +193,7 @@ void IdleSleep::setup() {
   // The binary sensors do not fire on_press for their first state, so a bit
   // still down here reaches no on_press at all. The replay hook decides.
   this->replay_mask_ = rec.stub_down;
+  this->replay_left_ = rec.stub_down;
   this->held_mask_ = rec.stub_down & first_down;
   this->load_settings_();
   // The stored wake press replay setting gates the replay.
@@ -328,24 +329,29 @@ void IdleSleep::loop() {
   }
 
   if (this->replay_pending_) {
-    if (this->link_seen_) {
+    bool sent = false;
+    for (uint8_t bit = 0; bit < 16; bit++) {
+      if ((this->replay_left_ & (1u << bit)) == 0)
+        continue;
+      const bool held = (this->held_mask_ & (1u << bit)) != 0;
+      // Without the link only an action that needs none can send. The call
+      // with the link settles the bit, sent or not.
+      const bool this_sent = this->replay_(bit, held, this->link_seen_);
+      if (!this_sent && !this->link_seen_)
+        continue;
+      this->replay_left_ &= static_cast<uint16_t>(~(1u << bit));
+      ESP_LOGI(TAG, "Replay bit %u, held at first read: %s, sent: %s", bit, YESNO(held), YESNO(this_sent));
+      if (this_sent && s_current != nullptr && s_current->replay_bit == NO_BIT)
+        s_current->replay_bit = bit;
+      sent = sent || this_sent;
+    }
+    if (sent) {
+      if (s_current != nullptr && s_current->replay_ms == NONE)
+        s_current->replay_ms = static_cast<int32_t>((esp_timer_get_time() - this->setup_us_) / 1000);
+      this->last_activity_ms_ = now;
+    }
+    if (this->replay_left_ == 0) {
       this->replay_pending_ = false;
-      bool sent = false;
-      for (uint8_t bit = 0; bit < 16; bit++) {
-        if ((this->replay_mask_ & (1u << bit)) == 0)
-          continue;
-        const bool held = (this->held_mask_ & (1u << bit)) != 0;
-        const bool this_sent = this->replay_(bit, held);
-        ESP_LOGI(TAG, "Replay bit %u, held at first read: %s, sent: %s", bit, YESNO(held), YESNO(this_sent));
-        if (this_sent && s_current != nullptr && s_current->replay_bit == NO_BIT)
-          s_current->replay_bit = bit;
-        sent = sent || this_sent;
-      }
-      if (sent) {
-        if (s_current != nullptr)
-          s_current->replay_ms = static_cast<int32_t>((esp_timer_get_time() - this->setup_us_) / 1000);
-        this->last_activity_ms_ = now;
-      }
     } else if (esp_timer_get_time() - this->setup_us_ > REPLAY_TIMEOUT_US) {
       this->replay_pending_ = false;
       ESP_LOGW(TAG, "Replay dropped: no link 3 s after setup");

@@ -13,7 +13,7 @@ inventory in the browser and posts only the resolved address to the remote. The
 page never publishes to Zigbee2MQTT. That websocket is read only.
 
 The remote does not need MQTT, Wi-Fi, Home Assistant, or Zigbee2MQTT for button
-playback. It needs Wi-Fi only while you configure it from the page.
+playback. It needs Wi-Fi to configure it from the page and to send a Home Assistant action.
 
 ## Requirements
 
@@ -322,7 +322,7 @@ While it stays awake, it sends the value again only after a change of 2 % or mor
 
 Zigbee2MQTT generates a `battery` property from this cluster. No external
 converter is necessary. The same percent also shows as the `Battery` sensor in
-Home Assistant over the ESPHome API when Wi-Fi is on.
+Home Assistant over the ESPHome API when Wi-Fi and the API server are on.
 
 After the first flash of this build, re-interview the remote one time in
 Zigbee2MQTT. Do this while the remote is awake, because Zigbee2MQTT must read the
@@ -530,7 +530,7 @@ clear.
 Pairing is tested before the join, so an open window never shows the red that
 means a fault.
 
-`D2` shows Wi-Fi and the API. Wi-Fi serves the `/buttons` page only, so a dark
+`D2` shows Wi-Fi and the API. Wi-Fi serves the `/buttons` page and Home Assistant actions only, so a dark
 `D2` does not stop a button.
 
 Assignment mode uses `D3` and `D4` only, so `D5` stays readable.

@@ -29,8 +29,11 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   void set_link_probe(std::function<bool()> probe) { this->link_probe_ = std::move(probe); }
   void set_block_probe(std::function<bool()> probe) { this->block_probe_ = std::move(probe); }
   // bit is the expander pin. held is true when the first read still showed it
-  // down. Returns true when something was sent.
-  void set_replay(std::function<bool(uint8_t, bool)> replay) { this->replay_ = std::move(replay); }
+  // down. link is false until link_probe has been true. Returns true when
+  // something was sent. A call with link false is an early try: send only an
+  // action that needs no link and return false for the rest. The call with
+  // link true is the last one for the bit.
+  void set_replay(std::function<bool(uint8_t, bool, bool)> replay) { this->replay_ = std::move(replay); }
 
   bool woke_from_sleep() const { return !this->cold_boot_; }
   // True once the hold arms the forced sleep. Main loop only, like the setters.
@@ -85,10 +88,12 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   uint32_t sleep_hold_time_ms_{2000};
   std::function<bool()> link_probe_{};
   std::function<bool()> block_probe_{};
-  std::function<bool(uint8_t, bool)> replay_{};
+  std::function<bool(uint8_t, bool, bool)> replay_{};
 
   bool cold_boot_{true};
   uint16_t replay_mask_{0};
+  // Bits that no replay call has settled yet.
+  uint16_t replay_left_{0};
   uint16_t held_mask_{0};
   bool replay_pending_{false};
   bool link_seen_{false};

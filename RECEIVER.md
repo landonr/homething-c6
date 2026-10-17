@@ -3,7 +3,7 @@
 ## Goal
 
 Assignment mode gives each supported input one active action. An action can be
-an IR code, a Zigbee command, a BLE HID control, the voice assistant, or no action.
+an IR code, a Zigbee command, a BLE HID control, a Home Assistant action, the voice assistant, or no action.
 
 Store assignments in flash. Outside assignment mode, an input replays its active
 action.
@@ -58,9 +58,122 @@ because you must create a group in Zigbee2MQTT before the remote can use it.
 Outside assignment mode, an assigned input sends its one Zigbee command to its
 target. Playback needs no MQTT and no Wi-Fi.
 
+## Home Assistant actions
+
+A slot can hold one Home Assistant action. The action has an entity ID, a kind, and an action.
+You assign it from the web page. The tap cycle cannot assign it.
+
+The remote sends the action over the ESPHome native API. The remote stores no Home Assistant token.
+
+In Home Assistant, open the ESPHome integration options for this device.
+Turn on **Allow the device to perform Home Assistant actions**. If this option is off, Home Assistant ignores the request.
+
+### The Home Assistant switch
+
+The **Home Assistant** switch on the Config tab controls the Home Assistant actions, the voice assistant, and the API server.
+
+If you turn the switch off, the Home Assistant buttons stop at once.
+A press sends nothing, does not turn on Wi-Fi, and does not blink `D2`. The log shows one line for each press.
+The remote also drops the actions in the queue and ends the [Wi-Fi lease](#wi-fi-lease).
+The remote also refuses a voice press at once. See [The voice assistant](#the-voice-assistant).
+
+The API server starts only at boot and has no stop. As a result, it runs until the next restart.
+After that restart, the API server does not start, and Home Assistant cannot connect to the remote.
+The ESPHome network log also uses the API server. While it is off, read the log over USB. OTA updates do not use it.
+
+Home Assistant shows the switch as the **Home Assistant API** entity. Home Assistant can turn the switch off.
+After the next restart, Home Assistant cannot reach the remote, so it cannot turn the switch on again.
+To turn the switch on, use the `/buttons` page. Then select **Restart**.
+
+If you turn the switch on in a boot that started with the switch off, the buttons stay off.
+They start after the next restart, together with the API server.
+
+The Home Assistant line on the Config tab tells you when the switch and the API server do not agree:
+
+| Line | Cause |
+| --- | --- |
+| **Home Assistant is off. Home Assistant and voice buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
+| **Home Assistant is on. The API is off. Restart the remote to start it.** | The switch is on, but it was off at boot. |
+
+An input that holds a Home Assistant action or the voice assistant keeps it while the switch is off.
+The tile shows the assignment in grey with a red circle, and the editor gives the reason.
+
+### Kinds and actions
+
+The action tokens are Home Assistant service names.
+
+| Kind | Actions |
+| --- | --- |
+| Light | `toggle`, `turn_on`, `turn_off`, `brightness_up`, `brightness_down` |
+| Switch, Input boolean | `toggle`, `turn_on`, `turn_off` |
+| Fan | The switch actions, `increase_speed`, `decrease_speed` |
+| Cover | `toggle`, `open_cover`, `close_cover`, `stop_cover` |
+| Lock | `lock`, `unlock` |
+| Scene | `turn_on` |
+| Script | `turn_on`, `toggle` |
+| Automation | `trigger`, `toggle` |
+| Button, Input button | `press` |
+| Media player | `media_play_pause`, `volume_up`, `volume_down`, `media_next_track`, `media_previous_track` |
+| Any entity | `homeassistant.toggle`, `homeassistant.turn_on`, `homeassistant.turn_off` |
+
+The Light actions `brightness_up` and `brightness_down` take a step of 1 to 100 percent.
+The remote sends them as `light.turn_on` with `brightness_step_pct`.
+
+The entity ID has a maximum of 64 characters. It has lower case letters, digits, underscores, and one dot.
+The domain of the entity must match the kind. The kind Any entity accepts an entity of any domain.
+
+### Assign an action from the page
+
+1. Select an input, then select **Home Assistant** in the Action selector.
+2. Type the entity ID. The page selects the kind from the domain of the entity.
+3. Select the action. For Brighten and Dim, enter the **Step, in percent**.
+4. Select **Assign Home Assistant action**.
+5. To test the action, select **Test saved action**.
+
+The test queues the saved action and shows the result: ok, error with the Home Assistant message, unconfirmed, timeout, or dropped.
+If the Home Assistant switch is off, or the API server is off for this boot, the test fails and shows the reason.
+Copy, Paste, export, and import carry Home Assistant assignments.
+
+### Press flow
+
+If the Home Assistant switch is off, a press sends nothing. See [The Home Assistant switch](#the-home-assistant-switch).
+
+A press queues the action. The queue holds a maximum of 8 actions. The remote drops extra presses.
+
+If Wi-Fi is off, the press turns it on. The remote sends the action when Home Assistant has connected and subscribed to actions.
+If no client subscribes within 20 seconds, the remote drops the press as a timeout.
+
+The remote waits 5 seconds for a reply. Old Home Assistant versions send no reply.
+An integration that does not allow actions also sends no reply. In this case the result is unconfirmed.
+After 8 unanswered calls, the remote stops asking for replies until late replies arrive.
+
+The first press after sleep takes a few seconds, because Wi-Fi must connect and Home Assistant must reconnect to the remote.
+Presses during the Wi-Fi lease are faster.
+
+### Wi-Fi lease
+
+Wi-Fi stays on while an action waits and for 60 seconds after the last action finished.
+Then Wi-Fi turns off, unless the SW9 session, a page session, or Wi-Fi Always On keeps it on.
+
+If you hold SW9 while only the lease holds Wi-Fi, the hold opens a page session.
+A page that you use during the lease continues as a page session.
+
+### Failure indication
+
+An error reply or a timeout blinks `D2` red for 2 seconds. The status LED switch still applies.
+
+### Web API
+
+`POST /buttons/api/action` accepts `action=set_ha` with `slot`, `kind`, `act`, `val`, and `entity`.
+It also accepts `action=test_ha` with `slot`.
+
+The state has `ha_kind`, `ha_act`, `ha_val`, and `ha_entity` for each slot.
+It also has a top-level `ha` object with `pending`, `last_slot`, `last`, and `error`.
+`radios.home_assistant` is the switch. `network.api_gated` is true if the switch was off at boot, so the API server did not start.
+
 ## Clear and replace an assignment
 
-An IR, Zigbee, BLE HID, or voice assignment replaces the previous action for that input.
+An IR, Zigbee, BLE HID, Home Assistant, or voice assignment replaces the previous action for that input.
 The remote never keeps two active actions on one input.
 
 The clear tap removes the local assignment. Group membership stays in
@@ -96,11 +209,15 @@ keypad buttons.
 Select an input. The page shows the current assignment, then an **Action**
 selector with the actions that the input accepts.
 
-The selector holds IR code, Zigbee target, BLE HID, Voice assistant, and Clear. It opens
+The selector holds IR code, Zigbee target, BLE HID, Home Assistant, Voice assistant, and Clear. It opens
 on the action that the input already holds.
 
+If the **Zigbee**, **Bluetooth**, or **Home Assistant** switch on the Config tab is off, the selector grays out the related action.
+If the **Home Assistant** switch is off, the selector also grays out **Voice assistant**, because the voice assistant uses the API.
+To assign that action, turn on its switch first. Until then, the selector opens on IR code for an input that holds that action.
+
 The right side of the selected-input title has **Copy** and **Paste** buttons.
-Use them to copy an IR code, Zigbee target, or BLE HID configuration between inputs.
+Use them to copy an IR code, Zigbee target, BLE HID, or Home Assistant configuration between inputs.
 
 Select the source input and select **Copy**. Then select the target input and
 select **Paste**. Paste opens the IR or Zigbee panel and fills its configuration
@@ -193,13 +310,13 @@ Each wheel detent sends one short HID press and release.
 
 ### Capability matrix
 
-| Input | Slots | Record IR | Zigbee target | BLE HID | Voice assistant | Clear |
-| --- | --- | --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Page only | Page only | No | Yes |
-| `SW2` | 19 | Yes | Page only | Page only | Yes | Yes |
-| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Yes | Yes |
-| Wheel directions | 12 to 16 | Yes | Page only | Page only | Yes | Yes |
-| Wheel rotation | 17 and 18 | Yes | Page only | Page only | No | Yes |
+| Input | Slots | Record IR | Zigbee target | BLE HID | Home Assistant | Voice assistant | Clear |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SW1` | 20 | Yes | Page only | Page only | Page only | No | Yes |
+| `SW2` | 19 | Yes | Page only | Page only | Page only | Yes | Yes |
+| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Page only | Yes | Yes |
+| Wheel directions | 12 to 16 | Yes | Page only | Page only | Page only | Yes | Yes |
+| Wheel rotation | 17 and 18 | Yes | Page only | Page only | Page only | No | Yes |
 
 Every slot accepts a Zigbee target from the page. Zigbee playback uses the same
 press handler as IR playback, so a wheel detent can send it. A command that only
@@ -354,11 +471,13 @@ bond.** with **Ready to pair.** while the radio is on.
 The remote holds the state, so a reload and a second browser both show what the
 remote runs with. The switch is disabled until the remote answers with the state.
 Home Assistant holds the same two switches, **Zigbee Radio** and **Bluetooth
-Radio**.
+Radio**. It also holds the **Home Assistant API** switch. See
+[The Home Assistant switch](#the-home-assistant-switch).
 
 An input that is assigned to a radio that is off keeps its assignment. The tile
 shows the assignment in grey with a red circle after the label, and the editor
-gives the reason. The input sends again when the switch goes back on.
+gives the reason. The input sends again when the switch goes back on. A Home
+Assistant or voice input with the Home Assistant switch off shows the same marks.
 
 If the Bluetooth switch is off, the remote does not start the NimBLE stack at
 boot, and the first turn-on starts it.
@@ -494,15 +613,20 @@ When `D3` and `D4` are idle, `D4` shows the Bluetooth state.
 | --- | --- |
 | Off | Wi-Fi is disabled. |
 | Red pulse | Wi-Fi is enabled but disconnected. |
-| Orange pulse | Wi-Fi is up, Home Assistant is expected, and the API is down. |
-| Solid orange | Wi-Fi is up and Home Assistant is not required (Config switch off). |
+| Orange pulse | Wi-Fi is up, the Home Assistant switch is on, and the API is down. |
+| Solid orange | Wi-Fi is up and the Home Assistant switch on the Config tab is off. |
 | Solid green | The API is connected. |
+| Red blink, 2 s | A Home Assistant action failed with an error reply or a timeout. |
 
-The Home Assistant switch on `/buttons` Config only changes this LED. The API
-server keeps running either way.
+The Home Assistant switch also stops the Home Assistant actions at once and the API server at the next restart.
+If the switch is on but was off at boot, the API server is off, so `D2` pulses orange until a restart.
+See [The Home Assistant switch](#the-home-assistant-switch).
 
-Wi-Fi serves the `/buttons` page only. A dark `D2` does not stop a button,
-because IR and Zigbee playback need neither Wi-Fi nor the API.
+Wi-Fi serves the `/buttons` page and carries Home Assistant actions and the voice assistant.
+A dark `D2` does not stop an IR or Zigbee button, because IR and Zigbee playback need neither Wi-Fi nor the API.
+If the Home Assistant switch is on, a Home Assistant action turns Wi-Fi on when you press its button.
+See [Home Assistant actions](#home-assistant-actions).
+A voice press does not turn on Wi-Fi, so the remote refuses it while Wi-Fi is off.
 
 | State | `D3` and `D4` indication | Next action |
 | --- | --- | --- |
@@ -515,7 +639,8 @@ because IR and Zigbee playback need neither Wi-Fi nor the API.
 
 `D3` and `D4` show voice-assistant state when assignment mode is closed. After
 a deep-sleep wake, all four LEDs pulse in the battery colour (see
-[Deep sleep](#deep-sleep)).
+[Deep sleep](#deep-sleep)). A refused voice press shows solid red for 2 seconds.
+See [The voice assistant](#the-voice-assistant).
 
 `D4` shows the Bluetooth state when assignment mode and voice state are both
 idle. `D3` stays dark then.
@@ -592,6 +717,24 @@ Outside assignment mode, an input uses its one active assignment in this order:
 
 An input without an assignment does not transmit a command.
 
+### The voice assistant
+
+A voice press starts the Home Assistant Assist pipeline over the native API.
+The remote starts it only when these conditions are true:
+
+- The **Home Assistant** switch on the Config tab is on.
+- Home Assistant is connected to the API and subscribed to voice.
+
+If a condition is false, the remote refuses the press. The log shows one line with the reason.
+`D3` and `D4` then show solid red for 2 seconds, the same as a voice-assistant error.
+
+The switch rule applies at once. If you turn the switch off, the API server runs until the next restart.
+The remote still refuses the press.
+
+A voice press does not turn on Wi-Fi. If Wi-Fi is off, the API is not connected, so the remote refuses the press.
+
+A refused press does not make the mic meter active, so it does not block idle sleep.
+
 ## Deep sleep
 
 The remote enters deep sleep to save battery. The `idle_sleep` component in
@@ -625,7 +768,8 @@ Idle sleep does not start while one of these is true:
 - The microphone runs, or the mic meter is active.
 - The voice assistant runs.
 - A Zigbee pairing request is active, or the pairing window is open.
-- Wi-Fi is on and Wi-Fi Always On is off, as in the SW9 or page session.
+- Wi-Fi is on and Wi-Fi Always On is off, as in the SW9 or page session. The Home Assistant Wi-Fi lease also blocks sleep.
+- A Home Assistant action waits to send or to get a reply. The log shows this as `ha=` (bit 7 of `block_probe`).
 
 A blocked remote counts as active. When the block ends, the full idle time starts again.
 
@@ -645,6 +789,8 @@ A held SW1, SW8, or SW9 does not tap when you release it.
 When the setting is on, the remote sends the wake press when the Zigbee link comes up.
 The wake press is the Zigbee assignment of that button.
 If no link comes within 3 s after setup, the remote drops the wake press.
+A Home Assistant assignment does not wait for the Zigbee link. The wake press queues its action at once.
+If the Home Assistant switch is off, the remote drops that wake press at once.
 [ZIGBEE.md](ZIGBEE.md) describes the send path.
 
 SW8 and SW9 act when you release them. If you still hold SW9 at wake, the remote runs the

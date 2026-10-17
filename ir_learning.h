@@ -27,6 +27,9 @@ class IrCodeStore {
   // Flipper .ir names are short words such as Power or Vol_up.
   static constexpr size_t NAME_LEN = 24;
 
+  // OWNER_IR covers both a stored code and the voice assistant.
+  enum Owner : uint8_t { OWNER_NONE = 0, OWNER_IR, OWNER_ZIGBEE, OWNER_BLE, OWNER_HA };
+
   void setup() {
     size_t loaded_count = 0;
     for (size_t i = 0; i < SLOT_COUNT; i++) {
@@ -190,8 +193,7 @@ class IrCodeStore {
     const bool written = voice_pref_.save(&next_mask);
     if (written)
       voice_mask_ = next_mask;
-    if (assignment_clear_callback_)
-      assignment_clear_callback_(button);
+    release_others(button, OWNER_IR);
     ESP_LOGI("ir_learn", "Button %u assigned to the voice assistant%s", button,
              erased && written ? "" : " (flash write failed)");
     return erased && written;
@@ -205,8 +207,7 @@ class IrCodeStore {
     const bool written = voice_pref_.save(&next_mask);
     if (written)
       voice_mask_ = next_mask;
-    if (assignment_clear_callback_)
-      assignment_clear_callback_(button);
+    release_others(button, OWNER_NONE);
     ESP_LOGI("ir_learn", "Button %u cleared%s", button,
              erased && written ? "" : " (flash write failed)");
     return erased && written;
@@ -277,8 +278,7 @@ class IrCodeStore {
     // A paste names the slot again after this call.
     if (names_.names[slot][0] != '\0')
       write_name_(button, "");
-    if (assignment_clear_callback_)
-      assignment_clear_callback_(button);
+    release_others(button, OWNER_IR);
     ESP_LOGI("ir_learn", "Saved button %u: %u pulses, %u us", button,
              static_cast<unsigned>(next.count), static_cast<unsigned>(total_us));
     return true;
@@ -301,8 +301,15 @@ class IrCodeStore {
     return true;
   }
 
-  void set_assignment_clear_callback(std::function<void(uint8_t)> callback) {
-    assignment_clear_callback_ = std::move(callback);
+  // A slot holds one kind. Each other kind registers a listener that clears
+  // its own record unless it is the kind that now owns the slot.
+  void add_assignment_clear_callback(std::function<void(uint8_t, Owner)> callback) {
+    assignment_clear_callbacks_.push_back(std::move(callback));
+  }
+
+  void release_others(uint8_t button, Owner keep) const {
+    for (const auto &callback : assignment_clear_callbacks_)
+      callback(button, keep);
   }
 
   bool clear_for_zigbee(uint8_t button) {
@@ -509,7 +516,7 @@ class IrCodeStore {
   esphome::ESPPreferenceObject voice_pref_{};
   uint32_t voice_mask_ = 0;
   uint32_t saves_ = 0;
-  std::function<void(uint8_t)> assignment_clear_callback_{};
+  std::vector<std::function<void(uint8_t, Owner)>> assignment_clear_callbacks_{};
 };
 
 inline IrCodeStore ir_code_store;
@@ -674,6 +681,8 @@ class IrUi {
     hid_play_callback_ = std::move(play);
   }
 
+  void set_ha_play_callback(std::function<bool(uint8_t)> play) { ha_play_callback_ = std::move(play); }
+
  private:
   void mark_() { since_ = esphome::millis(); }
 
@@ -697,6 +706,8 @@ class IrUi {
       return;
     if (zigbee_play_callback_ && zigbee_play_callback_(button))
       return;
+    if (ha_play_callback_ && ha_play_callback_(button))
+      return;
     pending_transmit_ = ir_code_store.load(button, code_);
   }
 
@@ -712,6 +723,7 @@ class IrUi {
   uint8_t voice_active_ = 0;
   std::function<bool(uint8_t)> zigbee_play_callback_{};
   std::function<bool(uint8_t, bool)> hid_play_callback_{};
+  std::function<bool(uint8_t)> ha_play_callback_{};
 };
 
 inline IrUi ir_ui;

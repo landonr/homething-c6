@@ -7,8 +7,11 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).parents[2]
@@ -139,9 +142,9 @@ class WifiSessionTest(unittest.TestCase):
     def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
         self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
         loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
-        self.assertIn("if (!this->temporary_wifi_)\n    return;", loop)
-        self.assertIn("millis() - this->last_activity_ms_", loop)
-        self.assertIn("if (idle_ms < WIFI_IDLE_MS)\n    return;", loop)
+        self.assertIn("if (!this->temporary_wifi_ && !this->action_wifi_)\n    return;", loop)
+        self.assertIn("this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) >= "
+                      "WIFI_IDLE_MS", loop)
         self.assertIn("wifi::global_wifi_component->disable();", loop)
         page = section(CPP, "void ButtonConfig::handle_page_", "\n}")
         activity = section(CPP, "void ButtonConfig::handle_activity_", "\n}")
@@ -187,7 +190,7 @@ class SleepSettingsTest(unittest.TestCase):
     """Production links idle_sleep, but the component must still build without it."""
 
     def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
-        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
         self.assertIn("cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep)", INIT)
         guarded = section(INIT, "    if CONF_IDLE_SLEEP_ID in config:\n", "\n\n")
         self.assertIn("sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])", guarded)
@@ -362,7 +365,7 @@ class BatteryTest(unittest.TestCase):
     """Bench configs have no battery sensors, so the link is optional and guarded."""
 
     def test_the_battery_link_is_optional_and_behind_a_define(self) -> None:
-        self.assertIn("from esphome.components import idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
         self.assertIn('cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
         self.assertIn('cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
         guarded = section(INIT, "    if CONF_BATTERY_LEVEL_ID in config:\n", "\n\n")
@@ -771,9 +774,11 @@ class EnforcementTest(unittest.TestCase):
     def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         self.assertIn('"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,'
-                      '"home_assistant":%s,"ip":"%s","mac":"%s"}', state)
+                      '"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"}', state)
         self.assertIn("wifi::global_wifi_component->is_connected()", state)
-        self.assertIn("api::global_api_server->is_connected()", state)
+        # The gate flag follows the connection flag, as the format string orders them.
+        self.assertIn('api::global_api_server->is_connected() ? "true" : "false",\n'
+                      '      this->ha_api_gated() ? "true" : "false",\n      ip, mac,', state)
         self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
         self.assertIn("get_mac_address_pretty_into_buffer(mac)", state)
 
@@ -785,7 +790,7 @@ class EnforcementTest(unittest.TestCase):
             r'hid\.assigned\s+\? "hid"[\s\S]*?zigbee\.assigned\s+\? "zigbee"'
             r'[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
-        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"', state)
+        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"', state)
         self.assertIn(
             "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
             ": ::ir_code_store.name(info.slot));",
@@ -875,7 +880,8 @@ class ZigbeeTargetTest(unittest.TestCase):
         clear = section(STORE, "bool clear_for_zigbee(uint8_t button) {", "\n  }")
         self.assertIn('write_name_(button, "")', clear)
         # The reverse direction is the store's callback, set up in setup().
-        self.assertIn("ir_code_store.set_assignment_clear_callback(", ZIGBEE)
+        self.assertIn("ir_code_store.add_assignment_clear_callback(", ZIGBEE)
+        self.assertIn("ir_code_store.release_others(slot, IrCodeStore::OWNER_ZIGBEE);", body)
 
 
 class PageTest(unittest.TestCase):
@@ -943,7 +949,7 @@ class PageTest(unittest.TestCase):
         separates them."""
         state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
         self.assertIn(
-            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"name":"',
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"',
             state,
         )
         self.assertIn("::ir_code_store.name(info.slot)", state)
@@ -1259,7 +1265,8 @@ class PageTest(unittest.TestCase):
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
         self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();"
-                      "batteryStatus();restartSync(j);radioStatus();bleStatus()}},"
+                      "batteryStatus();restartSync(j);radioStatus();bleStatus();", body)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()}},"
                       "\nfunction(){zpjLost();restartLost()})", body)
         self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
                       PAGE)
@@ -1513,7 +1520,10 @@ class PageTest(unittest.TestCase):
         self.assertIn('tfetch("/buttons/api/state",{cache:"no-store"},5000)', PAGE)
         self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
         self.assertIn("radioStatus();bleStatus()", refresh)
-        self.assertNotIn("paint()", refresh)
+        # A steady poll updates the status lines only. It repaints only when a
+        # Config switch changed, because the Action list grays out by switch.
+        self.assertEqual(refresh.count("paint()"), 1)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()", refresh)
         # The connection inputs are built once, so the repaint owns cfgio alone.
         self.assertIn('var e=document.getElementById("cfgio")', card)
         # The startup path reads state, then preloads every stored IR code.
@@ -1782,14 +1792,15 @@ class RadioSwitchTest(unittest.TestCase):
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
+        # A Home Assistant or voice press skips while its switch is off, so it is held like a radio.
         self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
-                      'r.action==="hid"?"ble":""}', PAGE)
+                      'r.action==="hid"?"ble":\n(r.action==="ha"||r.action==="voice")?"home_assistant":""}', PAGE)
         self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
         # The label stays, so the tile still says what the input is assigned to.
         self.assertIn(".k.rf span{opacity:.55}", PAGE)
         self.assertIn("background:var(--bad);margin-left:6px;vertical-align:middle}", PAGE)
-        self.assertIn('" radio is off, so this input is disabled. The assignment is kept.</div>"',
-                      PAGE)
+        self.assertIn('(sk==="home_assistant"?"Home Assistant is":"The "+(sk==="zigbee"?"Zigbee":"Bluetooth")'
+                      '+" radio is")+\n" off, so this input is disabled. The assignment is kept.</div>";', PAGE)
         self.assertIn('b.checked=radioBusy[kind]?radioWant[kind]:radioOn(kind);', PAGE)
         self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
         self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
@@ -1797,7 +1808,45 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
         self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
-        self.assertIn("Home Assistant is not required. D2 stays solid orange while Wi-Fi is up.", PAGE)
+        self.assertIn('"Home Assistant is off. Home Assistant and voice buttons are disabled."', PAGE)
+        self.assertNotIn("Home Assistant is not required.", PAGE)
+
+    def test_the_home_assistant_line_names_a_switch_this_boot_does_not_follow(self) -> None:
+        """The API server starts only at boot, so the switch and the API can
+        disagree until a restart. The line says which way and what cures it."""
+        status = section(PAGE, "function networkStatus(){", "\n\nfunction ")
+        self.assertIn("gated=st.network.api_gated===true", status)
+        self.assertIn('(gated?"":" The API stops at the next restart.")', status)
+        self.assertIn('gated?"Home Assistant is on. The API is off. Restart the remote to start it.":', status)
+        self.assertLess(status.index("!expect?"), status.index('gated?"Home Assistant is on.'))
+        self.assertIn("Home Assistant then cannot turn this switch on again, so use this page.", PAGE)
+
+    def test_the_api_gate_reads_flash_before_setup_and_reaches_the_state(self) -> None:
+        self.assertIn("static bool ha_api_expected_from_flash();", HEADER)
+        self.assertIn("void set_ha_api_gated(bool gated);", HEADER)
+        self.assertIn("std::atomic<bool> ha_api_gated_{false};", HEADER)
+        read = section(CPP, "bool ButtonConfig::ha_api_expected_from_flash() {", "\n}")
+        self.assertIn("global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);", read)
+        # A missing or corrupt record means on, the same rule setup() applies.
+        self.assertIn("return !preference.load(&loaded) || loaded.magic != HA_PREF_MAGIC || "
+                      "loaded.expected != 0;", read)
+        load = section(CPP, "void ButtonConfig::load_ha_pref_() {", "\n}")
+        self.assertIn("this->ha_api_expected_.store(ha_api_expected_from_flash(), std::memory_order_release);", load)
+        self.assertNotIn("loaded.magic", load)
+
+    def test_test_ha_refuses_while_home_assistant_is_off_or_gated(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        test = section(action, '  if (action == "test_ha") {', "\n  }\n")
+        off = test.index("if (!this->ha_api_expected()) {")
+        gated = test.index("if (this->ha_api_gated()) {")
+        self.assertLess(test.index('"slot has no Home Assistant action"'), off)
+        self.assertLess(off, gated)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant is off in Config"})"', test)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant API is off until the remote restarts"})"', test)
+        # A refusal must not claim the action slot or queue anything.
+        self.assertLess(action.index("Home Assistant API is off until the remote restarts"),
+                        action.index("compare_exchange_strong"))
+        self.assertNotIn("play(", test)
 
     def test_set_inputs_have_action_background_colors(self) -> None:
         self.assertIn('.set-ble{--set-bg:#2f80ed}', PAGE)
@@ -1955,6 +2004,44 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn("cg.progmem_array", INIT)
         self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
         self.assertNotIn('#include "button_config_page.h"', CPP)
+
+    def test_the_schema_reserves_lwip_sockets_for_the_page(self) -> None:
+        """Production has no web_server, so nothing else sizes CONFIG_LWIP_MAX_SOCKETS
+        for browser connections. At the old pool of 10, accept failed with ENFILE (23)
+        before httpd reached its own limit and could purge the oldest connection."""
+        tree = ast.parse(INIT)
+        schema = next(
+            n for n in tree.body
+            if isinstance(n, ast.Assign) and [ast.unparse(t) for t in n.targets] == ["CONFIG_SCHEMA"]
+        )
+        self.assertEqual(ast.unparse(schema.value.func), "cv.All")
+        self.assertIn("_consume_page_sockets", [ast.unparse(arg) for arg in schema.value.args])
+
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_consume_page_sockets")
+        calls = []
+
+        def consume_sockets(value, consumer, socket_type="tcp"):
+            calls.append((value, consumer, socket_type))
+            return lambda config: config
+
+        socket = types.ModuleType("esphome.components.socket")
+        socket.consume_sockets = consume_sockets
+        socket.SocketType = types.SimpleNamespace(TCP="tcp", UDP="udp", TCP_LISTEN="tcp_listen")
+        components = types.ModuleType("esphome.components")
+        components.socket = socket
+        stubs = {
+            "esphome": types.ModuleType("esphome"),
+            "esphome.components": components,
+            "esphome.components.socket": socket,
+        }
+        ns = {}
+        exec(compile(ast.Module(body=[func], type_ignores=[]), "_consume_page_sockets", "exec"), ns)
+        config = {}
+        with mock.patch.dict(sys.modules, stubs):
+            self.assertIs(ns["_consume_page_sockets"](config), config)
+        # 7 matches HTTPD_DEFAULT_CONFIG max_open_sockets. The 2 UDP sockets are the
+        # httpd control pair. The production pool is then 17 (api 3+1, ota 1, mdns 2, base 1).
+        self.assertEqual(calls, [(7, "button_config", "tcp"), (2, "button_config", "udp")])
 
 
 @unittest.skipUnless(shutil.which("git"), "git is not installed")

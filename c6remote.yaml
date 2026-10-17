@@ -12,10 +12,10 @@ esphome:
     - ir_learning.h
     - zigbee_learning.h
   on_boot:
-    # Ahead of every component, so the Zigbee component can be held down before
-    # its own setup runs. A failed component never starts, which is the only way
-    # to keep the 802.15.4 stack off: the ESP-Zigbee stack has no stop and no
-    # restart, so the switch cannot lift this until the next boot.
+    # Ahead of every component, so the Zigbee component and the API server can
+    # be held down before their own setup runs. A failed component never starts,
+    # which is the only way to keep the 802.15.4 stack off: the ESP-Zigbee stack
+    # has no stop and no restart, so the switch cannot lift this until the next boot.
     - priority: 800
       then:
         - lambda: |-
@@ -23,6 +23,13 @@ esphome:
               id(zigbee_radio)->mark_failed();
               zigbee_assignments.set_boot_gated(true);
               ESP_LOGI("zigbee_learn", "Zigbee radio is off, so the stack stays down");
+            }
+            // The API server has no stop and no restart either, so an off Home
+            // Assistant switch holds it down the same way until the next boot.
+            if (!button_config::ButtonConfig::ha_api_expected_from_flash()) {
+              api::global_api_server->mark_failed();
+              id(button_cfg).set_ha_api_gated(true);
+              ESP_LOGI("button_config", "Home Assistant is off, so the API server stays down");
             }
             // Must run before any loop, so a held SW1, SW8 or SW9 cannot release first.
             // With wake press replay off, the release must not tap. on_press clears the flag.
@@ -118,6 +125,11 @@ text_sensor:
 ble_hid:
   id: ble_hid_remote
 
+# Home Assistant actions over the native API. The ESPHome integration needs
+# "Allow the device to perform Home Assistant actions" on this device.
+ha_action:
+  id: ha_actions
+
 zigbee:
   id: zigbee_radio
   name: ${device_name}
@@ -170,6 +182,7 @@ zigbee:
 button_config:
   id: button_cfg
   idle_sleep_id: idle
+  ha_action_id: ha_actions
   battery_level_id: battery_level
   battery_voltage_id: battery_voltage
   on_status_leds:
@@ -215,16 +228,19 @@ idle_sleep:
     const bool voice = voice_assistant::global_voice_assistant->is_running();
     const bool pairing = zigbee_assignments.pairing();
     const bool window = zigbee_assignments.pairing_window_open();
-    // Without Always On, an enabled Wi-Fi is the SW9 or page session.
+    // Without Always On, an enabled Wi-Fi is the SW9 or page session, or the
+    // lease that a Home Assistant action holds.
     const bool wifi_session = !wifi::global_wifi_component->is_disabled() && !id(button_cfg).wifi_always_on();
+    const bool ha_busy = id(ha_actions).busy();
     const uint8_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
-                         wifi_session << 6;
+                         wifi_session << 6 | ha_busy << 7;
     // 0xFF is out of range, so the first call logs the starting mask.
     static uint8_t last_mask = 0xFF;
     if (mask != last_mask) {
       last_mask = mask;
-      ESP_LOGI("idle_sleep", "block=0x%02X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d at %" PRIu32 " ms",
-               mask, ir_mode, mic_running, meter, voice, pairing, window, wifi_session, millis());
+      ESP_LOGI("idle_sleep",
+               "block=0x%02X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d ha=%d at %" PRIu32 " ms", mask,
+               ir_mode, mic_running, meter, voice, pairing, window, wifi_session, ha_busy, millis());
     }
     return mask != 0;
   replay: !lambda |-
@@ -234,7 +250,12 @@ idle_sleep:
       return false;
     // Expander bit to slot, from the Button and Wheel binary_sensor entries.
     static const uint8_t SLOT_OF_BIT[16] = {20, 19, 3, 4, 5, 6, 7, 8, 10, 9, 11, 12, 13, 14, 15, 16};
-    return zigbee_assignments.play(SLOT_OF_BIT[bit]);
+    // A Home Assistant action needs Wi-Fi and the API, not the Zigbee link, so
+    // it queues at once. Every other kind waits for the link. play() is also
+    // true when the Home Assistant switch skips the press, so the bit settles.
+    if (id(ha_actions).play(SLOT_OF_BIT[bit]))
+      return true;
+    return link && zigbee_assignments.play(SLOT_OF_BIT[bit]);
 
 i2c:
   sda: GPIO22
@@ -303,15 +324,28 @@ binary_sensor:
           condition:
             lambda: return ir_ui.take_voice_start();
           then:
-            - lambda: |-
-                id(voice_led_state) = 1;
-                id(mic_meter_active) = true;
-            - light.turn_on:
-                id: status_light
-                effect: Status Indicators
-                brightness: 40%
-            # Home Assistant VAD ends the stream, so there is no stop on a timer.
-            - voice_assistant.start:
+            # Without a subscribed client, voice_assistant.start only logs and fires
+            # no trigger, so the meter would stay set and block sleep. An off switch
+            # refuses at once, although the API server runs until the next boot.
+            - if:
+                condition:
+                  and:
+                    - lambda: return id(button_cfg).ha_api_expected();
+                    - voice_assistant.connected:
+                then:
+                  # A refusal window still open would clear the meter of this start.
+                  - script.stop: refuse_voice_start
+                  - lambda: |-
+                      id(voice_led_state) = 1;
+                      id(mic_meter_active) = true;
+                  - light.turn_on:
+                      id: status_light
+                      effect: Status Indicators
+                      brightness: 40%
+                  # Home Assistant VAD ends the stream, so there is no stop on a timer.
+                  - voice_assistant.start:
+                else:
+                  - script.execute: refuse_voice_start
     on_release:
       - script.execute:
           id: release_assignment
@@ -628,9 +662,9 @@ light:
             // connects and orange on Wi-Fi alone when Home Assistant is expected.
             // Turning the HA switch off keeps solid orange while Wi-Fi is up.
             // Green is brighter than red on these 2020 parts at 3.3V, so orange
-            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). Wi-Fi only serves
-            // the /buttons page, so a dark D2 does not stop a button: playback is
-            // Zigbee groupcast or IR.
+            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). A dark D2 stops
+            // only a voice press: a Home Assistant press turns Wi-Fi on itself
+            // while the Home Assistant switch is on.
             const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
@@ -652,6 +686,11 @@ light:
             } else if (wifi_enabled) {
               it[0] = Color(140, 70, 0);
             }
+
+            // A failed Home Assistant action blinks D2 red for two seconds. The
+            // status LED switch still applies below.
+            if (id(ha_actions).failed_recently())
+              it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;
 
             // D3 and D4 show assignment mode when it is open, otherwise
             // voice-assistant state. When both are idle, D4 shows Bluetooth
@@ -948,7 +987,9 @@ switch:
     turn_off_action:
       - lambda: id(ble_hid_remote).set_radio_enabled(false);
 
-  # Off keeps D2 solid orange on Wi-Fi alone. The API server itself stays up.
+  # Off stops the Home Assistant actions at once and the API server from the
+  # next boot on. Home Assistant then cannot reach this switch, so only the
+  # /buttons page can turn it back on. D2 stays solid orange on Wi-Fi alone.
   - platform: template
     name: Home Assistant API
     id: ha_api_expected
@@ -1066,6 +1107,25 @@ script:
     then:
       - lambda: id(mic_meter_active) = false;
       - script.execute: show_idle_status
+  # The on_error LED state, without the meter, so a refused press cannot block
+  # sleep. restart keeps one 2 s window when presses repeat.
+  - id: refuse_voice_start
+    mode: restart
+    then:
+      - lambda: |-
+          if (!id(button_cfg).ha_api_expected())
+            ESP_LOGW("voice_assistant", "Voice start refused: the Home Assistant switch is off");
+          else if (id(button_cfg).ha_api_gated())
+            ESP_LOGW("voice_assistant", "Voice start refused: the API server is off until the next restart");
+          else
+            ESP_LOGW("voice_assistant", "Voice start refused: no Home Assistant client is subscribed to voice");
+          id(voice_led_state) = 4;
+      - light.turn_on:
+          id: status_light
+          effect: Status Indicators
+          brightness: 40%
+      - delay: 2s
+      - script.execute: stop_voice_listening
 
 voice_assistant:
   # gain_factor is applied in the Q31 domain before the 32-to-16 bit truncation,

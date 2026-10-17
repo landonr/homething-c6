@@ -238,5 +238,21 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("static_assert(BleHid::DEVICE_NAME_MAX <= CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN,", CPP)
 
 
+
+class AssignmentListenerTest(unittest.TestCase):
+    def test_ble_registers_one_listener_for_itself_and_leaves_the_other_kinds_alone(self) -> None:
+        setup = CPP.split("void BleHid::setup_assignments() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("::ir_code_store.add_assignment_clear_callback([](uint8_t slot, IrCodeStore::Owner keep) {", setup)
+        self.assertIn("if (keep != IrCodeStore::OWNER_BLE && BleHid::instance() != nullptr)", setup)
+        self.assertNotIn("zigbee_assignments.clear", CPP)
+        self.assertNotIn("set_assignment_store_callback", CPP)
+        self.assertNotIn("ha_action", CPP)
+
+    def test_a_hid_assignment_releases_the_others_after_it_clears_ir_and_voice(self) -> None:
+        assign = CPP.split("bool BleHid::assign(", 1)[1].split("\n}\n", 1)[0]
+        self.assertLess(assign.index("::ir_code_store.clear_for_zigbee(slot)"),
+                        assign.index("::ir_code_store.release_others(slot, IrCodeStore::OWNER_BLE);"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,10 @@
 #include "esphome/components/idle_sleep/idle_sleep.h"
 #endif
 
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+#include "esphome/components/ha_action/ha_action.h"
+#endif
+
 #ifdef USE_BUTTON_CONFIG_BATTERY
 #include "esphome/components/sensor/sensor.h"
 #endif
@@ -48,10 +52,17 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
     this->page_size_ = size;
   }
 
-  // When false, D2 stays solid orange on Wi-Fi alone instead of pulsing for a
-  // missing API. The API server itself keeps running either way.
+  // The Home Assistant switch. Off turns the Home Assistant actions off at once,
+  // and D2 stays solid orange on Wi-Fi alone. The API server has no stop, so
+  // off holds it down from the next boot on.
   bool ha_api_expected() const { return this->ha_api_expected_.load(std::memory_order_acquire); }
   bool set_ha_api_expected(bool expected);
+  // Reads the switch before setup() runs, so on_boot at priority 800 can hold
+  // the API server down before its own setup. A missing record means on.
+  static bool ha_api_expected_from_flash();
+  // True when that gate held the API server down for this boot.
+  void set_ha_api_gated(bool gated);
+  bool ha_api_gated() const { return this->ha_api_gated_.load(std::memory_order_acquire); }
   // Stored switch for D2 to D5 and the XIAO LED. The first call reads flash, so
   // on_boot at priority 800 sees it before this component's own setup().
   bool status_leds() const;
@@ -65,6 +76,12 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool set_boot_leds(bool enabled);
   bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
   void toggle_temporary_wifi();
+  // Main loop only. Enables Wi-Fi if it is off and keeps it up for
+  // ACTION_WIFI_LEASE_MS from now. Call it again to extend the lease.
+  void hold_wifi_for_action();
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  void set_ha_action(ha_action::HaAction *action);
+#endif
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   void set_idle_sleep(idle_sleep::IdleSleep *sleep) { this->idle_sleep_ = sleep; }
 #endif
@@ -84,6 +101,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void complete_action_(uint32_t id, bool ok);
   void load_ha_pref_();
   bool save_ha_pref_();
+  void sync_ha_action_();
   void load_wifi_pref_();
   bool set_wifi_always_on_(bool enabled);
   void note_activity_();
@@ -121,6 +139,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   static constexpr uint32_t WIFI_PREF_KEY = 0x5746414FU;
   static constexpr uint32_t WIFI_PREF_MAGIC = 0x57465031U;
   static constexpr uint32_t WIFI_IDLE_MS = 10U * 60U * 1000U;
+  // Wi-Fi stays up this long after the last Home Assistant action finished.
+  static constexpr uint32_t ACTION_WIFI_LEASE_MS = 60U * 1000U;
   struct WifiPref {
     uint32_t magic;
     uint8_t enabled;
@@ -154,6 +174,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> completed_action_id_{0};
   std::atomic<bool> completed_action_ok_{false};
   std::atomic<bool> ha_api_expected_{true};
+  std::atomic<bool> ha_api_gated_{false};
   std::atomic<bool> wifi_always_on_{false};
   // -1 until the first read of the stored value.
   mutable std::atomic<int8_t> status_leds_{-1};
@@ -162,6 +183,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<uint32_t> last_activity_ms_{0};
   bool boot_wifi_always_on_{false};
   bool temporary_wifi_{false};
+  bool action_wifi_{false};
+  uint32_t action_wifi_until_ms_{0};
   ESPPreferenceObject ha_pref_;
   ESPPreferenceObject wifi_pref_;
   ESPPreferenceObject name_pref_;
@@ -175,6 +198,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<const char *> current_name_{""};
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
   idle_sleep::IdleSleep *idle_sleep_{nullptr};
+#endif
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  ha_action::HaAction *ha_action_{nullptr};
 #endif
 #ifdef USE_BUTTON_CONFIG_BATTERY
   sensor::Sensor *battery_level_{nullptr};

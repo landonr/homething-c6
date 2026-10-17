@@ -405,6 +405,45 @@ class ProductionConfigTest(unittest.TestCase):
             r"script.execute: show_idle_status",
         )
 
+    def test_a_voice_press_starts_assist_only_with_the_switch_on_and_a_client_subscribed(self) -> None:
+        """Without a subscribed client, voice_assistant.start only logs and fires
+        no trigger, so a meter set first stays set and blocks sleep forever."""
+        config = CONFIG.read_text()
+        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
+        self.assertRegex(
+            start_voice,
+            r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
+            r"\n +- if:\n +condition:\n +and:\n"
+            r" +- lambda: return id\(button_cfg\)\.ha_api_expected\(\);\n"
+            r" +- voice_assistant\.connected:\n +then:\n",
+        )
+        accepted, refused = start_voice.split("\n                else:\n", 1)
+        meter = accepted.index("id(mic_meter_active) = true;")
+        for guard in ("return id(button_cfg).ha_api_expected();", "- voice_assistant.connected:"):
+            self.assertLess(accepted.index(guard), meter)
+            self.assertLess(accepted.index(guard), accepted.index("voice_assistant.start:"))
+        self.assertLess(accepted.index("script.stop: refuse_voice_start"), meter)
+        self.assertEqual(refused.strip(), "- script.execute: refuse_voice_start")
+        # Every input reuses the anchor, so no start can skip the guard.
+        self.assertEqual(config.count("voice_assistant.start:"), 1)
+        self.assertEqual(config.count("id(mic_meter_active) = true;"), 1)
+
+    def test_a_refused_voice_press_shows_the_error_state_without_the_meter(self) -> None:
+        config = CONFIG.read_text()
+        refuse = config.split("  - id: refuse_voice_start\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("    mode: restart\n", refuse)
+        self.assertNotIn("mic_meter_active", refuse)
+        self.assertNotIn("voice_assistant.start", refuse)
+        for reason in ("the Home Assistant switch is off",
+                       "the API server is off until the next restart",
+                       "no Home Assistant client is subscribed to voice"):
+            self.assertIn(f'ESP_LOGW("voice_assistant", "Voice start refused: {reason}");', refuse)
+        # The on_error sequence: state 4, the light, 2 s, then idle.
+        order = ["id(voice_led_state) = 4;", "effect: Status Indicators", "brightness: 40%",
+                 "- delay: 2s", "- script.execute: stop_voice_listening"]
+        positions = [refuse.index(step) for step in order]
+        self.assertEqual(positions, sorted(positions))
+
     def test_production_carries_no_bench_diagnostics(self) -> None:
         """The microphone runs from Assist, and the IR burst duplicated a learned
         slot. The mic and expander diagnostics live in the bench configs."""
@@ -990,6 +1029,43 @@ class ProductionConfigTest(unittest.TestCase):
             "FLAG_PAIR_FAILED | FLAG_RADIO_OFF)));",
             joined,
         )
+
+
+
+class HomeAssistantActionConfigTest(unittest.TestCase):
+    def test_production_declares_the_component_and_keeps_wifi_off_by_default(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("\nha_action:\n  id: ha_actions\n", config)
+        self.assertIn("  enable_on_boot: false\n", config)
+        self.assertIn("  ha_action_id: ha_actions\n", config)
+
+    def test_a_failed_action_blinks_d2_at_150_ms(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("id(ha_actions).failed_recently()", config)
+        self.assertIn("it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;", config)
+
+    def test_an_off_home_assistant_switch_holds_the_api_server_down_at_boot(self) -> None:
+        """The API server has no stop and no restart, so like the Zigbee stack it
+        must fail before its own setup runs, or Home Assistant connects anyway."""
+        config = CONFIG.read_text()
+        gate = config[config.index("    - priority: 800\n"):config.index("    - priority: 600\n")]
+        block = gate[gate.index("if (!button_config::ButtonConfig::ha_api_expected_from_flash()) {"):]
+        block = block[:block.index("\n            }\n")]
+        self.assertIn("api::global_api_server->mark_failed();", block)
+        self.assertIn("id(button_cfg).set_ha_api_gated(true);", block)
+        self.assertIn('ESP_LOGI("button_config", "Home Assistant is off, so the API server stays down");', block)
+        # The Zigbee gate stays first and keeps its own block.
+        self.assertLess(gate.index("ZigbeeAssignmentManager::radio_enabled_from_flash()"),
+                        gate.index("ha_api_expected_from_flash()"))
+        self.assertNotIn("zigbee", block.lower())
+
+    def test_the_home_assistant_entity_says_only_the_page_can_turn_it_back_on(self) -> None:
+        config = CONFIG.read_text()
+        entity = config[config.index("    name: Home Assistant API\n") - 400:config.index("    name: Home Assistant API\n")]
+        comment = entity[entity.rindex("\n\n") + 2:]
+        self.assertIn("API server from the\n  # next boot on.", comment)
+        self.assertIn("only the\n  # /buttons page can turn it back on.", comment)
+        self.assertNotIn("stays up", comment)
 
 
 if __name__ == "__main__":

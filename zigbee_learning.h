@@ -20,7 +20,7 @@
 // command from the radio.
 //
 // A target is a group or one device. The remote holds no MQTT client. The
-// /buttons page reads the Zigbee2MQTT inventory over the frontend websocket in
+// web page reads the Zigbee2MQTT inventory over the frontend websocket in
 // the browser and posts only the resolved address here, so a button keeps
 // working with Zigbee2MQTT and Home Assistant both down.
 //
@@ -48,7 +48,7 @@ class ZigbeeAssignmentManager {
 
   static constexpr uint32_t PAIR_WINDOW_SECONDS = 180;
 
-  // One press sends one ZCL command. The /buttons page reads the cluster list of
+  // One press sends one ZCL command. The web page reads the cluster list of
   // the target from Zigbee2MQTT and offers only the actions that list carries,
   // so a pair such as brighter and dimmer costs two inputs.
   enum Action : uint8_t {
@@ -153,7 +153,7 @@ class ZigbeeAssignmentManager {
   bool boot_gated() const { return boot_gated_.load(std::memory_order_relaxed); }
 
   // The Zigbee component keeps its instance file-static, so the YAML pushes the
-  // link state here for the /buttons page. The component latches its connected
+  // link state here for the web page. The component latches its connected
   // flag on the first join, so paired means joined once, not reachable now. A
   // factory-new stack has no credentials and is looking for a coordinator that
   // permits a join.

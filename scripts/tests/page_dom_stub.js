@@ -1,4 +1,4 @@
-// Runs the /buttons page script outside a browser.
+// Runs the web page script outside a browser.
 //
 // node --check only parses. The page is built from string concatenation and
 // plain vars, so a missing declaration or a renamed helper is a runtime

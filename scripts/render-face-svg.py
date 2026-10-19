@@ -28,7 +28,7 @@ CONTOUR_STEPS = 640
 LEGEND_PTS_PER_MM = 4.0
 CIRCLE_PTS = 48
 PLAN_STROKE_PAD = 0.7  # half the shell outline stroke, so the crop does not clip it
-# Path simplification tolerance in sheet px. The /buttons page embeds this SVG
+# Path simplification tolerance in sheet px. The web page embeds this SVG
 # in firmware flash, so its size matters.
 SIMPLIFY_TOL = 0.1
 COORD_PLACES = 1
@@ -472,7 +472,7 @@ def main():
         "--version",
         choices=sorted(OUTPUTS),
         default="web",
-        help="web: the /buttons page plan. sls, fdm: detailed README faces",
+        help="web: the web page plan. sls, fdm: detailed README faces",
     )
     ap.add_argument("-o", "--out", help="where to write the SVG")
     args = ap.parse_args()

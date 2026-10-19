@@ -1,4 +1,4 @@
-"""Regression checks for the /buttons web configurator component."""
+"""Regression checks for the button_config component and its web page."""
 
 from pathlib import Path
 import ast
@@ -1942,7 +1942,7 @@ class RadioSwitchTest(unittest.TestCase):
 
 class WiringTest(unittest.TestCase):
     def test_the_config_loads_the_local_component(self) -> None:
-        """The button page owns the root URL, so the stock entity page must stay out."""
+        """The web page owns the root URL, so the stock entity page must stay out."""
         block = section(CONFIG, "external_components:", "\nlogger:")
         self.assertIn("type: local", block)
         self.assertIn("path: components", block)

@@ -1,4 +1,4 @@
-"""Pattern checks for the Home Assistant assignment type on the /buttons page.
+"""Pattern checks for the Home Assistant assignment type on the web page.
 
 test_page_js.py runs the behaviour. These checks pin the contract strings that
 the firmware and the preview share, so a rename shows up here first.

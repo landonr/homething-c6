@@ -8,7 +8,7 @@ The remote uses endpoint 1 as a client of every cluster it can command. Each
 assigned button sends one ZCL command to its stored target, which is a group or
 one device.
 
-The firmware holds no MQTT client. The `/buttons` page reads the Zigbee2MQTT
+The firmware holds no MQTT client. The web page reads the Zigbee2MQTT
 inventory in the browser and posts only the resolved address to the remote. The
 page never publishes to Zigbee2MQTT. That websocket is read only.
 
@@ -65,7 +65,7 @@ If the remote joins inside the window, the window closes, the radio stays on and
 radio off and restarts, and `D5` goes dark.
 
 A radio that went off that way stays off. The flag is in flash, so a restart
-alone never brings it back. The `/buttons` page names the cause, so an off radio
+alone never brings it back. The web page names the cause, so an off radio
 is never a mystery:
 
 `Zigbee radio is off. Zigbee buttons are disabled. The last pairing attempt
@@ -408,7 +408,7 @@ A Tuya thermostat does not answer cluster `0x0201`. It uses manufacturer cluster
 
 ## Clear a button
 
-Clear a button from the `/buttons` page, or with the last tap of the assignment
+Clear a button from the web page, or with the last tap of the assignment
 cycle on the remote.
 
 Clearing removes the local record only. A group and its membership stay in
@@ -418,7 +418,7 @@ nothing behind, because the assignment wrote nothing to Zigbee2MQTT.
 ## The radio switch
 
 One switch turns the Zigbee radio off for the whole remote. The switch is on the
-`/buttons` page, on the heading line of the **Zigbee2MQTT** block, and in Home
+web page, on the heading line of the **Zigbee2MQTT** block, and in Home
 Assistant as **Zigbee Radio**.
 
 If the switch is off, every button that sends Zigbee is disabled and the remote
@@ -441,7 +441,7 @@ the remote to lift the gate. See "Network state on the page" for the line the
 page shows.
 
 Select the **Restart** button entity to reboot the remote from Home Assistant or
-from the `/buttons` page. A pairing press also restarts the remote, and it turns
+from the web page. A pairing press also restarts the remote, and it turns
 the radio on first, so it lifts the gate as well.
 
 `D5` is dark while the switch is off. It also stays dark until a reboot lifts the gate.
@@ -451,7 +451,7 @@ after a reboot.
 
 ## Network state on the page
 
-The stack reports three states, and the `/buttons` page names the one it is in
+The stack reports three states, and the web page names the one it is in
 under the switch:
 
 | Line | Meaning |
@@ -469,7 +469,7 @@ so `Paired` means joined once, not reachable now.
 
 The `zigbee` component keeps its instance file-static, so the 250 ms interval in
 `c6remote.yaml` pushes `is_started()`, `is_connected()`, and `factory_new_` into
-`zigbee_assignments`. The `/buttons` state endpoint reads them from there.
+`zigbee_assignments`. The `/buttons/api/state` endpoint reads them from there.
 
 ## Reachability
 
@@ -530,7 +530,7 @@ clear.
 Pairing is tested before the join, so an open window never shows the red that
 means a fault.
 
-`D2` shows Wi-Fi and the API. Wi-Fi serves the `/buttons` page and Home Assistant actions only, so a dark
+`D2` shows Wi-Fi and the API. Wi-Fi serves the web page and Home Assistant actions only, so a dark
 `D2` does not stop a button.
 
 Assignment mode uses `D3` and `D4` only, so `D5` stays readable.

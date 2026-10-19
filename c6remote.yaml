@@ -139,7 +139,7 @@ zigbee:
   endpoints:
     - num: 1
       device_type: ON_OFF_SWITCH
-      # One client cluster for each action the /buttons page can assign. A
+      # One client cluster for each action the web page can assign. A
       # cluster the simple descriptor omits still leaves the remote a valid
       # On/Off switch, but Zigbee2MQTT then reports no route for that command.
       clusters:
@@ -177,7 +177,7 @@ zigbee:
       - lambda: zigbee_assignments.on_network_up(x);
       - script.execute: show_idle_status
 
-# Serves the button assignment page at / and /buttons on port 80.
+# Serves the web page at / on port 80.
 # The ESPHome entity page (web_server) is not built.
 button_config:
   id: button_cfg
@@ -214,7 +214,7 @@ button_config:
 
 idle_sleep:
   id: idle
-  # Default until the /buttons page stores a value.
+  # Default until the web page stores a value.
   sleep_after: 5min
   cold_boot_grace: 60s
   # SW5 held for sleep_hold_time sleeps on release. Its on_press still fires its assignment.
@@ -960,7 +960,7 @@ switch:
 
   # Both radio switches keep their state in the assignment record of the radio
   # they gate, so the remote restores them itself and needs no restore_mode. The
-  # /buttons page writes the same two flags.
+  # web page writes the same two flags.
   - platform: template
     name: Zigbee Radio
     id: zigbee_radio_enable
@@ -989,7 +989,7 @@ switch:
 
   # Off stops the Home Assistant actions at once and the API server from the
   # next boot on. Home Assistant then cannot reach this switch, so only the
-  # /buttons page can turn it back on. D2 stays solid orange on Wi-Fi alone.
+  # web page can turn it back on. D2 stays solid orange on Wi-Fi alone.
   - platform: template
     name: Home Assistant API
     id: ha_api_expected

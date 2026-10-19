@@ -782,7 +782,7 @@ bool ButtonConfig::set_ha_api_expected(bool expected) {
 }
 
 void ButtonConfig::dump_config() {
-  ESP_LOGCONFIG(TAG, "Button config page at /buttons");
+  ESP_LOGCONFIG(TAG, "Button config page at /");
   ESP_LOGCONFIG(TAG, "  Firmware: %s", this->firmware_version_);
   ESP_LOGCONFIG(TAG, "  Friendly name: %s", this->current_name_.load(std::memory_order_acquire));
   ESP_LOGCONFIG(TAG, "  Home Assistant switch: %s", YESNO(this->ha_api_expected()));

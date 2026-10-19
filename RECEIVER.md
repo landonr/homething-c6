@@ -83,7 +83,7 @@ The ESPHome network log also uses the API server. While it is off, read the log 
 
 Home Assistant shows the switch as the **Home Assistant API** entity. Home Assistant can turn the switch off.
 After the next restart, Home Assistant cannot reach the remote, so it cannot turn the switch on again.
-To turn the switch on, use the `/buttons` page. Then select **Restart**.
+To turn the switch on, use the web page. Then select **Restart**.
 
 If you turn the switch on in a boot that started with the switch off, the buttons stay off.
 They start after the next restart, together with the API server.
@@ -183,7 +183,7 @@ If an IR capture fails, the old assignment remains.
 
 ## Web configurator
 
-The device serves a button page at `http://homething-c6-xxxxxx.local/`. The page also answers at `/buttons`.
+The device serves a web page at `http://homething-c6-xxxxxx.local/`.
 `xxxxxx` is the last six hex digits of the remote MAC address. The page uses
 the `web_server_base` server on port 80. The production config has no ESPHome `web_server` entity page.
 
@@ -588,7 +588,7 @@ the rest of the page.
 
 ### Trusted-LAN warning
 
-The `/buttons` page and its three endpoints have no authentication. The
+The web page and its four API endpoints have no authentication. The
 `api` and `ota` components on this device have none either.
 
 This is a deliberate choice for a trusted home network. Any device on that
@@ -622,7 +622,7 @@ The Home Assistant switch also stops the Home Assistant actions at once and the 
 If the switch is on but was off at boot, the API server is off, so `D2` pulses orange until a restart.
 See [The Home Assistant switch](#the-home-assistant-switch).
 
-Wi-Fi serves the `/buttons` page and carries Home Assistant actions and the voice assistant.
+Wi-Fi serves the web page and carries Home Assistant actions and the voice assistant.
 A dark `D2` does not stop an IR or Zigbee button, because IR and Zigbee playback need neither Wi-Fi nor the API.
 If the Home Assistant switch is on, a Home Assistant action turns Wi-Fi on when you press its button.
 See [Home Assistant actions](#home-assistant-actions).
@@ -826,7 +826,7 @@ While the remote sleeps, these conditions apply:
 
 ### Sleep settings on the page
 
-The `/buttons` page has a **Sleep** block. It shows only on a build with `idle_sleep`.
+The web page has a **Sleep** block. It shows only on a build with `idle_sleep`.
 
 - The **Sleep** switch turns idle sleep on or off.
 - The **Sleep after, in minutes** box sets the idle time from 1 to 60 minutes.

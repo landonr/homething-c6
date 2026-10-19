@@ -59,7 +59,7 @@ class HaAction final : public Component {
   void loop() override;
   void dump_config() override;
 
-  // The token tables are the contract with the /buttons page. val is -1 when the
+  // The token tables are the contract with the web page. val is -1 when the
   // page sent something that is not an integer.
   static Check validate(const std::string &kind, const std::string &act, int val,
                         const std::string &entity);

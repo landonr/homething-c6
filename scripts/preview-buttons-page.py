@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serves the /buttons page from the source header with a fake remote behind it.
+"""Serves the web page from the source header with a fake remote behind it.
 
 The page is a raw string in components/button_config/button_config_page.h, so a
 browser can run it without an ESPHome build and without hardware. This server
@@ -7,7 +7,7 @@ answers the page endpoints from a small in-memory state, so the layout,
 the radio switches, and the assignment tiles can be checked in a browser.
 
 Slot assignments come from preview-c6remote-config.json, an export from the
-/buttons config card.
+Import Export card of the web page.
 
 Usage: python3 scripts/preview-buttons-page.py [--port 8123]
 
@@ -15,7 +15,7 @@ Open http://127.0.0.1:8123/preview/offline to toggle offline mode. Each call
 flips the mode and prints the new state. While the mode is on, every
 /buttons/api request waits 8 s and then closes the connection with no answer,
 as a dead remote does. The page itself still loads. Use it to check the link
-line and the banner on the /buttons page.
+line and the banner on the web page.
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ def clean_name(text: str) -> str | None:
 
 
 def load_config(path: Path) -> tuple[dict, dict]:
-    # Export JSON from /buttons uses a shorter shape than /api/state.
+    # Export JSON from the web page uses a shorter shape than /buttons/api/state.
     data = json.loads(path.read_text())
     slots: dict[int, dict] = {}
     codes: dict[int, str] = {}
@@ -432,7 +432,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8123)
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"Preview at http://127.0.0.1:{args.port}/buttons")
+    print(f"Preview at http://127.0.0.1:{args.port}/")
     server.serve_forever()
 
 

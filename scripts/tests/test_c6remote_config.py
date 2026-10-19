@@ -1064,7 +1064,7 @@ class HomeAssistantActionConfigTest(unittest.TestCase):
         entity = config[config.index("    name: Home Assistant API\n") - 400:config.index("    name: Home Assistant API\n")]
         comment = entity[entity.rindex("\n\n") + 2:]
         self.assertIn("API server from the\n  # next boot on.", comment)
-        self.assertIn("only the\n  # /buttons page can turn it back on.", comment)
+        self.assertIn("only the\n  # web page can turn it back on.", comment)
         self.assertNotIn("stays up", comment)
 
 

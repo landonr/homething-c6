@@ -77,7 +77,7 @@ The firmware files are in the repository root:
 
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
 - `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
-- `components/button_config/` is a local ESPHome component. It serves the assignment page at `/` and `/buttons` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections.
+- `components/button_config/` is a local ESPHome component. It serves the web page at the root URL `/` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections.
 - `components/ha_action/` is a local ESPHome component. It stores one Home Assistant action for each slot and sends it over the native API. See `RECEIVER.md`.
   The Home Assistant switch turns the actions off at once. If the switch is off at boot, `on_boot` holds the API server down until the next boot.
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
@@ -85,10 +85,10 @@ The firmware files are in the repository root:
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
 - `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
-- `scripts/tests/page_dom_stub.js` runs the `/buttons` page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
-- `scripts/preview-buttons-page.py` serves the `/buttons` page with a fake remote behind it. It needs no build and no hardware.
+- `scripts/tests/page_dom_stub.js` runs the web page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
+- `scripts/preview-buttons-page.py` serves the web page with a fake remote behind it. It needs no build and no hardware.
 
-Run `python3 scripts/preview-buttons-page.py [--port 8123]`. Then open `http://127.0.0.1:8123/buttons`.
+Run `python3 scripts/preview-buttons-page.py [--port 8123]`. Then open `http://127.0.0.1:8123/`.
 
 The script reads the page out of the header for each request, so the preview cannot drift from the source.
 

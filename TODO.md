@@ -22,5 +22,5 @@ stores a group ID that you pick in Zigbee2MQTT, so a leftover group cannot be
 reached by accident. Removal is housekeeping, not a fix.
 
 Delete each `homething-c6-button-*` group in the Zigbee2MQTT frontend. Confirm
-first that no button on the `/buttons` page reports one of their IDs, `0xC600`
+first that no button on the web page reports one of their IDs, `0xC600`
 through `0xC611`.

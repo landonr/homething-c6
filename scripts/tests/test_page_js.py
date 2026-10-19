@@ -1,4 +1,4 @@
-"""Executes the /buttons page script against a DOM stub.
+"""Executes the web page script against a DOM stub.
 
 The other page checks match patterns in the source. They cannot catch an
 undeclared variable or a renamed helper, because those fail only when the code

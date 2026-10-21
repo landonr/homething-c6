@@ -199,6 +199,24 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("  reboot_timeout: 0s\n", wifi)
         self.assertIn("  reboot_timeout: 0s\n", api)
 
+    def test_home_assistant_shows_the_web_page_address_as_a_diagnostic(self) -> None:
+        """Without web_server, Home Assistant has no Visit link, so a text sensor
+        carries the hostname address, which a DHCP change cannot move."""
+        config = CONFIG.read_text()
+        self.assertNotRegex(config, r"(?m)^web_server:")
+        sensors = config.split("\ntext_sensor:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("  - platform: wifi_info\n    ip_address:\n      name: IP Address\n"
+                      "      entity_category: diagnostic\n", sensors)
+        page = sensors.split("\n  - platform: template\n", 1)[1].split("\n  - platform:", 1)[0]
+        for text in ("    id: web_page_url\n", "    name: Web Page\n", "    entity_category: diagnostic\n",
+                     "    icon: mdi:web\n", "    update_interval: never\n",
+                     '      return "http://" + App.get_name() + ".local/";'):
+            self.assertIn(text, page)
+        # A never interval runs no update, so the boot step must publish the state once.
+        boot = config.split("    - priority: 600\n", 1)[1].split("\n  on_shutdown:", 1)[0]
+        self.assertIn("\n        - component.update: web_page_url", boot)
+        self.assertEqual(config.count("component.update: web_page_url"), 1)
+
     def test_sw9_hold_consumes_the_tap_and_toggles_temporary_wifi(self) -> None:
         config = CONFIG.read_text()
         sw9 = button_entry(config, 9)

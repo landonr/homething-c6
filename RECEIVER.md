@@ -186,6 +186,8 @@ If an IR capture fails, the old assignment remains.
 The device serves a web page at `http://homething-c6-xxxxxx.local/`.
 `xxxxxx` is the last six hex digits of the remote MAC address. The page uses
 the `web_server_base` server on port 80. The production config has no ESPHome `web_server` entity page.
+Home Assistant shows the web page address as the diagnostic **Web Page** entity.
+The address uses the hostname, so a new IP address does not change it.
 
 The page title shows the friendly name of the remote, for example `homeThing C6 xxxxxx`.
 To change the name, select **Rename** beside the title. Type the name, then select **Save** or press Enter.

@@ -116,6 +116,7 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 
 Open `http://homething-c6-xxxxxx.local/` in a browser on the same network.
 `xxxxxx` is the last six hex digits of the remote MAC address. Home Assistant shows the remote as `homeThing C6 xxxxxx`.
+Home Assistant also shows the web page address as the diagnostic **Web Page** entity.
 The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
 You can also clear the input. Hold `SW1` for two seconds to use the on-device assignment mode.
 [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.

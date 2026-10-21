@@ -60,6 +60,8 @@ esphome:
             if (id(idle).woke_from_sleep() || !id(button_cfg).boot_leds())
               id(boot_chase_done) = true;
         - script.execute: show_idle_status
+        # The sensor never polls. The API sends this stored state when Home Assistant subscribes.
+        - component.update: web_page_url
   on_shutdown:
     - switch.turn_off: led_rail
     # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
@@ -121,6 +123,16 @@ text_sensor:
     ip_address:
       name: IP Address
       entity_category: diagnostic
+  # No web_server, so no Visit link. The hostname survives a DHCP change and
+  # already carries the MAC suffix.
+  - platform: template
+    id: web_page_url
+    name: Web Page
+    entity_category: diagnostic
+    icon: mdi:web
+    update_interval: never
+    lambda: |-
+      return "http://" + App.get_name() + ".local/";
 
 ble_hid:
   id: ble_hid_remote

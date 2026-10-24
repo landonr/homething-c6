@@ -63,6 +63,7 @@ border-radius:50%;background:var(--card);transition:left .15s}
 .sw input:focus-visible+span{outline:3px solid var(--acc);outline-offset:2px}
 .edtitle{display:flex;align-items:center;gap:8px}
 .edtitle .clip{display:flex;gap:6px;margin-left:auto}
+.edtitle .cn{color:var(--mut);font-weight:400;min-width:0;overflow-wrap:anywhere}
 .edtitle .clip button{font-size:13px;background:transparent;color:var(--fg);
 border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
 .edtitle .clip button[disabled]{opacity:.5;cursor:not-allowed}
@@ -371,6 +372,12 @@ var Z2MDEF="ws://homeassistant.local:8099/api";
 // cd holds the editable code text for cdSlot. codeLoad rejects an old read
 // after the user selects or pastes a newer code.
 var cd="",cdSlot=null,codeLoad=0;
+// inv holds the code name box for inSlot. inDirty keeps a name that is still
+// being typed, and a capture, a paste, or a save drops it for the stored name.
+var inv="",inSlot=null,inDirty=false,inBusy=false;
+// A code with no name prints this in its name line, because a Flipper signal
+// needs one. ir_name.h holds the same range.
+var IR_SLOT_NAME=/^Slot(?:[3-9]|1[0-9]|20)$/;
 // act is the open action panel. The Zigbee field values live here too, because
 // a late bridge/devices message repaints and would otherwise wipe them. A group
 // and a device get one box each, and zkv says which kind is on screen, so only
@@ -419,8 +426,8 @@ try{localStorage.setItem("c6.set-colors",setColors?"1":"0")}catch(x){}
 setColorsPaint()}
 function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
-// The code block prints the same fallback, so a copy and a tile agree.
-function codeName(r){return r.name?r.name:"Slot"+r.slot}
+// The stored name of the IR code on s, or "" when the slot has none.
+function irName(s){var r=row(s);return r&&r.action==="ir"&&r.name?r.name:""}
 function words(s){var r=row(s);if(!r)return "Unknown";
 if(r.action==="zigbee"){var A=za(r.act);
 return "Zigbee "+(A?A.n:"action "+r.act)+": "+
@@ -428,7 +435,7 @@ return "Zigbee "+(A?A.n:"action "+r.act)+": "+
 if(r.action==="voice")return "Voice assistant";
 if(r.action==="hid")return "BLE HID: "+hidWords(r.hid_kind,r.hid_usage,r.hid_mod);
 if(r.action==="ha")return "HA: "+haWords(r.ha_kind,r.ha_act,r.ha_val,r.ha_entity);
-if(r.action==="ir")return "IR: "+codeName(r);return "Clear"}
+if(r.action==="ir")return r.name?"IR: "+r.name:"IR code";return "Clear"}
 
 // The tokens and the actions each one allows match the firmware table.
 var T3="toggle turn_on turn_off";
@@ -1185,7 +1192,9 @@ radioSeen=radioKey();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
+// A hover and a screen reader both get the code name, and the map shows no text.
 b.setAttribute("aria-label",d.l+": "+words(d.s));
+b.setAttribute("title",d.l+": "+words(d.s));
 b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""].filter(Boolean).join(" ");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
 editor();cfgPaint()}
@@ -1266,7 +1275,44 @@ function irPanel(lock){
 var dis=lock?" disabled":"";
 return "<p class=sub>Capture from a source remote, or paste a code.</p>"+
 "<div class=act><button type=button id=b1"+dis+">Record IR</button></div>"+
-codeBox(lock)}
+nameBox(lock)+codeBox(lock)}
+
+// The firmware takes the same rule, so a name that passes here is stored as typed.
+function irNameWhy(v){
+if(!/^[\x20-\x7e]*$/.test(v)||/["\\]/.test(v))
+return "A code name uses printable ASCII only, with no quote and no backslash.";
+if(nameBytes(v)>23)return "A code name is up to 23 bytes.";
+if(IR_SLOT_NAME.test(v))return "Slot3 to Slot20 mark a code with no name.";
+return ""}
+
+function nameCount(v){return nameBytes(v)+" of 23 bytes. Printable ASCII only, with no quote and no backslash."}
+
+// Only a stored IR code takes a name. A capture clears the name, so the box
+// then shows the empty name and waits for a new one.
+function nameBox(lock){
+var r=row(sel),dis=lock||inBusy?" disabled":"";
+if(!r||r.action!=="ir")return "";
+if(inSlot!==sel||!inDirty){inv=r.name||"";inSlot=sel;inDirty=false}
+return "<label class=hd2 for=inm>Code name</label>"+
+"<div class='act nm' id=inr><input type=text id=inm maxlength=23 autocomplete=off spellcheck=false "+
+"placeholder='No name' value='"+att(inv)+"'"+dis+"><button type=button id=ins"+dis+">"+
+(inBusy?"Saving...":"Save name")+"</button></div>"+
+"<p class=sub id=inc>"+esc(nameCount(inv))+"</p>"}
+
+// The remote applies the name before it completes the action, so the poll in
+// waitAction already carries it. An empty box removes the name.
+function saveIrName(){
+var s=sel,v=String(inv).replace(/^ +| +$/g,""),why=irNameWhy(v);
+if(inBusy)return;
+if(why){msg=why;bad=true;paint();return}
+inBusy=true;msg="";bad=false;paint();
+post("set_ir_name",s,undefined,v).then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the name.")})})
+.then(function(){inBusy=false;inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false;
+return load().then(function(){return cfgChanged(s)}).then(function(){paint();
+if(row(s)&&row(s).action==="ir")return loadCode(s)})},
+function(e){inBusy=false;msg=e&&e.message?e.message:"The remote did not answer.";bad=true;paint()})}
 
 function vaPanel(lock){
 var h=holdOf(sel);
@@ -1823,9 +1869,14 @@ return e.val===undefined?A.d:parseInt(e.val,10)}
 function cfgNeeded(e){if(e.action!=="none")return true;
 var r=row(e.slot);return !!(r&&r.action!=="none")}
 
+// The remote reads the placeholder as no name. The import also drops that line,
+// so an unnamed code stays unnamed and a real name arrives unchanged.
+function cfgCode(text){return String(text).split("\n").filter(function(l){
+var m=/^\s*name\s*:\s*(.*?)\s*$/i.exec(l);return !(m&&IR_SLOT_NAME.test(m[1]))}).join("\n")}
+
 function cfgSend(e){
 if(e.action==="voice")return post("set_voice",e.slot);
-if(e.action==="ir")return post("set_ir_code",e.slot,e.code);
+if(e.action==="ir")return post("set_ir_code",e.slot,cfgCode(e.code));
 if(e.action==="hid")return post("set_hid",e.slot,null,undefined,
 "&kind="+encodeURIComponent(e.kind)+"&usage="+encodeURIComponent(e.usage)+
 "&mod="+encodeURIComponent(e.mod||0));
@@ -1950,7 +2001,8 @@ if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
 p.innerHTML="";return}
 var d=info(sel);
 var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
-var h="<h2 class=edtitle><span>"+esc(d.l)+"</span><span class=clip>"+
+var h="<h2 class=edtitle><span>"+esc(d.l)+"</span>"+(irName(sel)?"<span class=cn>"+esc(irName(sel))+"</span>":"")+
+"<span class=clip>"+
 "<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
 "<button type=button id=bpaste"+(!clip||locked?" disabled":"")+
 " title='Paste config from "+att(clip?clipName(clip):"")+"'>Paste</button>"+
@@ -2011,7 +2063,12 @@ box.oninput=function(){cd=box.value;
 var disabled=lock||!hasCode(cd);
 document.getElementById("ca").disabled=disabled};
 document.getElementById("ca").onclick=applyCode;
-if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")}}
+if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")};
+var nb=document.getElementById("inm");
+if(nb){nb.oninput=function(){inv=nb.value;inDirty=true;
+var c=document.getElementById("inc");if(c)c.textContent=nameCount(inv)};
+nb.onkeydown=function(ev){if(ev.key==="Enter"){ev.preventDefault();saveIrName()}};
+document.getElementById("ins").onclick=saveIrName}}
 if(act==="zb"){
 var gs=document.getElementById("zs"),ds=document.getElementById("zd"),
 gi=document.getElementById("zg"),hi=document.getElementById("zh"),
@@ -2063,7 +2120,7 @@ function pick(s){
 // Clear the previous input's code before paint, so its text cannot show while
 // the selected input's request is still in flight.
 if(sel!==s){codeLoad++;cdSlot=null;cd=""}
-sel=s;
+sel=s;inDirty=false;
 if(mode!=="rec"){msg="";bad=false}
 // Every Zigbee field belongs to the slot that was open, so none of it may
 // follow the selection to the next one.
@@ -2131,6 +2188,8 @@ if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 if(a==="record_ir"){mode="rec";rec=s;seen=false;msg="";bad=false;
 return load().then(function(){paint();watch()})}
 return waitAction(r.body.id).then(function(ok){
+// A paste replaces the name too, so the box follows the stored one again.
+if(ok&&a==="set_ir_code")inDirty=false;
 if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
 a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":a==="set_ha"?"Home Assistant action assigned.":"Cleared.";bad=false}
 else{msg=a==="set_ir_code"?"The remote refused that code.":
@@ -2226,7 +2285,7 @@ if(mode!=="rec")paint();return}stop();finish()})
 function stop(){if(timer){clearInterval(timer);timer=0}}
 
 function finish(){
-var was=mode,s=rec;mode="idle";
+var was=mode,s=rec;mode="idle";inDirty=false;
 if(was==="cancel"){msg="Recording cancelled.";bad=true}
 else if(seen){msg="Code saved.";bad=false}
 else{msg="No code received.";bad=true}

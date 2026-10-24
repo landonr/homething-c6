@@ -1067,6 +1067,18 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   request->send(stream);
 }
 
+bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {
+  if (!::ir_code_store.has_code(slot) || ::ir_code_store.is_voice(slot))
+    return false;
+  if (esphome::ble_hid::BleHid::instance()->assignment(slot).assigned || ::zigbee_assignments.assignment(slot).assigned)
+    return false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr && this->ha_action_->has_assignment(slot))
+    return false;
+#endif
+  return true;
+}
+
 // Reads only, so it runs on the httpd task without a defer. The block is the
 // Flipper .ir signal syntax, so a code moves between this board, a Flipper, and
 // the Flipper-IRDB files without a converter. Every printed value is a name
@@ -1089,6 +1101,8 @@ void ButtonConfig::handle_code_(AsyncWebServerRequest *request) {
   stream->printf(R"({"slot":%u,"present":%s,"text":")", static_cast<unsigned>(info->slot),
                  present ? "true" : "false");
   if (present) {
+    // A Flipper signal needs a name line, so a code with no name prints the
+    // placeholder that set_ir_code reads back as no name.
     if (name[0] != '\0')
       stream->printf("name: %s\\n", name);
     else
@@ -1130,7 +1144,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
                      action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
                      action == "set_hold" || action == "set_sleep_enabled" ||
                      action == "set_sleep_after" || action == "set_sleep_replay" || action == "pair" || action == "restart" ||
-                     action == "set_name" || action == "clear";
+                     action == "set_name" || action == "set_ir_name" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
     return;
@@ -1279,6 +1293,31 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
                   R"({"ok":false,"error":"a code is a Flipper signal block, or 4 to 512 alternating values in us"})");
     return;
   }
+  // The code block of a code with no name carries a placeholder, so an export,
+  // an import, or a copy to another input keeps the code unnamed.
+  if (action == "set_ir_code" && ir_name::placeholder(name.data(), name.size()))
+    name.clear();
+
+  // A rename keeps the timings, so only a slot that sends its stored code takes
+  // one. A name that set_name() would change is refused, so the page never
+  // shows a name that differs from the stored one.
+  std::string ir_name_text;
+  if (action == "set_ir_name") {
+    if (!this->slot_sends_ir_(info->slot)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"the slot holds no IR code"})");
+      return;
+    }
+    ir_name_text = request->arg("name");
+    if (ir_name::placeholder(ir_name_text.data(), ir_name_text.size())) {
+      request->send(400, "application/json", R"({"ok":false,"error":"Slot3 to Slot20 mark a code with no name"})");
+      return;
+    }
+    if (!ir_name::fits(ir_name_text.data(), ir_name_text.size())) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"a code name is up to 23 printable ASCII characters, with no quote, no backslash, and no space at either end"})");
+      return;
+    }
+  }
 
   // Every slot accepts a Zigbee target, because playback rides the same path as
   // IR. The page resolves the name to a group id against Zigbee2MQTT, so the
@@ -1419,6 +1458,10 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     this->defer([this, button, action_id, timings, name]() {
       const bool saved = ::ir_code_store.save(button, timings);
       this->complete_action_(action_id, saved && ::ir_code_store.set_name(button, name.c_str()));
+    });
+  } else if (action == "set_ir_name") {
+    this->defer([this, button, action_id, ir_name_text]() {
+      this->complete_action_(action_id, ::ir_code_store.rename(button, ir_name_text.c_str()));
     });
   } else if (action == "set_zigbee") {
     this->defer([this, button, action_id, group_id, zb_action, zb_param, target_name]() {

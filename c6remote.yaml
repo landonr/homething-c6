@@ -9,6 +9,7 @@ esphome:
   # and Home Assistant name.
   name_add_mac_suffix: true
   includes:
+    - ir_name.h
     - ir_learning.h
     - zigbee_learning.h
     - hold_actions.h

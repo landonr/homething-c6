@@ -148,15 +148,37 @@ def samsung_code(address: int, command: int) -> str:
     return f"0x{data:08X}"
 
 
+# Mirrors ir_name.h. "Slot<n>" marks a code with no name in the code block.
+IR_NAME_PLACEHOLDER = re.compile(r"^Slot(?:[3-9]|1[0-9]|20)$")
+IR_NAME_MAX = 23
+
+
+def ir_name_error(text: str) -> str | None:
+    """Mirrors the set_ir_name checks in button_config.cpp, after the slot check."""
+    if IR_NAME_PLACEHOLDER.match(text):
+        return "Slot3 to Slot20 mark a code with no name"
+    if (len(text) > IR_NAME_MAX or text != text.strip(" ")
+            or any(not 0x20 <= ord(c) <= 0x7E or c in '"\\' for c in text)):
+        return ("a code name is up to 23 printable ASCII characters, with no quote, no backslash, "
+                "and no space at either end")
+    return None
+
+
+def with_ir_name(text: str, slot: int, name: str) -> str:
+    """Rewrites the name line the way /buttons/api/code prints it."""
+    lines = [line for line in text.splitlines() if line.partition(":")[0].strip().lower() != "name"]
+    return "\n".join([f"name: {name or f'Slot{slot}'}"] + lines)
+
+
 def parse_ir_code(text: str) -> dict:
-    name = "IR"
+    name = ""
     address = 0
     command = 0
     for line in text.splitlines():
         key, _, value = line.partition(":")
         key = key.strip().lower()
         value = value.strip()
-        if key == "name" and value:
+        if key == "name" and value and not IR_NAME_PLACEHOLDER.match(value):
             name = value
         elif key == "address" and value:
             address = int(value.split()[0], 16)
@@ -363,6 +385,16 @@ class Handler(BaseHTTPRequestHandler):
             if why:
                 self.send_json({"ok": False, "error": why}, 400)
                 return
+        # parse_qs drops a blank value, so an empty box arrives as a missing name.
+        ir_name = form.get("name", [""])[0]
+        if action == "set_ir_name":
+            if SLOTS.get(slot, {}).get("action") != "ir":
+                self.send_json({"ok": False, "error": "the slot holds no IR code"}, 400)
+                return
+            why = ir_name_error(ir_name)
+            if why:
+                self.send_json({"ok": False, "error": why}, 400)
+                return
         if action == "test_ha":
             if SLOTS.get(slot, {}).get("action") != "ha":
                 self.send_json({"ok": False, "error": "slot has no Home Assistant action"}, 400)
@@ -442,6 +474,9 @@ class Handler(BaseHTTPRequestHandler):
                 "ha_val": int(form["val"][0]),
                 "ha_entity": form["entity"][0],
             }
+        elif action == "set_ir_name":
+            SLOTS[slot]["name"] = ir_name
+            IR_CODES[slot] = with_ir_name(IR_CODES.get(slot, ""), slot, ir_name)
         elif action == "clear" and SLOTS.get(slot, {}).get("action") == "ha":
             del SLOTS[slot]
         elif action == "forget_ble":

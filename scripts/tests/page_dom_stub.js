@@ -1284,6 +1284,119 @@ setTimeout(() => {
     global.bootBusy = false;
     global.st = prevSt;
   });
+  const irPanelOn = (slot) => {
+    global.st = STATE; global.inBusy = false; global.inDirty = false;
+    global.sel = slot; global.act = "ir"; global.msg = ""; global.bad = false;
+    paint();
+  };
+  step("the IR panel prefills the code name and posts a new one", () => {
+    const prevSel = global.sel, prevAct = global.act;
+    irPanelOn(6);
+    const panel = () => document.getElementById("edpanel").innerHTML;
+    if (panel().indexOf("value='Home'") < 0) throw new Error("the name box is not prefilled: " + panel());
+    // The stub registers ids from innerHTML but keeps no text for them, so the
+    // first count is read from the markup that the panel rendered.
+    if (panel().indexOf("<p class=sub id=inc>4 of 23 bytes.") < 0)
+      throw new Error("the count reads " + panel());
+    const box = document.getElementById("inm");
+    box.value = "TV Power";
+    box.oninput();
+    if (document.getElementById("inc").textContent.indexOf("8 of 23 bytes.") !== 0)
+      throw new Error("the count did not follow the typing: " + document.getElementById("inc").textContent);
+    // A state repaint keeps a name that is still being typed.
+    paint();
+    if (panel().indexOf("value='TV Power'") < 0) throw new Error("a repaint dropped the typed name");
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("ins").onclick();
+    global.fetch = realFetch;
+    if (body !== "action=set_ir_name&slot=6&name=TV%20Power") throw new Error("the save posted " + body);
+    if (!document.getElementById("inm").disabled || !document.getElementById("ins").disabled)
+      throw new Error("the name box stayed live during the write");
+    if (panel().indexOf("value='TV Power'") < 0) throw new Error("the write showed the old name");
+    global.inBusy = false; global.inDirty = false;
+    global.sel = prevSel; global.act = prevAct;
+    paint();
+  });
+  step("a bad code name gives the reason and posts nothing", () => {
+    const prevSel = global.sel, prevAct = global.act;
+    irPanelOn(6);
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    for (const [name, word] of [['TV "Power"', "printable ASCII"], ["A\\B", "printable ASCII"],
+                                ["Pöwer", "printable ASCII"], ["abcdefghijklmnopqrstuvwx", "up to 23 bytes"],
+                                ["Slot6", "mark a code with no name"], ["Slot20", "mark a code with no name"]]) {
+      const box = document.getElementById("inm");
+      box.value = name;
+      box.oninput();
+      document.getElementById("ins").onclick();
+      if (bodies.length) throw new Error(JSON.stringify(name) + " posted " + bodies[0]);
+      if (!bad || msg.indexOf(word) < 0) throw new Error(JSON.stringify(name) + " gave " + msg);
+    }
+    // Slot21 is past the last slot, so it is a name and not the placeholder.
+    const box = document.getElementById("inm");
+    box.value = "Slot21";
+    box.oninput();
+    document.getElementById("ins").onclick();
+    global.fetch = realFetch;
+    if (bodies.length !== 1 || bodies[0] !== "action=set_ir_name&slot=6&name=Slot21")
+      throw new Error("a valid name did not post: " + bodies.join(" | "));
+    global.inBusy = false; global.inDirty = false; global.msg = ""; global.bad = false;
+    global.sel = prevSel; global.act = prevAct;
+    paint();
+  });
+  step("the editor title and the map key name the code, and a capture empties the name box", () => {
+    const prevSel = global.sel, prevAct = global.act;
+    irPanelOn(6);
+    if (document.getElementById("ed").innerHTML.indexOf("<span>Button 6</span><span class=cn>Home</span>") < 0)
+      throw new Error("the title reads " + document.getElementById("ed").innerHTML);
+    if (keys[6].attrs.title !== "Button 6: IR: Home" || keys[6].attrs["aria-label"] !== "Button 6: IR: Home")
+      throw new Error("the key reads " + keys[6].attrs.title + " / " + keys[6].attrs["aria-label"]);
+    if (keys[4].attrs.title !== "Button 4: Voice assistant") throw new Error("a voice key reads " + keys[4].attrs.title);
+    const r6 = STATE.slots.find(r => r.slot === 6), prev = r6.name;
+    // A capture stores the code with no name.
+    r6.name = "";
+    global.inv = "typed"; global.inSlot = 6; global.inDirty = true;
+    global.mode = "rec"; global.rec = 6; global.seen = true;
+    finish();
+    if (inv !== "" || document.getElementById("edpanel").innerHTML.indexOf("value=''") < 0)
+      throw new Error("the name box kept " + JSON.stringify(inv) + " after a capture");
+    if (keys[6].attrs.title !== "Button 6: IR code") throw new Error("an unnamed key reads " + keys[6].attrs.title);
+    if (document.getElementById("ed").innerHTML.indexOf("class=cn") >= 0) throw new Error("an unnamed title shows a name");
+    r6.name = prev;
+    global.msg = ""; global.bad = false;
+    global.sel = prevSel; global.act = prevAct;
+    paint();
+  });
+  step("an export keeps a code name and an import keeps an unnamed code unnamed", () => {
+    global.st = STATE;
+    const prevAll = global.cfgAll;
+    const data = "type: raw\nfrequency: 38000\ndata: 100 200 300 400";
+    global.cfgAll = {6: "name: Home\n" + data};
+    const named = JSON.parse(cfgBlob()).slots.find(e => e.slot === 6);
+    global.cfgAll = {6: "name: Slot6\n" + data};
+    const unnamed = JSON.parse(cfgBlob()).slots.find(e => e.slot === 6);
+    global.cfgAll = prevAll;
+    // The export keeps the Flipper name line in both cases.
+    if (named.code !== "name: Home\n" + data || unnamed.code !== "name: Slot6\n" + data)
+      throw new Error("the export changed a code block: " + JSON.stringify([named.code, unnamed.code]));
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    cfgSend(named);
+    cfgSend(unnamed);
+    // A copy from another input carries the placeholder of that input.
+    cfgSend({slot: 6, action: "ir", code: "name: Slot9\n" + data});
+    cfgSend({slot: 6, action: "ir", code: "name: Slot21\n" + data});
+    global.fetch = realFetch;
+    const codes = bodies.map(b => decodeURIComponent(b.split("&code=")[1]));
+    if (codes[0] !== "name: Home\n" + data) throw new Error("a named code changed: " + codes[0]);
+    if (codes[1] !== data || codes[2] !== data)
+      throw new Error("a placeholder reached the remote: " + JSON.stringify(codes.slice(1, 3)));
+    if (codes[3] !== "name: Slot21\n" + data) throw new Error("a real name was dropped: " + codes[3]);
+  });
   const holdSelect = (k) => {
     const html = document.getElementById("hbx").innerHTML;
     const start = html.indexOf("<select id=hb-" + k);

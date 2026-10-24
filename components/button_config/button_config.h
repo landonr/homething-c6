@@ -134,6 +134,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void apply_friendly_name_(const std::string &name);
   void load_hold_pref_();
   bool set_hold_slot_(uint8_t action, uint8_t slot);
+  // True when a press of the slot sends its stored IR code, as the state reports it.
+  bool slot_sends_ir_(uint8_t slot) const;
   void apply_hold_slots_(const uint8_t *slots);
 
   // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.

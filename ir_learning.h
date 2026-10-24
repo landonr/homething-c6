@@ -4,6 +4,8 @@
 #include "esphome/core/preferences.h"
 #include "esphome/core/log.h"
 
+#include "ir_name.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -26,6 +28,7 @@ class IrCodeStore {
   static constexpr size_t MAX_PULSES = 512;
   // Flipper .ir names are short words such as Power or Vol_up.
   static constexpr size_t NAME_LEN = 24;
+  static_assert(ir_name::MAX + 1 == NAME_LEN, "the page limit must match the stored name");
 
   // OWNER_IR covers both a stored code and the voice assistant.
   enum Owner : uint8_t { OWNER_NONE = 0, OWNER_IR, OWNER_ZIGBEE, OWNER_BLE, OWNER_HA };
@@ -170,13 +173,23 @@ class IrCodeStore {
     size_t used = 0;
     for (const char *cursor = text; *cursor != '\0' && used + 1 < NAME_LEN; cursor++) {
       const char value = *cursor;
-      if (value < 0x20 || value > 0x7E || value == '"' || value == '\\')
+      if (!ir_name::keeps(value))
         continue;
       clean[used++] = value;
     }
     while (used > 0 && clean[used - 1] == ' ')
       clean[--used] = '\0';
     return write_name_(button, clean);
+  }
+
+  // A new name for the stored code. The timings stay, and an empty text
+  // removes the name. Main loop only, like every other write.
+  bool rename(uint8_t button, const char *text) {
+    if (!has_code(button))
+      return false;
+    const bool written = set_name(button, text);
+    ESP_LOGI("ir_learn", "Button %u renamed%s", button, written ? "" : " (flash write failed)");
+    return written;
   }
 
   // Counts successful captures only. A re-record of the same remote button

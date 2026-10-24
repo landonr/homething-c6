@@ -367,6 +367,23 @@ received" and the old assignment remains.
 
 To replace an assignment, record again or select a different action.
 
+### Name a code
+
+The IR panel of an input that holds an IR code has a **Code name** box. The box shows the stored name.
+Type a name and select **Save name** or press Enter. To remove the name, empty the box and save it.
+A rename changes only the name. The remote keeps the IR timings.
+
+A name has a maximum of 23 bytes of printable ASCII. A name cannot contain a quote or a backslash.
+The page removes a space at the start or the end before it saves the name.
+`Slot3` to `Slot20` cannot be names, because they mark a code with no name.
+If a name breaks a rule, the page shows the reason and sends nothing. The remote also refuses that name with HTTP 400.
+
+The editor title shows the name next to the input label. On the remote layout, the name is in the tooltip
+and the screen-reader label of the input. The layout shows no name text.
+
+A capture stores the new code with no name, so the box is empty after a capture.
+A paste uses the `name` line of the pasted block.
+
 ### Copy a code by text
 
 Each input has an "IR code" box on the page. The box holds one Flipper `.ir` signal block.
@@ -386,6 +403,10 @@ command: E6 00 00 00
 Every other frame prints as a raw block with `frequency`, `duty_cycle`, and a `data` line of durations in microseconds.
 
 The `name` line names the code. The page shows that name on the input tile.
+
+A code with no name prints `name: Slot<n>`, with the slot number of the input, because a Flipper signal needs a name line.
+`Slot3` to `Slot20` mean no name. If a pasted block uses one of them, the remote stores the code with no name.
+This rule also applies to a block that you copy from a different input.
 
 A paste can hold a whole Flipper-IRDB file. The parser reads the first signal and ignores the rest.
 
@@ -525,7 +546,10 @@ The block holds one entry for each input, with its slot number, its label, and
 its action.
 
 An IR entry carries the Flipper `.ir` block itself, so an export restores a
-remote without a source remote.
+remote without a source remote. The `name` line of the block carries the code name.
+An import keeps that name exactly.
+For a code with no name, the block has the `Slot<n>` placeholder. The import removes that line, so the code stays unnamed.
+An older export file uses the same placeholder, so it imports the same way.
 
 A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 `group`. A device entry holds `ieee` and `ep`.

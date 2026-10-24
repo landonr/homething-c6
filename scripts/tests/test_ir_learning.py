@@ -162,13 +162,26 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn("make_preference<NameBook>(NAME_KEY, true)", HEADER)
         self.assertIn("char names[SLOT_COUNT][NAME_LEN];", HEADER)
         clean = section(HEADER, "bool set_name(uint8_t button, const char *text) {", "\n  }")
-        self.assertIn("value < 0x20 || value > 0x7E", clean)
-        self.assertIn("value == '\"' || value == '\\\\'", clean)
+        # One rule for the store, the page check, and the set_ir_name check.
+        self.assertIn("if (!ir_name::keeps(value))\n        continue;", clean)
+        rule = (ROOT / "ir_name.h").read_text()
+        self.assertIn("inline bool keeps(char value) { return value >= 0x20 && value <= 0x7E && value != '\"' "
+                      "&& value != '\\\\'; }", rule)
+        self.assertIn('#include "ir_name.h"', HEADER)
+        self.assertIn("static_assert(ir_name::MAX + 1 == NAME_LEN,", HEADER)
         # A cleared slot must not keep the name of the code it held.
         self.assertEqual(HEADER.count('erase_code_(button) && write_name_(button, "")'), 2)
         # Nor may a slot keep the old name after a capture writes a new code.
         save = section(HEADER, "bool save(uint8_t button, const std::vector<int32_t> &raw) {", "\n  }")
         self.assertIn("if (names_.names[slot][0] != '\\0')\n      write_name_(button, \"\");", save)
+
+    def test_a_rename_keeps_the_timings(self) -> None:
+        """A rename writes only the name record, and only for a slot with a stored code."""
+        rename = section(HEADER, "bool rename(uint8_t button, const char *text) {", "\n  }")
+        self.assertLess(rename.index("if (!has_code(button))\n      return false;"),
+                        rename.index("set_name(button, text)"))
+        for gone in ("prefs_[", "records_[", "erase_code_(", "voice_pref_"):
+            self.assertNotIn(gone, rename)
 
     def test_playback_logs_actual_output_pulses(self) -> None:
         self.assertIn("log_output_(button, raw)", HEADER)

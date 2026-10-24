@@ -500,6 +500,80 @@ class HoldSettingsTest(unittest.TestCase):
             self.assertIn(error, CPP)
 
 
+class IrNameTest(unittest.TestCase):
+    """A stored IR code takes a name from the page, and the code block keeps a
+    Flipper-valid name line without a name that the remote invented."""
+
+    ACTION = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+
+    def test_the_header_is_shared_by_the_store_and_the_build(self) -> None:
+        includes = CONFIG.split("  includes:\n", 1)[1].split("  on_boot:", 1)[0]
+        self.assertLess(includes.index("    - ir_name.h\n"), includes.index("    - ir_learning.h\n"))
+        rule = (ROOT / "ir_name.h").read_text()
+        self.assertNotIn("esphome", rule)
+        self.assertIn("static constexpr size_t MAX = 23;", rule)
+
+    def test_set_ir_name_refuses_a_bad_request_before_the_busy_claim(self) -> None:
+        self.assertIn('action == "set_ir_name"', section(self.ACTION, "const bool known = ", ";"))
+        self.assertNotIn('action != "set_ir_name"', section(self.ACTION, "const bool needs_slot = ", ";"))
+        claim = self.ACTION.index("compare_exchange_strong(expected, true")
+        for error in ("the slot holds no IR code", "Slot3 to Slot20 mark a code with no name",
+                      "a code name is up to 23 printable ASCII characters, with no quote, no backslash, "
+                      "and no space at either end"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', self.ACTION)
+            self.assertLess(self.ACTION.index(error), claim)
+        check = section(self.ACTION, 'if (action == "set_ir_name") {', "\n  }\n")
+        order = ["this->slot_sends_ir_(info->slot)", 'ir_name_text = request->arg("name");',
+                 "ir_name::placeholder(ir_name_text.data(), ir_name_text.size())",
+                 "ir_name::fits(ir_name_text.data(), ir_name_text.size())"]
+        positions = [check.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        branch = section(self.ACTION, '} else if (action == "set_ir_name") {', "\n  } else")
+        self.assertIn("this->defer([this, button, action_id, ir_name_text]() {", branch)
+        self.assertIn("::ir_code_store.rename(button, ir_name_text.c_str())", branch)
+
+    def test_only_a_slot_that_sends_its_code_takes_a_name(self) -> None:
+        """The same order as the state report, so the page and the check agree."""
+        body = section(CPP, "bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {", "\n}")
+        for text in ("::ir_code_store.has_code(slot)", "::ir_code_store.is_voice(slot)",
+                     "BleHid::instance()->assignment(slot).assigned",
+                     "::zigbee_assignments.assignment(slot).assigned",
+                     "this->ha_action_->has_assignment(slot)"):
+            self.assertIn(text, body)
+        self.assertIn("bool slot_sends_ir_(uint8_t slot) const;", HEADER)
+
+    def test_a_pasted_placeholder_stores_no_name(self) -> None:
+        """An export, an import, and a copy to another input all carry the line."""
+        paste = self.ACTION.index("ir_name::placeholder(name.data(), name.size()))\n    name.clear();")
+        self.assertLess(self.ACTION.index('!parse_ir_text(request->arg("code"), name, timings)'), paste)
+        self.assertLess(paste, self.ACTION.index("::ir_code_store.set_name(button, name.c_str())"))
+        self.assertIn(R'stream->printf("name: Slot%u\\n"', CPP)
+        # The page drops the line on an import too, with the same range.
+        self.assertIn("var IR_SLOT_NAME=/^Slot(?:[3-9]|1[0-9]|20)$/;", PAGE)
+        self.assertIn("return !(m&&IR_SLOT_NAME.test(m[1]))", section(PAGE, "function cfgCode(text){", "\n\n"))
+
+    def test_the_page_edits_and_shows_the_code_name(self) -> None:
+        box = section(PAGE, "function nameBox(lock){", "\n\n")
+        self.assertIn('if(!r||r.action!=="ir")return "";', box)
+        self.assertIn("if(inSlot!==sel||!inDirty){inv=r.name||\"\";inSlot=sel;inDirty=false}", box)
+        self.assertIn("maxlength=23", box)
+        save = section(PAGE, "function saveIrName(){", "\n\n")
+        self.assertIn('post("set_ir_name",s,undefined,v)', save)
+        self.assertIn("return waitAction(r.body.id)", save)
+        self.assertLess(save.index("why=irNameWhy(v)"), save.index("post("))
+        self.assertIn("nameBytes(v)>23", section(PAGE, "function irNameWhy(v){", "\n\n"))
+        self.assertIn('<span class=cn>"+esc(irName(sel))+"</span>', PAGE)
+        self.assertIn('b.setAttribute("title",d.l+": "+words(d.s));', PAGE)
+
+    def test_the_preview_mirrors_set_ir_name(self) -> None:
+        self.assertIn('if action == "set_ir_name":', PREVIEW)
+        self.assertIn('IR_NAME_PLACEHOLDER = re.compile(r"^Slot(?:[3-9]|1[0-9]|20)$")', PREVIEW)
+        for error in ("the slot holds no IR code", "Slot3 to Slot20 mark a code with no name"):
+            self.assertIn(error, PREVIEW)
+        self.assertIn('"a code name is up to 23 printable ASCII characters, with no quote, no backslash, "', PREVIEW)
+        self.assertIn('elif action == "set_ir_name":', PREVIEW)
+
+
 class BatteryTest(unittest.TestCase):
     """Bench configs have no battery sensors, so the link is optional and guarded."""
 
@@ -1052,12 +1126,13 @@ class PageTest(unittest.TestCase):
         )
 
     def test_the_tile_shows_the_code_name(self) -> None:
-        """A tile holds one line, and the name says more than the protocol does."""
+        """A tile holds one line, and the name says more than the protocol does.
+        The placeholder of the code block is not a name, so the tile never shows it."""
         label = section(PAGE, "function words(s){", "return \"Clear\"}")
-        self.assertIn('return "IR: "+codeName(r)', label)
-        self.assertIn('function codeName(r){return r.name?r.name:"Slot"+r.slot}', PAGE)
+        self.assertIn('if(r.action==="ir")return r.name?"IR: "+r.name:"IR code";', label)
         self.assertNotIn("Samsung32", label)
-        # The code endpoint prints the same fallback into the name line.
+        self.assertNotIn("codeName", PAGE)
+        # A Flipper signal needs a name line, so the code endpoint prints the placeholder.
         self.assertIn(R'stream->printf("name: Slot%u\\n"', CPP)
 
     def test_the_page_details_the_action_of_a_slot(self) -> None:
@@ -1791,7 +1866,7 @@ class PageTest(unittest.TestCase):
         409. Nothing new is added to the firmware for an import."""
         send = section(PAGE, "function cfgSend(e){", '\nreturn post("clear",e.slot)}')
         self.assertIn('return post("set_voice",e.slot)', send)
-        self.assertIn('return post("set_ir_code",e.slot,e.code)', send)
+        self.assertIn('return post("set_ir_code",e.slot,cfgCode(e.code))', send)
         self.assertIn('return post("set_zigbee_device",e.slot,null,e.name||""', send)
         self.assertIn('return post("set_zigbee",e.slot,String(parseInt(e.group,10))', send)
         run = section(PAGE, "function cfgRun(list,i){", "return cfgRun(list,i+1)})}")

@@ -45,8 +45,10 @@ STATE = {
     "result": "none",
     "action_id": 0,
     "action_ok": True,
-    "status_leds": True,
+    "status_leds": "on",
     "boot_leds": True,
+    # Slot of each hold, 0 for none. These are the firmware defaults.
+    "holds": {"wifi": 5, "status": 7, "sleep": 20, "assign": 9},
     "network": {
         "wifi": True,
         "wifi_enabled": True,
@@ -115,6 +117,8 @@ def ha_error(kind: str, act: str, val: str, entity: str) -> str | None:
     if not val.isdigit() or int(val) > 100 or (step and int(val) < 1):
         return "a brightness step is 1 to 100"
     return None
+# Mirrors HoldActions::valid_slot(): the sixteen expander inputs, no wheel rotation.
+HOLD_SLOTS = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20}
 
 # A fake restart fails the state poll for a short time. Then the action ids
 # start again from zero, as they do after a real boot. The preview always comes
@@ -377,6 +381,25 @@ class Handler(BaseHTTPRequestHandler):
             STATE["action_ok"] = True
             self.send_json({"ok": True, "id": STATE["action_id"]})
             return
+        mode = form.get("mode", [""])[0]
+        if action == "set_status_leds" and mode not in ("off", "hold", "on"):
+            self.send_json({"ok": False, "error": "a status LED mode is off, hold, or on"}, 400)
+            return
+        # The same three refusals as handle_action_() in button_config.cpp.
+        hold = form.get("hold", [""])[0]
+        hold_slot = form.get("slot", [""])[0]
+        if action == "set_hold":
+            if hold not in STATE["holds"]:
+                self.send_json({"ok": False, "error": "a hold is wifi, status, sleep, or assign"}, 400)
+                return
+            if not (hold_slot.isdigit() and len(hold_slot) <= 2
+                    and (int(hold_slot) == 0 or int(hold_slot) in HOLD_SLOTS)):
+                self.send_json({"ok": False, "error": "a hold button is 0 or a button slot"}, 400)
+                return
+            if int(hold_slot) and any(
+                    key != hold and value == int(hold_slot) for key, value in STATE["holds"].items()):
+                self.send_json({"ok": False, "error": "another hold already uses that button"}, 400)
+                return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
 
@@ -387,7 +410,9 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "set_wifi_always_on":
             STATE["network"]["wifi_always_on"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_status_leds":
-            STATE["status_leds"] = form.get("enabled", ["0"])[0] == "1"
+            STATE["status_leds"] = mode
+        elif action == "set_hold":
+            STATE["holds"][hold] = int(hold_slot)
         elif action == "set_boot_leds":
             STATE["boot_leds"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_enabled":

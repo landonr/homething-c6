@@ -9,6 +9,11 @@ CONFIG = (ROOT / "c6remote.yaml").read_text()
 HEADER = (ROOT / "ir_learning.h").read_text()
 
 
+def hold_tick_step() -> str:
+    steps = CONFIG.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+    return next(step for step in steps if "hold_actions.tick(" in step)
+
+
 def section(text: str, start: str, end: str) -> str:
     """Return the text between the first start marker and the next end marker."""
     head = text.split(start, 1)
@@ -21,19 +26,24 @@ def section(text: str, start: str, end: str) -> str:
 
 
 class IrLearningTest(unittest.TestCase):
-    def test_sw1_hold_enters_receiver_mode(self) -> None:
-        self.assertIn("id: detect_receiver_hold", CONFIG)
-        self.assertIn("- delay: 2s", CONFIG)
-        self.assertIn('set_effect("Status Indicators")', CONFIG)
+    def test_the_assignment_hold_opens_receiver_mode(self) -> None:
+        assign = hold_tick_step().split("if (fired & (1u << HoldActions::ASSIGN)) {", 1)[1]
+        opened = assign.split("} else {", 1)[0]
+        self.assertIn("if (ir_ui.state == IrUi::OFF) {", opened)
+        self.assertIn("ir_ui.open();", opened)
+        self.assertIn('set_effect("Status Indicators")', opened)
         self.assertNotIn("IR Receiver", CONFIG)
 
-    def test_only_sw2_controls_voice_assistant(self) -> None:
-        sw1 = CONFIG.split("name: Button 1", 1)[1].split("name: Button 2", 1)[0]
-        sw2 = CONFIG.split("name: Button 2", 1)[1].split("name: Button 3", 1)[0]
-        self.assertIn("voice_assistant.start:", sw2)
-        release = CONFIG.split("id: release_assignment", 1)[1].split("id: detect_receiver_hold", 1)[0]
+    def test_voice_starts_in_one_shared_step_and_stops_on_a_plain_release(self) -> None:
+        """Every expander input reaches Assist through the shared paths, so no
+        input carries voice actions of its own."""
+        inputs = CONFIG[CONFIG.index("\nbinary_sensor:\n"):CONFIG.index("\nsensor:\n")]
+        self.assertNotIn("voice_assistant", inputs)
+        self.assertEqual(CONFIG.count("voice_assistant.start:"), 1)
+        press = CONFIG.split("  - id: button_press\n", 1)[1].split("\n  - id:", 1)[0]
+        self.assertIn("voice_assistant.start:", press)
+        release = CONFIG.split("  - id: release_assignment\n", 1)[1].split("\n  - id:", 1)[0]
         self.assertIn("voice_assistant.stop:", release)
-        self.assertNotIn("voice_assistant", sw1)
 
     def test_receiver_states_drive_only_d3_and_d4(self) -> None:
         for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
@@ -77,41 +87,39 @@ class IrLearningTest(unittest.TestCase):
         for period in (1600, 3200, 4000):
             self.assertIn(f"(millis() % {period}) / {period}.0f", d5)
 
-    def test_successful_save_returns_to_ready_until_sw1(self) -> None:
+    def test_successful_save_returns_to_ready_until_the_assignment_hold(self) -> None:
         self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)
         self.assertIn("state = READY", HEADER)
         self.assertIn("elapsed < 5000", HEADER)
-        sw1 = CONFIG.split("name: Button 1", 1)[1].split("name: Button 2", 1)[0]
-        self.assertIn("lambda: return ir_ui.state != IrUi::OFF;", sw1)
-        self.assertIn("script.execute: exit_receiver_hold", sw1)
         tick = HEADER.split("bool tick() {", 1)[1].split("\n  }", 1)[0]
         self.assertIn("if (state == READY)", tick)
         self.assertIn("close();", tick)
-        exit_hold = CONFIG.split("id: exit_receiver_hold", 1)[1].split("- id: ", 1)[0]
-        self.assertIn("ir_ui.close();", exit_hold)
-        self.assertIn("ir_ui.hold_consumed = true;", exit_hold)
+        # The hold closes the mode from any learn state. HoldActions makes the
+        # release silent, so IrUi keeps no consumed flag of its own.
+        assign = hold_tick_step().split("if (fired & (1u << HoldActions::ASSIGN)) {", 1)[1]
+        self.assertIn("ir_ui.close();", assign.split("} else {", 1)[1])
+        self.assertNotIn("hold_consumed", HEADER)
+        self.assertIn('"Receiver mode READY. Hold the assignment mode button or wait 5 s to leave"', HEADER)
+        self.assertNotIn("SW1", HEADER.split("void open() {", 1)[1].split("\n  }", 1)[0])
 
     def test_all_assignable_buttons_have_playback_paths(self) -> None:
         """Playback rides the tap, so every input needs its own slot number."""
-        for button in range(3, 12):
-            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL)", CONFIG)
-        # 12..16 are the wheel directions. 17 and 18 are the rotation detents,
-        # which have no release edge and so never reach the voice stage.
-        for button in range(12, 17):
-            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL)", CONFIG)
+        # 3..11 are SW3..SW11, 12..16 the wheel directions, 19 SW2 and 20 SW1.
+        for button in list(range(3, 17)) + [19, 20]:
+            self.assertEqual(1, CONFIG.count(f"{{id: button_press, slot: {button}}}"), button)
+            self.assertEqual(1, CONFIG.count(f"{{id: button_release, slot: {button}}}"), button)
+        # 17 and 18 are the rotation detents, which have no release edge and so
+        # never reach the voice stage.
         for button in (17, 18):
             self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::ARM_ONLY)", CONFIG)
-        self.assertIn("ir_ui.tap(20, IrUi::Tap::NO_VOICE)", CONFIG)
-        self.assertIn("ir_ui.tap(19, IrUi::Tap::FULL)", CONFIG)
         send = CONFIG.split("- if: &send_learned_code", 1)[1].split("- if:", 1)[0]
         self.assertIn("lambda: return ir_ui.take_transmit();", send)
         self.assertIn("code: !lambda return ir_ui.code();", send)
         self.assertIn("ir_code_store.save(target, raw)", HEADER)
         self.assertIn("pending_transmit_ = ir_code_store.load(button, code_);", HEADER)
-        self.assertEqual(17, CONFIG.count("- if: *send_learned_code"))
-        for button in range(3, 12):
-            entry = CONFIG.split(f"name: Button {button}", 1)[1].split(f"name: Button {button + 1}", 1)[0]
-            self.assertIn("- if: *send_learned_code", entry)
+        # The anticlockwise detent, the press path and the release path.
+        self.assertEqual(3, CONFIG.count("- if: *send_learned_code"))
+        self.assertLess(CONFIG.index("- if: &send_learned_code"), CONFIG.index("\nscript:\n"))
         self.assertIn("FIRST_BUTTON = 3", HEADER)
         self.assertNotIn("remote_transmitter.transmit_samsung:", CONFIG)
 

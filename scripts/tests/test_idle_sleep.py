@@ -13,6 +13,7 @@ HEADER = (COMPONENT / "idle_sleep.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 BENCH = (ROOT / "c6remote-test-sleep.yaml").read_text()
 PRODUCTION = (ROOT / "c6remote.yaml").read_text()
+HOLD_ACTIONS = (ROOT / "hold_actions.h").read_text()
 
 
 def function_body(source: str, signature: str) -> str:
@@ -45,7 +46,7 @@ def expander_bit_to_slot(config: str) -> dict[int, int]:
         if "pcf8574: button_expander" not in entry and "<<: *button_1" not in entry:
             continue
         bit = int(re.search(r"number: (\d+)", entry).group(1))
-        slot = int(re.search(r"ir_ui\.tap\((\d+),", entry).group(1))
+        slot = int(re.search(r"\{id: button_press, slot: (\d+)\}", entry).group(1))
         mapping[bit] = slot
     return mapping
 
@@ -159,6 +160,17 @@ class IdleSleepComponentTest(unittest.TestCase):
         int_low = tail[tail.index("gpio_get_level(WAKE_PIN) == 0"):tail.index("this->enter_sleep_();")]
         self.assertIn("if (this->forced_sleep_) {", int_low)
         self.assertIn("return;", int_low[int_low.index("if (this->forced_sleep_) {"):])
+
+    def test_arm_sleep_sets_the_forced_sleep_once(self) -> None:
+        """HoldActions times the production sleep hold, so the component takes the arm from outside."""
+        self.assertIn("void arm_sleep();", HEADER)
+        body = function_body(CPP, "void IdleSleep::arm_sleep()")
+        self.assertEqual(statements(body), [
+            "if (this->forced_sleep_)",
+            "return;",
+            "this->forced_sleep_ = true;",
+            'ESP_LOGI(TAG, "Sleep hold armed, sleeping on release");',
+        ])
 
     def test_hold_arms_forced_sleep_from_the_poll(self) -> None:
         hold = function_body(CPP, "void IdleSleep::track_hold_(uint16_t pressed, uint32_t now)")
@@ -332,10 +344,11 @@ class ProductionSleepConfigTest(unittest.TestCase):
     def test_production_has_idle_sleep_and_the_replay_hooks(self) -> None:
         self.assertIn("\nidle_sleep:\n", PRODUCTION)
         self.assertIn("return id(zigbee_radio).is_connected();", PRODUCTION)
-        self.assertIn("zigbee_assignments.play(SLOT_OF_BIT[bit])", PRODUCTION)
-        self.assertIn("id(ha_actions).play(SLOT_OF_BIT[bit])", PRODUCTION)
+        self.assertIn("const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];", PRODUCTION)
+        self.assertIn("return link && zigbee_assignments.play(slot);", PRODUCTION)
+        self.assertIn("if (id(ha_actions).play(slot))", PRODUCTION)
 
-    def test_the_sw5_hold_flashes_the_awake_led_once_when_armed(self) -> None:
+    def test_the_sleep_hold_flashes_the_awake_led_once_when_armed(self) -> None:
         self.assertIn("bool sleep_armed() const { return this->forced_sleep_; }", HEADER)
         interval = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
         for text in (
@@ -404,7 +417,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertIn("id(wake_pulse_until_ms) = first_ms + 1600;", drive)
         self.assertNotIn("wake_pending", drive)
 
-    def test_production_starts_the_sw8_and_sw9_holds_for_a_bit_held_at_wake(self) -> None:
+    def test_production_starts_a_hold_for_a_bit_held_at_wake(self) -> None:
         self.assertIn("uint16_t held_at_wake() const { return this->held_mask_; }", HEADER)
         setup = function_body(CPP, "void IdleSleep::setup()")
         self.assertIn("this->held_mask_ = rec.stub_down & first_down;", setup)
@@ -412,42 +425,35 @@ class ProductionSleepConfigTest(unittest.TestCase):
         drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
         once = drive.index("static bool held_checked = false;")
         self.assertLess(drive.index("if (!id(idle).woke_from_sleep())"), once)
-        self.assertLess(once, drive.index("id(idle).held_at_wake()"))
-        self.assertIn("if ((held & (1u << 7)) && !id(button_expander)->digital_read(7)) {", drive)
-        sw8 = statements(function_body(drive, "if ((held & (1u << 7))"))
-        self.assertEqual(sw8, ["if (id(idle).wake_replay())", "id(sw8_hold_consumed) = false;",
-                               "id(detect_peek_hold).execute();"])
-        self.assertIn("if ((held & (1u << 9)) && !id(button_expander)->digital_read(9)) {", drive)
-        sw9 = statements(function_body(drive, "if ((held & (1u << 9))"))
-        self.assertEqual(sw9, ["if (id(idle).wake_replay())", "id(sw9_hold_consumed) = false;",
-                               "id(detect_wifi_hold).execute();"])
-        self.assertNotIn("ir_ui.hold_consumed", drive)
+        # ButtonConfig loads the hold buttons in setup, so the start waits for it.
+        check = drive.index("if (!held_checked && App.is_setup_complete()) {")
+        self.assertLess(once, check)
+        self.assertLess(check, drive.index("id(idle).held_at_wake()"))
+        loop = function_body(drive, "for (uint8_t bit = 0; bit < 16; bit++)")
+        self.assertEqual(statements(loop), [
+            "if ((held & (1u << bit)) && !id(button_expander)->digital_read(bit))",
+            "hold_actions.wake_start(HoldActions::SLOT_OF_BIT[bit], now);",
+        ])
+        # on_boot marks every held bit before any loop, so a release during setup
+        # still reads the mark.
         boot = PRODUCTION.split("    - priority: 800\n", 1)[1].split("    - priority: 600\n", 1)[0]
-        self.assertIn("if (id(idle).woke_from_sleep() && !id(idle).wake_replay()) {", boot)
-        self.assertIn("const uint16_t held = id(idle).held_at_wake();", boot)
-        self.assertIn("if (held & 1u)\n                ir_ui.hold_consumed = true;", boot)
-        self.assertIn("if (held & (1u << 7))\n                id(sw8_hold_consumed) = true;", boot)
-        self.assertIn("if (held & (1u << 9))\n                id(sw9_hold_consumed) = true;", boot)
-        self.assertNotIn("(held & (1u << 0))", drive)
-        self.assertNotIn("detect_receiver_hold", drive)
-        self.assertNotIn("exit_receiver_hold", drive)
-        # The wake handling mirrors the on_press of each button.
-        for name, bit, lines in (
-            ("Button 8", 7, ["id(sw8_hold_consumed) = false;", "script.execute: detect_peek_hold"]),
-            ("Button 9", 9, ["id(sw9_hold_consumed) = false;", "script.execute: detect_wifi_hold"]),
-        ):
-            entry = PRODUCTION.split(f"name: {name}\n", 1)[1].split("  - platform:", 1)[0]
-            self.assertIn(f"number: {bit}\n", entry)
-            on_press = entry[entry.index("on_press:"):entry.index("on_release:")]
-            for line in lines:
-                self.assertIn(line, on_press, name)
+        mark = function_body(boot, "if (id(idle).woke_from_sleep())")
+        self.assertIn("const uint16_t held = id(idle).held_at_wake();", mark)
+        self.assertIn("const bool silent = !id(idle).wake_replay();", mark)
+        self.assertIn("if (held & (1u << bit))\n                  hold_actions.wake_held(HoldActions::SLOT_OF_BIT[bit], silent);",
+                      mark)
+        for gone in ("hold_consumed", "sw8_hold_consumed", "sw9_hold_consumed", "detect_peek_hold",
+                     "detect_wifi_hold", "detect_receiver_hold", "exit_receiver_hold"):
+            self.assertNotIn(gone, PRODUCTION)
 
-    def test_production_sleeps_on_a_sw5_hold(self) -> None:
+    def test_production_times_the_sleep_hold_outside_idle_sleep(self) -> None:
+        """The sleep hold moves between buttons, so the fixed expander bit stays unset."""
         section = PRODUCTION.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("  sleep_hold_bit: 4\n", section)
-        self.assertIn("  sleep_hold_time: 2s\n", section)
-        button = PRODUCTION.split("name: Button 5\n", 1)[1].split("  - platform:", 1)[0]
-        self.assertIn("number: 4\n", button)
+        self.assertNotIn("sleep_hold_bit", section)
+        self.assertNotIn("sleep_hold_time", section)
+        interval = PRODUCTION.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("if (fired & (1u << HoldActions::SLEEP))\n            id(idle).arm_sleep();", interval)
+        self.assertLess(interval.index("id(idle).arm_sleep();"), interval.index("const bool armed = id(idle).sleep_armed();"))
 
     def test_production_defaults_to_five_minutes_and_links_the_page(self) -> None:
         section = PRODUCTION.split("\nidle_sleep:\n", 1)[1].split("\n\n", 1)[0]
@@ -462,22 +468,25 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertNotIn("\ndeep_sleep:", PRODUCTION)
 
     def test_replay_table_matches_the_binary_sensors(self) -> None:
-        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", PRODUCTION).group(1)
+        self.assertNotIn("SLOT_OF_BIT[16]", PRODUCTION)
+        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", HOLD_ACTIONS).group(1)
         slots = [int(value) for value in table.split(",")]
         mapping = expander_bit_to_slot(PRODUCTION)
         self.assertEqual(sorted(mapping), list(range(16)))
         self.assertEqual(slots, [mapping[bit] for bit in range(16)])
 
-    def test_only_the_release_tap_inputs_skip_a_held_replay(self) -> None:
-        self.assertIn("if (held && (bit == 0 || bit == 7 || bit == 9))", PRODUCTION)
-        section = PRODUCTION[PRODUCTION.index("\nbinary_sensor:\n"):PRODUCTION.index("\nsensor:\n")]
-        for entry in section.split("  - platform: gpio\n")[1:]:
-            if "pcf8574: button_expander" not in entry and "<<: *button_1" not in entry:
-                continue
-            bit = int(re.search(r"number: (\d+)", entry).group(1))
-            on_release = entry[entry.index("on_release:"):]
-            taps_on_release = "ir_ui.tap(" in on_release
-            self.assertEqual(taps_on_release, bit in (0, 7, 9), f"expander bit {bit}")
+    def test_a_held_replay_skips_an_input_with_an_active_hold(self) -> None:
+        """That input taps on release, so a replay as well would send its assignment
+        twice. The check comes before the Home Assistant queue, so it covers that kind too."""
+        replay = PRODUCTION.split("  replay: !lambda |-\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(statements(replay), [
+            "const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];",
+            "if (held && hold_actions.defers(slot))",
+            "return false;",
+            "if (id(ha_actions).play(slot))",
+            "return true;",
+            "return link && zigbee_assignments.play(slot);",
+        ])
 
     def test_production_awake_led_is_the_inverted_gpio15_output(self) -> None:
         output = PRODUCTION[PRODUCTION.index("    id: awake_led_pwm\n") - len("  - platform: ledc\n"):]
@@ -524,7 +533,7 @@ class HomeAssistantSleepTest(unittest.TestCase):
         self.assertIn("this->replay_(bit, held, this->link_seen_)", CPP)
         self.assertIn("if (!this_sent && !this->link_seen_)", CPP)
         self.assertIn("bool, bool)> replay_{};", HEADER)
-        self.assertIn("return link && zigbee_assignments.play(SLOT_OF_BIT[bit]);", PRODUCTION)
+        self.assertIn("return link && zigbee_assignments.play(slot);", PRODUCTION)
 
 
 if __name__ == "__main__":

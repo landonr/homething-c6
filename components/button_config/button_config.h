@@ -63,10 +63,15 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   // True when that gate held the API server down for this boot.
   void set_ha_api_gated(bool gated);
   bool ha_api_gated() const { return this->ha_api_gated_.load(std::memory_order_acquire); }
-  // Stored switch for D2 to D5 and the XIAO LED. The first call reads flash, so
-  // on_boot at priority 800 sees it before this component's own setup().
-  bool status_leds() const;
-  bool set_status_leds(bool enabled);
+  // Stored mode for D2 to D5 and the XIAO LED. The first call reads flash, so
+  // on_boot at priority 800 sees it before this component's own setup(). The
+  // byte keeps an older off or on record valid.
+  enum StatusMode : uint8_t { STATUS_OFF = 0, STATUS_ON = 1, STATUS_HOLD = 2 };
+  uint8_t status_mode() const;
+  bool set_status_mode(uint8_t mode);
+  // True only in On. Hold stays dark until the status hold fires.
+  bool status_leds() const { return this->status_mode() == STATUS_ON; }
+  // The argument is status_leds() after the change.
   void add_on_status_leds_callback(std::function<void(bool)> &&callback) {
     this->status_leds_callbacks_.add(std::move(callback));
   }
@@ -127,6 +132,9 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void load_name_pref_();
   bool set_friendly_name_(const std::string &name);
   void apply_friendly_name_(const std::string &name);
+  void load_hold_pref_();
+  bool set_hold_slot_(uint8_t action, uint8_t slot);
+  void apply_hold_slots_(const uint8_t *slots);
 
   // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.
   static constexpr uint32_t HA_PREF_KEY = 0x48415049U;
@@ -155,6 +163,15 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   };
   static constexpr uint32_t BOOT_LED_PREF_KEY = 0x424C4544U;
   static constexpr uint32_t BOOT_LED_PREF_MAGIC = 0x424C4431U;
+  // 'HLD1' record under key 'HOLD'. One slot for each hold in HoldActions
+  // order, 0 for none. Missing, corrupt, or shared slots mean the defaults.
+  static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;
+  static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;
+  static constexpr size_t HOLD_COUNT = 4;
+  struct HoldPref {
+    uint32_t magic;
+    uint8_t slot[HOLD_COUNT];
+  };
   // 'NAM1' record under key 'NAME'. Length 0 means the YAML friendly name.
   static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;
   static constexpr uint32_t NAME_PREF_MAGIC = 0x4E414D31U;
@@ -177,9 +194,12 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   std::atomic<bool> ha_api_gated_{false};
   std::atomic<bool> wifi_always_on_{false};
   // -1 until the first read of the stored value.
-  mutable std::atomic<int8_t> status_leds_{-1};
+  mutable std::atomic<int8_t> status_mode_{-1};
   CallbackManager<void(bool)> status_leds_callbacks_;
   mutable std::atomic<int8_t> boot_leds_{-1};
+  // The httpd task reads this copy, because HoldActions is main-loop owned.
+  std::atomic<uint8_t> hold_slots_[HOLD_COUNT]{};
+  ESPPreferenceObject hold_pref_;
   std::atomic<uint32_t> last_activity_ms_{0};
   bool boot_wifi_always_on_{false};
   bool temporary_wifi_{false};

@@ -49,6 +49,7 @@ header.full{display:flex;align-items:center;gap:12px}
 h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 h2.ttl{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h2.ttl select{width:auto;margin:0;font-size:14px;font-weight:400}
 .sw{position:relative;display:inline-block;width:38px;height:22px;flex:none}
 .sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
 .sw input[disabled]{cursor:not-allowed}
@@ -213,7 +214,7 @@ aria-label="Assignment colors" checked><span></span></label></div>
 <h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"
 aria-label="Sleep" disabled><span></span></label></h2>
 <p class="sub st" id="sls">Sleep state is loading.</p>
-<p class="sub">Each press restarts the timer. Hold Button 5 for two seconds to sleep at once, even when Sleep is off.</p>
+<p class="sub" id="slh">Each press restarts the timer.</p>
 <label class="hd2" for="sla">Sleep after, in minutes</label>
 <div class="act" id="slr">
 <input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
@@ -221,16 +222,22 @@ aria-label="Sleep" disabled><span></span></label></h2>
 </div>
 <h2 class="ttl">Send the wake press<label class="sw" id="srw"><input type="checkbox" id="srb"
 aria-label="Send the wake press" disabled><span></span></label></h2>
-<p class="sub">When on, the button that wakes the remote also sends its Zigbee command if the link comes up within 3 seconds. When off, the first press only wakes the remote.</p>
+<p class="sub" id="srh">When on, the button that wakes the remote also sends its Zigbee command if the link comes up within 3 seconds. When off, the first press only wakes the remote.</p>
 </div>
 <hr class="rule">
-<h2 class="ttl">Status LEDs<label class="sw" id="lgw"><input type="checkbox" id="lgb"
-aria-label="Status LEDs" disabled><span></span></label></h2>
+<h2 class="ttl">Status LEDs<select id="lgm" aria-label="Status LEDs" disabled>
+<option value="off">Off</option><option value="hold">Hold button</option><option value="on">Always on</option></select></h2>
 <p class="sub st" id="lgs">Status LEDs state is loading.</p>
 <hr class="rule">
 <h2 class="ttl">Boot and wake LEDs<label class="sw" id="blw"><input type="checkbox" id="blb"
 aria-label="Boot and wake LEDs" disabled><span></span></label></h2>
 <p class="sub st" id="bls">Boot and wake LEDs state is loading.</p>
+<hr class="rule">
+<h2 class="ttl">Hold buttons</h2>
+<p class="sub">Hold a button to run its action. A button with an active hold sends its own assignment when you release it before the hold time.
+The Status LEDs hold is active only when Status LEDs is set to Hold button.</p>
+<div id="hbx"></div>
+<p class="sub st" id="hbs" hidden></p>
 <hr class="rule">
 <h2 class="ttl">Restart</h2>
 <p class="sub st" id="rss" hidden></p>
@@ -242,7 +249,7 @@ aria-label="Boot and wake LEDs" disabled><span></span></label></h2>
 aria-label="WiFi Always On" disabled><span></span></label></h2>
 <p class="sub st" id="wfd">WiFi Always On default is loading.</p>
 <p class="sub st" id="wfs">Wi-Fi state is loading.</p>
-<p class="sub">WiFi Always On applies at the next boot. Hold Button 9 for two seconds to toggle a temporary session when this switch is off.</p>
+<p class="sub" id="wfh">WiFi Always On applies at the next boot.</p>
 <dl class="info"><dt>IP address</dt><dd id="wip">Loading</dd>
 <dt>MAC address</dt><dd id="wmac">Loading</dd></dl>
 <hr class="rule">
@@ -287,7 +294,7 @@ aria-label="Bluetooth radio"><span></span></label></h2>
 </div>
 <script>
 var S=[
-{s:19,l:"Button 2",v:1,x:22.9,y:12.2},{s:20,l:"Button 1",v:0,x:77.1,y:12.2},
+{s:19,l:"Button 2",v:1,x:22.9,y:12.2},{s:20,l:"Button 1",v:1,x:77.1,y:12.2},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
 {s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.7,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.9},
 {s:17,l:"Wheel Clockwise",v:0,x:50,y:31.7,c:"rot right"},
@@ -298,6 +305,15 @@ var S=[
 {s:3,l:"Button 3",v:1,x:22.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:77.1,y:51.1},
 {s:4,l:"Button 4",v:1,x:22.9,y:60.1},{s:7,l:"Button 7",v:1,x:50,y:60.1},{s:10,l:"Button 10",v:1,x:77.1,y:60.1},
 {s:5,l:"Button 5",v:1,x:22.9,y:69.1},{s:8,l:"Button 8",v:1,x:50,y:69.1},{s:9,l:"Button 9",v:1,x:77.1,y:69.1}];
+// One row per hold, in the order of the holds object. The times match HOLD_MS
+// in hold_actions.h.
+var HOLDS=[
+{k:"wifi",n:"Wi-Fi",t:"Hold for two seconds to open or close a temporary Wi-Fi session."},
+{k:"status",n:"Status LEDs",t:"Hold for one second to see the status while Status LEDs is set to Hold button."},
+{k:"sleep",n:"Sleep",t:"Hold for two seconds. The remote sleeps when you release all buttons, even when Sleep is off."},
+{k:"assign",n:"Assignment mode",t:"Hold for two seconds to open or close assignment mode."}];
+// The inputs a hold can use, in board order. Wheel rotation has no release edge.
+var HB=[20,19,3,4,5,6,7,8,9,10,11,13,15,16,12,14];
 // One press, one Zigbee command. a is the number the remote stores, c is the
 // Zigbee2MQTT input cluster a target must carry to accept it, and p names the
 // value the command needs. The numbers match the Action enum in
@@ -322,8 +338,11 @@ var ZA=[
 {a:16,n:"Squawk",c:"ssIasWd"}];
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
-var ledBusy=false,ledWant=true,ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
+var ledBusy=false,ledWant="on",ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
+// holdWant is the {k,v} change in flight. holdHtml is the last hold markup, so a
+// poll that changes nothing never rebuilds an open list.
+var holdBusy=false,holdWant=null,holdError="",holdHtml="";
 // nameEdit keeps the box open across polls, so a repaint never overwrites a
 // name that is still being typed.
 var nameEdit=false,nameBusy=false,nameMsg="",nameBad=false;
@@ -514,7 +533,7 @@ b.onclick=(function(n){return function(){pick(n)}})(d.s);
 keys[d.s]=b;document.getElementById("remote").appendChild(b)}
 document.getElementById("bfr").onclick=forgetBle;
 document.getElementById("wfb").onchange=setWifiAlwaysOn;
-document.getElementById("lgb").onchange=setStatusLeds;
+document.getElementById("lgm").onchange=setStatusLeds;
 document.getElementById("blb").onchange=setBootLeds;
 document.getElementById("slb").onchange=setSleepEnabled;
 document.getElementById("srb").onchange=setSleepReplay;
@@ -809,7 +828,11 @@ var dip=document.getElementById("dip");
 if(dip)dip.textContent=st.network.ip||"Unavailable";
 if(mac)mac.textContent=st.network.mac||"Unavailable";
 if(fw)fw.textContent=typeof st.firmware==="string"&&st.firmware?st.firmware:"Unknown";
-ledStatus();bootLedStatus()}
+var wh=document.getElementById("wfh"),wn=holdName("wifi");
+if(wh)wh.textContent="WiFi Always On applies at the next boot."+(wn?" Hold "+wn+
+" for two seconds to toggle a temporary session when this switch is off.":
+" No button toggles a temporary session, because the Wi-Fi hold has no button.");
+ledStatus();bootLedStatus();holdPaint()}
 
 function bootLedStatus(){
 var line=document.getElementById("bls"),box=document.getElementById("blb");
@@ -830,24 +853,91 @@ if(!ok)throw new Error("The remote could not save the boot LED switch.")})})
 .then(function(){bootBusy=false;return load().then(paint)},function(e){
 bootBusy=false;bootError=e&&e.message?e.message:"The remote did not answer.";bootLedStatus()})}
 
+// An older firmware sends a boolean, so true reads as on and false as off.
+function ledMode(){var m=st&&st.status_leds;return m==="off"||m==="hold"?m:m===false?"off":"on"}
+
 function ledStatus(){
-var line=document.getElementById("lgs"),box=document.getElementById("lgb");
+var line=document.getElementById("lgs"),box=document.getElementById("lgm");
 if(!st)return;
-var on=st.status_leds!==false;
-if(box){box.checked=ledBusy?ledWant:on;box.disabled=ledBusy}
+var m=ledMode(),n=holdName("status");
+if(box){box.value=ledBusy?ledWant:m;box.disabled=ledBusy}
 if(line){line.className="sub st"+(ledError?" bad":"");
-line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>"+(on?"Status LEDs are on.":
-"Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse. Hold Button 8 for one second to see the status.")+(ledError?" "+esc(ledError):"")}}
+line.innerHTML="<span class='dot "+(m==="on"?"":"off")+"'></span>"+(m==="on"?"Status LEDs are on.":
+m==="hold"?"Status LEDs are dark. A radio switch still gives one pulse, and assignment mode still lights D2 to D5. "+(n?"Hold "+esc(n)+
+" for one second to see the status.":"The status hold has no button. Choose one under Hold buttons."):
+"Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse, "+
+"and assignment mode still lights D2 to D5.")+
+(ledError?" "+esc(ledError):"")}}
 
 function setStatusLeds(){
 if(ledBusy||!st)return;
-ledWant=document.getElementById("lgb").checked;ledBusy=true;ledError="";ledStatus();
-post("set_status_leds",null,undefined,undefined,"&enabled="+(ledWant?"1":"0"))
+var v=document.getElementById("lgm").value;
+if(["off","hold","on"].indexOf(v)<0)return;
+ledWant=v;ledBusy=true;ledError="";ledStatus();
+post("set_status_leds",null,undefined,undefined,"&mode="+ledWant)
 .then(function(r){if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){
-if(!ok)throw new Error("The remote could not save the status LED switch.")})})
+if(!ok)throw new Error("The remote could not save the status LED mode.")})})
 .then(function(){ledBusy=false;return load().then(paint)},function(e){
 ledBusy=false;ledError=e&&e.message?e.message:"The remote did not answer.";ledStatus()})}
+
+function holdSlot(k){return st&&st.holds?Number(st.holds[k])||0:0}
+
+// The label of the input that carries the hold, or "" for none.
+function holdName(k){var d=info(holdSlot(k));return d?d.l:""}
+
+// The hold an input carries now. The status hold counts only in Hold mode.
+function holdOf(s){var i;
+if(!s||!st||!st.holds)return null;
+for(i=0;i<HOLDS.length;i++)
+if(holdSlot(HOLDS[i].k)===s&&(HOLDS[i].k!=="status"||ledMode()==="hold"))return HOLDS[i];
+return null}
+
+// The Wi-Fi hold is the only way back to this page while WiFi Always On is off.
+function wifiHoldText(){var n=holdName("wifi");
+return n?" Hold "+n+" for two seconds to open a temporary session.":
+" No button opens a temporary session, because the Wi-Fi hold has no button."}
+
+// The other hold that uses the input in cur, or null.
+function holdUser(cur,s,k){
+for(var i=0;i<HOLDS.length;i++)if(HOLDS[i].k!==k&&cur[HOLDS[i].k]===s)return HOLDS[i];
+return null}
+
+// The markup is rebuilt only when it changes, so a state poll cannot close a
+// list that is open. An input that another hold uses is disabled in each list.
+function holdPaint(){
+var box=document.getElementById("hbx"),line=document.getElementById("hbs");
+if(!box||!st)return;
+var cur={},h="",i,j,d,s,by;
+if(!st.holds)h="<p class=sub>This firmware has no hold settings.</p>";
+else{
+for(i=0;i<HOLDS.length;i++){d=HOLDS[i];
+cur[d.k]=holdBusy&&holdWant&&holdWant.k===d.k?holdWant.v:holdSlot(d.k)}
+for(i=0;i<HOLDS.length;i++){d=HOLDS[i];
+h+="<label class=hd2 for=hb-"+d.k+">"+esc(d.n)+"</label><select id=hb-"+d.k+(holdBusy?" disabled":"")+">"+
+"<option value=0"+(cur[d.k]?"":" selected")+">None</option>";
+for(j=0;j<HB.length;j++){s=HB[j];by=holdUser(cur,s,d.k);
+h+="<option value="+s+(cur[d.k]===s?" selected":"")+(by?" disabled":"")+">"+
+esc(info(s).l)+(by?" ("+esc(by.n)+")":"")+"</option>"}
+h+="</select><p class=sub>"+esc(d.t)+"</p>"}}
+if(h!==holdHtml){holdHtml=h;box.innerHTML=h;
+if(st.holds)HOLDS.forEach(function(x){document.getElementById("hb-"+x.k).onchange=function(){setHold(x.k)}})}
+if(line){line.hidden=!holdError;line.className="sub st"+(holdError?" bad":"");line.textContent=holdError}}
+
+function setHold(k){
+if(holdBusy||!st||!st.holds)return;
+var v=Number(document.getElementById("hb-"+k).value)||0,
+always=!!(st.network&&st.network.wifi_always_on===true);
+if(v===holdSlot(k))return;
+if(k==="wifi"&&!v&&!always&&!confirm("WiFi Always On is off. Without a Wi-Fi hold, no button opens "+
+"a temporary session after this one closes. Continue?")){holdHtml="";holdPaint();return}
+holdBusy=true;holdWant={k:k,v:v};holdError="";holdPaint();
+post("set_hold",null,undefined,undefined,"&hold="+k+"&slot="+v)
+.then(function(r){if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){
+if(!ok)throw new Error("The remote could not save the hold button.")})})
+.then(function(){holdBusy=false;return load().then(paint)},function(e){
+holdBusy=false;holdError=e&&e.message?e.message:"The remote did not answer.";holdPaint()})}
 
 function setWifiAlwaysOn(){
 if(wifiBusy||!st||!st.network)return;
@@ -877,6 +967,14 @@ num=document.getElementById("sla"),ap=document.getElementById("slap"),line=docum
 var z=st&&st.sleep,on=!!(z&&z.enabled===true);
 if(blk)blk.hidden=!(z&&z.available);
 if(!z||!z.available)return;
+var hl=document.getElementById("slh"),hn=holdName("sleep");
+if(hl)hl.textContent="Each press restarts the timer."+(hn?" Hold "+hn+
+" for two seconds to sleep at once, even when Sleep is off.":
+" The sleep hold has no button. Choose one under Hold buttons to sleep at once.");
+var wk=document.getElementById("srh"),an=holdName("assign");
+if(wk)wk.textContent="When on, the button that wakes the remote also sends its Zigbee command if the link "+
+"comes up within 3 seconds. When off, the first press only wakes the remote. If you keep a hold button down "+
+"after the wake, its hold starts."+(an?" The assignment mode hold on "+an+" does not start from a wake.":"");
 if(box){box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy}
 var rb=document.getElementById("srb");
 if(rb){rb.checked=sleepBusy?replayWant:z.replay===true;rb.disabled=sleepBusy}
@@ -926,7 +1024,7 @@ e.innerHTML=e.hidden?"":"<span class='dot "+(restartBusy?"warn":restartDone?"":"
 (!restartBusy?(restartDone?"The remote restarted.":""):
 !restartId?"The page asked the remote to restart.":"The remote is restarting."+
 (always?" This page reconnects when the remote is back.":
-" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session."))+
+" Wi-Fi stays off after the restart."+wifiHoldText()))+
 (restartErr?" "+esc(restartErr):"")}}
 
 // The remote restarts after it answers, so the press is never confirmed by an
@@ -1054,7 +1152,7 @@ var a=st&&st.network?st.network.wifi_always_on:undefined;
 if(lnkOffline){k="bad";t="This browser is offline. Changes on this page are not saved until it reconnects."}
 else if(restartBusy||zpjBusy){k="warn";t="Waiting for the remote to restart."}
 else{k="bad";t="The page is not connected to the remote. Changes on this page are not saved until it reconnects."+
-(a===false?" Hold Button 9 for two seconds to open a temporary session.":
+(a===false?wifiHoldText():
 a===true?" If the remote sleeps, press a button to wake it.":"")}}
 b.hidden=!t;
 if(t&&lnkText!==t){b.textContent=t}
@@ -1073,7 +1171,7 @@ stBusy=true;
 readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus();
+st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;st.holds=j.holds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus();
 // A switch can change on another page or on the remote, and the Action list follows it.
 if(booted&&radioKey()!==radioSeen)paint()}},
 function(){zpjLost();restartLost()})
@@ -1171,7 +1269,9 @@ return "<p class=sub>Capture from a source remote, or paste a code.</p>"+
 codeBox(lock)}
 
 function vaPanel(lock){
-return "<p class=sub>The press starts Assist and the release ends it.</p>"+
+var h=holdOf(sel);
+return "<p class=sub>"+(h?"This input has the "+esc(h.n)+" hold, so the release starts Assist "+
+"and Home Assistant ends it when your speech stops.":"The press starts Assist and the release ends it.")+"</p>"+
 "<div class=act><button type=button id=b2"+(lock?" disabled":"")+
 ">Assign voice assistant</button></div>"}
 
@@ -1219,6 +1319,8 @@ return h}
 function haPanel(lock){
 var dis=lock?" disabled":"",h,i,saved=row(sel)&&row(sel).action==="ha";
 h="<p class=sub>Run one action on one Home Assistant entity.</p>"+
+(holdOf(sel)?"<p class=sub>This input has the "+esc(holdOf(sel).n)+" hold, so the action runs when you release "+
+"a short press.</p>":"")+
 "<label class=hd2 for=he>Entity ID</label><input id=he type=text autocomplete=off autocapitalize=off "+
 "autocorrect=off spellcheck=false placeholder=light.living_room value='"+att(hek)+"'"+dis+">"+
 "<label class=hd2 for=hd>Kind</label><select id=hd"+dis+">";
@@ -1398,7 +1500,7 @@ if(!confirm(open?(zbPaired()?
 "The button assignments are kept. Continue?":
 "The remote restarts to start pairing. This page reconnects when the remote is back. Continue?"):
 "The remote restarts with the Zigbee radio off."+
-(always?"":" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session.")+
+(always?"":" Wi-Fi stays off after the restart."+wifiHoldText())+
 " Continue?"))return;
 zpjBusy=true;zpjWant=!!open;zpjErr="";zpjDown=false;zpjPaint();
 post("pair",null,undefined,undefined,"&on="+(open?"1":"0")).then(function(r){
@@ -1553,45 +1655,72 @@ lines.push(JSON.stringify(e))}
 // single line hides which input an entry belongs to.
 return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
 
-var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","status_leds","boot_leds","sleep","wake_replay"];
+var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"];
+// Each hold key carries the slot of its input, or 0 for none.
+var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];
 // The name stays out, because it belongs to one remote and a copy would give two the same name.
 function cfgSettings(){
 var o={zigbee:radioOn("zigbee"),ble:radioOn("ble"),home_assistant:radioOn("home_assistant"),
 wifi_always_on:!!(st&&st.network&&st.network.wifi_always_on)},z=st&&st.sleep;
-if(st&&typeof st.status_leds==="boolean")o.status_leds=st.status_leds;
+if(st&&st.status_leds!==undefined)o.status_leds=ledMode();
 if(st&&typeof st.boot_leds==="boolean")o.boot_leds=st.boot_leds;
+if(st&&st.holds)HOLDS.forEach(function(d){o["hold_"+d.k]=holdSlot(d.k)});
 if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true}
 return o}
 
 function cfgSetCheck(o){
 if(!o||typeof o!=="object"||Array.isArray(o))return "The settings entry must be an object.";
-var k,i;
+var k,used={};
 for(k in o){if(!Object.prototype.hasOwnProperty.call(o,k))continue;
-if(CFG_BOOL.indexOf(k)<0&&k!=="sleep_after_s")return "The settings entry has the unknown key "+k+".";
+if(CFG_BOOL.indexOf(k)<0&&CFG_HOLD.indexOf(k)<0&&k!=="sleep_after_s"&&k!=="status_leds")
+return "The settings entry has the unknown key "+k+".";
 if(k==="sleep_after_s"){
 if(typeof o[k]!=="number"||o[k]%1!==0||o[k]<10||o[k]>3600)
 return "The setting sleep_after_s needs a whole number of seconds from 10 to 3600."}
+// An older file stores a boolean, so true means on and false means off.
+else if(k==="status_leds"){
+if(typeof o[k]!=="boolean"&&["off","hold","on"].indexOf(o[k])<0)
+return "The setting status_leds must be off, hold, on, true, or false."}
+else if(CFG_HOLD.indexOf(k)>=0){
+if(o[k]!==0&&HB.indexOf(o[k])<0)
+return "The setting "+k+" needs 0 or the slot number of a button or a wheel direction.";
+if(o[k]&&used[o[k]])return "The settings "+used[o[k]]+" and "+k+" name the same input.";
+if(o[k])used[o[k]]=k}
 else if(typeof o[k]!=="boolean")return "The setting "+k+" must be true or false."}
 return ""}
 
 // A setting that already matches is skipped, like a clear on an empty input. A
 // remote without sleep skips the sleep keys.
+// count is the number of settings that change. A hold that moves takes two writes.
 function cfgSetList(o){
-var list=[],z=st&&st.sleep,sl=!!(z&&z.available),skipped=0;
-if(!o)return {list:list,skipped:0};
-function add(k,cur,action,args){if(o[k]!==undefined&&o[k]!==cur)list.push({key:k,action:action,args:args(o[k])})}
+var list=[],z=st&&st.sleep,sl=!!(z&&z.available),skipped=0,count=0;
+if(!o)return {list:list,skipped:0,count:0};
+function add(k,cur,action,args){if(o[k]!==undefined&&o[k]!==cur){list.push({key:k,action:action,args:args(o[k])});count++}}
 function en(v){return "&enabled="+(v?"1":"0")}
+function ledArg(v){return v===true?"on":v===false?"off":v}
 ["zigbee","ble","home_assistant"].forEach(function(r){
 add(r,radioOn(r),"set_radio",function(v){return "&radio="+r+"&on="+(v?"1":"0")})});
 add("wifi_always_on",!!(st&&st.network&&st.network.wifi_always_on),"set_wifi_always_on",en);
-if(st&&typeof st.status_leds==="boolean")add("status_leds",st.status_leds,"set_status_leds",en);
+if(st&&st.status_leds!==undefined&&o.status_leds!==undefined&&ledArg(o.status_leds)!==ledMode()){
+list.push({key:"status_leds",action:"set_status_leds",args:"&mode="+ledArg(o.status_leds)});count++}
 if(st&&typeof st.boot_leds==="boolean")add("boot_leds",st.boot_leds,"set_boot_leds",en);
+if(st&&st.holds){
+var cur={},fin={},chg=[],seen={},why="";
+HOLDS.forEach(function(d){var v=o["hold_"+d.k];cur[d.k]=holdSlot(d.k);fin[d.k]=v===undefined?cur[d.k]:v;
+if(fin[d.k]!==cur[d.k])chg.push(d.k);
+if(fin[d.k]&&seen[fin[d.k]])why="After the import, the "+seen[fin[d.k]]+" and "+d.n+" holds would use the same input.";
+if(fin[d.k])seen[fin[d.k]]=d.n});
+if(why)return {list:[],skipped:0,count:0,error:why};
+// Each changing hold lets go first, so no two holds share an input between writes.
+chg.forEach(function(k){if(cur[k])list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot=0"})});
+chg.forEach(function(k){if(fin[k])list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot="+fin[k]})});
+count+=chg.length}
 if(sl){
 add("sleep",z.enabled===true,"set_sleep_enabled",en);
 add("sleep_after_s",z.after_s,"set_sleep_after",function(v){return "&seconds="+v});
 add("wake_replay",z.replay===true,"set_sleep_replay",en)}
 else{["sleep","sleep_after_s","wake_replay"].forEach(function(k){if(o[k]!==undefined)skipped++})}
-return {list:list,skipped:skipped}}
+return {list:list,skipped:skipped,count:count}}
 
 // Read one code at a time because a burst can outrun the remote's connection limit.
 function cfgRefresh(){
@@ -1732,13 +1861,15 @@ var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,skip;
 if(parsed.error){cfgNote(parsed.error,true);return}
 j=parsed.config;
 for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);
-ins=list.length;sets=cfgSetList(j.settings);skip=sets.skipped?" The remote has no sleep, so "+(sets.skipped===1?"1 sleep setting was":sets.skipped+" sleep settings were")+" skipped.":"";
+ins=list.length;sets=cfgSetList(j.settings);
+if(sets.error){cfgNote(sets.error,true);return}
+skip=sets.skipped?" The remote has no sleep, so "+(sets.skipped===1?"1 sleep setting was":sets.skipped+" sleep settings were")+" skipped.":"";
 list=list.concat(sets.list);
 if(!list.length){cfgNote("The remote already matches this config."+skip,false);return}
 cfgBusy=true;cfgBad=false;
 return cfgRun(list,0).then(function(){
 cfgBusy=false;cfgAll={};cfgReady=false;cfgDirty=false;cdSlot=null;
-cfgNote("Applied "+ins+(ins===1?" input":" inputs")+" and "+sets.list.length+(sets.list.length===1?" setting.":" settings.")+skip,false);
+cfgNote("Applied "+ins+(ins===1?" input":" inputs")+" and "+sets.count+(sets.count===1?" setting.":" settings.")+skip,false);
 return load().then(function(){if(sel!==null&&(!row(sel)||row(sel).action!=="ir")){
 codeLoad++;cd="";cdSlot=sel}paint();return cfgRefresh()}).then(function(){
 if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})})
@@ -1841,7 +1972,8 @@ if(msg)h+="<div class='note "+(bad?"bad":"ok")+"'>"+esc(msg)+"</div>";
 var lock=locked;
 if(mode==="cancel")h+="<div class=note>Cancelling.</div>";
 else if(st&&st.busy&&st.owner==="device")
-h+="<div class=note>Assignment in progress on the remote.</div>";
+h+="<div class=note>Assignment in progress on the remote."+(holdName("assign")?" Hold "+
+esc(holdName("assign"))+" for two seconds on the remote to close it.":"")+"</div>";
 else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</div>";
 
 // One open list, because a slot holds one action. The panel beside it carries

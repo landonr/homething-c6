@@ -370,9 +370,11 @@ class ReplayTest(unittest.TestCase):
 
     def test_production_sends_an_ha_slot_without_the_link_and_zigbee_with_it(self) -> None:
         replay = section(CONFIG, "  replay: !lambda |-\n", "\n\ni2c:")
-        ha = replay.index("if (id(ha_actions).play(SLOT_OF_BIT[bit]))\n      return true;")
-        zigbee = replay.index("return link && zigbee_assignments.play(SLOT_OF_BIT[bit]);")
+        ha = replay.index("if (id(ha_actions).play(slot))\n      return true;")
+        zigbee = replay.index("return link && zigbee_assignments.play(slot);")
         self.assertLess(ha, zigbee)
+        # A held input with an active hold taps on release, so its action must not queue here too.
+        self.assertLess(replay.index("if (held && hold_actions.defers(slot))\n      return false;"), ha)
         self.assertNotIn("return zigbee_assignments.play(", replay)
         # A skipped press settles its bit, so the hook does not call it again every loop.
         self.assertIn("play() is also\n    // true when the Home Assistant switch skips the press, so the bit settles.",
@@ -410,19 +412,19 @@ class WifiLeaseTest(unittest.TestCase):
                            "this->boot_wifi_always_on_)\n    return;")
         self.assertLess(guard, loop.index("wifi::global_wifi_component->disable();"))
 
-    def test_sw9_does_not_cut_a_running_action(self) -> None:
+    def test_the_wifi_hold_does_not_cut_a_running_action(self) -> None:
         toggle = section(BUTTON_CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
         self.assertIn("if (this->boot_wifi_always_on_)\n    return;", toggle)
         self.assertLess(toggle.index("if (this->action_wifi_) {"),
                         toggle.index("wifi::global_wifi_component->disable();"))
 
-    def test_sw9_opens_a_page_session_when_only_the_lease_holds_wifi(self) -> None:
+    def test_the_wifi_hold_opens_a_page_session_when_only_the_lease_holds_wifi(self) -> None:
         toggle = section(BUTTON_CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
         self.assertIn("wifi::global_wifi_component->is_disabled() || (this->action_wifi_ && !this->temporary_wifi_)",
                       toggle)
         self.assertLess(toggle.index("this->action_wifi_ && !this->temporary_wifi_"),
-                        toggle.index('this->open_temporary_wifi_("by SW9");'))
-        self.assertLess(toggle.index('this->open_temporary_wifi_("by SW9");'), toggle.index("} else {"))
+                        toggle.index('this->open_temporary_wifi_("by the Wi-Fi hold");'))
+        self.assertLess(toggle.index('this->open_temporary_wifi_("by the Wi-Fi hold");'), toggle.index("} else {"))
 
     def test_a_page_used_during_the_lease_becomes_a_temporary_session(self) -> None:
         loop = section(BUTTON_CPP, "void ButtonConfig::loop() {", "\n}")
@@ -433,11 +435,25 @@ class WifiLeaseTest(unittest.TestCase):
 
     def test_the_sleep_gate_counts_the_lease_and_the_busy_queue(self) -> None:
         probe = section(CONFIG, "  block_probe: !lambda |-\n", "  replay: !lambda")
-        self.assertIn("or the\n    // lease that a Home Assistant action holds.", probe)
+        self.assertIn("or\n    // the lease that a Home Assistant action holds.", probe)
         self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
         self.assertIn("wifi_session << 6 | ha_busy << 7;", probe)
         self.assertIn("wifi=%d ha=%d at", probe)
         self.assertIn("window, wifi_session, ha_busy, millis());", probe)
+
+
+class HoldTapTest(unittest.TestCase):
+    def test_a_press_reaches_home_assistant_only_through_the_shared_tap(self) -> None:
+        """An input with an active hold taps on release, so its Home Assistant
+        action must ride the same tap as every other kind, at the press or at the release."""
+        inputs = CONFIG[CONFIG.index("\nbinary_sensor:\n"):CONFIG.index("\nsensor:\n")]
+        self.assertNotIn("ha_actions", inputs)
+        for script in ("button_press", "button_release"):
+            body = section(CONFIG, f"  - id: {script}\n", "\n  - id:")
+            self.assertNotIn("ha_actions", body)
+            self.assertIn("ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);", body)
+        # The replay hook is the one direct caller.
+        self.assertEqual(CONFIG.count("id(ha_actions).play("), 1)
 
 
 class WebContractTest(unittest.TestCase):

@@ -56,14 +56,15 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "lgw", "lgb", "lgs", "blw", "blb", "bls", "rss", "rsb",
+                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "srh", "slh", "lgm", "lgs", "blw", "blb", "bls", "hbx", "hbs", "wfh", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
 
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
-  status_leds: true, boot_leds: true,
+  status_leds: "on", boot_leds: true,
+  holds: {wifi: 5, status: 7, sleep: 20, assign: 9},
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, api_gated: false, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   sleep: {available: true, enabled: true, after_s: 300, replay: false},
@@ -563,7 +564,7 @@ setTimeout(() => {
     }
   });
   step("the voice panel is not offered on a slot without it", () => {
-    global.sel = 20;  // SW1 owns the hold gesture, so it has no voice action.
+    global.sel = 17;  // A wheel detent has no release edge, so it has no voice action.
     global.act = "va";
     paint();
     if (act === "va") throw new Error("voice stayed selected on a slot without it");
@@ -1217,30 +1218,46 @@ setTimeout(() => {
       throw new Error("switch lost pending preference");
     global.wifiBusy = false;
   });
-  step("Status LEDs switch shows the stored state and posts the change", () => {
+  step("the Status LEDs mode shows the stored mode and posts the change", () => {
     const prevSt = global.st;
     global.st = STATE;
+    const box = document.getElementById("lgm"), line = document.getElementById("lgs");
+    STATE.status_leds = "off";
+    ledStatus();
+    if (box.value !== "off" || box.disabled) throw new Error("off showed " + box.value);
+    if (!line.innerHTML.includes("stay dark") || line.innerHTML.includes("Hold Button") ||
+        !line.innerHTML.includes("A radio switch still gives one pulse, and assignment mode still lights D2 to D5."))
+      throw new Error("off line is wrong: " + line.innerHTML);
+    STATE.status_leds = "hold";
+    ledStatus();
+    if (box.value !== "hold") throw new Error("hold showed " + box.value);
+    if (!line.innerHTML.includes("Hold Button 7 for one second to see the status.") ||
+        !line.innerHTML.includes("assignment mode still lights D2 to D5."))
+      throw new Error("hold line does not name the status hold button: " + line.innerHTML);
+    STATE.holds.status = 0;
+    ledStatus();
+    if (!line.innerHTML.includes("The status hold has no button. Choose one under Hold buttons."))
+      throw new Error("hold line does not name the missing button: " + line.innerHTML);
+    STATE.holds.status = 7;
+    // An older firmware sends a boolean.
     STATE.status_leds = false;
     ledStatus();
-    if (document.getElementById("lgb").checked) throw new Error("off showed on");
-    if (!document.getElementById("lgs").innerHTML.includes("stay dark") ||
-        !document.getElementById("lgs").innerHTML.includes("A radio switch still gives one pulse.") ||
-        !document.getElementById("lgs").innerHTML.includes("Hold Button 8 for one second to see the status."))
-      throw new Error("off line is wrong: " + document.getElementById("lgs").innerHTML);
-    STATE.status_leds = true;
+    if (box.value !== "off") throw new Error("a legacy false showed " + box.value);
+    STATE.status_leds = "on";
     ledStatus();
-    if (!document.getElementById("lgb").checked) throw new Error("on showed off");
+    if (box.value !== "on" || !line.innerHTML.includes("Status LEDs are on."))
+      throw new Error("on showed " + box.value + ": " + line.innerHTML);
     const realFetch = global.fetch;
     let body = "";
     global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    document.getElementById("lgb").checked = false;
-    document.getElementById("lgb").onchange();
+    box.value = "hold";
+    box.onchange();
     global.fetch = realFetch;
-    if (!body.includes("action=set_status_leds") || !body.includes("enabled=0"))
-      throw new Error("switch posted " + body);
-    if (!document.getElementById("lgb").disabled || document.getElementById("lgb").checked)
-      throw new Error("switch lost pending state");
+    if (!body.includes("action=set_status_leds") || !body.includes("mode=hold") || body.includes("enabled="))
+      throw new Error("the mode posted " + body);
+    if (!box.disabled || box.value !== "hold") throw new Error("the mode lost the pending state");
     global.ledBusy = false;
+    ledStatus();
     global.st = prevSt;
   });
   step("Boot and wake LEDs switch shows the stored state and posts the change", () => {
@@ -1266,6 +1283,130 @@ setTimeout(() => {
       throw new Error("switch lost pending state");
     global.bootBusy = false;
     global.st = prevSt;
+  });
+  const holdSelect = (k) => {
+    const html = document.getElementById("hbx").innerHTML;
+    const start = html.indexOf("<select id=hb-" + k);
+    if (start < 0) throw new Error("no select for " + k);
+    return html.slice(start, html.indexOf("</select>", start));
+  };
+  step("each hold lists None and the sixteen inputs, with a taken input disabled and named", () => {
+    global.st = STATE;
+    global.holdBusy = false; global.holdError = "";
+    holdPaint();
+    const wifi = holdSelect("wifi");
+    if ((wifi.match(/<option /g) || []).length !== 17) throw new Error("wrong option count: " + wifi);
+    if (!wifi.includes("<option value=5 selected>Button 5</option>"))
+      throw new Error("the stored Wi-Fi input is not selected: " + wifi);
+    if (!wifi.includes("<option value=7 disabled>Button 7 (Status LEDs)</option>") ||
+        !wifi.includes("<option value=20 disabled>Button 1 (Sleep)</option>") ||
+        !wifi.includes("<option value=9 disabled>Button 9 (Assignment mode)</option>"))
+      throw new Error("a taken input is not disabled and named: " + wifi);
+    if (wifi.includes("value=17") || wifi.includes("value=18")) throw new Error("wheel rotation is offered: " + wifi);
+    if (!holdSelect("status").includes("<option value=5 disabled>Button 5 (Wi-Fi)</option>"))
+      throw new Error("the status list does not name the Wi-Fi input");
+    STATE.holds.assign = 0;
+    holdPaint();
+    if (!holdSelect("assign").includes("<option value=0 selected>None</option>") ||
+        !holdSelect("wifi").includes("<option value=9>Button 9</option>"))
+      throw new Error("a freed input stayed taken: " + holdSelect("wifi"));
+    STATE.holds.assign = 9;
+    holdPaint();
+    if (typeof document.getElementById("hb-sleep").onchange !== "function") throw new Error("no change handler");
+  });
+  step("a hold change posts set_hold and keeps the wanted input during the write", () => {
+    global.st = STATE;
+    const realFetch = global.fetch;
+    let body = "";
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    document.getElementById("hb-sleep").value = "3";
+    document.getElementById("hb-sleep").onchange();
+    global.fetch = realFetch;
+    if (body !== "action=set_hold&hold=sleep&slot=3") throw new Error("the hold posted " + body);
+    if (!document.getElementById("hb-sleep").disabled || !document.getElementById("hb-wifi").disabled)
+      throw new Error("a hold list stayed live during the write");
+    if (!holdSelect("sleep").includes("<option value=3 selected>Button 3</option>"))
+      throw new Error("the list snapped back during the write: " + holdSelect("sleep"));
+    if (!holdSelect("wifi").includes("<option value=3 disabled>Button 3 (Sleep)</option>"))
+      throw new Error("the other lists ignore the pending input");
+    global.holdBusy = false; global.holdWant = null;
+    holdPaint();
+  });
+  step("a Wi-Fi hold set to None asks first while WiFi Always On is off", () => {
+    global.st = STATE;
+    STATE.network.wifi_always_on = false;
+    const realFetch = global.fetch;
+    let body = null;
+    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+    confirmAsked = 0; confirmAnswer = false;
+    document.getElementById("hb-wifi").value = "0";
+    document.getElementById("hb-wifi").onchange();
+    if (confirmAsked !== 1 || confirmText.indexOf("no button opens a temporary session") < 0)
+      throw new Error("no question before the Wi-Fi hold went away: " + confirmText);
+    if (body !== null) throw new Error("a refused change posted " + body);
+    if (!holdSelect("wifi").includes("<option value=5 selected>Button 5</option>") || holdBusy)
+      throw new Error("a refused change kept the new value");
+    STATE.network.wifi_always_on = true;
+    confirmAsked = 0; confirmAnswer = true;
+    document.getElementById("hb-wifi").value = "0";
+    document.getElementById("hb-wifi").onchange();
+    global.fetch = realFetch;
+    if (confirmAsked !== 0) throw new Error("an always-on remote was asked");
+    if (body !== "action=set_hold&hold=wifi&slot=0") throw new Error("None posted " + body);
+    STATE.network.wifi_always_on = false;
+    global.holdBusy = false; global.holdWant = null;
+    holdPaint();
+  });
+  step("the hold texts name the stored inputs and a missing one", () => {
+    global.st = STATE;
+    global.sleepBusy = false;
+    networkStatus(); sleepStatus();
+    if (document.getElementById("wfh").textContent !== "WiFi Always On applies at the next boot. Hold Button 5 " +
+        "for two seconds to toggle a temporary session when this switch is off.")
+      throw new Error("the Wi-Fi line reads " + document.getElementById("wfh").textContent);
+    if (document.getElementById("slh").textContent.indexOf("Hold Button 1 for two seconds to sleep at once") < 0)
+      throw new Error("the sleep line reads " + document.getElementById("slh").textContent);
+    if (document.getElementById("srh").textContent.indexOf("The assignment mode hold on Button 9 does not start from a wake.") < 0)
+      throw new Error("the wake line reads " + document.getElementById("srh").textContent);
+    if (wifiHoldText() !== " Hold Button 5 for two seconds to open a temporary session.")
+      throw new Error("the recovery hint reads " + wifiHoldText());
+    STATE.holds.wifi = 0; STATE.holds.sleep = 0;
+    networkStatus(); sleepStatus();
+    if (wifiHoldText().indexOf("the Wi-Fi hold has no button") < 0) throw new Error("no hint for a missing Wi-Fi hold");
+    if (document.getElementById("wfh").textContent.indexOf("the Wi-Fi hold has no button") < 0)
+      throw new Error("the Wi-Fi line reads " + document.getElementById("wfh").textContent);
+    if (document.getElementById("slh").textContent.indexOf("The sleep hold has no button.") < 0)
+      throw new Error("the sleep line reads " + document.getElementById("slh").textContent);
+    STATE.holds.wifi = 5; STATE.holds.sleep = 20;
+    networkStatus(); sleepStatus();
+  });
+  step("the voice and Home Assistant panels name a hold that moves the press to the release", () => {
+    global.st = STATE;
+    const prevSel = global.sel, prevAct = global.act, prevRadios = STATE.radios;
+    STATE.radios = {zigbee: true, ble: true, home_assistant: true};
+    global.act = "va"; global.sel = 20;
+    paint();
+    if (document.getElementById("edpanel").innerHTML.indexOf("This input has the Sleep hold") < 0)
+      throw new Error("the panel reads " + document.getElementById("edpanel").innerHTML);
+    global.act = "ha";
+    paint();
+    if (document.getElementById("edpanel").innerHTML.indexOf(
+        "This input has the Sleep hold, so the action runs when you release a short press.") < 0)
+      throw new Error("the Home Assistant panel reads " + document.getElementById("edpanel").innerHTML);
+    global.act = "va";
+    // The status hold counts only in Hold mode.
+    global.sel = 7;
+    paint();
+    if (document.getElementById("edpanel").innerHTML.indexOf("The press starts Assist and the release ends it.") < 0)
+      throw new Error("an inactive status hold changed the panel");
+    STATE.status_leds = "hold";
+    paint();
+    if (document.getElementById("edpanel").innerHTML.indexOf("This input has the Status LEDs hold") < 0)
+      throw new Error("an active status hold did not change the panel");
+    STATE.status_leds = "on";
+    STATE.radios = prevRadios;
+    global.sel = prevSel; global.act = prevAct;
+    paint();
   });
   step("the sleep block shows only with idle_sleep and names its state", () => {
     global.st = STATE;
@@ -1597,7 +1738,7 @@ setTimeout(() => {
     if (document.getElementById("zrs").innerHTML.indexOf("Pairing.") < 0)
       throw new Error("the link line does not name the window");
     // A stop restarts the remote too. Without WiFi Always On the page cannot
-    // follow it back, so the question names the SW9 hold.
+    // follow it back, so the question names the Wi-Fi hold.
     body = null;
     global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
     STATE.network.wifi_always_on = false;
@@ -1607,8 +1748,8 @@ setTimeout(() => {
     if (confirmText.indexOf("The remote restarts with the Zigbee radio off.") < 0)
       throw new Error("the stop question does not name the restart: " + confirmText);
     if (confirmText.indexOf("Wi-Fi stays off after the restart.") < 0 ||
-        confirmText.indexOf("Hold Button 9 for two seconds") < 0)
-      throw new Error("the stop question does not name the SW9 hold: " + confirmText);
+        confirmText.indexOf("Hold Button 5 for two seconds") < 0)
+      throw new Error("the stop question does not name the Wi-Fi hold: " + confirmText);
     if (body !== null) throw new Error("a refused stop still posted: " + body);
     if (document.getElementById("zpj").disabled)
       throw new Error("a refused stop locked the button");
@@ -1618,7 +1759,7 @@ setTimeout(() => {
     global.fetch = realFetch;
     STATE.network.wifi_always_on = false;
     if (confirmAsked !== 1) throw new Error("a stop did not ask");
-    if (confirmText.indexOf("Button 9") >= 0 || confirmText.indexOf("Wi-Fi stays off") >= 0)
+    if (confirmText.indexOf("Button 5") >= 0 || confirmText.indexOf("Wi-Fi stays off") >= 0)
       throw new Error("an always-on remote was told Wi-Fi stays off: " + confirmText);
     if (body !== "action=pair&on=0") throw new Error("stop did not close the window: " + body);
     STATE.zigbee.pairing = false; STATE.zigbee.pair_left = 0;
@@ -1769,7 +1910,8 @@ setTimeout(() => {
   step("the export carries the device settings and leaves the name out", () => {
     const j = JSON.parse(cfgBlob());
     const want = {zigbee: true, ble: true, home_assistant: true, wifi_always_on: false,
-                  status_leds: true, boot_leds: true, sleep: true, sleep_after_s: 300, wake_replay: false};
+                  status_leds: "on", boot_leds: true, hold_wifi: 5, hold_status: 7, hold_sleep: 20,
+                  hold_assign: 9, sleep: true, sleep_after_s: 300, wake_replay: false};
     if (JSON.stringify(j.settings) !== JSON.stringify(want))
       throw new Error("settings are wrong: " + JSON.stringify(j.settings));
     if ("name" in j.settings) throw new Error("the name was exported");
@@ -1817,13 +1959,63 @@ setTimeout(() => {
     if (cfgSetList({home_assistant: false}).list[0].args !== "&radio=home_assistant&on=0")
       throw new Error("the Home Assistant argument is wrong");
   });
-  step("an import sends status_leds only when it differs", () => {
-    if (cfgSetList({status_leds: true}).list.length) throw new Error("a matching setting was sent");
+  step("an import sends status_leds only when it differs and maps a legacy boolean", () => {
+    if (cfgSetList({status_leds: "on"}).list.length) throw new Error("a matching setting was sent");
+    if (cfgSetList({status_leds: true}).list.length) throw new Error("a legacy true was sent against on");
     const l = cfgSetList({status_leds: false}).list;
-    if (l.length !== 1 || l[0].action !== "set_status_leds" || l[0].args !== "&enabled=0")
-      throw new Error("wrong status_leds entry: " + JSON.stringify(l));
-    const r = cfgParse(JSON.stringify({c6remote: 1, slots: [], settings: {status_leds: 1}}));
-    if (!r.error || r.error.indexOf("status_leds") < 0) throw new Error("a number was accepted");
+    if (l.length !== 1 || l[0].action !== "set_status_leds" || l[0].args !== "&mode=off")
+      throw new Error("wrong legacy status_leds entry: " + JSON.stringify(l));
+    const h = cfgSetList({status_leds: "hold"}).list;
+    if (h.length !== 1 || h[0].args !== "&mode=hold") throw new Error("wrong hold entry: " + JSON.stringify(h));
+    for (const bad of [1, "dim", null]) {
+      const r = cfgParse(JSON.stringify({c6remote: 1, slots: [], settings: {status_leds: bad}}));
+      if (!r.error || r.error.indexOf("status_leds") < 0) throw new Error(JSON.stringify(bad) + " was accepted");
+    }
+    for (const good of ["off", "hold", "on", true, false]) {
+      const r = cfgParse(JSON.stringify({c6remote: 1, slots: [], settings: {status_leds: good}}));
+      if (r.error) throw new Error(JSON.stringify(good) + " was refused: " + r.error);
+    }
+  });
+  step("an import moves holds through None so no two holds share an input", () => {
+    global.st = STATE;
+    const swap = cfgSetList({hold_wifi: 7, hold_status: 5});
+    const got = swap.list.map(e => e.args);
+    const want = ["&hold=wifi&slot=0", "&hold=status&slot=0", "&hold=wifi&slot=7", "&hold=status&slot=5"];
+    if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error("wrong hold writes: " + JSON.stringify(got));
+    if (swap.list.some(e => e.action !== "set_hold") || swap.count !== 2)
+      throw new Error("wrong hold actions or count: " + JSON.stringify(swap));
+    if (cfgSetList({hold_wifi: 5, hold_assign: 9}).list.length) throw new Error("matching holds were sent");
+    const none = cfgSetList({hold_assign: 0}).list;
+    if (none.length !== 1 || none[0].args !== "&hold=assign&slot=0") throw new Error("None sent " + JSON.stringify(none));
+    // The status hold keeps input 7, so moving the Wi-Fi hold there must fail before any write.
+    const clash = cfgSetList({hold_wifi: 7});
+    if (!clash.error || clash.error.indexOf("Wi-Fi") < 0 || clash.error.indexOf("Status LEDs") < 0 || clash.list.length)
+      throw new Error("a clash with a kept hold was not refused: " + JSON.stringify(clash));
+  });
+  step("an import refuses a bad hold key before any write", () => {
+    const base = {c6remote: 1, slots: []};
+    const bad = (settings, word) => {
+      const r = cfgParse(JSON.stringify(Object.assign({}, base, {settings: settings})));
+      if (!r.error || r.error.indexOf(word) < 0)
+        throw new Error("not refused with " + word + ": " + JSON.stringify(r));
+    };
+    bad({hold_wifi: 17}, "hold_wifi");
+    bad({hold_sleep: "20"}, "hold_sleep");
+    bad({hold_status: 2}, "hold_status");
+    bad({hold_wifi: 5, hold_assign: 5}, "same input");
+    bad({hold_power: 5}, "hold_power");
+    const ok = cfgParse(JSON.stringify(Object.assign({}, base, {settings: {hold_wifi: 0, hold_assign: 20}})));
+    if (ok.error) throw new Error("valid holds were refused: " + ok.error);
+    const realFetch = global.fetch;
+    const bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    global.cfgBusy = false;
+    global.cfgIn = JSON.stringify({c6remote: 1, settings: {hold_wifi: 7}, slots: [{slot: 3, action: "voice"}]});
+    cfgApply();
+    global.fetch = realFetch;
+    if (bodies.length || !cfgBad || cfgMsg.indexOf("same input") < 0)
+      throw new Error("a clashing import wrote: " + JSON.stringify(bodies) + " " + cfgMsg);
+    global.cfgBusy = false;
   });
   step("an import sends boot_leds only when it differs", () => {
     if (cfgSetList({boot_leds: true}).list.length) throw new Error("a matching setting was sent");
@@ -2100,7 +2292,7 @@ setTimeout(() => {
       restartPaint();
       const off = restartLine().innerHTML;
       if (off.indexOf("The remote is restarting.") < 0 || off.indexOf("Wi-Fi stays off after the restart.") < 0 ||
-          off.indexOf("Hold Button 9 for two seconds") < 0)
+          off.indexOf("Hold Button 5 for two seconds") < 0)
         throw new Error("the Wi-Fi off line reads " + off);
       STATE.network.wifi_always_on = true;
       restartPaint();
@@ -2295,7 +2487,7 @@ setTimeout(() => {
       if (banner().hidden) throw new Error("the banner stayed hidden");
       if (banner().textContent.indexOf("The page is not connected to the remote.") !== 0)
         throw new Error("the banner reads " + banner().textContent);
-      if (banner().textContent.indexOf("Hold Button 9 for two seconds to open a temporary session.") < 0)
+      if (banner().textContent.indexOf("Hold Button 5 for two seconds to open a temporary session.") < 0)
         throw new Error("no recovery hint with WiFi Always On off: " + banner().textContent);
       if (link().indexOf("Not connected to the remote. Last answer ") < 0 || link().indexOf(" s ago.") < 0)
         throw new Error("the line reads " + link());

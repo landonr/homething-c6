@@ -3,6 +3,7 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
+#include "hold_actions.h"
 #include "ir_learning.h"
 #include "zigbee_learning.h"
 #include "esphome/components/api/api_server.h"
@@ -35,14 +36,15 @@ static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&
                   SLEEP_AFTER_MAX_S == idle_sleep::IdleSleep::MAX_SLEEP_AFTER_S,
               "the page range must match IdleSleep");
 #endif
+// The page and the state JSON name the holds in HoldActions order.
+static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};
 
 static const SlotInfo SLOTS[] = {
     {3, true},   {4, true},   {5, true},  {6, true},  {7, true},  {8, true},
     {9, true},   {10, true},  {11, true}, {12, true}, {13, true}, {14, true},
     {15, true},  {16, true},  {17, false},  // wheel clockwise
     {18, false},                            // wheel anticlockwise
-    {19, true},
-    {20, false},                            // SW1 owns the receiver-mode hold
+    {19, true},  {20, true},
 };
 
 static const SlotInfo *find_slot(long slot) {
@@ -170,6 +172,51 @@ static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {
   if (*end != '\0' || value < SLEEP_AFTER_MIN_S || value > SLEEP_AFTER_MAX_S)
     return false;
   seconds = static_cast<uint32_t>(value);
+  return true;
+}
+
+static bool parse_status_mode(const std::string &text, uint8_t &mode) {
+  if (text == "off")
+    mode = ButtonConfig::STATUS_OFF;
+  else if (text == "on")
+    mode = ButtonConfig::STATUS_ON;
+  else if (text == "hold")
+    mode = ButtonConfig::STATUS_HOLD;
+  else
+    return false;
+  return true;
+}
+
+static const char *status_mode_name(uint8_t mode) {
+  switch (mode) {
+    case ButtonConfig::STATUS_OFF:
+      return "off";
+    case ButtonConfig::STATUS_HOLD:
+      return "hold";
+    default:
+      return "on";
+  }
+}
+
+static bool parse_hold_name(const std::string &text, uint8_t &action) {
+  for (uint8_t i = 0; i < HoldActions::COUNT; i++) {
+    if (text == HOLD_NAMES[i]) {
+      action = i;
+      return true;
+    }
+  }
+  return false;
+}
+
+// 0 takes the button away from the hold.
+static bool parse_hold_slot(const std::string &text, uint8_t &slot) {
+  if (text.empty() || text.size() > 2 || std::isdigit(static_cast<unsigned char>(text[0])) == 0)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (*end != '\0' || (value != 0 && !HoldActions::valid_slot(static_cast<uint8_t>(value))))
+    return false;
+  slot = static_cast<uint8_t>(value);
   return true;
 }
 
@@ -472,6 +519,8 @@ void ButtonConfig::setup() {
   this->load_ha_pref_();
   this->sync_ha_action_();
   this->load_wifi_pref_();
+  this->load_hold_pref_();
+  ::hold_actions.set_status_active(this->status_mode() == STATUS_HOLD);
   this->boot_wifi_always_on_ = this->wifi_always_on();
   if (this->boot_wifi_always_on_)
     wifi::global_wifi_component->enable();
@@ -528,32 +577,37 @@ bool ButtonConfig::set_wifi_always_on_(bool enabled) {
   return true;
 }
 
-bool ButtonConfig::status_leds() const {
-  int8_t value = this->status_leds_.load(std::memory_order_acquire);
+uint8_t ButtonConfig::status_mode() const {
+  int8_t value = this->status_mode_.load(std::memory_order_acquire);
   if (value < 0) {
     // Preferences open in app_main, so this works before setup().
     auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
     LedPref loaded{};
-    const bool off = preference.load(&loaded) && loaded.magic == LED_PREF_MAGIC && loaded.enabled == 0 &&
-                     loaded.reserved[0] == 0 && loaded.reserved[1] == 0 && loaded.reserved[2] == 0;
-    value = off ? 0 : 1;
-    this->status_leds_.store(value, std::memory_order_release);
+    const bool valid = preference.load(&loaded) && loaded.magic == LED_PREF_MAGIC &&
+                       loaded.enabled <= STATUS_HOLD && loaded.reserved[0] == 0 && loaded.reserved[1] == 0 &&
+                       loaded.reserved[2] == 0;
+    value = static_cast<int8_t>(valid ? loaded.enabled : STATUS_ON);
+    this->status_mode_.store(value, std::memory_order_release);
   }
-  return value == 1;
+  return static_cast<uint8_t>(value);
 }
 
-bool ButtonConfig::set_status_leds(bool enabled) {
-  if (this->status_leds() == enabled)
+bool ButtonConfig::set_status_mode(uint8_t mode) {
+  if (mode > STATUS_HOLD)
+    return false;
+  if (this->status_mode() == mode)
     return true;
   auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
-  LedPref next{LED_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  LedPref next{LED_PREF_MAGIC, mode, {0, 0, 0}};
   if (!preference.save(&next)) {
-    ESP_LOGE(TAG, "Failed to save the status LED switch");
+    ESP_LOGE(TAG, "Failed to save the status LED mode");
     return false;
   }
-  this->status_leds_.store(enabled ? 1 : 0, std::memory_order_release);
-  ESP_LOGI(TAG, "Status LEDs %s", enabled ? "on" : "off");
-  this->status_leds_callbacks_.call(enabled);
+  this->status_mode_.store(static_cast<int8_t>(mode), std::memory_order_release);
+  ESP_LOGI(TAG, "Status LEDs %s", status_mode_name(mode));
+  // Before the callbacks, so a running peek has ended when the trigger reads it.
+  ::hold_actions.set_status_active(mode == STATUS_HOLD);
+  this->status_leds_callbacks_.call(mode == STATUS_ON);
   return true;
 }
 
@@ -686,6 +740,45 @@ void ButtonConfig::apply_friendly_name_(const std::string &name) {
     hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));
 }
 
+// A missing, corrupt, or inconsistent record gives every hold its default button.
+void ButtonConfig::load_hold_pref_() {
+  static_assert(HOLD_COUNT == HoldActions::COUNT, "the record stores one slot for each hold");
+  this->hold_pref_ = global_preferences->make_preference<HoldPref>(HOLD_PREF_KEY, true);
+  HoldPref loaded{};
+  const bool valid = this->hold_pref_.load(&loaded) && loaded.magic == HOLD_PREF_MAGIC &&
+                     HoldActions::valid_slots(loaded.slot);
+  this->apply_hold_slots_(valid ? static_cast<const uint8_t *>(loaded.slot) : HoldActions::DEFAULT_SLOT);
+}
+
+void ButtonConfig::apply_hold_slots_(const uint8_t *slots) {
+  ::hold_actions.set_slots(slots);
+  for (uint8_t i = 0; i < HoldActions::COUNT; i++)
+    this->hold_slots_[i].store(slots[i], std::memory_order_release);
+}
+
+// Main loop only. The httpd check read older values, so this checks again.
+bool ButtonConfig::set_hold_slot_(uint8_t action, uint8_t slot) {
+  if (action >= HoldActions::COUNT)
+    return false;
+  HoldPref next{HOLD_PREF_MAGIC, {}};
+  for (uint8_t i = 0; i < HoldActions::COUNT; i++)
+    next.slot[i] = ::hold_actions.slot(static_cast<HoldActions::Action>(i));
+  if (next.slot[action] == slot)
+    return true;
+  next.slot[action] = slot;
+  if (!HoldActions::valid_slots(next.slot)) {
+    ESP_LOGW(TAG, "Hold %s cannot take slot %u", HOLD_NAMES[action], static_cast<unsigned>(slot));
+    return false;
+  }
+  if (!this->hold_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the hold buttons");
+    return false;
+  }
+  this->apply_hold_slots_(next.slot);
+  ESP_LOGI(TAG, "Hold %s on slot %u", HOLD_NAMES[action], static_cast<unsigned>(slot));
+  return true;
+}
+
 void ButtonConfig::note_activity_() {
   this->last_activity_ms_.store(millis(), std::memory_order_release);
 }
@@ -700,18 +793,18 @@ void ButtonConfig::open_temporary_wifi_(const char *reason) {
 void ButtonConfig::toggle_temporary_wifi() {
   if (this->boot_wifi_always_on_)
     return;
-  // Wi-Fi up for the action lease alone is no page session, so SW9 opens one.
+  // Wi-Fi up for the action lease alone is no page session, so the Wi-Fi hold opens one.
   if (wifi::global_wifi_component->is_disabled() || (this->action_wifi_ && !this->temporary_wifi_)) {
-    this->open_temporary_wifi_("by SW9");
+    this->open_temporary_wifi_("by the Wi-Fi hold");
   } else {
     this->temporary_wifi_ = false;
     // A running Home Assistant action keeps Wi-Fi until its lease ends.
     if (this->action_wifi_) {
-      ESP_LOGI(TAG, "SW9 ended the temporary Wi-Fi session, but a Home Assistant action holds Wi-Fi");
+      ESP_LOGI(TAG, "The Wi-Fi hold ended the temporary Wi-Fi session, but a Home Assistant action holds Wi-Fi");
       return;
     }
     wifi::global_wifi_component->disable();
-    ESP_LOGI(TAG, "Temporary Wi-Fi session closed by SW9");
+    ESP_LOGI(TAG, "Temporary Wi-Fi session closed by the Wi-Fi hold");
   }
 }
 
@@ -788,7 +881,12 @@ void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "  Home Assistant switch: %s", YESNO(this->ha_api_expected()));
   ESP_LOGCONFIG(TAG, "  API server held down this boot: %s", YESNO(this->ha_api_gated()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
-  ESP_LOGCONFIG(TAG, "  Status LEDs: %s", YESNO(this->status_leds()));
+  ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));
+  ESP_LOGCONFIG(TAG, "  Hold slots: wifi %u, status %u, sleep %u, assign %u",
+                static_cast<unsigned>(this->hold_slots_[HoldActions::WIFI].load(std::memory_order_acquire)),
+                static_cast<unsigned>(this->hold_slots_[HoldActions::STATUS].load(std::memory_order_acquire)),
+                static_cast<unsigned>(this->hold_slots_[HoldActions::SLEEP].load(std::memory_order_acquire)),
+                static_cast<unsigned>(this->hold_slots_[HoldActions::ASSIGN].load(std::memory_order_acquire)));
   ESP_LOGCONFIG(TAG, "  Boot and wake LEDs: %s", YESNO(this->boot_leds()));
   ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
 }
@@ -861,12 +959,16 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   stream->print(R"({"firmware":")");
   print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":%s,"boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"holds":{"wifi":%u,"status":%u,"sleep":%u,"assign":%u},"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
-      this->status_leds() ? "true" : "false", this->boot_leds() ? "true" : "false",
+      status_mode_name(this->status_mode()), this->boot_leds() ? "true" : "false",
+      static_cast<unsigned>(this->hold_slots_[HoldActions::WIFI].load(std::memory_order_acquire)),
+      static_cast<unsigned>(this->hold_slots_[HoldActions::STATUS].load(std::memory_order_acquire)),
+      static_cast<unsigned>(this->hold_slots_[HoldActions::SLEEP].load(std::memory_order_acquire)),
+      static_cast<unsigned>(this->hold_slots_[HoldActions::ASSIGN].load(std::memory_order_acquire)),
       wifi::global_wifi_component->is_connected() ? "true" : "false",
       wifi::global_wifi_component->is_disabled() ? "false" : "true",
       this->wifi_always_on() ? "true" : "false",
@@ -1026,7 +1128,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "set_ha" || action == "test_ha" || action == "forget_ble" || action == "set_radio" ||
                      action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
-                     action == "set_sleep_enabled" ||
+                     action == "set_hold" || action == "set_sleep_enabled" ||
                      action == "set_sleep_after" || action == "set_sleep_replay" || action == "pair" || action == "restart" ||
                      action == "set_name" || action == "clear";
   if (!known) {
@@ -1069,14 +1171,30 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     wifi_default_on = enabled == "1";
   }
 
-  bool status_leds_on = false;
-  if (action == "set_status_leds") {
-    const std::string enabled = request->arg("enabled");
-    if (enabled != "0" && enabled != "1") {
-      request->send(400, "application/json", R"({"ok":false,"error":"invalid status LED switch"})");
+  uint8_t led_mode = STATUS_ON;
+  if (action == "set_status_leds" && !parse_status_mode(request->arg("mode"), led_mode)) {
+    request->send(400, "application/json", R"({"ok":false,"error":"a status LED mode is off, hold, or on"})");
+    return;
+  }
+
+  // A hold carries its own name and button, so it skips the slot parse below.
+  uint8_t hold_action = 0;
+  uint8_t hold_slot = 0;
+  if (action == "set_hold") {
+    if (!parse_hold_name(request->arg("hold"), hold_action)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"a hold is wifi, status, sleep, or assign"})");
       return;
     }
-    status_leds_on = enabled == "1";
+    if (!parse_hold_slot(request->arg("slot"), hold_slot)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"a hold button is 0 or a button slot"})");
+      return;
+    }
+    for (uint8_t i = 0; i < HoldActions::COUNT; i++) {
+      if (i != hold_action && hold_slot != 0 && this->hold_slots_[i].load(std::memory_order_acquire) == hold_slot) {
+        request->send(400, "application/json", R"({"ok":false,"error":"another hold already uses that button"})");
+        return;
+      }
+    }
   }
 
   bool boot_leds_on = false;
@@ -1141,7 +1259,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
 
   const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
                           action != "set_wifi_always_on" && action != "set_status_leds" && action != "set_boot_leds" &&
-                          !sleep_action && action != "pair" &&
+                          action != "set_hold" && !sleep_action && action != "pair" &&
                           action != "restart" && action != "set_name";
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
@@ -1370,8 +1488,12 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       this->complete_action_(action_id, this->set_wifi_always_on_(wifi_default_on));
     });
   } else if (action == "set_status_leds") {
-    this->defer([this, action_id, status_leds_on]() {
-      this->complete_action_(action_id, this->set_status_leds(status_leds_on));
+    this->defer([this, action_id, led_mode]() {
+      this->complete_action_(action_id, this->set_status_mode(led_mode));
+    });
+  } else if (action == "set_hold") {
+    this->defer([this, action_id, hold_action, hold_slot]() {
+      this->complete_action_(action_id, this->set_hold_slot_(hold_action, hold_slot));
     });
   } else if (action == "set_boot_leds") {
     this->defer([this, action_id, boot_leds_on]() {

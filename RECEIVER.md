@@ -10,28 +10,27 @@ action.
 
 ## Enter and leave the mode
 
-Hold `SW1` for two seconds to enter assignment mode. Hold `SW1` for two seconds
-again to leave it.
+Hold the assignment mode button for two seconds to enter assignment mode. Hold
+it for two seconds again to leave the mode.
+
+The default assignment mode button is `SW9`. To use a different button, see
+[Hold buttons](#hold-buttons).
 
 The ready state closes after five seconds without an input.
 
-The release that ends an `SW1` hold does not count as a tap.
+The release that ends an assignment mode hold does not count as a tap.
 
 ## Assignment cycle
 
-For `SW2`, `SW3` through `SW11`, and the five wheel directions, tap the same
-input in this order:
+For `SW1` to `SW11` and the five wheel directions, tap the same input in this
+order:
 
 1. First tap: train an IR code.
 2. Second tap: assign the voice assistant.
 3. Third tap: clear the input.
 
-For `SW1`, tap the same input in this order:
-
-1. First tap: train an IR code.
-2. Second tap: clear the input.
-
-`SW1` has no voice stage because its hold gesture controls assignment mode.
+A button with an active hold taps when you release it, not when you press it.
+See [Hold buttons](#hold-buttons).
 
 The cycle has no Zigbee stage. A Zigbee target comes from Zigbee2MQTT, which
 the remote cannot read, so only the web page assigns one.
@@ -139,6 +138,7 @@ Copy, Paste, export, and import carry Home Assistant assignments.
 If the Home Assistant switch is off, a press sends nothing. See [The Home Assistant switch](#the-home-assistant-switch).
 
 A press queues the action. The queue holds a maximum of 8 actions. The remote drops extra presses.
+A button with an active hold queues its action when you release it. See [Hold buttons](#hold-buttons).
 
 If Wi-Fi is off, the press turns it on. The remote sends the action when Home Assistant has connected and subscribed to actions.
 If no client subscribes within 20 seconds, the remote drops the press as a timeout.
@@ -153,9 +153,9 @@ Presses during the Wi-Fi lease are faster.
 ### Wi-Fi lease
 
 Wi-Fi stays on while an action waits and for 60 seconds after the last action finished.
-Then Wi-Fi turns off, unless the SW9 session, a page session, or Wi-Fi Always On keeps it on.
+Then Wi-Fi turns off, unless a session from the Wi-Fi hold, a page session, or Wi-Fi Always On keeps it on.
 
-If you hold SW9 while only the lease holds Wi-Fi, the hold opens a page session.
+If you use the Wi-Fi hold while only the lease holds Wi-Fi, the hold opens a page session.
 A page that you use during the lease continues as a page session.
 
 ### Failure indication
@@ -235,6 +235,7 @@ The page is an alternative to the tap cycle, not a replacement. Both routes writ
 the same flash records.
 
 The page also has a **Sleep** block for the deep-sleep settings. See [Deep sleep](#deep-sleep).
+The **Hold buttons** block sets the button for each hold. See [Hold buttons](#hold-buttons).
 
 The header of the page has a connection line. It shows if the page can read
 the remote. If two reads in a row fail, or one read gets no answer in time, the
@@ -314,7 +315,7 @@ Each wheel detent sends one short HID press and release.
 
 | Input | Slots | Record IR | Zigbee target | BLE HID | Home Assistant | Voice assistant | Clear |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Page only | Page only | Page only | No | Yes |
+| `SW1` | 20 | Yes | Page only | Page only | Page only | Yes | Yes |
 | `SW2` | 19 | Yes | Page only | Page only | Page only | Yes | Yes |
 | `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Page only | Yes | Yes |
 | Wheel directions | 12 to 16 | Yes | Page only | Page only | Page only | Yes | Yes |
@@ -325,15 +326,13 @@ press handler as IR playback, so a wheel detent can send it. A command that only
 makes sense as a pair, such as brighter and dimmer, costs two slots, and the
 wheel directions are the natural home for one.
 
-`SW1` has no voice action because the hold gesture owns its press edge.
-
 Wheel rotation has no voice action because a detent has no release edge to end
 push-to-talk.
 
-The page hides the voice button on those three slots. The firmware checks the
+The page hides the voice button on those two slots. The firmware checks the
 same rule again on each request.
 
-A voice request for slot 17, 18, or 20 gets HTTP 400 and changes nothing.
+A voice request for slot 17 or 18 gets HTTP 400 and changes nothing.
 
 ### One operation at a time
 
@@ -516,7 +515,7 @@ the card is closed and **Hide** when the card is open.
 
 The Config tab shows the current configuration after the page loads.
 The Config tab has three sections.
-Settings shows the firmware, the battery, the IP address, sleep, the LED settings, and restart.
+Settings shows the firmware, the battery, the IP address, sleep, the LED settings, the hold buttons, and restart.
 Connections shows Wi-Fi, Home Assistant, Zigbee, and Bluetooth.
 Import Export is the third section.
 The page reads each stored IR code in sequence and puts it in the configuration text.
@@ -545,22 +544,28 @@ The import ignores `firmware`.
 The block also holds a `settings` object with the device settings of the remote:
 
 ```json
-{"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,
-"wifi_always_on":false,"status_leds":true,"boot_leds":true,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
+{"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,"wifi_always_on":false,
+"status_leds":"on","boot_leds":true,"hold_wifi":5,"hold_status":7,"hold_sleep":20,"hold_assign":9,
+"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
 ```
 
 These keys are valid:
 
 - `zigbee`, `ble`, and `home_assistant` turn each radio on or off.
 - `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
-- `status_leds` turns `D2` to `D5` and the XIAO user LED on or off. See [The LED settings](#the-led-settings) for the radio switch pulse, the status peek, and the sleep lap.
+- `status_leds` sets the **Status LEDs** mode for `D2` to `D5` and the XIAO user LED. The value is `off`, `hold`, or `on`. See [The LED settings](#the-led-settings).
 - `boot_leds` turns the cold-boot chase and the wake battery pulses on or off.
+- `hold_wifi`, `hold_status`, `hold_sleep`, and `hold_assign` give the slot of the button for each hold. The value `0` means no button. See [Hold buttons](#hold-buttons).
 - `sleep` turns idle sleep on or off.
 - `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
 - `wake_replay` makes the press that wakes the remote replay its stored setting.
 
 Each key is optional. If a key is absent, the import leaves that setting as it is.
 A file from an older page has no `settings` object, and it still imports.
+A file from an older page can give `status_leds` as `true` or `false`. The import reads `true` as `on` and `false` as `off`.
+
+Two hold keys cannot give the same slot. The import also refuses a file that leaves two holds on one button.
+To move holds between buttons, the import first sets each changed hold to no button. Then it sets the new buttons.
 A remote without sleep does not export the three sleep keys.
 If a file holds them, the import skips them and says so in the result note.
 
@@ -661,51 +666,68 @@ The amber XIAO user LED shows that the remote is awake (see
 
 ### The LED settings
 
-Two switches in the **Config** tab control the LEDs. Both are on by default. The remote stores each one in flash.
+Two settings in the **Config** tab control the LEDs. The remote stores each one in flash.
 
-The **Status LEDs** switch covers all status light. This includes `D2` to `D5` in normal use,
+The **Status LEDs** setting has three modes: **Off**, **Hold button**, and **Always on**. The default is **Always on**.
+The setting covers all status light. This includes `D2` to `D5` in normal use,
 assignment mode, voice, and pairing feedback. It also covers the amber XIAO user LED.
-If **Status LEDs** is off, these LEDs stay dark. As a result, assignment and pairing give no light feedback.
 
-One exception applies while **Status LEDs** is off. When a radio turns on or off, the LED of that radio gives one radio switch pulse.
+| Mode | Result |
+| --- | --- |
+| Always on | The LEDs show the status at all times. |
+| Hold button | The LEDs stay dark. Hold the status hold button for 1 s to see the status. |
+| Off | The LEDs stay dark. The status hold does nothing. |
+
+In the **Off** and **Hold button** modes, these LEDs stay dark. As a result, pairing gives no light feedback.
+After an update from the older on and off switch, a stored on reads as **Always on** and a stored off reads as **Off**.
+
+Four exceptions apply in the **Off** and **Hold button** modes.
+
+The radio switch pulse is the first exception. When a radio turns on or off, the LED of that radio gives one radio switch pulse.
 The radio switch pulse is 800 ms long. It is green when the radio turns on and red when the radio turns off.
 `D2` pulses for Wi-Fi, `D4` pulses for Bluetooth, and `D5` pulses for Zigbee. `D3` does not pulse.
 If two or more radios change at the same time, each LED gives its own pulse.
 Each source of the change gives the pulse. For example, a Wi-Fi session that closes when idle gives a red pulse on `D2`.
-If **Status LEDs** is on, no pulse plays. The status colour of the LED shows the new radio state.
+In the **Always on** mode, no pulse plays. The status colour of the LED shows the new radio state.
 
 The `D5` pulse shows the Zigbee switch, not the stack. If the Zigbee switch was off at boot and you turn it on, `D5` gives a green pulse.
 But the stack starts only after a reboot. See [The radio switches](#the-radio-switches).
 
-The status peek is the second exception. While **Status LEDs** is off, hold SW8 for 1 s.
-`D2` to `D5` then show the same status as with **Status LEDs** on. When you release SW8, the LEDs go dark again.
+The status peek is the second exception. It works only in the **Hold button** mode.
+Hold the status hold button for 1 s. The default status hold button is `SW7`.
+`D2` to `D5` then show the same status as in the **Always on** mode. When you release the button, the LEDs go dark again.
 The XIAO user LED stays dark during a status peek. No radio switch pulse plays during a status peek.
-If **Status LEDs** is on, a hold of SW8 does not start a status peek.
+If you change the mode during a status peek, the status peek stops.
 
-The sleep lap is the third exception. When the SW5 hold arms sleep, `D2` to `D5` give one sleep lap.
-The sleep lap plays with either LED setting. See [Enter sleep](#enter-sleep).
+The sleep lap is the third exception. When the sleep hold arms sleep, `D2` to `D5` give one sleep lap.
+The sleep lap plays in all three modes. See [Enter sleep](#enter-sleep).
 
-SW8 sends its assignment when you release it, not when you press it. As a result, a status peek does not send the SW8 assignment.
-A voice assignment on SW8 starts at the release, and Home Assistant ends it when your speech stops.
-A BLE HID assignment on SW8 sends the key press and the key release together at the release.
+Assignment mode is the fourth exception. While assignment mode is open, `D2` to `D5` show the full status in all three modes.
+`D3` and `D4` show the assignment mode state. The XIAO user LED stays dark unless the mode is **Always on**.
+No radio switch pulse plays while assignment mode is open. When assignment mode closes, the LEDs go dark again.
+
+In the **Hold button** mode, the status hold button sends its assignment when you release it.
+As a result, a status peek does not send the assignment of that button. See [Hold buttons](#hold-buttons).
 
 The **Boot and wake LEDs** switch covers only two animations. These are the rainbow chase on a cold boot
 and the battery pulses after a deep-sleep wake. If this switch is off, the status LEDs show at once.
 
-The two switches work together in this way:
+The two settings work together in this way:
 
 | Status LEDs | Boot and wake LEDs | Result |
 | --- | --- | --- |
-| on | on | The animation plays, then the status LEDs show. |
-| on | off | The status LEDs show at once. |
-| off | on | The animation plays on `D2` to `D5`, then the LEDs stay dark except for a radio switch pulse, a status peek, or a sleep lap. |
-| off | off | The LEDs stay dark except for a radio switch pulse, a status peek, or a sleep lap. |
+| Always on | on | The animation plays, then the status LEDs show. |
+| Always on | off | The status LEDs show at once. |
+| Off or Hold button | on | The animation plays on `D2` to `D5`, then the LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
+| Off or Hold button | off | The LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
 
-If **Status LEDs** is off, the animation does not show assignment or voice state.
-The `led_vdd` rail is on only during an animation, a radio switch pulse, a status peek, or a sleep lap.
-A change applies at once. If you turn **Status LEDs** on, the LEDs show the current state again.
-If you turn it off during an animation, the animation finishes and then the LEDs go dark.
-While both switches are off, the Home Assistant **Status Light** entity is on only for a radio switch pulse, a status peek, or a sleep lap.
+A status peek occurs only in the **Hold button** mode.
+In the **Off** and **Hold button** modes, the LEDs do not show voice state. They show assignment mode state while the mode is open.
+The `led_vdd` rail is on only during an animation, a radio switch pulse, a status peek, a sleep lap, or assignment mode.
+A change applies at once. If you set **Status LEDs** to **Always on**, the LEDs show the current state again.
+If you set **Off** or **Hold button** during an animation, the animation finishes and then the LEDs go dark.
+Assume that **Status LEDs** is not **Always on** and **Boot and wake LEDs** is off.
+Then the Home Assistant **Status Light** entity is on only for a radio switch pulse, a status peek, a sleep lap, or assignment mode.
 The XIAO charge LED is hardware driven. These settings cannot turn it off.
 
 ## Normal playback
@@ -737,23 +759,59 @@ A voice press does not turn on Wi-Fi. If Wi-Fi is off, the API is not connected,
 
 A refused press does not make the mic meter active, so it does not block idle sleep.
 
+## Hold buttons
+
+A hold runs a device action when you keep a button down for a set time. The remote has four holds:
+
+| Hold | Default button | Hold time | Action |
+| --- | --- | --- | --- |
+| Wi-Fi | `SW5` | 2 s | Opens or closes a temporary Wi-Fi session. |
+| Status LEDs | `SW7` | 1 s | Shows the status until you release the button. See [The LED settings](#the-led-settings). |
+| Sleep | `SW1` | 2 s | Arms sleep. The remote sleeps when you release all buttons. See [Enter sleep](#enter-sleep). |
+| Assignment mode | `SW9` | 2 s | Opens assignment mode, or closes it from any state. |
+
+The **Hold buttons** block on the **Config** tab sets the button for each hold.
+A hold can use `SW1` to `SW11` or one of the five wheel directions.
+Wheel rotation cannot carry a hold, because a detent has no release edge.
+To turn a hold off, select **None**.
+
+Two holds cannot use the same button. The page disables a button that another hold uses and names that hold.
+The firmware refuses a request for a used button with HTTP 400 and changes nothing.
+The remote stores the hold buttons in flash. If the stored record is missing or bad, the remote uses the default buttons.
+
+A hold is active when it has a button. The status hold is active only when **Status LEDs** is set to **Hold button**.
+
+A button with an active hold sends its own assignment when you release it before the hold time.
+If the hold time passes, the hold runs and the release sends nothing.
+A button without an active hold sends its assignment when you press it.
+The remote decides at the press if the button has an active hold. A settings change during the hold does not change that press.
+
+A voice assignment on a button with an active hold starts Assist at the release. Home Assistant ends it when your speech stops.
+A BLE HID assignment on a button with an active hold sends the key press and the key release together at the release.
+A Home Assistant action on a button with an active hold runs at the release. It asks for Wi-Fi at that moment.
+
+If **WiFi Always On** is off, the Wi-Fi hold is the only button that opens a temporary session.
+In that case, the page asks you to confirm before it removes the button from the Wi-Fi hold.
+
 ## Deep sleep
 
 The remote enters deep sleep to save battery. The `idle_sleep` component in
-`c6remote.yaml` controls it. The `sleep_after`, `sleep_hold_time`, and
-`cold_boot_grace` keys set the default times.
+`c6remote.yaml` controls it. The `sleep_after` and `cold_boot_grace` keys set
+the default times. The sleep hold is one of the [hold buttons](#hold-buttons),
+and its hold time is 2 s.
 
 ### Enter sleep
 
-Two events start deep sleep: a hold on SW5, and an idle period.
+Two events start deep sleep: the sleep hold, and an idle period.
 
-To sleep at once, hold SW5 for the `sleep_hold_time` value. When the hold time passes, the remote arms sleep. Then release SW5.
+To sleep at once, hold the sleep hold button for 2 s. The default sleep hold button is `SW1`.
+When the hold time passes, the remote arms sleep. Then release the button.
 When the remote arms sleep, `D2` to `D5` give one sleep lap. The sleep lap is one anticlockwise lap of blue-white light, from `D5` to `D2`.
-The sleep lap plays with either LED setting. If **Status LEDs** is on, the amber XIAO user LED also flashes once.
+The sleep lap plays in all LED settings. If **Status LEDs** is set to **Always on**, the amber XIAO user LED also flashes once.
 After the sleep lap, `D2` to `D5` stay dark until the remote sleeps.
 The remote sleeps when you release all buttons. If you release all buttons during the sleep lap, the remote sleeps at once.
-SW5 still sends its own assignment when you press it.
-The hold ignores the blocks that follow.
+The sleep hold button sends nothing when the hold runs. A shorter press sends its assignment at the release.
+The sleep hold ignores the blocks that follow.
 
 If no activity occurs for the `sleep_after` time, the remote enters deep sleep.
 A stored page value replaces this default.
@@ -770,7 +828,7 @@ Idle sleep does not start while one of these is true:
 - The microphone runs, or the mic meter is active.
 - The voice assistant runs.
 - A Zigbee pairing request is active, or the pairing window is open.
-- Wi-Fi is on and Wi-Fi Always On is off, as in the SW9 or page session. The Home Assistant Wi-Fi lease also blocks sleep.
+- Wi-Fi is on and Wi-Fi Always On is off, as in a session from the Wi-Fi hold or the page. The Home Assistant Wi-Fi lease also blocks sleep.
 - A Home Assistant action waits to send or to get a reply. The log shows this as `ha=` (bit 7 of `block_probe`).
 
 A blocked remote counts as active. When the block ends, the full idle time starts again.
@@ -786,7 +844,7 @@ firmware knows which button woke it.
 
 The wake press replay is a setting. It is off by default.
 When it is off, the press that wakes the remote only wakes it. Press the button again to send its command.
-A held SW1, SW8, or SW9 does not tap when you release it.
+If you still hold the button at wake, its release does not tap.
 
 When the setting is on, the remote sends the wake press when the Zigbee link comes up.
 The wake press is the Zigbee assignment of that button.
@@ -795,15 +853,13 @@ A Home Assistant assignment does not wait for the Zigbee link. The wake press qu
 If the Home Assistant switch is off, the remote drops that wake press at once.
 [ZIGBEE.md](ZIGBEE.md) describes the send path.
 
-SW8 and SW9 act when you release them. If you still hold SW9 at wake, the remote runs the
-Wi-Fi hold whether the setting is on or off. When the setting is on, the remote sends the assignment
-of SW9 when you release SW9 before the 2 s hold ends.
+If you still hold a button with an active hold at wake, the remote does not replay its wake press.
+This rule also applies to a Home Assistant assignment.
+When the setting is on, the remote sends the assignment of that button when you release it before the hold time.
 
-If you still hold SW8 at wake, the remote runs the status peek hold whether the setting is on or off.
-When the setting is on, the remote sends the assignment of SW8 when you release SW8 before the 1 s hold ends.
-
-If you still hold SW1 at wake, the remote does not start the assignment mode
-hold. When the setting is on, the remote sends the assignment of SW1 when you release SW1.
+If you still hold a button with an active hold at wake, its hold starts. This occurs when the setting is on or off.
+The assignment mode hold is the exception. It does not start from a wake.
+When the setting is on, the release of the assignment mode hold button always sends its assignment.
 
 After a wake, all four LEDs pulse two times in the battery colour. Each pulse
 is 800 ms. The colour shows the battery level at the first moment after the wake:
@@ -835,7 +891,7 @@ The web page has a **Sleep** block. It shows only on a build with `idle_sleep`.
 - The **Send the wake press** switch turns the wake press replay on or off. It is off by default.
 
 The remote stores all three settings in flash. A change restarts the idle window.
-The SW5 hold works when **Sleep** is off.
+The sleep hold works when **Sleep** is off.
 
 ### Flash over USB
 

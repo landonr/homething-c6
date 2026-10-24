@@ -142,15 +142,19 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("hid_play_callback_(button, false)", (ROOT / "ir_learning.h").read_text())
-        for slot in [slot for slot in range(3, 17) if slot not in (8, 9)] + [19]:
-            self.assertIn(f"slot: {slot}", CONFIG)
-        # SW8 and SW9 tap on release, so each releases its own slot after the tap.
-        for button in (8, 9):
-            entry = CONFIG.split(f"    name: Button {button}\n", 1)[1].split(f"    name: Button {button + 1}\n", 1)[0]
-            self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::FULL);", entry)
-            self.assertIn(f"ir_ui.release({button});", entry)
-        self.assertIn("set_pressed(20, true)", CONFIG)
-        self.assertIn("set_pressed(20, false)", CONFIG)
+        for slot in list(range(3, 17)) + [19, 20]:
+            self.assertIn(f"{{id: button_release, slot: {slot}}}", CONFIG)
+        # A press with an active hold taps on release, so the HID press and
+        # release go out together after the tap. Every other press releases
+        # through release_assignment.
+        release = CONFIG.split("  - id: button_release\n", 1)[1].split("\n  - id:", 1)[0]
+        tap = release.index("- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);")
+        self.assertLess(tap, release.index("- lambda: ir_ui.release(static_cast<uint8_t>(slot));"))
+        self.assertIn("id: release_assignment", release)
+        plain = CONFIG.split("  - id: release_assignment\n", 1)[1].split("\n  - id:", 1)[0]
+        self.assertIn("lambda: return ir_ui.release(static_cast<uint8_t>(slot));", plain)
+        # SW1 no longer drives HID from its raw edges.
+        self.assertNotIn("set_pressed(", CONFIG)
 
     @staticmethod
     def body(start: str) -> str:

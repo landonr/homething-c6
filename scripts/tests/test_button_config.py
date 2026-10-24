@@ -22,15 +22,19 @@ PAGE = (COMPONENT / "button_config_page.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
+HOLDS = (ROOT / "hold_actions.h").read_text()
+PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
 ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
 
-# Slots that cannot start the voice assistant. 20 is SW1, whose press edge is
-# already owned by the receiver-mode hold gesture. 17 and 18 are the wheel
-# detents, which have no release edge to end push-to-talk with.
-NO_VOICE = {17, 18, 20}
+# Slots that cannot start the voice assistant. 17 and 18 are the wheel detents,
+# which have no release edge to end push-to-talk with.
+NO_VOICE = {17, 18}
 ALL_SLOTS = list(range(3, 21))
+# The inputs that can carry a hold: every expander input, no wheel rotation.
+HOLD_SLOTS = set(range(3, 17)) | {19, 20}
+HOLD_KEYS = ["wifi", "status", "sleep", "assign"]
 
 
 def section(text: str, start: str, end: str) -> str:
@@ -132,7 +136,8 @@ class WifiSessionTest(unittest.TestCase):
         self.assertNotIn("global_wifi_component->disable()", setter)
         toggle = section(CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
         self.assertIn("if (this->boot_wifi_always_on_)\n    return;", toggle)
-        self.assertIn('this->open_temporary_wifi_("by SW9");', toggle)
+        self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', toggle)
+        self.assertNotIn("SW9", toggle)
         self.assertIn("this->temporary_wifi_ = false;", toggle)
         opener = section(CPP, "void ButtonConfig::open_temporary_wifi_(const char *reason) {", "\n}")
         self.assertIn("this->note_activity_();", opener)
@@ -240,27 +245,52 @@ class SleepSettingsTest(unittest.TestCase):
             self.assertIn("this->defer([this, action_id, ", branch)
             self.assertIn(f"this->complete_action_(action_id, {call});", branch)
 
-    def test_the_status_leds_setting_is_stored_validated_and_exposed(self) -> None:
-        self.assertIn("bool status_leds() const;", HEADER)
-        status = section(CPP, "bool ButtonConfig::status_leds() const {", "\n}")
+    def test_the_status_mode_is_stored_validated_and_exposed(self) -> None:
+        self.assertIn("enum StatusMode : uint8_t { STATUS_OFF = 0, STATUS_ON = 1, STATUS_HOLD = 2 };", HEADER)
+        self.assertIn("uint8_t status_mode() const;", HEADER)
+        self.assertIn("bool set_status_mode(uint8_t mode);", HEADER)
+        # Every gate and the on_status_leds trigger keep reading the On mode alone.
+        self.assertIn("bool status_leds() const { return this->status_mode() == STATUS_ON; }", HEADER)
+        status = section(CPP, "uint8_t ButtonConfig::status_mode() const {", "\n}")
         self.assertIn("make_preference<LedPref>(LED_PREF_KEY, true)", status)
         self.assertIn("value < 0", status)
-        setter = section(CPP, "bool ButtonConfig::set_status_leds(bool enabled) {", "\n}")
+        # Byte 0 is off and 1 is on, as in the older switch record, so it keeps its meaning.
+        self.assertIn("loaded.enabled <= STATUS_HOLD", status)
+        self.assertIn("value = static_cast<int8_t>(valid ? loaded.enabled : STATUS_ON);", status)
+        setter = section(CPP, "bool ButtonConfig::set_status_mode(uint8_t mode) {", "\n}")
+        self.assertIn("if (mode > STATUS_HOLD)\n    return false;", setter)
         self.assertIn("preference.save(&next)", setter)
-        self.assertIn("this->status_leds_callbacks_.call(enabled);", setter)
+        # The peek ends before the trigger asks for the light.
+        self.assertLess(setter.index("::hold_actions.set_status_active(mode == STATUS_HOLD);"),
+                        setter.index("this->status_leds_callbacks_.call(mode == STATUS_ON);"))
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertIn("::hold_actions.set_status_active(this->status_mode() == STATUS_HOLD);", setup)
         action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
-        self.assertIn('R"({"ok":false,"error":"invalid status LED switch"})"', action)
+        self.assertIn('parse_status_mode(request->arg("mode"), led_mode)', action)
+        self.assertIn('R"({"ok":false,"error":"a status LED mode is off, hold, or on"})"', action)
+        self.assertNotIn("invalid status LED switch", CPP)
+        self.assertLess(action.index("a status LED mode is off, hold, or on"),
+                        action.index("compare_exchange_strong(expected, true"))
         branch = section(action, '} else if (action == "set_status_leds") {', "\n  } else")
-        self.assertIn("this->set_status_leds(status_leds_on)", branch)
+        self.assertIn("this->set_status_mode(led_mode)", branch)
+        parse = section(CPP, "static bool parse_status_mode(const std::string &text, uint8_t &mode) {", "\n}")
+        for word in ('"off"', '"on"', '"hold"'):
+            self.assertIn(word, parse)
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"status_leds":%s,"boot_leds":%s,"network"', state)
-        self.assertIn("this->status_leds() ? \"true\" : \"false\"", state)
-        self.assertIn("Status LEDs: %s", CPP)
+        self.assertIn('"status_leds":"%s","boot_leds":%s,"holds":{', state)
+        self.assertIn("status_mode_name(this->status_mode()), this->boot_leds()", state)
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));', CPP)
         self.assertIn('post("set_status_leds"', PAGE)
-        self.assertIn('id="lgb"', PAGE)
-        self.assertIn('"wifi_always_on","status_leds","boot_leds","sleep","wake_replay"', PAGE)
-        self.assertIn('add("status_leds",st.status_leds,"set_status_leds",en);', PAGE)
-        self.assertIn("o.status_leds=st.status_leds;", PAGE)
+        self.assertIn('"&mode="+ledWant', PAGE)
+        self.assertIn('<h2 class="ttl">Status LEDs<select id="lgm" aria-label="Status LEDs" disabled>\n'
+                      '<option value="off">Off</option><option value="hold">Hold button</option>'
+                      '<option value="on">Always on</option></select></h2>', PAGE)
+        self.assertNotIn('id="lgb"', PAGE)
+        self.assertIn('var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"];',
+                      PAGE)
+        self.assertIn("o.status_leds=ledMode();", PAGE)
+        self.assertIn('function ledMode(){var m=st&&st.status_leds;return m==="off"||m==="hold"?m:m===false?"off":"on"}',
+                      PAGE)
 
     def test_the_boot_leds_setting_mirrors_the_status_leds_setting(self) -> None:
         self.assertIn("bool boot_leds() const;", HEADER)
@@ -274,7 +304,7 @@ class SleepSettingsTest(unittest.TestCase):
         branch = section(action, '} else if (action == "set_boot_leds") {', "\n  } else")
         self.assertIn("this->set_boot_leds(boot_leds_on)", branch)
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"status_leds":%s,"boot_leds":%s,"network"', state)
+        self.assertIn('"boot_leds":%s,"holds":{', state)
         self.assertIn("this->boot_leds() ? \"true\" : \"false\"", state)
         self.assertIn('post("set_boot_leds"', PAGE)
         self.assertIn('id="blb"', PAGE)
@@ -325,7 +355,7 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertLess(dev.index('id="dip"'), dev.index('id="slpcfg"'))
         self.assertIn('document.getElementById("dip")', PAGE)
         self.assertIn('dip.textContent=st.network.ip||"Unavailable"', PAGE)
-        self.assertLess(dev.index('id="slpcfg"'), dev.index('id="lgb"'))
+        self.assertLess(dev.index('id="slpcfg"'), dev.index('id="lgm"'))
         self.assertIn('<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"\n'
                       'aria-label="Sleep" disabled>', block)
         self.assertIn('<input type="number" id="sla" min="1" max="60" step="1"', block)
@@ -359,6 +389,115 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn('elif action == "set_sleep_enabled":', preview)
         self.assertIn('elif action == "set_sleep_after":', preview)
         self.assertIn("10 <= int(seconds) <= 3600", preview)
+
+
+class HoldSettingsTest(unittest.TestCase):
+    """Four holds, each on one input or none, stored by ButtonConfig and run by HoldActions."""
+
+    def test_the_hold_record_loads_and_falls_back_to_the_defaults(self) -> None:
+        self.assertIn("static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;", HEADER)
+        self.assertIn("  struct HoldPref {\n    uint32_t magic;\n    uint8_t slot[HOLD_COUNT];\n  };", HEADER)
+        load = section(CPP, "void ButtonConfig::load_hold_pref_() {", "\n}")
+        self.assertIn("static_assert(HOLD_COUNT == HoldActions::COUNT,", load)
+        self.assertIn("make_preference<HoldPref>(HOLD_PREF_KEY, true)", load)
+        self.assertIn("loaded.magic == HOLD_PREF_MAGIC", load)
+        # One bad slot or one shared slot drops the whole record.
+        self.assertIn("HoldActions::valid_slots(loaded.slot)", load)
+        self.assertIn("HoldActions::DEFAULT_SLOT", load)
+        self.assertIn("static constexpr uint8_t DEFAULT_SLOT[COUNT] = {5, 7, 20, 9};", HOLDS)
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertLess(setup.index("this->load_hold_pref_();"),
+                        setup.index("::hold_actions.set_status_active("))
+        apply_ = section(CPP, "void ButtonConfig::apply_hold_slots_(const uint8_t *slots) {", "\n}")
+        self.assertIn("::hold_actions.set_slots(slots);", apply_)
+        self.assertIn("this->hold_slots_[i].store(slots[i], std::memory_order_release);", apply_)
+        self.assertIn("std::atomic<uint8_t> hold_slots_[HOLD_COUNT]{};", HEADER)
+
+    def test_the_set_hold_action_refuses_a_bad_request_before_the_busy_claim(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "set_hold"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "set_hold"', section(action, "const bool needs_slot = ", ";"))
+        claim = action.index("compare_exchange_strong(expected, true")
+        for error in ("a hold is wifi, status, sleep, or assign", "a hold button is 0 or a button slot",
+                      "another hold already uses that button"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', action)
+            self.assertLess(action.index(error), claim)
+        self.assertIn('parse_hold_name(request->arg("hold"), hold_action)', action)
+        self.assertIn('parse_hold_slot(request->arg("slot"), hold_slot)', action)
+        self.assertIn("this->hold_slots_[i].load(std::memory_order_acquire) == hold_slot", action)
+        branch = section(action, '} else if (action == "set_hold") {', "\n  } else")
+        self.assertIn("this->defer([this, action_id, hold_action, hold_slot]() {", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_hold_slot_(hold_action, hold_slot));", branch)
+        slot = section(CPP, "static bool parse_hold_slot(const std::string &text, uint8_t &slot) {", "\n}")
+        self.assertIn("value != 0 && !HoldActions::valid_slot(static_cast<uint8_t>(value))", slot)
+        # A second request can land between the httpd check and the defer.
+        setter = section(CPP, "bool ButtonConfig::set_hold_slot_(uint8_t action, uint8_t slot) {", "\n}")
+        self.assertLess(setter.index("if (!HoldActions::valid_slots(next.slot)) {"),
+                        setter.index("this->hold_pref_.save(&next)"))
+        self.assertLess(setter.index("this->hold_pref_.save(&next)"),
+                        setter.index("this->apply_hold_slots_(next.slot);"))
+
+    def test_the_state_and_the_log_name_the_holds_in_one_order(self) -> None:
+        self.assertIn('static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};',
+                      CPP)
+        self.assertIn("enum Action : uint8_t { WIFI = 0, STATUS = 1, SLEEP = 2, ASSIGN = 3, COUNT = 4 };", HOLDS)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"holds":{"wifi":%u,"status":%u,"sleep":%u,"assign":%u},"network":{', state)
+        order = [state.index(f"this->hold_slots_[HoldActions::{name}].load") for name in
+                 ("WIFI", "STATUS", "SLEEP", "ASSIGN")]
+        self.assertEqual(order, sorted(order))
+        dump = section(CPP, "void ButtonConfig::dump_config() {", "\n}")
+        self.assertIn('"  Hold slots: wifi %u, status %u, sleep %u, assign %u"', dump)
+        self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', CPP)
+
+    def test_the_page_offers_every_input_that_can_hold_once_per_hold(self) -> None:
+        holds = re.findall(r'\{k:"(\w+)",n:"[^"]+",t:"[^"]+"\}', section(PAGE, "var HOLDS=[", "];"))
+        self.assertEqual(holds, HOLD_KEYS)
+        inputs = [int(value) for value in section(PAGE, "var HB=[", "];").split(",")]
+        self.assertEqual(len(inputs), len(set(inputs)))
+        self.assertEqual(set(inputs), HOLD_SLOTS)
+        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", HOLDS).group(1)
+        self.assertEqual({int(value) for value in table.split(",")}, HOLD_SLOTS)
+        paint = section(PAGE, "function holdPaint(){", "\n\n")
+        # An input another hold uses stays visible, but disabled and named.
+        self.assertIn('(by?" disabled":"")', paint)
+        self.assertIn('(by?" ("+esc(by.n)+")":"")', paint)
+        self.assertIn("if(h!==holdHtml){", paint)
+        send = section(PAGE, "function setHold(k){", "\n\n")
+        self.assertIn('post("set_hold",null,undefined,undefined,"&hold="+k+"&slot="+v)', send)
+        self.assertIn("return waitAction(r.body.id)", send)
+        self.assertIn('<div id="hbx"></div>', section(PAGE, '<section class="card full conn" id="devcfg">', "</section>"))
+
+    def test_no_page_text_names_a_fixed_hold_button(self) -> None:
+        script = section(PAGE, "<script>", "</script>")
+        self.assertNotRegex(PAGE, r"Hold Button \d")
+        self.assertNotIn("SW1", PAGE)
+        self.assertNotIn("SW9", PAGE)
+        for name in ("wifi", "status", "sleep", "assign"):
+            self.assertIn(f'holdName("{name}")', script)
+        self.assertIn('var wh=document.getElementById("wfh"),wn=holdName("wifi");', script)
+        self.assertIn("function wifiHoldText(){", script)
+        self.assertIn("(a===false?wifiHoldText():", script)
+
+    def test_the_import_moves_holds_through_none(self) -> None:
+        send = section(PAGE, "function cfgSetList(o){", "\n\n")
+        clear = send.index('list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot=0"})')
+        target = send.index('list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot="+fin[k]})')
+        self.assertLess(clear, target)
+        self.assertIn('var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];', PAGE)
+        apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
+        self.assertLess(apply_.index("if(sets.error){cfgNote(sets.error,true);return}"), apply_.index("cfgRun("))
+
+    def test_the_preview_serves_the_holds_and_the_status_mode(self) -> None:
+        self.assertIn('"status_leds": "on",', PREVIEW)
+        self.assertIn('"holds": {"wifi": 5, "status": 7, "sleep": 20, "assign": 9},', PREVIEW)
+        self.assertIn("HOLD_SLOTS = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20}", PREVIEW)
+        self.assertIn('elif action == "set_hold":', PREVIEW)
+        for error in ("a status LED mode is off, hold, or on", "a hold is wifi, status, sleep, or assign",
+                      "a hold button is 0 or a button slot", "another hold already uses that button"):
+            self.assertIn(error, PREVIEW)
+            self.assertIn(error, CPP)
 
 
 class BatteryTest(unittest.TestCase):
@@ -458,8 +597,7 @@ class RestartTest(unittest.TestCase):
         paint = section(PAGE, "function restartPaint(){", "\n\n")
         self.assertIn('b.disabled=restartBusy;b.textContent=restartBusy?"Restarting...":"Restart remote"', paint)
         self.assertIn("st.network.wifi_always_on===true", paint)
-        self.assertIn('" Wi-Fi stays off after the restart. Hold Button 9 for two seconds to open a temporary session."',
-                      paint)
+        self.assertIn('" Wi-Fi stays off after the restart."+wifiHoldText()', paint)
         self.assertIn('"The remote is restarting."', paint)
         self.assertIn("function restartLost(){if(restartBusy&&restartId)restartDown=true}", PAGE)
         sync = section(PAGE, "function restartSync(j){", "\n\n")
@@ -673,9 +811,9 @@ class SlotTableTest(unittest.TestCase):
         page = {row["slot"]: row["voice"] for row in page_slots()}
         self.assertEqual(firmware, page)
 
-    def test_only_slots_17_and_18_and_20_have_no_voice_action(self) -> None:
+    def test_only_the_wheel_rotation_slots_have_no_voice_action(self) -> None:
         """17 and 18 are wheel detents with no release edge to end push-to-talk.
-        20 is SW1, whose press edge belongs to the receiver-mode hold."""
+        SW1 lost its fixed hold, so slot 20 takes a voice action too."""
         firmware = {slot for slot, voice in cpp_slots() if not voice}
         self.assertEqual(firmware, NO_VOICE)
 
@@ -1227,8 +1365,7 @@ class PageTest(unittest.TestCase):
                       'is back. Continue?"', send)
         self.assertIn('"The remote restarts with the Zigbee radio off."', send)
         self.assertIn("var always=!!(st.network&&st.network.wifi_always_on===true);", send)
-        self.assertIn('(always?"":" Wi-Fi stays off after the restart. Hold Button 9 for two seconds '
-                      'to open a temporary session.")', send)
+        self.assertIn('(always?"":" Wi-Fi stays off after the restart."+wifiHoldText())', send)
         paint = section(PAGE, "function zpjPaint(){", "\n\n// The state poll")
         self.assertIn("b.disabled=zpjBusy||!known;", paint)
         self.assertIn('b.textContent=zpjBusy?"Restarting...":zpjOn?"Stop pairing":'
@@ -1264,7 +1401,8 @@ class PageTest(unittest.TestCase):
         froze the link line at whatever the first load put there."""
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
-        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;zpjSync();networkStatus();sleepStatus();"
+        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;"
+                      "st.holds=j.holds;zpjSync();networkStatus();sleepStatus();"
                       "batteryStatus();restartSync(j);radioStatus();bleStatus();", body)
         self.assertIn("if(booted&&radioKey()!==radioSeen)paint()}},"
                       "\nfunction(){zpjLost();restartLost()})", body)
@@ -1413,7 +1551,7 @@ class PageTest(unittest.TestCase):
         self.assertEqual(marks, sorted(marks))
         self.assertGreater(marks[0], PAGE.index('<div class="tabgrid" id="configtab" hidden>'))
         dev = section(PAGE, order[1], "</section>")
-        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgb"', 'id="blb"', 'id="rsb"'):
+        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgm"', 'id="blb"', 'id="hbx"', 'id="rsb"'):
             self.assertIn(want, dev)
         wifi = section(PAGE, order[3], "</section>")
         for want in ('id="wfb"', 'id="wip"', 'id="wmac"', 'id="hab"'):
@@ -1643,7 +1781,7 @@ class PageTest(unittest.TestCase):
         settings = section(PAGE, "function cfgSettings(){", "\n\n")
         self.assertNotIn("name", settings)
         send = section(PAGE, "function cfgSetList(o){", "\n\n")
-        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds",
+        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds", "set_hold",
                        "set_sleep_enabled", "set_sleep_after", "set_sleep_replay"):
             self.assertIn('"%s"' % action, send)
         self.assertIn("if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();", section(PAGE, "function load(){", "\n\n"))
@@ -1721,7 +1859,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
         self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
                       '\n                          action != "set_wifi_always_on" && action != "set_status_leds" '
-                      '&& action != "set_boot_leds" &&\n                          !sleep_action && action != "pair" &&\n                          action != "restart" && '
+                      '&& action != "set_boot_leds" &&\n                          action != "set_hold" && !sleep_action && '
+                      'action != "pair" &&\n                          action != "restart" && '
                       'action != "set_name";', CPP)
         # A switch writes flash, so it runs on the loop like every other write.
         switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
@@ -1878,11 +2017,13 @@ class RadioSwitchTest(unittest.TestCase):
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
         # The sleep block hides because the build fixes it. The idle restart line
-        # hides because an idle remote has nothing to report.
+        # hides because an idle remote has nothing to report. The hold line shows
+        # only a failed hold change.
         for card_id in ("devcfg", "wificfg", "zbcfg", "blecfg"):
             card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
             card = card.replace('<div id="slpcfg" hidden>', "", 1)
             card = card.replace('<p class="sub st" id="rss" hidden></p>', "", 1)
+            card = card.replace('<p class="sub st" id="hbs" hidden></p>', "", 1)
             self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)
@@ -1962,9 +2103,9 @@ class WiringTest(unittest.TestCase):
         self.assertIn("if (ir_ui.tick())", block)
         self.assertIn("id(show_idle_status).execute();", block)
 
-    def test_the_hold_script_leaves_the_idle_restore_to_the_interval(self) -> None:
+    def test_the_assignment_hold_leaves_the_idle_restore_to_the_interval(self) -> None:
         """Catches a double restore once tick() reports a close from any source."""
-        block = section(CONFIG, "  - id: exit_receiver_hold", "  - id: show_idle_status")
+        block = section(CONFIG, "if (fired & (1u << HoldActions::ASSIGN)) {", "\n      - lambda: |-")
         self.assertIn("ir_ui.close();", block)
         self.assertNotIn("show_idle_status", block)
 

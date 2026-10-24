@@ -535,14 +535,13 @@ class IrUi {
     CLEARED = 6,
   };
 
-  // FULL cycles IR, voice, clear. NO_VOICE omits voice. ARM_ONLY always
-  // arms IR capture for wheel rotation, which has no release edge.
-  enum class Tap : uint8_t { FULL, NO_VOICE, ARM_ONLY };
+  // FULL cycles IR, voice, clear. ARM_ONLY always arms IR capture for wheel
+  // rotation, which has no release edge.
+  enum class Tap : uint8_t { FULL, ARM_ONLY };
 
   uint8_t state = OFF;
   uint8_t target = 0;
   uint8_t stage = 0;
-  bool hold_consumed = false;
 
   void open() {
     state = READY;
@@ -552,7 +551,7 @@ class IrUi {
     web_result_ = OFF;
     web_result_slot_ = 0;
     mark_();
-    ESP_LOGI("ir_learn", "Receiver mode READY; hold SW1 or wait 5 s to leave");
+    ESP_LOGI("ir_learn", "Receiver mode READY. Hold the assignment mode button or wait 5 s to leave");
   }
 
   void close() {

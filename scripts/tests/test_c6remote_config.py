@@ -8,6 +8,12 @@ import unittest
 CONFIG = Path(__file__).parents[2] / "c6remote.yaml"
 IR_LEARNING = Path(__file__).parents[2] / "ir_learning.h"
 ZIGBEE_LEARNING = Path(__file__).parents[2] / "zigbee_learning.h"
+HOLD_ACTIONS = Path(__file__).parents[2] / "hold_actions.h"
+
+# Expander input name to its assignment slot.
+INPUT_SLOTS = {f"Button {number}": number for number in range(3, 12)}
+INPUT_SLOTS.update({"Button 1": 20, "Button 2": 19, "Wheel Right": 12, "Wheel Up": 13,
+                    "Wheel Press": 14, "Wheel Down": 15, "Wheel Left": 16})
 
 
 def button_pin(config: str, button: int) -> int:
@@ -24,6 +30,15 @@ def button_entry(config: str, button: int) -> str:
     start = config.index(f"    name: Button {button}\n")
     end = config.find("\n  - platform: gpio", start + 1)
     return config[start:end if end >= 0 else None]
+
+
+def script_entry(config: str, script_id: str) -> str:
+    return config.split(f"  - id: {script_id}\n", 1)[1].split("\n  - id:", 1)[0]
+
+
+def hold_tick_step(config: str) -> str:
+    steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+    return next(step for step in steps if "hold_actions.tick(" in step)
 
 
 def status_light_entry(config: str) -> str:
@@ -125,7 +140,7 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertNotIn("it[0]", draw)
         self.assertNotIn("it.all()", draw)
 
-    def test_the_sw5_sleep_arm_plays_one_anticlockwise_lap_then_goes_dark(self) -> None:
+    def test_the_sleep_hold_arm_plays_one_anticlockwise_lap_then_goes_dark(self) -> None:
         """The arm must show with either LED setting, and the LEDs stay dark until the release sleeps."""
         config = CONFIG.read_text()
         entry = status_light_entry(config)
@@ -217,83 +232,149 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("\n        - component.update: web_page_url", boot)
         self.assertEqual(config.count("component.update: web_page_url"), 1)
 
-    def test_sw9_hold_consumes_the_tap_and_toggles_temporary_wifi(self) -> None:
+    def test_the_firmware_includes_the_hold_actions_header(self) -> None:
         config = CONFIG.read_text()
-        sw9 = button_entry(config, 9)
-        hold = config.split("  - id: detect_wifi_hold\n", 1)[1].split("\n  - id:", 1)[0]
-        self.assertIn("id(sw9_hold_consumed) = false;", sw9)
-        self.assertIn("script.execute: detect_wifi_hold", sw9)
-        self.assertIn("script.stop: detect_wifi_hold", sw9)
-        self.assertIn("return !id(sw9_hold_consumed);", sw9)
-        self.assertIn("delay: 2s", hold)
-        self.assertLess(hold.index("id(sw9_hold_consumed) = true;"),
-                        hold.index("id(button_cfg).toggle_temporary_wifi();"))
+        includes = config.split("  includes:\n", 1)[1].split("  on_boot:", 1)[0]
+        self.assertIn("    - hold_actions.h\n", includes)
+        # The header stays free of ESPHome, so a host compiler can test it.
+        header = HOLD_ACTIONS.read_text()
+        self.assertNotIn("esphome", header)
+        self.assertNotIn("ESP_LOG", header)
+        self.assertNotIn("millis()", header)
+        self.assertIn("inline HoldActions hold_actions;", header)
 
-    def test_sw9_short_tap_plays_and_releases_its_assignment(self) -> None:
-        sw9 = button_entry(CONFIG.read_text(), 9)
-        self.assertLess(sw9.index("return !id(sw9_hold_consumed);"),
-                        sw9.index("ir_ui.tap(9, IrUi::Tap::FULL);"))
-        self.assertLess(sw9.index("ir_ui.tap(9, IrUi::Tap::FULL);"),
-                        sw9.index("ir_ui.release(9);"))
-        self.assertIn("if: *send_learned_code", sw9)
-        self.assertIn("if: *start_learned_voice", sw9)
-        self.assertNotIn("voice_assistant.stop:", sw9)
-
-    def test_sw8_taps_on_release_behind_its_peek_hold(self) -> None:
-        """A peek hold must not send the SW8 assignment, so SW8 taps on release like SW9."""
+    def test_every_expander_input_shares_one_press_and_one_release_path(self) -> None:
+        """A hold can move to any input, so no input may keep a path of its own."""
         config = CONFIG.read_text()
-        self.assertEqual(button_pin(config, 8), 7)
-        sw8 = button_entry(config, 8)
-        on_press = sw8[sw8.index("on_press:"):sw8.index("on_release:")]
-        on_release = sw8[sw8.index("on_release:"):]
-        self.assertIn("id(sw8_hold_consumed) = false;", on_press)
-        self.assertIn("script.execute: detect_peek_hold", on_press)
-        self.assertNotIn("ir_ui.tap(", on_press)
-        # The peek ends on every release, also a release that taps.
-        self.assertLess(on_release.index("script.stop: detect_peek_hold"),
-                        on_release.index("id(status_peek) = false;"))
-        self.assertLess(on_release.index("id(status_peek) = false;"),
-                        on_release.index("return !id(sw8_hold_consumed);"))
-        self.assertLess(on_release.index("return !id(sw8_hold_consumed);"),
-                        on_release.index("ir_ui.tap(8, IrUi::Tap::FULL);"))
-        self.assertLess(on_release.index("ir_ui.tap(8, IrUi::Tap::FULL);"),
-                        on_release.index("ir_ui.release(8);"))
-        self.assertIn("if: *send_learned_code", on_release)
-        self.assertIn("if: *start_learned_voice", on_release)
-        # Home Assistant VAD ends a voice tap, so nothing stops Assist on release.
-        self.assertNotIn("release_assignment", sw8)
-        self.assertNotIn("{id: release_assignment, slot: 8}", config)
-        hold = config.split("  - id: detect_peek_hold\n", 1)[1].split("\n  - id:", 1)[0]
-        self.assertIn("    mode: restart\n", hold)
-        self.assertIn("delay: 1s", hold)
-        early = hold.index("if (id(button_cfg).status_leds())\n            return;")
-        consumed = hold.index("id(sw8_hold_consumed) = true;")
-        peek = hold.index("id(status_peek) = true;")
-        light = hold.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();')
-        self.assertLess(early, consumed)
-        self.assertLess(consumed, peek)
-        self.assertLess(peek, light)
+        section = config[config.index("\nbinary_sensor:\n"):config.index("\nsensor:\n")]
+        found = {}
+        for entry in section.split("  - platform: gpio\n")[1:]:
+            name = re.search(r"name: ([^\n]+)", entry).group(1)
+            press = re.findall(r"on_press:\n      - script\.execute: \{id: button_press, slot: (\d+)\}\n", entry)
+            release = re.findall(r"on_release:\n      - script\.execute: \{id: button_release, slot: (\d+)\}", entry)
+            self.assertEqual(len(press), 1, name)
+            self.assertEqual(press, release, name)
+            found[name] = int(press[0])
+        self.assertEqual(found, INPUT_SLOTS)
+        for gone in ("ir_ui.tap(", "voice_assistant", "set_pressed(", "release_assignment", "hold_consumed"):
+            self.assertNotIn(gone, section)
 
-    def test_an_sw8_peek_holds_the_status_light_on_with_status_leds_off(self) -> None:
+    def test_the_press_path_taps_only_when_hold_actions_allows_it(self) -> None:
+        config = CONFIG.read_text()
+        press = script_entry(config, "button_press")
+        self.assertIn("    mode: parallel\n", press)
+        self.assertIn("    parameters:\n      slot: int\n", press)
+        # The decision comes first, with no delay in front of it.
+        self.assertNotIn("delay:", press)
+        decide = press.index("lambda: return hold_actions.press(static_cast<uint8_t>(slot), millis());")
+        tap = press.index("- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);")
+        self.assertLess(decide, tap)
+        self.assertLess(tap, press.index("- if: *send_learned_code"))
+        self.assertLess(press.index("- if: *send_learned_code"), press.index("- if: &start_learned_voice"))
+        self.assertEqual(config.count("hold_actions.press("), 1)
+
+    def test_the_release_path_taps_a_deferred_press_and_releases_the_rest(self) -> None:
+        config = CONFIG.read_text()
+        release = script_entry(config, "button_release")
+        self.assertIn("    mode: parallel\n", release)
+        self.assertNotIn("delay:", release)
+        # One call, because release() clears the latched press.
+        self.assertEqual(config.count("hold_actions.release("), 1)
+        call = release.index("- lambda: id(hold_release) = hold_actions.release(static_cast<uint8_t>(slot));")
+        tap_branch = release.split("lambda: return id(hold_release) == HoldActions::TAP_AND_RELEASE;", 1)[1]
+        tap_branch = tap_branch.split("\n      - if:\n", 1)[0]
+        self.assertLess(call, release.index("HoldActions::TAP_AND_RELEASE"))
+        order = ["- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);", "- if: *send_learned_code",
+                 "- if: *start_learned_voice", "- lambda: ir_ui.release(static_cast<uint8_t>(slot));"]
+        positions = [tap_branch.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        # Home Assistant VAD ends a voice tap, so this branch stops no stream.
+        self.assertNotIn("voice_assistant.stop:", tap_branch)
+        release_only = release.split("lambda: return id(hold_release) == HoldActions::RELEASE_ONLY;", 1)[1]
+        self.assertIn("            - script.execute:\n                id: release_assignment\n"
+                      "                slot: !lambda return slot;", release_only)
+        # A fired hold is SILENT, so neither branch runs for it.
+        self.assertNotIn("HoldActions::SILENT", config)
+        self.assertIn("  - id: hold_release\n    type: uint8_t\n    restore_value: false\n", config)
+        self.assertLess(config.index("  - id: button_press\n"), config.index("  - id: button_release\n"))
+
+    def test_the_hold_tick_dispatches_each_action(self) -> None:
+        config = CONFIG.read_text()
+        step = hold_tick_step(config)
+        # The wake step returns early after a cold boot, so the tick is its own earlier step.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        tick = next(i for i, item in enumerate(steps) if "hold_actions.tick(" in item)
+        wake = next(i for i, item in enumerate(steps) if "if (!id(idle).woke_from_sleep())\n            return;" in item)
+        self.assertLess(tick, wake)
+        self.assertLess(step.index("if (!App.is_setup_complete())\n            return;"),
+                        step.index("const uint8_t fired = hold_actions.tick(millis());"))
+        self.assertIn("if (fired & (1u << HoldActions::WIFI))\n            id(button_cfg).toggle_temporary_wifi();", step)
+        self.assertIn("if (fired & (1u << HoldActions::STATUS))\n            id(status_light).turn_on()"
+                      '.set_brightness(0.4f).set_effect("Status Indicators").perform();', step)
+        self.assertIn("if (fired & (1u << HoldActions::SLEEP))\n            id(idle).arm_sleep();", step)
+        assign = step.split("if (fired & (1u << HoldActions::ASSIGN)) {", 1)[1]
+        opened = assign.split("} else {", 1)[0]
+        self.assertIn("if (ir_ui.state == IrUi::OFF) {", opened)
+        order = ["ir_ui.open();", "id(ir_rail).turn_on();", 'set_effect("Status Indicators")']
+        positions = [opened.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("ir_ui.close();", assign.split("} else {", 1)[1])
+        self.assertEqual(config.count("hold_actions.tick("), 1)
+
+    def _light_gates(self, config: str) -> dict:
+        """The four places that keep the strip lit with Status LEDs off or on hold."""
+        entry = status_light_entry(config)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        return {
+            "on_turn_on": turn_on[:turn_on.index("switch.turn_on: led_rail")],
+            "250ms turn-off": tick[:tick.index("id(status_light).turn_off()")],
+            "on_status_leds off": status_off,
+            "status_on": effect[effect.index("const bool status_on ="):].split(";", 1)[0],
+        }
+
+    def test_a_status_peek_holds_the_status_light_on(self) -> None:
         """Each status_light gate must see the peek, or the rail stays off or the 250 ms tick blanks the light."""
         config = CONFIG.read_text()
-        entry = status_light_entry(config)
-        term = "id(status_peek)"
-        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
-        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
-        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
-        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
-        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
-        self.assertIn(term, status_off)
+        for name, gate in self._light_gates(config).items():
+            self.assertIn("hold_actions.peeking()", gate, name)
         # A negated term would turn the light off during a peek instead.
-        self.assertNotIn("!id(status_peek)", config)
-        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
-        self.assertIn("const bool status_on = id(button_cfg).status_leds() || id(status_peek);", effect)
+        self.assertNotIn("!hold_actions.peeking()", config)
+        effect = status_light_entry(config).split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        self.assertIn("const bool status_on = id(button_cfg).status_leds() || hold_actions.peeking() || "
+                      "ir_ui.state != IrUi::OFF;", effect)
         self.assertIn("if (!status_on)\n              it.all() = Color::BLACK;", effect)
-        # Only the hold script sets the peek and only the SW8 release clears it.
-        self.assertEqual(config.count("id(status_peek) = true;"), 1)
-        self.assertEqual(config.count("id(status_peek) = false;"), 1)
-        self.assertIn("  - id: status_peek\n    type: bool\n    restore_value: false\n", config)
+        self.assertEqual(config.count("hold_actions.peeking()"), 4)
+
+    def test_an_open_assignment_mode_lights_the_strip_in_every_led_mode(self) -> None:
+        """Assignment mode gives its only feedback on D3 and D4, so Off and Hold must not darken it."""
+        config = CONFIG.read_text()
+        term = "ir_ui.state != IrUi::OFF"
+        for name, gate in self._light_gates(config).items():
+            self.assertIn(term, gate, name)
+            self.assertNotIn("ir_ui.state == IrUi::OFF", gate, name)
+        # Each opener sets the state before it asks for the light.
+        step = hold_tick_step(config)
+        opened = step.split("if (ir_ui.state == IrUi::OFF) {", 1)[1].split("} else {", 1)[0]
+        self.assertLess(opened.index("ir_ui.open();"), opened.index("id(status_light).turn_on()"))
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        # A web open sets the state in open_from_web(), on the httpd defer, before this tick.
+        self.assertLess(tick.index("if (ir_ui.take_open_request()) {"), tick.index("id(status_light).turn_on()"))
+        # A close restores idle status, which the on_turn_on gate then darkens, and the
+        # turn-off gate reads the state after tick() closed the mode.
+        self.assertLess(tick.index("if (ir_ui.tick())\n            id(show_idle_status).execute();"),
+                        tick.index("id(status_light).turn_off()"))
+        self.assertIn("open_requested_ = true;", IR_LEARNING.read_text().split("void open_from_web(uint8_t button) {", 1)[1])
+
+    def test_the_fixed_hold_paths_are_gone(self) -> None:
+        config = CONFIG.read_text()
+        for gone in ("detect_wifi_hold", "detect_peek_hold", "detect_receiver_hold", "exit_receiver_hold",
+                     "sw8_hold_consumed", "sw9_hold_consumed", "status_peek", "hold_consumed", "NO_VOICE",
+                     "set_pressed(", "sleep_hold_bit", "sleep_hold_time"):
+            self.assertNotIn(gone, config)
+        self.assertNotIn("hold_consumed", IR_LEARNING.read_text())
 
     def test_sw9_and_sw10_follow_silkscreen_wiring(self) -> None:
         """Catches swapping PCF8575 P8 and P9 under Button 9 and Button 10."""
@@ -302,29 +383,17 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertEqual(button_pin(config, 10), 8)
 
     def test_every_assignable_input_runs_the_tap_cycle(self) -> None:
-        """Catches an input that lost its slot or took a neighbour's slot."""
+        """Catches an input that lost its slot or a path that lost the full cycle."""
         config = CONFIG.read_text()
-        expected = {f"Button {number}": number for number in range(3, 12)}
-        expected["Button 2"] = 19
-        expected.update(
-            {
-                "Wheel Right": 12,
-                "Wheel Up": 13,
-                "Wheel Press": 14,
-                "Wheel Down": 15,
-                "Wheel Left": 16,
-            }
-        )
-        for name, slot in expected.items():
-            match = re.search(rf"name: {name}\n[\s\S]*?ir_ui\.tap\((\d+), IrUi::Tap::(\w+)\)", config)
-            if match is None:
-                raise AssertionError(f"{name} does not call ir_ui.tap")
-            self.assertEqual(int(match.group(1)), slot, name)
-            self.assertEqual(match.group(2), "FULL", name)
-
-        self.assertIn("ir_ui.tap(20, IrUi::Tap::NO_VOICE);", config)
+        for name, slot in INPUT_SLOTS.items():
+            entry = button_entry(config, int(name.split()[1])) if name.startswith("Button") else \
+                config.split(f"    name: {name}\n", 1)[1].split("\n  - platform:", 1)[0]
+            self.assertIn(f"{{id: button_press, slot: {slot}}}", entry, name)
+        # Both shared paths run the full cycle, so every expander input has voice.
+        self.assertEqual(config.count("ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);"), 2)
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", config)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", config)
+        self.assertNotIn("NO_VOICE", config)
 
     def test_status_light_drives_all_four_cascaded_leds(self) -> None:
         config = CONFIG.read_text()
@@ -333,8 +402,8 @@ class ProductionConfigTest(unittest.TestCase):
             r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
         )
 
-    def test_sw2_is_push_to_talk_for_home_assistant_assist(self) -> None:
-        """SW1 owns the receiver-mode hold, so SW2 carries push to talk."""
+    def test_a_voice_assignment_is_push_to_talk_for_home_assistant_assist(self) -> None:
+        """An input without an active hold starts Assist on press and ends it on release."""
         config = CONFIG.read_text()
         # Zigbee and Wi-Fi share the C6 radio. Coexistence needs modem power
         # save, or the STA misses beacons and the association flaps.
@@ -354,14 +423,10 @@ class ProductionConfigTest(unittest.TestCase):
             config,
             r"id: board_microphone[\s\S]*?sample_rate: 16000",
         )
-        # The voice stage is a shared anchor, so it is defined on Button 2.
-        self.assertRegex(
-            config,
-            r"name: Button 2\n    id: button_2\n    pin:[\s\S]*?"
-            r"\n      - lambda: ir_ui\.tap\(19, IrUi::Tap::FULL\);[\s\S]*?"
-            r"\n      - if: &start_learned_voice",
-        )
-        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
+        # The voice stage is a shared anchor, so it is defined in the press path.
+        self.assertIn("- if: &start_learned_voice", script_entry(config, "button_press"))
+        self.assertEqual(config.count("voice_assistant.start:"), 1)
+        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("\n  - id: button_release", 1)[0]
         self.assertRegex(
             start_voice,
             r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
@@ -370,7 +435,7 @@ class ProductionConfigTest(unittest.TestCase):
             r"effect: Status Indicators[\s\S]*?"
             r"voice_assistant\.start:",
         )
-        release = config.split("  - id: release_assignment", 1)[1].split("  - id: detect_receiver_hold", 1)[0]
+        release = script_entry(config, "release_assignment")
         self.assertRegex(
             release,
             r"lambda: return ir_ui\.release\(static_cast<uint8_t>\(slot\)\);[\s\S]*?voice_assistant\.stop:",
@@ -427,7 +492,8 @@ class ProductionConfigTest(unittest.TestCase):
         """Without a subscribed client, voice_assistant.start only logs and fires
         no trigger, so a meter set first stays set and blocks sleep forever."""
         config = CONFIG.read_text()
-        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("on_release:", 1)[0]
+        # The anchor lives in the shared press path, so the release path reuses it.
+        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("\n  - id: button_release", 1)[0]
         self.assertRegex(
             start_voice,
             r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
@@ -435,12 +501,13 @@ class ProductionConfigTest(unittest.TestCase):
             r" +- lambda: return id\(button_cfg\)\.ha_api_expected\(\);\n"
             r" +- voice_assistant\.connected:\n +then:\n",
         )
-        accepted, refused = start_voice.split("\n                else:\n", 1)
+        accepted, refused = start_voice.split("\n                      else:\n", 1)
         meter = accepted.index("id(mic_meter_active) = true;")
         for guard in ("return id(button_cfg).ha_api_expected();", "- voice_assistant.connected:"):
             self.assertLess(accepted.index(guard), meter)
             self.assertLess(accepted.index(guard), accepted.index("voice_assistant.start:"))
         self.assertLess(accepted.index("script.stop: refuse_voice_start"), meter)
+        refused = "\n".join(line for line in refused.splitlines() if not line.strip().startswith("#"))
         self.assertEqual(refused.strip(), "- script.execute: refuse_voice_start")
         # Every input reuses the anchor, so no start can skip the guard.
         self.assertEqual(config.count("voice_assistant.start:"), 1)
@@ -535,9 +602,9 @@ class ProductionConfigTest(unittest.TestCase):
             header,
             r"if \(stage == 1 && mode == Tap::FULL\)[\s\S]*?ir_code_store\.set_voice",
         )
-        for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_"):
+        for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_", "NO_VOICE"):
             self.assertNotIn(gone, header)
-        self.assertIn("ir_ui.tap(20, IrUi::Tap::NO_VOICE);", CONFIG.read_text())
+        self.assertIn("enum class Tap : uint8_t { FULL, ARM_ONLY };", header)
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
 

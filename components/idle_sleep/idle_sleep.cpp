@@ -134,6 +134,13 @@ void IdleSleep::track_hold_(uint16_t pressed, uint32_t now) {
   }
 }
 
+void IdleSleep::arm_sleep() {
+  if (this->forced_sleep_)
+    return;
+  this->forced_sleep_ = true;
+  ESP_LOGI(TAG, "Sleep hold armed, sleeping on release");
+}
+
 void IdleSleep::setup() {
   // First: a held pad ignores every configuration written while it is held.
   for (gpio_num_t pin : HELD_FLOATING)

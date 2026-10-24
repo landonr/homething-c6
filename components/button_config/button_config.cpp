@@ -39,6 +39,8 @@ static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&
 // The page and the state JSON name the holds in HoldActions order.
 static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};
 
+static const char *hold_name(uint8_t hold) { return hold < HoldActions::COUNT ? HOLD_NAMES[hold] : "none"; }
+
 static const SlotInfo SLOTS[] = {
     {3, true},   {4, true},   {5, true},  {6, true},  {7, true},  {8, true},
     {9, true},   {10, true},  {11, true}, {12, true}, {13, true}, {14, true},
@@ -198,25 +200,41 @@ static const char *status_mode_name(uint8_t mode) {
   }
 }
 
-static bool parse_hold_name(const std::string &text, uint8_t &action) {
-  for (uint8_t i = 0; i < HoldActions::COUNT; i++) {
-    if (text == HOLD_NAMES[i]) {
-      action = i;
+// "none" takes the hold off the button.
+static bool parse_hold_name(const std::string &text, uint8_t &hold) {
+  for (uint8_t i = 0; i <= HoldActions::COUNT; i++) {
+    if (text == hold_name(i)) {
+      hold = i;
       return true;
     }
   }
   return false;
 }
 
-// 0 takes the button away from the hold.
+// Wheel rotation has no release edge, so it is not a hold slot.
 static bool parse_hold_slot(const std::string &text, uint8_t &slot) {
   if (text.empty() || text.size() > 2 || std::isdigit(static_cast<unsigned char>(text[0])) == 0)
     return false;
   char *end = nullptr;
   const unsigned long value = std::strtoul(text.c_str(), &end, 10);
-  if (*end != '\0' || (value != 0 && !HoldActions::valid_slot(static_cast<uint8_t>(value))))
+  if (*end != '\0' || !HoldActions::valid_slot(static_cast<uint8_t>(value)))
     return false;
   slot = static_cast<uint8_t>(value);
+  return true;
+}
+
+// The HLD1 rule: each hold on its own button slot, or 0 for none.
+static bool hld1_valid(const uint8_t *slots) {
+  for (uint8_t a = 0; a < HoldActions::COUNT; a++) {
+    if (slots[a] == 0)
+      continue;
+    if (!HoldActions::valid_slot(slots[a]))
+      return false;
+    for (uint8_t b = a + 1; b < HoldActions::COUNT; b++) {
+      if (slots[b] == slots[a])
+        return false;
+    }
+  }
   return true;
 }
 
@@ -740,42 +758,63 @@ void ButtonConfig::apply_friendly_name_(const std::string &name) {
     hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));
 }
 
-// A missing, corrupt, or inconsistent record gives every hold its default button.
+// A valid HLD2 record is used as stored. Otherwise a valid HLD1 record moves to
+// HLD2 once. Otherwise every input takes its default hold.
 void ButtonConfig::load_hold_pref_() {
-  static_assert(HOLD_COUNT == HoldActions::COUNT, "the record stores one slot for each hold");
-  this->hold_pref_ = global_preferences->make_preference<HoldPref>(HOLD_PREF_KEY, true);
-  HoldPref loaded{};
-  const bool valid = this->hold_pref_.load(&loaded) && loaded.magic == HOLD_PREF_MAGIC &&
-                     HoldActions::valid_slots(loaded.slot);
-  this->apply_hold_slots_(valid ? static_cast<const uint8_t *>(loaded.slot) : HoldActions::DEFAULT_SLOT);
-}
-
-void ButtonConfig::apply_hold_slots_(const uint8_t *slots) {
-  ::hold_actions.set_slots(slots);
-  for (uint8_t i = 0; i < HoldActions::COUNT; i++)
-    this->hold_slots_[i].store(slots[i], std::memory_order_release);
-}
-
-// Main loop only. The httpd check read older values, so this checks again.
-bool ButtonConfig::set_hold_slot_(uint8_t action, uint8_t slot) {
-  if (action >= HoldActions::COUNT)
-    return false;
-  HoldPref next{HOLD_PREF_MAGIC, {}};
-  for (uint8_t i = 0; i < HoldActions::COUNT; i++)
-    next.slot[i] = ::hold_actions.slot(static_cast<HoldActions::Action>(i));
-  if (next.slot[action] == slot)
-    return true;
-  next.slot[action] = slot;
-  if (!HoldActions::valid_slots(next.slot)) {
-    ESP_LOGW(TAG, "Hold %s cannot take slot %u", HOLD_NAMES[action], static_cast<unsigned>(slot));
-    return false;
+  static_assert(HOLD_COUNT == HoldActions::COUNT, "the HLD1 record stores one slot for each hold");
+  static_assert(HOLD_SLOTS == HoldActions::SLOT_LIMIT, "the HLD2 record stores one hold for each slot");
+  this->hold_pref_ = global_preferences->make_preference<HoldTablePref>(HOLD_TABLE_PREF_KEY, true);
+  HoldTablePref table{};
+  if (this->hold_pref_.load(&table) && table.magic == HOLD_TABLE_PREF_MAGIC) {
+    this->apply_holds_(table.hold);
+    return;
   }
+  ESPPreferenceObject old_pref = global_preferences->make_preference<HoldPref>(HOLD_PREF_KEY, true);
+  HoldPref old{};
+  if (old_pref.load(&old) && old.magic == HOLD_PREF_MAGIC && hld1_valid(old.slot)) {
+    HoldTablePref next{HOLD_TABLE_PREF_MAGIC, {}, {}};
+    for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+      next.hold[s] = HoldActions::NONE;
+    for (uint8_t a = 0; a < HoldActions::COUNT; a++) {
+      if (old.slot[a] != 0)
+        next.hold[old.slot[a]] = a;
+    }
+    this->apply_holds_(next.hold);
+    if (this->hold_pref_.save(&next)) {
+      ESP_LOGI(TAG, "Moved the hold buttons to the per-slot record");
+    } else {
+      ESP_LOGE(TAG, "Failed to save the hold buttons");
+    }
+    return;
+  }
+  uint8_t defaults[HOLD_SLOTS];
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    defaults[s] = HoldActions::default_hold(s);
+  this->apply_holds_(defaults);
+}
+
+void ButtonConfig::apply_holds_(const uint8_t *holds) {
+  ::hold_actions.set_holds(holds);
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    this->holds_[s].store(::hold_actions.hold(s), std::memory_order_release);
+}
+
+// Main loop only. Several slots can carry the same hold.
+bool ButtonConfig::set_hold_(uint8_t slot, uint8_t hold) {
+  if (!HoldActions::valid_slot(slot) || hold > HoldActions::NONE)
+    return false;
+  if (::hold_actions.hold(slot) == hold)
+    return true;
+  HoldTablePref next{HOLD_TABLE_PREF_MAGIC, {}, {}};
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    next.hold[s] = ::hold_actions.hold(s);
+  next.hold[slot] = hold;
   if (!this->hold_pref_.save(&next)) {
     ESP_LOGE(TAG, "Failed to save the hold buttons");
     return false;
   }
-  this->apply_hold_slots_(next.slot);
-  ESP_LOGI(TAG, "Hold %s on slot %u", HOLD_NAMES[action], static_cast<unsigned>(slot));
+  this->apply_holds_(next.hold);
+  ESP_LOGI(TAG, "Slot %u hold: %s", static_cast<unsigned>(slot), hold_name(hold));
   return true;
 }
 
@@ -882,11 +921,11 @@ void ButtonConfig::dump_config() {
   ESP_LOGCONFIG(TAG, "  API server held down this boot: %s", YESNO(this->ha_api_gated()));
   ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
   ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));
-  ESP_LOGCONFIG(TAG, "  Hold slots: wifi %u, status %u, sleep %u, assign %u",
-                static_cast<unsigned>(this->hold_slots_[HoldActions::WIFI].load(std::memory_order_acquire)),
-                static_cast<unsigned>(this->hold_slots_[HoldActions::STATUS].load(std::memory_order_acquire)),
-                static_cast<unsigned>(this->hold_slots_[HoldActions::SLEEP].load(std::memory_order_acquire)),
-                static_cast<unsigned>(this->hold_slots_[HoldActions::ASSIGN].load(std::memory_order_acquire)));
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++) {
+    const uint8_t hold = this->holds_[s].load(std::memory_order_acquire);
+    if (hold != HoldActions::NONE)
+      ESP_LOGCONFIG(TAG, "  Hold on slot %u: %s", static_cast<unsigned>(s), hold_name(hold));
+  }
   ESP_LOGCONFIG(TAG, "  Boot and wake LEDs: %s", YESNO(this->boot_leds()));
   ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
 }
@@ -959,16 +998,12 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   stream->print(R"({"firmware":")");
   print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"holds":{"wifi":%u,"status":%u,"sleep":%u,"assign":%u},"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
       static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
       status_mode_name(this->status_mode()), this->boot_leds() ? "true" : "false",
-      static_cast<unsigned>(this->hold_slots_[HoldActions::WIFI].load(std::memory_order_acquire)),
-      static_cast<unsigned>(this->hold_slots_[HoldActions::STATUS].load(std::memory_order_acquire)),
-      static_cast<unsigned>(this->hold_slots_[HoldActions::SLEEP].load(std::memory_order_acquire)),
-      static_cast<unsigned>(this->hold_slots_[HoldActions::ASSIGN].load(std::memory_order_acquire)),
       wifi::global_wifi_component->is_connected() ? "true" : "false",
       wifi::global_wifi_component->is_disabled() ? "false" : "true",
       this->wifi_always_on() ? "true" : "false",
@@ -1056,7 +1091,8 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
     print_json_text(stream, ha.entity.c_str());
     stream->print(R"(","name":")");
     print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
-    stream->print("\"}");
+    // Wheel rotation never carries a hold, so it reads none.
+    stream->printf(R"(","hold":"%s"})", hold_name(this->holds_[info.slot].load(std::memory_order_acquire)));
     first = false;
   }
   stream->print(R"(],"name":")");
@@ -1191,23 +1227,18 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
-  // A hold carries its own name and button, so it skips the slot parse below.
-  uint8_t hold_action = 0;
+  // A hold slot excludes wheel rotation, so it skips the slot parse below.
+  uint8_t hold = HoldActions::NONE;
   uint8_t hold_slot = 0;
   if (action == "set_hold") {
-    if (!parse_hold_name(request->arg("hold"), hold_action)) {
-      request->send(400, "application/json", R"({"ok":false,"error":"a hold is wifi, status, sleep, or assign"})");
+    if (!parse_hold_name(request->arg("hold"), hold)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"a hold is none, wifi, status, sleep, or assign"})");
       return;
     }
     if (!parse_hold_slot(request->arg("slot"), hold_slot)) {
-      request->send(400, "application/json", R"({"ok":false,"error":"a hold button is 0 or a button slot"})");
+      request->send(400, "application/json", R"({"ok":false,"error":"a hold slot is 3 to 16, 19, or 20"})");
       return;
-    }
-    for (uint8_t i = 0; i < HoldActions::COUNT; i++) {
-      if (i != hold_action && hold_slot != 0 && this->hold_slots_[i].load(std::memory_order_acquire) == hold_slot) {
-        request->send(400, "application/json", R"({"ok":false,"error":"another hold already uses that button"})");
-        return;
-      }
     }
   }
 
@@ -1535,8 +1566,8 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
       this->complete_action_(action_id, this->set_status_mode(led_mode));
     });
   } else if (action == "set_hold") {
-    this->defer([this, action_id, hold_action, hold_slot]() {
-      this->complete_action_(action_id, this->set_hold_slot_(hold_action, hold_slot));
+    this->defer([this, action_id, hold_slot, hold]() {
+      this->complete_action_(action_id, this->set_hold_(hold_slot, hold));
     });
   } else if (action == "set_boot_leds") {
     this->defer([this, action_id, boot_leds_on]() {

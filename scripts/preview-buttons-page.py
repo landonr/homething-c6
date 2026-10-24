@@ -47,8 +47,6 @@ STATE = {
     "action_ok": True,
     "status_leds": "on",
     "boot_leds": True,
-    # Slot of each hold, 0 for none. These are the firmware defaults.
-    "holds": {"wifi": 5, "status": 7, "sleep": 20, "assign": 9},
     "network": {
         "wifi": True,
         "wifi_enabled": True,
@@ -119,6 +117,9 @@ def ha_error(kind: str, act: str, val: str, entity: str) -> str | None:
     return None
 # Mirrors HoldActions::valid_slot(): the sixteen expander inputs, no wheel rotation.
 HOLD_SLOTS = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20}
+HOLD_NAMES = ("none", "wifi", "status", "sleep", "assign")
+# The firmware defaults. Several slots can share a hold.
+DEFAULT_HOLDS = {5: "wifi", 7: "status", 20: "sleep", 9: "assign"}
 
 # A fake restart fails the state poll for a short time. Then the action ids
 # start again from zero, as they do after a real boot. The preview always comes
@@ -204,13 +205,22 @@ def clean_name(text: str) -> str | None:
     return name
 
 
-def load_config(path: Path) -> tuple[dict, dict]:
+def load_config(path: Path) -> tuple[dict, dict, dict]:
     # Export JSON from the web page uses a shorter shape than /buttons/api/state.
     data = json.loads(path.read_text())
     slots: dict[int, dict] = {}
     codes: dict[int, str] = {}
+    holds: dict[int, str] = dict(DEFAULT_HOLDS)
+    # An older file names one slot for each hold in the settings.
+    for key, value in data.get("settings", {}).items():
+        if key.startswith("hold_") and key[5:] in HOLD_NAMES:
+            holds = {s: h for s, h in holds.items() if h != key[5:]}
+            if value:
+                holds[int(value)] = key[5:]
     for entry in data.get("slots", []):
         slot = int(entry["slot"])
+        if entry.get("hold") in HOLD_NAMES and slot in HOLD_SLOTS:
+            holds[slot] = entry["hold"]
         action = entry.get("action", "none")
         if action == "voice":
             slots[slot] = {"action": "voice"}
@@ -246,10 +256,10 @@ def load_config(path: Path) -> tuple[dict, dict]:
             text = entry.get("code", "")
             codes[slot] = text
             slots[slot] = parse_ir_code(text)
-    return slots, codes
+    return slots, codes, holds
 
 
-SLOTS, IR_CODES = load_config(CONFIG)
+SLOTS, IR_CODES, HOLDS = load_config(CONFIG)
 SLOTS.setdefault(8, {"action": "ha", "ha_kind": "light", "ha_act": "brightness_up",
                      "ha_val": 10, "ha_entity": "light.kitchen"})
 
@@ -285,6 +295,7 @@ def slot_json(slot: int) -> dict:
         "ha_act": entry.get("ha_act", ""),
         "ha_val": entry.get("ha_val", 0),
         "ha_entity": entry.get("ha_entity", ""),
+        "hold": HOLDS.get(slot, "none"),
     }
 
 
@@ -417,20 +428,15 @@ class Handler(BaseHTTPRequestHandler):
         if action == "set_status_leds" and mode not in ("off", "hold", "on"):
             self.send_json({"ok": False, "error": "a status LED mode is off, hold, or on"}, 400)
             return
-        # The same three refusals as handle_action_() in button_config.cpp.
+        # The same two refusals as handle_action_() in button_config.cpp.
         hold = form.get("hold", [""])[0]
         hold_slot = form.get("slot", [""])[0]
         if action == "set_hold":
-            if hold not in STATE["holds"]:
-                self.send_json({"ok": False, "error": "a hold is wifi, status, sleep, or assign"}, 400)
+            if hold not in HOLD_NAMES:
+                self.send_json({"ok": False, "error": "a hold is none, wifi, status, sleep, or assign"}, 400)
                 return
-            if not (hold_slot.isdigit() and len(hold_slot) <= 2
-                    and (int(hold_slot) == 0 or int(hold_slot) in HOLD_SLOTS)):
-                self.send_json({"ok": False, "error": "a hold button is 0 or a button slot"}, 400)
-                return
-            if int(hold_slot) and any(
-                    key != hold and value == int(hold_slot) for key, value in STATE["holds"].items()):
-                self.send_json({"ok": False, "error": "another hold already uses that button"}, 400)
+            if not (hold_slot.isdigit() and len(hold_slot) <= 2 and int(hold_slot) in HOLD_SLOTS):
+                self.send_json({"ok": False, "error": "a hold slot is 3 to 16, 19, or 20"}, 400)
                 return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
@@ -444,7 +450,10 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "set_status_leds":
             STATE["status_leds"] = mode
         elif action == "set_hold":
-            STATE["holds"][hold] = int(hold_slot)
+            if hold == "none":
+                HOLDS.pop(int(hold_slot), None)
+            else:
+                HOLDS[int(hold_slot)] = hold
         elif action == "set_boot_leds":
             STATE["boot_leds"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_enabled":

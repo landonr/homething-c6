@@ -64,7 +64,6 @@ els.scb.checked = true;
 const STATE = {
   busy: false, owner: "none", saves: 0, op_slot: 0, op_state: "off",
   status_leds: "on", boot_leds: true,
-  holds: {wifi: 5, status: 7, sleep: 20, assign: 9},
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, api_gated: false, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
   sleep: {available: true, enabled: true, after_s: 300, replay: false},
@@ -79,17 +78,21 @@ const STATE = {
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
     {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
-    {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: ""},
-    {slot: 7, action: "hid", pulses: 0, us: 0, code: "", fields: "", group: 0, hid_kind: "keyboard", hid_usage: 4, hid_mod: 2, name: ""},
+    {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: "", hold: "wifi"},
+    {slot: 7, action: "hid", pulses: 0, us: 0, code: "", fields: "", group: 0, hid_kind: "keyboard", hid_usage: 4, hid_mod: 2, name: "", hold: "status"},
     {slot: 8, action: "ha", pulses: 0, us: 0, code: "", fields: "", group: 0, ha_kind: "light", ha_act: "brightness_up", ha_val: 10, ha_entity: "light.kitchen", name: ""},
-    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, act: 0, val: 0, name: "Office Lamp"},
+    {slot: 9, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: "", hold: "assign"},
+    {slot: 20, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 4609, ieee: "", ep: 0, act: 0, val: 0, name: "Office Lamp", hold: "sleep"},
   ],
 };
 
-// The firmware always serves the four ha_ fields, empty when nothing is assigned.
+// The firmware always serves the four ha_ fields, empty when nothing is assigned,
+// and a hold on every slot.
 for (const row of STATE.slots) {
   if (row.action !== "ha") Object.assign(row, {ha_kind: "", ha_act: "", ha_val: 0, ha_entity: ""});
+  if (row.hold === undefined) row.hold = "none";
 }
+const slotRow = (slot) => STATE.slots.find(r => r.slot === slot);
 STATE.ha = {pending: 0, last_slot: 0, last: "none", error: ""};
 
 const body = mk("body");
@@ -161,6 +164,30 @@ try {
 
 // The startup path runs through a promise, so the checks wait for it.
 setTimeout(() => {
+  // The body that Save posts for one write, read through the real post().
+  const bodyOf = (w) => {
+    if (!w || w.error) throw new Error("no write: " + JSON.stringify(w));
+    let b = null;
+    const realFetch = global.fetch;
+    global.fetch = (u, o) => { b = o && o.body; return realFetch(u, o); };
+    post(w.a, w.s, w.c, w.n, w.x);
+    global.fetch = realFetch;
+    return b;
+  };
+  // Runs Save once and returns the bodies it posts. The writes never answer, so
+  // no late result reaches a later step. The caller clears svBusy.
+  const saveNow = () => {
+    const bodies = [], realFetch = global.fetch;
+    global.fetch = (u, o) => {
+      if (o && o.body) { bodies.push(o.body); return new Promise(() => {}); }
+      return realFetch(u, o);
+    };
+    global.svBusy = false;
+    saveCard();
+    global.fetch = realFetch;
+    return bodies;
+  };
+  const saveButton = () => document.getElementById("sv");
   step("page open reports activity and state polls do not", () => {
     if (activityCalls !== 1) throw new Error("page open sent " + activityCalls + " activity requests");
     stateRefresh();
@@ -244,7 +271,7 @@ setTimeout(() => {
     if (cd !== "" || cdSlot !== 3) throw new Error("the empty code box was not ready");
     global.fetch = realFetch;
   });
-  step("the IR loading state stays below the code actions", () => {
+  step("the IR loading state stays below the code box", () => {
     const realFetch = global.fetch;
     global.fetch = (u, o) => {
       if (String(u).indexOf("/api/code") >= 0) return new Promise(() => {});
@@ -259,37 +286,32 @@ setTimeout(() => {
     pick(6);
     const html = document.getElementById("edpanel").innerHTML;
     const status = html.indexOf("Loading the stored code.");
-    const actions = html.indexOf('<div class=act><button type=button id=ca');
-    const actionsEnd = html.indexOf("</div>", actions);
-    if (actions < 0 || actionsEnd < 0 || status <= actionsEnd)
-      throw new Error("the loading state is not below the code actions");
+    const box = html.indexOf("</textarea>");
+    if (box < 0 || status <= box) throw new Error("the loading state is not below the code box");
     global.fetch = realFetch;
     cfgAll[6] = CODE.text;
   });
-  step("empty IR code disables Apply until text arrives", () => {
-    global.sel = 3;
-    global.cd = " \t\n";
-    global.cdSlot = 3;
-    global.act = "ir";
-    paint();
+  step("an empty or blank IR code leaves Save off until text arrives", () => {
+    pick(3);
     const box = document.getElementById("ct");
-    const apply = document.getElementById("ca");
-    if (!apply.disabled)
-      throw new Error("empty code enabled a code action");
+    if (document.getElementById("ca")) throw new Error("the panel still has Apply");
+    if (!saveButton().disabled || !document.getElementById("sd").disabled)
+      throw new Error("an untouched card enabled Save or Discard");
+    if (document.getElementById("ed").innerHTML.indexOf("<p class='sub st' id=svm>No unsaved changes.</p>") < 0)
+      throw new Error("the card has no saved marker: " + document.getElementById("ed").innerHTML);
     box.value = " \t\n";
     box.oninput();
-    if (!apply.disabled)
-      throw new Error("whitespace enabled a code action");
+    if (!saveButton().disabled) throw new Error("whitespace enabled Save");
     box.value = "name: Home";
     box.oninput();
-    if (apply.disabled)
-      throw new Error("typed code did not enable its actions");
+    if (saveButton().disabled || document.getElementById("svm").textContent !== "Unsaved changes.")
+      throw new Error("typed code did not enable Save");
     box.value = "";
     box.oninput();
-    if (!apply.disabled)
-      throw new Error("cleared code left an action enabled");
+    if (!saveButton().disabled || document.getElementById("svm").textContent !== "No unsaved changes.")
+      throw new Error("cleared code left Save enabled");
   });
-  step("IR details precede code actions without a Now summary", () => {
+  step("IR details follow the code box without a Now summary", () => {
     global.sel = 6;
     global.cd = CODE.text;
     global.cdSlot = 6;
@@ -297,10 +319,9 @@ setTimeout(() => {
     paint();
     const html = document.getElementById("edpanel").innerHTML;
     const details = html.indexOf("<dl class=info>");
-    const actions = html.indexOf('<div class=act><button type=button id=ca');
     if (html.indexOf("Now:") >= 0) throw new Error("the current assignment summary remains");
-    if (details < 0 || actions < 0 || details >= actions)
-      throw new Error("IR details do not precede Apply");
+    if (details < 0 || details < html.indexOf("</textarea>"))
+      throw new Error("IR details do not follow the code box");
   });
   step("accepted Paste immediately assigns a Zigbee device", () => {
     global.sel = 5;
@@ -313,6 +334,7 @@ setTimeout(() => {
     if (!clip || clip.kind !== "zigbee" || !clip.device || clip.act !== 3 || clip.val !== 32)
       throw new Error("the Zigbee assignment was not copied: " + JSON.stringify(clip));
     if (msg) throw new Error("Zigbee Copy showed a success notice: " + msg);
+    confirmAnswer = true;
     pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
@@ -320,20 +342,24 @@ setTimeout(() => {
     const bodies = [];
     const realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
-    confirmAnswer = true; confirmAsked = 0;
-    paste.onclick();
-    if (confirmAsked !== 1 || confirmText.indexOf("Button 5 to Button 3") < 0)
-      throw new Error("Paste did not identify source and target: " + confirmText);
-    if (bodies.length !== 1) throw new Error("accepted Paste did not write once");
-    if (act !== "zb" || zkv !== "d" || zhv !== "0x94deb8fffe9db81e" ||
-        zpv !== "1" || zav !== 3 || zvv !== "32")
-      throw new Error("Paste did not fill the device form");
-    if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee_device&slot=3") < 0 ||
-        bodies[0].indexOf("ieee=0x94deb8fffe9db81e") < 0 || bodies[0].indexOf("act=3") < 0 ||
-        bodies[0].indexOf("val=32") < 0)
-      throw new Error("Assign sent the wrong device payload: " + bodies[0]);
-    global.fetch = realFetch;
-    global.zbusy = false;
+    // The stub never answers the write, so the lock it takes goes even when a check fails.
+    try {
+      confirmAnswer = true; confirmAsked = 0;
+      paste.onclick();
+      if (confirmAsked !== 1 || confirmText.indexOf("Button 5 to Button 3") < 0)
+        throw new Error("Paste did not identify source and target: " + confirmText);
+      if (bodies.length !== 1) throw new Error("accepted Paste did not write once");
+      if (act !== "zb" || zkv !== "d" || zhv !== "0x94deb8fffe9db81e" ||
+          zpv !== "1" || zav !== 3 || zvv !== "32")
+        throw new Error("Paste did not fill the device form");
+      if (bodies.length !== 1 || bodies[0].indexOf("action=set_zigbee_device&slot=3") < 0 ||
+          bodies[0].indexOf("ieee=0x94deb8fffe9db81e") < 0 || bodies[0].indexOf("act=3") < 0 ||
+          bodies[0].indexOf("val=32") < 0)
+        throw new Error("Paste sent the wrong device payload: " + bodies[0]);
+    } finally {
+      global.fetch = realFetch;
+      global.zbusy = false;
+    }
   });
   step("cancelled Paste changes nothing and sends nothing", () => {
     const realFetch = global.fetch;
@@ -341,17 +367,23 @@ setTimeout(() => {
     global.tg = [{id: 4609, name: "Office Lamp", members: []}];
     global.clip = clipConfig(row(20));
     pick(3);
+    // The pasted draft is still unsaved, so a click on the open input keeps it
+    // and does not repaint. A Copy repaints in the page, so the stub does too.
+    paint();
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
-    const before = {act, zkv, zsv, zgv, zav, zvv, msg, bad};
-    confirmAnswer = false; confirmAsked = 0;
-    document.getElementById("bpaste").onclick();
-    if (confirmAsked !== 1) throw new Error("Paste did not ask for confirmation");
-    if (bodies.length) throw new Error("cancelled Paste wrote: " + bodies[0]);
-    for (const k of Object.keys(before)) if (global[k] !== before[k])
-      throw new Error("cancelled Paste changed " + k);
-    confirmAnswer = true;
-    global.fetch = realFetch;
-    global.zbusy = false;
+    try {
+      const before = {act, zkv, zsv, zgv, zav, zvv, msg, bad};
+      confirmAnswer = false; confirmAsked = 0;
+      document.getElementById("bpaste").onclick();
+      if (confirmAsked !== 1) throw new Error("Paste did not ask for confirmation");
+      if (bodies.length) throw new Error("cancelled Paste wrote: " + bodies[0]);
+      for (const k of Object.keys(before)) if (global[k] !== before[k])
+        throw new Error("cancelled Paste changed " + k);
+    } finally {
+      confirmAnswer = true;
+      global.fetch = realFetch;
+      global.zbusy = false;
+    }
   });
   step("accepted Paste immediately assigns BLE HID", () => {
     global.sel = 7;
@@ -362,18 +394,24 @@ setTimeout(() => {
     if (!clip || clip.kind !== "hid")
       throw new Error("the BLE HID assignment was not copied: " + JSON.stringify(clip));
     if (msg) throw new Error("BLE HID Copy showed a success notice: " + msg);
+    confirmAnswer = true;
     pick(3);
+    if (sel !== 3) throw new Error("the Paste target did not open: " + sel);
     const bodies = [];
     const realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
-    confirmAnswer = true; confirmAsked = 0;
-    document.getElementById("bpaste").onclick();
-    global.fetch = realFetch;
-    if (confirmAsked !== 1) throw new Error("BLE HID Paste did not ask for confirmation");
-    if (bodies.length !== 1 || bodies[0].indexOf("action=set_hid&slot=3") < 0 ||
-        bodies[0].indexOf("kind=keyboard") < 0 || bodies[0].indexOf("usage=4") < 0 ||
-        bodies[0].indexOf("mod=2") < 0)
-      throw new Error("accepted BLE HID Paste sent the wrong payload: " + bodies[0]);
+    try {
+      confirmAnswer = true; confirmAsked = 0;
+      document.getElementById("bpaste").onclick();
+      if (confirmAsked !== 1) throw new Error("BLE HID Paste did not ask for confirmation");
+      if (bodies.length !== 1 || bodies[0].indexOf("action=set_hid&slot=3") < 0 ||
+          bodies[0].indexOf("kind=keyboard") < 0 || bodies[0].indexOf("usage=4") < 0 ||
+          bodies[0].indexOf("mod=2") < 0)
+        throw new Error("accepted BLE HID Paste sent the wrong payload: " + bodies[0]);
+    } finally {
+      global.fetch = realFetch;
+      global.svBusy = false;
+    }
   });
   step("the Home Assistant panel offers the entity, kind, action and step fields", () => {
     pick(8);
@@ -381,8 +419,9 @@ setTimeout(() => {
     if (hek !== "light.kitchen" || hkd !== "light" || hac !== "brightness_up" || hvl !== "10")
       throw new Error("pick did not load the saved action");
     const html = document.getElementById("edpanel").innerHTML;
-    for (const id of ["he", "hd", "hc", "hs", "hg", "ht"])
+    for (const id of ["he", "hd", "hc", "hs", "ht"])
       if (!document.getElementById(id)) throw new Error("the panel has no " + id);
+    if (document.getElementById("hg")) throw new Error("the panel still has its own Assign button");
     for (const text of ["placeholder=light.living_room", "autocapitalize=off", "autocorrect=off",
                         "spellcheck=false", "Any entity", "Input boolean", "Media player", "Brighten",
                         "Allow the device to perform Home Assistant actions", "first press after sleep"])
@@ -438,30 +477,34 @@ setTimeout(() => {
     paint();
     if (keys[8].className.indexOf("set-ha") < 0) throw new Error("the tile has no HA colour class");
   });
-  step("Assign checks the firmware rules before it posts", () => {
-    const realFetch = global.fetch, bodies = [];
-    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+  step("Save checks the Home Assistant rules before it posts", () => {
     pick(3); act = "ha";
-    hek = "switch.x"; hkd = "light"; hac = "toggle"; assignHa();
-    if (!bad || msg.indexOf("its domain must match the kind") < 0) throw new Error("a kind mismatch gave: " + msg);
-    hek = "light"; assignHa();
-    if (msg.indexOf("an entity id is domain.object_id") < 0) throw new Error("a bare name gave: " + msg);
-    hek = "light." + "a".repeat(60); assignHa();
-    if (msg.indexOf("up to 64 characters") < 0) throw new Error("a long id gave: " + msg);
-    hek = "light.kitchen"; hac = "brightness_up"; hvl = "0"; assignHa();
-    if (msg !== "a brightness step is 1 to 100") throw new Error("step 0 gave: " + msg);
-    hvl = "101"; assignHa();
-    if (msg !== "a brightness step is 1 to 100") throw new Error("step 101 gave: " + msg);
-    hvl = "abc"; assignHa();
-    if (msg !== "a brightness step is 1 to 100") throw new Error("a letter step gave: " + msg);
-    if (bodies.length) throw new Error("a bad entry was posted: " + bodies[0]);
-    hvl = "25"; assignHa();
-    if (bodies.length !== 1 || bodies[0] !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=25&entity=light.kitchen")
-      throw new Error("Assign sent: " + bodies[0]);
-    hac = "toggle"; hvl = "25"; hek = " Light.Kitchen "; assignHa();
-    if (bodies[1] !== "action=set_ha&slot=3&kind=light&act=toggle&val=0&entity=light.kitchen")
-      throw new Error("a toggle did not send val 0 and a trimmed id: " + bodies[1]);
-    global.fetch = realFetch;
+    const why = () => haWrite(3).error || "";
+    hek = "switch.x"; hkd = "light"; hac = "toggle";
+    if (why().indexOf("its domain must match the kind") < 0) throw new Error("a kind mismatch gave: " + why());
+    hek = "light";
+    if (why().indexOf("an entity id is domain.object_id") < 0) throw new Error("a bare name gave: " + why());
+    hek = "light." + "a".repeat(60);
+    if (why().indexOf("up to 64 characters") < 0) throw new Error("a long id gave: " + why());
+    hek = "light.kitchen"; hac = "brightness_up"; hvl = "0";
+    if (why() !== "a brightness step is 1 to 100") throw new Error("step 0 gave: " + why());
+    hvl = "101";
+    if (why() !== "a brightness step is 1 to 100") throw new Error("step 101 gave: " + why());
+    hvl = "abc";
+    if (why() !== "a brightness step is 1 to 100") throw new Error("a letter step gave: " + why());
+    // Save shows the reason in the card and posts nothing.
+    const bodies = saveNow();
+    if (bodies.length || !bad || msg !== "a brightness step is 1 to 100" || svBusy)
+      throw new Error("Save with a bad step gave " + msg + " and posted " + JSON.stringify(bodies));
+    hvl = "25";
+    let body = bodyOf(haWrite(3));
+    if (body !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=25&entity=light.kitchen")
+      throw new Error("Save would send: " + body);
+    hac = "toggle"; hvl = "25"; hek = " Light.Kitchen ";
+    body = bodyOf(haWrite(3));
+    if (body !== "action=set_ha&slot=3&kind=light&act=toggle&val=0&entity=light.kitchen")
+      throw new Error("a toggle did not send val 0 and a trimmed id: " + body);
+    global.msg = ""; global.bad = false;
   });
   step("accepted Paste immediately assigns a Home Assistant action", () => {
     global.sel = 8; global.clip = null; global.clipBusy = false;
@@ -469,17 +512,23 @@ setTimeout(() => {
     document.getElementById("bcopy").onclick();
     if (!clip || clip.kind !== "ha" || clip.entity !== "light.kitchen" || clip.act !== "brightness_up")
       throw new Error("the Home Assistant assignment was not copied: " + JSON.stringify(clip));
+    confirmAnswer = true;
     pick(3);
+    if (sel !== 3) throw new Error("the Paste target did not open: " + sel);
     const bodies = [], realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
-    confirmAnswer = true; confirmAsked = 0;
-    document.getElementById("bpaste").onclick();
-    global.fetch = realFetch;
-    if (confirmAsked !== 1 || confirmText.indexOf("Home Assistant config from Button 8") < 0)
-      throw new Error("Paste did not name the config: " + confirmText);
-    if (act !== "ha" || hek !== "light.kitchen") throw new Error("Paste did not fill the panel");
-    if (bodies.length !== 1 || bodies[0] !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=10&entity=light.kitchen")
-      throw new Error("Paste sent: " + bodies[0]);
+    try {
+      confirmAnswer = true; confirmAsked = 0;
+      document.getElementById("bpaste").onclick();
+      if (confirmAsked !== 1 || confirmText.indexOf("Home Assistant config from Button 8") < 0)
+        throw new Error("Paste did not name the config: " + confirmText);
+      if (act !== "ha" || hek !== "light.kitchen") throw new Error("Paste did not fill the panel");
+      if (bodies.length !== 1 || bodies[0] !== "action=set_ha&slot=3&kind=light&act=brightness_up&val=10&entity=light.kitchen")
+        throw new Error("Paste sent: " + bodies[0]);
+    } finally {
+      global.fetch = realFetch;
+      global.svBusy = false;
+    }
   });
   step("a backup carries Home Assistant actions out and back in", () => {
     global.cfgAll = {6: CODE.text};
@@ -520,6 +569,7 @@ setTimeout(() => {
     if (!clip || clip.kind !== "ir" || clip.code !== CODE.text)
       throw new Error("the full IR code was not copied: " + JSON.stringify(clip));
     if (msg) throw new Error("IR Copy showed a success notice: " + msg);
+    confirmAnswer = true;
     pick(3);
     const paste = document.getElementById("bpaste");
     if (typeof paste.onclick !== "function")
@@ -527,16 +577,20 @@ setTimeout(() => {
     const bodies = [];
     const realFetch = global.fetch;
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
-    confirmAnswer = true; confirmAsked = 0;
-    paste.onclick();
-    if (confirmAsked !== 1) throw new Error("IR Paste did not ask for confirmation");
-    if (bodies.length !== 1) throw new Error("accepted IR Paste did not write once");
-    if (act !== "ir" || cd !== CODE.text || cdSlot !== 3)
-      throw new Error("Paste did not fill the IR code box");
-    global.fetch = realFetch;
-    if (bodies.length !== 1 || bodies[0].indexOf("action=set_ir_code&slot=3") < 0 ||
-        bodies[0].indexOf("code=name%3A%20Home") < 0)
-      throw new Error("Apply sent the wrong IR payload: " + bodies[0]);
+    try {
+      confirmAnswer = true; confirmAsked = 0;
+      paste.onclick();
+      if (confirmAsked !== 1) throw new Error("IR Paste did not ask for confirmation");
+      if (bodies.length !== 1) throw new Error("accepted IR Paste did not write once");
+      if (act !== "ir" || cd !== CODE.text || cdSlot !== 3)
+        throw new Error("Paste did not fill the IR code box");
+      if (bodies.length !== 1 || bodies[0].indexOf("action=set_ir_code&slot=3") < 0 ||
+          bodies[0].indexOf("code=name%3A%20Home") < 0)
+        throw new Error("Paste sent the wrong IR payload: " + bodies[0]);
+    } finally {
+      global.fetch = realFetch;
+      global.svBusy = false;
+    }
   }), 0);
   global.tg = [
     {id: 1, name: "all_light", members: ["0xaaa", "0xbbb"]},
@@ -615,19 +669,16 @@ setTimeout(() => {
       throw new Error("a group with no known member must offer every action");
     global.zgv = "";
   });
-  step("the one button posts the address and endpoint, writing nothing to the bridge", () => {
-    let body = null, sent = 0;
-    const realFetch = global.fetch;
+  step("Save posts the address and endpoint, writing nothing to the bridge", () => {
+    let sent = 0;
     global.ws = {readyState: 1, send: () => { sent++; }};
-    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
     global.sel = 20;
     global.zkv = "d";
     global.zhv = "0x94deb8fffe9db81e";
     global.zpv = "1";
     global.zav = 0;
     global.zvv = "";
-    assignTarget();
-    global.fetch = realFetch;
+    const body = bodyOf(zbWrite(20));
     if (sent !== 0) throw new Error("the page wrote to Zigbee2MQTT");
     if (!body || body.indexOf("action=set_zigbee_device") < 0) throw new Error("wrong action: " + body);
     if (body.indexOf("ieee=0x94deb8fffe9db81e") < 0) throw new Error("no IEEE address: " + body);
@@ -636,25 +687,20 @@ setTimeout(() => {
     if (body.indexOf("name=Office%20Lamp") < 0) throw new Error("no looked-up name: " + body);
   });
   step("the target box reaches a device and a group", () => {
-    const realFetch = global.fetch;
-    let body = null;
-    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
     global.sel = 20;
     global.zpv = "";
     global.zkv = "d";
     global.zhv = "94deb8fffe9db81e";  // the 0x prefix is optional
-    assignTarget();
+    let body = bodyOf(zbWrite(20));
     if (!body || body.indexOf("action=set_zigbee_device") < 0)
       throw new Error("16 hex digits did not assign a device: " + body);
     if (body.indexOf("ep=1") < 0) throw new Error("an empty endpoint box must mean 1: " + body);
-    body = null;
     global.zkv = "g";
     global.zgv = "0x1201";
-    assignTarget();
+    body = bodyOf(zbWrite(20));
     if (!body || body.indexOf("action=set_zigbee&") < 0)
       throw new Error("a short ID must still assign a group: " + body);
     if (body.indexOf("group=0x1201") < 0) throw new Error("no group id: " + body);
-    global.fetch = realFetch;
   });
   step("a picker fills the target box and drops the other picker", () => {
     global.sel = 20;
@@ -684,49 +730,45 @@ setTimeout(() => {
   });
 
   step("the action and its value ride along with the target", () => {
-    let body = null;
-    const realFetch = global.fetch;
-    global.fetch = (u, o) => { body = o && o.body; return realFetch(u, o); };
     global.sel = 20;
     global.zkv = "d";
     global.zhv = "0x94deb8fffe9db81e";
     global.zpv = "";
     global.zav = 3;   // Brighter
     global.zvv = "48";
-    assignTarget();
+    let body = bodyOf(zbWrite(20));
     if (body.indexOf("act=3") < 0 || body.indexOf("val=48") < 0)
       throw new Error("the action did not reach the remote: " + body);
     // An empty box means the placeholder the panel showed.
     global.zvv = "";
-    assignTarget();
+    body = bodyOf(zbWrite(20));
     if (body.indexOf("val=32") < 0) throw new Error("the default value was not sent: " + body);
     // An action that takes no value sends none.
     global.zav = 0;
-    assignTarget();
+    body = bodyOf(zbWrite(20));
     if (body.indexOf("act=0&val=0") < 0) throw new Error("Toggle sent a value: " + body);
     global.zkv = "g";
     global.zgv = "4609";
     global.zav = 11;  // Warmer
     global.zvv = "5";
-    assignTarget();
+    body = bodyOf(zbWrite(20));
     if (body.indexOf("action=set_zigbee&") < 0 || body.indexOf("act=11") < 0)
       throw new Error("a group assign lost its action: " + body);
-    global.fetch = realFetch;
   });
   step("a value outside the range of its action never reaches the remote", () => {
-    let calls = 0;
-    const realFetch = global.fetch;
-    global.fetch = (u, o) => { calls++; return realFetch(u, o); };
+    global.sel = 20; global.act = "zb";
     global.zkv = "d";
     global.zhv = "0x94deb8fffe9db81e";
     global.zav = 3;
     global.zvv = "900";
-    assignTarget();
-    global.fetch = realFetch;
-    if (calls !== 0) throw new Error("a step of 900 was still sent");
-    if (!bad || msg.indexOf("1 to 254") < 0) throw new Error("no clear refusal: " + msg);
+    const w = zbWrite(20);
+    if (!w.error || w.error.indexOf("1 to 254") < 0) throw new Error("no clear refusal: " + JSON.stringify(w));
+    const bodies = saveNow();
+    if (bodies.length) throw new Error("a step of 900 was still sent");
+    if (!bad || msg.indexOf("1 to 254") < 0) throw new Error("Save gave no clear refusal: " + msg);
     global.zav = 0;
     global.zvv = "";
+    global.msg = ""; global.bad = false;
   });
   step("the action selector rewires the endpoint and clears the old value", () => {
     global.sel = 20;
@@ -750,30 +792,20 @@ setTimeout(() => {
   });
 
   step("a hidden field cannot be assigned", () => {
-    const realFetch = global.fetch;
-    let body = null, calls = 0;
-    global.fetch = (u, o) => { calls++; body = o && o.body; return realFetch(u, o); };
     global.sel = 20;
     // A stale address from a device pick must not ride along on a group assign.
     global.zkv = "g";
     global.zgv = "4609";
     global.zhv = "0x94deb8fffe9db81e";
-    assignTarget();
-    global.fetch = realFetch;
-    if (calls !== 1) throw new Error("expected exactly one request, got " + calls);
+    const body = bodyOf(zbWrite(20));
     if (body.indexOf("action=set_zigbee&") < 0) throw new Error("the hidden kind won: " + body);
     if (body.indexOf("ieee=") >= 0) throw new Error("a hidden address was sent: " + body);
   });
   step("a malformed address is refused before it reaches the remote", () => {
-    const realFetch = global.fetch;
-    let calls = 0;
-    global.fetch = (u, o) => { calls++; return realFetch(u, o); };
     global.zkv = "d";
     global.zhv = "0x94deb8";
-    assignTarget();
-    global.fetch = realFetch;
-    if (calls !== 0) throw new Error("a short address was still sent");
-    if (!bad || msg.indexOf("16 hex digits") < 0) throw new Error("no clear refusal: " + msg);
+    const w = zbWrite(20);
+    if (!w.error || w.error.indexOf("16 hex digits") < 0) throw new Error("no clear refusal: " + JSON.stringify(w));
   });
 
   step("a named keyboard usage opens the list, and Custom opens the box", () => {
@@ -819,14 +851,9 @@ setTimeout(() => {
     paint();
     if (html().indexOf("id=hmc value=1 checked") < 0 || html().indexOf("id=hmg value=8 checked") < 0)
       throw new Error("the repaint dropped the checked boxes: " + html());
-    const bodies = [];
-    const realFetch = global.fetch;
-    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     global.hmv = "153";
-    assignHid();
-    global.fetch = realFetch;
-    if (bodies.length !== 1 || bodies[0].indexOf("mod=9") < 0)
-      throw new Error("the posted mask was not the left bits 9: " + bodies[0]);
+    const body = bodyOf(hidWrite(7));
+    if (body.indexOf("mod=9") < 0) throw new Error("the posted mask was not the left bits 9: " + body);
   });
   step("hidWords names the modifiers", () => {
     const w = hidWords("keyboard", 4, 0x13);
@@ -898,6 +925,9 @@ setTimeout(() => {
       throw new Error("a device target did not survive: " + JSON.stringify(by[5]));
     if (by[20].kind !== "group" || by[20].group !== 4609 || by[20].name !== "Office Lamp")
       throw new Error("a group target did not survive: " + JSON.stringify(by[20]));
+    // Each input that can hold carries its hold, and wheel rotation carries none.
+    if (by[5].hold !== "wifi" || by[9].hold !== "assign" || by[3].hold !== "none" || "hold" in by[17])
+      throw new Error("the holds did not export: " + JSON.stringify([by[5], by[9], by[3], by[17]]));
   });
   step("the export names the firmware only when the state carries one", () => {
     const prevSt = global.st;
@@ -1027,7 +1057,7 @@ setTimeout(() => {
   };
   step("an off Config switch grays out only its own actions and names the switch", () => {
     const saved = global.st.radios;
-    global.zbusy = false; global.clipBusy = false;
+    global.zbusy = false; global.clipBusy = false; global.svBusy = false;
     // Voice runs over the Home Assistant API, so that switch grays out two actions.
     for (const [radio, ids, tip] of [["zigbee", ["zb"], "Turn on Zigbee in Config"],
                                      ["ble", ["hid"], "Turn on Bluetooth in Config"],
@@ -1052,7 +1082,7 @@ setTimeout(() => {
   });
   step("an input whose action needs an off switch opens on IR and recovers when it is on", () => {
     const saved = global.st.radios;
-    global.zbusy = false; global.clipBusy = false;
+    global.zbusy = false; global.clipBusy = false; global.svBusy = false;
     for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"],
                                      ["home_assistant", 4, "va"]]) {
       global.st.radios = {zigbee: true, ble: true, home_assistant: true};
@@ -1166,7 +1196,7 @@ setTimeout(() => {
   });
   step("an off Home Assistant switch holds a voice input and grays out Voice assistant", () => {
     const prevRadios = global.st.radios;
-    global.zbusy = false; global.clipBusy = false;
+    global.zbusy = false; global.clipBusy = false; global.svBusy = false;
     global.st.radios = {zigbee: true, ble: true, home_assistant: false};
     global.sel = null;
     paint();
@@ -1234,11 +1264,16 @@ setTimeout(() => {
     if (!line.innerHTML.includes("Hold Button 7 for one second to see the status.") ||
         !line.innerHTML.includes("assignment mode still lights D2 to D5."))
       throw new Error("hold line does not name the status hold button: " + line.innerHTML);
-    STATE.holds.status = 0;
+    // Several buttons can share the hold, and the line names each one.
+    slotRow(3).hold = "status";
     ledStatus();
-    if (!line.innerHTML.includes("The status hold has no button. Select a button on the Buttons tab to give it the status hold."))
+    if (!line.innerHTML.includes("Hold Button 3 or Button 7 for one second to see the status."))
+      throw new Error("hold line does not name both status buttons: " + line.innerHTML);
+    slotRow(3).hold = "none"; slotRow(7).hold = "none";
+    ledStatus();
+    if (!line.innerHTML.includes("No button has the status hold. Select a button on the Buttons tab to give it the status hold."))
       throw new Error("hold line does not name the missing button: " + line.innerHTML);
-    STATE.holds.status = 7;
+    slotRow(7).hold = "status";
     // An older firmware sends a boolean.
     STATE.status_leds = false;
     ledStatus();
@@ -1284,12 +1319,19 @@ setTimeout(() => {
     global.bootBusy = false;
     global.st = prevSt;
   });
+  // Opens the card of one input from its stored state, as a click on its key does.
+  const cardOn = (slot) => {
+    global.st = STATE; global.svBusy = false; global.inDirty = false;
+    global.msg = ""; global.bad = false;
+    edOpen(slot);
+  };
   const irPanelOn = (slot) => {
-    global.st = STATE; global.inBusy = false; global.inDirty = false;
-    global.sel = slot; global.act = "ir"; global.msg = ""; global.bad = false;
+    cfgAll[6] = CODE.text;
+    cardOn(slot);
+    global.act = "ir";
     paint();
   };
-  step("the IR panel prefills the code name and posts a new one", () => {
+  step("the IR panel prefills the code name and Save posts a new one", () => {
     const prevSel = global.sel, prevAct = global.act;
     irPanelOn(6);
     const panel = () => document.getElementById("edpanel").innerHTML;
@@ -1306,32 +1348,29 @@ setTimeout(() => {
     // A state repaint keeps a name that is still being typed.
     paint();
     if (panel().indexOf("value='TV Power'") < 0) throw new Error("a repaint dropped the typed name");
-    const realFetch = global.fetch;
-    let body = "";
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    document.getElementById("ins").onclick();
-    global.fetch = realFetch;
-    if (body !== "action=set_ir_name&slot=6&name=TV%20Power") throw new Error("the save posted " + body);
-    if (!document.getElementById("inm").disabled || !document.getElementById("ins").disabled)
-      throw new Error("the name box stayed live during the write");
+    if (document.getElementById("ins")) throw new Error("the panel still has Save name");
+    if (saveButton().disabled) throw new Error("a typed name left Save off");
+    const bodies = saveNow();
+    if (JSON.stringify(bodies) !== JSON.stringify(["action=set_ir_name&slot=6&name=TV%20Power"]))
+      throw new Error("Save posted " + JSON.stringify(bodies));
+    if (!document.getElementById("inm").disabled || !saveButton().disabled ||
+        document.getElementById("ed").innerHTML.indexOf(">Saving...</button>") < 0)
+      throw new Error("the card stayed live during the write");
     if (panel().indexOf("value='TV Power'") < 0) throw new Error("the write showed the old name");
-    global.inBusy = false; global.inDirty = false;
+    global.svBusy = false; global.inDirty = false;
     global.sel = prevSel; global.act = prevAct;
     paint();
   });
-  step("a bad code name gives the reason and posts nothing", () => {
+  step("a bad code name gives the reason at Save and posts nothing", () => {
     const prevSel = global.sel, prevAct = global.act;
     irPanelOn(6);
-    const realFetch = global.fetch;
-    const bodies = [];
-    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     for (const [name, word] of [['TV "Power"', "printable ASCII"], ["A\\B", "printable ASCII"],
                                 ["Pöwer", "printable ASCII"], ["abcdefghijklmnopqrstuvwx", "up to 23 bytes"],
                                 ["Slot6", "mark a code with no name"], ["Slot20", "mark a code with no name"]]) {
       const box = document.getElementById("inm");
       box.value = name;
       box.oninput();
-      document.getElementById("ins").onclick();
+      const bodies = saveNow();
       if (bodies.length) throw new Error(JSON.stringify(name) + " posted " + bodies[0]);
       if (!bad || msg.indexOf(word) < 0) throw new Error(JSON.stringify(name) + " gave " + msg);
     }
@@ -1339,11 +1378,10 @@ setTimeout(() => {
     const box = document.getElementById("inm");
     box.value = "Slot21";
     box.oninput();
-    document.getElementById("ins").onclick();
-    global.fetch = realFetch;
+    const bodies = saveNow();
     if (bodies.length !== 1 || bodies[0] !== "action=set_ir_name&slot=6&name=Slot21")
       throw new Error("a valid name did not post: " + bodies.join(" | "));
-    global.inBusy = false; global.inDirty = false; global.msg = ""; global.bad = false;
+    global.svBusy = false; global.inDirty = false; global.msg = ""; global.bad = false;
     global.sel = prevSel; global.act = prevAct;
     paint();
   });
@@ -1403,21 +1441,20 @@ setTimeout(() => {
     const start = html.indexOf("<label class=hd2 for=hsel>Hold</label>");
     return start < 0 ? "" : html.slice(start);
   };
-  const cardOn = (slot) => {
-    global.st = STATE; global.holdBusy = false; global.holdWant = null; global.holdError = "";
-    global.sel = slot; global.act = "ir"; global.msg = ""; global.bad = false;
-    paint();
+  const pickHold = (k) => {
+    const box = document.getElementById("hsel");
+    box.value = k;
+    box.onchange();
   };
-  step("the button card prefills its own hold and names a hold on another button", () => {
+  step("the button card prefills its own hold and lists every hold with its time", () => {
     const prevSel = global.sel, prevAct = global.act;
     cardOn(5);
     const card = holdCard();
-    if (card.indexOf("<option value=wifi selected>Wi-Fi, 2 s</option>") < 0)
-      throw new Error("Button 5 does not show its Wi-Fi hold: " + card);
-    if (card.indexOf("<option value=status>Status LEDs, 1 s (Button 7)</option>") < 0 ||
-        card.indexOf("<option value=sleep>Sleep, 2 s (Button 1)</option>") < 0 ||
-        card.indexOf("<option value=assign>Assignment mode, 2 s (Button 9)</option>") < 0)
-      throw new Error("a hold on another button is not named: " + card);
+    for (const want of ["<option value=wifi selected>Wi-Fi, 2 s</option>", "<option value=status>Status LEDs, 1 s</option>",
+                        "<option value=sleep>Sleep, 2 s</option>", "<option value=assign>Assignment mode, 2 s</option>"])
+      if (card.indexOf(want) < 0) throw new Error("the list lacks " + want + ": " + card);
+    // Several buttons can share a hold, so no option names another button.
+    if (card.indexOf("(Button") >= 0) throw new Error("an option names a button: " + card);
     if (card.indexOf("Hold for 2 s to open or close a temporary Wi-Fi session. " +
         "A shorter press sends the action of this button when you release it.") < 0)
       throw new Error("the effect line reads " + card);
@@ -1452,62 +1489,85 @@ setTimeout(() => {
     STATE.status_leds = "on";
     paint();
   });
-  step("a move from hold A to hold B clears A first and keeps B on screen during the write", () => {
-    const prevSel = global.sel, prevAct = global.act, prevRun = global.holdRun;
-    let steps = null;
-    STATE.network.wifi_always_on = true;
-    global.holdRun = (list) => { steps = list; return new Promise(() => {}); };
-    try {
-      cardOn(5);
-      document.getElementById("hsel").value = "sleep";
-      document.getElementById("hsel").onchange();
-      if (JSON.stringify(steps) !== JSON.stringify(["&hold=wifi&slot=0", "&hold=sleep&slot=5"]))
-        throw new Error("the change sends " + JSON.stringify(steps));
-      if (!document.getElementById("hsel").disabled || holdCard().indexOf("<option value=sleep selected>") < 0)
-        throw new Error("the list snapped back during the write: " + holdCard());
-      // A button with no hold takes one in a single write, which moves it off its old button.
-      steps = null;
-      cardOn(3);
-      document.getElementById("hsel").value = "wifi";
-      document.getElementById("hsel").onchange();
-      if (JSON.stringify(steps) !== JSON.stringify(["&hold=wifi&slot=3"])) throw new Error("the move sends " + JSON.stringify(steps));
-    } finally {
-      global.holdRun = prevRun;
-      STATE.network.wifi_always_on = false;
-      global.holdBusy = false; global.holdWant = null;
-      global.sel = prevSel; global.act = prevAct;
-      paint();
-    }
+  step("a hold change and a field edit post nothing, and Save turns on only for an unsaved change", () => {
+    const realFetch = global.fetch, bodies = [];
+    global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
+    cardOn(3);
+    if (!saveButton().disabled) throw new Error("Save is live with nothing unsaved");
+    pickHold("wifi");
+    if (saveButton().disabled || holdCard().indexOf("<option value=wifi selected>") < 0 ||
+        document.getElementById("ed").innerHTML.indexOf("<p class='sub st' id=svm>Unsaved changes.</p>") < 0)
+      throw new Error("a hold change did not mark the card unsaved: " + holdCard());
+    // Back to the stored hold is no change.
+    pickHold("");
+    if (!saveButton().disabled || hdv !== null) throw new Error("the stored hold still counts as a change");
+    document.getElementById("as-zb").onclick();
+    const zg = document.getElementById("zg");
+    zg.value = "4609";
+    zg.oninput();
+    if (saveButton().disabled) throw new Error("a typed group left Save off");
+    document.getElementById("as-hid").onclick();
+    document.getElementById("as-ha").onclick();
+    const he = document.getElementById("he");
+    he.value = "light.kitchen";
+    he.oninput.call(he);
+    document.getElementById("as-va").onclick();
+    document.getElementById("as-cl").onclick();
+    // Clear on an input that holds nothing changes nothing.
+    if (!saveButton().disabled) throw new Error("Clear on an empty input counts as a change");
+    global.fetch = realFetch;
+    if (bodies.length) throw new Error("an edit posted " + JSON.stringify(bodies));
+    cardOn(4);
+    document.getElementById("as-va").onclick();
+    if (!saveButton().disabled) throw new Error("Voice on a voice input counts as a change");
+    document.getElementById("as-cl").onclick();
+    if (saveButton().disabled) throw new Error("Clear on a voice input is not a change");
+    cardOn(3);
   });
-  step("taking the Wi-Fi hold off its button asks first while WiFi Always On is off", () => {
-    const prevSel = global.sel, prevAct = global.act, prevRun = global.holdRun;
-    STATE.network.wifi_always_on = false;
-    let runs = 0;
-    global.holdRun = () => { runs++; return new Promise(() => {}); };
-    try {
-      for (const next of ["", "sleep"]) {
-        cardOn(5);
-        confirmAsked = 0; confirmAnswer = false;
-        document.getElementById("hsel").value = next;
-        document.getElementById("hsel").onchange();
-        if (confirmAsked !== 1 || confirmText.indexOf("no button opens a temporary session") < 0)
-          throw new Error(JSON.stringify(next) + " did not ask: " + confirmText);
-        if (runs || holdBusy || holdCard().indexOf("<option value=wifi selected>") < 0)
-          throw new Error(JSON.stringify(next) + " changed the hold after a refusal");
-      }
-      // A move of the Wi-Fi hold to another button keeps a way back, so it does not ask.
-      cardOn(3);
-      confirmAsked = 0;
-      document.getElementById("hsel").value = "wifi";
-      document.getElementById("hsel").onchange();
-      if (confirmAsked !== 0 || runs !== 1) throw new Error("a move asked or did not send: " + confirmAsked + " / " + runs);
-    } finally {
-      global.holdRun = prevRun;
-      confirmAnswer = true;
-      global.holdBusy = false; global.holdWant = null;
-      global.sel = prevSel; global.act = prevAct;
-      paint();
-    }
+  step("Discard puts the card and the panel back to the stored slot", () => {
+    cardOn(7);
+    pickHold("sleep");
+    const hu = document.getElementById("hp");
+    hu.value = "custom";
+    hu.onchange.call(hu);
+    document.getElementById("hu").value = "0x28";
+    document.getElementById("hu").oninput();
+    if (!edDirty()) throw new Error("the edits did not count");
+    document.getElementById("sd").onclick();
+    if (edDirty() || hdv !== null || act !== "hid" || huv !== "4" || hcust || hmv !== "2")
+      throw new Error("Discard left " + JSON.stringify({hdv, act, huv, hcust, hmv}));
+    if (holdCard().indexOf("<option value=status selected>") < 0 || !saveButton().disabled)
+      throw new Error("Discard did not repaint the stored hold: " + holdCard());
+  });
+  step("leaving an unsaved card asks first, and a refusal keeps the selection", () => {
+    cardOn(3);
+    pickHold("sleep");
+    confirmAnswer = false; confirmAsked = 0;
+    pick(5);
+    if (confirmAsked !== 1 || confirmText !== "Discard unsaved changes to Button 3?")
+      throw new Error("a new selection did not ask: " + confirmText);
+    if (sel !== 3 || hdv !== "sleep") throw new Error("a refusal dropped the edits: " + sel + " " + hdv);
+    // A second click on the open input keeps the edits without a question.
+    confirmAsked = 0;
+    pick(3);
+    if (confirmAsked !== 0 || hdv !== "sleep") throw new Error("a click on the open input dropped the edits");
+    // The Config tab asks the same question.
+    document.getElementById("tabc").attrs["aria-selected"] = "false";
+    document.getElementById("tabc").onclick();
+    if (confirmAsked !== 1 || document.getElementById("tabc").attrs["aria-selected"] !== "false" || hdv !== "sleep")
+      throw new Error("the tab change did not ask or did not keep the edits");
+    confirmAnswer = true; confirmAsked = 0;
+    pick(5);
+    if (confirmAsked !== 1 || sel !== 5 || hdv !== null || edDirty())
+      throw new Error("an accepted question did not drop the edits: " + sel + " " + hdv);
+    pick(3);
+    pickHold("sleep");
+    confirmAsked = 0;
+    document.getElementById("tabc").onclick();
+    if (confirmAsked !== 1 || document.getElementById("tabc").attrs["aria-selected"] !== "true" || edDirty())
+      throw new Error("an accepted tab change kept the edits");
+    showTab(false);
+    cardOn(3);
   });
   step("the hold texts name the stored inputs and a missing one", () => {
     global.st = STATE;
@@ -1522,16 +1582,25 @@ setTimeout(() => {
       throw new Error("the wake line reads " + document.getElementById("srh").textContent);
     if (wifiHoldText() !== " Hold Button 5 for two seconds to open a temporary session.")
       throw new Error("the recovery hint reads " + wifiHoldText());
-    STATE.holds.wifi = 0; STATE.holds.sleep = 0;
+    // A shared hold names every button in button order.
+    slotRow(3).hold = "wifi"; slotRow(9).hold = "wifi"; slotRow(8).hold = "assign";
     networkStatus(); sleepStatus();
-    if (wifiHoldText().indexOf("the Wi-Fi hold has no button") < 0) throw new Error("no hint for a missing Wi-Fi hold");
-    if (document.getElementById("wfh").textContent.indexOf("the Wi-Fi hold has no button. " +
+    if (wifiHoldText() !== " Hold Button 3, Button 5, or Button 9 for two seconds to open a temporary session.")
+      throw new Error("three Wi-Fi buttons read " + wifiHoldText());
+    if (document.getElementById("srh").textContent.indexOf("The assignment mode hold on Button 8 does not start from a wake.") < 0)
+      throw new Error("a moved assignment hold reads " + document.getElementById("srh").textContent);
+    slotRow(9).hold = "none";
+    if (holdName("wifi") !== "Button 3 or Button 5") throw new Error("two Wi-Fi buttons read " + holdName("wifi"));
+    slotRow(3).hold = "none"; slotRow(5).hold = "none"; slotRow(20).hold = "none";
+    networkStatus(); sleepStatus();
+    if (wifiHoldText().indexOf("no button has the Wi-Fi hold") < 0) throw new Error("no hint for a missing Wi-Fi hold");
+    if (document.getElementById("wfh").textContent.indexOf("no button has the Wi-Fi hold. " +
         "Select a button on the Buttons tab to give it the Wi-Fi hold.") < 0)
       throw new Error("the Wi-Fi line reads " + document.getElementById("wfh").textContent);
-    if (document.getElementById("slh").textContent.indexOf("The sleep hold has no button. To sleep at once, " +
+    if (document.getElementById("slh").textContent.indexOf("No button has the sleep hold. To sleep at once, " +
         "select a button on the Buttons tab and give it the sleep hold.") < 0)
       throw new Error("the sleep line reads " + document.getElementById("slh").textContent);
-    STATE.holds.wifi = 5; STATE.holds.sleep = 20;
+    slotRow(5).hold = "wifi"; slotRow(20).hold = "sleep"; slotRow(8).hold = "none"; slotRow(9).hold = "assign";
     networkStatus(); sleepStatus();
   });
   step("the voice and Home Assistant panels name a hold that moves the press to the release", () => {
@@ -2064,8 +2133,7 @@ setTimeout(() => {
   step("the export carries the device settings and leaves the name out", () => {
     const j = JSON.parse(cfgBlob());
     const want = {zigbee: true, ble: true, home_assistant: true, wifi_always_on: false,
-                  status_leds: "on", boot_leds: true, hold_wifi: 5, hold_status: 7, hold_sleep: 20,
-                  hold_assign: 9, sleep: true, sleep_after_s: 300, wake_replay: false};
+                  status_leds: "on", boot_leds: true, sleep: true, sleep_after_s: 300, wake_replay: false};
     if (JSON.stringify(j.settings) !== JSON.stringify(want))
       throw new Error("settings are wrong: " + JSON.stringify(j.settings));
     if ("name" in j.settings) throw new Error("the name was exported");
@@ -2130,23 +2198,26 @@ setTimeout(() => {
       if (r.error) throw new Error(JSON.stringify(good) + " was refused: " + r.error);
     }
   });
-  step("an import moves holds through None so no two holds share an input", () => {
+  step("an import maps an old hold key onto its input and reads a hold on each slot entry", () => {
     global.st = STATE;
-    const swap = cfgSetList({hold_wifi: 7, hold_status: 5});
-    const got = swap.list.map(e => e.args);
-    const want = ["&hold=wifi&slot=0", "&hold=status&slot=0", "&hold=wifi&slot=7", "&hold=status&slot=5"];
-    if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error("wrong hold writes: " + JSON.stringify(got));
-    if (swap.list.some(e => e.action !== "set_hold") || swap.count !== 2)
-      throw new Error("wrong hold actions or count: " + JSON.stringify(swap));
-    if (cfgSetList({hold_wifi: 5, hold_assign: 9}).list.length) throw new Error("matching holds were sent");
-    const none = cfgSetList({hold_assign: 0}).list;
-    if (none.length !== 1 || none[0].args !== "&hold=assign&slot=0") throw new Error("None sent " + JSON.stringify(none));
-    // The status hold keeps input 7, so moving the Wi-Fi hold there must fail before any write.
-    const clash = cfgSetList({hold_wifi: 7});
-    if (!clash.error || clash.error.indexOf("Wi-Fi") < 0 || clash.error.indexOf("Status LEDs") < 0 || clash.list.length)
-      throw new Error("a clash with a kept hold was not refused: " + JSON.stringify(clash));
+    const args = (o, slots) => cfgHoldList(o, slots).map(e => e.action + e.args);
+    // An older file gives each hold one input, so a key also takes its hold off the others.
+    let got = args({hold_wifi: 7, hold_status: 5}, []);
+    if (JSON.stringify(got) !== JSON.stringify(["set_hold&slot=5&hold=status", "set_hold&slot=7&hold=wifi"]))
+      throw new Error("old keys gave " + JSON.stringify(got));
+    if (args({hold_wifi: 5, hold_assign: 9}, []).length) throw new Error("matching holds were sent");
+    got = args({hold_assign: 0}, []);
+    if (JSON.stringify(got) !== JSON.stringify(["set_hold&slot=9&hold=none"])) throw new Error("0 gave " + JSON.stringify(got));
+    // A newer file can give one hold to several inputs.
+    got = args(undefined, [{slot: 3, action: "none", hold: "wifi"}, {slot: 5, action: "none", hold: "wifi"},
+                           {slot: 17, action: "none"}]);
+    if (JSON.stringify(got) !== JSON.stringify(["set_hold&slot=3&hold=wifi"])) throw new Error("slot holds gave " + JSON.stringify(got));
+    // A hold on a slot entry comes after the keys.
+    got = args({hold_sleep: 3}, [{slot: 3, action: "none", hold: "status"}]);
+    if (JSON.stringify(got) !== JSON.stringify(["set_hold&slot=20&hold=none", "set_hold&slot=3&hold=status"]))
+      throw new Error("a key and a slot hold gave " + JSON.stringify(got));
   });
-  step("an import refuses a bad hold key before any write", () => {
+  step("an import refuses a bad hold before any write", () => {
     const base = {c6remote: 1, slots: []};
     const bad = (settings, word) => {
       const r = cfgParse(JSON.stringify(Object.assign({}, base, {settings: settings})));
@@ -2160,15 +2231,20 @@ setTimeout(() => {
     bad({hold_power: 5}, "hold_power");
     const ok = cfgParse(JSON.stringify(Object.assign({}, base, {settings: {hold_wifi: 0, hold_assign: 20}})));
     if (ok.error) throw new Error("valid holds were refused: " + ok.error);
+    if (cfgCheck({slot: 3, action: "none", hold: "power"}).indexOf("unknown hold") < 0)
+      throw new Error("an unknown hold passed");
+    if (cfgCheck({slot: 17, action: "none", hold: "wifi"}).indexOf("wheel rotation") < 0)
+      throw new Error("a hold on wheel rotation passed");
+    if (cfgCheck({slot: 17, action: "none", hold: "none"})) throw new Error("no hold on wheel rotation was refused");
     const realFetch = global.fetch;
     const bodies = [];
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     global.cfgBusy = false;
-    global.cfgIn = JSON.stringify({c6remote: 1, settings: {hold_wifi: 7}, slots: [{slot: 3, action: "voice"}]});
+    global.cfgIn = JSON.stringify({c6remote: 1, slots: [{slot: 3, action: "voice"}, {slot: 18, action: "none", hold: "sleep"}]});
     cfgApply();
     global.fetch = realFetch;
-    if (bodies.length || !cfgBad || cfgMsg.indexOf("same input") < 0)
-      throw new Error("a clashing import wrote: " + JSON.stringify(bodies) + " " + cfgMsg);
+    if (bodies.length || !cfgBad || cfgMsg.indexOf("wheel rotation") < 0)
+      throw new Error("a bad import wrote: " + JSON.stringify(bodies) + " " + cfgMsg);
     global.cfgBusy = false;
   });
   step("an import sends boot_leds only when it differs", () => {
@@ -2274,71 +2350,161 @@ setTimeout(() => {
   });
 
   (async () => {
+    // The sync steps leave promise chains behind. Let the ones that need no timer finish first.
+    for (let i = 0; i < 500; i++) await Promise.resolve();
+    // Microtasks only, so no timer of an earlier step runs while waitAction is replaced.
+    const settleSave = async (p) => {
+      let done = false;
+      Promise.resolve(p).then(() => { done = true; }, () => { done = true; });
+      for (let i = 0; i < 2000 && !done; i++) await Promise.resolve();
+      for (let i = 0; i < 200; i++) await Promise.resolve();
+      return done;
+    };
     {
-      // Writes of earlier steps are still in flight, so only set_hold and its own
-      // action id are answered here. Everything else goes to the base stubs.
-      const baseFetch = global.fetch, baseWait = global.waitAction, HOLD_ID = 9001;
+      // Writes of earlier steps are still in flight, so only the card writes and
+      // their own action ids are answered here. Everything else goes to the base stubs.
+      const baseFetch = global.fetch, baseWait = global.waitAction, SAVE_ID = 9100;
+      const card = /^action=(set_ir_code|set_ir_name|set_zigbee|set_zigbee_device|set_hid|set_ha|set_voice|clear|set_hold)&/;
       const bodies = [];
-      let code = 200, done = "";
+      let ids = SAVE_ID, refuse = "";
       global.fetch = (u, o) => {
         const body = o && o.body ? String(o.body) : "";
-        if (body.indexOf("action=set_hold&") !== 0) return baseFetch(u, o);
+        if (!card.test(body)) return baseFetch(u, o);
         bodies.push(body);
-        const text = code === 200 ? '{"ok":true,"id":' + HOLD_ID + '}' :
-          '{"error":"another hold already uses that button"}';
-        return Promise.resolve({status: code, ok: code === 200, json: () => Promise.resolve(STATE),
-                                text: () => Promise.resolve(text)});
+        if (refuse && body.indexOf(refuse) === 0)
+          return Promise.resolve({status: 400, ok: false, json: () => Promise.resolve(STATE),
+                                  text: () => Promise.resolve('{"ok":false,"error":"the remote refused it"}')});
+        const id = ++ids;
+        return Promise.resolve({status: 200, ok: true, json: () => Promise.resolve(STATE),
+                                text: () => Promise.resolve('{"ok":true,"id":' + id + '}')});
       };
-      global.waitAction = (id, ms) => id === HOLD_ID ? Promise.resolve(true) : baseWait(id, ms);
-      const run = async () => {
-        done = "";
-        holdRun(["&hold=wifi&slot=0", "&hold=sleep&slot=5"], 0)
-          .then(() => { done = "ok"; }, (e) => { done = e.message; });
-        for (let i = 0; i < 200 && !done; i++) await Promise.resolve();
+      global.waitAction = (id, ms) => id > SAVE_ID ? Promise.resolve(true) : baseWait(id, ms);
+      const prevRadios = STATE.radios, prevTg = global.tg;
+      STATE.radios = {zigbee: true, ble: true, home_assistant: true};
+      global.tg = [{id: 4609, name: "Office Lamp", members: []}];
+      const save = async (slot, edit) => {
+        bodies.length = 0;
+        cardOn(slot);
+        edit();
+        const ok = await settleSave(saveCard());
+        return {ok, bodies: bodies.slice(), msg, bad, busy: svBusy, sel, dirty: edDirty()};
       };
-      await run();
-      const sent = bodies.splice(0);
-      const first = done;
-      code = 400;
-      await run();
-      global.fetch = baseFetch; global.waitAction = baseWait;
-      step("the hold writes go out one at a time, the clear before the set", () => {
-        if (first !== "ok" || JSON.stringify(sent) !== JSON.stringify(
-            ["action=set_hold&hold=wifi&slot=0", "action=set_hold&hold=sleep&slot=5"]))
-          throw new Error("the writes were " + JSON.stringify(sent) + " / " + first);
-        if (done !== "another hold already uses that button" ||
-            JSON.stringify(bodies) !== JSON.stringify(["action=set_hold&hold=wifi&slot=0"]))
-          throw new Error("a refused clear went on to " + JSON.stringify(bodies) + " / " + done);
+      const type = (id, value) => { const e = document.getElementById(id); e.value = value; e.oninput.call(e); };
+      const code = "name: TV\ntype: parsed\nprotocol: NEC\naddress: 04 00 00 00\ncommand: 08 00 00 00";
+      const results = {};
+      cfgAll[6] = CODE.text;
+      results.ir = await save(6, () => { type("ct", code); type("inm", "TV Power"); pickHold("sleep"); });
+      results.zigbee = await save(3, () => {
+        document.getElementById("as-zb").onclick(); type("zg", "4609"); pickHold("wifi"); });
+      results.hid = await save(3, () => {
+        document.getElementById("as-hid").onclick();
+        const hp = document.getElementById("hp"); hp.value = "0x04"; hp.onchange.call(hp);
+        const ctrl = document.getElementById("hmc"); ctrl.value = "1"; ctrl.checked = true; ctrl.onchange(); });
+      results.ha = await save(3, () => { document.getElementById("as-ha").onclick(); type("he", "light.kitchen"); });
+      results.voice = await save(19, () => { document.getElementById("as-va").onclick(); pickHold("status"); });
+      results.clear = await save(4, () => { document.getElementById("as-cl").onclick(); });
+      step("Save posts the action and then the hold, one write at a time, with the exact bodies", () => {
+        const want = {
+          ir: ["action=set_ir_code&slot=6&code=" + encodeURIComponent(code), "action=set_ir_name&slot=6&name=TV%20Power",
+               "action=set_hold&slot=6&hold=sleep"],
+          zigbee: ["action=set_zigbee&slot=3&group=4609&name=Office%20Lamp&act=0&val=0", "action=set_hold&slot=3&hold=wifi"],
+          hid: ["action=set_hid&slot=3&kind=keyboard&usage=4&mod=1"],
+          ha: ["action=set_ha&slot=3&kind=light&act=toggle&val=0&entity=light.kitchen"],
+          voice: ["action=set_voice&slot=19", "action=set_hold&slot=19&hold=status"],
+          clear: ["action=clear&slot=4"],
+        };
+        for (const k of Object.keys(want)) {
+          const r = results[k];
+          if (JSON.stringify(r.bodies) !== JSON.stringify(want[k]))
+            throw new Error(k + " posted " + JSON.stringify(r.bodies));
+          if (!r.ok || r.busy || r.msg !== "Saved." || r.bad || r.dirty)
+            throw new Error(k + " ended as " + JSON.stringify(r));
+        }
       });
+      // A refused action stops the hold write and keeps the draft, so Save runs again.
+      refuse = "action=set_hid&";
+      const failed = await save(3, () => {
+        document.getElementById("as-hid").onclick();
+        const hp = document.getElementById("hp"); hp.value = "0x04"; hp.onchange.call(hp);
+        pickHold("sleep"); });
+      const kept = {act, huv, hdv, sv: saveButton().disabled};
+      refuse = "";
+      bodies.length = 0;
+      const retried = await settleSave(saveCard());
+      const again = bodies.slice();
+      step("a refused action stops the hold write and keeps the edits for a retry", () => {
+        if (JSON.stringify(failed.bodies) !== JSON.stringify(["action=set_hid&slot=3&kind=keyboard&usage=4&mod=0"]))
+          throw new Error("the refused save posted " + JSON.stringify(failed.bodies));
+        if (failed.busy || !failed.bad || failed.msg !== "the remote refused it" || !failed.dirty)
+          throw new Error("the refused save ended as " + JSON.stringify(failed));
+        if (kept.act !== "hid" || kept.huv !== "0x04" || kept.hdv !== "sleep" || kept.sv)
+          throw new Error("the refusal dropped the edits: " + JSON.stringify(kept));
+        if (!retried || JSON.stringify(again) !== JSON.stringify(
+            ["action=set_hid&slot=3&kind=keyboard&usage=4&mod=0", "action=set_hold&slot=3&hold=sleep"]))
+          throw new Error("the retry posted " + JSON.stringify(again));
+      });
+      // The Wi-Fi confirm runs at Save, and only for the last Wi-Fi hold.
+      STATE.network.wifi_always_on = false;
+      confirmAnswer = false; confirmAsked = 0;
+      const refused = await save(5, () => { pickHold(""); });
+      const refusedHdv = hdv;
+      const asked = confirmAsked, askText = confirmText;
+      confirmAnswer = true; confirmAsked = 0;
+      slotRow(3).hold = "wifi";
+      const shared = await save(5, () => { pickHold(""); });
+      slotRow(3).hold = "none";
+      step("Save asks before it removes the last Wi-Fi hold while WiFi Always On is off", () => {
+        if (asked !== 1 || askText.indexOf("no button opens a temporary session") < 0)
+          throw new Error("the last Wi-Fi hold did not ask: " + askText);
+        if (refused.bodies.length || refusedHdv !== "" || !refused.dirty)
+          throw new Error("a refusal still wrote or dropped the edit: " + JSON.stringify(refused));
+        if (confirmAsked !== 0 || JSON.stringify(shared.bodies) !== JSON.stringify(["action=set_hold&slot=5&hold=none"]))
+          throw new Error("a shared Wi-Fi hold asked or did not write: " + JSON.stringify(shared.bodies));
+      });
+      // A late result never paints on another input.
+      bodies.length = 0;
+      cardOn(6);
+      type("inm", "Lamp");
+      const late = saveCard();
+      pick(3);
+      await settleSave(late);
+      const moved = {msg, sel, posted: bodies.slice()};
+      step("a late Save result never paints on another input", () => {
+        if (moved.sel !== 3 || moved.msg !== "" || JSON.stringify(moved.posted) !== JSON.stringify(["action=set_ir_name&slot=6&name=Lamp"]))
+          throw new Error("the late result reads " + JSON.stringify(moved));
+      });
+      global.fetch = baseFetch; global.waitAction = baseWait;
+      STATE.radios = prevRadios; global.tg = prevTg;
+      cardOn(3);
     }
     {
-      const baseFetch = global.fetch, baseWait = global.waitAction, NAME_ID = 9002;
-      const prevSel = global.sel, prevAct = global.act;
-      global.fetch = (u, o) => String(o && o.body || "").indexOf("action=set_ir_name&") !== 0 ? baseFetch(u, o) :
-        Promise.resolve({status: 200, ok: true, json: () => Promise.resolve(STATE),
-                         text: () => Promise.resolve('{"ok":true,"id":' + NAME_ID + '}')});
-      global.waitAction = (id, ms) => id === NAME_ID ? Promise.resolve(true) : baseWait(id, ms);
-      const save = async (moveTo) => {
-        irPanelOn(6);
-        const box = document.getElementById("inm");
-        box.value = "TV Power";
-        box.oninput();
-        document.getElementById("ins").onclick();
-        if (moveTo) pick(moveTo);
-        for (let i = 0; i < 200 && inBusy; i++) await Promise.resolve();
-        return {busy: inBusy, msg: msg, sel: sel};
-      };
-      const stay = await save(0);
-      const moved = await save(3);
-      global.fetch = baseFetch; global.waitAction = baseWait;
-      global.msg = ""; global.bad = false; global.inDirty = false;
-      global.sel = prevSel; global.act = prevAct;
-      paint();
-      step("a name save notice shows only on the card of its own input", () => {
-        if (stay.busy || stay.msg !== "Name saved.") throw new Error("the save on the open card gave " + JSON.stringify(stay));
-        if (moved.busy || moved.sel !== 3 || moved.msg !== "")
-          throw new Error("a save that landed after a move to Button 3 gave " + JSON.stringify(moved));
+      // A poll replaces the stored state but never the draft.
+      cfgAll[6] = CODE.text;
+      cardOn(8);
+      const he = document.getElementById("he");
+      he.value = "light.porch"; he.oninput.call(he);
+      pickHold("sleep");
+      const prevRadios = STATE.radios;
+      // The Bluetooth switch changes, so the poll repaints the card. The read
+      // answers at once, so no timer of an earlier step runs here.
+      STATE.radios = {zigbee: true, ble: false, home_assistant: true};
+      global.stBusy = false;
+      stateRefresh();
+      await settleSave();
+      const after = {hek, hdv, dirty: edDirty(), panel: document.getElementById("edpanel").innerHTML,
+                     card: document.getElementById("ed").innerHTML};
+      STATE.radios = prevRadios;
+      global.stBusy = false;
+      stateRefresh();
+      await settleSave();
+      step("a state poll keeps the unsaved edits", () => {
+        if (after.hek !== "light.porch" || after.hdv !== "sleep" || !after.dirty)
+          throw new Error("the poll dropped the edits: " + JSON.stringify({hek: after.hek, hdv: after.hdv}));
+        if (after.panel.indexOf("value='light.porch'") < 0 || after.card.indexOf("<option value=sleep selected>") < 0 ||
+            after.card.indexOf("Unsaved changes.") < 0)
+          throw new Error("the repaint after the poll lost the draft");
       });
+      cardOn(3);
     }
     const realFetch = global.fetch;
     if (cfgTask) await cfgTask;
@@ -2398,8 +2564,9 @@ setTimeout(() => {
         dropped: "Too many presses are queued.",
       };
       global.haSetStatus = true;
+      global.svBusy = false;
       pick(3); global.act = "ha"; global.hek = "light.kitchen"; global.hkd = "light"; global.hac = "toggle";
-      assignHa();
+      saveCard();
       await haSettle();
       step("a 400 from set_ha shows the firmware text", () => {
         if (msg !== "Home Assistant actions are not configured" || !bad) throw new Error("the 400 showed: " + msg);
@@ -2649,7 +2816,7 @@ setTimeout(() => {
         await new Promise(done => setTimeout(done, 20));
       };
       let paints = 0;
-      global.zbusy = false; global.clipBusy = false;
+      global.zbusy = false; global.clipBusy = false; global.svBusy = false;
       STATE.radios = {zigbee: true, ble: true, home_assistant: true};
       pick(5);
       global.paint = () => { paints++; realPaint(); };

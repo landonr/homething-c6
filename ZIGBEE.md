@@ -142,7 +142,7 @@ repeated assignment leaves no group behind.
 6. Select a group or a device. The picker fills the boxes below it.
 7. Select the command in the **Action** selector, then fill its value box if it
    shows one.
-8. Select **Assign**.
+8. Select **Save** in the button card.
 
 The device list holds only a device that accepts at least one of the actions. A
 device the bridge published no endpoint list for stays in the list, because that
@@ -152,7 +152,7 @@ The Target kind selector decides which fields the panel shows. **Group** shows
 the group picker and a **Group ID** box. **Device** shows the device picker, an
 **IEEE address** box, and an **Endpoint** box.
 
-The panel therefore holds one target at a time, and **Assign** sends what is on
+The panel therefore holds one target at a time, and **Save** sends what is on
 screen. Changing the kind clears every field, so a value the panel stopped
 showing can never be assigned.
 
@@ -183,7 +183,7 @@ once, because no target needs a network confirmation to be stored.
 
 ### A device target
 
-**Assign** sends the IEEE address, the endpoint, the action and its value to
+**Save** sends the IEEE address, the endpoint, the action and its value to
 the remote. The browser publishes nothing to Zigbee2MQTT.
 
 The page picks the lowest endpoint that has the input cluster of the action. A

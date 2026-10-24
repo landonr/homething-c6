@@ -126,7 +126,7 @@ The domain of the entity must match the kind. The kind Any entity accepts an ent
 1. Select an input, then select **Home Assistant** in the Action selector.
 2. Type the entity ID. The page selects the kind from the domain of the entity.
 3. Select the action. For Brighten and Dim, enter the **Step, in percent**.
-4. Select **Assign Home Assistant action**.
+4. Select **Save** in the button card.
 5. To test the action, select **Test saved action**.
 
 The test queues the saved action and shows the result: ok, error with the Home Assistant message, unconfirmed, timeout, or dropped.
@@ -222,11 +222,10 @@ The right side of the selected-input title has **Copy** and **Paste** buttons.
 Use them to copy an IR code, Zigbee target, BLE HID, or Home Assistant configuration between inputs.
 
 Select the source input and select **Copy**. Then select the target input and
-select **Paste**. Paste opens the IR or Zigbee panel and fills its configuration
-form. Paste does not write an assignment to the remote.
+select **Paste**. Paste asks you to confirm. Then it opens the panel of the copied action and fills its fields.
+Paste writes the configuration to the remote at once. It does not wait for **Save**.
 
 Paste stays available for a Clear or empty input when copied configuration exists.
-Select **Apply** for IR or **Assign** for Zigbee and BLE HID to write the configuration.
 
 One panel shows at a time, because an input holds one action. The IR panel owns
 the **Record IR** button and the code box.
@@ -235,13 +234,38 @@ The page is an alternative to the tap cycle, not a replacement. Both routes writ
 the same flash records.
 
 The page also has a **Sleep** block for the deep-sleep settings. See [Deep sleep](#deep-sleep).
-The **Hold** list on the card of a button sets the hold of that button. See [Hold buttons](#hold-buttons).
+The **Hold** list on the card of a button sets the hold of that button. **Save** writes it. See [Hold buttons](#hold-buttons).
 
 The header of the page has a connection line. It shows if the page can read
 the remote. If two reads in a row fail, or one read gets no answer in time, the
 line turns red and a banner stays at the top of the page. Changes on the page do
 not get to the remote while the banner shows. The banner goes away when the
 remote answers again.
+
+### Save and Discard
+
+The middle card holds the input title, **Copy** and **Paste**, the **Action** list, and the **Hold** list.
+**Save** and **Discard** are at the bottom of that card. The panels have no write buttons of their own.
+
+A change stays on the page until you select **Save**. These changes count:
+
+- A different action in the **Action** list. **Clear** on an empty input is no change.
+- A different hold in the **Hold** list.
+- An edit in a panel field: the IR code, the code name, a Zigbee field, a BLE HID field, or a Home Assistant field.
+
+While a change is not saved, the card shows **Unsaved changes.** If nothing changed, **Save** is not available.
+
+**Save** first checks every field. If a field is not correct, the card shows the reason and the page sends nothing.
+Then **Save** writes the action, and after it the hold. It sends one write at a time and waits for each one to complete.
+If a write fails, the page stops. The card shows the error and keeps your changes, so you can select **Save** again.
+When all writes are complete, the card shows **Saved.**
+
+**Discard** puts the card and the panel back to the stored action and hold.
+
+If you select a different input or the **Config** tab while a change is not saved, the page asks first.
+If you select **Cancel**, the page keeps the change and the current input.
+
+**Record IR**, **Test saved action**, **Copy**, and **Paste** do not wait for **Save**.
 
 ### Assign a Zigbee target from the page
 
@@ -254,7 +278,7 @@ not need a state transition, because you name both instead.
 3. Select **Group** or **Device**, then pick a target or type its address.
 4. Select the command in the **Action** selector, then fill its value box if it
    shows one.
-5. Select **Assign**.
+5. Select **Save** in the button card.
 
 The browser reads the group and device lists from Zigbee2MQTT and sends only the
 address, the action and its value to the remote. The address of the frontend and
@@ -289,7 +313,7 @@ Read [ZIGBEE.md](ZIGBEE.md) for the accepted group ID formats.
 4. Select the key from the list. Keyboard and Consumer list the common usages by name.
 5. If the usage is not in the list, select **Custom usage** and enter the number.
 6. Select the modifier keys to hold with the key, when applicable.
-7. Select **Assign**.
+7. Select **Save** in the button card.
 
 A gamepad button still takes a number. A D-pad still takes a direction.
 
@@ -370,7 +394,7 @@ To replace an assignment, record again or select a different action.
 ### Name a code
 
 The IR panel of an input that holds an IR code has a **Code name** box. The box shows the stored name.
-Type a name and select **Save name** or press Enter. To remove the name, empty the box and save it.
+Type a name, then select **Save** in the button card or press Enter. To remove the name, empty the box and select **Save**.
 A rename changes only the name. The remote keeps the IR timings.
 
 A name has a maximum of 23 bytes of printable ASCII. A name cannot contain a quote or a backslash.
@@ -388,7 +412,7 @@ A paste uses the `name` line of the pasted block.
 
 Each input has an "IR code" box on the page. The box holds one Flipper `.ir` signal block.
 
-`GET /buttons/api/code?slot=<n>` returns that block. The Apply button posts it back as the `code` field.
+`GET /buttons/api/code?slot=<n>` returns that block. **Save** in the button card posts the text of the box back as the `code` field.
 
 A Samsung32 frame prints as a parsed block:
 
@@ -554,6 +578,9 @@ An older export file uses the same placeholder, so it imports the same way.
 A Zigbee entry carries `kind`, which is `group` or `device`. A group entry holds
 `group`. A device entry holds `ieee` and `ep`.
 
+The entry of a button or a wheel direction also carries `hold`. The value is `none`, `wifi`, `status`, `sleep`, or `assign`.
+Wheel rotation entries carry no `hold`.
+
 A BLE HID entry carries `kind`, `usage`, and `mod`. Only keyboard entries use `mod`.
 
 The block also holds a `firmware` string. It records the firmware build that wrote the file.
@@ -569,8 +596,7 @@ The block also holds a `settings` object with the device settings of the remote:
 
 ```json
 {"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,"wifi_always_on":false,
-"status_leds":"on","boot_leds":true,"hold_wifi":5,"hold_status":7,"hold_sleep":20,"hold_assign":9,
-"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
+"status_leds":"on","boot_leds":true,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
 ```
 
 These keys are valid:
@@ -579,7 +605,7 @@ These keys are valid:
 - `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
 - `status_leds` sets the **Status LEDs** mode for `D2` to `D5` and the XIAO user LED. The value is `off`, `hold`, or `on`. See [The LED settings](#the-led-settings).
 - `boot_leds` turns the cold-boot chase and the wake battery pulses on or off.
-- `hold_wifi`, `hold_status`, `hold_sleep`, and `hold_assign` give the slot of the button for each hold. The value `0` means no button. See [Hold buttons](#hold-buttons).
+- `hold_wifi`, `hold_status`, `hold_sleep`, and `hold_assign` come from an older page. Each one gives the slot of one button for that hold, or `0` for no button. See [Hold buttons](#hold-buttons).
 - `sleep` turns idle sleep on or off.
 - `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
 - `wake_replay` makes the press that wakes the remote replay its stored setting.
@@ -588,8 +614,12 @@ Each key is optional. If a key is absent, the import leaves that setting as it i
 A file from an older page has no `settings` object, and it still imports.
 A file from an older page can give `status_leds` as `true` or `false`. The import reads `true` as `on` and `false` as `off`.
 
-Two hold keys cannot give the same slot. The import also refuses a file that leaves two holds on one button.
-To move holds between buttons, the import first sets each changed hold to no button. Then it sets the new buttons.
+The export puts the holds in the slot entries, not in `settings`. Several entries can carry the same hold.
+The import sets the hold of each entry that differs from the remote. It writes the holds after the inputs and the settings.
+An older file has no `hold` in its slot entries. It gives one button for each hold in the four `hold_` keys instead.
+The import puts each of these holds on the named button and takes it off every other button.
+Two of these keys cannot give the same slot. If they do, the import refuses the file before it writes.
+A `hold` in a slot entry comes after the four keys.
 A remote without sleep does not export the three sleep keys.
 If a file holds them, the import skips them and says so in the result note.
 
@@ -797,17 +827,23 @@ A hold runs a device action when you keep a button down for a set time. The remo
 To set the hold of a button, select the button on the **Buttons** tab.
 The **Hold** list under the action list shows **None**, the four holds, and the hold time of each hold.
 The line under the list tells what the hold does.
+Select **Save** to write the hold. See [Save and Discard](#save-and-discard).
 A hold can use `SW1` to `SW11` or one of the five wheel directions.
 Wheel rotation cannot carry a hold, because a detent has no release edge. As a result, the card of a wheel rotation input has no **Hold** list.
-To turn off the hold of a button, select **None**.
+To turn off the hold of a button, select **None** and then **Save**.
 
-Two holds cannot use the same button. If a hold uses a different button, the list shows the name of that button after the hold.
-If you select that hold, the page moves it to this button.
-If this button has a different hold, the page removes that hold first. Then it sets the new hold.
-The firmware refuses a request for a used button with HTTP 400 and changes nothing.
-The remote stores the hold buttons in flash. If the stored record is missing or bad, the remote uses the default buttons.
+Each button carries one hold or no hold. Several buttons can carry the same hold.
+For example, `SW3` and `SW5` can both open a temporary Wi-Fi session.
+The `set_hold` action takes `slot` and `hold`. The value of `hold` is `none`, `wifi`, `status`, `sleep`, or `assign`.
+The firmware refuses a wheel rotation slot or an unknown hold with HTTP 400 and changes nothing.
+The state JSON gives the `hold` of each slot.
 
-A hold is active when it has a button. The status hold is active only when **Status LEDs** is set to **Hold button**.
+The remote stores one hold for each button in flash. If the stored record is missing, each button takes its default hold.
+If one entry of the record is bad, only that button takes its default hold.
+An older firmware stores one button for each hold. At the first boot after the update, the remote moves that record to the new form.
+
+The status hold is active only when **Status LEDs** is set to **Hold button**. The other holds are always active.
+If two buttons carry the status hold, the status shows until you release the last of them.
 The tooltip of each button on the map names its active hold.
 
 A button with an active hold sends its own assignment when you release it before the hold time.
@@ -819,9 +855,9 @@ A voice assignment on a button with an active hold starts Assist at the release.
 A BLE HID assignment on a button with an active hold sends the key press and the key release together at the release.
 A Home Assistant action on a button with an active hold runs at the release. It asks for Wi-Fi at that moment.
 
-If **WiFi Always On** is off, the Wi-Fi hold is the only button that opens a temporary session.
-In that case, the page asks you to confirm before it removes the Wi-Fi hold from its button.
-If you select **Wi-Fi** on a different button, the page moves the hold and does not ask.
+If **WiFi Always On** is off, a button with the Wi-Fi hold is the only way to open a temporary session.
+In that case, the page asks you to confirm before a save takes the Wi-Fi hold off the last button that has it.
+If another button keeps the Wi-Fi hold, the page does not ask.
 
 ## Deep sleep
 

@@ -133,10 +133,10 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool set_friendly_name_(const std::string &name);
   void apply_friendly_name_(const std::string &name);
   void load_hold_pref_();
-  bool set_hold_slot_(uint8_t action, uint8_t slot);
+  bool set_hold_(uint8_t slot, uint8_t hold);
   // True when a press of the slot sends its stored IR code, as the state reports it.
   bool slot_sends_ir_(uint8_t slot) const;
-  void apply_hold_slots_(const uint8_t *slots);
+  void apply_holds_(const uint8_t *holds);
 
   // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.
   static constexpr uint32_t HA_PREF_KEY = 0x48415049U;
@@ -165,14 +165,24 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   };
   static constexpr uint32_t BOOT_LED_PREF_KEY = 0x424C4544U;
   static constexpr uint32_t BOOT_LED_PREF_MAGIC = 0x424C4431U;
-  // 'HLD1' record under key 'HOLD'. One slot for each hold in HoldActions
-  // order, 0 for none. Missing, corrupt, or shared slots mean the defaults.
+  // Older 'HLD1' record under key 'HOLD'. One slot for each hold in HoldActions
+  // order, 0 for none. A valid one moves to the 'HLD2' record once.
   static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;
   static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;
   static constexpr size_t HOLD_COUNT = 4;
   struct HoldPref {
     uint32_t magic;
     uint8_t slot[HOLD_COUNT];
+  };
+  // 'HLD2' record under key 'HLDS'. One HoldActions value for each slot below
+  // HOLD_SLOTS, HoldActions::NONE for none. A bad entry takes its default.
+  static constexpr uint32_t HOLD_TABLE_PREF_KEY = 0x484C4453U;
+  static constexpr uint32_t HOLD_TABLE_PREF_MAGIC = 0x484C4432U;
+  static constexpr size_t HOLD_SLOTS = 21;
+  struct HoldTablePref {
+    uint32_t magic;
+    uint8_t hold[HOLD_SLOTS];
+    uint8_t reserved[3];
   };
   // 'NAM1' record under key 'NAME'. Length 0 means the YAML friendly name.
   static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;
@@ -200,7 +210,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   CallbackManager<void(bool)> status_leds_callbacks_;
   mutable std::atomic<int8_t> boot_leds_{-1};
   // The httpd task reads this copy, because HoldActions is main-loop owned.
-  std::atomic<uint8_t> hold_slots_[HOLD_COUNT]{};
+  std::atomic<uint8_t> holds_[HOLD_SLOTS]{};
   ESPPreferenceObject hold_pref_;
   std::atomic<uint32_t> last_activity_ms_{0};
   bool boot_wifi_always_on_{false};

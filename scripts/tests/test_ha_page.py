@@ -39,7 +39,8 @@ class HaPageTest(unittest.TestCase):
             self.assertIn(text, PREVIEW)
 
     def test_the_save_and_test_paths_post_the_contract_fields(self) -> None:
-        self.assertIn('go("set_ha",null,"&kind="+hkd+"&act="+hac+"&val="+v+"&entity="', PAGE)
+        # Save in the button card posts the write that haWrite() builds.
+        self.assertIn('return {a:"set_ha",s:s,x:"&kind="+hkd+"&act="+hac+"&val="+v+"&entity="+encodeURIComponent(e),', PAGE)
         self.assertIn('post("test_ha",s)', PAGE)
         self.assertIn('post("set_ha",e.slot,null,undefined,', PAGE)
 

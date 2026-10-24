@@ -278,7 +278,7 @@ class SleepSettingsTest(unittest.TestCase):
         for word in ('"off"', '"on"', '"hold"'):
             self.assertIn(word, parse)
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"status_leds":"%s","boot_leds":%s,"holds":{', state)
+        self.assertIn('"status_leds":"%s","boot_leds":%s,"network":{', state)
         self.assertIn("status_mode_name(this->status_mode()), this->boot_leds()", state)
         self.assertIn('ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));', CPP)
         self.assertIn('post("set_status_leds"', PAGE)
@@ -305,7 +305,7 @@ class SleepSettingsTest(unittest.TestCase):
         branch = section(action, '} else if (action == "set_boot_leds") {', "\n  } else")
         self.assertIn("this->set_boot_leds(boot_leds_on)", branch)
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"boot_leds":%s,"holds":{', state)
+        self.assertIn('"boot_leds":%s,"network":{', state)
         self.assertIn("this->boot_leds() ? \"true\" : \"false\"", state)
         self.assertIn('post("set_boot_leds"', PAGE)
         self.assertIn('id="blb"', PAGE)
@@ -393,63 +393,77 @@ class SleepSettingsTest(unittest.TestCase):
 
 
 class HoldSettingsTest(unittest.TestCase):
-    """Four holds, each on one input or none, stored by ButtonConfig and run by HoldActions."""
+    """One hold or none on each input, stored by ButtonConfig and run by HoldActions.
+    Several inputs can share a hold."""
 
-    def test_the_hold_record_loads_and_falls_back_to_the_defaults(self) -> None:
+    def test_the_hold_table_loads_migrates_the_old_record_and_falls_back_to_the_defaults(self) -> None:
         self.assertIn("static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;", HEADER)
         self.assertIn("static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;", HEADER)
         self.assertIn("  struct HoldPref {\n    uint32_t magic;\n    uint8_t slot[HOLD_COUNT];\n  };", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_TABLE_PREF_KEY = 0x484C4453U;", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_TABLE_PREF_MAGIC = 0x484C4432U;", HEADER)
+        self.assertIn("  struct HoldTablePref {\n    uint32_t magic;\n    uint8_t hold[HOLD_SLOTS];\n"
+                      "    uint8_t reserved[3];\n  };", HEADER)
         load = section(CPP, "void ButtonConfig::load_hold_pref_() {", "\n}")
-        self.assertIn("static_assert(HOLD_COUNT == HoldActions::COUNT,", load)
-        self.assertIn("make_preference<HoldPref>(HOLD_PREF_KEY, true)", load)
-        self.assertIn("loaded.magic == HOLD_PREF_MAGIC", load)
-        # One bad slot or one shared slot drops the whole record.
-        self.assertIn("HoldActions::valid_slots(loaded.slot)", load)
-        self.assertIn("HoldActions::DEFAULT_SLOT", load)
+        self.assertIn("static_assert(HOLD_SLOTS == HoldActions::SLOT_LIMIT,", load)
+        self.assertIn("make_preference<HoldTablePref>(HOLD_TABLE_PREF_KEY, true)", load)
+        self.assertIn("table.magic == HOLD_TABLE_PREF_MAGIC", load)
+        # The new record wins, then the old one moves over, then the defaults apply.
+        new_record = load.index("this->apply_holds_(table.hold);")
+        old_record = load.index("old.magic == HOLD_PREF_MAGIC && hld1_valid(old.slot)")
+        self.assertLess(new_record, old_record)
+        self.assertLess(old_record, load.index("defaults[s] = HoldActions::default_hold(s);"))
+        self.assertIn("next.hold[old.slot[a]] = a;", load)
+        self.assertLess(load.index("next.hold[old.slot[a]] = a;"), load.index("this->hold_pref_.save(&next)"))
+        old_rule = section(CPP, "static bool hld1_valid(const uint8_t *slots) {", "\n}")
+        self.assertIn("if (slots[b] == slots[a])", old_rule)
         self.assertIn("static constexpr uint8_t DEFAULT_SLOT[COUNT] = {5, 7, 20, 9};", HOLDS)
         setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
         self.assertLess(setup.index("this->load_hold_pref_();"),
                         setup.index("::hold_actions.set_status_active("))
-        apply_ = section(CPP, "void ButtonConfig::apply_hold_slots_(const uint8_t *slots) {", "\n}")
-        self.assertIn("::hold_actions.set_slots(slots);", apply_)
-        self.assertIn("this->hold_slots_[i].store(slots[i], std::memory_order_release);", apply_)
-        self.assertIn("std::atomic<uint8_t> hold_slots_[HOLD_COUNT]{};", HEADER)
+        apply_ = section(CPP, "void ButtonConfig::apply_holds_(const uint8_t *holds) {", "\n}")
+        # A bad entry takes its default inside set_holds(), so the copy reads the result.
+        self.assertIn("::hold_actions.set_holds(holds);", apply_)
+        self.assertIn("this->holds_[s].store(::hold_actions.hold(s), std::memory_order_release);", apply_)
+        self.assertIn("std::atomic<uint8_t> holds_[HOLD_SLOTS]{};", HEADER)
+        self.assertNotIn("valid_slots", HOLDS + CPP)
 
     def test_the_set_hold_action_refuses_a_bad_request_before_the_busy_claim(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
         self.assertIn('action == "set_hold"', section(action, "const bool known = ", ";"))
         self.assertIn('action != "set_hold"', section(action, "const bool needs_slot = ", ";"))
         claim = action.index("compare_exchange_strong(expected, true")
-        for error in ("a hold is wifi, status, sleep, or assign", "a hold button is 0 or a button slot",
-                      "another hold already uses that button"):
+        for error in ("a hold is none, wifi, status, sleep, or assign", "a hold slot is 3 to 16, 19, or 20"):
             self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', action)
             self.assertLess(action.index(error), claim)
-        self.assertIn('parse_hold_name(request->arg("hold"), hold_action)', action)
+        # Several inputs can share a hold, so no request is refused for a used hold.
+        self.assertNotIn("another hold already uses that button", CPP)
+        self.assertIn('parse_hold_name(request->arg("hold"), hold)', action)
         self.assertIn('parse_hold_slot(request->arg("slot"), hold_slot)', action)
-        self.assertIn("this->hold_slots_[i].load(std::memory_order_acquire) == hold_slot", action)
         branch = section(action, '} else if (action == "set_hold") {', "\n  } else")
-        self.assertIn("this->defer([this, action_id, hold_action, hold_slot]() {", branch)
-        self.assertIn("this->complete_action_(action_id, this->set_hold_slot_(hold_action, hold_slot));", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_hold_(hold_slot, hold));", branch)
+        names = section(CPP, "static bool parse_hold_name(const std::string &text, uint8_t &hold) {", "\n}")
+        self.assertIn("for (uint8_t i = 0; i <= HoldActions::COUNT; i++) {", names)
+        self.assertIn('return hold < HoldActions::COUNT ? HOLD_NAMES[hold] : "none";', CPP)
         slot = section(CPP, "static bool parse_hold_slot(const std::string &text, uint8_t &slot) {", "\n}")
-        self.assertIn("value != 0 && !HoldActions::valid_slot(static_cast<uint8_t>(value))", slot)
-        # A second request can land between the httpd check and the defer.
-        setter = section(CPP, "bool ButtonConfig::set_hold_slot_(uint8_t action, uint8_t slot) {", "\n}")
-        self.assertLess(setter.index("if (!HoldActions::valid_slots(next.slot)) {"),
-                        setter.index("this->hold_pref_.save(&next)"))
+        self.assertIn("!HoldActions::valid_slot(static_cast<uint8_t>(value))", slot)
+        setter = section(CPP, "bool ButtonConfig::set_hold_(uint8_t slot, uint8_t hold) {", "\n}")
+        self.assertIn("if (!HoldActions::valid_slot(slot) || hold > HoldActions::NONE)", setter)
+        self.assertLess(setter.index("next.hold[slot] = hold;"), setter.index("this->hold_pref_.save(&next)"))
         self.assertLess(setter.index("this->hold_pref_.save(&next)"),
-                        setter.index("this->apply_hold_slots_(next.slot);"))
+                        setter.index("this->apply_holds_(next.hold);"))
 
-    def test_the_state_and_the_log_name_the_holds_in_one_order(self) -> None:
+    def test_the_state_serves_a_hold_on_each_slot_and_the_log_lists_the_held_slots(self) -> None:
         self.assertIn('static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};',
                       CPP)
         self.assertIn("enum Action : uint8_t { WIFI = 0, STATUS = 1, SLEEP = 2, ASSIGN = 3, COUNT = 4 };", HOLDS)
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"holds":{"wifi":%u,"status":%u,"sleep":%u,"assign":%u},"network":{', state)
-        order = [state.index(f"this->hold_slots_[HoldActions::{name}].load") for name in
-                 ("WIFI", "STATUS", "SLEEP", "ASSIGN")]
-        self.assertEqual(order, sorted(order))
+        self.assertNotIn('"holds":', state)
+        self.assertIn('stream->printf(R"(","hold":"%s"})", hold_name(this->holds_[info.slot].load(std::memory_order_acquire)));',
+                      state)
         dump = section(CPP, "void ButtonConfig::dump_config() {", "\n}")
-        self.assertIn('"  Hold slots: wifi %u, status %u, sleep %u, assign %u"', dump)
+        self.assertIn("if (hold != HoldActions::NONE)", dump)
+        self.assertIn('"  Hold on slot %u: %s"', dump)
         self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', CPP)
 
     def test_the_button_card_offers_each_hold_once(self) -> None:
@@ -465,21 +479,20 @@ class HoldSettingsTest(unittest.TestCase):
         self.assertEqual({int(value) for value in table.split(",")}, HOLD_SLOTS)
         card = section(PAGE, "function holdSection(lock){", "\n\n")
         # Wheel rotation is not in HB, so slots 17 and 18 get no section.
-        self.assertIn('if(HB.indexOf(sel)<0||!st||!st.holds)return "";', card)
-        # A hold on another input stays selectable and names that input.
-        self.assertIn('(by&&by!==sel&&info(by)?" ("+esc(info(by).l)+")":"")', card)
-        # The wanted hold stays selected while the write runs.
-        self.assertIn("var cur=holdBusy&&holdWant&&holdWant.s===sel?holdWant.k:holdAt(sel)", card)
+        self.assertIn('if(HB.indexOf(sel)<0||!st)return "";', card)
+        # The draft hold shows until Save, and no option names another input.
+        self.assertIn("var cur=hdv!==null?hdv:holdAt(sel),i,d,h;", card)
+        self.assertIn('h+="<option value="+d.k+(cur===d.k?" selected":"")+">"+esc(d.n)+", "+d.d+"</option>"}', card)
+        self.assertNotIn("info(by)", PAGE)
+        # Several inputs can share a hold, and the stored hold comes from the slot entry.
+        self.assertIn('function holdAt(s){var r=row(s);return r&&r.hold&&r.hold!=="none"?r.hold:""}', PAGE)
         change = section(PAGE, "function holdChange(){", "\n\n")
-        self.assertLess(change.index('if(old)steps.push("&hold="+old+"&slot=0");'),
-                        change.index('if(k)steps.push("&hold="+k+"&slot="+s);'))
-        self.assertLess(change.index('if(old==="wifi"&&!always&&!confirm('), change.index("holdBusy=true;"))
-        send = section(PAGE, "function holdRun(steps,i){", "\n\n")
-        self.assertIn('post("set_hold",null,undefined,undefined,steps[i])', send)
-        self.assertIn("return waitAction(r.body.id)", send)
-        self.assertIn(".then(function(){return holdRun(steps,i+1)})", send)
+        self.assertIn("hdv=k===holdAt(sel)?null:k;paint()", change)
+        self.assertNotIn("post(", change)
+        for gone in ("function holdRun(", "holdBusy", "holdWant", "holdError", "st.holds"):
+            self.assertNotIn(gone, PAGE)
         edit = section(PAGE, "function editor(){", "\nfunction ")
-        self.assertIn('h+="</div>"+holdSection(lock);', edit)
+        self.assertIn('h+="</div>"+holdSection(lock)+edBar(lock);', edit)
         self.assertIn('var hs=document.getElementById("hsel");if(hs)hs.onchange=holdChange;', edit)
         self.assertIn('var hl=holdOf(d.s),lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
         # The Config tab has no hold block now.
@@ -499,24 +512,38 @@ class HoldSettingsTest(unittest.TestCase):
         self.assertIn("function wifiHoldText(){", script)
         self.assertIn("(a===false?wifiHoldText():", script)
 
-    def test_the_import_moves_holds_through_none(self) -> None:
-        send = section(PAGE, "function cfgSetList(o){", "\n\n")
-        clear = send.index('list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot=0"})')
-        target = send.index('list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot="+fin[k]})')
-        self.assertLess(clear, target)
+    def test_the_export_puts_a_hold_on_each_slot_and_the_import_reads_both_forms(self) -> None:
+        blob = section(PAGE, "function cfgBlob(){", "\n\n")
+        self.assertIn('if(HB.indexOf(s)>=0)e.hold=holdAt(s)||"none";', blob)
+        self.assertNotIn("hold_", section(PAGE, "function cfgSettings(){", "\n\n"))
+        self.assertNotIn("set_hold", section(PAGE, "function cfgSetList(o){", "\n\n"))
+        # An older file still imports its four keys.
         self.assertIn('var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];', PAGE)
+        holds = section(PAGE, "function cfgHoldList(o,slots){", "\n\n")
+        old_key = holds.index('HB.forEach(function(x){if(want[x]===d.k)want[x]="none"});if(v)want[v]=d.k')
+        slot_field = holds.index("want[e.slot]=e.hold")
+        self.assertLess(old_key, slot_field)
+        self.assertIn('list.push({key:"hold of slot "+s,action:"set_hold",args:"&slot="+s+"&hold="+want[s]})', holds)
+        check = section(PAGE, "function cfgCheck(e){", "\n\n")
+        self.assertIn('if(!holdInfo(e.hold))return "Slot "+e.slot+" carries the unknown hold "+e.hold+".";', check)
+        self.assertIn('if(HB.indexOf(e.slot)<0)return "Slot "+e.slot+" is wheel rotation, which cannot carry a hold."', check)
         apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
-        self.assertLess(apply_.index("if(sets.error){cfgNote(sets.error,true);return}"), apply_.index("cfgRun("))
+        # The holds go after the inputs and the settings.
+        self.assertIn("list=list.concat(sets.list,holds);", apply_)
 
     def test_the_preview_serves_the_holds_and_the_status_mode(self) -> None:
         self.assertIn('"status_leds": "on",', PREVIEW)
-        self.assertIn('"holds": {"wifi": 5, "status": 7, "sleep": 20, "assign": 9},', PREVIEW)
+        self.assertIn('DEFAULT_HOLDS = {5: "wifi", 7: "status", 20: "sleep", 9: "assign"}', PREVIEW)
+        self.assertIn('"hold": HOLDS.get(slot, "none"),', PREVIEW)
+        self.assertNotIn('"holds":', PREVIEW)
         self.assertIn("HOLD_SLOTS = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20}", PREVIEW)
         self.assertIn('elif action == "set_hold":', PREVIEW)
-        for error in ("a status LED mode is off, hold, or on", "a hold is wifi, status, sleep, or assign",
-                      "a hold button is 0 or a button slot", "another hold already uses that button"):
+        for error in ("a status LED mode is off, hold, or on", "a hold is none, wifi, status, sleep, or assign",
+                      "a hold slot is 3 to 16, 19, or 20"):
             self.assertIn(error, PREVIEW)
             self.assertIn(error, CPP)
+        # Several slots can share a hold, so the preview refuses no used hold.
+        self.assertNotIn("another hold already uses that button", PREVIEW)
 
 
 class IrNameTest(unittest.TestCase):
@@ -576,16 +603,20 @@ class IrNameTest(unittest.TestCase):
         self.assertIn('if(!r||r.action!=="ir")return "";', box)
         self.assertIn("if(inSlot!==sel||!inDirty){inv=r.name||\"\";inSlot=sel;inDirty=false}", box)
         self.assertIn("maxlength=23", box)
-        save = section(PAGE, "function saveIrName(){", "\n\n")
-        self.assertIn('post("set_ir_name",s,undefined,v)', save)
-        self.assertIn("return waitAction(r.body.id)", save)
-        self.assertLess(save.index("why=irNameWhy(v)"), save.index("post("))
+        self.assertNotIn("id=ins", box)
+        plan = section(PAGE, "function savePlan(s){", "\n\n")
+        # The name is checked before the first write, and a code apply goes before it.
+        self.assertLess(plan.index("why=irNameWhy(v);"), plan.index("plan={steps:steps"))
+        self.assertLess(plan.index('steps.push({a:"set_ir_code",s:s,c:cd,'), plan.index('{a:"set_ir_name",s:s,n:v,'))
+        # The code apply takes the name from its name line, so the name write runs only if it still differs.
+        self.assertIn('steps.push(function(){var x=row(s);return x&&x.action==="ir"&&(x.name||"")===v?null:', plan)
         self.assertIn("nameBytes(v)>23", section(PAGE, "function irNameWhy(v){", "\n\n"))
         self.assertIn('<span class=cn>"+esc(irName(sel))+"</span>', PAGE)
         # words() carries the code name, and an active hold follows it.
         self.assertIn('lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
         self.assertIn('b.setAttribute("title",lb);', PAGE)
-        self.assertIn('if(sel===s){inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false}', save)
+        # A late Save result never paints on another input.
+        self.assertIn('if(sel===s){hdv=null;edReset(s);msg="Saved.";bad=false}', section(PAGE, "function saveCard(){", "\n\n"))
 
     def test_the_preview_mirrors_set_ir_name(self) -> None:
         self.assertIn('if action == "set_ir_name":', PREVIEW)
@@ -1321,9 +1352,9 @@ class PageTest(unittest.TestCase):
         self.assertNotIn('"Type"', body)
         self.assertNotIn("<details", body)
         self.assertIn('function ms(u){return (u/1000).toFixed(1)+" ms"}', PAGE)
-        # The IR detail sits in its code box immediately before its actions.
+        # The IR detail sits in its code box, under the text and above the loading line.
         box = section(PAGE, "function codeBox(lock){", "\n\nfunction loadCode")
-        self.assertIn('h+=detail(sel)+"<div class=act>', box)
+        self.assertIn('h+=detail(sel)+(cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")', box)
         self.assertNotIn("Now:", PAGE)
 
     def test_the_state_row_reports_the_frame_length_and_the_code(self) -> None:
@@ -1347,28 +1378,30 @@ class PageTest(unittest.TestCase):
         self.assertIn("const int16_t space = record.pulses[3 + 2 * bit];", decode)
         self.assertIn("value = (value << 1) | (-space > 100 ? 1U : 0U);", decode)
 
-    def test_the_page_can_apply_a_code_and_copy_an_assignment(self) -> None:
+    def test_the_page_can_save_a_code_and_copy_an_assignment(self) -> None:
         box = section(PAGE, "function codeBox(lock){", 'return h}')
         self.assertIn("<textarea id=ct", box)
         # The box carries the only copy of a code, so it never hides behind a toggle.
         self.assertNotIn("<details", box)
         self.assertIn('function hasCode(text){return !!String(text||"").replace(/\\s+/g,"")}', PAGE)
-        self.assertIn('var codeDis=lock||!hasCode(cd)?" disabled":"";', box)
         self.assertNotIn('id=cc', box)
-        self.assertIn('id=ca"+codeDis+">Apply to this input</button>', box)
-        # Loading follows the code actions, so it cannot move them.
+        # Save in the card applies the code, so the box has no button of its own.
+        self.assertNotIn("id=ca", PAGE)
+        self.assertNotIn("Apply to this input", PAGE)
+        # Loading follows the box, so it cannot move it.
         self.assertIn(".code .load{color:var(--mut);font-size:13px;margin:8px 0 0}", PAGE)
-        self.assertIn('"<div class=act><button type=button id=ca"+codeDis+">Apply to this input</button></div>"+', box)
         self.assertIn('"<p class=load>Loading the stored code.</p>"', box)
-        self.assertIn('var disabled=lock||!hasCode(cd);', PAGE)
+        # A blank box is no change, and a cleared stored code is one.
+        self.assertIn('function codeDirty(){return act==="ir"&&cdSlot===sel&&(hasCode(cd)?cd!==cdBase:hasCode(cdBase))}',
+                      PAGE)
         # Assignment and config copies use one fallback for plain HTTP.
         copy = section(PAGE, "function copyBox(t){", "return ok}")
         self.assertIn('document.execCommand("copy")', copy)
         self.assertIn("if(!ok&&navigator.clipboard)", copy)
         self.assertNotIn("function copyCode()", PAGE)
-        self.assertIn('go("set_ir_code",text)', PAGE)
+        self.assertIn('steps.push({a:"set_ir_code",s:s,c:cd,why:"The remote refused that code."})', PAGE)
         self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
-        self.assertIn('cd=code;cdSlot=s', PAGE)
+        self.assertIn('cd=cdBase=code;cdSlot=s', PAGE)
         # The block is line based, so the newlines have to survive the encode.
         self.assertIn('"&code=")+encodeURIComponent(v)', PAGE)
         self.assertNotIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
@@ -1477,14 +1510,14 @@ class PageTest(unittest.TestCase):
     def test_switching_kind_drops_the_other_kind_of_target(self) -> None:
         """A hidden field must not still be assignable, and a slot that holds a
         device should open on the device fields rather than on an empty group."""
-        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="va"')
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="hid"){')
         self.assertIn('document.getElementById("zn").onchange=function(){zkv=this.value;\n'
                       'zsv="";zdv="";zgv="";zhv="";zpv="";', wiring)
-        self.assertIn('var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";', PAGE)
+        self.assertIn('zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";', section(PAGE, "function edReset(s){", "\n\n"))
 
     def test_the_open_panel_follows_the_stored_action(self) -> None:
         """Opening a slot on its own action saves a hunt through the selector."""
-        body = section(PAGE, "function actFor(s){", "\n\nfunction pick(")
+        body = section(PAGE, "function actFor(s){", "\n\n// The card and the panel from the stored slot")
         self.assertIn('if(r.action==="zigbee")return "zb";', body)
         self.assertIn('if(r.action==="voice")return "va";', body)
         self.assertIn('if(!r||r.action==="none")return "ir";', body)
@@ -1493,9 +1526,9 @@ class PageTest(unittest.TestCase):
     def test_only_an_ir_assignment_loads_stored_code_on_selection(self) -> None:
         """An empty slot has no IR code, so its ready code box must not show a
         loading state while the endpoint returns an empty response."""
-        pick = section(PAGE, "function pick(s){", "\n\nfunction load()")
-        self.assertIn('if(!pr||pr.action!=="ir")cdSlot=s;', pick)
-        self.assertIn('if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)', pick)
+        reset = section(PAGE, "function edReset(s){", "\n\n")
+        self.assertIn('if(!pr||pr.action!=="ir")cdSlot=s;', reset)
+        self.assertIn('if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)', section(PAGE, "function edOpen(s){", "\n\n"))
 
     def test_the_zigbee_fields_survive_a_repaint(self) -> None:
         """A late bridge/devices message repaints the panel, and a half typed
@@ -1527,13 +1560,13 @@ class PageTest(unittest.TestCase):
     def test_one_button_assigns_whatever_the_target_box_holds(self) -> None:
         """The page once had three assign buttons and claimed a typed ID won over
         the pickers, which nothing implemented. A picker now fills the box and
-        one button sends it, so there is no second route to disagree."""
+        Save in the card sends it, so there is no second route to disagree."""
         self.assertNotIn("wins over", PAGE)
-        for gone in ('id=za', 'id=zw', 'assignGroup', 'assignDevice', 'assignTyped',
+        for gone in ('id=za', 'id=zw', 'id=zi', 'assignGroup', 'assignDevice', 'assignTyped', 'assignTarget',
                      'Assign group', 'Assign device', 'Assign typed'):
             self.assertNotIn(gone, PAGE)
-        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="va"')
-        self.assertIn('document.getElementById("zi").onclick=assignTarget', wiring)
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="hid"){')
+        self.assertIn('e=act==="zb"?zbWrite(s):act==="hid"?hidWrite(s):haWrite(s);', section(PAGE, "function savePlan(s){", "\n\n"))
         # A picker only fills the fields of the kind already on screen.
         self.assertIn('if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};',
                       wiring)
@@ -1542,13 +1575,14 @@ class PageTest(unittest.TestCase):
     def test_the_one_button_reaches_a_device_and_a_group(self) -> None:
         """Neither picker renders without the bridge lists, so the box is the only
         disconnected route and it has to carry both kinds of target."""
-        body = section(PAGE, "function assignTarget(){", "\nfunction ")
-        self.assertIn("sendDevice(ieee,ep||\"1\",name,val)", body)
-        self.assertIn("sendGroup(g,name,val)", body)
+        body = section(PAGE, "function zbWrite(s){", "\n\n")
+        self.assertIn('return {a:"set_zigbee_device",s:s,n:name,x:"&ieee="+encodeURIComponent(ieee)+'
+                      '"&ep="+encodeURIComponent(ep||"1")+', body)
+        self.assertIn('return {a:"set_zigbee",s:s,c:g,n:name,x:"&act="+Number(zav)+"&val="+encodeURIComponent(val),', body)
         # The kind selector already decided, so nothing reads the digit count.
         self.assertIn('if(zkv==="d"){', body)
         # A malformed address is caught here rather than by the remote.
-        self.assertIn("if(!/^[0-9a-fA-F]{16}$/.test(hex)){", body)
+        self.assertIn('if(!/^[0-9a-fA-F]{16}$/.test(hex))return {error:"An IEEE address is 16 hex digits."};', body)
         # 0x1201 and 4609 are the same group, so the name lookup reads the value.
         self.assertIn('parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10)', body)
         # The name is re-derived, so an edited box cannot keep the old label.
@@ -1646,7 +1680,7 @@ class PageTest(unittest.TestCase):
         body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
         self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
         self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;"
-                      "st.holds=j.holds;zpjSync();networkStatus();sleepStatus();"
+                      "holdSync(j);zpjSync();networkStatus();sleepStatus();"
                       "batteryStatus();restartSync(j);radioStatus();bleStatus();", body)
         self.assertIn("if(booted&&radioKey()!==radioSeen)paint()}},"
                       "\nfunction(){zpjLost();restartLost()})", body)
@@ -1763,7 +1797,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('fetch("/buttons/api/code?slot="+source', copy)
         self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
         self.assertIn('clip=c;', copy)
-        paste = section(PAGE, "function pasteAssignment(){", "\n\nfunction applyCode(")
+        paste = section(PAGE, "function pasteAssignment(){", "\n\n// One entry per input")
         self.assertIn('if(!confirm("Apply the "+', paste)
         self.assertIn('if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}', paste)
         self.assertIn('act="zb";zkv=c.device?"d":"g";', paste)
@@ -2007,7 +2041,7 @@ class PageTest(unittest.TestCase):
         self.assertIn("if(!(ep>=1&&ep<=240))", check)
         self.assertIn("if(!(g>=1&&g<=65527))", check)
         apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
-        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,skip;", apply_)
+        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,holds,n,skip;", apply_)
         self.assertIn("if(parsed.error){cfgNote(parsed.error,true);return}", apply_)
         self.assertLess(apply_.index("cfgParse"), apply_.index("cfgRun("))
         parse = section(PAGE, "function cfgParse(text){", "\n\n// An action")
@@ -2025,9 +2059,15 @@ class PageTest(unittest.TestCase):
         settings = section(PAGE, "function cfgSettings(){", "\n\n")
         self.assertNotIn("name", settings)
         send = section(PAGE, "function cfgSetList(o){", "\n\n")
-        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds", "set_hold",
+        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds",
                        "set_sleep_enabled", "set_sleep_after", "set_sleep_replay"):
             self.assertIn('"%s"' % action, send)
+        # A hold belongs to a slot now, so its write comes from the hold list, with the card action.
+        self.assertIn('action:"set_hold"', section(PAGE, "function cfgHoldList(o,slots){", "\n\n"))
+        # A poll before the first load has no slots, and the hold hints still read them.
+        self.assertIn("function row(s){if(!st||!st.slots)return null;", PAGE)
+        failed = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy").split(".catch(function(err){", 1)[1]
+        self.assertNotIn("edReset", failed)
         self.assertIn("if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();", section(PAGE, "function load(){", "\n\n"))
 
     def test_an_import_reuses_the_action_endpoint_one_input_at_a_time(self) -> None:

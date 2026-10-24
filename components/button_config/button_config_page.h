@@ -308,7 +308,7 @@ var S=[
 {s:3,l:"Button 3",v:1,x:21.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:78.1,y:51.1},
 {s:4,l:"Button 4",v:1,x:21.9,y:60.2},{s:7,l:"Button 7",v:1,x:50,y:60.2},{s:10,l:"Button 10",v:1,x:78.1,y:60.2},
 {s:5,l:"Button 5",v:1,x:21.9,y:69.2},{s:8,l:"Button 8",v:1,x:50,y:69.2},{s:9,l:"Button 9",v:1,x:78.1,y:69.2}];
-// One row per hold, in the order of the holds object. d matches HOLD_MS in
+// One row per hold, in HoldActions order. d matches HOLD_MS in
 // hold_actions.h, and t completes "Hold for d to ...".
 var HOLDS=[
 {k:"wifi",n:"Wi-Fi",d:"2 s",t:"open or close a temporary Wi-Fi session"},
@@ -343,9 +343,12 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var ledBusy=false,ledWant="on",ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
-// holdWant is the {s,k} change in flight, so the list holds the new value until
-// the remote answers. holdError is the reason the last change failed.
-var holdBusy=false,holdWant=null,holdError="";
+// The open card is a draft until Save. hdv is the hold picked in the card, or
+// null to show the stored one. edBase is the draft key of the stored slot, and
+// cdBase is the stored code that the code box started from. svBusy covers a
+// Save and an immediate Paste.
+var hdv=null,edBase="",cdBase="",svBusy=false;
+var FLASH_WHY="Flash write failed. The assignment was not saved.";
 // nameEdit keeps the box open across polls, so a repaint never overwrites a
 // name that is still being typed.
 var nameEdit=false,nameBusy=false,nameMsg="",nameBad=false;
@@ -376,7 +379,7 @@ var Z2MDEF="ws://homeassistant.local:8099/api";
 var cd="",cdSlot=null,codeLoad=0;
 // inv holds the code name box for inSlot. inDirty keeps a name that is still
 // being typed, and a capture, a paste, or a save drops it for the stored name.
-var inv="",inSlot=null,inDirty=false,inBusy=false;
+var inv="",inSlot=null,inDirty=false;
 // A code with no name prints this in its name line, because a Flipper signal
 // needs one. ir_name.h holds the same range.
 var IR_SLOT_NAME=/^Slot(?:[3-9]|1[0-9]|20)$/;
@@ -426,7 +429,8 @@ function setColorsToggle(){
 setColors=!!document.getElementById("scb").checked;
 try{localStorage.setItem("c6.set-colors",setColors?"1":"0")}catch(x){}
 setColorsPaint()}
-function row(s){if(!st)return null;for(var i=0;i<st.slots.length;i++)
+// A poll before the first load builds st without slots.
+function row(s){if(!st||!st.slots)return null;for(var i=0;i<st.slots.length;i++)
 if(st.slots[i].slot===s)return st.slots[i];return null}
 // The stored name of the IR code on s, or "" when the slot has none.
 function irName(s){var r=row(s);return r&&r.action==="ir"&&r.name?r.name:""}
@@ -550,7 +554,8 @@ document.getElementById("slap").onclick=setSleepAfter;
 document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};
 document.getElementById("rsb").onclick=restartRemote;
 document.getElementById("tabb").onclick=function(){showTab(false)};
-document.getElementById("tabc").onclick=function(){showTab(true);if(!cfgReady)cfgRefresh()};
+document.getElementById("tabc").onclick=function(){var drop=edDirty()&&!svBusy;
+if(!edLeave())return;if(drop)edOpen(sel);showTab(true);if(!cfgReady)cfgRefresh()};
 document.getElementById("zrb").onchange=function(){setRadio("zigbee")};
 document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};
 document.getElementById("brb").onchange=function(){setRadio("ble")};
@@ -840,7 +845,7 @@ if(fw)fw.textContent=typeof st.firmware==="string"&&st.firmware?st.firmware:"Unk
 var wh=document.getElementById("wfh"),wn=holdName("wifi");
 if(wh)wh.textContent="WiFi Always On applies at the next boot."+(wn?" Hold "+wn+
 " for two seconds to toggle a temporary session when this switch is off.":
-" No button toggles a temporary session, because the Wi-Fi hold has no button. "+
+" No button toggles a temporary session, because no button has the Wi-Fi hold. "+
 "Select a button on the Buttons tab to give it the Wi-Fi hold.");
 ledStatus();bootLedStatus()}
 
@@ -874,7 +879,7 @@ if(box){box.value=ledBusy?ledWant:m;box.disabled=ledBusy}
 if(line){line.className="sub st"+(ledError?" bad":"");
 line.innerHTML="<span class='dot "+(m==="on"?"":"off")+"'></span>"+(m==="on"?"Status LEDs are on.":
 m==="hold"?"Status LEDs are dark. A radio switch still gives one pulse, and assignment mode still lights D2 to D5. "+(n?"Hold "+esc(n)+
-" for one second to see the status.":"The status hold has no button. "+
+" for one second to see the status.":"No button has the status hold. "+
 "Select a button on the Buttons tab to give it the status hold."):
 "Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse, "+
 "and assignment mode still lights D2 to D5.")+
@@ -892,25 +897,25 @@ if(!ok)throw new Error("The remote could not save the status LED mode.")})})
 .then(function(){ledBusy=false;return load().then(paint)},function(e){
 ledBusy=false;ledError=e&&e.message?e.message:"The remote did not answer.";ledStatus()})}
 
-function holdSlot(k){return st&&st.holds?Number(st.holds[k])||0:0}
+// The hold stored on input s, or "" for none. Several inputs can share a hold.
+function holdAt(s){var r=row(s);return r&&r.hold&&r.hold!=="none"?r.hold:""}
 
-// The label of the input that carries the hold, or "" for none.
-function holdName(k){var d=info(holdSlot(k));return d?d.l:""}
+// Every input with hold k, in button order.
+function holdSlots(k){var out=[],i;for(i=0;i<HB.length;i++)if(holdAt(HB[i])===k)out.push(HB[i]);return out}
+
+// The inputs with hold k as "Button 3" or "Button 3 or Button 5", or "" for none.
+function holdName(k){var n=holdSlots(k).map(function(s){return info(s).l});
+return n.length<3?n.join(" or "):n.slice(0,-1).join(", ")+", or "+n[n.length-1]}
 
 // The hold an input carries now. The status hold counts only in Hold mode.
-function holdOf(s){var i;
-if(!s||!st||!st.holds)return null;
-for(i=0;i<HOLDS.length;i++)
-if(holdSlot(HOLDS[i].k)===s&&(HOLDS[i].k!=="status"||ledMode()==="hold"))return HOLDS[i];
-return null}
+function holdOf(s){var k=holdAt(s);
+if(!k||(k==="status"&&ledMode()!=="hold"))return null;
+return holdInfo(k)}
 
 // The Wi-Fi hold is the only way back to this page while WiFi Always On is off.
 function wifiHoldText(){var n=holdName("wifi");
 return n?" Hold "+n+" for two seconds to open a temporary session.":
-" No button opens a temporary session, because the Wi-Fi hold has no button."}
-
-// The hold stored on s, active or not, or "" for none.
-function holdAt(s){for(var i=0;i<HOLDS.length;i++)if(holdSlot(HOLDS[i].k)===s)return HOLDS[i].k;return ""}
+" No button opens a temporary session, because no button has the Wi-Fi hold."}
 
 function holdInfo(k){for(var i=0;i<HOLDS.length;i++)if(HOLDS[i].k===k)return HOLDS[i];return null}
 
@@ -921,41 +926,24 @@ if(k==="status"&&ledMode()!=="hold")return "The Status LEDs hold is active only 
 "Hold button on the Config tab. Until then, a press sends the action of this button at once.";
 return "Hold for "+d.d+" to "+d.t+". A shorter press sends the action of this button when you release it."}
 
-// The hold of the selected input. A hold on another input names that input, and
-// picking it moves the hold here. Wheel rotation has no release edge.
+// The hold of the selected input. Wheel rotation has no release edge.
 function holdSection(lock){
-if(HB.indexOf(sel)<0||!st||!st.holds)return "";
-var cur=holdBusy&&holdWant&&holdWant.s===sel?holdWant.k:holdAt(sel),i,d,by,h;
-h="<label class=hd2 for=hsel>Hold</label><select id=hsel"+(lock||holdBusy?" disabled":"")+">"+
+if(HB.indexOf(sel)<0||!st)return "";
+var cur=hdv!==null?hdv:holdAt(sel),i,d,h;
+h="<label class=hd2 for=hsel>Hold</label><select id=hsel"+(lock?" disabled":"")+">"+
 "<option value=''"+(cur?"":" selected")+">None</option>";
-for(i=0;i<HOLDS.length;i++){d=HOLDS[i];by=holdSlot(d.k);
-h+="<option value="+d.k+(cur===d.k?" selected":"")+">"+esc(d.n)+", "+d.d+
-(by&&by!==sel&&info(by)?" ("+esc(info(by).l)+")":"")+"</option>"}
+for(i=0;i<HOLDS.length;i++){d=HOLDS[i];
+h+="<option value="+d.k+(cur===d.k?" selected":"")+">"+esc(d.n)+", "+d.d+"</option>"}
 h+="</select><p class=sub id=hsd>"+esc(holdLine(cur))+"</p>";
-if(holdError)h+="<p class='sub st bad' id=hse>"+esc(holdError)+"</p>";
 return h}
 
-// The remote refuses a button that another hold uses, so a change from hold A
-// to hold B clears A first. A set of B moves B off its old button.
-function holdChange(){
-var s=sel,k=document.getElementById("hsel").value,old=holdAt(s),steps=[],
-always=!!(st&&st.network&&st.network.wifi_always_on===true);
-if(holdBusy||!st||!st.holds||k===old)return;
-if(old==="wifi"&&!always&&!confirm("WiFi Always On is off. Without a Wi-Fi hold, no button opens "+
-"a temporary session after this one closes. Continue?")){paint();return}
-if(old)steps.push("&hold="+old+"&slot=0");
-if(k)steps.push("&hold="+k+"&slot="+s);
-holdBusy=true;holdWant={s:s,k:k};holdError="";paint();
-holdRun(steps,0).then(function(){holdBusy=false;holdWant=null;return load().then(paint)},function(e){
-holdBusy=false;holdWant=null;holdError=e&&e.message?e.message:"The remote did not answer.";
-return load().then(paint,paint)})}
+// The list edits the draft only. Save writes it.
+function holdChange(){var k=document.getElementById("hsel").value;
+hdv=k===holdAt(sel)?null:k;paint()}
 
-function holdRun(steps,i){
-if(i>=steps.length)return Promise.resolve();
-return post("set_hold",null,undefined,undefined,steps[i]).then(function(r){
-if(r.code!==200)throw new Error(fail(r));
-return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the hold.")})})
-.then(function(){return holdRun(steps,i+1)})}
+// The poll keeps the stored holds current without a repaint of the card.
+function holdSync(j){if(!st||!st.slots||!j||!Array.isArray(j.slots))return;
+j.slots.forEach(function(n){var r=row(n.slot);if(r)r.hold=n.hold})}
 
 function setWifiAlwaysOn(){
 if(wifiBusy||!st||!st.network)return;
@@ -988,7 +976,7 @@ if(!z||!z.available)return;
 var hl=document.getElementById("slh"),hn=holdName("sleep");
 if(hl)hl.textContent="Each press restarts the timer."+(hn?" Hold "+hn+
 " for two seconds to sleep at once, even when Sleep is off.":
-" The sleep hold has no button. To sleep at once, select a button on the Buttons tab and give it the sleep hold.");
+" No button has the sleep hold. To sleep at once, select a button on the Buttons tab and give it the sleep hold.");
 var wk=document.getElementById("srh"),an=holdName("assign");
 if(wk)wk.textContent="When on, the button that wakes the remote also sends its Zigbee command if the link "+
 "comes up within 3 seconds. When off, the first press only wakes the remote. If you keep a hold button down "+
@@ -1189,7 +1177,7 @@ stBusy=true;
 readState()
 .then(function(j){if(j&&j.ble){if(!st)st={};st.name=j.name;st.default_name=j.default_name;namePaint();
 st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;
-st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;st.holds=j.holds;zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus();
+st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;holdSync(j);zpjSync();networkStatus();sleepStatus();batteryStatus();restartSync(j);radioStatus();bleStatus();
 // A switch can change on another page or on the remote, and the Action list follows it.
 if(booted&&radioKey()!==radioSeen)paint()}},
 function(){zpjLost();restartLost()})
@@ -1218,7 +1206,7 @@ function att(t){return esc(t).replace(/'/g,"&#39;").replace(/"/g,"&#34;")}
 
 // The browser talks to Zigbee2MQTT, not the remote. The kind selector shows one
 // target's fields at a time, so the panel cannot hold a group and a device at
-// once and Assign never has to choose between two. A picker fills the fields of
+// once and Save never has to choose between two. A picker fills the fields of
 // its own kind, and the fields also cover a target the bridge never published.
 function zbForm(lock){
 var h="",i,dis=(lock||zbusy)?" disabled":"";
@@ -1260,11 +1248,10 @@ h+="<label class=hd2 for=zg>Group ID</label>"+
 "<p class=sub>Membership lives in the "+
 "light, so a group only works once the light has joined it.</p>"}
 h+=actionForm(dis);
-h+="<div class=act><button type=button id=zi"+dis+">Assign</button></div>";
 return h}
 
 // The target decides the list, so this runs after the picker above it. An
-// action the target dropped cannot stay selected, or Assign would send it.
+// action the target dropped cannot stay selected, or Save would send it.
 function actionForm(dis){
 var list=zActions(),h="",i,found=false;
 for(i=0;i<list.length;i++)if(list[i].a===Number(zav))found=true;
@@ -1303,37 +1290,18 @@ function nameCount(v){return nameBytes(v)+" of 23 bytes. Printable ASCII only, w
 // Only a stored IR code takes a name. A capture clears the name, so the box
 // then shows the empty name and waits for a new one.
 function nameBox(lock){
-var r=row(sel),dis=lock||inBusy?" disabled":"";
+var r=row(sel),dis=lock?" disabled":"";
 if(!r||r.action!=="ir")return "";
 if(inSlot!==sel||!inDirty){inv=r.name||"";inSlot=sel;inDirty=false}
 return "<label class=hd2 for=inm>Code name</label>"+
 "<div class='act nm' id=inr><input type=text id=inm maxlength=23 autocomplete=off spellcheck=false "+
-"placeholder='No name' value='"+att(inv)+"'"+dis+"><button type=button id=ins"+dis+">"+
-(inBusy?"Saving...":"Save name")+"</button></div>"+
+"placeholder='No name' value='"+att(inv)+"'"+dis+"></div>"+
 "<p class=sub id=inc>"+esc(nameCount(inv))+"</p>"}
 
-// The remote applies the name before it completes the action, so the poll in
-// waitAction already carries it. An empty box removes the name.
-function saveIrName(){
-var s=sel,v=String(inv).replace(/^ +| +$/g,""),why=irNameWhy(v);
-if(inBusy)return;
-if(why){msg=why;bad=true;paint();return}
-inBusy=true;msg="";bad=false;paint();
-post("set_ir_name",s,undefined,v).then(function(r){
-if(r.code!==200)throw new Error(fail(r));
-return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the name.")})})
-// A save that lands after the selection moved gives no notice on the new card.
-.then(function(){inBusy=false;if(sel===s){inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false}
-return load().then(function(){return cfgChanged(s)}).then(function(){paint();
-if(row(s)&&row(s).action==="ir")return loadCode(s)})},
-function(e){inBusy=false;msg=e&&e.message?e.message:"The remote did not answer.";bad=true;paint()})}
-
-function vaPanel(lock){
+function vaPanel(){
 var h=holdOf(sel);
 return "<p class=sub>"+(h?"This input has the "+esc(h.n)+" hold, so the release starts Assist "+
-"and Home Assistant ends it when your speech stops.":"The press starts Assist and the release ends it.")+"</p>"+
-"<div class=act><button type=button id=b2"+(lock?" disabled":"")+
-">Assign voice assistant</button></div>"}
+"and Home Assistant ends it when your speech stops.":"The press starts Assist and the release ends it.")+"</p>"}
 
 function hidPanel(lock){
 var dis=lock?" disabled":"";
@@ -1364,13 +1332,10 @@ h+="<h2 class=hd2>Modifier keys</h2><div class=mods>";
 for(j=0;j<4;j++)h+="<label for="+MB[j][0]+"><input type=checkbox id="+MB[j][0]+" value="+MB[j][1]+
 (ml&MB[j][1]?" checked":"")+dis+">"+MB[j][2]+"</label>";
 h+="</div><p class=sub>The remote holds the checked keys while it sends the key.</p>"}
-h+="<div class=act><button type=button id=hi"+dis+">Assign BLE HID</button></div>";
 return h}
 
-function clearPanel(lock){
-return "<p class=sub>The input sends nothing until it is assigned again.</p>"+
-"<div class=act><button type=button class=sec id=b3"+(lock?" disabled":"")+
-">Clear this input</button></div>"}
+function clearPanel(){
+return "<p class=sub>Save clears the input. It then sends nothing until it is assigned again.</p>"}
 
 function haOpts(){var L=haActs(hkd),h="",i;
 for(i=0;i<L.length;i++)h+="<option value="+L[i]+(L[i]===hac?" selected":"")+">"+haLabel(hkd,L[i])+"</option>";
@@ -1391,8 +1356,8 @@ h+="</select><label class=hd2 for=hc>Action</label><select id=hc"+dis+">"+haOpts
 "<p class=sub>The ESPHome integration needs <b>Allow the device to perform Home Assistant actions</b>. "+
 "The first press after sleep waits a few seconds for Wi-Fi and Home Assistant.</p>";
 if(haMsg)h+="<div class='note "+(haBad?"bad":"ok")+"'>"+esc(haMsg)+"</div>";
-h+="<div class=act><button type=button id=hg"+dis+">Assign Home Assistant action</button>"+
-(saved?"<button type=button class=sec id=ht"+(lock||haBusy?" disabled":"")+">Test saved action</button>":"")+"</div>";
+if(saved)h+="<div class=act><button type=button class=sec id=ht"+(lock||haBusy?" disabled":"")+
+">Test saved action</button></div>";
 return h}
 
 function haFix(){var L=haActs(hkd);if(L.indexOf(hac)<0)hac=L[0]}
@@ -1407,18 +1372,17 @@ function haWire(lock){
 var he=document.getElementById("he"),hd=document.getElementById("hd"),hc=document.getElementById("hc"),
 hs=document.getElementById("hs"),ht=document.getElementById("ht");
 he.oninput=function(){hek=this.value.toLowerCase();if(this.value!==hek)this.value=hek;
-var k=haKindFor(hek);if(k)hkd=k;haFix();haSync()};
+var k=haKindFor(hek);if(k)hkd=k;haFix();haSync();svPaint()};
 hd.onchange=function(){hkd=this.value;haFix();msg="";bad=false;paint()};
 hc.onchange=function(){hac=this.value;if(haStep(hac)&&!hvl)hvl="10";msg="";bad=false;paint()};
-hs.oninput=function(){hvl=this.value};
-if(!lock)document.getElementById("hg").onclick=assignHa;
+hs.oninput=function(){hvl=this.value;svPaint()};
 if(ht&&!lock&&!haBusy)ht.onclick=testHa}
 
-function assignHa(){
+function haWrite(s){
 var e=String(hek).replace(/^\s+|\s+$/g,"").toLowerCase(),r=String(hvl).replace(/^\s+|\s+$/g,""),
 v=haStep(hac)?(/^[0-9]+$/.test(r)?parseInt(r,10):NaN):0,why=haCheck(e,hkd,hac,v);
-if(why){msg=why;bad=true;paint();return}
-go("set_ha",null,"&kind="+hkd+"&act="+hac+"&val="+v+"&entity="+encodeURIComponent(e))}
+if(why)return {error:why};
+return {a:"set_ha",s:s,x:"&kind="+hkd+"&act="+hac+"&val="+v+"&entity="+encodeURIComponent(e),why:FLASH_WHY}}
 
 var HM={ok:"Home Assistant ran the action.",
 unconfirmed:"Sent. Home Assistant did not confirm. If nothing happened, turn on \"Allow the device to perform Home Assistant actions\" in the ESPHome integration options.",
@@ -1602,13 +1566,11 @@ z2mConnect(u,k);z2mStatus()}
 function hasCode(text){return !!String(text||"").replace(/\s+/g,"")}
 
 function codeBox(lock){
-var codeDis=lock||!hasCode(cd)?" disabled":"";
 var h="<div class=code><p class=hd>IR code</p>"+
 "<p class=sub><a href=https://github.com/Lucaslhm/Flipper-IRDB target=_blank "+
 "rel=noreferrer>Flipper-IRDB</a></p>"+
-"<textarea id=ct rows=7 spellcheck=false autocomplete=off>"+esc(cd)+"</textarea>";
-h+=detail(sel)+"<div class=act><button type=button id=ca"+codeDis+">Apply to this input</button></div>"+
-(cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")+"</div>";
+"<textarea id=ct rows=7 spellcheck=false autocomplete=off"+(lock?" disabled":"")+">"+esc(cd)+"</textarea>";
+h+=detail(sel)+(cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")+"</div>";
 return h}
 
 function loadCode(s){var loadId=++codeLoad;cdSlot=null;cd="";
@@ -1619,9 +1581,9 @@ return tfetch("/buttons/api/code?slot="+s,{cache:"no-store"},5000)
 .then(function(j){if(j.slot!==s||!j.present||!j.text)throw new Error();
 cfgAll[s]=j.text;cfgRefresh();return j.text})})
 .then(function(code){if(loadId!==codeLoad)return;
-cd=code;cdSlot=s;if(sel===s)paint()})
+cd=cdBase=code;cdSlot=s;if(sel===s)paint()})
 .catch(function(){if(loadId!==codeLoad)return;
-cdSlot=s;msg="Could not read that IR code.";bad=true;if(sel===s)paint()})}
+cdBase=cd;cdSlot=s;msg="Could not read that IR code.";bad=true;if(sel===s)paint()})}
 
 // The page is served over plain HTTP, so navigator.clipboard is undefined in
 // most browsers. execCommand still works there.
@@ -1686,12 +1648,6 @@ if(c.kind==="ha"){paint();go("set_ha",null,"&kind="+c.ha_kind+"&act="+c.act+
 if(c.device){sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0));return}
 sendGroup(String(c.group),c.name||"",String(c.val||0))}
 
-function applyCode(){
-var text=document.getElementById("ct").value;
-cd=text;
-if(!hasCode(text)){msg="Paste a code first.";bad=true;paint();return}
-go("set_ir_code",text)}
-
 // One entry per input, in the render order of the page. label is for the reader,
 // because an import applies the slot number.
 function cfgBlob(){
@@ -1710,13 +1666,15 @@ e.usage=r.hid_usage;e.mod=r.hid_mod||0}
 else if(r&&r.action==="ha"){e.action="ha";e.kind=r.ha_kind;e.act=r.ha_act;
 e.entity=r.ha_entity;if(r.ha_val)e.val=r.ha_val}
 else if(r&&r.action==="ir"){e.action="ir";e.code=cfgAll[s]||""}
+if(HB.indexOf(s)>=0)e.hold=holdAt(s)||"none";
 lines.push(JSON.stringify(e))}
 // One line for each input, because an indented block runs past 100 lines and a
 // single line hides which input an entry belongs to.
 return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
 
 var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"];
-// Each hold key carries the slot of its input, or 0 for none.
+// An older file names one input for each hold in these keys, or 0 for none. A
+// newer file puts a hold on each slot entry instead.
 var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];
 // The name stays out, because it belongs to one remote and a copy would give two the same name.
 function cfgSettings(){
@@ -1724,7 +1682,6 @@ var o={zigbee:radioOn("zigbee"),ble:radioOn("ble"),home_assistant:radioOn("home_
 wifi_always_on:!!(st&&st.network&&st.network.wifi_always_on)},z=st&&st.sleep;
 if(st&&st.status_leds!==undefined)o.status_leds=ledMode();
 if(st&&typeof st.boot_leds==="boolean")o.boot_leds=st.boot_leds;
-if(st&&st.holds)HOLDS.forEach(function(d){o["hold_"+d.k]=holdSlot(d.k)});
 if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true}
 return o}
 
@@ -1751,7 +1708,7 @@ return ""}
 
 // A setting that already matches is skipped, like a clear on an empty input. A
 // remote without sleep skips the sleep keys.
-// count is the number of settings that change. A hold that moves takes two writes.
+// count is the number of settings that change.
 function cfgSetList(o){
 var list=[],z=st&&st.sleep,sl=!!(z&&z.available),skipped=0,count=0;
 if(!o)return {list:list,skipped:0,count:0};
@@ -1764,23 +1721,26 @@ add("wifi_always_on",!!(st&&st.network&&st.network.wifi_always_on),"set_wifi_alw
 if(st&&st.status_leds!==undefined&&o.status_leds!==undefined&&ledArg(o.status_leds)!==ledMode()){
 list.push({key:"status_leds",action:"set_status_leds",args:"&mode="+ledArg(o.status_leds)});count++}
 if(st&&typeof st.boot_leds==="boolean")add("boot_leds",st.boot_leds,"set_boot_leds",en);
-if(st&&st.holds){
-var cur={},fin={},chg=[],seen={},why="";
-HOLDS.forEach(function(d){var v=o["hold_"+d.k];cur[d.k]=holdSlot(d.k);fin[d.k]=v===undefined?cur[d.k]:v;
-if(fin[d.k]!==cur[d.k])chg.push(d.k);
-if(fin[d.k]&&seen[fin[d.k]])why="After the import, the "+seen[fin[d.k]]+" and "+d.n+" holds would use the same input.";
-if(fin[d.k])seen[fin[d.k]]=d.n});
-if(why)return {list:[],skipped:0,count:0,error:why};
-// Each changing hold lets go first, so no two holds share an input between writes.
-chg.forEach(function(k){if(cur[k])list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot=0"})});
-chg.forEach(function(k){if(fin[k])list.push({key:"hold_"+k,action:"set_hold",args:"&hold="+k+"&slot="+fin[k]})});
-count+=chg.length}
 if(sl){
 add("sleep",z.enabled===true,"set_sleep_enabled",en);
 add("sleep_after_s",z.after_s,"set_sleep_after",function(v){return "&seconds="+v});
 add("wake_replay",z.replay===true,"set_sleep_replay",en)}
 else{["sleep","sleep_after_s","wake_replay"].forEach(function(k){if(o[k]!==undefined)skipped++})}
 return {list:list,skipped:skipped,count:count}}
+
+// One write for each hold input whose hold changes. An older hold key puts its
+// hold on the named input and takes it off every other one, because that file
+// gave each hold one input. A hold on a slot entry comes after the keys.
+function cfgHoldList(o,slots){
+var want={},list=[],i,s;
+if(!st||!st.slots)return list;
+for(i=0;i<HB.length;i++)want[HB[i]]=holdAt(HB[i])||"none";
+if(o)HOLDS.forEach(function(d){var v=o["hold_"+d.k];if(v===undefined)return;
+HB.forEach(function(x){if(want[x]===d.k)want[x]="none"});if(v)want[v]=d.k});
+(slots||[]).forEach(function(e){if(e&&e.hold!==undefined&&HB.indexOf(e.slot)>=0)want[e.slot]=e.hold});
+for(i=0;i<HB.length;i++){s=HB[i];
+if(want[s]!==(holdAt(s)||"none"))list.push({key:"hold of slot "+s,action:"set_hold",args:"&slot="+s+"&hold="+want[s]})}
+return list}
 
 // Read one code at a time because a burst can outrun the remote's connection limit.
 function cfgRefresh(){
@@ -1850,6 +1810,9 @@ g=haCheck(m,e.kind,e.act,u);
 if(g)return "Slot "+e.slot+" has an invalid Home Assistant action: "+g+"."}
 else if(a!=="ir"&&a!=="voice"&&a!=="none")
 return "Slot "+e.slot+" carries the unknown action "+a+".";
+if(e.hold!==undefined&&e.hold!=="none"){
+if(!holdInfo(e.hold))return "Slot "+e.slot+" carries the unknown hold "+e.hold+".";
+if(HB.indexOf(e.slot)<0)return "Slot "+e.slot+" is wheel rotation, which cannot carry a hold."}
 if(a==="zigbee"){
 var A=za(e.act===undefined?0:e.act);
 if(!A)return "Slot "+e.slot+" names the unknown Zigbee action "+e.act+".";
@@ -1879,7 +1842,7 @@ if(!A||!A.p)return 0;
 return e.val===undefined?A.d:parseInt(e.val,10)}
 
 // A clear on an input that already holds nothing writes flash for no gain, so it
-// is the one entry an import skips.
+// is the one entry an import skips. A hold alone goes through cfgHoldList.
 function cfgNeeded(e){if(e.action!=="none")return true;
 var r=row(e.slot);return !!(r&&r.action!=="none")}
 
@@ -1922,25 +1885,28 @@ if(!ok)throw new Error(who+": the remote refused it.");
 return cfgRun(list,i+1)})}
 
 function cfgApply(){
-var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,skip;
+var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,holds,n,skip;
 if(parsed.error){cfgNote(parsed.error,true);return}
 j=parsed.config;
 for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);
-ins=list.length;sets=cfgSetList(j.settings);
-if(sets.error){cfgNote(sets.error,true);return}
+ins=list.length;sets=cfgSetList(j.settings);holds=cfgHoldList(j.settings,j.slots);
 skip=sets.skipped?" The remote has no sleep, so "+(sets.skipped===1?"1 sleep setting was":sets.skipped+" sleep settings were")+" skipped.":"";
-list=list.concat(sets.list);
+list=list.concat(sets.list,holds);
 if(!list.length){cfgNote("The remote already matches this config."+skip,false);return}
 cfgBusy=true;cfgBad=false;
+// A hold counts as a setting in the note.
+n=sets.count+holds.length;
 return cfgRun(list,0).then(function(){
 cfgBusy=false;cfgAll={};cfgReady=false;cfgDirty=false;cdSlot=null;
-cfgNote("Applied "+ins+(ins===1?" input":" inputs")+" and "+sets.count+(sets.count===1?" setting.":" settings.")+skip,false);
-return load().then(function(){if(sel!==null&&(!row(sel)||row(sel).action!=="ir")){
-codeLoad++;cd="";cdSlot=sel}paint();return cfgRefresh()}).then(function(){
+cfgNote("Applied "+ins+(ins===1?" input":" inputs")+" and "+n+(n===1?" setting.":" settings.")+skip,false);
+// The Config tab asked before it dropped any draft, so the card starts again
+// from the imported slot.
+return load().then(function(){if(sel!==null)edReset(sel);paint();return cfgRefresh()}).then(function(){
 if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})})
 .catch(function(err){cfgBusy=false;
 cfgNote(err&&err.message?err.message:"The remote did not answer.",true);
 cfgAll={};cfgReady=false;
+// A failed import keeps the open draft and a running Test as they are.
 return load().then(function(){paint();return cfgRefresh()})})}
 
 function cfgCopy(){var t=document.getElementById("cx");
@@ -2014,7 +1980,7 @@ if(sel===null){e.innerHTML="<h2>No input selected</h2>"+
 "<p class=sub>Select an input on the left to change what it does.</p>";
 p.innerHTML="";return}
 var d=info(sel);
-var copied=clipConfig(row(sel)),locked=(st&&st.busy)||zbusy||clipBusy;
+var copied=clipConfig(row(sel)),locked=edLock();
 var h="<h2 class=edtitle><span>"+esc(d.l)+"</span>"+(irName(sel)?"<span class=cn>"+esc(irName(sel))+"</span>":"")+
 "<span class=clip>"+
 "<button type=button id=bcopy"+(!copied||locked?" disabled":"")+">Copy</button>"+
@@ -2049,8 +2015,9 @@ opts.push(["ha","Home Assistant"]);
 if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
 if(!d.v&&act==="va")act="ir";
-// An action with its Config switch off cannot be assigned, so the panel opens on IR.
-if(actOff(act))act="ir";
+// An action with its Config switch off cannot be assigned, so the panel opens on
+// IR. A draft that still matched the stored slot stays clean.
+if(actOff(act)){var was=edKey()===edBase;act="ir";if(was)edBase=edKey()}
 h+="<h2 class=hd2 id=asl>Action</h2><div class=aslist role=radiogroup "+
 "aria-labelledby=asl id=as>";
 var title="";
@@ -2059,31 +2026,29 @@ h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
 " aria-checked="+on+(lock||off?" disabled":"")+
 (off?" title='Turn on "+actRadio[opts[i][0]][1]+" in Config'":"")+">"+esc(opts[i][1])+"</button>";
 if(on)title=opts[i][1]}
-h+="</div>"+holdSection(lock);
-var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):
-act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):act==="va"?vaPanel(lock):
-act==="cl"?clearPanel(lock):irPanel(lock));
+h+="</div>"+holdSection(lock)+edBar(lock);
+var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm((st&&st.busy)||svBusy):
+act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):act==="va"?vaPanel():
+act==="cl"?clearPanel():irPanel(lock));
 e.innerHTML=h;
 p.innerHTML=panel;
 
 if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
 var hs=document.getElementById("hsel");if(hs)hs.onchange=holdChange;
+document.getElementById("sv").onclick=saveCard;
+document.getElementById("sd").onclick=edDiscard;
 if(!locked&&clip)document.getElementById("bpaste").onclick=pasteAssignment;
 if(!lock)for(var j=0;j<opts.length;j++)(function(v){
 document.getElementById("as-"+v).onclick=function(){
 act=v;msg="";bad=false;paint()}})(opts[j][0]);
 if(act==="ir"){
 var box=document.getElementById("ct");
-box.oninput=function(){cd=box.value;
-var disabled=lock||!hasCode(cd);
-document.getElementById("ca").disabled=disabled};
-document.getElementById("ca").onclick=applyCode;
+box.oninput=function(){cd=box.value;svPaint()};
 if(!lock)document.getElementById("b1").onclick=function(){go("record_ir")};
 var nb=document.getElementById("inm");
 if(nb){nb.oninput=function(){inv=nb.value;inDirty=true;
-var c=document.getElementById("inc");if(c)c.textContent=nameCount(inv)};
-nb.onkeydown=function(ev){if(ev.key==="Enter"){ev.preventDefault();saveIrName()}};
-document.getElementById("ins").onclick=saveIrName}}
+var c=document.getElementById("inc");if(c)c.textContent=nameCount(inv);svPaint()};
+nb.onkeydown=function(ev){if(ev.key==="Enter"){ev.preventDefault();saveCard()}}}}
 if(act==="zb"){
 var gs=document.getElementById("zs"),ds=document.getElementById("zd"),
 gi=document.getElementById("zg"),hi=document.getElementById("zh"),
@@ -2095,9 +2060,9 @@ zsv="";zdv="";zgv="";zhv="";zpv="";msg="";bad=false;paint()};
 if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};
 if(ds)ds.onchange=function(){zdv=this.value;
 if(zdv){zhv=zdv;zpv=String(deviceEp(zdv,zav))}paint()};
-if(gi)gi.oninput=function(){zgv=gi.value};
-if(hi)hi.oninput=function(){zhv=hi.value};
-if(pi)pi.oninput=function(){zpv=pi.value};
+if(gi)gi.oninput=function(){zgv=gi.value;svPaint()};
+if(hi)hi.oninput=function(){zhv=hi.value;svPaint()};
+if(pi)pi.oninput=function(){zpv=pi.value;svPaint()};
 if(gs)gs.onclick=null;
 var ai=document.getElementById("zt"),vi=document.getElementById("zv");
 // The value belongs to the action that asked for it, and the endpoint follows
@@ -2105,23 +2070,19 @@ var ai=document.getElementById("zt"),vi=document.getElementById("zv");
 if(ai)ai.onchange=function(){zav=parseInt(this.value,10);zvv="";
 if(zkv==="d"&&zhv)zpv=String(deviceEp(zhv,zav));
 msg="";bad=false;paint()};
-if(vi)vi.oninput=function(){zvv=vi.value};
-document.getElementById("zi").onclick=assignTarget}
+if(vi)vi.oninput=function(){zvv=vi.value;svPaint()}}
 if(act==="hid"){
 var hk=document.getElementById("hk"),hu=document.getElementById("hu"),hmb=["hmc","hms","hma","hmg"].map(function(i){return document.getElementById(i)});
 var hp=document.getElementById("hp");
 hk.onchange=function(){hkv=this.value;huv=hkv==="gamepad_dpad"?"0":"";hmv="0";hcust=false;msg="";bad=false;paint()};
 // Only the Custom switch changes the panel, so a named key keeps the list open.
 if(hp)hp.onchange=function(){var c=this.value==="custom";
-if(c===hcust){huv=this.value;return}
+if(c===hcust){huv=this.value;svPaint();return}
 hcust=c;huv=c?"":this.value;msg="";bad=false;paint()};
-if(hu)hu.oninput=function(){huv=this.value};
+if(hu)hu.oninput=function(){huv=this.value;svPaint()};
 hmb.forEach(function(b){if(b)b.onchange=function(){var m=0;
-hmb.forEach(function(x){if(x&&x.checked)m|=Number(x.value)});hmv=String(m)}});
-if(!lock)document.getElementById("hi").onclick=assignHid}
-if(act==="ha")haWire(lock);
-if(act==="va"&&!lock)document.getElementById("b2").onclick=function(){go("set_voice")};
-if(act==="cl"&&!lock)document.getElementById("b3").onclick=function(){go("clear")}}
+hmb.forEach(function(x){if(x&&x.checked)m|=Number(x.value)});hmv=String(m);svPaint()}});}
+if(act==="ha")haWire(lock)}
 
 function actFor(s){var r=row(s);
 if(!r||r.action==="none")return "ir";
@@ -2131,17 +2092,17 @@ if(r.action==="ha")return "ha";
 if(r.action==="voice")return "va";
 return "ir"}
 
-function pick(s){
-// Clear the previous input's code before paint, so its text cannot show while
-// the selected input's request is still in flight.
-if(sel!==s){codeLoad++;cdSlot=null;cd=""}
-if(sel!==s)holdError="";
-sel=s;inDirty=false;
-if(mode!=="rec"){msg="";bad=false}
+// The card and the panel from the stored slot, for pick, Discard, and a save.
+// The hold draft is apart, so a Paste keeps a hold that is still unsaved.
+function edReset(s){
+var pr=row(s);
+// Clear the code before paint, so an old text cannot show while the request runs.
+codeLoad++;cdSlot=null;cd="";cdBase="";inDirty=false;
 // Every Zigbee field belongs to the slot that was open, so none of it may
 // follow the selection to the next one.
 act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";
-var pr=row(s);zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
+if(actOff(act))act="ir";
+zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";
 zav=(pr&&pr.action==="zigbee")?(pr.act||0):0;
 zvv=(pr&&pr.action==="zigbee"&&pr.val)?String(pr.val):"";
 hkv=(pr&&pr.action==="hid")?pr.hid_kind:"keyboard";
@@ -2156,9 +2117,122 @@ haFix();haMsg="";haBad=false;haBusy=false;haTok++;
 // Only IR assignments have stored code. Empty and Clear slots show a ready
 // code box, so they do not wait for a request that can only return empty text.
 if(!pr||pr.action!=="ir")cdSlot=s;
-else if(cfgAll[s]!==undefined){cd=cfgAll[s];cdSlot=s}
+else if(cfgAll[s]!==undefined){cd=cdBase=cfgAll[s];cdSlot=s}
+edBase=edKey()}
+
+function edOpen(s){
+sel=s;hdv=null;
+if(mode!=="rec"){msg="";bad=false}
+edReset(s);
 paint();
-if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
+var pr=row(s);if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)}
+
+// A click on the open input keeps its edits. Another input asks first.
+function pick(s){
+if(s===sel&&edDirty()&&!svBusy)return;
+if(!edLeave())return;
+edOpen(s)}
+
+// True when the open card may close. Unsaved edits go only after you agree.
+function edLeave(){
+return !edDirty()||svBusy||confirm("Discard unsaved changes to "+info(sel).l+"?")}
+
+function edDiscard(){if(svBusy||sel===null)return;edOpen(sel)}
+
+function edLock(){return !!((st&&st.busy)||zbusy||clipBusy||svBusy)}
+
+// The draft as one string. A field counts only for the selected action, because
+// Save sends only that action.
+function edKey(){
+return act+"|"+(act==="zb"?[zkv,zgv,zhv,zpv,Number(zav),zvv].join("|"):
+act==="hid"?[hkv,parseInt(String(huv).replace(/^\s+|\s+$/g,""),0),modLeft(hmv)].join("|"):
+act==="ha"?[hek,hkd,hac,haStep(hac)?hvl:""].join("|"):"")}
+
+// A blank box is no change on an empty input, but a cleared stored code is one.
+function codeDirty(){return act==="ir"&&cdSlot===sel&&(hasCode(cd)?cd!==cdBase:hasCode(cdBase))}
+function nameDirty(){var r=row(sel);
+return !!(r&&r.action==="ir"&&inDirty&&inSlot===sel&&String(inv).replace(/^ +| +$/g,"")!==(r.name||""))}
+function holdDirty(){return hdv!==null&&hdv!==holdAt(sel)}
+// Voice and Clear carry no fields. Clear on an empty input changes nothing.
+function actDirty(){var r=row(sel),k=r?r.action:"none";
+if(act==="va")return k!=="voice";
+if(act==="cl")return k!=="none";
+return codeDirty()||(act==="ir"&&nameDirty())||edKey()!==edBase}
+function edDirty(){return sel!==null&&!!st&&(holdDirty()||actDirty())}
+
+// Save sits at the bottom of the middle card, under the hold.
+function edBar(lock){var dirty=edDirty(),off=lock||!dirty?" disabled":"";
+return "<div class=act id=svr><button type=button id=sv"+off+">"+(svBusy?"Saving...":"Save")+"</button>"+
+"<button type=button class=sec id=sd"+off+">Discard</button></div>"+
+"<p class='sub st' id=svm>"+esc(svLine(dirty))+"</p>"}
+
+function svLine(dirty){return svBusy?"Saving the changes.":dirty?"Unsaved changes.":"No unsaved changes."}
+
+// A typed field changes only the bar, so the box keeps its focus.
+function svPaint(){var b=document.getElementById("sv"),d=document.getElementById("sd"),
+m=document.getElementById("svm"),dirty=edDirty(),off=edLock()||!dirty;
+if(b)b.disabled=off;if(d)d.disabled=off;if(m)m.textContent=svLine(dirty)}
+
+// Every check runs before the first write, so a bad field posts nothing. act is
+// true when the plan writes the action, and gone when it takes the last Wi-Fi
+// hold away while WiFi Always On is off.
+function savePlan(s){
+var r=row(s),k=r?r.action:"none",steps=[],e,v,why,plan;
+if(actDirty()){
+if(act==="va")steps.push({a:"set_voice",s:s,why:FLASH_WHY});
+else if(act==="cl")steps.push({a:"clear",s:s,why:FLASH_WHY});
+else if(act==="zb"||act==="hid"||act==="ha"){
+e=act==="zb"?zbWrite(s):act==="hid"?hidWrite(s):haWrite(s);
+if(e.error)return e;steps.push(e)}
+else{
+if(codeDirty()){if(!hasCode(cd))return {error:"Paste a code first."};
+steps.push({a:"set_ir_code",s:s,c:cd,why:"The remote refused that code."})}
+else if(k!=="ir")return {error:"Paste a code first."};
+if(nameDirty()){v=String(inv).replace(/^ +| +$/g,"");why=irNameWhy(v);
+if(why)return {error:why};
+// A code apply takes the name from its name line, so the check runs after it.
+steps.push(function(){var x=row(s);return x&&x.action==="ir"&&(x.name||"")===v?null:
+{a:"set_ir_name",s:s,n:v,why:"The remote could not save the name."}})}}}
+plan={steps:steps,act:steps.length>0,gone:false};
+if(holdDirty()){
+plan.gone=holdAt(s)==="wifi"&&hdv!=="wifi"&&holdSlots("wifi").length===1&&
+!(st.network&&st.network.wifi_always_on===true);
+steps.push({a:"set_hold",s:s,x:"&hold="+(hdv||"none"),why:"The remote could not save the hold."})}
+return plan}
+
+// The action goes first and the hold after it, one write at a time. A failure
+// stops the rest and keeps the draft, so Save can run again.
+function saveCard(){
+var s=sel,plan;
+if(svBusy||edLock()||!edDirty())return;
+plan=savePlan(s);
+if(plan.error){msg=plan.error;bad=true;paint();return}
+if(plan.gone&&!confirm("WiFi Always On is off. Without a Wi-Fi hold, no button opens "+
+"a temporary session after this one closes. Continue?"))return;
+svBusy=true;msg="";bad=false;paint();
+return svRun(plan.steps,0).then(function(){
+svBusy=false;if(plan.act)delete cfgAll[s];
+return load().then(function(){
+// A late result never paints on another input.
+if(sel===s){hdv=null;edReset(s);msg="Saved.";bad=false}
+paint();
+return (plan.act?cfgChanged(s):Promise.resolve()).then(function(){
+if(sel===s&&row(s)&&row(s).action==="ir"&&cdSlot!==s)return loadCode(s)})})},
+function(e){svBusy=false;
+if(plan.act){delete cfgAll[s];cfgReady=false}
+if(sel===s){msg=e&&e.message?e.message:"The remote did not answer.";bad=true}
+return load().then(paint,paint)})}
+
+// Each step posts one write and waits for its action id. A step can be a
+// function that returns the write, or null to skip it.
+function svRun(list,i){
+if(i>=list.length)return Promise.resolve();
+var w=typeof list[i]==="function"?list[i]():list[i];
+if(!w)return svRun(list,i+1);
+return post(w.a,w.s,w.c,w.n,w.x).then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error(w.why)})})
+.then(function(){return svRun(list,i+1)})}
 
 function load(){return readState().then(function(j){st=j;
 if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();return j})}
@@ -2170,15 +2244,15 @@ function readState(){return tfetch("/buttons/api/state",{cache:"no-store"},5000)
 .then(function(j){if(!j||typeof j!=="object")throw new Error();lnkOk();return j},
 function(e){lnkBad(e);throw e})}
 
-function assignHid(){
+function hidWrite(s){
 var usage=parseInt(String(huv).replace(/^\s+|\s+$/g,""),0);
 var mod=hkv==="keyboard"?modLeft(hmv):0;
 var good=(hkv==="keyboard"&&usage>=0&&usage<=231&&mod>=0&&mod<=255&&(usage||mod))||
 (hkv==="consumer"&&usage>=1&&usage<=1023)||(hkv==="gamepad_button"&&usage>=1&&usage<=16)||
 (hkv==="gamepad_dpad"&&usage>=0&&usage<=7);
-if(!good){msg=(hidList(hkv)&&!hcust)?"Choose a key, or select Custom usage.":
-"Enter a value inside the selected HID report range.";bad=true;paint();return}
-go("set_hid",null,"&kind="+hkv+"&usage="+usage+"&mod="+mod)}
+if(!good)return {error:(hidList(hkv)&&!hcust)?"Choose a key, or select Custom usage.":
+"Enter a value inside the selected HID report range."};
+return {a:"set_hid",s:s,x:"&kind="+hkv+"&usage="+usage+"&mod="+mod,why:FLASH_WHY}}
 
 // A code block keeps its newlines, because the parser reads it a line at a time.
 // ESPHome caps a POST body, and the sdkconfig raises that cap for a full length
@@ -2197,23 +2271,27 @@ if(r.code===409)return "Another assignment is already running";
 if(r.body&&r.body.error)return r.body.error;
 return "Request failed ("+r.code+")"}
 
+// Paste and Record IR write at once, so they skip Save.
 function go(a,c,x){
 var s=sel;
+svBusy=true;paint();
 post(a,s,c,undefined,x).then(function(r){
+svBusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 if(a==="record_ir"){mode="rec";rec=s;seen=false;msg="";bad=false;
 return load().then(function(){paint();watch()})}
+svBusy=true;
 return waitAction(r.body.id).then(function(ok){
-// A paste replaces the name too, so the box follows the stored one again.
-if(ok&&a==="set_ir_code")inDirty=false;
-if(ok){msg=a==="set_voice"?"Assigned to the voice assistant.":
-a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":a==="set_ha"?"Home Assistant action assigned.":"Cleared.";bad=false}
-else{msg=a==="set_ir_code"?"The remote refused that code.":
-"Flash write failed. The assignment was not saved.";bad=true}
+svBusy=false;
+if(ok){msg=a==="set_ir_code"?"Code applied.":a==="set_hid"?"BLE HID assigned.":
+a==="set_ha"?"Home Assistant action assigned.":"Saved.";bad=false;delete cfgAll[s]}
+else{msg=a==="set_ir_code"?"The remote refused that code.":FLASH_WHY;bad=true}
 return load().then(function(){
+// The pasted config is now the stored one, so the draft starts from it again.
+if(ok&&sel===s)edReset(s);
 if(ok)return cfgChanged(s).then(function(){paint();if(row(s)&&row(s).action==="ir")return loadCode(s)});
 paint();if(row(s)&&row(s).action==="ir")return loadCode(s)})})})
-.catch(function(){msg="The remote did not answer.";bad=true;paint()})}
+.catch(function(){svBusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 // The kind selector already said which target this is, so nothing here has to
 // infer it from the format. The name is looked up fresh rather than remembered,
@@ -2222,34 +2300,33 @@ paint();if(row(s)&&row(s).action==="ir")return loadCode(s)})})})
 // The remote bounds it again, because an import never passes through here.
 function actionValue(){
 var A=za(zav);
-if(!A)return null;
+if(!A)return {error:"Pick an action."};
 if(!A.p)return "0";
 var raw=String(zvv).replace(/^\s+|\s+$/g,"");
 var n=raw===""?A.d:parseInt(raw,10);
-if(!(n>=A.lo&&n<=A.hi)){
-msg=A.p+" is "+A.lo+" to "+A.hi+".";bad=true;paint();return null}
+if(!(n>=A.lo&&n<=A.hi))return {error:A.p+" is "+A.lo+" to "+A.hi+"."};
 return String(n)}
 
-function assignTarget(){
+function zbWrite(s){
 var name="",i,val=actionValue();
-if(val===null)return;
+if(typeof val!=="string")return val;
 if(zkv==="d"){
 var a=zhv.replace(/^\s+|\s+$/g,""),hex=a.replace(/^0[xX]/,"");
-if(!a){msg="Pick a device, or type an IEEE address.";bad=true;paint();return}
-if(!/^[0-9a-fA-F]{16}$/.test(hex)){
-msg="An IEEE address is 16 hex digits.";bad=true;paint();return}
+if(!a)return {error:"Pick a device, or type an IEEE address."};
+if(!/^[0-9a-fA-F]{16}$/.test(hex))return {error:"An IEEE address is 16 hex digits."};
 var ieee="0x"+hex.toLowerCase(),ep=zpv.replace(/^\s+|\s+$/g,"");
 if(td)for(i=0;i<td.length;i++)if(td[i].ieee.toLowerCase()===ieee){
 name=td[i].name;if(!ep)ep=String(deviceEp(ieee,zav))}
-sendDevice(ieee,ep||"1",name,val);
-return}
+return {a:"set_zigbee_device",s:s,n:name,x:"&ieee="+encodeURIComponent(ieee)+"&ep="+encodeURIComponent(ep||"1")+
+"&act="+Number(zav)+"&val="+encodeURIComponent(val),why:"The remote could not store that device."}}
 var g=zgv.replace(/^\s+|\s+$/g,"");
-if(!g){msg="Pick a group, or type a group ID.";bad=true;paint();return}
+if(!g)return {error:"Pick a group, or type a group ID."};
 var n=parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10);
 if(tg)for(i=0;i<tg.length;i++)if(tg[i].id===n)name=tg[i].name;
-sendGroup(g,name,val)}
+return {a:"set_zigbee",s:s,c:g,n:name,x:"&act="+Number(zav)+"&val="+encodeURIComponent(val),
+why:"The remote could not store that group."}}
 
-// The picker and the typed box both land here, so one path builds the request.
+// Paste writes a Zigbee config at once through these two.
 function sendDevice(ieee,ep,name,val){
 var s=sel;
 zbusy=true;paint();
@@ -2261,9 +2338,9 @@ zbusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
 var A=za(zav);
-if(ok){msg=(A?A.n:"That action")+" assigned to "+(name?name:ieee)+".";bad=false}
+if(ok){msg=(A?A.n:"That action")+" assigned to "+(name?name:ieee)+".";bad=false;delete cfgAll[s]}
 else{msg="The remote could not store that device.";bad=true}
-return load().then(function(){if(ok)return cfgChanged(s).then(paint);paint()})})})
+return load().then(function(){if(ok&&sel===s)edReset(s);if(ok)return cfgChanged(s).then(paint);paint()})})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function sendGroup(v,name,val){
@@ -2275,9 +2352,9 @@ zbusy=false;
 if(r.code!==200){msg=fail(r);bad=true;return load().then(paint)}
 return waitAction(r.body.id).then(function(ok){
 var A=za(zav);
-if(ok){msg=(A?A.n:"That action")+" assigned to the Zigbee group.";bad=false}
+if(ok){msg=(A?A.n:"That action")+" assigned to the Zigbee group.";bad=false;delete cfgAll[s]}
 else{msg="The remote could not store that group.";bad=true}
-return load().then(function(){if(ok)return cfgChanged(s).then(paint);paint()})})})
+return load().then(function(){if(ok&&sel===s)edReset(s);if(ok)return cfgChanged(s).then(paint);paint()})})})
 .catch(function(){zbusy=false;msg="The remote did not answer.";bad=true;paint()})}
 
 function waitAction(id,ms){return load().then(function(j){
@@ -2305,6 +2382,7 @@ var was=mode,s=rec;mode="idle";inDirty=false;
 if(was==="cancel"){msg="Recording cancelled.";bad=true}
 else if(seen){msg="Code saved.";bad=false}
 else{msg="No code received.";bad=true}
+if(seen&&was!=="cancel"){delete cfgAll[s];if(sel===s)edReset(s)}
 paint();if(seen&&was!=="cancel")cfgChanged(s).then(function(){
 if(sel===s&&row(s)&&row(s).action==="ir")loadCode(s)})}
 
@@ -2317,7 +2395,7 @@ stateWatch();
 function boot(){
 booting=true;
 return load().then(function(j){booted=true;
-if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;
+if(j.busy&&j.owner==="web"&&j.op_slot){mode="rec";rec=j.op_slot;sel=j.op_slot;edReset(sel);
 seen=j.result==="saved"&&j.result_slot===rec;watch()}
 zpjSync();paint();return cfgRefresh().then(function(){if(sel!==null&&row(sel)&&row(sel).action==="ir")return loadCode(sel)})}).catch(function(){
 document.getElementById("ed").textContent="The remote did not answer."}).then(function(){booting=false})}

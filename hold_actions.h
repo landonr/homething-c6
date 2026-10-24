@@ -9,6 +9,8 @@
 class HoldActions {
  public:
   enum Action : uint8_t { WIFI = 0, STATUS = 1, SLEEP = 2, ASSIGN = 3, COUNT = 4 };
+  // The table value of an input without a hold.
+  static constexpr uint8_t NONE = COUNT;
   // RELEASE_ONLY: the press tapped, so end push-to-talk. TAP_AND_RELEASE: a
   // deferred press sends its assignment now. SILENT: the hold fired.
   enum Release : uint8_t { RELEASE_ONLY = 0, TAP_AND_RELEASE = 1, SILENT = 2 };
@@ -28,40 +30,35 @@ class HoldActions {
     return false;
   }
 
-  // COUNT entries in Action order. 0 is no button, and two holds never share one.
-  static bool valid_slots(const uint8_t *slots) {
+  static uint8_t default_hold(uint8_t slot) {
     for (uint8_t a = 0; a < COUNT; a++) {
-      if (slots[a] == 0)
-        continue;
-      if (!valid_slot(slots[a]))
-        return false;
-      for (uint8_t b = a + 1; b < COUNT; b++) {
-        if (slots[b] == slots[a])
-          return false;
-      }
+      if (DEFAULT_SLOT[a] == slot)
+        return a;
     }
+    return NONE;
+  }
+
+  // Several inputs can share a hold, and each input carries one hold or NONE.
+  static bool valid_hold(uint8_t slot, uint8_t hold) {
+    if (slot >= SLOT_LIMIT || hold > NONE)
+      return false;
+    return hold == NONE || valid_slot(slot);
+  }
+
+  // SLOT_LIMIT entries indexed by slot. An entry that is not valid takes its default.
+  void set_holds(const uint8_t *holds) {
+    for (uint8_t s = 0; s < SLOT_LIMIT; s++)
+      holds_[s] = valid_hold(s, holds[s]) ? holds[s] : default_hold(s);
+  }
+
+  bool set_hold(uint8_t slot, uint8_t hold) {
+    if (!valid_slot(slot) || hold > NONE)
+      return false;
+    holds_[slot] = hold;
     return true;
   }
 
-  bool set_slots(const uint8_t *slots) {
-    if (!valid_slots(slots))
-      return false;
-    for (uint8_t a = 0; a < COUNT; a++)
-      slots_[a] = slots[a];
-    return true;
-  }
-
-  bool set_slot(Action action, uint8_t slot) {
-    if (action >= COUNT)
-      return false;
-    uint8_t next[COUNT];
-    for (uint8_t a = 0; a < COUNT; a++)
-      next[a] = slots_[a];
-    next[action] = slot;
-    return set_slots(next);
-  }
-
-  uint8_t slot(Action action) const { return action < COUNT ? slots_[action] : 0; }
+  uint8_t hold(uint8_t slot) const { return slot < SLOT_LIMIT ? holds_[slot] : NONE; }
 
   // True only in the Hold status mode. Off also ends a peek, and a status hold
   // that has not fired taps on its release instead.
@@ -69,15 +66,16 @@ class HoldActions {
     status_active_ = active;
     if (active)
       return;
-    peeking_ = false;
     for (Press &entry : presses_) {
-      if (entry.down && entry.action == STATUS)
+      if (entry.down && entry.action == STATUS) {
         entry.timing = false;
+        entry.fired = false;
+      }
     }
   }
   bool status_active() const { return status_active_; }
 
-  bool defers(uint8_t slot) const { return active_action_(slot) != COUNT; }
+  bool defers(uint8_t slot) const { return active_action_(slot) != NONE; }
 
   // True when the press taps now. A deferring press latches its action here, so
   // a settings change during the hold does not move it.
@@ -87,11 +85,11 @@ class HoldActions {
     wake_[slot] = WAKE_NONE;
     Press &entry = presses_[slot];
     const uint8_t action = active_action_(slot);
-    if (action == COUNT) {
+    if (action == NONE) {
       entry.down = false;
       return true;
     }
-    entry = Press{true, true, false, action, now};
+    entry = Press{true, true, false, false, action, now};
     return false;
   }
 
@@ -108,8 +106,7 @@ class HoldActions {
     }
     entry.down = false;
     entry.timing = false;
-    if (entry.action == STATUS)
-      peeking_ = false;
+    entry.fired = false;
     return entry.silent ? SILENT : TAP_AND_RELEASE;
   }
 
@@ -126,14 +123,15 @@ class HoldActions {
     if (slot >= SLOT_LIMIT || presses_[slot].down)
       return;
     const uint8_t action = active_action_(slot);
-    if (action == COUNT)
+    if (action == NONE)
       return;
     const bool silent = wake_[slot] == WAKE_SILENT;
     wake_[slot] = WAKE_NONE;
-    presses_[slot] = Press{true, action != ASSIGN, silent, action, now};
+    presses_[slot] = Press{true, action != ASSIGN, silent, false, action, now};
   }
 
-  // Bit n set: action n fired on this call. Each hold fires once.
+  // Bit n set: action n fired on this call. Each press fires once, and two
+  // inputs with the same hold that fire together set one bit.
   uint8_t tick(uint32_t now) {
     uint8_t fired = 0;
     for (Press &entry : presses_) {
@@ -141,15 +139,23 @@ class HoldActions {
         continue;
       entry.timing = false;
       entry.silent = true;
-      if (entry.action == STATUS)
-        peeking_ = true;
+      entry.fired = true;
       fired |= static_cast<uint8_t>(1u << entry.action);
     }
     return fired;
   }
 
-  // True from the status hold until its release.
-  bool peeking() const { return peeking_; }
+  // True while any status hold that fired is still down, so a second status
+  // input keeps the peek until the last release.
+  bool peeking() const {
+    if (!status_active_)
+      return false;
+    for (const Press &entry : presses_) {
+      if (entry.down && entry.fired && entry.action == STATUS)
+        return true;
+    }
+    return false;
+  }
 
  private:
   enum : uint8_t { WAKE_NONE = 0, WAKE_TAP = 1, WAKE_SILENT = 2 };
@@ -158,23 +164,24 @@ class HoldActions {
     bool down;
     bool timing;
     bool silent;
+    bool fired;
     uint8_t action;
     uint32_t since;
   };
 
   uint8_t active_action_(uint8_t slot) const {
-    if (slot == 0)
-      return COUNT;
-    for (uint8_t a = 0; a < COUNT; a++) {
-      if (slots_[a] == slot && (a != STATUS || status_active_))
-        return a;
-    }
-    return COUNT;
+    if (slot >= SLOT_LIMIT)
+      return NONE;
+    const uint8_t action = holds_[slot];
+    if (action == STATUS && !status_active_)
+      return NONE;
+    return action;
   }
 
-  uint8_t slots_[COUNT] = {DEFAULT_SLOT[WIFI], DEFAULT_SLOT[STATUS], DEFAULT_SLOT[SLEEP], DEFAULT_SLOT[ASSIGN]};
+  // The defaults, one entry per slot: DEFAULT_SLOT in table form.
+  uint8_t holds_[SLOT_LIMIT] = {NONE, NONE, NONE, NONE, NONE, WIFI, NONE, STATUS, NONE, ASSIGN, NONE,
+                                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, SLEEP};
   bool status_active_ = false;
-  bool peeking_ = false;
   Press presses_[SLOT_LIMIT] = {};
   uint8_t wake_[SLOT_LIMIT] = {};
 };

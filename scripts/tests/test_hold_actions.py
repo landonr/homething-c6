@@ -59,6 +59,7 @@ static void each_hold_fires_once_at_its_time() {
     H h;
     h.set_status_active(true);
     EXPECT(H::DEFAULT_SLOT[a] == slots[a]);
+    EXPECT(h.hold(slots[a]) == a);
     EXPECT(H::HOLD_MS[a] == want_ms[a]);
     // The hold time crosses the millis() wrap.
     const uint32_t start = 0xFFFFFC00u;
@@ -164,44 +165,100 @@ static void a_press_clears_a_wake_mark() {
   // A stale replay mark must not tap again after a tapped press gains a hold.
   h.wake_held(PLAIN, false);
   EXPECT(h.press(PLAIN, 10000));
-  EXPECT(h.set_slot(H::WIFI, PLAIN));
+  EXPECT(h.set_hold(PLAIN, H::WIFI));
   EXPECT(h.release(PLAIN) == H::RELEASE_ONLY);
 }
 
-static void two_holds_never_share_an_input() {
+static void the_defaults_are_one_hold_on_each_default_slot() {
   H h;
-  EXPECT(!h.set_slot(H::WIFI, SLOT_STATUS));
-  EXPECT(h.slot(H::WIFI) == SLOT_WIFI);
-  EXPECT(h.slot(H::STATUS) == SLOT_STATUS);
-  // Wheel rotation has no release edge, and 21 is past the last slot.
-  EXPECT(!h.set_slot(H::WIFI, 17));
-  EXPECT(!h.set_slot(H::WIFI, 18));
-  EXPECT(!h.set_slot(H::WIFI, 21));
-  EXPECT(h.slot(H::WIFI) == SLOT_WIFI);
-  EXPECT(h.set_slot(H::WIFI, 0));
+  for (uint8_t s = 0; s < H::SLOT_LIMIT; s++) {
+    uint8_t want = H::NONE;
+    for (uint8_t a = 0; a < H::COUNT; a++)
+      if (H::DEFAULT_SLOT[a] == s)
+        want = a;
+    EXPECT(H::default_hold(s) == want);
+    EXPECT(h.hold(s) == want);
+  }
+  EXPECT(h.hold(21) == H::NONE);
+}
+
+static void several_inputs_can_share_a_hold() {
+  H h;
+  EXPECT(h.set_hold(PLAIN, H::WIFI));
+  EXPECT(h.hold(PLAIN) == H::WIFI);
+  EXPECT(h.hold(SLOT_WIFI) == H::WIFI);
+  EXPECT(!h.press(PLAIN, 0));
+  EXPECT(!h.press(SLOT_WIFI, 500));
+  EXPECT(h.tick(2000) == bit(H::WIFI));
+  EXPECT(h.tick(2500) == bit(H::WIFI));
+  EXPECT(h.release(PLAIN) == H::SILENT);
+  EXPECT(h.release(SLOT_WIFI) == H::SILENT);
+  // Each input carries one hold, so a new hold replaces the old one.
+  EXPECT(h.set_hold(SLOT_WIFI, H::SLEEP));
+  EXPECT(h.hold(SLOT_WIFI) == H::SLEEP);
+  EXPECT(h.set_hold(SLOT_WIFI, H::NONE));
   EXPECT(!h.defers(SLOT_WIFI));
-  EXPECT(h.set_slot(H::STATUS, SLOT_WIFI));
-  const uint8_t shared[H::COUNT] = {3, 3, 0, 0};
-  EXPECT(!H::valid_slots(shared));
-  EXPECT(!h.set_slots(shared));
-  EXPECT(h.slot(H::STATUS) == SLOT_WIFI);
-  const uint8_t none[H::COUNT] = {0, 0, 0, 0};
-  EXPECT(H::valid_slots(none));
-  EXPECT(H::valid_slots(H::DEFAULT_SLOT));
-  EXPECT(!H::valid_slot(0));
+  EXPECT(h.defers(PLAIN));
+}
+
+static void set_hold_refuses_a_bad_slot_or_hold() {
+  H h;
+  // Wheel rotation has no release edge, 0 to 2 are no inputs, and 21 is past the last slot.
+  static const uint8_t BAD[] = {0, 1, 2, 17, 18, 21};
+  for (const uint8_t slot : BAD) {
+    EXPECT(!h.set_hold(slot, H::WIFI));
+    EXPECT(!h.set_hold(slot, H::NONE));
+    EXPECT(h.hold(slot) == H::NONE);
+  }
+  EXPECT(!h.set_hold(PLAIN, H::NONE + 1));
+  EXPECT(h.hold(PLAIN) == H::NONE);
   for (uint8_t bit = 0; bit < 16; bit++)
     EXPECT(H::valid_slot(H::SLOT_OF_BIT[bit]));
+  // A stored table with a bad entry gives that entry its default.
+  uint8_t table[H::SLOT_LIMIT];
+  for (uint8_t s = 0; s < H::SLOT_LIMIT; s++)
+    table[s] = H::NONE;
+  table[PLAIN] = H::SLEEP;
+  table[SLOT_WIFI] = H::NONE + 1;
+  table[17] = H::WIFI;
+  h.set_holds(table);
+  EXPECT(h.hold(PLAIN) == H::SLEEP);
+  EXPECT(h.hold(SLOT_WIFI) == H::WIFI);
+  EXPECT(h.hold(17) == H::NONE);
+  EXPECT(h.hold(SLOT_STATUS) == H::NONE);
+}
+
+static void two_status_inputs_peek_until_the_last_release() {
+  H h;
+  h.set_status_active(true);
+  EXPECT(h.set_hold(PLAIN, H::STATUS));
+  EXPECT(!h.press(SLOT_STATUS, 0));
+  EXPECT(!h.press(PLAIN, 200));
+  EXPECT(h.tick(1000) == bit(H::STATUS));
+  EXPECT(h.peeking());
+  EXPECT(h.tick(1200) == bit(H::STATUS));
+  EXPECT(h.release(SLOT_STATUS) == H::SILENT);
+  EXPECT(h.peeking());
+  EXPECT(h.release(PLAIN) == H::SILENT);
+  EXPECT(!h.peeking());
+  // A second status input still down but not yet fired does not keep the peek.
+  EXPECT(!h.press(SLOT_STATUS, 5000));
+  EXPECT(h.tick(6000) == bit(H::STATUS));
+  EXPECT(!h.press(PLAIN, 6100));
+  EXPECT(h.release(SLOT_STATUS) == H::SILENT);
+  EXPECT(!h.peeking());
+  EXPECT(h.release(PLAIN) == H::TAP_AND_RELEASE);
 }
 
 static void a_latched_press_ignores_a_later_settings_change() {
   H h;
   EXPECT(!h.press(SLOT_WIFI, 0));
-  EXPECT(h.set_slot(H::WIFI, PLAIN));
+  EXPECT(h.set_hold(SLOT_WIFI, H::NONE));
   EXPECT(h.tick(2000) == bit(H::WIFI));
   EXPECT(h.release(SLOT_WIFI) == H::SILENT);
   // An input that tapped on press does not tap again after it gains a hold.
   EXPECT(h.press(SLOT_WIFI, 3000));
-  EXPECT(h.set_slot(H::SLEEP, SLOT_WIFI));
+  EXPECT(h.set_hold(SLOT_WIFI, H::SLEEP));
   EXPECT(h.tick(10000) == 0);
   EXPECT(h.release(SLOT_WIFI) == H::RELEASE_ONLY);
 }
@@ -222,7 +279,10 @@ static const Case CASES[] = {
     {"a_replay_wake_mark_taps_on_release", a_replay_wake_mark_taps_on_release},
     {"wake_start_skips_the_assignment_hold", wake_start_skips_the_assignment_hold},
     {"a_press_clears_a_wake_mark", a_press_clears_a_wake_mark},
-    {"two_holds_never_share_an_input", two_holds_never_share_an_input},
+    {"the_defaults_are_one_hold_on_each_default_slot", the_defaults_are_one_hold_on_each_default_slot},
+    {"several_inputs_can_share_a_hold", several_inputs_can_share_a_hold},
+    {"set_hold_refuses_a_bad_slot_or_hold", set_hold_refuses_a_bad_slot_or_hold},
+    {"two_status_inputs_peek_until_the_last_release", two_status_inputs_peek_until_the_last_release},
     {"a_latched_press_ignores_a_later_settings_change", a_latched_press_ignores_a_later_settings_change},
 };
 
@@ -294,8 +354,17 @@ class HoldActionsTest(unittest.TestCase):
     def test_a_press_clears_a_wake_mark(self) -> None:
         self.run_case("a_press_clears_a_wake_mark")
 
-    def test_two_holds_never_share_an_input(self) -> None:
-        self.run_case("two_holds_never_share_an_input")
+    def test_the_defaults_are_one_hold_on_each_default_slot(self) -> None:
+        self.run_case("the_defaults_are_one_hold_on_each_default_slot")
+
+    def test_several_inputs_can_share_a_hold(self) -> None:
+        self.run_case("several_inputs_can_share_a_hold")
+
+    def test_set_hold_refuses_a_bad_slot_or_hold(self) -> None:
+        self.run_case("set_hold_refuses_a_bad_slot_or_hold")
+
+    def test_two_status_inputs_peek_until_the_last_release(self) -> None:
+        self.run_case("two_status_inputs_peek_until_the_last_release")
 
     def test_a_latched_press_ignores_a_later_settings_change(self) -> None:
         self.run_case("a_latched_press_ignores_a_later_settings_change")

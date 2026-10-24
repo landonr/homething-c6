@@ -119,7 +119,7 @@ Open `http://homething-c6-xxxxxx.local/` in a browser on the same network.
 Home Assistant also shows the web page address as the diagnostic **Web Page** entity.
 The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
 You can also clear the input. Hold `SW9` for two seconds to use the on-device assignment mode.
-The **Config** tab can move this hold and the Wi-Fi, status, and sleep holds to other buttons.
+Each button card on the **Buttons** tab can move this hold and the Wi-Fi, status, and sleep holds to that button.
 [`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
 
 <p align="center">

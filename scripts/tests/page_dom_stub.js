@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "srh", "slh", "lgm", "lgs", "blw", "blb", "bls", "hbx", "hbs", "wfh", "rss", "rsb",
+                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "srh", "slh", "lgm", "lgs", "blw", "blb", "bls", "wfh", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
@@ -1236,7 +1236,7 @@ setTimeout(() => {
       throw new Error("hold line does not name the status hold button: " + line.innerHTML);
     STATE.holds.status = 0;
     ledStatus();
-    if (!line.innerHTML.includes("The status hold has no button. Choose one under Hold buttons."))
+    if (!line.innerHTML.includes("The status hold has no button. Select a button on the Buttons tab to give it the status hold."))
       throw new Error("hold line does not name the missing button: " + line.innerHTML);
     STATE.holds.status = 7;
     // An older firmware sends a boolean.
@@ -1397,78 +1397,117 @@ setTimeout(() => {
       throw new Error("a placeholder reached the remote: " + JSON.stringify(codes.slice(1, 3)));
     if (codes[3] !== "name: Slot21\n" + data) throw new Error("a real name was dropped: " + codes[3]);
   });
-  const holdSelect = (k) => {
-    const html = document.getElementById("hbx").innerHTML;
-    const start = html.indexOf("<select id=hb-" + k);
-    if (start < 0) throw new Error("no select for " + k);
-    return html.slice(start, html.indexOf("</select>", start));
+  // The hold section of the editor card, from the select to the end of the card.
+  const holdCard = () => {
+    const html = document.getElementById("ed").innerHTML;
+    const start = html.indexOf("<label class=hd2 for=hsel>Hold</label>");
+    return start < 0 ? "" : html.slice(start);
   };
-  step("each hold lists None and the sixteen inputs, with a taken input disabled and named", () => {
-    global.st = STATE;
-    global.holdBusy = false; global.holdError = "";
-    holdPaint();
-    const wifi = holdSelect("wifi");
-    if ((wifi.match(/<option /g) || []).length !== 17) throw new Error("wrong option count: " + wifi);
-    if (!wifi.includes("<option value=5 selected>Button 5</option>"))
-      throw new Error("the stored Wi-Fi input is not selected: " + wifi);
-    if (!wifi.includes("<option value=7 disabled>Button 7 (Status LEDs)</option>") ||
-        !wifi.includes("<option value=20 disabled>Button 1 (Sleep)</option>") ||
-        !wifi.includes("<option value=9 disabled>Button 9 (Assignment mode)</option>"))
-      throw new Error("a taken input is not disabled and named: " + wifi);
-    if (wifi.includes("value=17") || wifi.includes("value=18")) throw new Error("wheel rotation is offered: " + wifi);
-    if (!holdSelect("status").includes("<option value=5 disabled>Button 5 (Wi-Fi)</option>"))
-      throw new Error("the status list does not name the Wi-Fi input");
-    STATE.holds.assign = 0;
-    holdPaint();
-    if (!holdSelect("assign").includes("<option value=0 selected>None</option>") ||
-        !holdSelect("wifi").includes("<option value=9>Button 9</option>"))
-      throw new Error("a freed input stayed taken: " + holdSelect("wifi"));
-    STATE.holds.assign = 9;
-    holdPaint();
-    if (typeof document.getElementById("hb-sleep").onchange !== "function") throw new Error("no change handler");
+  const cardOn = (slot) => {
+    global.st = STATE; global.holdBusy = false; global.holdWant = null; global.holdError = "";
+    global.sel = slot; global.act = "ir"; global.msg = ""; global.bad = false;
+    paint();
+  };
+  step("the button card prefills its own hold and names a hold on another button", () => {
+    const prevSel = global.sel, prevAct = global.act;
+    cardOn(5);
+    const card = holdCard();
+    if (card.indexOf("<option value=wifi selected>Wi-Fi, 2 s</option>") < 0)
+      throw new Error("Button 5 does not show its Wi-Fi hold: " + card);
+    if (card.indexOf("<option value=status>Status LEDs, 1 s (Button 7)</option>") < 0 ||
+        card.indexOf("<option value=sleep>Sleep, 2 s (Button 1)</option>") < 0 ||
+        card.indexOf("<option value=assign>Assignment mode, 2 s (Button 9)</option>") < 0)
+      throw new Error("a hold on another button is not named: " + card);
+    if (card.indexOf("Hold for 2 s to open or close a temporary Wi-Fi session. " +
+        "A shorter press sends the action of this button when you release it.") < 0)
+      throw new Error("the effect line reads " + card);
+    if (typeof document.getElementById("hsel").onchange !== "function") throw new Error("no change handler");
+    cardOn(3);
+    if (holdCard().indexOf("<option value='' selected>None</option>") < 0)
+      throw new Error("a button with no hold does not show None: " + holdCard());
+    // Wheel rotation has no release edge, so it takes no hold.
+    cardOn(17);
+    if (holdCard() !== "" || document.getElementById("hsel")) throw new Error("slot 17 shows a hold section");
+    // Off mode: the status hold is stored but not active.
+    STATE.status_leds = "off";
+    cardOn(7);
+    if (holdCard().indexOf("<option value=status selected>") < 0 ||
+        holdCard().indexOf("active only when Status LEDs is set to Hold button on the Config tab") < 0)
+      throw new Error("the status line in Off mode reads " + holdCard());
+    STATE.status_leds = "on";
+    global.sel = prevSel; global.act = prevAct;
+    paint();
   });
-  step("a hold change posts set_hold and keeps the wanted input during the write", () => {
+  step("the map title names an active hold only", () => {
     global.st = STATE;
-    const realFetch = global.fetch;
-    let body = "";
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    document.getElementById("hb-sleep").value = "3";
-    document.getElementById("hb-sleep").onchange();
-    global.fetch = realFetch;
-    if (body !== "action=set_hold&hold=sleep&slot=3") throw new Error("the hold posted " + body);
-    if (!document.getElementById("hb-sleep").disabled || !document.getElementById("hb-wifi").disabled)
-      throw new Error("a hold list stayed live during the write");
-    if (!holdSelect("sleep").includes("<option value=3 selected>Button 3</option>"))
-      throw new Error("the list snapped back during the write: " + holdSelect("sleep"));
-    if (!holdSelect("wifi").includes("<option value=3 disabled>Button 3 (Sleep)</option>"))
-      throw new Error("the other lists ignore the pending input");
-    global.holdBusy = false; global.holdWant = null;
-    holdPaint();
+    paint();
+    const title = keys[5].attrs.title;
+    if (title.indexOf("Button 5: ") !== 0 || !title.endsWith(". Hold: Wi-Fi") || keys[5].attrs["aria-label"] !== title)
+      throw new Error("the Wi-Fi key reads " + title);
+    if (keys[7].attrs.title.indexOf("Hold:") >= 0) throw new Error("an inactive status hold shows: " + keys[7].attrs.title);
+    if (keys[3].attrs.title.indexOf("Hold:") >= 0) throw new Error("a key with no hold names one");
+    STATE.status_leds = "hold";
+    paint();
+    if (!keys[7].attrs.title.endsWith(". Hold: Status LEDs")) throw new Error("an active status hold is missing: " + keys[7].attrs.title);
+    STATE.status_leds = "on";
+    paint();
   });
-  step("a Wi-Fi hold set to None asks first while WiFi Always On is off", () => {
-    global.st = STATE;
-    STATE.network.wifi_always_on = false;
-    const realFetch = global.fetch;
-    let body = null;
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    confirmAsked = 0; confirmAnswer = false;
-    document.getElementById("hb-wifi").value = "0";
-    document.getElementById("hb-wifi").onchange();
-    if (confirmAsked !== 1 || confirmText.indexOf("no button opens a temporary session") < 0)
-      throw new Error("no question before the Wi-Fi hold went away: " + confirmText);
-    if (body !== null) throw new Error("a refused change posted " + body);
-    if (!holdSelect("wifi").includes("<option value=5 selected>Button 5</option>") || holdBusy)
-      throw new Error("a refused change kept the new value");
+  step("a move from hold A to hold B clears A first and keeps B on screen during the write", () => {
+    const prevSel = global.sel, prevAct = global.act, prevRun = global.holdRun;
+    let steps = null;
     STATE.network.wifi_always_on = true;
-    confirmAsked = 0; confirmAnswer = true;
-    document.getElementById("hb-wifi").value = "0";
-    document.getElementById("hb-wifi").onchange();
-    global.fetch = realFetch;
-    if (confirmAsked !== 0) throw new Error("an always-on remote was asked");
-    if (body !== "action=set_hold&hold=wifi&slot=0") throw new Error("None posted " + body);
+    global.holdRun = (list) => { steps = list; return new Promise(() => {}); };
+    try {
+      cardOn(5);
+      document.getElementById("hsel").value = "sleep";
+      document.getElementById("hsel").onchange();
+      if (JSON.stringify(steps) !== JSON.stringify(["&hold=wifi&slot=0", "&hold=sleep&slot=5"]))
+        throw new Error("the change sends " + JSON.stringify(steps));
+      if (!document.getElementById("hsel").disabled || holdCard().indexOf("<option value=sleep selected>") < 0)
+        throw new Error("the list snapped back during the write: " + holdCard());
+      // A button with no hold takes one in a single write, which moves it off its old button.
+      steps = null;
+      cardOn(3);
+      document.getElementById("hsel").value = "wifi";
+      document.getElementById("hsel").onchange();
+      if (JSON.stringify(steps) !== JSON.stringify(["&hold=wifi&slot=3"])) throw new Error("the move sends " + JSON.stringify(steps));
+    } finally {
+      global.holdRun = prevRun;
+      STATE.network.wifi_always_on = false;
+      global.holdBusy = false; global.holdWant = null;
+      global.sel = prevSel; global.act = prevAct;
+      paint();
+    }
+  });
+  step("taking the Wi-Fi hold off its button asks first while WiFi Always On is off", () => {
+    const prevSel = global.sel, prevAct = global.act, prevRun = global.holdRun;
     STATE.network.wifi_always_on = false;
-    global.holdBusy = false; global.holdWant = null;
-    holdPaint();
+    let runs = 0;
+    global.holdRun = () => { runs++; return new Promise(() => {}); };
+    try {
+      for (const next of ["", "sleep"]) {
+        cardOn(5);
+        confirmAsked = 0; confirmAnswer = false;
+        document.getElementById("hsel").value = next;
+        document.getElementById("hsel").onchange();
+        if (confirmAsked !== 1 || confirmText.indexOf("no button opens a temporary session") < 0)
+          throw new Error(JSON.stringify(next) + " did not ask: " + confirmText);
+        if (runs || holdBusy || holdCard().indexOf("<option value=wifi selected>") < 0)
+          throw new Error(JSON.stringify(next) + " changed the hold after a refusal");
+      }
+      // A move of the Wi-Fi hold to another button keeps a way back, so it does not ask.
+      cardOn(3);
+      confirmAsked = 0;
+      document.getElementById("hsel").value = "wifi";
+      document.getElementById("hsel").onchange();
+      if (confirmAsked !== 0 || runs !== 1) throw new Error("a move asked or did not send: " + confirmAsked + " / " + runs);
+    } finally {
+      global.holdRun = prevRun;
+      confirmAnswer = true;
+      global.holdBusy = false; global.holdWant = null;
+      global.sel = prevSel; global.act = prevAct;
+      paint();
+    }
   });
   step("the hold texts name the stored inputs and a missing one", () => {
     global.st = STATE;
@@ -1486,9 +1525,11 @@ setTimeout(() => {
     STATE.holds.wifi = 0; STATE.holds.sleep = 0;
     networkStatus(); sleepStatus();
     if (wifiHoldText().indexOf("the Wi-Fi hold has no button") < 0) throw new Error("no hint for a missing Wi-Fi hold");
-    if (document.getElementById("wfh").textContent.indexOf("the Wi-Fi hold has no button") < 0)
+    if (document.getElementById("wfh").textContent.indexOf("the Wi-Fi hold has no button. " +
+        "Select a button on the Buttons tab to give it the Wi-Fi hold.") < 0)
       throw new Error("the Wi-Fi line reads " + document.getElementById("wfh").textContent);
-    if (document.getElementById("slh").textContent.indexOf("The sleep hold has no button.") < 0)
+    if (document.getElementById("slh").textContent.indexOf("The sleep hold has no button. To sleep at once, " +
+        "select a button on the Buttons tab and give it the sleep hold.") < 0)
       throw new Error("the sleep line reads " + document.getElementById("slh").textContent);
     STATE.holds.wifi = 5; STATE.holds.sleep = 20;
     networkStatus(); sleepStatus();
@@ -2233,6 +2274,72 @@ setTimeout(() => {
   });
 
   (async () => {
+    {
+      // Writes of earlier steps are still in flight, so only set_hold and its own
+      // action id are answered here. Everything else goes to the base stubs.
+      const baseFetch = global.fetch, baseWait = global.waitAction, HOLD_ID = 9001;
+      const bodies = [];
+      let code = 200, done = "";
+      global.fetch = (u, o) => {
+        const body = o && o.body ? String(o.body) : "";
+        if (body.indexOf("action=set_hold&") !== 0) return baseFetch(u, o);
+        bodies.push(body);
+        const text = code === 200 ? '{"ok":true,"id":' + HOLD_ID + '}' :
+          '{"error":"another hold already uses that button"}';
+        return Promise.resolve({status: code, ok: code === 200, json: () => Promise.resolve(STATE),
+                                text: () => Promise.resolve(text)});
+      };
+      global.waitAction = (id, ms) => id === HOLD_ID ? Promise.resolve(true) : baseWait(id, ms);
+      const run = async () => {
+        done = "";
+        holdRun(["&hold=wifi&slot=0", "&hold=sleep&slot=5"], 0)
+          .then(() => { done = "ok"; }, (e) => { done = e.message; });
+        for (let i = 0; i < 200 && !done; i++) await Promise.resolve();
+      };
+      await run();
+      const sent = bodies.splice(0);
+      const first = done;
+      code = 400;
+      await run();
+      global.fetch = baseFetch; global.waitAction = baseWait;
+      step("the hold writes go out one at a time, the clear before the set", () => {
+        if (first !== "ok" || JSON.stringify(sent) !== JSON.stringify(
+            ["action=set_hold&hold=wifi&slot=0", "action=set_hold&hold=sleep&slot=5"]))
+          throw new Error("the writes were " + JSON.stringify(sent) + " / " + first);
+        if (done !== "another hold already uses that button" ||
+            JSON.stringify(bodies) !== JSON.stringify(["action=set_hold&hold=wifi&slot=0"]))
+          throw new Error("a refused clear went on to " + JSON.stringify(bodies) + " / " + done);
+      });
+    }
+    {
+      const baseFetch = global.fetch, baseWait = global.waitAction, NAME_ID = 9002;
+      const prevSel = global.sel, prevAct = global.act;
+      global.fetch = (u, o) => String(o && o.body || "").indexOf("action=set_ir_name&") !== 0 ? baseFetch(u, o) :
+        Promise.resolve({status: 200, ok: true, json: () => Promise.resolve(STATE),
+                         text: () => Promise.resolve('{"ok":true,"id":' + NAME_ID + '}')});
+      global.waitAction = (id, ms) => id === NAME_ID ? Promise.resolve(true) : baseWait(id, ms);
+      const save = async (moveTo) => {
+        irPanelOn(6);
+        const box = document.getElementById("inm");
+        box.value = "TV Power";
+        box.oninput();
+        document.getElementById("ins").onclick();
+        if (moveTo) pick(moveTo);
+        for (let i = 0; i < 200 && inBusy; i++) await Promise.resolve();
+        return {busy: inBusy, msg: msg, sel: sel};
+      };
+      const stay = await save(0);
+      const moved = await save(3);
+      global.fetch = baseFetch; global.waitAction = baseWait;
+      global.msg = ""; global.bad = false; global.inDirty = false;
+      global.sel = prevSel; global.act = prevAct;
+      paint();
+      step("a name save notice shows only on the card of its own input", () => {
+        if (stay.busy || stay.msg !== "Name saved.") throw new Error("the save on the open card gave " + JSON.stringify(stay));
+        if (moved.busy || moved.sel !== 3 || moved.msg !== "")
+          throw new Error("a save that landed after a move to Button 3 gave " + JSON.stringify(moved));
+      });
+    }
     const realFetch = global.fetch;
     if (cfgTask) await cfgTask;
     await new Promise(done => setTimeout(done, 20));

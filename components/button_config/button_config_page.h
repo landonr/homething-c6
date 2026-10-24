@@ -236,12 +236,6 @@ aria-label="Send the wake press" disabled><span></span></label></h2>
 aria-label="Boot and wake LEDs" disabled><span></span></label></h2>
 <p class="sub st" id="bls">Boot and wake LEDs state is loading.</p>
 <hr class="rule">
-<h2 class="ttl">Hold buttons</h2>
-<p class="sub">Hold a button to run its action. A button with an active hold sends its own assignment when you release it before the hold time.
-The Status LEDs hold is active only when Status LEDs is set to Hold button.</p>
-<div id="hbx"></div>
-<p class="sub st" id="hbs" hidden></p>
-<hr class="rule">
 <h2 class="ttl">Restart</h2>
 <p class="sub st" id="rss" hidden></p>
 <div class="act"><button type="button" id="rsb">Restart remote</button></div>
@@ -314,13 +308,13 @@ var S=[
 {s:3,l:"Button 3",v:1,x:21.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:78.1,y:51.1},
 {s:4,l:"Button 4",v:1,x:21.9,y:60.2},{s:7,l:"Button 7",v:1,x:50,y:60.2},{s:10,l:"Button 10",v:1,x:78.1,y:60.2},
 {s:5,l:"Button 5",v:1,x:21.9,y:69.2},{s:8,l:"Button 8",v:1,x:50,y:69.2},{s:9,l:"Button 9",v:1,x:78.1,y:69.2}];
-// One row per hold, in the order of the holds object. The times match HOLD_MS
-// in hold_actions.h.
+// One row per hold, in the order of the holds object. d matches HOLD_MS in
+// hold_actions.h, and t completes "Hold for d to ...".
 var HOLDS=[
-{k:"wifi",n:"Wi-Fi",t:"Hold for two seconds to open or close a temporary Wi-Fi session."},
-{k:"status",n:"Status LEDs",t:"Hold for one second to see the status while Status LEDs is set to Hold button."},
-{k:"sleep",n:"Sleep",t:"Hold for two seconds. The remote sleeps when you release all buttons, even when Sleep is off."},
-{k:"assign",n:"Assignment mode",t:"Hold for two seconds to open or close assignment mode."}];
+{k:"wifi",n:"Wi-Fi",d:"2 s",t:"open or close a temporary Wi-Fi session"},
+{k:"status",n:"Status LEDs",d:"1 s",t:"see the status until you release the button"},
+{k:"sleep",n:"Sleep",d:"2 s",t:"sleep when you release all buttons, even when Sleep is off"},
+{k:"assign",n:"Assignment mode",d:"2 s",t:"open or close assignment mode"}];
 // The inputs a hold can use, in board order. Wheel rotation has no release edge.
 var HB=[20,19,3,4,5,6,7,8,9,10,11,13,15,16,12,14];
 // One press, one Zigbee command. a is the number the remote stores, c is the
@@ -349,9 +343,9 @@ var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys=
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var ledBusy=false,ledWant="on",ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
 var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
-// holdWant is the {k,v} change in flight. holdHtml is the last hold markup, so a
-// poll that changes nothing never rebuilds an open list.
-var holdBusy=false,holdWant=null,holdError="",holdHtml="";
+// holdWant is the {s,k} change in flight, so the list holds the new value until
+// the remote answers. holdError is the reason the last change failed.
+var holdBusy=false,holdWant=null,holdError="";
 // nameEdit keeps the box open across polls, so a repaint never overwrites a
 // name that is still being typed.
 var nameEdit=false,nameBusy=false,nameMsg="",nameBad=false;
@@ -846,8 +840,9 @@ if(fw)fw.textContent=typeof st.firmware==="string"&&st.firmware?st.firmware:"Unk
 var wh=document.getElementById("wfh"),wn=holdName("wifi");
 if(wh)wh.textContent="WiFi Always On applies at the next boot."+(wn?" Hold "+wn+
 " for two seconds to toggle a temporary session when this switch is off.":
-" No button toggles a temporary session, because the Wi-Fi hold has no button.");
-ledStatus();bootLedStatus();holdPaint()}
+" No button toggles a temporary session, because the Wi-Fi hold has no button. "+
+"Select a button on the Buttons tab to give it the Wi-Fi hold.");
+ledStatus();bootLedStatus()}
 
 function bootLedStatus(){
 var line=document.getElementById("bls"),box=document.getElementById("blb");
@@ -879,7 +874,8 @@ if(box){box.value=ledBusy?ledWant:m;box.disabled=ledBusy}
 if(line){line.className="sub st"+(ledError?" bad":"");
 line.innerHTML="<span class='dot "+(m==="on"?"":"off")+"'></span>"+(m==="on"?"Status LEDs are on.":
 m==="hold"?"Status LEDs are dark. A radio switch still gives one pulse, and assignment mode still lights D2 to D5. "+(n?"Hold "+esc(n)+
-" for one second to see the status.":"The status hold has no button. Choose one under Hold buttons."):
+" for one second to see the status.":"The status hold has no button. "+
+"Select a button on the Buttons tab to give it the status hold."):
 "Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse, "+
 "and assignment mode still lights D2 to D5.")+
 (ledError?" "+esc(ledError):"")}}
@@ -913,46 +909,53 @@ function wifiHoldText(){var n=holdName("wifi");
 return n?" Hold "+n+" for two seconds to open a temporary session.":
 " No button opens a temporary session, because the Wi-Fi hold has no button."}
 
-// The other hold that uses the input in cur, or null.
-function holdUser(cur,s,k){
-for(var i=0;i<HOLDS.length;i++)if(HOLDS[i].k!==k&&cur[HOLDS[i].k]===s)return HOLDS[i];
-return null}
+// The hold stored on s, active or not, or "" for none.
+function holdAt(s){for(var i=0;i<HOLDS.length;i++)if(holdSlot(HOLDS[i].k)===s)return HOLDS[i].k;return ""}
 
-// The markup is rebuilt only when it changes, so a state poll cannot close a
-// list that is open. An input that another hold uses is disabled in each list.
-function holdPaint(){
-var box=document.getElementById("hbx"),line=document.getElementById("hbs");
-if(!box||!st)return;
-var cur={},h="",i,j,d,s,by;
-if(!st.holds)h="<p class=sub>This firmware has no hold settings.</p>";
-else{
-for(i=0;i<HOLDS.length;i++){d=HOLDS[i];
-cur[d.k]=holdBusy&&holdWant&&holdWant.k===d.k?holdWant.v:holdSlot(d.k)}
-for(i=0;i<HOLDS.length;i++){d=HOLDS[i];
-h+="<label class=hd2 for=hb-"+d.k+">"+esc(d.n)+"</label><select id=hb-"+d.k+(holdBusy?" disabled":"")+">"+
-"<option value=0"+(cur[d.k]?"":" selected")+">None</option>";
-for(j=0;j<HB.length;j++){s=HB[j];by=holdUser(cur,s,d.k);
-h+="<option value="+s+(cur[d.k]===s?" selected":"")+(by?" disabled":"")+">"+
-esc(info(s).l)+(by?" ("+esc(by.n)+")":"")+"</option>"}
-h+="</select><p class=sub>"+esc(d.t)+"</p>"}}
-if(h!==holdHtml){holdHtml=h;box.innerHTML=h;
-if(st.holds)HOLDS.forEach(function(x){document.getElementById("hb-"+x.k).onchange=function(){setHold(x.k)}})}
-if(line){line.hidden=!holdError;line.className="sub st"+(holdError?" bad":"");line.textContent=holdError}}
+function holdInfo(k){for(var i=0;i<HOLDS.length;i++)if(HOLDS[i].k===k)return HOLDS[i];return null}
 
-function setHold(k){
-if(holdBusy||!st||!st.holds)return;
-var v=Number(document.getElementById("hb-"+k).value)||0,
-always=!!(st.network&&st.network.wifi_always_on===true);
-if(v===holdSlot(k))return;
-if(k==="wifi"&&!v&&!always&&!confirm("WiFi Always On is off. Without a Wi-Fi hold, no button opens "+
-"a temporary session after this one closes. Continue?")){holdHtml="";holdPaint();return}
-holdBusy=true;holdWant={k:k,v:v};holdError="";holdPaint();
-post("set_hold",null,undefined,undefined,"&hold="+k+"&slot="+v)
-.then(function(r){if(r.code!==200)throw new Error(fail(r));
-return waitAction(r.body.id).then(function(ok){
-if(!ok)throw new Error("The remote could not save the hold button.")})})
-.then(function(){holdBusy=false;return load().then(paint)},function(e){
-holdBusy=false;holdError=e&&e.message?e.message:"The remote did not answer.";holdPaint()})}
+// One line under the list says what a hold of k does on this input.
+function holdLine(k){var d=holdInfo(k);
+if(!d)return "No hold. A press sends the action of this button at once.";
+if(k==="status"&&ledMode()!=="hold")return "The Status LEDs hold is active only when Status LEDs is set to "+
+"Hold button on the Config tab. Until then, a press sends the action of this button at once.";
+return "Hold for "+d.d+" to "+d.t+". A shorter press sends the action of this button when you release it."}
+
+// The hold of the selected input. A hold on another input names that input, and
+// picking it moves the hold here. Wheel rotation has no release edge.
+function holdSection(lock){
+if(HB.indexOf(sel)<0||!st||!st.holds)return "";
+var cur=holdBusy&&holdWant&&holdWant.s===sel?holdWant.k:holdAt(sel),i,d,by,h;
+h="<label class=hd2 for=hsel>Hold</label><select id=hsel"+(lock||holdBusy?" disabled":"")+">"+
+"<option value=''"+(cur?"":" selected")+">None</option>";
+for(i=0;i<HOLDS.length;i++){d=HOLDS[i];by=holdSlot(d.k);
+h+="<option value="+d.k+(cur===d.k?" selected":"")+">"+esc(d.n)+", "+d.d+
+(by&&by!==sel&&info(by)?" ("+esc(info(by).l)+")":"")+"</option>"}
+h+="</select><p class=sub id=hsd>"+esc(holdLine(cur))+"</p>";
+if(holdError)h+="<p class='sub st bad' id=hse>"+esc(holdError)+"</p>";
+return h}
+
+// The remote refuses a button that another hold uses, so a change from hold A
+// to hold B clears A first. A set of B moves B off its old button.
+function holdChange(){
+var s=sel,k=document.getElementById("hsel").value,old=holdAt(s),steps=[],
+always=!!(st&&st.network&&st.network.wifi_always_on===true);
+if(holdBusy||!st||!st.holds||k===old)return;
+if(old==="wifi"&&!always&&!confirm("WiFi Always On is off. Without a Wi-Fi hold, no button opens "+
+"a temporary session after this one closes. Continue?")){paint();return}
+if(old)steps.push("&hold="+old+"&slot=0");
+if(k)steps.push("&hold="+k+"&slot="+s);
+holdBusy=true;holdWant={s:s,k:k};holdError="";paint();
+holdRun(steps,0).then(function(){holdBusy=false;holdWant=null;return load().then(paint)},function(e){
+holdBusy=false;holdWant=null;holdError=e&&e.message?e.message:"The remote did not answer.";
+return load().then(paint,paint)})}
+
+function holdRun(steps,i){
+if(i>=steps.length)return Promise.resolve();
+return post("set_hold",null,undefined,undefined,steps[i]).then(function(r){
+if(r.code!==200)throw new Error(fail(r));
+return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the hold.")})})
+.then(function(){return holdRun(steps,i+1)})}
 
 function setWifiAlwaysOn(){
 if(wifiBusy||!st||!st.network)return;
@@ -985,7 +988,7 @@ if(!z||!z.available)return;
 var hl=document.getElementById("slh"),hn=holdName("sleep");
 if(hl)hl.textContent="Each press restarts the timer."+(hn?" Hold "+hn+
 " for two seconds to sleep at once, even when Sleep is off.":
-" The sleep hold has no button. Choose one under Hold buttons to sleep at once.");
+" The sleep hold has no button. To sleep at once, select a button on the Buttons tab and give it the sleep hold.");
 var wk=document.getElementById("srh"),an=holdName("assign");
 if(wk)wk.textContent="When on, the button that wakes the remote also sends its Zigbee command if the link "+
 "comes up within 3 seconds. When off, the first press only wakes the remote. If you keep a hold button down "+
@@ -1200,9 +1203,11 @@ radioSeen=radioKey();
 for(var i=0;i<S.length;i++){var d=S[i],b=keys[d.s],r=row(d.s);
 b.firstChild.textContent=d.l;
 b.lastChild.textContent=words(d.s);
-// A hover and a screen reader both get the code name, and the map shows no text.
-b.setAttribute("aria-label",d.l+": "+words(d.s));
-b.setAttribute("title",d.l+": "+words(d.s));
+// A hover and a screen reader both get the code name and an active hold, and the
+// map shows no text.
+var hl=holdOf(d.s),lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");
+b.setAttribute("aria-label",lb);
+b.setAttribute("title",lb);
 b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""].filter(Boolean).join(" ");
 b.setAttribute("aria-pressed",sel===d.s?"true":"false")}
 editor();cfgPaint()}
@@ -1317,7 +1322,8 @@ inBusy=true;msg="";bad=false;paint();
 post("set_ir_name",s,undefined,v).then(function(r){
 if(r.code!==200)throw new Error(fail(r));
 return waitAction(r.body.id).then(function(ok){if(!ok)throw new Error("The remote could not save the name.")})})
-.then(function(){inBusy=false;inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false;
+// A save that lands after the selection moved gives no notice on the new card.
+.then(function(){inBusy=false;if(sel===s){inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false}
 return load().then(function(){return cfgChanged(s)}).then(function(){paint();
 if(row(s)&&row(s).action==="ir")return loadCode(s)})},
 function(e){inBusy=false;msg=e&&e.message?e.message:"The remote did not answer.";bad=true;paint()})}
@@ -2053,7 +2059,7 @@ h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
 " aria-checked="+on+(lock||off?" disabled":"")+
 (off?" title='Turn on "+actRadio[opts[i][0]][1]+" in Config'":"")+">"+esc(opts[i][1])+"</button>";
 if(on)title=opts[i][1]}
-h+="</div>";
+h+="</div>"+holdSection(lock);
 var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm(st&&st.busy):
 act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):act==="va"?vaPanel(lock):
 act==="cl"?clearPanel(lock):irPanel(lock));
@@ -2061,6 +2067,7 @@ e.innerHTML=h;
 p.innerHTML=panel;
 
 if(!locked&&copied)document.getElementById("bcopy").onclick=copyAssignment;
+var hs=document.getElementById("hsel");if(hs)hs.onchange=holdChange;
 if(!locked&&clip)document.getElementById("bpaste").onclick=pasteAssignment;
 if(!lock)for(var j=0;j<opts.length;j++)(function(v){
 document.getElementById("as-"+v).onclick=function(){
@@ -2128,6 +2135,7 @@ function pick(s){
 // Clear the previous input's code before paint, so its text cannot show while
 // the selected input's request is still in flight.
 if(sel!==s){codeLoad++;cdSlot=null;cd=""}
+if(sel!==s)holdError="";
 sel=s;inDirty=false;
 if(mode!=="rec"){msg="";bad=false}
 // Every Zigbee field belongs to the slot that was open, so none of it may

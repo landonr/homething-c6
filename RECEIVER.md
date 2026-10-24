@@ -235,7 +235,7 @@ The page is an alternative to the tap cycle, not a replacement. Both routes writ
 the same flash records.
 
 The page also has a **Sleep** block for the deep-sleep settings. See [Deep sleep](#deep-sleep).
-The **Hold buttons** block sets the button for each hold. See [Hold buttons](#hold-buttons).
+The **Hold** list on the card of a button sets the hold of that button. See [Hold buttons](#hold-buttons).
 
 The header of the page has a connection line. It shows if the page can read
 the remote. If two reads in a row fail, or one read gets no answer in time, the
@@ -536,7 +536,7 @@ the card is closed and **Hide** when the card is open.
 
 The Config tab shows the current configuration after the page loads.
 The Config tab has three sections.
-Settings shows the firmware, the battery, the IP address, sleep, the LED settings, the hold buttons, and restart.
+Settings shows the firmware, the battery, the IP address, sleep, the LED settings, and restart.
 Connections shows Wi-Fi, Home Assistant, Zigbee, and Bluetooth.
 Import Export is the third section.
 The page reads each stored IR code in sequence and puts it in the configuration text.
@@ -794,16 +794,21 @@ A hold runs a device action when you keep a button down for a set time. The remo
 | Sleep | `SW1` | 2 s | Arms sleep. The remote sleeps when you release all buttons. See [Enter sleep](#enter-sleep). |
 | Assignment mode | `SW9` | 2 s | Opens assignment mode, or closes it from any state. |
 
-The **Hold buttons** block on the **Config** tab sets the button for each hold.
+To set the hold of a button, select the button on the **Buttons** tab.
+The **Hold** list under the action list shows **None**, the four holds, and the hold time of each hold.
+The line under the list tells what the hold does.
 A hold can use `SW1` to `SW11` or one of the five wheel directions.
-Wheel rotation cannot carry a hold, because a detent has no release edge.
-To turn a hold off, select **None**.
+Wheel rotation cannot carry a hold, because a detent has no release edge. As a result, the card of a wheel rotation input has no **Hold** list.
+To turn off the hold of a button, select **None**.
 
-Two holds cannot use the same button. The page disables a button that another hold uses and names that hold.
+Two holds cannot use the same button. If a hold uses a different button, the list shows the name of that button after the hold.
+If you select that hold, the page moves it to this button.
+If this button has a different hold, the page removes that hold first. Then it sets the new hold.
 The firmware refuses a request for a used button with HTTP 400 and changes nothing.
 The remote stores the hold buttons in flash. If the stored record is missing or bad, the remote uses the default buttons.
 
 A hold is active when it has a button. The status hold is active only when **Status LEDs** is set to **Hold button**.
+The tooltip of each button on the map names its active hold.
 
 A button with an active hold sends its own assignment when you release it before the hold time.
 If the hold time passes, the hold runs and the release sends nothing.
@@ -815,7 +820,8 @@ A BLE HID assignment on a button with an active hold sends the key press and the
 A Home Assistant action on a button with an active hold runs at the release. It asks for Wi-Fi at that moment.
 
 If **WiFi Always On** is off, the Wi-Fi hold is the only button that opens a temporary session.
-In that case, the page asks you to confirm before it removes the button from the Wi-Fi hold.
+In that case, the page asks you to confirm before it removes the Wi-Fi hold from its button.
+If you select **Wi-Fi** on a different button, the page moves the hold and does not ask.
 
 ## Deep sleep
 

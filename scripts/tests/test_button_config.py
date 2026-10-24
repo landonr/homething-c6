@@ -452,23 +452,41 @@ class HoldSettingsTest(unittest.TestCase):
         self.assertIn('"  Hold slots: wifi %u, status %u, sleep %u, assign %u"', dump)
         self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', CPP)
 
-    def test_the_page_offers_every_input_that_can_hold_once_per_hold(self) -> None:
-        holds = re.findall(r'\{k:"(\w+)",n:"[^"]+",t:"[^"]+"\}', section(PAGE, "var HOLDS=[", "];"))
-        self.assertEqual(holds, HOLD_KEYS)
+    def test_the_button_card_offers_each_hold_once(self) -> None:
+        holds = re.findall(r'\{k:"(\w+)",n:"[^"]+",d:"(\d+) s",t:"[^"]+"\}', section(PAGE, "var HOLDS=[", "];"))
+        self.assertEqual([key for key, _ in holds], HOLD_KEYS)
+        # The page shows the hold time that the firmware times.
+        times = re.search(r"HOLD_MS\[COUNT\] = \{([^}]*)\}", HOLDS).group(1)
+        self.assertEqual([int(s) * 1000 for _, s in holds], [int(v) for v in times.split(",")])
         inputs = [int(value) for value in section(PAGE, "var HB=[", "];").split(",")]
         self.assertEqual(len(inputs), len(set(inputs)))
         self.assertEqual(set(inputs), HOLD_SLOTS)
         table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", HOLDS).group(1)
         self.assertEqual({int(value) for value in table.split(",")}, HOLD_SLOTS)
-        paint = section(PAGE, "function holdPaint(){", "\n\n")
-        # An input another hold uses stays visible, but disabled and named.
-        self.assertIn('(by?" disabled":"")', paint)
-        self.assertIn('(by?" ("+esc(by.n)+")":"")', paint)
-        self.assertIn("if(h!==holdHtml){", paint)
-        send = section(PAGE, "function setHold(k){", "\n\n")
-        self.assertIn('post("set_hold",null,undefined,undefined,"&hold="+k+"&slot="+v)', send)
+        card = section(PAGE, "function holdSection(lock){", "\n\n")
+        # Wheel rotation is not in HB, so slots 17 and 18 get no section.
+        self.assertIn('if(HB.indexOf(sel)<0||!st||!st.holds)return "";', card)
+        # A hold on another input stays selectable and names that input.
+        self.assertIn('(by&&by!==sel&&info(by)?" ("+esc(info(by).l)+")":"")', card)
+        # The wanted hold stays selected while the write runs.
+        self.assertIn("var cur=holdBusy&&holdWant&&holdWant.s===sel?holdWant.k:holdAt(sel)", card)
+        change = section(PAGE, "function holdChange(){", "\n\n")
+        self.assertLess(change.index('if(old)steps.push("&hold="+old+"&slot=0");'),
+                        change.index('if(k)steps.push("&hold="+k+"&slot="+s);'))
+        self.assertLess(change.index('if(old==="wifi"&&!always&&!confirm('), change.index("holdBusy=true;"))
+        send = section(PAGE, "function holdRun(steps,i){", "\n\n")
+        self.assertIn('post("set_hold",null,undefined,undefined,steps[i])', send)
         self.assertIn("return waitAction(r.body.id)", send)
-        self.assertIn('<div id="hbx"></div>', section(PAGE, '<section class="card full conn" id="devcfg">', "</section>"))
+        self.assertIn(".then(function(){return holdRun(steps,i+1)})", send)
+        edit = section(PAGE, "function editor(){", "\nfunction ")
+        self.assertIn('h+="</div>"+holdSection(lock);', edit)
+        self.assertIn('var hs=document.getElementById("hsel");if(hs)hs.onchange=holdChange;', edit)
+        self.assertIn('var hl=holdOf(d.s),lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
+        # The Config tab has no hold block now.
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        self.assertNotIn("Hold buttons", dev)
+        for gone in ('id="hbx"', 'id="hbs"', "function holdPaint(", "function setHold("):
+            self.assertNotIn(gone, PAGE)
 
     def test_no_page_text_names_a_fixed_hold_button(self) -> None:
         script = section(PAGE, "<script>", "</script>")
@@ -564,7 +582,10 @@ class IrNameTest(unittest.TestCase):
         self.assertLess(save.index("why=irNameWhy(v)"), save.index("post("))
         self.assertIn("nameBytes(v)>23", section(PAGE, "function irNameWhy(v){", "\n\n"))
         self.assertIn('<span class=cn>"+esc(irName(sel))+"</span>', PAGE)
-        self.assertIn('b.setAttribute("title",d.l+": "+words(d.s));', PAGE)
+        # words() carries the code name, and an active hold follows it.
+        self.assertIn('lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
+        self.assertIn('b.setAttribute("title",lb);', PAGE)
+        self.assertIn('if(sel===s){inDirty=false;msg=v?"Name saved.":"Name removed.";bad=false}', save)
 
     def test_the_preview_mirrors_set_ir_name(self) -> None:
         self.assertIn('if action == "set_ir_name":', PREVIEW)
@@ -1774,7 +1795,7 @@ class PageTest(unittest.TestCase):
         self.assertEqual(marks, sorted(marks))
         self.assertGreater(marks[0], PAGE.index('<div class="tabgrid" id="configtab" hidden>'))
         dev = section(PAGE, order[1], "</section>")
-        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgm"', 'id="blb"', 'id="hbx"', 'id="rsb"'):
+        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgm"', 'id="blb"', 'id="rsb"'):
             self.assertIn(want, dev)
         wifi = section(PAGE, order[3], "</section>")
         for want in ('id="wfb"', 'id="wip"', 'id="wmac"', 'id="hab"'):
@@ -2240,13 +2261,11 @@ class RadioSwitchTest(unittest.TestCase):
         """A line that hides moves the text and the buttons under it, so each one
         is always rendered and always names its own subject."""
         # The sleep block hides because the build fixes it. The idle restart line
-        # hides because an idle remote has nothing to report. The hold line shows
-        # only a failed hold change.
+        # hides because an idle remote has nothing to report.
         for card_id in ("devcfg", "wificfg", "zbcfg", "blecfg"):
             card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
             card = card.replace('<div id="slpcfg" hidden>', "", 1)
             card = card.replace('<p class="sub st" id="rss" hidden></p>', "", 1)
-            card = card.replace('<p class="sub st" id="hbs" hidden></p>', "", 1)
             self.assertNotIn("hidden", card)
         # The switch locks instead of leaving the page while the state is unknown.
         self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)

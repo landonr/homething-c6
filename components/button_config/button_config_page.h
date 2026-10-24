@@ -80,7 +80,7 @@ letter-spacing:.06em}
 .remote{position:relative;width:fit-content;max-width:100%;margin:0}
 .remote>img{display:block;width:auto;max-width:100%;max-height:100vh;height:auto;
 user-select:none;-webkit-user-drag:none}
-.remote .k{position:absolute;width:17%;aspect-ratio:1;border:2px solid transparent;
+.remote .k{position:absolute;width:19.6%;aspect-ratio:1;border:2px solid transparent;
 border-radius:25%;padding:0;background:transparent;transform:translate(-50%,-50%)}
 .remote .k:hover{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 55%,transparent)}
 .remote .k[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--sel) 72%,transparent);
@@ -95,7 +95,9 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 body.set-colors .remote .k[class*=set-]{background:color-mix(in srgb,var(--set-bg) 42%,transparent)}
 body.set-colors .remote .k[class*=set-]:hover{background:color-mix(in srgb,var(--set-bg) 52%,transparent)}
 body.set-colors .remote .k[class*=set-][aria-pressed=true]{background:color-mix(in srgb,var(--set-bg) 62%,transparent)}
-.remote .k.rot{left:50%;top:31.7%;width:49%;border-radius:50%;z-index:1}
+.remote .k.rot{left:50%;top:31.4%;width:51.7%;border-radius:50%;z-index:1}
+.remote .k.press{width:18.3%;border-radius:50%}
+.remote .k.dir{width:9.65%}
 .remote .k.rot.left{clip-path:inset(0 50% 0 0)}
 .remote .k.rot.right{clip-path:inset(0 0 0 50%)}
 .remote .k:not(.rot){z-index:2}
@@ -294,18 +296,24 @@ aria-label="Bluetooth radio"><span></span></label></h2>
 </div>
 </div>
 <script>
+// x and y are percents of the case-front-face.svg viewBox: the cap centres, the
+// centre of the press circle and the scroll dial, and for each direction the
+// middle of the ring band on the axis of its glyph. The .k, .press and .rot
+// widths are the cap, press circle and dial sizes. .dir is the band between the
+// dial and the black wheel edge, less a small inset so the round corners stay on
+// the wheel. test_button_config checks every value against the SVG.
 var S=[
-{s:19,l:"Button 2",v:1,x:22.9,y:12.2},{s:20,l:"Button 1",v:1,x:77.1,y:12.2},
+{s:19,l:"Button 2",v:1,x:21.9,y:11.7},{s:20,l:"Button 1",v:1,x:78.1,y:11.7},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
-{s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.7,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.9},
-{s:17,l:"Wheel Clockwise",v:0,x:50,y:31.7,c:"rot right"},
-{s:16,l:"Wheel Left",v:1,x:21.1,y:31.7},{s:14,l:"Wheel Press",v:1,x:50,y:31.7},
-{s:12,l:"Wheel Right",v:1,x:78.9,y:31.7},{s:15,l:"Wheel Down",v:1,x:50,y:41.8},
+{s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.4,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.49,c:"dir"},
+{s:17,l:"Wheel Clockwise",v:0,x:50,y:31.4,c:"rot right"},
+{s:16,l:"Wheel Left",v:1,x:19.18,y:31.4,c:"dir"},{s:14,l:"Wheel Press",v:1,x:50,y:31.4,c:"press"},
+{s:12,l:"Wheel Right",v:1,x:80.82,y:31.4,c:"dir"},{s:15,l:"Wheel Down",v:1,x:50,y:41.37,c:"dir"},
 // Keypad fills column by column on the board, so the rows read 3 6 11, 4 7 10,
 // 5 8 9. The array order is the render order, not the slot order.
-{s:3,l:"Button 3",v:1,x:22.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:77.1,y:51.1},
-{s:4,l:"Button 4",v:1,x:22.9,y:60.1},{s:7,l:"Button 7",v:1,x:50,y:60.1},{s:10,l:"Button 10",v:1,x:77.1,y:60.1},
-{s:5,l:"Button 5",v:1,x:22.9,y:69.1},{s:8,l:"Button 8",v:1,x:50,y:69.1},{s:9,l:"Button 9",v:1,x:77.1,y:69.1}];
+{s:3,l:"Button 3",v:1,x:21.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:78.1,y:51.1},
+{s:4,l:"Button 4",v:1,x:21.9,y:60.2},{s:7,l:"Button 7",v:1,x:50,y:60.2},{s:10,l:"Button 10",v:1,x:78.1,y:60.2},
+{s:5,l:"Button 5",v:1,x:21.9,y:69.2},{s:8,l:"Button 8",v:1,x:50,y:69.2},{s:9,l:"Button 9",v:1,x:78.1,y:69.2}];
 // One row per hold, in the order of the holds object. The times match HOLD_MS
 // in hold_actions.h.
 var HOLDS=[

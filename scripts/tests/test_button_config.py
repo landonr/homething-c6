@@ -3,6 +3,7 @@
 from pathlib import Path
 import ast
 import importlib.util
+import math
 import os
 import re
 import shutil
@@ -892,6 +893,153 @@ class SlotTableTest(unittest.TestCase):
         self.assertEqual(firmware, NO_VOICE)
 
 
+FACE_SVG = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
+# Percentage points of the viewBox. The SVG prints one decimal, so a cap edge
+# can move 0.05 units.
+FACE_TOLERANCE = 0.3
+
+
+def face_shapes() -> dict:
+    """Returns {class: [(cx, cy, w, h)]} for each subpath of the face, as percents
+    of the viewBox. x and w are percents of its width, y and h of its height."""
+    text = FACE_SVG.read_text()
+    x0, y0, width, height = (float(v) for v in re.search(r'viewBox="([^"]+)"', text).group(1).split())
+    shapes: dict = {}
+    for attrs in re.findall(r"<path([^>]*)>", text):
+        cls = re.search(r'class="([^"]*)"', attrs)
+        path = re.search(r'\sd="([^"]*)"', attrs)
+        if cls is None or path is None:
+            continue
+        for sub in re.split(r"(?=M)", path.group(1)):
+            nums = [float(v) for v in re.findall(r"-?\d*\.?\d+", sub)]
+            if not nums:
+                continue
+            xs, ys = nums[0::2], nums[1::2]
+            shapes.setdefault(cls.group(1), []).append((
+                100 * ((min(xs) + max(xs)) / 2 - x0) / width,
+                100 * ((min(ys) + max(ys)) / 2 - y0) / height,
+                100 * (max(xs) - min(xs)) / width,
+                100 * (max(ys) - min(ys)) / height,
+            ))
+    return shapes
+
+
+def css_percent(rule: str, prop: str) -> float:
+    body = section(PAGE, rule + "{", "}")
+    return float(re.search(rf"(?:^|;){prop}:([\d.]+)%", body).group(1))
+
+
+class FaceGeometryTest(unittest.TestCase):
+    """The overlays are percents of the face image, so a regenerated face with a
+    new viewBox moves every key. These checks fail before the overlays do."""
+
+    def assertNear(self, got: float, want: float, what: str) -> None:
+        self.assertLessEqual(abs(got - want), FACE_TOLERANCE, f"{what}: page {got}, face {want:.2f}")
+
+    def test_the_page_and_the_preview_embed_this_face(self) -> None:
+        self.assertIn('svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"', INIT)
+        self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', PREVIEW)
+        # Only absolute moves and lines, so the point pairs above are the outline.
+        letters = set(re.findall(r"[A-Za-z]", "".join(re.findall(r'\sd="([^"]*)"', FACE_SVG.read_text()))))
+        self.assertLessEqual(letters, {"M", "L", "Z"})
+
+    def test_each_button_overlay_sits_on_its_own_cap(self) -> None:
+        caps = face_shapes()["cap"]
+        buttons = [row for row in page_slots() if row["label"].startswith("Button ")]
+        self.assertEqual(len(caps), len(buttons))
+        used = set()
+        for row in buttons:
+            index = min(range(len(caps)), key=lambda i: abs(caps[i][0] - row["x"]) + abs(caps[i][1] - row["y"]))
+            self.assertNotIn(index, used, row["label"])
+            used.add(index)
+            self.assertNear(row["x"], caps[index][0], row["label"] + " x")
+            self.assertNear(row["y"], caps[index][1], row["label"] + " y")
+
+    def test_the_key_overlay_is_the_size_of_a_cap(self) -> None:
+        width = css_percent(".remote .k", "width")
+        for cx, cy, w, h in face_shapes()["cap"]:
+            self.assertNear(width, w, f"cap at {cx:.1f} {cy:.1f}")
+
+    @staticmethod
+    def wheel() -> tuple:
+        """Returns the wheel centre, the black wheel radius and the dial radius,
+        in viewBox units, and the viewBox width and height."""
+        text = FACE_SVG.read_text()
+        _, _, width, height = (float(v) for v in re.search(r'viewBox="([^"]+)"', text).group(1).split())
+        shapes = face_shapes()
+        (knob,) = shapes["knob"]
+        (dial,) = shapes["wheelmark scrolldial"]
+        centre = (knob[0] * width / 100, knob[1] * height / 100)
+        outer = (knob[2] * width + knob[3] * height) / 400
+        inner = (dial[2] * width + dial[3] * height) / 400
+        return centre, outer, inner, width, height
+
+    def direction_rows(self) -> list:
+        """(row, glyph) for Up, Down, Left and Right."""
+        glyphs = face_shapes()["wheelglyph"]
+        self.assertEqual(len(glyphs), 4)
+        rows = {row["slot"]: row for row in page_slots()}
+        return [(rows[13], min(glyphs, key=lambda g: g[1])), (rows[15], max(glyphs, key=lambda g: g[1])),
+                (rows[16], min(glyphs, key=lambda g: g[0])), (rows[12], max(glyphs, key=lambda g: g[0]))]
+
+    def test_the_direction_overlay_is_the_ring_band_width(self) -> None:
+        _, outer, inner, width, _ = self.wheel()
+        self.assertNear(css_percent(".remote .k.dir", "width"), 100 * (outer - inner) / width, "direction width")
+
+    def test_each_direction_overlay_sits_mid_band_and_covers_its_glyph(self) -> None:
+        (wx, wy), outer, inner, width, height = self.wheel()
+        side = css_percent(".remote .k.dir", "width") * width / 100
+        for row, glyph in self.direction_rows():
+            self.assertEqual(row["class"], "dir", row["label"])
+            x, y = row["x"] * width / 100, row["y"] * height / 100
+            gx, gy = glyph[0] * width / 100, glyph[1] * height / 100
+            # On the axis of the glyph, at the middle of the ring band.
+            if abs(gx - wx) < abs(gy - wy):
+                self.assertNear(row["x"], glyph[0], row["label"] + " x")
+            else:
+                self.assertNear(row["y"], glyph[1], row["label"] + " y")
+            self.assertNear(100 * math.hypot(x - wx, y - wy) / width, 100 * (outer + inner) / 2 / width,
+                            row["label"] + " radius")
+            # The glyph stays inside the overlay.
+            for corner_x in (gx - glyph[2] * width / 200, gx + glyph[2] * width / 200):
+                self.assertLessEqual(abs(corner_x - x), side / 2, row["label"])
+            for corner_y in (gy - glyph[3] * height / 200, gy + glyph[3] * height / 200):
+                self.assertLessEqual(abs(corner_y - y), side / 2, row["label"])
+
+    def test_the_direction_overlay_corners_stay_on_the_wheel(self) -> None:
+        """A rounded square is its inner square grown by the corner radius, so its
+        farthest point is an inner corner plus that radius."""
+        (wx, wy), outer, _, width, height = self.wheel()
+        side = css_percent(".remote .k.dir", "width") * width / 100
+        radius = section(PAGE, ".remote .k{", "}")
+        self.assertNotIn("border-radius", section(PAGE, ".remote .k.dir{", "}"))
+        corner = float(re.search(r"border-radius:([\d.]+)%", radius).group(1)) * side / 100
+        half = side / 2 - corner
+        for row, _ in self.direction_rows():
+            x, y = row["x"] * width / 100, row["y"] * height / 100
+            far = max(math.hypot(x + dx - wx, y + dy - wy) for dx in (-half, half) for dy in (-half, half)) + corner
+            self.assertLessEqual(far, outer, f"{row['label']} reaches {far:.2f} past the wheel edge {outer:.2f}")
+
+    def test_the_press_overlay_is_the_round_centre_key(self) -> None:
+        (circle,) = face_shapes()["wheelmark"]
+        press = {row["slot"]: row for row in page_slots()}[14]
+        self.assertEqual(press["class"], "press")
+        self.assertNear(press["x"], circle[0], "Wheel Press x")
+        self.assertNear(press["y"], circle[1], "Wheel Press y")
+        self.assertNear(css_percent(".remote .k.press", "width"), circle[2], "Wheel Press width")
+        self.assertIn("border-radius:50%", section(PAGE, ".remote .k.press{", "}"))
+
+    def test_the_rotation_overlay_is_the_scroll_dial(self) -> None:
+        (dial,) = face_shapes()["wheelmark scrolldial"]
+        rows = {row["slot"]: row for row in page_slots()}
+        for slot in (17, 18):
+            self.assertNear(rows[slot]["x"], dial[0], rows[slot]["label"] + " x")
+            self.assertNear(rows[slot]["y"], dial[1], rows[slot]["label"] + " y")
+        self.assertNear(css_percent(".remote .k.rot", "left"), dial[0], "rotation left")
+        self.assertNear(css_percent(".remote .k.rot", "top"), dial[1], "rotation top")
+        self.assertNear(css_percent(".remote .k.rot", "width"), dial[2], "rotation width")
+
+
 class PlacementTest(unittest.TestCase):
     def test_the_top_group_puts_button_1_on_the_right(self) -> None:
         """Button 1 sits to the right of Button 2 on the board."""
@@ -913,8 +1061,8 @@ class PlacementTest(unittest.TestCase):
 
     def test_both_rotation_slots_flank_the_wheel_up_hotspot(self) -> None:
         rows = {row["slot"]: row for row in page_slots()}
-        self.assertEqual((rows[18]["x"], rows[18]["y"]), (50, 31.7))
-        self.assertEqual((rows[17]["x"], rows[17]["y"]), (50, 31.7))
+        self.assertEqual((rows[18]["x"], rows[18]["y"]), (rows[17]["x"], rows[17]["y"]))
+        self.assertEqual((rows[17]["x"], rows[17]["y"]), (rows[14]["x"], rows[14]["y"]))
         self.assertIn(".remote .k.rot.left{clip-path:inset(0 50% 0 0)}", PAGE)
         self.assertIn(".remote .k.rot.right{clip-path:inset(0 0 0 50%)}", PAGE)
 

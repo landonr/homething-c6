@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homeThing C6</title>
+  <meta name="description" content="An open source smart home remote with real buttons. For your TV, Sonos, Zigbee lights and Home Assistant. No touchscreen, no apps, no daily charging.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="homeThing C6">
+  <meta property="og:description" content="An open source smart home remote with real buttons. For your TV, Sonos, Zigbee lights and Home Assistant.">
+  <meta property="og:image" content="assets/remote-build-stages.jpg">
+  <link rel="icon" href="assets/homeThingLogo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <nav class="nav-inner" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/homeThingLogo.svg" alt="" width="26" height="26">homeThing</a>
+      <a href="index.html" aria-current="page">C6</a>
+      <a href="s3.html">S3</a>
+      <a href="original.html">Original</a>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <a href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Discord</a>
+      <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.instagram.com/homething.io/" target="_blank" rel="noopener">Instagram</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="band hero">
+      <div class="inner">
+        <h1>homeThing C6</h1>
+        <p class="subhead">An open source smart home remote with real buttons.</p>
+        <p>For your TV, Sonos, Zigbee lights and Home Assistant.<br>No touchscreen, no apps, no daily charging.</p>
+        <p><a class="cta" href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Coming Soon</a></p>
+        <img class="hero-image" src="assets/remote-build-stages.jpg" width="1600" height="1201" alt="Four homeThing C6 units on a table: the bare board, the finished remote with lit LEDs, the case without the scroll wheel, and the empty case">
+      </div>
+    </section>
+
+    <section class="band grey" id="specs">
+      <div class="inner">
+        <h2>Specs</h2>
+        <div class="row">
+          <div class="text">
+            <h3 class="subhead">One remote, no screen.</h3>
+            <ul class="specs">
+              <li><strong>Controls:</strong> Scroll wheel with 5-way pad, 11 assignable buttons</li>
+              <li><strong>Battery:</strong> 1000 mAh LiPo, aimed at about a month per charge</li>
+              <li><strong>Wireless:</strong> Wi-Fi, BLE, Zigbee</li>
+              <li><strong>Processor:</strong> Seeed Studio XIAO ESP32-C6</li>
+              <li><strong>Infrared:</strong> Learns and sends codes from your existing remotes</li>
+              <li><strong>Voice:</strong> Microphone for the Home Assistant voice assistant</li>
+              <li><strong>Status:</strong> 4 RGB LEDs</li>
+              <li><strong>Case:</strong> 3D printed, SLS or FDM</li>
+              <li><strong>Charging:</strong> USB-C</li>
+            </ul>
+            <p><a class="cta" href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Coming Soon</a></p>
+            <p class="caption">Join the Discord to hear first when homeThing C6 is ready to order.</p>
+          </div>
+          <div class="media pair">
+            <img src="assets/case-annotated-front.png" width="900" height="2306" loading="lazy" alt="Front of the homeThing C6 in a clear case: the microphone and power buttons, the scroll wheel with lit status LEDs, and nine buttons below it">
+            <img src="assets/case-annotated-back.png" width="900" height="2306" loading="lazy" alt="Back of the homeThing C6 in a clear purple case">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="inner">
+        <h2>Build one, or get one ready to go.</h2>
+        <div class="narrow">
+          <p>The board arrives fully assembled, so there is no soldering. The board design, the firmware and the case files are all open source on <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>, so you can build your own from scratch.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band grey">
+      <div class="inner">
+        <h2>Your smart home, on real buttons.</h2>
+        <div class="row">
+          <div class="text">
+            <h3 class="subhead">Control Anything</h3>
+            <p>Pick it up, press a button, and the lights change. No phone to unlock, no app to open.</p>
+            <p><strong>TV:</strong> Learns the IR codes from the remote you already have, then sends them.</p>
+            <p><strong>Music:</strong> Controls Sonos over Wi-Fi, or pairs with a phone, tablet or computer over BLE for media keys.</p>
+            <p><strong>Lights:</strong> Talks straight to Zigbee lights and groups.</p>
+            <p><strong>Home Assistant:</strong> Puts any action or script on a button.</p>
+            <p><strong>Voice:</strong> Talks to your Home Assistant voice assistant through the built-in mic.</p>
+          </div>
+          <div class="media">
+            <img class="tall" src="assets/remote-controls-annotated.svg" width="1840" height="2912" loading="lazy" alt="Front of the homeThing C6 with labels for the microphone, the scroll wheel and 5-way control, the RGB status LEDs, the 11 assignable buttons, the XIAO ESP32-C6 and the USB-C port">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="inner">
+        <h2>Built Your Way</h2>
+        <div class="row">
+          <div class="text">
+            <h3 class="subhead">A custom board in an open case.</h3>
+            <p>Custom PCB built around the Seeed Studio XIAO ESP32-C6.</p>
+            <p>Parametric 3D printed case in SLS and FDM versions.</p>
+            <p>Sleeps between presses and wakes on any button.</p>
+          </div>
+          <div class="media">
+            <img src="assets/case-exploded.png" width="1200" height="1440" loading="lazy" alt="Exploded view of the homeThing C6: the clear front case, the button caps, the circuit board with the scroll wheel and the XIAO ESP32-C6, the battery and the purple back case">
+          </div>
+        </div>
+        <div class="pair below stack-small">
+          <figure>
+            <img src="assets/case-front-iso-sls.png" width="1200" height="600" loading="lazy" alt="Isometric render of the SLS version of the front case">
+            <figcaption class="caption">SLS front</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/case-front-iso-fdm.png" width="1200" height="600" loading="lazy" alt="Isometric render of the FDM version of the front case">
+            <figcaption class="caption">FDM front</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="band grey">
+      <div class="inner">
+        <h2>Make It Yours</h2>
+        <div class="row">
+          <div class="text">
+            <h3 class="subhead">Every button is yours to set.</h3>
+            <p>Open the remote’s own web page from any browser on your network. Pick a button, then pick what it does: an IR code, a Zigbee light or group, a BLE media key, a Home Assistant action, or voice.</p>
+            <p>You can also assign buttons on the remote itself. No app, no cloud.</p>
+          </div>
+          <figure class="media">
+            <img src="assets/buttons-page-assign.png" width="2200" height="1878" loading="lazy" alt="The remote’s Buttons web page: a drawing of the remote on the left, with button 7 set to a Zigbee target on the right">
+            <figcaption class="caption">The Buttons tab with a Zigbee assignment</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="posts">
+      <div class="inner">
+        <h2>Posts</h2>
+        <ul class="posts">
+          <li class="post">
+            <a href="s3.html"><img src="assets/legacy/s3-video.jpg" width="480" height="360" loading="lazy" alt="Video thumbnail: the homeThing S3 remote with its screen showing the song that plays"></a>
+            <div>
+              <a class="post-title" href="s3.html">homeThing S3</a>
+              <p>Project summary</p>
+            </div>
+          </li>
+          <li class="post">
+            <a href="original.html"><img src="assets/legacy/orig-m5stackfire.jpg" width="1330" height="1330" loading="lazy" alt="The original homeThing menu on an M5Stack Fire, with the Back, Select and Next buttons labelled"></a>
+            <div>
+              <a class="post-title" href="original.html">Original homeThing</a>
+              <p>Project summary</p>
+            </div>
+          </li>
+          <li class="post">
+            <a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener"><img src="assets/legacy/post-esphome-component.jpg" width="480" height="360" loading="lazy" alt="Video thumbnail for ESPHome Component From Scratch"></a>
+            <div>
+              <a class="post-title" href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener">ESPHome Component From Scratch</a>
+              <p>Video, and the <a href="https://homething.cargo.site/ESPHome-Component-From-Scratch" target="_blank" rel="noopener">blog post</a></p>
+            </div>
+          </li>
+          <li class="post">
+            <a href="https://www.youtube.com/watch?v=LEmA9E3Gzkk" target="_blank" rel="noopener"><img src="assets/legacy/post-m5stick-setup.jpg" width="480" height="360" loading="lazy" alt="Video thumbnail for M5Stick C Plus homeThing Setup"></a>
+            <div>
+              <a class="post-title" href="https://www.youtube.com/watch?v=LEmA9E3Gzkk" target="_blank" rel="noopener">M5Stick C Plus homeThing Setup</a>
+              <p>Video</p>
+            </div>
+          </li>
+          <li class="post">
+            <a href="https://homething.cargo.site/homeThing-First-Year" target="_blank" rel="noopener"><img src="assets/legacy/post-first-year.jpg" width="886" height="886" loading="lazy" alt="Cover image for What We Learned In The First Year"></a>
+            <div>
+              <a class="post-title" href="https://homething.cargo.site/homeThing-First-Year" target="_blank" rel="noopener">What We Learned In The First Year</a>
+              <p>Blog post</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="band grey">
+      <div class="inner">
+        <h2>Sponsorship</h2>
+        <div class="narrow">
+          <p><a href="https://pcbway.com/g/Xymq6O" target="_blank" rel="noopener">PCBWay</a> sponsors the prototype boards and 3D printing for homeThing C6. Boards arrive fully assembled. Thank you PCBWay!</p>
+          <p>Like the project? <a href="https://github.com/sponsors/landonr" target="_blank" rel="noopener">Sponsor homeThing on GitHub</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 homeThing · <a href="mailto:homeThing32@gmail.com">homeThing32@gmail.com</a></p>
+  </footer>
+</body>
+</html>

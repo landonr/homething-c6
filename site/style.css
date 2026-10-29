@@ -352,10 +352,6 @@ p:last-child {
   margin-top: 1em;
 }
 
-.parts + .row {
-  margin-top: clamp(64px, 8vw, 120px);
-}
-
 /* Image pairs and figures */
 
 .pair {
@@ -443,6 +439,33 @@ figcaption {
 .video-link {
   margin: 1em 0 2.5em;
   text-align: center;
+}
+
+.video-desc {
+  margin-top: 1.5em;
+}
+
+.video-desc ul {
+  margin: 0 0 1.2em;
+  padding-left: 1.2em;
+}
+
+.video-desc ul.chapters {
+  list-style: none;
+  padding-left: 0;
+}
+
+.chapters a {
+  display: inline-block;
+  min-width: 3.4em;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-years {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.5em;
 }
 
 /* Screenshot grid */

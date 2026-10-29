@@ -104,6 +104,10 @@ The project website is in `site/`. It contains `index.html`, `s3.html`, `origina
 
 `site/assets/legacy/` holds the images from the old Cargo site. No other copy of these images exists.
 
+`site/esphome-component-from-scratch.html` and `site/first-year.html` hold the two blog posts from the old Cargo site.
+
+The images that only these posts use are in `site/assets/legacy/`, and their file names start with `esphome-` or `first-year-`.
+
 Every link and asset path in `site/` must be relative, because GitHub Pages serves the site from a sub-path.
 
 `scripts/build-site.sh` assembles the site into `_site/`, or into the directory that you give as the argument.

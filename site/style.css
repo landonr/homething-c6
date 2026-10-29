@@ -301,6 +301,61 @@ p:last-child {
   padding-left: 1.2em;
 }
 
+/* Parts tables */
+
+.parts {
+  max-width: 960px;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+.parts table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+
+.parts th,
+.parts td {
+  padding: 0.6em 1em 0.6em 0;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.parts th {
+  font-weight: 600;
+}
+
+.parts th:last-child,
+.parts td:last-child {
+  padding-right: 0;
+}
+
+.parts tbody tr:last-child td {
+  border-bottom: 1px solid var(--line);
+}
+
+.parts th:nth-child(2),
+.parts td:nth-child(2) {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.parts td:last-child {
+  color: var(--muted);
+}
+
+.parts .caption {
+  margin-top: 1em;
+}
+
+.parts + .row {
+  margin-top: clamp(64px, 8vw, 120px);
+}
+
 /* Image pairs and figures */
 
 .pair {
@@ -567,6 +622,45 @@ figcaption {
 
   .pair.stack-small {
     grid-template-columns: 1fr;
+  }
+
+  /* Each part becomes two lines: the name and qty, then the role below. */
+  .parts tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 1em;
+    padding: 0.6em 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .parts tbody tr:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .parts th,
+  .parts td,
+  .parts tbody tr:last-child td {
+    padding: 0;
+    border: 0;
+  }
+
+  .parts th:nth-child(2),
+  .parts td:nth-child(2) {
+    width: auto;
+    text-align: right;
+  }
+
+  .parts td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .parts th:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .gallery {

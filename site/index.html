@@ -73,6 +73,41 @@
         <div class="narrow">
           <p>The board arrives fully assembled, so there is no soldering. The board design, the firmware and the case files are all open source on <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>, so you can build your own from scratch.</p>
         </div>
+
+        <h2 class="section-gap">Parts</h2>
+        <div class="parts">
+          <table>
+            <thead>
+              <tr><th scope="col">Part</th><th scope="col">Qty</th><th scope="col">Role</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><a href="https://github.com/landonr/homething-c6/releases" target="_blank" rel="noopener">Custom PCB</a></td><td>1</td><td>Fabrication files are in each release</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991254/24613066" target="_blank" rel="noopener">Seeed Studio XIAO ESP32-C6</a></td><td>1</td><td>Main module: Wi-Fi 6, BLE 5, Zigbee</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/adafruit-industries-llc/5001/15277532" target="_blank" rel="noopener">Adafruit ANO rotary encoder</a></td><td>1</td><td>Scroll wheel and directional navigation</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/pui-audio-inc/DMM-4026-B-I2S-R/11587483" target="_blank" rel="noopener">PUI Audio DMM-4026-B-I2S-R I2S microphone</a></td><td>1</td><td>Voice microphone, I2S MEMS</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/vishay-semiconductor-opto-division/TSOP6136TT/4075852" target="_blank" rel="noopener">Vishay TSOP6136TT IR receiver</a></td><td>1</td><td>IR receiver, 36 kHz</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/inolux/INL-3AHIR30/10384806" target="_blank" rel="noopener">Inolux INL-3AHIR30 IR LED</a></td><td>1</td><td>IR emitter, 940 nm</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933" target="_blank" rel="noopener">XINGLIGHT XL-2020RGBC-WS2812B RGB LED</a></td><td>4</td><td>Status LEDs, addressable RGB</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/texas-instruments/PCF8575DBR/754551" target="_blank" rel="noopener">Texas Instruments PCF8575DBR GPIO expander</a></td><td>1</td><td>Button GPIO expander, 16-bit I2C</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/e-switch/TL3315NF160Q/1870395" target="_blank" rel="noopener">E-Switch TL3315NF160Q tactile switch</a></td><td>11</td><td>Buttons</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/jst-sales-america-inc/S2B-PH-SM4-TB-LF-SN/926655" target="_blank" rel="noopener">JST S2B-PH-SM4-TB(LF)(SN) connector</a></td><td>1</td><td>Battery connector, JST PH 2-pin</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598" target="_blank" rel="noopener">Nexperia MMBT2222A NPN transistor</a></td><td>1</td><td>IR LED driver</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/alpha-omega-semiconductor-inc/AO3401A/1855773" target="_blank" rel="noopener">Alpha &amp; Omega AO3401A P-channel MOSFET</a></td><td>2</td><td>LED and IR rail switches</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292" target="_blank" rel="noopener">1uF 50V X7R 0805 capacitor (Yageo CC0805KKX7R9BB105)</a></td><td>2</td><td>Decoupling and LED rail bulk</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/CC0603KRX7R9BB104/2103082" target="_blank" rel="noopener">100nF 50V X7R 0603 capacitor (Yageo CC0603KRX7R9BB104)</a></td><td>2</td><td>Microphone decoupling and IR receiver supply filter</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-07470RL/727256" target="_blank" rel="noopener">470R 1% 0603 resistor (Yageo RC0603FR-07470RL)</a></td><td>1</td><td>IR LED transistor base</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-0710RL/726879" target="_blank" rel="noopener">10R 1% 0603 resistor (Yageo RC0603FR-0710RL)</a></td><td>1</td><td>IR LED current limit</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-074K7L/727212" target="_blank" rel="noopener">4.7k 1% 0603 resistor (Yageo RC0603FR-074K7L)</a></td><td>2</td><td>I2C pull-ups</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100RL/726888" target="_blank" rel="noopener">100R 1% 0603 resistor (Yageo RC0603FR-07100RL)</a></td><td>1</td><td>IR receiver supply filter</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889" target="_blank" rel="noopener">100k 1% 0603 resistor (Yageo RC0603FR-07100KL)</a></td><td>4</td><td>Battery sense divider, interrupt pull-up and microphone data pull-down</td></tr>
+              <tr><td><a href="https://www.digikey.com/en/products/detail/yageo/RC0603FR-071ML/726844" target="_blank" rel="noopener">1M 1% 0603 resistor (Yageo RC0603FR-071ML)</a></td><td>2</td><td>Gate pull-ups that hold the LED and IR rails off by default</td></tr>
+              <tr><td>1000mAh LiPo pouch, 102050 size (10 x 20 x 50 mm), with a JST PH 2-pin plug</td><td>1</td><td>Battery</td></tr>
+              <tr><td><a href="https://github.com/landonr/homething-c6/tree/develop/case" target="_blank" rel="noopener">3D printed case</a></td><td>1 set</td><td>Front shell, back shell, button pad, IR window and 11 caps (SLS or FDM)</td></tr>
+              <tr><td>M2 x 5 screw</td><td>1</td><td>Closes the case at the grip end</td></tr>
+              <tr><td>Stretch-release adhesive strip</td><td>2</td><td>Holds the battery to the board</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 

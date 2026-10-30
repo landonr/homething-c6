@@ -42,7 +42,7 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 
 - Control a TV with on-board IR receive and transmit hardware
 - Drive music playback over Wi-Fi and BLE
-- Switch lights over Zigbee, Thread, or Matter
+- Switch lights over Zigbee, or over Wi-Fi with Home Assistant actions
 - Map Home Assistant actions to physical buttons instead of app screens
 - Assign every button from a web page on the remote itself
 - Run for a long time between charges

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESPHome Component From Scratch · homeThing</title>
+  <meta name="description" content="ESPHome Component From Scratch, using the M5 Stack Mini EncoderC Hat: the folder structure, the header file, the C++ file, the configuration schema and the YAML setup.">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ESPHome Component From Scratch">
+  <meta property="og:description" content="Using the M5 Stack Mini EncoderC Hat: the folder structure, the header file, the C++ file, the configuration schema and the YAML setup.">
+  <meta property="og:image" content="assets/legacy/post-esphome-component.jpg">
+  <link rel="icon" href="assets/homeThingLogo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <nav class="nav-inner" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/homeThingLogo.svg" alt="" width="26" height="26">homeThing</a>
+      <a href="index.html">C6</a>
+      <a href="s3.html">S3</a>
+      <a href="original.html">Original</a>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <a href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Discord</a>
+      <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.instagram.com/homething.io/" target="_blank" rel="noopener">Instagram</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="band">
+      <article class="article">
+        <header class="article-head">
+          <p class="article-meta"><a href="index.html#posts">Blog</a></p>
+          <h1>ESPHome Component From Scratch</h1>
+          <h2 class="article-sub">Using the M5 Stack Mini EncoderC Hat</h2>
+        </header>
+
+        <figure>
+          <a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener"><img src="assets/legacy/post-esphome-component.jpg" width="480" height="360" alt="YouTube video: ESPHome External Component From Scratch, with a cat and an M5StickC with the encoder hat"></a>
+          <figcaption class="caption"><a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener"><i><b>watch on YouTube!</b></i></a></figcaption>
+        </figure>
+
+        <p>Priced at just eight dollars, this compact tool combines a scroll knob, a button and a light to provide intuitive control over various devices. In this blog post, we will delve into the technical aspects of the Mini Encoder C-Hat, examining its component structure, behavior, configuration process, and real-world implementation. Join us as we demystify the i2c Mini EncoderC Hat and discover its potential for seamless device control!</p>
+
+        <h2><b><u>1. ESPHome Folder Structure:</u></b></h2>
+        <p>ESPHome components consist of C++ files and Python files. C++ files contain the core code responsible for the component's functionality, while Python files enable users to define the component's setup. Furthermore, each component resides within its dedicated folder, allowing for organized and modular development.</p>
+
+        <figure>
+          <img src="assets/legacy/esphome-01.png" width="918" height="805" loading="lazy" alt="Diagram of an ESPHome component: C++ code in the .h and .c files, Python code in __init__.py that defines how the component is set up for the user, and folders named by component domain, with the fastled_clockless platform in the light folder as the example">
+        </figure>
+
+        <p><b><u>folder structure example</u></b><br>components_folder<br>&nbsp; &nbsp; - fastled_clockless (name of component <u>platform</u>)<br>&nbsp; &nbsp; &nbsp; &nbsp;- light<br>&nbsp; &nbsp; &nbsp; &nbsp;- button<br>&nbsp; &nbsp; &nbsp; &nbsp;- etc, (other components)<br>&nbsp; &nbsp;- template (name of component)<br>&nbsp; &nbsp; &nbsp; &nbsp;- binary_sensor<br>&nbsp; &nbsp; &nbsp; &nbsp;- sensor<br>&nbsp; &nbsp; &nbsp; &nbsp;- switch<br>&nbsp; &nbsp;- etc, (other components)</p>
+
+        <p><b><u>folder example</u></b></p>
+        <figure>
+          <img src="assets/legacy/esphome-02.png" width="263" height="238" loading="lazy" alt="Finder window of a components folder: a template folder with binary_sensor, sensor and switch folders inside it, then text_sensor, time, uptime and voltage_sampler">
+        </figure>
+
+        <p><b><u>example yaml</u></b><br>light:<br>&nbsp; - platform:<br>&nbsp; &nbsp; &nbsp; &nbsp; fastled_clockless</p>
+
+        <h2><b><u>2. Analyzing the Header File:</u></b></h2>
+        <p><a href="https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/miniencoderc.h" target="_blank" rel="noopener">https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/miniencoderc.h</a></p>
+        <p>The header file of the Mini Encoder C-Hat provides essential insights into its operation. It serves as both an <b>I²CDevice</b> and a <b>Component</b>, facilitating device registration during the setup phase and granting access to <b>setup()</b>, <b>loop(), and get_setup_priority()</b> functions. The C++ file complements the header file, implementing the code that drives the Mini Encoder C-Hat's behavior and functionality.</p>
+        <p>Within the header and C++ files, we have an <b>encoder_value</b> and a <b>button</b>, serving as the primary means of interaction. The <b>encoder_value</b> is a <b>Sensor</b> which can publish a number, and the <b>button</b> is a <b>BinarySensor</b> which can publish on/off. These sensors facilitate seamless integration with other components by allowing subscription to published values. We also have callback triggers for when the encoder rotates clockwise and anticlockwise</p>
+
+        <figure>
+          <img src="assets/legacy/esphome-03.png" width="657" height="289" loading="lazy" alt="Code from miniencoderc.h: the MiniEncoderC class extends i2c::I2CDevice and Component, and declares setup(), loop(), set_number(), set_min_value(), set_max_value() and get_setup_priority()">
+          <figcaption class="caption">miniencoderc.h</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/legacy/esphome-04.png" width="468" height="141" loading="lazy" alt="Code from miniencoderc.h: the clockwise and anticlockwise callback managers, the encoder_value_, increment_value_ and firmware_version_ sensors, and the button_ binary sensor">
+          <figcaption class="caption">miniencoderc.h</figcaption>
+        </figure>
+
+        <h2><b><u>3. Inside the C++ File:</u></b></h2>
+        <p><a href="https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/miniencoderc.cpp" target="_blank" rel="noopener">https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/miniencoderc.cpp</a></p>
+
+        <figure>
+          <img src="assets/legacy/esphome-05.png" width="1442" height="398" loading="lazy" alt="M5Stack Hat Encoder I2C protocol register map at address 0x42: counter value at 0x00, increment value at 0x10, button value at 0x20, RGB at 0x30, counter reset at 0x40, firmware version at 0xFE and I2C address at 0xFF">
+        </figure>
+        <pre><code>static const uint8_t MINI_ENCODER_C_FIRMWARE = 0xFE;
+static const uint8_t MINI_ENCODER_C_RESET_COUNTER = 0x40;
+static const uint8_t MINI_ENCODER_C_ENCODER = 0x00;
+static const uint8_t MINI_ENCODER_C_INCREMENT = 0x10;
+static const uint8_t MINI_ENCODER_C_BUTTON = 0x20;</code></pre>
+        <p>The constants in the C++ file are based on this image from the docs. We can see for example <b>MINI_ENCODER_C_FIRMWARE</b> is <b>0xFE</b>, and in the table Firmware Version is row <b>0xF0</b>, in column <b>E</b>. If the encoder isn't plugged in, the register won't read and the component will get marked as failed so it won't run. The firmware register is read like this:</p>
+        <pre><code>uint8_t firmware;
+if (this-&gt;read_register(<b>MINI_ENCODER_C_FIRMWARE</b>, &amp;firmware, 1) !=
+ i2c::ERROR_OK) {
+ ESP_LOGE(TAG, "MiniEncoderC Setup Failed");
+ this-&gt;mark_failed();
+    return;
+}</code></pre>
+        <p>If there is more than one byte to read, then we can look at multiple columns like this:</p>
+        <pre><code>uint8_t data[4];
+if (this-&gt;read_register(MINI_ENCODER_C_ENCODER, data, 4) != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "unable to read encoder level");
+    this-&gt;mark_failed();
+    return;
+}
+int32_t value = data[0] | (data[1] &lt;&lt; 8) | (data[2] &lt;&lt; 16) | (data[3] &lt;&lt; 24);</code></pre>
+        <p>The register is read into an array with 4 spots, and then each 8 byte Integer deconstructed into a 32 bit Integer</p>
+
+        <h2><b><u>4. Examining Configurations and Schemas:</u></b></h2>
+        <p><a href="https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/__init__.py" target="_blank" rel="noopener">https://github.com/landonr/esphome-components/blob/main/components/MiniEncoderC/__init__.py</a></p>
+
+        <p><b>Imports</b></p>
+        <p>In order to make our code work, we need to import certain components. These include the binary sensor for our button, the I²C module for device communication, and the sensor for reading encoder values. We also import some constants from ESPHome, such as the config ID and trigger ID for our light output. Additionally, we import automation for triggers and some light-related features.</p>
+        <pre><code>import esphome.codegen as cg
+import esphome.config_validation as cv
+from esphome.components import binary_sensor, i2c, sensor
+from esphome.const import (
+    CONF_ID, 
+    CONF_TRIGGER_ID
+)
+from esphome.components.MiniEncoderC.light import MiniEncoderCLightOutput
+from esphome import automation
+from esphome.components.light import LightState</code></pre>
+        <p><b><u>Configuration and Constants</u></b></p>
+        <p>Since we can connect multiple devices, we automatically load the binary sensor and sensor modules when needed. We also make sure that the I²C class is defined correctly as a requirement. This ensures that the user has the necessary dependencies.</p>
+        <p>We set up our namespace and define our own config IDs and triggers that the user can use. These triggers are activated when the encoder is rotated clockwise or counterclockwise.</p>
+        <pre><code>MULTI_CONF = True
+
+AUTO_LOAD = [ "binary_sensor", "sensor" ]
+
+DEPENDENCIES = ['i2c']
+
+miniencoderc_ns = cg.esphome_ns.namespace('miniencoderc')
+MiniEncoderC = miniencoderc_ns.class_('MiniEncoderC', i2c.I2CDevice, cg.Component)
+CONF_ENCODER = "encoder"
+CONF_ON_CLOCKWISE = "on_clockwise"
+CONF_ON_ANTICLOCKWISE = "on_anticlockwise"
+CONF_BUTTON = "button"
+CONF_ENCODER_FILTER = "encoder_filter"
+
+MiniEncoderCClockwiseTrigger = miniencoderc_ns.class_(
+    "MiniEncoderCClockwiseTrigger", automation.Trigger
+)
+MiniEncoderCAnticlockwiseTrigger = miniencoderc_ns.class_(
+    "MiniEncoderCAnticlockwiseTrigger", automation.Trigger
+)
+</code></pre>
+        <p><b>CONFIG_SCHEMA</b></p>
+        <p>The <b>CONFIG_SCHEMA</b> is what the user primarily interacts with. Here, they can set the ID for the encoder and optionally configure the button. We set the default I²C address to 0x42, which the user can change if needed.</p>
+        <p>Within the <b>ENCODER_SCHEMA</b>, there are additional options for the clockwise and counterclockwise triggers.</p>
+        <pre><code>CONFIG_SCHEMA = cv.COMPONENT_SCHEMA.extend(
+    {
+        cv.GenerateID(): cv.declare_id(MiniEncoderC),
+        cv.Optional(CONF_ENCODER): ENCODER_SCHEMA,
+        cv.Optional(CONF_BUTTON): binary_sensor.binary_sensor_schema(),
+    }
+).extend(i2c.i2c_device_schema(0x42))
+
+ENCODER_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_ON_CLOCKWISE): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(
+                    MiniEncoderCClockwiseTrigger
+                ),
+            }
+        ),
+        cv.Optional(CONF_ON_ANTICLOCKWISE): automation.validate_automation(
+            {
+                cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(
+                    MiniEncoderCAnticlockwiseTrigger
+                ),
+            }
+        ),
+        cv.Optional(CONF_ENCODER_FILTER, default=1): cv.int_range(min=1, max=100),
+    }
+).extend(sensor.sensor_schema())
+</code></pre>
+        <p><b>async def to_code(config):</b></p>
+        <p>During the build process, this code is transformed into C++. We create a variable called "<b>var</b>" and register it as a component so <b>setup()</b> is called and as an I²C device component so <b>loop()</b> is called. However, the values in our class are not yet assigned.</p>
+        <p>To fix this, we create a variable for the encoder and set its values. The "<b>sens</b>" variable represents an instance of the MiniEncoderC class. The <b>set_encoder(sens)</b> line is generated into C++ code and calls the corresponding function in out C++ file. Similarly, if a filter is provided, the <b>set_encoder_function()</b> function is called.</p>
+        <p>The clockwise and counterclockwise triggers, as well as the button, are also configured using specific C++ functions. When all the code is converted to C++ and executed, the device should work correctly if everything is set up properly by the user.</p>
+        <pre><code>async def to_code(config):
+    var = cg.new_Pvariable(config[CONF_ID])
+    await cg.register_component(var, config)
+    await i2c.register_i2c_device(var, config)
+
+    if CONF_ENCODER in config:
+        sens = await sensor.new_sensor(config[CONF_ENCODER])
+        cg.add(var.set_encoder(sens))
+
+        encoderConfig = config[CONF_ENCODER]
+
+        if CONF_ENCODER_FILTER in encoderConfig:
+            cg.add(var.set_encoder_filter(encoderConfig[CONF_ENCODER_FILTER]))
+
+        for conf in encoderConfig.get(CONF_ON_CLOCKWISE, []):
+            trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
+            await automation.build_automation(trigger, [], conf)
+        for conf in encoderConfig.get(CONF_ON_ANTICLOCKWISE, []):
+            trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
+            await automation.build_automation(trigger, [], conf)
+
+    if CONF_BUTTON in config:
+        button = await binary_sensor.new_binary_sensor(config[CONF_BUTTON])
+        cg.add(var.set_button(button))</code></pre>
+        <h2><u>5. Including Our New Component!</u></h2>
+        <p>Loading the external component from GitHub</p>
+        <pre><code>external_components:
+ - source:
+     type: git
+     url: https://github.com/landonr/esphome-components
+     ref: main
+     components: [MiniEncoderC]</code></pre>
+        <p>Loading the external component locally<br>(if you have it copied to <b>esphome/local_components</b>)</p>
+        <pre><code>external_components:
+ - source:
+     type: local
+     path: local_components
+     components: [MiniEncoderC]</code></pre>
+        <p><b>Setting up the External Component</b></p>
+        <pre><code>MiniEncoderC:
+ id: encoder
+ i2c_id: bus_b
+ # address: 0x42
+ button:
+ name: Rotary Button
+ id: rotary_button
+ encoder:
+ name: Rotary Encoder
+ id: rotary
+ encoder_filter: 2 // (1-100) divides the encoder value to make it less sensitive</code></pre>
+        <h2><b><u>6. Conclusion:</u></b></h2>
+        <p>By understanding I²C registers we can communicate with a ton of devices that can communicate with our projects. Now that we’re all experts at ESPHome’s component structure, behavior, configuration process, I hope to see some cool new components!</p>
+        <p>- lando</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 homeThing · <a href="mailto:homeThing32@gmail.com">homeThing32@gmail.com</a></p>
+  </footer>
+</body>
+</html>

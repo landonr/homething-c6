@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What we learned in the first year making homeThing · homeThing</title>
+  <meta name="description" content="What we learned in the first year making homeThing: the menu, project tooling, Home Assistant integration, ESPHome external components and support for other hardware.">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="What we learned in the first year making homeThing">
+  <meta property="og:description" content="The menu, project tooling, Home Assistant integration, ESPHome external components and support for other hardware.">
+  <meta property="og:image" content="assets/legacy/post-first-year.jpg">
+  <link rel="icon" href="assets/homeThingLogo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <nav class="nav-inner" aria-label="Main">
+      <a class="brand" href="index.html"><img src="assets/homeThingLogo.svg" alt="" width="26" height="26">homeThing</a>
+      <a href="index.html">C6</a>
+      <a href="s3.html">S3</a>
+      <a href="original.html">Original</a>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <a href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Discord</a>
+      <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.instagram.com/homething.io/" target="_blank" rel="noopener">Instagram</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="band">
+      <article class="article">
+        <header class="article-head">
+          <p class="article-meta"><a href="index.html#posts">Blog</a></p>
+          <h1>What we learned in the first year making homeThing</h1>
+        </header>
+
+        <figure>
+          <a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener"><img src="assets/legacy/post-esphome-component.jpg" width="480" height="360" alt="YouTube video: ESPHome External Component From Scratch, with a cat and an M5StickC with the encoder hat"></a>
+          <figcaption class="caption"><a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener"><i><b>watch on YouTube!</b></i></a></figcaption>
+        </figure>
+
+        <h2><b>Menu</b></h2>
+        <div class="gallery">
+          <figure>
+            <img src="assets/legacy/shot-home.jpg" width="300" height="562" loading="lazy" alt="homeThing home menu with Beam, Sources, Media Players, Snake, Cat toy, Color Lights and custom screens">
+            <figcaption class="caption">homeThing Menu</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/legacy/shot-nowPlaying.jpg" width="300" height="562" loading="lazy" alt="homeThing Now Playing screen with the artist, the track and a progress bar">
+            <figcaption class="caption">Now Playing Screen</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/legacy/shot-settingsScreen.jpg" width="300" height="562" loading="lazy" alt="homeThing settings screen with the firmware branch, backlight, restart, SSID, Wi-Fi signal and IP address">
+            <figcaption class="caption">Custom Settings Screen</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/legacy/shot-customScreen.jpg" width="300" height="562" loading="lazy" alt="homeThing Desk Screen with Megadesk, desk nudge up, desk nudge down and Desk Lamp">
+            <figcaption class="caption">Custom Room Screen</figcaption>
+          </figure>
+        </div>
+
+        <p>The custom menu system is drawn using rectangles, lines, icons and text. The menu works on any screen over 60x60 and in any orientation. The fonts, colors and margins are all customizable for different scenarios. There is also a custom menu for the Now Playing screen which replicates the original iPod’s now playing screen.</p>
+        <p>The menu was originally designed around different types of devices (speakers, lights, switches, etc). It was a major improvement to make the screens generic so the device types can be mixed. Now we can have screens for different rooms, or for settings on the device.</p>
+        <p>When I started to work on the menu system, there wasn’t any progress on an official ESPHome menu system. Since then the <a href="https://esphome.io/components/display_menu/index.html" target="_blank" rel="noopener">Display Menu</a> component has been merged. It currently works with grayscale LCD displays, the <a href="https://github.com/esphome/esphome/pull/4105?notification_referrer_id=NT_kwDOACfKK7I0OTQyNjE4MjU5OjI2MDc2NTk" target="_blank" rel="noopener">Graphical Display Menu</a> is still in review for color screens.</p>
+        <p class="article-links"><small><a href="https://github.com/landonr/homeThing" target="_blank" rel="noopener">homeThing Component <u>https://github.com/landonr/homeThing</u></a><br>
+          <a href="https://github.com/esphome/esphome/pull/4105" target="_blank" rel="noopener">Graphical Display Component <u>https://github.com/esphome/esphome/pull/4105</u></a></small></p>
+
+        <h2>Making The Project Easier to Work With</h2>
+        <p>After posting about the project on Reddit I got a few people interested in helping out. One person reached out to create the Light Detail menu which lets users change the brightness, temperature and color on lights. At this point the project changed from an independent project, to a collaboration. So the first thing I did was set up a <a href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener"><b><u>Discord channel</u></b></a> to make it easier for us to communicate.</p>
+        <p>We also started to struggle with formatting, setup and bug reporting. I got the GitHub project set up with code format checking on pull requests using CPPLint to clean up the project and align our code. I also added a build script that compiles all of the example devices to make sure the code can be merged safely. The build script also runs daily to let me know if the project needs updating due to a breaking change in ESPHome.</p>
+        <p>Originally I had my personal devices included in the GitHub repository. I changed it so the repository only has example configs for tested devices, so it’s easy for people to copy and paste when setting up a new device. My personal devices are now moved to a new repo with a daily Github action to make sure they are always working.</p>
+        <p class="article-links"><small><a href="https://github.com/landonr/esphome-devices/" target="_blank" rel="noopener">Personal ESPHome Devices <u>https://github.com/landonr/esphome-devices/</u></a></small></p>
+
+        <h2>Smart Home Integration</h2>
+        <p>The challenges showed up when I started to communicate with media players. Home Assistant lets us use one API for many different kinds of smart home devices (media players, lights, etc), but they don’t all work the same. I began with getting Sonos to work, and then moved onto my Roku TV next. This process let me get an idea on how to structure the code.</p>
+        <figure>
+          <img src="assets/legacy/first-year-01.png" width="1600" height="1124" loading="lazy" alt="Diagram of the custom Home Assistant components that let Home Assistant devices behave as native ESPHome devices: Number, Switch, Cover and Light are built on HomeAssistantComponent, and HomeAssistantBaseMediaPlayer has speaker and TV media players, with Android, Roku and Samsung TV players">
+        </figure>
+        <p>ESPHome provides a component for reading the state of lights and switches, but I needed to control them so I made my own base component for controllable Home Assistant devices. After that I made Media Player (Speaker, TV, Soundbar), Light, Switch, etc components on top of that. Finally there are specific integrations for devices that need custom code like Sonos and Samsung TVs are built on top of the base devices.</p>
+
+        <h2>Example Configuration for controlling a switch, light, speaker and tv</h2>
+        <pre><code>switch:
+    - platform: homeassistant_component
+      entity_id: "switch.oven_fan"
+      name: "Oven Fan"
+      id: oven_fan_switch
+
+# sonos favorite source
+media_player_source_sonos:
+  id: sonos
+
+media_player:
+  - platform: homeassistant_media_player
+    name: Beam
+    entity_id: "media_player.beam"
+    id: media_player_beam
+    type: speaker
+    sources:
+      - id: sonos
+        type: sonos
+  - platform: homeassistant_media_player
+    name: TV
+    entity_id: "media_player.55_tcl_roku_tv"
+    id: media_player_tv
+    type: roku
+</code></pre>
+        <p>This approach makes it easy for users to add new media player types. Users can make a new class based on the base media player, and then fill out the corresponding service calls (Play, Pause, Navigation, etc). The remote checks the device’s features and only shows commands that it supports like grouping.</p>
+
+        <h2>ESPHome External Components</h2>
+        <p>Once enough people started to use the project, I began to run into setup issues. The project needed people to download code and copy it onto their servers. It also couldn’t be updated easily. ESPHome provides <a href="https://esphome.io/components/external_components.html" target="_blank" rel="noopener">External Components</a> which is the suggested method for creating integrations - so I jumped into learning that. This took longer than expected because I couldn’t find much documentation on it. So after making some friends on Discord and GitHub I got comfortable enough to make <a href="https://www.youtube.com/watch?v=fqayrwJGlJA" target="_blank" rel="noopener">my own tutorial</a>.</p>
+        <figure>
+          <img src="assets/legacy/esphome-01.png" width="918" height="805" loading="lazy" alt="ESPHome Components Explained: a diagram of C++ code in the .h and .c files, Python code in __init__.py, and folders named by component domain">
+        </figure>
+        <p><u><a href="esphome-component-from-scratch.html">ESPHome Components From Scratch</a></u></p>
+        <p>I got some feedback that copying images and fonts into the ESPHome build folder makes the set up process a lot more intimidating. I was able to improve this step by getting ESPHome to load images and fonts from the web on build. Users can now paste in a few lines in their config to load what ever images they want to display.</p>
+
+        <h2>Online Font and Image examples</h2>
+        <pre><code>font:
+  - file: "https://github.com/landonr/homeThing/raw/main/fonts/iosevka.ttf"
+    id: web_font
+    size: 20
+
+image:
+  id: launch_image
+  file: "https://freight.cargo.site/t/original/i/35740c5dcf360e685ed3f8a27095b923c658ea3435692ecfa6b2036725a90776/desklogo.png"
+  resize: 168x60
+  type: TRANSPARENT_BINARY
+</code></pre>
+        <p class="article-links"><small><a href="https://github.com/landonr/homeThing/tree/main/components" target="_blank" rel="noopener">Homething Components <u>https://github.com/landonr/homeThing/tree/main/components</u></a><br>
+          <a href="https://github.com/esphome/esphome/pull/5254" target="_blank" rel="noopener">Online Font <u>https://github.com/esphome/esphome/pull/5254</u></a><br>
+          <a href="https://github.com/esphome/esphome/pull/5214" target="_blank" rel="noopener">Online Images <u>https://github.com/esphome/esphome/pull/5214</u></a></small></p>
+
+        <h2>Supporting Other Hardware</h2>
+        <figure>
+          <img src="assets/legacy/post-first-year.jpg" width="886" height="886" loading="lazy" alt="Exploded render of the homeThing Remote V2: a blue faceplate, a screen module, a scroll wheel on a green board, and a blue case">
+          <figcaption class="caption">homeThing Remote V2</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/legacy/first-year-02.jpg" width="1600" height="1200" loading="lazy" alt="An M5StickC Plus and an M5Stack Fire on a wooden desk, both on the homeThing Now Playing screen">
+          <figcaption class="caption">M5Stick C Plug and M5Stack Fire</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/legacy/first-year-03.png" width="745" height="482" loading="lazy" alt="A white 3D printed homeThing controller under a desk, with a desk height menu on its screen">
+          <figcaption class="caption">homeThing IKEA Bekant Desk Controller</figcaption>
+        </figure>
+
+        <h2>TDisplay S3</h2>
+        <p>A newer generation of the display/cpu that we use came out later in 2022. I got one but there were issues getting it working with ESPHome. The display uses a patched version of the display driver. I spent some time trying to get basic text working using an ESPHome component, and then made a <a href="https://github.com/landonr/lilygo-tdisplays3-esphome" target="_blank" rel="noopener">GitHub repo</a> with the code. Several people saw the repo and have contributed to it. We now have the device fully working with ESPHome!</p>
+        <p class="article-links"><small><a href="https://github.com/landonr/lilygo-tdisplays3-esphome" target="_blank" rel="noopener">LilyGo TDisplay S3 Component <u>https://github.com/landonr/lilygo-tdisplays3-esphome</u></a></small></p>
+
+        <h2>M5Stack</h2>
+        <p>We were also interested in running homeThing on a device out of the box. This led us to the M5Stack Stick and Fire. Both of these devices have a ESP32, display, buttons and a battery. HomeThing was originally designed to be controlled using the iPod click wheel, so we had to refactor the controls to make it work for 3 button devices.</p>
+        <p>The M5StickC uses the AXP192 battery management system which needs to be controlled in order to turn the screen on. There are a few repos on GitHub for this system, but ultimately we settled on using <a href="https://github.com/martydingo/esphome-axp192" target="_blank" rel="noopener">‘martydingos’ repo</a>. We contributed charging detection and display brightness back into this repo for use in homeThing.</p>
+        <p>M5Stack Fire uses IP5306 for battery management which also needs the same treatment. Another GitHub user, ssieb helped us make a <a href="https://github.com/ssieb/custom_components/tree/master/components/ip5306" target="_blank" rel="noopener">IP5306 component</a> to get the M5Stack Fire working.</p>
+        <p>Both of these devices have internal microphones which make them ideal for Voice Assistant. We have tested and confirmed the M5Stick C works, however there are stability issues with the M5Stack Fire using assist.</p>
+        <p class="article-links"><small><a href="https://github.com/martydingo/esphome-axp192" target="_blank" rel="noopener">M5Stack AXP192 Component <u>https://github.com/martydingo/esphome-axp192</u></a><br>
+          <a href="https://github.com/landonr/esphome-components/tree/main/components/UnitEncoderC" target="_blank" rel="noopener">M5Stack Unit Encoder C Component <u>https://github.com/landonr/esphome-components/tree/main/components/UnitEncoderC</u></a><br>
+          <a href="https://github.com/landonr/esphome-components/tree/main/components/MiniEncoderC" target="_blank" rel="noopener">M5Stack Mini Encoder Component <u>https://github.com/landonr/esphome-components/tree/main/components/MiniEncoderC</u></a><br>
+          <a href="https://github.com/ssieb/custom_components/tree/master/components/ip5306" target="_blank" rel="noopener">M5Stack IP5306 Component <u>https://github.com/ssieb/custom_components/tree/master/components/ip5306</u></a></small></p>
+
+        <p>- lando</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 homeThing · <a href="mailto:homeThing32@gmail.com">homeThing32@gmail.com</a></p>
+  </footer>
+</body>
+</html>

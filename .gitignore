@@ -101,3 +101,6 @@ c6remote-kicad/renders/
 
 # Local drag editor for the README callout dots. It writes scripts/annotation-callouts.json.
 scripts/annotation-editor.py
+
+# Website build output from scripts/build-site.sh.
+_site/

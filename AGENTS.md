@@ -98,6 +98,36 @@ A missing field makes the preview show a state that the firmware never serves.
 
 Read `ROADMAP.md` when the task needs the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
 
+### Website
+
+The project website is in `site/`. It contains `index.html`, `s3.html`, `original.html`, and the shared `style.css`.
+
+`site/assets/legacy/` holds the images from the old Cargo site. No other copy of these images exists.
+
+`site/esphome-component-from-scratch.html` and `site/first-year.html` hold the two blog posts from the old Cargo site.
+
+The images that only these posts use are in `site/assets/legacy/`, and their file names start with `esphome-` or `first-year-`.
+
+Every link and asset path in `site/` must be relative, because GitHub Pages serves the site from a sub-path.
+
+`scripts/build-site.sh` assembles the site into `_site/`, or into the directory that you give as the argument.
+
+The script copies the product images from `docs/readme-assets/`. Do not add copies of these images to `site/`.
+
+If a page uses a new image from `docs/readme-assets/`, add the file name to the list in `scripts/build-site.sh`.
+
+To preview the site, run this command from the repository root. Then open `http://127.0.0.1:8130/`.
+
+```bash
+scripts/build-site.sh && python3 -m http.server 8130 -d _site
+```
+
+`.github/workflows/pages.yml` deploys the site to GitHub Pages on each push to `develop` that changes the site inputs.
+
+The site does not deploy from `main`, because a push to `main` also creates a board release.
+
+The `github-pages` environment accepts deploys from `develop` and `main`. If you remove `develop` from it, the deploy job fails.
+
 ## Validation and fabrication commands
 
 Run these commands from `c6remote-kicad/`:

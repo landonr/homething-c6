@@ -1,0 +1,54 @@
+# Deploy the static website to GitHub Pages.
+#
+# scripts/build-site.sh assembles site/ and copies the product images in from
+# docs/readme-assets/, so the repository keeps one copy of each binary. The
+# trigger is develop, not main, because a push to main also cuts a board release.
+# The github-pages environment must list develop as a deployment branch.
+# Run it by hand with workflow_dispatch.
+name: Deploy site
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'site/**'
+      - 'docs/readme-assets/**'
+      - 'scripts/build-site.sh'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one that has started.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: scripts/build-site.sh _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

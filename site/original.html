@@ -33,8 +33,29 @@
     <section class="band grey">
       <div class="inner">
         <div class="page-head">
+          <p class="page-years">2022–2023</p>
           <h1>Original homeThing</h1>
           <p class="subhead">homeThing is a universal remote platform that works with any smart home.</p>
+        </div>
+
+        <div class="row even image-left">
+          <div class="text">
+            <h3 class="subhead">A low cost remote with minimal parts.</h3>
+            <ul class="specs">
+              <li><strong>Battery:</strong> 1100mAh</li>
+              <li><strong>Display:</strong> 135x240 1.14" IPS LCD</li>
+              <li><strong>Wireless:</strong> Wi-Fi 802.11, Bluetooth 4.2 + BLE</li>
+              <li><strong>Processor:</strong> ESP32 with an integrated screen, on a Lilygo TTGO T-Display</li>
+              <li><strong>Controls:</strong> Scroll wheel, directional pad, 2 buttons</li>
+              <li><strong>Charging:</strong> USB-C</li>
+              <li><strong>Case:</strong> 3D printed, 3 parts</li>
+            </ul>
+            <p><a class="cta" href="https://www.pcbway.com/project/shareproject/homeThing_V1_3_e3572f8f.html" target="_blank" rel="noopener">Order the case from PCBWay</a></p>
+            <p class="caption">The finished remote is not for sale. The <a href="https://github.com/landonr/homeThing/tree/main/Case%20Design/tdisplay" target="_blank" rel="noopener">case 3D files</a> and the <a href="https://github.com/landonr/homeThing/blob/main/tdisplay-ipod.yaml" target="_blank" rel="noopener">ESPHome config</a> are on GitHub.</p>
+          </div>
+          <div class="media">
+            <img src="assets/legacy/orig-render.png" width="1100" height="1100" alt="Exploded render of the original homeThing: the amber translucent case, the TTGO T-Display board with its screen and USB-C port, a blue battery and the scroll wheel">
+          </div>
         </div>
 
         <div class="row">
@@ -92,6 +113,23 @@
           <img src="assets/legacy/shot-cattoy.jpg" width="300" height="562" loading="lazy" alt="homeThing menu screenshot: cat toy">
           <img src="assets/legacy/shot-settingsScreen.jpg" width="300" height="562" loading="lazy" alt="homeThing menu screenshot: settings screen">
         </div>
+        <h2 class="section-gap">Parts</h2>
+        <div class="parts">
+          <table>
+            <thead>
+              <tr><th scope="col">Part</th><th scope="col">Qty</th><th scope="col">Role</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><a href="https://github.com/Xinyuan-LilyGO/TTGO-T-Display" target="_blank" rel="noopener">Lilygo TTGO T-Display</a></td><td>1</td><td>ESP32 board with a 1.14 inch screen and USB-C</td></tr>
+              <tr><td><a href="https://www.adafruit.com/product/5001" target="_blank" rel="noopener">Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder</a></td><td>1</td><td>Scroll wheel and directional buttons</td></tr>
+              <tr><td><a href="https://www.adafruit.com/product/5221" target="_blank" rel="noopener">Adafruit ANO Rotary Navigation Encoder Breakout PCB</a></td><td>1</td><td>Breakout for the ANO encoder</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/88345-battery-rechargeable-li-poly-37v-1100mah-jst-zh.html" target="_blank" rel="noopener">1100mAh LiPo</a></td><td>1</td><td>Battery</td></tr>
+              <tr><td><a href="https://github.com/landonr/homeThing/tree/main/Case%20Design/tdisplay" target="_blank" rel="noopener">3D printed case</a></td><td>1 set</td><td>3 parts</td></tr>
+            </tbody>
+          </table>
+          <p class="caption">A <a href="https://github.com/landonr/homeThing/tree/main/Case%20Design/tdisplay/5000mAh%20battery" target="_blank" rel="noopener">community case variant</a> fits a 5000 mAh battery.</p>
+        </div>
+
         <p class="closing">The firmware, the menus and the setup guides are on <a href="https://github.com/landonr/homeThing" target="_blank" rel="noopener">GitHub</a>.</p>
       </div>
     </section>

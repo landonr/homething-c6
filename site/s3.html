@@ -33,21 +33,28 @@
     <section class="band">
       <div class="inner">
         <div class="page-head">
+          <p class="page-years">2023–2024</p>
           <h1>homeThing S3</h1>
-          <p class="subhead">You’re open to create your own remote, or start with the one we built.</p>
+          <p class="subhead">Built on a custom PCB, it adds more buttons and a microphone to the original homeThing.</p>
         </div>
 
         <div class="row even image-left">
           <div class="text">
+            <h3 class="subhead">A faster processor and a larger display.</h3>
             <ul class="specs">
               <li><strong>Battery:</strong> 700mAh</li>
               <li><strong>Display:</strong> 170x320 1.9" TFT LCD</li>
               <li><strong>Wireless:</strong> Wi-Fi 802.11, BLE 5 + BT mesh</li>
-              <li><strong>Processor:</strong> ESP32 S3</li>
+              <li><strong>Processor:</strong> ESP32 S3 with an integrated screen, on a Lilygo T-Display S3</li>
               <li><strong>Memory:</strong> 16MB Flash, 8MB PSRAM</li>
+              <li><strong>Board:</strong> Custom PCB for easier setup</li>
               <li><strong>Controls:</strong> Scroll wheel, directional pad, 5 buttons</li>
-              <li><strong>I/O:</strong> Microphone, infrared emitter, Stemma QT port</li>
+              <li><strong>I/O:</strong> Microphone for voice assistant, IR blaster, Stemma QT port</li>
+              <li><strong>Charging:</strong> USB-C</li>
+              <li><strong>Case:</strong> 3D printed, 2 parts</li>
             </ul>
+            <p><a class="cta" href="https://www.pcbway.com/project/shareproject/homeThing_S3_2b3ac3ac.html" target="_blank" rel="noopener">Order from PCBWay</a></p>
+            <p class="caption">No longer developed, but still available fully assembled from PCBWay. The <a href="https://github.com/landonr/homeThing/tree/main/Case%20Design/tdisplay-s3" target="_blank" rel="noopener">case 3D files</a> and the <a href="https://github.com/landonr/homeThing/blob/main/tdisplay-s3.yaml" target="_blank" rel="noopener">ESPHome config</a> are on GitHub.</p>
           </div>
           <div class="media">
             <img src="assets/legacy/s3-render.png" width="1100" height="1100" alt="Exploded render of the homeThing S3 with its purple case, red board, screen and speaker">
@@ -58,9 +65,84 @@
         <div class="video">
           <iframe src="https://www.youtube-nocookie.com/embed/5bx5w-n5c0Y" title="iPod Smart Home Remote with Voice Assist" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         </div>
+        <div class="narrow video-desc">
+          <p>homeThing S3 now with Voice Assistant, infrared emitter, a custom case, and a PCB!</p>
+          <p><a href="https://www.pcbway.com/project/shareproject/homeThing_S3_2b3ac3ac.html" target="_blank" rel="noopener">Buy Case and PCB from PCBWay</a></p>
+        </div>
         <p class="video-link"><a href="https://www.youtube.com/watch?v=5bx5w-n5c0Y" target="_blank" rel="noopener">Watch on YouTube</a></p>
+
+        <h2 class="section-gap">Build Video</h2>
+        <div class="video">
+          <iframe src="https://www.youtube-nocookie.com/embed/hcDLqpd2mt0" title="homeThing S3 Build Video" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        </div>
+        <div class="narrow video-desc">
+          <p>HomeThing S3: Circuit Board Assembly &amp; Soldering Guide</p>
+          <p><strong>Materials needed</strong></p>
+          <ul>
+            <li>Soldering iron &amp; solder</li>
+            <li>3D Printed homeThing Case</li>
+            <li>Custom PCB for homeThing S3</li>
+            <li>TDisplay S3 with soldered pin</li>
+            <li>Adafruit Ano Directional navigation and scroll wheel rotary encoder + PCB</li>
+            <li>INMP441 i2s Microphone</li>
+            <li>GPIO extender for I2C 8-bit</li>
+            <li>470ohm resistor</li>
+            <li>0.1uF capacitor</li>
+            <li>Super-bright 5mm IR LED - 940nm</li>
+            <li>702050 700mah lipo</li>
+            <li>10mm Push Button</li>
+            <li>6xM2.5x8mm screws</li>
+            <li>2N2222 Transistor</li>
+            <li>Female Headers, 2.54mm</li>
+          </ul>
+          <p><strong>Chapters</strong></p>
+          <ul class="chapters">
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=0s" target="_blank" rel="noopener">0:00</a> Introduction</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=28s" target="_blank" rel="noopener">0:28</a> Install PCF8574n</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=54s" target="_blank" rel="noopener">0:54</a> Attach INMP441 (microphone)</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=100s" target="_blank" rel="noopener">1:40</a> Attach Infrared LED - Resistor</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=180s" target="_blank" rel="noopener">3:00</a> Attach Capacitor</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=190s" target="_blank" rel="noopener">3:10</a> Clip down pins</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=200s" target="_blank" rel="noopener">3:20</a> Attach buttons</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=220s" target="_blank" rel="noopener">3:40</a> Assemble Scroll Wheel</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=260s" target="_blank" rel="noopener">4:20</a> Attach Scroll Wheel</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=282s" target="_blank" rel="noopener">4:42</a> Attach Pin Headers</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=319s" target="_blank" rel="noopener">5:19</a> Attach Battery</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=335s" target="_blank" rel="noopener">5:35</a> Attach TDisplay</li>
+            <li><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0&amp;t=342s" target="_blank" rel="noopener">5:42</a> Assemble Device</li>
+          </ul>
+        </div>
+        <p class="video-link"><a href="https://www.youtube.com/watch?v=hcDLqpd2mt0" target="_blank" rel="noopener">Watch on YouTube</a></p>
+
+        <h2 class="section-gap">Parts</h2>
+        <div class="parts">
+          <table>
+            <thead>
+              <tr><th scope="col">Part</th><th scope="col">Qty</th><th scope="col">Role</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><a href="https://www.pcbway.com/project/shareproject/homeThing_S3_2b3ac3ac.html" target="_blank" rel="noopener">Custom PCB</a></td><td>1</td><td>Custom homeThing S3 PCB. Gerbers are in <a href="https://github.com/landonr/homeThing/tree/main/Case%20Design/tdisplay-s3/gerber" target="_blank" rel="noopener">gerber/</a>.</td></tr>
+              <tr><td><a href="https://www.lilygo.cc/en-ca/products/t-display-s3?variant=42351558590645" target="_blank" rel="noopener">TDisplay S3 (Soldered Pin)</a></td><td>1</td><td>ESP32-S3 board with screen. Plugs into the PCB.</td></tr>
+              <tr><td><a href="https://www.adafruit.com/product/5001" target="_blank" rel="noopener">Adafruit ANO Directional Navigation and Scroll Wheel Rotary Encoder</a></td><td>1</td><td>Directional buttons and scroll wheel</td></tr>
+              <tr><td><a href="https://www.adafruit.com/product/5221" target="_blank" rel="noopener">Adafruit ANO Rotary Navigation Encoder Breakout PCB</a></td><td>1</td><td>Breakout for the ANO encoder. Plugs into the PCB.</td></tr>
+              <tr><td><a href="https://www.aliexpress.us/item/32962426410.html" target="_blank" rel="noopener">INMP441</a></td><td>1</td><td>I2S microphone</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/71446-ic-i-o-expander-for-i2c-8bit-pcf8574p.html" target="_blank" rel="noopener">PCF8574N</a></td><td>1</td><td>I2C GPIO expander for the ANO and case buttons</td></tr>
+              <tr><td><a href="https://www.adafruit.com/product/387" target="_blank" rel="noopener">5mm 940nm IR LED</a></td><td>1</td><td>IR transmitter on GPIO13</td></tr>
+              <tr><td><a href="https://leeselectronic.com/qc/product/7174-7174TRANSISTOR2N2222MPS2222ANPN5.html" target="_blank" rel="noopener">2N2222 NPN transistor</a></td><td>1</td><td>IR LED driver</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/91581-91581RESISTORS14W470OHM110PCS.html" target="_blank" rel="noopener">470ohm resistor</a></td><td>1</td><td>IR LED current limit</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/844-polyester-cap-50v-01uf-4pcs.html" target="_blank" rel="noopener">0.1uF capacitor</a></td><td>1</td><td>Decoupling for the PCF8574</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/31231-tack-switch-6x6x10mm.html" target="_blank" rel="noopener">6x6mm tactile switch (10mm tall)</a></td><td>3</td><td>Through-hole tact switches for the case buttons</td></tr>
+              <tr><td><a href="https://www.aliexpress.com/item/32835179410.html" target="_blank" rel="noopener">3.7V 7x20x50mm 700mAh Lipo</a></td><td>1</td><td>Battery</td></tr>
+              <tr><td><a href="https://leeselectronic.com/en/product/6049-6049BOLTM25100PCS.html" target="_blank" rel="noopener">M2.5x8mm screws</a></td><td>6</td><td>Case screws</td></tr>
+              <tr><td>Female pin socket 1x12, 2.54mm</td><td>2</td><td>T-Display S3 plugs into these</td></tr>
+              <tr><td>Female pin socket 1x09, 2.54mm</td><td>1</td><td>ANO breakout plugs into this</td></tr>
+              <tr><td>Female pin socket 1x03, 2.54mm</td><td>2</td><td>INMP441 plugs into these</td></tr>
+              <tr><td>Male pin header 1x04, 2.54mm (optional)</td><td>1</td><td>Optional expansion header: 5V, GPIO12, GPIO16, GND</td></tr>
+            </tbody>
+          </table>
+        </div>
         <div class="narrow">
-          <p>Build your own from the firmware and guides on <a href="https://github.com/landonr/homeThing" target="_blank" rel="noopener">GitHub</a>, and order the case from <a href="https://www.pcbway.com/project/shareproject/homeThing_V1_3_e3572f8f.html" target="_blank" rel="noopener">PCBWay</a>.</p>
+          <p>Build your own from the firmware and guides on <a href="https://github.com/landonr/homeThing" target="_blank" rel="noopener">GitHub</a>, or order parts or a fully assembled remote from <a href="https://www.pcbway.com/project/shareproject/homeThing_S3_2b3ac3ac.html" target="_blank" rel="noopener">PCBWay</a>.</p>
         </div>
       </div>
     </section>

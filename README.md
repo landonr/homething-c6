@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <a href="https://homething.io/"><b>homething.io</b></a>
+</p>
+
+<p align="center">
   <a href="https://discord.gg/BX6ZtGKHTy"><img alt="Discord" src="https://img.shields.io/discord/1021434469917413498?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
   <a href="https://www.instagram.com/homething.io/"><img alt="Instagram" src="https://img.shields.io/badge/Instagram-%40homething.io-E4405F?style=for-the-badge&logo=instagram&logoColor=white"></a>
   <a href="https://homething.io/"><img alt="Website" src="https://img.shields.io/badge/Website-homething.io-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>

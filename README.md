@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://homething.io/"><b>homething.io</b></a>
+  <a href="https://landonr.github.io/homething-c6/"><b>landonr.github.io/homething-c6</b></a>
 </p>
 
 <p align="center">

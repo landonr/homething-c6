@@ -22,7 +22,7 @@
 <p align="center">
   <sub>Prototype and fab costs sponsored by <a href="https://pcbway.com/g/Xymq6O">PCBWay</a>. Boards arrive fully assembled, no soldering required.</sub>
   <br>
-  <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
+  <a href="https://pcbway.com/g/Xymq6O"><img alt="Sponsored by PCBWay" src="https://img.shields.io/badge/Sponsored%20by-PCBWay-2EA44F?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -145,13 +145,9 @@ This project grew out of [homeThing](https://github.com/landonr/homeThing) but h
 
 # Sponsorship
 
-<img src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" data-caption="PCBWay Logo" data-no-zoom="">
+<a href="https://pcbway.com/g/Xymq6O"><img alt="Sponsored by PCBWay" src="https://img.shields.io/badge/Sponsored%20by-PCBWay-2EA44F?style=for-the-badge"></a>
 
 ## [PCBWay](https://pcbway.com/g/Xymq6O "PCBWay") sponsors 3D Printing and PCB assembly costs on this project during the prototyping phase! 
 If you are interested in their awesome fabrication services please check them out.&nbsp; They offer 
 
-3D prototyping,&nbsp;PCB design and assembly, as well as CNC metal fabrication.&nbsp; Costs are reasonable and the quality is as good as it gets.&nbsp; Thank you PCBWay for sponsoring us and other fun projects!<br><br>
-
-## [cargo](https://cargo.site/ "cargo.site") sponsors our website!
-
-They make it super easy to keep things pretty and up to date! It’s honestly so much easier than managing our own site, highly recommended!
+3D prototyping,&nbsp;PCB design and assembly, as well as CNC metal fabrication.&nbsp; Costs are reasonable and the quality is as good as it gets.&nbsp; Thank you PCBWay for sponsoring us and other fun projects!

@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>homeThing C6</title>
-  <meta name="description" content="An open source smart home remote with real buttons. For your TV, Sonos, Zigbee lights and Home Assistant. No touchscreen, no apps, no daily charging.">
+  <meta name="description" content="An open source universal remote that can control anything. For your TV, Sonos, Zigbee lights and Home Assistant. No touchscreen, no apps, no daily charging.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="homeThing C6">
-  <meta property="og:description" content="An open source smart home remote with real buttons. For your TV, Sonos, Zigbee lights and Home Assistant.">
-  <meta property="og:image" content="assets/remote-build-stages.jpg">
+  <meta property="og:description" content="An open source universal remote that can control anything. For your TV, Sonos, Zigbee lights and Home Assistant.">
+  <meta property="og:image" content="assets/c6/hero.jpg">
   <link rel="icon" href="assets/homeThingLogo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,13 +30,74 @@
   </header>
 
   <main>
-    <section class="band hero">
-      <div class="inner">
+    <section class="hero hero-cover">
+      <img class="hero-photo" src="assets/c6/hero.jpg" width="2880" height="1440" alt="The homeThing C6 remote standing upright on an oak table in low evening sun, with plants and a bay window over the prairie behind it">
+      <div class="hero-text">
         <h1>homeThing C6</h1>
-        <p class="subhead">An open source smart home remote with real buttons.</p>
-        <p>For your TV, Sonos, Zigbee lights and Home Assistant.<br>No touchscreen, no apps, no daily charging.</p>
+        <p class="subhead">An open source universal remote that can control anything.</p>
         <p><a class="cta" href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Coming Soon</a></p>
-        <img class="hero-image" src="assets/remote-build-stages.jpg" width="1600" height="1201" alt="Four homeThing C6 units on a table: the bare board, the finished remote with lit LEDs, the case without the scroll wheel, and the empty case">
+      </div>
+    </section>
+
+    <section class="band" id="features">
+      <div class="inner">
+        <h2>What homeThing C6 does.</h2>
+        <p class="features-lede">For your TV, Sonos, Zigbee lights and Home Assistant.<br>No touchscreen, no apps, no daily charging.</p>
+        <ul class="features">
+          <li class="feature big">
+            <video src="assets/c6/clip-tv.mp4" poster="assets/c6/clip-tv.jpg" width="480" height="640" muted loop playsinline preload="none" data-autoplay aria-label="A press on the remote turns on the TV"></video>
+            <div class="feature-copy">
+              <h3>Runs your TV</h3>
+              <p>Learns the IR codes from the remote you already have. Then the wheel and pad drive the TV.</p>
+            </div>
+          </li>
+          <li class="feature tall">
+            <video src="assets/c6/clip-lights.mp4" poster="assets/c6/clip-lights.jpg" width="480" height="640" muted loop playsinline preload="none" data-autoplay aria-label="A button turns the living room lights off and back on"></video>
+            <div class="feature-copy">
+              <h3>Switches the lights</h3>
+              <p>A button talks straight to Zigbee lights and groups.</p>
+            </div>
+          </li>
+          <li class="feature-text tile-blue">
+            <h3>No hub needed</h3>
+            <p>Presses go straight to your Zigbee lights and IR devices. They work without Wi-Fi, Home Assistant or Zigbee2MQTT.</p>
+          </li>
+          <li class="feature">
+            <video src="assets/c6/clip-sleep.mp4" poster="assets/c6/clip-sleep.jpg" width="480" height="640" muted loop playsinline preload="none" data-autoplay aria-label="The remote flashes blue as it goes to sleep"></video>
+            <div class="feature-copy">
+              <h3>Sleeps on its own</h3>
+              <p>It sleeps between presses, aimed at about a month per charge.</p>
+            </div>
+          </li>
+          <li class="feature-text feature-web tile-violet">
+            <div>
+              <h3>No flashing needed</h3>
+              <p>Set every button from the remote's own web page, in any browser. No YAML to edit and no firmware to rebuild.</p>
+            </div>
+            <div class="browser feature-shot">
+              <div class="browser-bar" aria-hidden="true">
+                <span class="browser-dots"><i></i><i></i><i></i></span>
+                <span class="browser-url">homething-c6-13f498.local</span>
+              </div>
+              <img src="assets/c6/feature-web-page.jpg" width="600" height="680" loading="lazy" alt="The remote's web page: a drawing of the remote, and button 7 set to a Zigbee target">
+            </div>
+          </li>
+          <li class="feature big">
+            <video src="assets/c6/clip-fireplace.mp4" poster="assets/c6/clip-fireplace.jpg" width="480" height="640" muted loop playsinline preload="none" data-autoplay aria-label="A button lights the gas fireplace"></video>
+            <div class="feature-copy">
+              <h3>Any button, any device</h3>
+              <p>Each button can drive something different. Here one lights the fireplace over Zigbee.</p>
+            </div>
+          </li>
+          <li class="feature-text tile-purple">
+            <h3>Bluetooth keys too</h3>
+            <p>Pair it like a Bluetooth keyboard or gamepad, and send media keys to a computer, phone or tablet.</p>
+          </li>
+          <li class="feature-text tile-ink">
+            <h3>Open source, all of it</h3>
+            <p>The board, the case and the ESPHome firmware are on GitHub. Build one, change it or fix it.</p>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -47,21 +108,27 @@
           <div class="text">
             <h3 class="subhead">One remote, no screen.</h3>
             <ul class="specs">
-              <li><strong>Controls:</strong> Scroll wheel with 5-way pad, 11 assignable buttons</li>
-              <li><strong>Battery:</strong> 1000 mAh LiPo, aimed at about a month per charge</li>
-              <li><strong>Wireless:</strong> Wi-Fi, BLE, Zigbee</li>
-              <li><strong>Processor:</strong> Seeed Studio XIAO ESP32-C6</li>
-              <li><strong>Infrared:</strong> Learns and sends codes from your existing remotes</li>
-              <li><strong>Voice:</strong> Microphone for the Home Assistant voice assistant</li>
-              <li><strong>Status:</strong> 4 RGB LEDs</li>
-              <li><strong>Case:</strong> 3D printed, SLS or FDM</li>
-              <li><strong>Charging:</strong> USB-C</li>
+              <li><strong>Controls</strong> Scroll wheel with 5-way pad, 11 assignable buttons</li>
+              <li><strong>Battery</strong> 1000 mAh LiPo, aimed at about a month per charge</li>
+              <li><strong>Charging</strong> USB-C</li>
+              <li><strong>Processor</strong> Seeed Studio XIAO ESP32-C6</li>
+              <li><strong>Infrared</strong> Transmits, receives and learns codes</li>
+              <li><strong>Voice</strong> Microphone for the Home Assistant voice assistant</li>
+              <li><strong>Status</strong> 4 RGB LEDs</li>
+              <li><strong>Case</strong> 3D printed, SLS or FDM</li>
+              <li><strong>Wireless</strong>
+                <span class="radios">
+                  <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>Wi-Fi</span>
+                  <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"/></svg>BLE</span>
+                  <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 8h9l-9 8h9"/></svg>Zigbee</span>
+                </span>
+              </li>
             </ul>
             <p><a class="cta" href="https://discord.gg/BX6ZtGKHTy" target="_blank" rel="noopener">Coming Soon</a></p>
             <p class="caption">Join the Discord to hear first when homeThing C6 is ready to order.</p>
           </div>
           <div class="media">
-            <img src="assets/case-exploded.png" width="1200" height="1440" loading="lazy" alt="Exploded view of the homeThing C6: the clear front case, the button caps, the circuit board with the scroll wheel and the XIAO ESP32-C6, the battery and the purple back case">
+            <video src="assets/c6/explode.mp4" poster="assets/c6/explode.jpg" width="960" height="720" muted loop playsinline preload="none" data-autoplay aria-label="The case, the button pad and the board parts come apart, the exploded remote turns once, and the parts go back together"></video>
           </div>
         </div>
       </div>
@@ -73,6 +140,7 @@
         <div class="narrow">
           <p>The board arrives fully assembled, so there is no soldering. The board design, the firmware and the case files are all open source on <a href="https://github.com/landonr/homething-c6" target="_blank" rel="noopener">GitHub</a>, so you can build your own from scratch.</p>
         </div>
+        <img class="build-stages" src="assets/remote-build-stages.jpg" width="1600" height="1201" loading="lazy" alt="Four homeThing C6 units on a table: the bare board, the finished remote with lit LEDs, the case without the scroll wheel, and the empty case">
       </div>
     </section>
 
@@ -134,7 +202,13 @@
             <p>You can also assign buttons on the remote itself. No app, no cloud.</p>
           </div>
           <figure class="media">
-            <img src="assets/buttons-page-assign.png" width="2200" height="1878" loading="lazy" alt="The remote’s Buttons web page: a drawing of the remote on the left, with button 7 set to a Zigbee target on the right">
+            <div class="browser">
+              <div class="browser-bar" aria-hidden="true">
+                <span class="browser-dots"><i></i><i></i><i></i></span>
+                <span class="browser-url">homething-c6-13f498.local</span>
+              </div>
+              <img src="assets/buttons-page-assign.png" width="2200" height="1878" loading="lazy" alt="The remote’s Buttons web page: a drawing of the remote on the left, with button 7 set to a Zigbee target on the right">
+            </div>
             <figcaption class="caption">The Buttons tab with a Zigbee assignment</figcaption>
           </figure>
         </div>
@@ -237,5 +311,19 @@
   <footer class="footer">
     <p>© 2026 homeThing · <a href="mailto:homeThing32@gmail.com">homeThing32@gmail.com</a></p>
   </footer>
+
+  <script>
+    // Play a clip only while it is on screen. With reduced motion, the poster stays.
+    (() => {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) return;
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) e.target.play().catch(() => {});
+          else e.target.pause();
+        }
+      }, { threshold: 0.4 });
+      document.querySelectorAll("video[data-autoplay]").forEach((v) => io.observe(v));
+    })();
+  </script>
 </body>
 </html>

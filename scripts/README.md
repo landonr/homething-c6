@@ -46,6 +46,10 @@ The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as we
 Add `--rig` to a case script to render on the Windows Rig over SSH.
 The case scripts write dated files into `c6remote-explode`; copy them into `docs/readme-assets/` as `case-assembled.png`, `case-exploded.png`, and `case-explode-loop.webp`.
 
+After a new `case-explode-loop.webp`, run `scripts/site-media.sh <IMG_7480_clicks.mp4>` to make the C6 page videos in `site/assets/c6/`.
+The script also cuts the four feature clips from the living room demo video. It needs `ffmpeg` and ImageMagick.
+It also crops the web page image for the "No flashing needed" card from `buttons-page-assign.png`.
+
 Run `case/.venv/bin/python scripts/render-face-svg.py --version sls` and `--version fdm` to draw the two front faces for `case/README.md`.
 The script reads the case model. It writes `case-front-face-sls.svg` and `case-front-face-fdm.svg` into `docs/readme-assets/`.
 Without `--version`, it writes `case-front-face.svg` for the web page. Keep that file small, because the firmware embeds it.

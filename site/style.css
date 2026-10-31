@@ -2,6 +2,7 @@
   --ink: #1c1c1e;
   --muted: #6e6e73;
   --grey: #f2f2f4;
+  --card: #f5f5f7;
   --accent: #5b5fc7;
   --line: rgba(0, 0, 0, 0.08);
   --pad-x: clamp(20px, 9vw, 200px);
@@ -155,6 +156,7 @@ p:last-child {
 }
 
 .band.grey {
+  --card: #fff;
   background: var(--grey);
 }
 
@@ -164,9 +166,16 @@ p:last-child {
 }
 
 .hero {
+  --hero-start: #6b92e6;
+  --hero-mid: #6169c2;
+  --hero-end: #5459ad;
+  --hero-fade: #fff;
   background:
-    linear-gradient(rgba(255, 255, 255, 0) 70%, #fff 100%),
-    linear-gradient(100deg, #6b92e6 0%, #6169c2 50%, #5459ad 100%);
+    linear-gradient(rgba(255, 255, 255, 0) 70%, var(--hero-fade) 100%),
+    linear-gradient(100deg, var(--hero-start) 0%, var(--hero-mid) 50%, var(--hero-end) 100%);
+  /* A repeated tile shows as a coloured line at the bottom when the height is fractional. */
+  background-repeat: no-repeat;
+  background-color: var(--hero-fade);
   color: #fff;
   text-align: center;
   padding-top: 150px;
@@ -188,20 +197,97 @@ p:last-child {
   margin-top: 0.75em;
 }
 
+.hero .page-years {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .hero-image {
   width: 100%;
   max-width: 720px;
   margin: clamp(48px, 6vw, 80px) auto 0;
 }
 
-.page-head {
-  text-align: center;
-  margin-bottom: clamp(56px, 7vw, 110px);
+/* Title over a full-bleed render. The hero gradient fades out down the top of the photo
+   behind the text. Narrow screens crop the sides, so the render keeps the remote centred. */
+.hero.hero-cover {
+  position: relative;
+  /* Up to full screen height, so the render scales up and the title takes less of it. The 60vw
+     cap keeps a tall window from filling with sky above the remote. */
+  height: clamp(600px, calc(100svh - 52px), 60vw);
+  padding: 0;
+  overflow: hidden;
+  background: var(--hero-mid);
 }
 
-.page-head .subhead {
-  max-width: 30em;
-  margin: 0.8em auto 0;
+.hero-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(100deg, var(--hero-start) 0%, var(--hero-mid) 50%, var(--hero-end) 100%);
+  -webkit-mask-image: linear-gradient(#000 0%, rgba(0, 0, 0, 0.55) 22%, transparent 48%);
+  mask-image: linear-gradient(#000 0%, rgba(0, 0, 0, 0.55) 22%, transparent 48%);
+}
+
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+
+.hero-text {
+  position: relative;
+  z-index: 2;
+  padding: clamp(40px, 5vw, 72px) var(--pad-x) 0;
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Small enough that "homeThing C6" stays on one line on a phone. */
+.hero-text h1 {
+  font-size: clamp(42px, 6.6vw, 112px);
+}
+
+.hero-text .subhead {
+  font-size: clamp(20px, 1.7vw, 28px);
+  text-wrap: balance;
+}
+
+.hero-text .cta {
+  text-shadow: none;
+}
+
+h2:has(+ .features-lede) {
+  margin-bottom: 0.45em;
+}
+
+.features-lede {
+  max-width: 34em;
+  margin: 0 auto clamp(40px, 5vw, 64px);
+  text-align: center;
+  color: var(--muted);
+}
+
+.build-stages {
+  width: 100%;
+  max-width: 800px;
+  margin: clamp(40px, 5vw, 64px) auto 0;
+  border-radius: 16px;
+}
+
+.hero-s3 {
+  --hero-start: #9b74e6;
+  --hero-mid: #8358d0;
+  --hero-end: #6c40b5;
+}
+
+.hero-original {
+  --hero-start: #e07a2a;
+  --hero-mid: #d6612a;
+  --hero-end: #c6452b;
+  --hero-fade: var(--grey);
 }
 
 .section-gap {
@@ -269,27 +355,127 @@ p:last-child {
   margin: 0 auto;
 }
 
+/* A plain browser window around a web page screenshot. */
+.browser {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.1);
+}
+
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #e8e8ec;
+  border-bottom: 1px solid var(--line);
+}
+
+.browser-dots {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.browser-dots i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+
+.browser-dots i:nth-child(2) {
+  background: #febc2e;
+}
+
+.browser-dots i:nth-child(3) {
+  background: #28c840;
+}
+
+/* The right margin matches the dots, so the address sits in the middle of the bar. */
+.browser-url {
+  flex: 1;
+  min-width: 0;
+  margin-right: 42px;
+  padding: 4px 12px;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .narrow {
   max-width: 36em;
   margin: 0 auto;
   text-align: left;
 }
 
-/* Spec lists */
+/* Spec lists: each spec shows as a card, two to a row. */
 
 .specs {
   list-style: none;
   margin: 0 0 1.6em;
   padding: 0;
+  display: grid;
+  /* At most two columns, and one on a phone. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(240px, calc(50% - 6px))), 1fr));
+  gap: 12px;
 }
 
 .specs li {
-  padding: 0.5em 0;
-  border-top: 1px solid var(--line);
+  padding: 14px 18px;
+  background: var(--card);
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
-.specs li:last-child {
-  border-bottom: 1px solid var(--line);
+.specs strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.specs li:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.icon {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.specs .radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin-top: 6px;
+  color: var(--ink);
+}
+
+.specs .radios span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.specs .radios .icon {
+  color: var(--accent);
 }
 
 .text .caption {
@@ -301,40 +487,177 @@ p:last-child {
   padding-left: 1.2em;
 }
 
+.media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+}
+
+/* Feature cards: a bento grid. Clips fill their cells, and text cards set the row heights. */
+
+.features {
+  --gap: 24px;
+  --row: clamp(220px, 22vw, 300px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--row), auto);
+  grid-auto-flow: dense;
+  gap: var(--gap);
+}
+
+.feature,
+.feature-text {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  color: #fff;
+}
+
+.feature {
+  background: var(--grey);
+}
+
+.feature.big {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.feature.tall {
+  grid-row: span 2;
+}
+
+.feature video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The dark fade keeps the white text readable over a bright frame, such as a lit TV. */
+.feature-copy {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: clamp(20px, 2.2vw, 32px) clamp(20px, 2.2vw, 32px) clamp(28px, 3vw, 44px);
+  background: linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.42) 70%, transparent);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+}
+
+.feature h3 {
+  font-size: clamp(22px, 1.8vw, 28px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: 0.4em;
+}
+
+.feature.big h3 {
+  font-size: clamp(26px, 2.4vw, 36px);
+}
+
+.feature p {
+  max-width: 24em;
+  font-size: 16px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.feature-text {
+  background: var(--tile);
+  padding: clamp(24px, 2.6vw, 40px);
+}
+
+/* Each tile keeps white text at WCAG AA contrast or better. */
+.tile-blue { --tile: #4470d0; }
+.tile-violet { --tile: #5b5fc7; }
+.tile-purple { --tile: #7048c0; }
+.tile-ink { --tile: #1c1c1e; }
+
+.feature-text h3 {
+  font-size: clamp(24px, 2vw, 32px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: 0.5em;
+}
+
+.feature-text p {
+  font-size: 17px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Text on the plain tile, and a crop of the web page that runs off the right and bottom edges. */
+.feature-web {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+.feature-web > div {
+  padding-bottom: clamp(24px, 2.6vw, 40px);
+}
+
+/* A browser window cut off by the card's right and bottom edges. Size containment keeps it
+   from growing the row, so the text cards set the height and the window fills it. */
+.browser.feature-shot {
+  contain: size;
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 10px 0 0 0;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.feature-shot .browser-url {
+  margin-right: 0;
+  text-align: left;
+}
+
 /* Parts tables */
 
 .parts {
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
   overflow-x: auto;
 }
 
 .parts table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card);
+  border-radius: 16px;
   text-align: left;
-  font-size: 0.9em;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .parts th,
 .parts td {
-  padding: 0.6em 1em 0.6em 0;
+  padding: 14px 20px;
   border-top: 1px solid var(--line);
   vertical-align: top;
+  /* Long part numbers would otherwise widen the table past a phone screen. */
+  overflow-wrap: anywhere;
 }
 
-.parts th {
+.parts thead th {
+  border-top: 0;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.parts th:last-child,
-.parts td:last-child {
-  padding-right: 0;
-}
-
-.parts tbody tr:last-child td {
-  border-bottom: 1px solid var(--line);
+.parts td:nth-child(1) {
+  font-weight: 600;
 }
 
 .parts th:nth-child(2),
@@ -344,12 +667,13 @@ p:last-child {
   text-align: center;
 }
 
-.parts td:last-child {
+.parts td:nth-child(3) {
   color: var(--muted);
 }
 
 .parts .caption {
-  margin-top: 1em;
+  margin-top: 1.5em;
+  text-align: center;
 }
 
 /* Image pairs and figures */
@@ -578,6 +902,18 @@ figcaption {
   margin: 0;
 }
 
+@media (max-width: 1000px) {
+  .features {
+    --gap: 16px;
+    --row: clamp(220px, 34vw, 340px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .feature.big {
+    grid-column: auto;
+  }
+}
+
 @media (max-width: 800px) {
   :root {
     --pad-y: 64px;
@@ -626,6 +962,56 @@ figcaption {
     padding: 10px 16px;
   }
 
+  .hero.hero-cover {
+    height: max(640px, calc(100svh - 52px));
+  }
+
+  .features {
+    --gap: 12px;
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+  }
+
+  .feature.big,
+  .feature.tall {
+    grid-row: auto;
+  }
+
+  .feature video {
+    position: static;
+    height: auto;
+    aspect-ratio: 3 / 4;
+  }
+
+  .feature-web {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .feature-web > div {
+    padding-right: clamp(24px, 2.6vw, 40px);
+    padding-bottom: 0;
+  }
+
+  .browser.feature-shot {
+    contain: none;
+    justify-self: end;
+    width: 85%;
+  }
+
+  .feature-text p {
+    font-size: 15px;
+  }
+
+  .parts table {
+    font-size: 14px;
+  }
+
+  .parts th,
+  .parts td {
+    padding: 12px 10px;
+  }
+
   .nav-inner {
     gap: 4px 16px;
     font-size: 15px;
@@ -645,45 +1031,6 @@ figcaption {
 
   .pair.stack-small {
     grid-template-columns: 1fr;
-  }
-
-  /* Each part becomes two lines: the name and qty, then the role below. */
-  .parts tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 1em;
-    padding: 0.6em 0;
-    border-top: 1px solid var(--line);
-  }
-
-  .parts tbody tr:last-child {
-    border-bottom: 1px solid var(--line);
-  }
-
-  .parts th,
-  .parts td,
-  .parts tbody tr:last-child td {
-    padding: 0;
-    border: 0;
-  }
-
-  .parts th:nth-child(2),
-  .parts td:nth-child(2) {
-    width: auto;
-    text-align: right;
-  }
-
-  .parts td:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .parts th:last-child {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .gallery {

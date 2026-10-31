@@ -576,6 +576,23 @@ h2:has(+ .features-lede) {
 .tile-purple { --tile: #7048c0; }
 .tile-ink { --tile: #1c1c1e; }
 
+/* 1 / -1 spans every track at any column count. "span 4" adds implicit columns in the narrower grids. */
+.feature-text.wide {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(16px, 2vw, 28px);
+}
+
+.feature-text.wide h3 {
+  margin-bottom: 0;
+}
+
+.feature-text.wide p {
+  max-width: 32em;
+}
+
 .feature-text h3 {
   font-size: clamp(24px, 2vw, 32px);
   letter-spacing: -0.02em;
@@ -1001,6 +1018,14 @@ figcaption {
 
   .feature-text p {
     font-size: 15px;
+  }
+
+  .feature-text.wide {
+    display: block;
+  }
+
+  .feature-text.wide h3 {
+    margin-bottom: 0.5em;
   }
 
   .parts table {

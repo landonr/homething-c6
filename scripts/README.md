@@ -50,6 +50,10 @@ After a new `case-explode-loop.webp`, run `scripts/site-media.sh <IMG_7480_click
 The script also cuts the four feature clips from the living room demo video. It needs `ffmpeg` and ImageMagick.
 It also crops the web page image for the "No flashing needed" card from `buttons-page-assign.png`.
 
+Run `scripts/browser-frame.sh <in.png> <out.png> [address]` to draw a browser window around a web page screenshot.
+The README uses `buttons-page-assign-framed.png` and `buttons-page-config-framed.png`, which this script makes from the two plain screenshots.
+After a new web page screenshot, run the script again. The script needs ImageMagick.
+
 Run `case/.venv/bin/python scripts/render-face-svg.py --version sls` and `--version fdm` to draw the two front faces for `case/README.md`.
 The script reads the case model. It writes `case-front-face-sls.svg` and `case-front-face-fdm.svg` into `docs/readme-assets/`.
 Without `--version`, it writes `case-front-face.svg` for the web page. Keep that file small, because the firmware embeds it.

@@ -8,8 +8,8 @@
 <h1 align="center">homeThing C6</h1>
 
 <p align="center">
-  A handheld remote for TV, Sonos, Zigbee lights, and Home Assistant.<br>
-  Physical buttons, a rotary control, fast access, and long idle life. No touchscreen, no apps, no daily charging.
+  An open source universal remote that can control anything.<br>
+  For your TV, Sonos, Zigbee lights, and Home Assistant. No touchscreen, no apps, no daily charging.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://discord.gg/BX6ZtGKHTy"><img alt="Discord" src="https://img.shields.io/discord/1021434469917413498?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
   <a href="https://www.instagram.com/homething.io/"><img alt="Instagram" src="https://img.shields.io/badge/Instagram-%40homething.io-E4405F?style=for-the-badge&logo=instagram&logoColor=white"></a>
-  <a href="https://homething.io/"><img alt="Website" src="https://img.shields.io/badge/Website-homething.io-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+  <a href="https://landonr.github.io/homething-c6/"><img alt="Website" src="https://img.shields.io/badge/Website-GitHub%20Pages-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
   <a href="https://github.com/landonr/homeThing"><img alt="homeThing on GitHub" src="https://img.shields.io/github/stars/landonr/homeThing?style=for-the-badge&logo=github&logoColor=white&label=homeThing&color=181717"></a>
 </p>
 
@@ -33,25 +33,57 @@
   <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
 </p>
 
-## Summary
+## What homeThing C6 does
+
+- **Runs your TV.** It learns the IR codes from the remote you already have. Then the wheel and pad drive the TV.
+- **Switches the lights.** A button talks straight to Zigbee lights and groups.
+- **Any button, any device.** Each button can drive something different, for example a gas fireplace over Zigbee.
+- **Sleeps on its own.** It sleeps between presses, with a target of about a month per charge.
+- **No hub needed.** Presses go straight to your Zigbee lights and IR devices. They work without Wi-Fi, Home Assistant, or Zigbee2MQTT.
+- **No flashing needed.** Set every button from the remote's own web page, in any browser. You do not edit YAML or rebuild the firmware.
+- **Bluetooth keys too.** Pair it like a Bluetooth keyboard or gamepad, and send media keys to a computer, phone, or tablet.
+- **Open source, all of it.** The board, the case, and the ESPHome firmware are in this repository.
+
+## Specs
+
+### One remote, no screen.
+
+| Spec | Detail |
+| --- | --- |
+| **Controls** | Scroll wheel with 5-way pad, 11 assignable buttons |
+| **Battery** | 1000 mAh LiPo, with a target of about a month per charge |
+| **Charging** | USB-C |
+| **Processor** | Seeed Studio XIAO ESP32-C6 |
+| **Infrared** | Transmits, receives, and learns codes |
+| **Voice** | Microphone for the Home Assistant voice assistant |
+| **Status** | 4 RGB LEDs |
+| **Case** | 3D printed, SLS or FDM |
+| **Wireless** | Wi-Fi, BLE, Zigbee |
+
+<p align="center">
+  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
+</p>
+
+## Build one, or get one ready to go
+
+The board arrives fully assembled, so there is no soldering. The board design, the firmware, and the case files are all open source in this repository, so you can build your own from scratch.
 
 - **Case:** The [`case/` README](case/README.md) documents the enclosure files and assembly information.
 - **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
-- **Firmware:** The [firmware section](#firmware-more-info) documents the ESPHome configuration and local components.
+- **Firmware:** The [Make It Yours](#make-it-yours) section documents button assignment. [`c6remote.yaml`](c6remote.yaml) is the ESPHome configuration.
 - **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
 
-The prototype uses a Seeed Studio XIAO ESP32-C6.
+## Your smart home, on real buttons
 
-### Features
+### Control Anything
 
-- Control a TV with on-board IR receive and transmit hardware
-- Drive music playback over Wi-Fi and BLE
-- Switch lights over Zigbee, or over Wi-Fi with Home Assistant actions
-- Map Home Assistant actions to physical buttons instead of app screens
-- Assign every button from a web page on the remote itself
-- Run for a long time between charges
+Pick it up, press a button, and the lights change. No phone to unlock, no app to open.
 
-## Case ([more info](case/README.md))
+- **TV:** Learns the IR codes from the remote you already have, then sends them.
+- **Music:** Controls Sonos over Wi-Fi, or pairs with a phone, tablet, or computer over BLE for media keys.
+- **Lights:** Talks straight to Zigbee lights and groups.
+- **Home Assistant:** Puts any action or script on a button.
+- **Voice:** Talks to your Home Assistant voice assistant through the built-in mic.
 
 <p align="center">
   <picture>
@@ -64,13 +96,48 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
   </picture>
 </p>
 
+## Make It Yours
+
+### Every button is yours to set.
+
+Open the remote's own web page from any browser on your network. Pick a button, then pick what it does: an IR code, a Zigbee light or group, a BLE media key, a Home Assistant action, or voice. You can also assign buttons on the remote itself. No app, no cloud.
+
+#### Button assignment ([more info](RECEIVER.md))
+
+Open `http://homething-c6-xxxxxx.local/` in a browser. `xxxxxx` is the end of the remote's MAC address.
+Home Assistant also shows this address as the **Web Page** entity.
+To assign buttons on the remote itself, hold `SW9` for two seconds.
+[`RECEIVER.md`](RECEIVER.md) has the full steps.
+The page has no password, so use it only on a trusted network.
+
 <p align="center">
-  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
+  <img alt="The Buttons tab in a browser window. Button 7 is selected and set to a Zigbee target" src="docs/readme-assets/buttons-page-assign-framed.png" width="62%">
+  <img alt="The Config tab in a browser window, with the Wi-Fi, sleep, Home Assistant, Zigbee, and Bluetooth settings" src="docs/readme-assets/buttons-page-config-framed.png" width="35%">
+</p>
+<p align="center"><sub>The Buttons tab with a Zigbee assignment, and the Config tab</sub></p>
+
+## Built Your Way
+
+### A custom board in an open case.
+
+- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
+- Parametric 3D printed case in SLS and FDM versions.
+- Sleeps between presses and wakes on any button.
+
+### Case ([more info](case/README.md))
+
+<p align="center">
+  <img alt="Front of the homeThing C6 in a clear case: the microphone and power buttons, the scroll wheel with lit status LEDs, and nine buttons below it" src="docs/readme-assets/case-annotated-front.png" width="220" hspace="20">
+  <img alt="Back of the homeThing C6 in a clear purple case" src="docs/readme-assets/case-annotated-back.png" width="220" hspace="20">
 </p>
 
-## Board ([more info](c6remote-kicad/README.md))
+<p align="center">
+  <img alt="Isometric render of the SLS version of the front case" src="docs/readme-assets/case-front-iso-sls.png" width="380">
+  <img alt="Isometric render of the FDM version of the front case" src="docs/readme-assets/case-front-iso-fdm.png" width="380">
+</p>
+<p align="center"><sub>SLS front and FDM front</sub></p>
 
-### PCB and hardware
+### Board ([more info](c6remote-kicad/README.md))
 
 <p align="center">
   <picture>
@@ -105,7 +172,7 @@ The prototype uses a Seeed Studio XIAO ESP32-C6.
 
 The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
 
-### Schematic
+#### Schematic
 
 <p align="center">
   <picture>
@@ -113,24 +180,6 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
     <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
   </picture>
 </p>
-
-## Firmware ([more info](RECEIVER.md))
-
-### Button assignment
-
-Open `http://homething-c6-xxxxxx.local/` in a browser on the same network.
-`xxxxxx` is the last six hex digits of the remote MAC address. Home Assistant shows the remote as `homeThing C6 xxxxxx`.
-Home Assistant also shows the web page address as the diagnostic **Web Page** entity.
-The page draws the remote layout. Select an input, then assign IR, Zigbee, BLE HID, or voice.
-You can also clear the input. Hold `SW9` for two seconds to use the on-device assignment mode.
-The card of each button on the **Buttons** tab can give that button this hold or the Wi-Fi, status, or sleep hold.
-[`RECEIVER.md`](RECEIVER.md) documents both routes. The page has no password, so use it only on a trusted network.
-
-<p align="center">
-  <img alt="The Buttons tab. Button 7 is selected and set to a Zigbee target" src="docs/readme-assets/buttons-page-assign.png" width="62%">
-  <img alt="The Config tab with the Wi-Fi, sleep, Home Assistant, Zigbee, and Bluetooth settings" src="docs/readme-assets/buttons-page-config.png" width="35%">
-</p>
-<p align="center"><sub>The Buttons tab with a Zigbee assignment, and the Config tab</sub></p>
 
 ## Status ([more info](docs/timeline.md))
 

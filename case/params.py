@@ -639,8 +639,8 @@ a floor under what is left there."""
 # material diffuses better than the silicone did, so the pad now just gets
 # out of the light's way entirely.
 LED_HEIGHT = 0.8
-"""XL-2020RGBC body height above the board face. Hand-entered: D2-D5 have no 3D
-model at all, so nothing in the design files can confirm it."""
+"""XL-2020RGBC body height above the board face. Hand-entered: D2-D7 carry only
+a WS2812C-2020 stand-in model, so nothing in the design files can confirm it."""
 LED_BODY = 2.0
 """XL-2020RGBC body side, square in plan. Hand-entered for the same reason as
 LED_HEIGHT."""
@@ -648,8 +648,8 @@ PAD_LED_CLEARANCE = 0.6
 """How far past an LED's own body edge the pad's wheel cut has to reach, so
 the web's edge stands clear of the package rather than grazing it. One term
 of pad_clear_y(), off the LED placements plus LED_BODY, so moving an LED
-moves it; the lip's own rotating clearance is the other term and governs at
-the present layout."""
+moves it. The lip's own rotating clearance is the other term. This term
+governs at the present layout, because D6 and D7 sit on the wheel's y axis."""
 WHEEL_OPENING_EDGE = 0.65
 """Minimum ceiling between the shell's wheel opening and the side wall. The
 opening is clipped to a chord near the X axis if it would come closer than
@@ -660,8 +660,8 @@ the clip and no longer does: the channel runs flush to the cavity wall
 instead."""
 
 # LED ring channel: an annular void inside the front shell's ceiling, circling
-# the wheel opening and passing over D2-D5, so their light spreads around the
-# channel and reads as a ring on the face instead of four dots. The channel is
+# the wheel opening and passing over D2-D7, so their light spreads around the
+# channel and reads as a ring on the face instead of six dots. The channel is
 # open to the cavity below (the pad's wheel cut already uncovers the LEDs) and
 # roofed by LED_RING_ROOF of translucent shell, which is the diffuser.
 LED_RING_WALL = 1.0

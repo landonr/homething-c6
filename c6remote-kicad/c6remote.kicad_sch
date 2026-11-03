@@ -5436,7 +5436,7 @@
 		(uuid "800d052d-d962-4416-9051-b975664cc94e")
 	)
 	(junction
-		(at 262.89 162.56)
+		(at 134.62 189.23)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9631f1bb-6f8e-4f74-8af3-9256c478b22c")
@@ -5460,7 +5460,7 @@
 		(uuid "dd11c6ea-d385-444b-9ddb-04c76d1977ef")
 	)
 	(junction
-		(at 147.32 163.83)
+		(at 154.94 189.23)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fe8823b3-ac53-445b-8a00-df633c4df5a9")
@@ -5470,12 +5470,12 @@
 		(uuid "2bbc7e70-6e2b-4f44-a4f4-536ad8117f57")
 	)
 	(no_connect
-		(at 26.67 163.83)
-		(uuid "3f6c94b1-0d52-4a7e-bd10-2c8f5a41e904")
+		(at 276.86 152.4)
+		(uuid "38fd35cb-58e8-4d97-88b6-6a7000b5c70e")
 	)
 	(no_connect
-		(at 240.03 152.4)
-		(uuid "50f08042-2dc9-4d14-8d9b-c6ddf49f3a60")
+		(at 26.67 163.83)
+		(uuid "3f6c94b1-0d52-4a7e-bd10-2c8f5a41e904")
 	)
 	(no_connect
 		(at 208.28 68.58)
@@ -5488,6 +5488,16 @@
 	(no_connect
 		(at 204.47 68.58)
 		(uuid "e6f2abdf-a775-48f2-9fef-ec0e86a460f9")
+	)
+	(wire
+		(pts
+			(xy 185.42 142.24) (xy 185.42 144.78)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "05c3604b-7654-45c8-a998-09420a2eb91a")
 	)
 	(wire
 		(pts
@@ -5511,7 +5521,7 @@
 	)
 	(wire
 		(pts
-			(xy 213.36 152.4) (xy 212.09 152.4)
+			(xy 222.25 152.4) (xy 220.98 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5531,7 +5541,7 @@
 	)
 	(wire
 		(pts
-			(xy 265.43 152.4) (xy 270.51 152.4)
+			(xy 137.16 179.07) (xy 142.24 179.07)
 		)
 		(stroke
 			(width 0)
@@ -5548,6 +5558,26 @@
 			(type default)
 		)
 		(uuid "0f61eeeb-fe26-4aef-8a86-7eeeed60e196")
+	)
+	(wire
+		(pts
+			(xy 176.53 152.4) (xy 177.8 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "11c818bd-c588-49f4-9ba0-c89dd4fb6617")
+	)
+	(wire
+		(pts
+			(xy 241.3 142.24) (xy 241.3 144.78)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13bf3c07-8916-46d1-94dd-3538944f07ed")
 	)
 	(wire
 		(pts
@@ -5591,7 +5621,7 @@
 	)
 	(wire
 		(pts
-			(xy 223.52 152.4) (xy 224.79 152.4)
+			(xy 232.41 152.4) (xy 233.68 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5631,16 +5661,6 @@
 	)
 	(wire
 		(pts
-			(xy 124.46 161.29) (xy 139.7 161.29)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4a5eab6e-1e1b-4943-8cd0-1135822b8d9a")
-	)
-	(wire
-		(pts
 			(xy 80.01 158.75) (xy 82.55 158.75)
 		)
 		(stroke
@@ -5671,6 +5691,16 @@
 	)
 	(wire
 		(pts
+			(xy 260.35 152.4) (xy 261.62 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5fc0e5f2-98a7-422f-a521-cbe867698221")
+	)
+	(wire
+		(pts
 			(xy 200.66 64.77) (xy 198.12 64.77)
 		)
 		(stroke
@@ -5691,7 +5721,7 @@
 	)
 	(wire
 		(pts
-			(xy 139.7 143.51) (xy 139.7 144.78)
+			(xy 138.43 152.4) (xy 137.16 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5751,7 +5781,7 @@
 	)
 	(wire
 		(pts
-			(xy 176.53 142.24) (xy 176.53 144.78)
+			(xy 157.48 142.24) (xy 157.48 144.78)
 		)
 		(stroke
 			(width 0)
@@ -5761,7 +5791,7 @@
 	)
 	(wire
 		(pts
-			(xy 118.11 152.4) (xy 132.08 152.4)
+			(xy 129.54 142.24) (xy 129.54 144.78)
 		)
 		(stroke
 			(width 0)
@@ -5771,7 +5801,7 @@
 	)
 	(wire
 		(pts
-			(xy 262.89 162.56) (xy 266.7 162.56)
+			(xy 134.62 189.23) (xy 142.24 189.23)
 		)
 		(stroke
 			(width 0)
@@ -5791,7 +5821,7 @@
 	)
 	(wire
 		(pts
-			(xy 185.42 152.4) (xy 184.15 152.4)
+			(xy 166.37 152.4) (xy 165.1 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5808,6 +5838,16 @@
 			(type default)
 		)
 		(uuid "931812bd-7834-463b-bddb-bd89bb8054ee")
+	)
+	(wire
+		(pts
+			(xy 194.31 152.4) (xy 193.04 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "94a4d0b6-f43f-4ad5-8f6b-4c9a3a144bf7")
 	)
 	(wire
 		(pts
@@ -5841,7 +5881,7 @@
 	)
 	(wire
 		(pts
-			(xy 147.32 163.83) (xy 149.86 163.83)
+			(xy 154.94 189.23) (xy 163.83 189.23)
 		)
 		(stroke
 			(width 0)
@@ -5901,13 +5941,23 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 157.48) (xy 257.81 162.56)
+			(xy 129.54 184.15) (xy 129.54 189.23)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "a3a05526-cf2c-452b-9117-1b05e1c72c23")
+	)
+	(wire
+		(pts
+			(xy 269.24 142.24) (xy 269.24 144.78)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a5bbc92a-eb0a-4c5a-9c0e-17211e73e5ba")
 	)
 	(wire
 		(pts
@@ -5931,7 +5981,7 @@
 	)
 	(wire
 		(pts
-			(xy 195.58 152.4) (xy 196.85 152.4)
+			(xy 204.47 152.4) (xy 205.74 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5951,7 +6001,7 @@
 	)
 	(wire
 		(pts
-			(xy 139.7 160.02) (xy 139.7 161.29)
+			(xy 120.65 152.4) (xy 121.92 152.4)
 		)
 		(stroke
 			(width 0)
@@ -5981,13 +6031,23 @@
 	)
 	(wire
 		(pts
-			(xy 204.47 142.24) (xy 204.47 144.78)
+			(xy 213.36 142.24) (xy 213.36 144.78)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "b627b766-b4a9-4412-8723-a913ff7bf7bd")
+	)
+	(wire
+		(pts
+			(xy 250.19 152.4) (xy 248.92 152.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bad80ba9-be78-4d00-9d29-78c2e5617dc9")
 	)
 	(wire
 		(pts
@@ -6001,7 +6061,7 @@
 	)
 	(wire
 		(pts
-			(xy 167.64 152.4) (xy 168.91 152.4)
+			(xy 148.59 152.4) (xy 149.86 152.4)
 		)
 		(stroke
 			(width 0)
@@ -6011,7 +6071,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 162.56) (xy 262.89 162.56)
+			(xy 129.54 189.23) (xy 134.62 189.23)
 		)
 		(stroke
 			(width 0)
@@ -6081,16 +6141,6 @@
 	)
 	(wire
 		(pts
-			(xy 147.32 152.4) (xy 147.32 163.83)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d68cafa0-5b77-4b2c-ba78-e83daa43a2b6")
-	)
-	(wire
-		(pts
 			(xy 167.64 88.9) (xy 167.64 102.87)
 		)
 		(stroke
@@ -6141,7 +6191,7 @@
 	)
 	(wire
 		(pts
-			(xy 274.32 162.56) (xy 278.13 162.56)
+			(xy 149.86 189.23) (xy 154.94 189.23)
 		)
 		(stroke
 			(width 0)
@@ -6189,9 +6239,9 @@
 		)
 		(uuid "91394653-29bf-4f99-800b-40c834424435")
 	)
-	(global_label "led_4"
+	(global_label "led_5"
 		(shape bidirectional)
-		(at 213.36 152.4 90)
+		(at 222.25 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6200,7 +6250,7 @@
 		)
 		(uuid "016574b5-1238-4bcf-9d6c-7f851fb9bfd2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 213.36 152.4 90)
+			(at 222.25 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6393,6 +6443,28 @@
 			)
 		)
 	)
+	(global_label "led_6"
+		(shape bidirectional)
+		(at 250.19 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "2810d2ae-0e37-49c5-83fa-c56d540a1e86")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 250.19 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw7"
 		(shape input)
 		(at 52.07 88.9 0)
@@ -6441,7 +6513,7 @@
 	)
 	(global_label "led_2"
 		(shape bidirectional)
-		(at 167.64 152.4 90)
+		(at 148.59 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6450,7 +6522,7 @@
 		)
 		(uuid "411c290c-56fd-4e21-85bc-00485df33742")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 167.64 152.4 90)
+			(at 148.59 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6485,9 +6557,9 @@
 			)
 		)
 	)
-	(global_label "led_3"
+	(global_label "led_4"
 		(shape bidirectional)
-		(at 195.58 152.4 90)
+		(at 204.47 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6496,7 +6568,7 @@
 		)
 		(uuid "467237f5-6b9c-4b69-bf71-160c1b38e26e")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 195.58 152.4 90)
+			(at 204.47 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6557,7 +6629,51 @@
 	)
 	(global_label "led_vdd"
 		(shape bidirectional)
-		(at 176.53 142.24 0)
+		(at 269.24 142.24 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "4d11bc74-15db-4bd0-a032-a9986ba96dce")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 269.24 142.24 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "led_3"
+		(shape bidirectional)
+		(at 176.53 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4d2747a2-c612-44c4-aae0-2af8f6bf9ebe")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 176.53 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "led_vdd"
+		(shape bidirectional)
+		(at 157.48 142.24 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6566,7 +6682,7 @@
 		)
 		(uuid "4dd5ec9d-2515-4a5e-90f3-d3c6f536d880")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 176.53 142.24 90)
+			(at 157.48 142.24 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6897,6 +7013,28 @@
 			)
 		)
 	)
+	(global_label "led_4"
+		(shape bidirectional)
+		(at 194.31 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "7a3cff16-a1ab-4c31-b46c-3988b0b71b50")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 194.31 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "bat_sense"
 		(shape bidirectional)
 		(at 260.35 34.29 0)
@@ -6987,6 +7125,28 @@
 			)
 		)
 	)
+	(global_label "led_vdd"
+		(shape bidirectional)
+		(at 185.42 142.24 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "85d2cb27-2b29-470d-8515-c21d4b175d1a")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 185.42 142.24 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "ws"
 		(shape input)
 		(at 191.77 87.63 180)
@@ -7054,6 +7214,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "led_6"
+		(shape bidirectional)
+		(at 260.35 152.4 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "8c4974b5-b0c7-4e8b-b9cb-d38748d33b21")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 260.35 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -7344,16 +7526,16 @@
 	)
 	(global_label "led_vdd"
 		(shape bidirectional)
-		(at 118.11 152.4 270)
+		(at 129.54 142.24 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify left bottom)
 		)
 		(uuid "a49d011b-dee0-4a34-8a19-141ff20b62f5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 118.11 152.4 90)
+			(at 129.54 142.24 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7484,7 +7666,7 @@
 	)
 	(global_label "led_vdd"
 		(shape bidirectional)
-		(at 257.81 157.48 0)
+		(at 129.54 184.15 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7493,7 +7675,7 @@
 		)
 		(uuid "bbee12c7-4257-4578-864a-992a89a917a6")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 257.81 157.48 0)
+			(at 129.54 184.15 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7528,9 +7710,9 @@
 			)
 		)
 	)
-	(global_label "led_4"
+	(global_label "led_5"
 		(shape bidirectional)
-		(at 223.52 152.4 90)
+		(at 232.41 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7539,7 +7721,7 @@
 		)
 		(uuid "bff3ee35-d25e-42fb-8137-9679c7234196")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 223.52 152.4 90)
+			(at 232.41 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7576,7 +7758,7 @@
 	)
 	(global_label "led_1"
 		(shape input)
-		(at 124.46 161.29 90)
+		(at 120.65 152.4 90)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7586,7 +7768,7 @@
 		)
 		(uuid "c276fa94-e82a-4e3f-b5c1-8f67cb460d1d")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 124.46 153.2249 90)
+			(at 120.65 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7690,7 +7872,7 @@
 	)
 	(global_label "led_3"
 		(shape bidirectional)
-		(at 185.42 152.4 90)
+		(at 166.37 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7699,7 +7881,7 @@
 		)
 		(uuid "c803d2d7-ac42-40e2-93a8-e16b530478a8")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 185.42 152.4 90)
+			(at 166.37 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7784,7 +7966,7 @@
 	)
 	(global_label "led_2"
 		(shape bidirectional)
-		(at 139.7 143.51 0)
+		(at 138.43 152.4 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7793,7 +7975,7 @@
 		)
 		(uuid "cf34a897-750a-4f7e-a60d-3c74888d6326")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 139.7 143.51 90)
+			(at 138.43 152.4 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7806,7 +7988,7 @@
 	)
 	(global_label "led_vdd"
 		(shape bidirectional)
-		(at 204.47 142.24 0)
+		(at 213.36 142.24 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7815,7 +7997,7 @@
 		)
 		(uuid "d1861ff3-823d-4720-8a02-41d408f222d8")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 204.47 142.24 90)
+			(at 213.36 142.24 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7872,7 +8054,7 @@
 	)
 	(global_label "led_en"
 		(shape bidirectional)
-		(at 270.51 152.4 0)
+		(at 142.24 179.07 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7881,7 +8063,7 @@
 		)
 		(uuid "e13a2cac-54b3-4f26-a1ef-d49c92ace614")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 270.51 152.4 0)
+			(at 142.24 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7918,7 +8100,7 @@
 	)
 	(global_label "led_vdd"
 		(shape bidirectional)
-		(at 232.41 144.78 0)
+		(at 241.3 142.24 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -7927,7 +8109,7 @@
 		)
 		(uuid "e997a868-d576-4227-af58-59c247410f37")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 232.41 144.78 90)
+			(at 241.3 142.24 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8668,7 +8850,7 @@
 	)
 	(symbol
 		(lib_id "Transistor_FET:AO3401A")
-		(at 260.35 152.4 180)
+		(at 132.08 179.07 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8678,7 +8860,7 @@
 		(dnp no)
 		(uuid "10e77792-cd8b-4e57-b602-6e2f5620a874")
 		(property "Reference" "Q2"
-			(at 251.35 149.86 0)
+			(at 123.08 176.53 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8688,7 +8870,7 @@
 			)
 		)
 		(property "Value" "AO3401A"
-			(at 251.35 152.4 0)
+			(at 123.08 179.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8698,7 +8880,7 @@
 			)
 		)
 		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8709,7 +8891,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.aosmd.com/res/datasheets/AO3401A.pdf"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8720,7 +8902,7 @@
 			)
 		)
 		(property "Description" "Transistor: P-channel MOSFET -30V -4A SOT-23 (led_vdd high-side switch)"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8731,7 +8913,7 @@
 			)
 		)
 		(property "Manufacturer" "Alpha & Omega Semiconductor"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8742,7 +8924,7 @@
 			)
 		)
 		(property "MPN" "AO3401A"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8753,7 +8935,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/alpha-omega-semiconductor-inc/AO3401A/1855773"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8764,7 +8946,7 @@
 			)
 		)
 		(property "LCSC" "https://www.lcsc.com/product-detail/C15127.html"
-			(at 260.35 152.4 0)
+			(at 132.08 179.07 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8794,7 +8976,7 @@
 	)
 	(symbol
 		(lib_id "LED:WS2812B-2020")
-		(at 176.53 152.4 0)
+		(at 157.48 152.4 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8804,7 +8986,7 @@
 		(dnp no)
 		(uuid "15b8aa2c-20ab-4cbb-9d2b-90c746aee233")
 		(property "Reference" "D3"
-			(at 179.324 149.352 0)
+			(at 160.274 149.352 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8814,7 +8996,7 @@
 			)
 		)
 		(property "Value" "XL-2020RGBC-WS2812B"
-			(at 176.784 139.446 0)
+			(at 157.734 139.446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8824,7 +9006,7 @@
 			)
 		)
 		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8835,7 +9017,7 @@
 			)
 		)
 		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8846,7 +9028,7 @@
 			)
 		)
 		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8857,7 +9039,7 @@
 			)
 		)
 		(property "Manufacturer" "XINGLIGHT"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8868,7 +9050,7 @@
 			)
 		)
 		(property "MPN" "XL-2020RGBC-WS2812B"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8879,7 +9061,7 @@
 			)
 		)
 		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8890,7 +9072,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
-			(at 176.53 152.4 0)
+			(at 157.48 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8923,7 +9105,7 @@
 	)
 	(symbol
 		(lib_id "LED:WS2812B-2020")
-		(at 204.47 152.4 0)
+		(at 213.36 152.4 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8933,7 +9115,7 @@
 		(dnp no)
 		(uuid "183cbd06-52aa-4f1d-aa97-fbbdca321290")
 		(property "Reference" "D4"
-			(at 207.264 149.352 0)
+			(at 216.154 149.352 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8943,7 +9125,7 @@
 			)
 		)
 		(property "Value" "XL-2020RGBC-WS2812B"
-			(at 204.724 139.446 0)
+			(at 213.614 139.446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8953,7 +9135,7 @@
 			)
 		)
 		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8964,7 +9146,7 @@
 			)
 		)
 		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8975,7 +9157,7 @@
 			)
 		)
 		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8986,7 +9168,7 @@
 			)
 		)
 		(property "Manufacturer" "XINGLIGHT"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8997,7 +9179,7 @@
 			)
 		)
 		(property "MPN" "XL-2020RGBC-WS2812B"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9008,7 +9190,7 @@
 			)
 		)
 		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9019,7 +9201,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
-			(at 204.47 152.4 0)
+			(at 213.36 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9184,7 +9366,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 270.51 162.56 90)
+		(at 146.05 189.23 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9194,7 +9376,7 @@
 		(dnp no)
 		(uuid "1d955dae-ddc9-4914-82fb-e17ab14364cf")
 		(property "Reference" "C4"
-			(at 267.5 159.4 270)
+			(at 143.04 186.07 270)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9204,7 +9386,7 @@
 			)
 		)
 		(property "Value" "1uF"
-			(at 274 159.4 270)
+			(at 149.54 186.07 270)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9214,7 +9396,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9225,7 +9407,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9235,8 +9417,8 @@
 				)
 			)
 		)
-		(property "Description" "Capacitor: 1uF 50V X7R 0805 (led_vdd bulk, local charge for D2-D5)"
-			(at 270.51 162.56 0)
+		(property "Description" "Capacitor: 1uF 50V X7R 0805 (led_vdd bulk, local charge for D2-D7)"
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9247,7 +9429,7 @@
 			)
 		)
 		(property "Manufacturer" "Yageo"
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9258,7 +9440,7 @@
 			)
 		)
 		(property "MPN" "CC0805KKX7R9BB105"
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9269,7 +9451,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/CC0805KKX7R9BB105/5195292"
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9280,7 +9462,7 @@
 			)
 		)
 		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/CC0805KKX7R9BB105"
-			(at 270.51 162.56 0)
+			(at 146.05 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10059,7 +10241,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 232.41 160.02 90)
+		(at 241.3 160.02 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10069,7 +10251,7 @@
 		(dnp no)
 		(uuid "370bef21-fc17-4b1c-9ec8-58965af173f8")
 		(property "Reference" "#PWR040"
-			(at 228.346 162.814 90)
+			(at 237.236 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10079,7 +10261,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 236.22 162.814 90)
+			(at 245.11 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10089,7 +10271,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 232.41 160.02 0)
+			(at 241.3 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10100,7 +10282,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 232.41 160.02 0)
+			(at 241.3 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10111,7 +10293,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 232.41 160.02 0)
+			(at 241.3 160.02 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10706,7 +10888,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 262.89 162.56 0)
+		(at 134.62 189.23 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10716,7 +10898,7 @@
 		(dnp no)
 		(uuid "4e238b64-729f-432c-9883-29245f52e54a")
 		(property "Reference" "#PWR_FLAG05"
-			(at 252 161.5 0)
+			(at 134.62 193.04 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10726,7 +10908,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 252 164 0)
+			(at 134.62 195.58 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10736,7 +10918,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 262.89 162.56 0)
+			(at 134.62 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10747,7 +10929,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 262.89 162.56 0)
+			(at 134.62 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10758,7 +10940,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 262.89 162.56 0)
+			(at 134.62 189.23 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -10980,8 +11162,137 @@
 		)
 	)
 	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 185.42 152.4 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "5b99573b-f836-42a7-a787-51342b2e407b")
+		(property "Reference" "D6"
+			(at 188.214 149.352 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "XL-2020RGBC-WS2812B"
+			(at 185.674 139.446 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "XINGLIGHT"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "XL-2020RGBC-WS2812B"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
+			(at 185.42 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "675b78bd-593c-42f9-a225-0150075a776f")
+		)
+		(pin "2"
+			(uuid "6fc81d72-211b-4e6a-8e71-f9876354853d")
+		)
+		(pin "3"
+			(uuid "8db4bb6f-903e-4680-b01c-b8ea0cdaf9b0")
+		)
+		(pin "4"
+			(uuid "d1491545-3898-4dbc-b9f9-be2d0c1abc0c")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3.3V")
-		(at 270.51 144.78 0)
+		(at 142.24 171.45 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -10991,7 +11302,7 @@
 		(dnp no)
 		(uuid "5d717906-6fed-49ea-84f8-c6f70309e8f0")
 		(property "Reference" "#PWR042"
-			(at 273.304 140.716 0)
+			(at 145.034 167.386 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11001,7 +11312,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 276.624 142.71 0)
+			(at 148.354 169.38 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11011,7 +11322,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 270.51 144.78 0)
+			(at 142.24 171.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11022,7 +11333,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 270.51 144.78 0)
+			(at 142.24 171.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11033,7 +11344,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 270.51 144.78 0)
+			(at 142.24 171.45 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11134,7 +11445,7 @@
 	)
 	(symbol
 		(lib_id "LED:WS2812B-2020")
-		(at 139.7 152.4 90)
+		(at 129.54 152.4 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -11144,7 +11455,7 @@
 		(dnp no)
 		(uuid "63b456fb-0f9b-490b-bc0e-23b9885c708d")
 		(property "Reference" "D2"
-			(at 130.048 144.526 90)
+			(at 132.334 149.352 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11154,7 +11465,7 @@
 			)
 		)
 		(property "Value" "XL-2020RGBC-WS2812B"
-			(at 129.794 140.208 90)
+			(at 129.794 139.446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11164,7 +11475,7 @@
 			)
 		)
 		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11175,7 +11486,7 @@
 			)
 		)
 		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11186,7 +11497,7 @@
 			)
 		)
 		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11197,7 +11508,7 @@
 			)
 		)
 		(property "Manufacturer" "XINGLIGHT"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11208,7 +11519,7 @@
 			)
 		)
 		(property "MPN" "XL-2020RGBC-WS2812B"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11219,7 +11530,7 @@
 			)
 		)
 		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11230,7 +11541,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
-			(at 139.7 152.4 0)
+			(at 129.54 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11539,7 +11850,7 @@
 	)
 	(symbol
 		(lib_id "LED:WS2812B-2020")
-		(at 232.41 152.4 0)
+		(at 241.3 152.4 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -11549,7 +11860,7 @@
 		(dnp no)
 		(uuid "715481cb-3bd9-40e4-a990-1623fa9310a0")
 		(property "Reference" "D5"
-			(at 235.204 149.352 0)
+			(at 244.094 149.352 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11559,7 +11870,7 @@
 			)
 		)
 		(property "Value" "XL-2020RGBC-WS2812B"
-			(at 232.664 139.446 0)
+			(at 241.554 139.446 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -11569,7 +11880,7 @@
 			)
 		)
 		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11580,7 +11891,7 @@
 			)
 		)
 		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11591,7 +11902,7 @@
 			)
 		)
 		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11602,7 +11913,7 @@
 			)
 		)
 		(property "Manufacturer" "XINGLIGHT"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11613,7 +11924,7 @@
 			)
 		)
 		(property "MPN" "XL-2020RGBC-WS2812B"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11624,7 +11935,7 @@
 			)
 		)
 		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11635,7 +11946,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
-			(at 232.41 152.4 0)
+			(at 241.3 152.4 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12193,7 +12504,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 204.47 160.02 90)
+		(at 213.36 160.02 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -12203,7 +12514,7 @@
 		(dnp no)
 		(uuid "8f6ff8ac-7841-48c1-8424-89605176ba03")
 		(property "Reference" "#PWR038"
-			(at 200.406 162.814 90)
+			(at 209.296 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12213,7 +12524,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 208.28 162.814 90)
+			(at 217.17 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12223,7 +12534,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 204.47 160.02 0)
+			(at 213.36 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12234,7 +12545,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 204.47 160.02 0)
+			(at 213.36 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12245,7 +12556,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 204.47 160.02 0)
+			(at 213.36 160.02 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12601,7 +12912,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 257.81 147.32 0)
+		(at 129.54 173.99 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -12611,7 +12922,7 @@
 		(dnp no)
 		(uuid "9b798beb-19dc-4650-a36f-45a8261d1e19")
 		(property "Reference" "#PWR041"
-			(at 257.81 141.986 0)
+			(at 129.54 168.656 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12621,7 +12932,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 261.112 144.272 0)
+			(at 132.842 170.942 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -12631,7 +12942,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 257.81 147.32 0)
+			(at 129.54 173.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12642,7 +12953,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 257.81 147.32 0)
+			(at 129.54 173.99 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12653,7 +12964,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 257.81 147.32 0)
+			(at 129.54 173.99 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13018,6 +13329,135 @@
 		)
 	)
 	(symbol
+		(lib_id "LED:WS2812B-2020")
+		(at 269.24 152.4 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "a579eda5-d0fd-4ddd-9174-d79529a920ca")
+		(property "Reference" "D7"
+			(at 272.034 149.352 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "XL-2020RGBC-WS2812B"
+			(at 269.494 139.446 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Library:LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "RGB LED: XL-2020RGBC-WS2812B addressable, integrated controller, 5mA/ch, VDD 3.5-5.5V, 2020 PLCC4"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "XINGLIGHT"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "XL-2020RGBC-WS2812B"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "https://www.lcsc.com/product-detail/C5349955.html"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/xinglight/XL-2020RGBC-WS2812B/25672933"
+			(at 269.24 152.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "16802f02-8189-4f11-b01f-67fa1be5c147")
+		)
+		(pin "2"
+			(uuid "d76bd206-76c4-4a7b-9180-61eeb1218838")
+		)
+		(pin "3"
+			(uuid "23f201e2-ff57-4f82-ae69-443099673cb4")
+		)
+		(pin "4"
+			(uuid "ec894b5f-3a1b-416c-b9e3-442dea85cbab")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "D7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 92.71 95.25 270)
 		(unit 1)
@@ -13301,6 +13741,81 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 185.42 160.02 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "adca9ce0-db55-4665-a803-bac316b98b6f")
+		(property "Reference" "#PWR044"
+			(at 181.356 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 189.23 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 185.42 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 185.42 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 185.42 160.02 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8ccf270e-d77c-4c69-b4e4-0a751b19ae85")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR044")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 39.37 163.83 270)
 		(unit 1)
@@ -13425,7 +13940,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 270.51 148.59 0)
+		(at 142.24 175.26 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13435,7 +13950,7 @@
 		(dnp no)
 		(uuid "b4b19036-c32a-44aa-9c23-2055d264a986")
 		(property "Reference" "R10"
-			(at 274.32 146.81 0)
+			(at 146.05 173.48 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13445,7 +13960,7 @@
 			)
 		)
 		(property "Value" "1M"
-			(at 274.32 149.31 0)
+			(at 146.05 175.98 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13455,7 +13970,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13466,7 +13981,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13477,7 +13992,7 @@
 			)
 		)
 		(property "Description" "Resistor: 1M 1% 0.1W 0603 (Q2 gate pull-up, holds led_vdd off by default)"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13488,7 +14003,7 @@
 			)
 		)
 		(property "Manufacturer" "Yageo"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13499,7 +14014,7 @@
 			)
 		)
 		(property "MPN" "RC0603FR-071ML"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13510,7 +14025,7 @@
 			)
 		)
 		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-071ML/726844"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13521,7 +14036,7 @@
 			)
 		)
 		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-071ML"
-			(at 270.51 148.59 0)
+			(at 142.24 175.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -14004,6 +14519,81 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR020")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 269.24 160.02 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "c18806be-dbce-4da0-b0e7-db4babed2b8a")
+		(property "Reference" "#PWR045"
+			(at 265.176 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 273.05 162.814 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 269.24 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 269.24 160.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 269.24 160.02 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c5b071dd-2821-4e4b-bc2b-327313d2e0e7")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR045")
 					(unit 1)
 				)
 			)
@@ -15345,7 +15935,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 149.86 163.83 0)
+		(at 154.94 189.23 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -15355,7 +15945,7 @@
 		(dnp no)
 		(uuid "d6b35221-9d50-4ced-82be-18e675945cfa")
 		(property "Reference" "#PWR_FLAG03"
-			(at 154.94 159.004 0)
+			(at 154.94 193.04 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -15365,7 +15955,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 155.956 162.052 0)
+			(at 154.94 195.58 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -15375,7 +15965,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 149.86 163.83 0)
+			(at 154.94 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -15386,7 +15976,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 149.86 163.83 0)
+			(at 154.94 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -15397,7 +15987,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 149.86 163.83 0)
+			(at 154.94 189.23 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16227,7 +16817,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 147.32 163.83 0)
+		(at 129.54 160.02 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -16237,8 +16827,7 @@
 		(dnp no)
 		(uuid "e9dc46b6-d24d-4d73-98f2-72f065740b8c")
 		(property "Reference" "#PWR032"
-			(at 147.32 170.18 0)
-			(hide yes)
+			(at 125.476 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16248,18 +16837,17 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 145.288 167.64 0)
+			(at 133.35 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(justify left)
 			)
 		)
 		(property "Footprint" ""
-			(at 147.32 163.83 0)
+			(at 129.54 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16270,7 +16858,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 147.32 163.83 0)
+			(at 129.54 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16281,7 +16869,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 147.32 163.83 0)
+			(at 129.54 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16506,7 +17094,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 176.53 160.02 90)
+		(at 157.48 160.02 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -16516,7 +17104,7 @@
 		(dnp no)
 		(uuid "eee635db-90d8-4590-b250-f57ac1390cdb")
 		(property "Reference" "#PWR036"
-			(at 172.466 162.814 90)
+			(at 153.416 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16526,7 +17114,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 180.34 162.814 90)
+			(at 161.29 162.814 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16536,7 +17124,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 176.53 160.02 0)
+			(at 157.48 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16547,7 +17135,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 176.53 160.02 0)
+			(at 157.48 160.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16558,7 +17146,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 176.53 160.02 0)
+			(at 157.48 160.02 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16660,7 +17248,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 278.13 162.56 0)
+		(at 163.83 189.23 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -16670,7 +17258,7 @@
 		(dnp no)
 		(uuid "fe90caf3-5c62-45a3-968d-1032a75f2f82")
 		(property "Reference" "#PWR043"
-			(at 280 157.5 0)
+			(at 165.7 184.17 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16680,7 +17268,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 280 160 0)
+			(at 165.7 186.67 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16690,7 +17278,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 278.13 162.56 0)
+			(at 163.83 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16701,7 +17289,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 278.13 162.56 0)
+			(at 163.83 189.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -16712,7 +17300,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 278.13 162.56 0)
+			(at 163.83 189.23 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -16738,5 +17326,4 @@
 			(page "1")
 		)
 	)
-	(embedded_fonts no)
 )

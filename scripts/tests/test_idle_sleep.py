@@ -372,7 +372,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         effect = PRODUCTION.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
         # The old D3 and D4 branch is gone, so nothing before D5 reads the window.
         self.assertNotIn("wake_pulse_until_ms", effect.split("// D5 is Zigbee status", 1)[0])
-        overlay = effect.split("// D5 is Zigbee status", 1)[1].split("it[3] = Color(0, 128, 0);\n            }", 1)[1]
+        overlay = effect.split("// D5 is Zigbee status", 1)[1].split("it[d5] = Color(0, 128, 0);\n            }", 1)[1]
         self.assertIn("if (millis() < id(wake_pulse_until_ms)) {", overlay)
         self.assertIn("((id(wake_pulse_until_ms) - millis()) % 800) / 800.0f", overlay)
         self.assertIn("const float wave = 0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase);", overlay)
@@ -389,17 +389,19 @@ class ProductionSleepConfigTest(unittest.TestCase):
             "                  pulse = Color(level, level, level);",
         ):
             self.assertIn(text, overlay)
-        # D2 and D5 always take the pulse. D3 and D4 only when no user action owns them or status LEDs are off.
+        # Every LED but D3 and D4 always takes the pulse. D3 and D4 only when no user
+        # action owns them or status LEDs are off. d4 is D4 at either LED count.
         always = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF", 1)[0]
-        self.assertIn("it[0] = pulse;", always)
-        self.assertIn("it[3] = pulse;", always)
+        self.assertIn("for (int32_t i = 0; i < it.size(); i++) {\n"
+                      "                if (i != 1 && i != d4)\n"
+                      "                  it[i] = pulse;", always)
         self.assertNotIn("it[1]", always)
-        self.assertNotIn("it[2]", always)
+        self.assertNotIn("it[d4]", always)
         guarded = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0)) {", 1)[1]
         self.assertIn("it[1] = pulse;", guarded)
-        self.assertIn("it[2] = pulse;", guarded)
-        self.assertNotIn("it[0]", guarded)
-        self.assertNotIn("it[3]", guarded)
+        self.assertIn("it[d4] = pulse;", guarded)
+        for index in ("0", "i", "d5"):
+            self.assertNotIn(f"it[{index}]", guarded)
 
     def test_the_wake_tick_latches_the_battery_band_before_the_window_opens(self) -> None:
         drive = PRODUCTION.split("  - interval: 50ms\n", 1)[1]

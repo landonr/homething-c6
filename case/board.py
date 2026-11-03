@@ -378,7 +378,7 @@ def courtyards():
 
     The only keepout that covers every part. Both 3D assemblies are blind to the
     eleven switches, whose model is VRML and so absent from the STEP, and to
-    D2-D5 and J1, which have no model at all. Courtyards are 2D, so this bounds
+    J1, which has no model at all. Courtyards are 2D, so this bounds
     where a part sits, never how tall it is.
     """
     src = _require(KICAD_PCB).read_text()

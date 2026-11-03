@@ -11,6 +11,16 @@
 # a staged PCB rerenders the board views (3D PNGs + flat SVGs), a staged
 # schematic rerenders schematic.svg; docs/readme-assets/ is then staged.
 #
+# A staged PCB also reruns scripts/render-annotated-remote.py --only board, so
+# the annotated board SVGs embed the new board PNGs. A staged board PNG without
+# the PCB does the same. The case sets stay out: their ImageMagick step can
+# change the PNG bytes without a design change.
+#
+# The case renders come from ../c6remote-explode and are copied in by hand. If a
+# staged file is a source of them (PCB, board_extras.py, case model), the hook
+# runs scripts/stamp-case-renders.py --check. It only warns, and the hook never
+# stages docs/readme-assets/case-renders.stamp.
+#
 # A staged PCB also refreshes c6remote-kicad/ibom.html via scripts/gen-ibom.sh,
 # so the pre-fab pin-1 walk artifact never lags the board. It is gitignored and
 # deliberately not staged. Non-fatal: the generator needs KiCad's bundled Python
@@ -53,6 +63,21 @@ PCB_STAGED=false
 grep -qE '^c6remote-kicad/c6remote\.kicad_sch$' <<<"$STAGED" && SCH_STAGED=true
 grep -qE '^c6remote-kicad/c6remote\.kicad_pcb$' <<<"$STAGED" && PCB_STAGED=true
 
+# Warn, never block, when this commit moves a source of the hand-copied case renders.
+"$REPO_ROOT/scripts/stamp-case-renders.py" --check --if-staged \
+	|| echo "[pre-commit] WARNING: stamp-case-renders.py failed, case render staleness unknown" >&2
+
+# The annotated board SVGs embed the board PNGs, so a PNG-only rerender must refresh them.
+if ! $PCB_STAGED && grep -qE '^docs/readme-assets/board-3d-rotated-(top|bottom)\.png$' <<<"$STAGED"; then
+	echo "[pre-commit] board PNG staged -> rerendering annotated board SVGs"
+	python3 "$REPO_ROOT/scripts/render-annotated-remote.py" --only board >/dev/null
+	git add -- \
+		"$REPO_ROOT/docs/readme-assets/board-front-annotated.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-front-annotated-dark.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-back-annotated.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-back-annotated-dark.svg"
+fi
+
 # Only regenerate when a design file is actually part of this commit.
 if ! $SCH_STAGED && ! $PCB_STAGED; then
 	exit 0
@@ -73,7 +98,11 @@ else
 	echo "[pre-commit] schematic staged -> rerendering README schematic SVG"
 	"$REPO_ROOT/scripts/render-readme-assets.sh" --only schematic
 fi
-git add "$REPO_ROOT/docs/readme-assets/"
+if $PCB_STAGED; then
+	echo "[pre-commit] PCB staged -> rerendering annotated board SVGs"
+	python3 "$REPO_ROOT/scripts/render-annotated-remote.py" --only board >/dev/null
+fi
+git add -- "$REPO_ROOT/docs/readme-assets/" ':(top,exclude)docs/readme-assets/case-renders.stamp'
 echo "[pre-commit] docs/readme-assets/ regenerated and staged"
 
 if $PCB_STAGED; then

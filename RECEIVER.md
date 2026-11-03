@@ -603,7 +603,7 @@ These keys are valid:
 
 - `zigbee`, `ble`, and `home_assistant` turn each radio on or off.
 - `wifi_always_on` keeps Wi-Fi on. It takes effect at the next boot.
-- `status_leds` sets the **Status LEDs** mode for `D2` to `D5` and the XIAO user LED. The value is `off`, `hold`, or `on`. See [The LED settings](#the-led-settings).
+- `status_leds` sets the **Status LEDs** mode for all status LEDs and the XIAO user LED. The value is `off`, `hold`, or `on`. See [The LED settings](#the-led-settings).
 - `boot_leds` turns the cold-boot chase and the wake battery pulses on or off.
 - `hold_wifi`, `hold_status`, `hold_sleep`, and `hold_assign` come from an older page. Each one gives the slot of one button for that hold, or `0` for no button. See [Hold buttons](#hold-buttons).
 - `sleep` turns idle sleep on or off.
@@ -660,9 +660,29 @@ trusted, add authentication to the page.
 
 ## LED meanings
 
-After a boot that is not a deep-sleep wake, rainbow pulses go clockwise round
-the wheel two times, from `D2` to `D5`. Each pulse overlaps the next. The status
-indications then start.
+The status LEDs make a ring round the wheel. A V2 board has four LEDs, and a
+V3 board has six. Clockwise from the bottom left, the order is `D2`, `D3`,
+`D4`, and `D5` on a V2 board. On a V3 board, the order is `D2`, `D3`, `D6`,
+`D4`, `D5`, and `D7`. The data chain from `GPIO17` uses the same order. `D6`
+is at the top centre, and `D7` is at the bottom centre.
+
+The `status_led_count` substitution in `c6remote.yaml` sets the number of LEDs.
+The default is `4`, for a V2 board. For a V3 board, build with this command:
+
+```bash
+esphome -s status_led_count 6 run c6remote.yaml
+```
+
+If the count does not agree with the board, the Bluetooth and Zigbee
+indications move to the wrong LEDs or do not show.
+
+`D6` and `D7` show no status. They light only in the animations that use the
+full ring: the cold-boot chase, the wake battery pulses, and the sleep lap.
+
+After a boot that is not a deep-sleep wake, LED pulses go clockwise round the
+ring two times, from `D2` to the last LED. Each pulse overlaps the next. Each
+LED pulses in its own colour: `D2` red, `D3` azure, `D6` magenta, `D4` green,
+`D5` blue, and `D7` cyan. The status indications then start.
 
 Assignment mode uses `D3` and `D4` only. `D2` keeps the connection state, and
 `D5` keeps the Zigbee state. A connection fault stays visible during a capture.
@@ -699,7 +719,7 @@ A voice press does not turn on Wi-Fi, so the remote refuses it while Wi-Fi is of
 | Cleared | Amber for one second | Select an input. |
 
 `D3` and `D4` show voice-assistant state when assignment mode is closed. After
-a deep-sleep wake, all four LEDs pulse in the battery colour (see
+a deep-sleep wake, all status LEDs pulse in the battery colour (see
 [Deep sleep](#deep-sleep)). A refused voice press shows solid red for 2 seconds.
 See [The voice assistant](#the-voice-assistant).
 
@@ -723,7 +743,7 @@ The amber XIAO user LED shows that the remote is awake (see
 Two settings in the **Config** tab control the LEDs. The remote stores each one in flash.
 
 The **Status LEDs** setting has three modes: **Off**, **Hold button**, and **Always on**. The default is **Always on**.
-The setting covers all status light. This includes `D2` to `D5` in normal use,
+The setting covers all status light. This includes all status LEDs in normal use,
 assignment mode, voice, and pairing feedback. It also covers the amber XIAO user LED.
 
 | Mode | Result |
@@ -753,7 +773,7 @@ Hold the status hold button for 1 s. The default status hold button is `SW7`.
 The XIAO user LED stays dark during a status peek. No radio switch pulse plays during a status peek.
 If you change the mode during a status peek, the status peek stops.
 
-The sleep lap is the third exception. When the sleep hold arms sleep, `D2` to `D5` give one sleep lap.
+The sleep lap is the third exception. When the sleep hold arms sleep, all status LEDs give one sleep lap.
 The sleep lap plays in all three modes. See [Enter sleep](#enter-sleep).
 
 Assignment mode is the fourth exception. While assignment mode is open, `D2` to `D5` show the full status in all three modes.
@@ -763,7 +783,7 @@ No radio switch pulse plays while assignment mode is open. When assignment mode 
 In the **Hold button** mode, the status hold button sends its assignment when you release it.
 As a result, a status peek does not send the assignment of that button. See [Hold buttons](#hold-buttons).
 
-The **Boot and wake LEDs** switch covers only two animations. These are the rainbow chase on a cold boot
+The **Boot and wake LEDs** switch covers only two animations. These are the colour chase on a cold boot
 and the battery pulses after a deep-sleep wake. If this switch is off, the status LEDs show at once.
 
 The two settings work together in this way:
@@ -772,7 +792,7 @@ The two settings work together in this way:
 | --- | --- | --- |
 | Always on | on | The animation plays, then the status LEDs show. |
 | Always on | off | The status LEDs show at once. |
-| Off or Hold button | on | The animation plays on `D2` to `D5`, then the LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
+| Off or Hold button | on | The animation plays on all status LEDs, then the LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
 | Off or Hold button | off | The LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
 
 A status peek occurs only in the **Hold button** mode.
@@ -872,9 +892,10 @@ Two events start deep sleep: the sleep hold, and an idle period.
 
 To sleep at once, hold the sleep hold button for 2 s. The default sleep hold button is `SW1`.
 When the hold time passes, the remote arms sleep. Then release the button.
-When the remote arms sleep, `D2` to `D5` give one sleep lap. The sleep lap is one anticlockwise lap of blue-white light, from `D5` to `D2`.
+When the remote arms sleep, all status LEDs give one sleep lap. The sleep lap is one anticlockwise lap of blue-white light, from the last LED to `D2`.
+The last LED is `D5` on a V2 board and `D7` on a V3 board.
 The sleep lap plays in all LED settings. If **Status LEDs** is set to **Always on**, the amber XIAO user LED also flashes once.
-After the sleep lap, `D2` to `D5` stay dark until the remote sleeps.
+After the sleep lap, all status LEDs stay dark until the remote sleeps.
 The remote sleeps when you release all buttons. If you release all buttons during the sleep lap, the remote sleeps at once.
 The sleep hold button sends nothing when the hold runs. A shorter press sends its assignment at the release.
 The sleep hold ignores the blocks that follow.
@@ -927,7 +948,7 @@ If you still hold a button with an active hold at wake, its hold starts. This oc
 The assignment mode hold is the exception. It does not start from a wake.
 When the setting is on, the release of the assignment mode hold button always sends its assignment.
 
-After a wake, all four LEDs pulse two times in the battery colour. Each pulse
+After a wake, all status LEDs pulse two times in the battery colour. Each pulse
 is 800 ms. The colour shows the battery level at the first moment after the wake:
 
 | Battery | Colour |
@@ -937,7 +958,7 @@ is 800 ms. The colour shows the battery level at the first moment after the wake
 | Less than 30 % | Red |
 | No reading | White |
 
-The pulse covers the Wi-Fi, Bluetooth, and Zigbee status LEDs for 1.6 seconds.
+The pulse covers all status LEDs for 1.6 seconds.
 The status colours return when the pulse ends. Assignment mode and voice states
 have priority on `D3` and `D4`, so they stay visible during the pulse.
 
@@ -964,7 +985,7 @@ The sleep hold works when **Sleep** is off.
 USB serial disconnects while the remote sleeps. To flash the remote, do these steps:
 
 1. If this is the first build after the `idle_sleep` change, run `esphome clean c6remote.yaml`.
-2. Run `esphome compile c6remote.yaml`.
+2. Run `esphome compile c6remote.yaml`. For a V3 board, run `esphome -s status_led_count 6 compile c6remote.yaml`.
 3. Press a button to wake the remote.
 4. Run `esphome upload c6remote.yaml --device /dev/cu.usbmodem2101`.
 

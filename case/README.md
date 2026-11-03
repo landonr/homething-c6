@@ -319,7 +319,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 ## Functional constraints
 
 - Keep the button caps captive behind the front-shell ceiling.
-- Keep the button pad clear of the wheel and the four wheel LEDs.
+- Keep the button pad clear of the wheel and the six wheel LEDs.
 - Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.

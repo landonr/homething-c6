@@ -1,5 +1,13 @@
 # Scripts
 
+## Zone refill
+
+Run `python3 scripts/refill-zones.py` from the repository root to fill the copper zones and save the fill into `c6remote-kicad/c6remote.kicad_pcb`.
+The script fills a copy in a temporary directory with KiCad's Python, then copies only the board file back.
+It does not start if KiCad is open. It does not write the board if content outside the `filled_polygon` blocks changes.
+It then compares DRC with and without `--refill-zones`. Add `--dry-run` to write nothing, or `--no-drc` to skip DRC.
+Set `KICAD_PYTHON` or `KICAD_CLI` to override a binary path.
+
 ## Draft preview in 3D
 
 Run this command from the repository root to see the current case model in the exploded viewer:
@@ -45,6 +53,22 @@ The three case scripts use the sibling `c6remote-explode` checkout. Set `C6REMOT
 The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as well. They render the case geometry the viewer has, so run `../c6remote-explode/refresh-assets.sh` after a case or board change.
 Add `--rig` to a case script to render on the Windows Rig over SSH.
 The case scripts write dated files into `c6remote-explode`; copy them into `docs/readme-assets/` as `case-assembled.png`, `case-exploded.png`, and `case-explode-loop.webp`.
+The annotated case images `case-annotated-front.png` and `case-annotated-back.png` come from `../c6remote-explode/scripts/render-blender.py`.
+Use `--preset readme-annotated-front` or `--preset readme-annotated-back` for them.
+If the checkout is a git worktree, run `REPO=<checkout> ../c6remote-explode/refresh-assets.sh`. Without `REPO`, the script copies from `~/dev/homething-c6`.
+
+Run `python3 scripts/render-annotated-remote.py` to draw the labels and leader lines over the board and case images.
+The script writes each annotated SVG in a light version and a `-dark` version.
+Add `--only board` or `--only case` to draw one image set. The default is `--only all`.
+The pre-commit hook uses `--only board`, because the case sets go through ImageMagick and can change without a design change.
+
+`scripts/stamp-case-renders.py` tells you when the case renders are stale.
+It calculates a hash from the git blob IDs of the case render sources. The `INPUTS` constant in the script lists these sources.
+`docs/readme-assets/case-renders.stamp` records the hash of the sources for the current case renders.
+Run `scripts/stamp-case-renders.py --check` to compare the index with the stamp. Add `--strict` to exit with status 1 when the renders are stale.
+The pre-commit hook runs the check when you stage a case render source. The check only shows a warning.
+After you copy new case renders into `docs/readme-assets/`, run `scripts/stamp-case-renders.py --write`.
+Use `--rev <commit>` to record the sources of a commit instead of the index.
 
 After a new `case-explode-loop.webp`, run `scripts/site-media.sh <IMG_7480_clicks.mp4>` to make the C6 page videos in `site/assets/c6/`.
 The script also cuts the four feature clips from the living room demo video. It needs `ffmpeg` and ImageMagick.

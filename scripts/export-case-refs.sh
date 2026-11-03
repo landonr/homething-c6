@@ -9,9 +9,10 @@
 #   - c6remote-board.step       full assembly, source of the keepout heights (untracked)
 #   - c6remote-board.glb        mesh assembly for viewers (untracked)
 #
-# D2-D5 and J1 are absent from both assembly exports: their footprints point at
-# 3D model paths that do not exist. J1 is a battery connector, so its height is a
-# real gap in the bottom-side keepout, not a cosmetic one.
+# J1 is absent from both assembly exports: its footprint points at a 3D model path
+# that does not exist. J1 is a battery connector, so its height is a real gap in
+# the bottom-side keepout, not a cosmetic one. D2-D7 use the checked-in
+# 3dmodels/WS2812C-2020.step and are present.
 #
 # Override the kicad-cli path on non-default installs:
 #   KICAD_CLI=/path/to/kicad-cli scripts/export-case-refs.sh
@@ -30,8 +31,8 @@ fi
 
 mkdir -p "$OUT"
 
-# The assembly exports exit 2 because five footprints reference 3D models that are
-# not installed, so check the output file rather than the status.
+# The assembly exports exit 2 because J1 references a 3D model that is not
+# installed, so check the output file rather than the status.
 export_assembly() {
 	local out="$1"
 	shift

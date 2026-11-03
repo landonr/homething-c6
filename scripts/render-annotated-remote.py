@@ -168,12 +168,21 @@ def render_editor(key, data=None):
     return render_set(key, data or load_callouts(), ids=True, write=False)
 
 
-def render_all(data=None):
+# The case sets pass through ImageMagick, whose PNG output can carry timestamps. The pre-commit hook
+# renders only the board sets, so a board commit cannot churn the case SVGs.
+GROUPS = {'board': ('board_front', 'board_back'), 'case': ('case_front', 'case_back'), 'all': tuple(SETS)}
+
+
+def render_all(data=None, keys=None):
     data = data or load_callouts()
     for suffix, color in (('', black), ('-dark', light)):
-        for key in SETS:
+        for key in keys or SETS:
             render_set(key, data, suffix, color)
 
 
 if __name__ == '__main__':
-    render_all()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Render the annotated README SVGs in both colour schemes.')
+    parser.add_argument('--only', choices=GROUPS, default='all', help='image sets to render (default: all)')
+    render_all(keys=GROUPS[parser.parse_args().only])

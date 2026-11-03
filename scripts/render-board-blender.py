@@ -40,7 +40,10 @@ DRESS = {
 
 # Status LEDs lit as the viewer's readme-annotated-front preset lights them: its ledColors
 # at led 70 of the viewer's 400 emission strength.
-LED_COLORS = {"D2": 0xFF0000, "D3": 0xABAA00, "D4": 0x00FF00, "D5": 0x0000FF}
+LED_COLORS = {
+    "D2": 0xFF0000, "D3": 0x0070FF, "D4": 0x00FF00, "D5": 0x0000FF,
+    "D6": 0xAA00AB, "D7": 0x00ABAA,
+}
 LED_STRENGTH = 280
 
 ap = argparse.ArgumentParser()

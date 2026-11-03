@@ -881,7 +881,7 @@ line.innerHTML="<span class='dot "+(m==="on"?"":"off")+"'></span>"+(m==="on"?"St
 m==="hold"?"Status LEDs are dark. A radio switch still gives one pulse, and assignment mode still lights D2 to D5. "+(n?"Hold "+esc(n)+
 " for one second to see the status.":"No button has the status hold. "+
 "Select a button on the Buttons tab to give it the status hold."):
-"Status LEDs are off. D2 to D5 and the XIAO LED stay dark. A radio switch still gives one pulse, "+
+"Status LEDs are off. The ring LEDs and the XIAO LED stay dark. A radio switch still gives one pulse, "+
 "and assignment mode still lights D2 to D5.")+
 (ledError?" "+esc(ledError):"")}}
 

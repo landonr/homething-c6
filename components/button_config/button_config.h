@@ -63,7 +63,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   // True when that gate held the API server down for this boot.
   void set_ha_api_gated(bool gated);
   bool ha_api_gated() const { return this->ha_api_gated_.load(std::memory_order_acquire); }
-  // Stored mode for D2 to D5 and the XIAO LED. The first call reads flash, so
+  // Stored mode for the ring LEDs and the XIAO LED. The first call reads flash, so
   // on_boot at priority 800 sees it before this component's own setup(). The
   // byte keeps an older off or on record valid.
   enum StatusMode : uint8_t { STATUS_OFF = 0, STATUS_ON = 1, STATUS_HOLD = 2 };

@@ -49,19 +49,19 @@ class IrLearningTest(unittest.TestCase):
         for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
             self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
         # D2 is Wi-Fi and D5 is Zigbee. Assignment mode must not hide either, so
-        # its branch writes no it[0], no it[3], and no whole-strip colour.
+        # its branch writes no it[0], no it[d5], and no whole-strip colour.
         mode = CONFIG.split("if (ir_ui.state != IrUi::OFF) {", 1)[1]
         mode = mode.split("} else if (id(voice_led_state) == 1)", 1)[0]
-        for forbidden in ("it[0]", "it[3]", "it.all()"):
+        for forbidden in ("it[0]", "it[d5]", "it.all()"):
             self.assertNotIn(forbidden, mode)
         self.assertIn("it[1]", mode)
-        self.assertIn("it[2]", mode)
+        self.assertIn("it[d4]", mode)
 
     def test_wifi_and_zigbee_leds_render_outside_the_mode_branch(self) -> None:
         status = CONFIG.split("name: Status Indicators", 1)[1].split("on_turn_on:", 1)[0]
         self.assertIn("it[0] = Color(0, 96, 24);", status)
         self.assertIn("id(zigbee_radio).is_connected()", status)
-        self.assertIn("it[3] = Color(0, 128, 0);", status)
+        self.assertIn("it[d5] = Color(0, 128, 0);", status)
 
     def test_d2_reports_wifi_and_api_only(self) -> None:
         # A Home Assistant press turns Wi-Fi on itself, so a dark D2 must not

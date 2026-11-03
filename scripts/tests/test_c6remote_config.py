@@ -41,6 +41,14 @@ def hold_tick_step(config: str) -> str:
     return next(step for step in steps if "hold_actions.tick(" in step)
 
 
+def status_led_index(effect: str, name: str, count: int) -> int:
+    """Evaluates the strip index the Status Indicators lambda gives one fixed LED."""
+    match = re.search(rf"const int32_t {name} = it\.size\(\) >= 6 \? (\d+) : (\d+);", effect)
+    if match is None:
+        raise AssertionError(f"{name} index not found")
+    return int(match.group(1) if count >= 6 else match.group(2))
+
+
 def status_light_entry(config: str) -> str:
     match = re.search(
         r"  - platform: esp32_rmt_led_strip\n    id: status_light(?P<entry>[\s\S]*?)\n\nswitch:",
@@ -105,18 +113,18 @@ class ProductionConfigTest(unittest.TestCase):
         wake = next(i for i, step in enumerate(steps) if "if (!id(idle).woke_from_sleep())\n            return;" in step)
         self.assertLess(poll, wake)
         step = steps[poll]
-        # Strip index per radio: D2 Wi-Fi, D4 Bluetooth, D5 Zigbee. D3 has no radio.
+        # One slot per radio. The draw maps each slot to the LED of that radio.
         self.assertIn("on[0] = !wifi::global_wifi_component->is_disabled();", step)
-        self.assertIn("on[2] = id(ble_hid_remote).radio_enabled();", step)
-        self.assertIn("on[3] = zigbee_assignments.radio_enabled();", step)
-        self.assertNotIn("on[1] =", step)
+        self.assertIn("on[1] = id(ble_hid_remote).radio_enabled();", step)
+        self.assertIn("on[2] = zigbee_assignments.radio_enabled();", step)
+        self.assertIn("  - id: radio_pulse_end_ms\n    type: uint32_t[3]\n", config)
         # The switch, not the boot gate, so a turn-on after a gated boot still pulses green.
         self.assertNotIn("boot_gated()", step)
         # The first poll is the baseline, so a boot or a wake plays no pulse.
-        self.assertIn("static bool last[4] = {on[0], on[1], on[2], on[3]};", step)
+        self.assertIn("static bool last[3] = {on[0], on[1], on[2]};", step)
         # Setup can tick intervals before ButtonConfig::setup() enables Wi-Fi.
         self.assertLess(step.index("if (!App.is_setup_complete())\n            return;"),
-                        step.index("static bool last[4]"))
+                        step.index("static bool last[3]"))
         # The baseline moves while status LEDs are on, but no pulse starts.
         self.assertLess(step.index("last[n] = on[n];"),
                         step.index("if (id(button_cfg).status_leds())\n              continue;"))
@@ -136,7 +144,10 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("const uint32_t end = id(radio_pulse_end_ms)[n];", draw)
         self.assertIn("const float phase = (end - now) / 800.0f;", draw)
         self.assertIn("192.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
-        self.assertIn("it[n] = ((id(radio_pulse_red) >> n) & 1) ? Color(level, 0, 0) : Color(0, level, 0);", draw)
+        # Wi-Fi on D2, Bluetooth on D4, Zigbee on D5, at either LED count.
+        self.assertIn("const int32_t radio_led[3] = {0, d4, d5};", draw)
+        self.assertIn("it[radio_led[n]] = ((id(radio_pulse_red) >> n) & 1) ? Color(level, 0, 0) : Color(0, level, 0);",
+                      draw)
         self.assertNotIn("it[0]", draw)
         self.assertNotIn("it.all()", draw)
 
@@ -174,14 +185,18 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertTrue(draw.endswith("\n            }"))
         self.assertNotIn("status_on", draw)
         self.assertNotIn("status_leds()", draw)
-        # Black first, so all four LEDs stay dark after the lap while sleep stays armed.
-        self.assertLess(draw.index("it.all() = Color::BLACK;"), draw.index("for (uint32_t n = 0; n < 4; n++) {"))
+        # Black first, so every LED stays dark after the lap while sleep stays armed.
+        self.assertLess(draw.index("it.all() = Color::BLACK;"), draw.index("for (int32_t n = 0; n < it.size(); n++) {"))
         self.assertIn("const uint32_t t = millis() - id(sleep_lap_start_ms);", draw)
-        self.assertIn("const uint32_t start = n * 150;", draw)
-        self.assertIn("if (t < start || t >= start + 450)", draw)
+        self.assertIn("const uint32_t start = n * step;", draw)
+        self.assertIn("if (t < start || t >= start + 3 * step)", draw)
+        # The 900 ms rail gate must cover the lap, which ends after count + 2 steps.
+        for count in (4, 6):
+            self.assertLessEqual((count + 2) * (600 // count), 900, count)
+        self.assertEqual((4 + 2) * (600 // 4), 900)
         self.assertIn("160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
-        # Strip order D2 D3 D4 D5 is clockwise, so the lap runs D5 D4 D3 D2.
-        self.assertIn("it[3 - n] = Color(level / 3, level / 3, level);", draw)
+        # Strip order is clockwise, so the lap runs from the last LED back to D2.
+        self.assertIn("it[it.size() - 1 - n] = Color(level / 3, level / 3, level);", draw)
 
     def test_name_carries_the_mac_suffix(self) -> None:
         """Several remotes on one network need distinct hostnames and HA names."""
@@ -395,12 +410,30 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", config)
         self.assertNotIn("NO_VOICE", config)
 
-    def test_status_light_drives_all_four_cascaded_leds(self) -> None:
+    def test_status_light_drives_the_cascaded_leds_of_the_board(self) -> None:
+        """V2 boards have four LEDs and V3 boards six. The default must stay safe for V2."""
         config = CONFIG.read_text()
+        self.assertRegex(config, r"^substitutions:\n(?:  .*\n)*?  status_led_count: \"4\"\n")
         self.assertRegex(
             config,
-            r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: 4",
+            r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: \$\{status_led_count\}\n",
         )
+
+    def test_status_led_indices_follow_the_led_count(self) -> None:
+        """D2 and D3 lead both chains. A six-LED ring puts D6 before D4 and D7 after D5."""
+        effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
+        self.assertEqual(status_led_index(effect, "d4", 4), 2)
+        self.assertEqual(status_led_index(effect, "d5", 4), 3)
+        self.assertEqual(status_led_index(effect, "d4", 6), 3)
+        self.assertEqual(status_led_index(effect, "d5", 6), 4)
+        # The index setup comes before the boot chase, which returns early.
+        self.assertLess(effect.index("const int32_t d5 = "), effect.index("if (boot_chase) {"))
+        # Only D2 and D3 are fixed literals. Every other fixed LED goes through d4 or d5.
+        for literal in ("it[2]", "it[3]", "it[4]", "it[5]"):
+            self.assertNotIn(literal, effect)
+        self.assertIn("const uint32_t step = 600 / it.size();", effect)
+        self.assertEqual(600 // 4, 150)
+        self.assertEqual(600 // 6, 100)
 
     def test_a_voice_assignment_is_push_to_talk_for_home_assistant_assist(self) -> None:
         """An input without an active hold starts Assist on press and ends it on release."""
@@ -451,7 +484,7 @@ class ProductionConfigTest(unittest.TestCase):
         for value in (1, 2, 3, 4):
             self.assertIn(f"id(voice_led_state) == {value}", effect)
         self.assertIn("it[1] =", effect)
-        self.assertIn("it[2] =", effect)
+        self.assertIn("it[d4] =", effect)
         self.assertIn("const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();", effect)
         self.assertIn("wifi::global_wifi_component->is_connected()", effect)
         self.assertIn("api::global_api_server->is_connected()", effect)
@@ -950,10 +983,29 @@ class ProductionConfigTest(unittest.TestCase):
         effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
         chase = effect.split("// D2 stays dark", 1)[0]
         self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", chase)
-        # Eight pulses, two laps of four, each longer than the gap to the next.
-        self.assertIn("if (t < 7 * 150 + 450) {", chase)
-        self.assertIn("for (uint32_t n = 0; n < 8; n++) {", chase)
-        self.assertIn("it[n % 4] = ESPHSVColor(n * 32, 255, level);", chase)
+        # Two laps of one pulse per LED, each three steps long and one step apart.
+        self.assertIn("const uint32_t step = 600 / it.size();", chase)
+        self.assertIn("const uint32_t pulses = 2 * it.size();", chase)
+        self.assertIn("if (t < (pulses + 2) * step) {", chase)
+        self.assertIn("for (uint32_t n = 0; n < pulses; n++) {", chase)
+        self.assertIn("const uint32_t start = n * step;", chase)
+        self.assertIn("if (t < start || t >= start + 3 * step)", chase)
+        self.assertIn("const float phase = (t - start) / (3.0f * step);", chase)
+        self.assertIn("const uint32_t led = n % it.size();", chase)
+        self.assertIn(
+            "const Color base = boot_colors[it.size() >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)];", chase)
+        self.assertIn("it[led] = base * level;", chase)
+        # README render palette in chain order D2 D3 D6 D4 D5 D7.
+        palette = chase.split("static const Color boot_colors[6] = {", 1)[1].split("};", 1)[0]
+        self.assertEqual(
+            [tuple(int(v) for v in c) for c in re.findall(r"Color\((\d+), (\d+), (\d+)\)", palette)],
+            [(255, 0, 0), (0, 112, 255), (170, 0, 171), (0, 255, 0), (0, 0, 255), (0, 171, 170)])
+        # Four LEDs keep the original chase: eight 450 ms pulses 150 ms apart over
+        # 1500 ms. Six LEDs keep the 600 ms lap.
+        for count, total in ((4, 1500), (6, 1400)):
+            step = 600 // count
+            self.assertEqual(step % 50, 0, count)
+            self.assertEqual((2 * count + 2) * step, total, count)
         self.assertIn("return;", chase)
 
     def test_d5_is_reserved_for_zigbee_status_alone(self) -> None:
@@ -964,9 +1016,9 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertIn("if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())",
                       entry)
         self.assertIn("else if (!id(zigbee_radio).is_connected())", entry)
-        self.assertIn("it[3] = Color(0, 128, 0);", entry)
+        self.assertIn("it[d5] = Color(0, 128, 0);", entry)
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
-        self.assertNotIn("it[3]", before_d5.split("// D3 and D4", 1)[1])
+        self.assertNotIn("it[d5]", before_d5.split("// D3 and D4", 1)[1])
 
     def test_d5_separates_pairing_and_an_unreachable_target(self) -> None:
         # An open window is a normal state, so it must not borrow the red that
@@ -975,18 +1027,18 @@ class ProductionConfigTest(unittest.TestCase):
         d5 = entry.split("// D5 is Zigbee status", 1)[1]
         pairing = d5.index("zigbee_assignments.pairing_window_open()")
         self.assertLess(pairing, d5.index("!id(zigbee_radio).is_connected()"))
-        self.assertIn("it[3] = Color(0, 0, level);", d5)
+        self.assertIn("it[d5] = Color(0, 0, level);", d5)
         # Amber sits after the join test, so only a joined remote can show it.
         reach = d5.index("ZigbeeAssignmentManager::REACH_FAILED")
         self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
-        self.assertIn("it[3] = Color(level, level / 2, 0);", d5)
+        self.assertIn("it[d5] = Color(level, level / 2, 0);", d5)
 
     def test_d5_shows_yellow_while_a_stored_network_rejoins(self) -> None:
         # A boot on stored credentials must show yellow, not dark, before the stack starts.
         d5 = status_light_entry(CONFIG.read_text()).split("// D5 is Zigbee status", 1)[1]
         yellow = "if (!zigbee_assignments.pairing() && !id(zigbee_radio)->factory_new_.load()) {"
         self.assertIn(yellow, d5)
-        self.assertIn("it[3] = Color(192, 128, 0);", d5)
+        self.assertIn("it[d5] = Color(192, 128, 0);", d5)
         connected = d5.index("!id(zigbee_radio).is_connected()")
         self.assertLess(connected, d5.index(yellow))
         self.assertLess(d5.index(yellow), d5.index("!id(zigbee_radio).is_started()"))
@@ -1000,11 +1052,11 @@ class ProductionConfigTest(unittest.TestCase):
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
         # The wake pulse is an overlay after D5, so Bluetooth follows voice state 4.
         self.assertNotIn("wake_pulse_until_ms", before_d5)
-        self.assertIn("it[2] = Color(255, 0, 0);\n            } else {\n              auto *ble = id(ble_hid_remote);",
+        self.assertIn("it[d4] = Color(255, 0, 0);\n            } else {\n              auto *ble = id(ble_hid_remote);",
                       before_d5)
         ble = before_d5[before_d5.index("auto *ble = id(ble_hid_remote);"):]
-        self.assertIn("it[2] =", ble)
-        self.assertNotIn("it[3]", ble)
+        self.assertIn("it[d4] =", ble)
+        self.assertNotIn("it[d5]", ble)
         self.assertNotIn("it[1]", ble)
         order = [
             "!ble->radio_enabled()",

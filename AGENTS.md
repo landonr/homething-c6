@@ -158,11 +158,13 @@ ERC and DRC are the only scoped checks. This repository has no finer-grained tes
 
 `--refill-zones` refills zones in memory. It does not write the refill to `c6remote.kicad_pcb`.
 
-If a board edit can affect pours, do not commit until Landon refills and saves the zones in KiCad.
+If a board edit can affect pours, write a refilled board before the commit. This rule covers footprint moves, footprint changes, new tracks, new vias, and net changes.
 
-Use Edit → Fill All Zones. Stage the board file only after Landon confirms the refill.
+Run `python3 scripts/refill-zones.py` from the repository root. To fill and check without a change to the board file, add `--dry-run`.
 
-This rule covers footprint moves, footprint changes, new tracks, new vias, and net changes.
+The script fills a copy of the board in a temporary directory, then copies only the board file back. If content outside the `filled_polygon` blocks changes, the script does not write the board. It shows the fill outlines of each zone and fails if DRC with and without `--refill-zones` gives different results. If KiCad is open, the script does not start.
+
+Do not use the MCP `refill_zones` tool. It first saves the board that the MCP server holds in memory, and that copy can be older than the file. Its fill subprocess also does not protect the project files.
 
 `scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented one-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
 
@@ -185,9 +187,9 @@ The BOM groups by Value+Footprint. It joins references with `, ` and includes th
 
 Set `KICAD_CLI=/path/to/kicad-cli` to override the binary.
 
-Store a product URL in `LCSC`, not a bare C-number. Only `Q2` and `D2`-`D5` have LCSC values.
+Store a product URL in `LCSC`, not a bare C-number. Only `Q2`, `Q3`, and `D2`-`D7` have LCSC values.
 
-`Q2` uses `C15127`. `D2`-`D5` use `C5349955`.
+`Q2` and `Q3` use `C15127`. `D2`-`D7` use `C5349955`.
 
 Regenerate the BOM with `scripts/export-bom.sh` or `scripts/regen-fab.sh`. Do not use the MCP `export_bom` tool.
 
@@ -206,7 +208,9 @@ When you stage the schematic or board, the hook performs these actions:
 - It runs `regen-fab.sh` and stages `export/`.
 - It runs `scripts/render-readme-assets.sh` and stages `docs/readme-assets/`. The board PNGs render with Blender from `scripts/render-board-blender.py`.
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
+- A staged PCB runs `scripts/render-annotated-remote.py --only board`. This step updates the four annotated board SVGs from the new board PNGs.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
+- If you stage a case render source, the hook runs `scripts/stamp-case-renders.py --check`. The `INPUTS` constant in that script lists the sources. This check also runs without a staged schematic or board. The check only shows a warning. The hook never stages `docs/readme-assets/case-renders.stamp`.
 
 The iBOM is a gitignored pre-fabrication pin-1 artifact. Never stage it.
 
@@ -312,7 +316,7 @@ Follow named nets across the schematic. Then verify the corresponding board nets
 - `U3` is a `PCF8575DBR` expander on `sda` and `scl`.
 - `U3` carries `sw1`-`sw11` and `ano_sw1`-`ano_sw5`. It uses all 16 I/O pins.
 - `ENC1` is the custom Ano Rotary part. It uses `ano_enc1`, `ano_enc2`, and `ano_sw1`-`ano_sw5`.
-- `D2`-`D5` form a cascade of XINGLIGHT `XL-2020RGBC-WS2812B` status LEDs.
+- `D2`-`D7` form a cascade of six XINGLIGHT `XL-2020RGBC-WS2812B` status LEDs round the `ENC1` wheel.
 
 The encoder directions map to these expander bits. Measured on unit 1 on 2026-07-27.
 
@@ -368,9 +372,13 @@ The board net is `unconnected-(U1-VBUS-Pad14)`. A 5 V feature needs a new net. D
 
 `GPIO17` drives `D2` DIN on `led_1` without a series resistor.
 
-`led_2`, `led_3`, and `led_4` connect each DOUT to the next DIN. `D5` DOUT is no-connect.
+The chain order is `D2`, `D3`, `D6`, `D4`, `D5`, and `D7`. From the front, this order goes clockwise round the wheel from the bottom left.
 
-All four VDD pins use `led_vdd`. The four devices draw approximately 2.0 mA when dark.
+`led_2` to `led_6` connect each DOUT to the next DIN in that order. `D7` DOUT is no-connect.
+
+`led_3` connects `D3` to `D6`, and `led_4` connects `D6` to `D4`. `D6` is at the top centre, and `D7` is at the bottom centre.
+
+All six VDD pins use `led_vdd`. The six devices draw approximately 3.0 mA when dark.
 
 `Q2` is an `AO3401A` at F.Cu `(42, 84.4375)`. Pad 2 is the `+3.3V` source.
 
@@ -382,9 +390,9 @@ Pad 3 is the `led_vdd` drain. Pad 1 is the `led_en` gate from `GPIO18`.
 
 `C4` is a 1uF 50V X7R 0805 capacitor at B.Cu `(46.75, 67.3)`. It is the local `led_vdd` reservoir.
 
-The gated rail uses an approximately 90 mm trace tree and four vias instead of the former `+3.3V` plane taps.
+The gated rail uses an approximately 121 mm trace tree and six vias instead of the former `+3.3V` plane taps.
 
-The tree has 39.3 mm on F.Cu and 51.9 mm on B.Cu.
+The tree has 62.3 mm on F.Cu and 58.6 mm on B.Cu.
 
 `C4` returns through a 5.2 mm B.Cu stub to through-hole GND at `ENC1` pad 6.
 
@@ -498,25 +506,52 @@ A rotated stub can connect a power rail to a signal pin.
 
 ### Autorouting
 
-Use KiCadRoutingTools at `~/dev/KiCadRoutingTools`. Do not use the MCP Freerouting autorouter.
+KiCadRoutingTools at `~/dev/KiCadRoutingTools` is the default router for this board.
 
-Freerouting needs Java 25. This machine has only Java 17 and 23.
+Freerouting cuts the F.Cu GND pour because the KiCad Specctra export writes each zone as its outline. Freerouting does not refill a plane, so it cannot see the split.
 
-Run this command:
+Run the command from `~/dev/KiCadRoutingTools`, and give absolute board paths. With the four environment variables, KiCadRoutingTools does not remove existing copper.
 
 ```bash
-~/dev/KiCadRoutingTools/.venv/bin/python ~/dev/KiCadRoutingTools/route.py <board.kicad_pcb>
+cd ~/dev/KiCadRoutingTools
+KICAD_FINALIZE_RIP=0 KICAD_IMPROVEMENT_GATE=0 \
+KICAD_PLANE_FINALIZE=0 KICAD_RIP_PREEXISTING=0 \
+.venv/bin/python py_router/route.py <in.kicad_pcb> <out.kicad_pcb> \
+  --nets <net> ... \
+  --track-width 0.2 --via-size 0.6 --via-drill 0.3 \
+  --grid-step 0.25 --clearance 0.4 \
+  --no-fix-drc-settings --keep-input-copper --escalation off \
+  --same-net-pad-clearance 0.05 --direction-preference-cost 0 \
+  --via-proximity-cost 0 --ordering inside_out
 ```
 
-The command writes `<board>_routed.kicad_pcb` and does not change the input board.
+The flags match the hand-routed style of this board: 0.2 mm tracks, 0.6/0.3 mm vias, and 45 degree corners on the 0.25 mm grid.
 
-If you use `--overwrite`, the command replaces the input board.
+`--clearance 0.4` sets only the routing clearance, and DRC keeps the project rule. This clearance gives gaps close to the gaps on the hand-routed board.
 
-Use `--nets "<glob>"` to limit nets. Use `route_diff.py` for differential pairs and `route_planes.py` for planes.
+If you do not give an output file, the command writes `<in>_routed.kicad_pcb`. `--overwrite` (`-O`) replaces the input board.
 
-The virtual environment contains numpy, scipy, shapely, and `grid_router.so` from `build_router.py`.
+Some nets must cross the F.Cu GND pour near the ENC1 ring. Route these nets in a second run, after all other nets.
 
-If the schematic changed, update the board from the schematic before routing.
+Add `--layer-costs 4 1` to the second run. As a result, B.Cu costs less than F.Cu. KiCadRoutingTools puts the crossing on B.Cu and does not cut the GND pour.
+
+For example, the first D6/D7 run routed `led_3` and `led_4`. The second run routed `led_6` and `led_vdd` with `--layer-costs 4 1`.
+
+`--keep-input-copper` keeps the existing tracks. KiCadRoutingTools can extend a track from a cut end.
+
+If you replace part of a hand-routed track, first cut the track into stubs at the new pads.
+
+Extend existing tracks where possible. A full redraw of the LED chain doubled the vias and isolated an LED VSS pad from the F.Cu GND pour.
+
+After each run, run DRC with `--refill-zones`. The pour report from KiCadRoutingTools can miss a split in the GND pour.
+
+Before you commit a routed board, follow the rule in "Zone refill before a commit".
+
+`--nets` limits the run to the given nets and accepts glob patterns. Use `py_router/route_diff.py` for differential pairs and `py_router/route_planes.py` for planes.
+
+If the schematic changed, update the board from the schematic before you route it.
+
+The virtual environment contains numpy, scipy, and shapely. `build_router.py` writes the Rust module to `rust_router/grid_router.so`.
 
 ### Schematic-to-board synchronization
 

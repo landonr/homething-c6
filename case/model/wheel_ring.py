@@ -14,8 +14,8 @@ annular channel circling the wheel opening, open to the cavity below, roofed
 by LED_RING_ROOF of translucent shell. Its inner wall is upright below a short
 top chamfer, so the web to the wheel's bore is at least LED_RING_WALL; its outer wall is
 one 45 degree plane over the whole height, widest at the mouth, so the light
-enters across a flare. The four LEDs fire up into it and the channel carries
-their light around the wheel, so the face shows a ring rather than four dots.
+enters across a flare. The six LEDs fire up into it and the channel carries
+their light around the wheel, so the face shows a ring rather than six dots.
 """
 
 import math
@@ -76,10 +76,11 @@ def led_y_reach():
 def pad_clear_y():
     """Half-width of the band around the wheel the pad has to stay out of, in y
     off the wheel centre: whichever asks for more of the lip's own rotating
-    clearance and led_y_reach() plus PAD_LED_CLEARANCE. The lip governs at the
-    present layout, so the LEDs come uncovered with room to spare, but the LED
-    term is derived off their placements so moving one outward can take over
-    rather than quietly ending up back under silicone.
+    clearance and led_y_reach() plus PAD_LED_CLEARANCE. The LED term governs
+    at the present layout: D6 and D7 sit on the wheel's y axis, so their full
+    radial reach counts in y. It is derived off the placements, so moving an
+    LED outward widens the band rather than quietly ending up back under
+    silicone.
 
     A requirement rather than a cut now. The pad used to be one full-width slab
     and this band was subtracted from it, severing it in two; the pad is two

@@ -3,8 +3,8 @@ shells.
 
 Feature clashes: the mic duct, the front ledges and the end screw block against
 every part's courtyard. The
-only pass that sees the eleven switches, D2-D5 and J1, none of which reach the
-STEP assembly. 2D, so it answers where a part sits, never how tall it is.
+only pass that sees the eleven switches and J1, none of which reach the STEP
+assembly. 2D, so it answers where a part sits, never how tall it is.
 
 End screw: the one fastener that closes the two shells, read off both built
 shells rather than off the stack that sized it.
@@ -91,8 +91,8 @@ def _part_z(ref, side):
 def feature_clashes():
     """Case features that sit inside the cavity, against every part's courtyard.
 
-    This is the only pass that sees the switches, D2-D5 and J1, none of which
-    reach the STEP assembly. Courtyards carry no height, so a part's z span comes
+    This is the only pass that sees the switches and J1, none of which reach
+    the STEP assembly. Courtyards carry no height, so a part's z span comes
     from its model where it has one, and is assumed to fill its side of the cavity
     where it does not. The end screw block is read on its built solid.
     """

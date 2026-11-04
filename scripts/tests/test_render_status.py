@@ -155,6 +155,55 @@ class FingerprintTest(unittest.TestCase):
         self.assertEqual(working['one'], staged['one'])
         self.assertEqual(working['two']['fingerprint'], 'unstaged')
 
+    def stamp_before_write(self):
+        (self.root / 'docs' / 'readme-assets').mkdir(parents=True)
+        stamp = self.root / rs.STAMP
+        stamp.write_text(rs.dump_stamp({'one': {'fingerprint': 'old', 'source': 'index'}}))
+        git(self.root, 'add', rs.STAMP)
+        return stamp, {'one': {'made_by': 'hook', 'inputs': ['a.txt']}, 'two': {'made_by': 'repo', 'inputs': ['dir/']}}
+
+    def assert_write_refused(self, groups, stamp, expected):
+        before, staged = stamp.read_text(), git(self.root, 'show', f':{rs.STAMP}')
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as caught, contextlib.redirect_stderr(err), \
+                contextlib.redirect_stdout(io.StringIO()):
+            rs.write(self.root, groups, ['one', 'two'], stage=True)
+        self.assertIn('git add', str(caught.exception))
+        self.assertIn(expected, err.getvalue())
+        self.assertEqual(stamp.read_text(), before)
+        self.assertEqual(git(self.root, 'show', f':{rs.STAMP}'), staged)
+
+    def test_write_refuses_an_unstaged_input_edit(self):
+        stamp, groups = self.stamp_before_write()
+        (self.root / 'dir' / 'b.txt').write_text('changed\n')
+        self.assert_write_refused(groups, stamp, 'two: input dir/b.txt has unstaged changes')
+
+    def test_write_refuses_an_untracked_file_in_an_input_directory(self):
+        stamp, groups = self.stamp_before_write()
+        (self.root / 'dir' / 'new.txt').write_text('new\n')
+        self.assert_write_refused(groups, stamp, 'two: input dir/new.txt is not tracked')
+
+    def test_allow_unstaged_records_the_staged_state(self):
+        stamp, groups = self.stamp_before_write()
+        staged = rs.fingerprint(self.root, ['dir/'])
+        (self.root / 'dir' / 'b.txt').write_text('changed\n')
+        (self.root / 'dir' / 'new.txt').write_text('new\n')
+        with contextlib.redirect_stdout(io.StringIO()):
+            rs.write(self.root, groups, ['two'], allow_unstaged=True)
+        self.assertEqual(json.loads(stamp.read_text())['two'], {'fingerprint': staged, 'source': 'index'})
+
+    def test_rev_ignores_the_working_tree(self):
+        stamp, groups = self.stamp_before_write()
+        tree = git(self.root, 'write-tree').strip()
+        commit = git(self.root, '-c', 'user.name=test', '-c', 'user.email=test@example.com',
+                     'commit-tree', tree, '-m', 'inputs').strip()
+        (self.root / 'dir' / 'b.txt').write_text('changed\n')
+        (self.root / 'dir' / 'new.txt').write_text('new\n')
+        with contextlib.redirect_stdout(io.StringIO()):
+            rs.write(self.root, groups, ['two'], rev=commit)
+        self.assertEqual(json.loads(stamp.read_text())['two'],
+                         {'fingerprint': rs.fingerprint(self.root, ['dir/'], rev=commit), 'source': commit})
+
     def test_an_untracked_path_fails_clearly(self):
         groups = {'one': {'made_by': 'repo', 'outputs': ['a.txt'], 'inputs': ['missing.txt']}}
         with self.assertRaises(SystemExit) as caught:

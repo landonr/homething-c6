@@ -5,7 +5,7 @@ scripts/renders.json lists the render groups. A fingerprint hashes the git blob 
 a group's inputs, so it follows the index or a commit, not the working tree.
 
     render-status.py [--check] [GROUP...] [--strict] [--if-staged]
-    render-status.py --write GROUP... [--rev R] [--stage]
+    render-status.py --write GROUP... [--rev R] [--stage] [--allow-unstaged]
     render-status.py --list
 """
 
@@ -124,6 +124,14 @@ def staged(root, inputs):
     return run.returncode == 1
 
 
+def unstaged(root, inputs):
+    """Input files that the index does not hold as they are: unstaged edits and untracked files."""
+    edited = git(root, 'diff', '--name-only', '-z', '--', *inputs).stdout.split('\0')
+    others = git(root, 'ls-files', '--others', '--exclude-standard', '-z', '--', *inputs).stdout.split('\0')
+    return ([f'{path} has unstaged changes' for path in sorted(filter(None, edited))]
+            + [f'{path} is not tracked' for path in sorted(filter(None, others))])
+
+
 def status(root, name, group, stamp):
     if group['made_by'] == 'static':
         return 'static', None
@@ -183,10 +191,17 @@ def check(root, groups, names, strict=False, if_staged=False):
     return 1 if strict and stale else 0
 
 
-def write(root, groups, names, rev=None, stage=False):
+def write(root, groups, names, rev=None, stage=False, allow_unstaged=False):
     for name in names:
         if groups[name]['made_by'] == 'static':
             fail(f'{name} is static, so it has no stamp')
+    if not rev and not allow_unstaged:
+        problems = [f'{name}: input {problem}' for name in names for problem in unstaged(root, groups[name]['inputs'])]
+        for problem in problems:
+            print(f'{TAG} ERROR: {problem}', file=sys.stderr)
+        if problems:
+            fail('wrote no stamp, because the index does not hold these inputs. Run git add on them first, '
+                 'or add --allow-unstaged to record the staged state.')
     if rev:
         run = git(root, 'rev-parse', '--verify', '--quiet', f'{rev}^{{commit}}', check=False)
         if run.returncode:
@@ -234,12 +249,14 @@ def main(argv=None):
     parser.add_argument('--rev', help='with --write, read this commit instead of the index')
     parser.add_argument('--stage', action='store_true',
                         help='with --write, also stage the new entries, and only those (for the pre-commit hook)')
+    parser.add_argument('--allow-unstaged', action='store_true',
+                        help='with --write, record the staged state when an input has unstaged changes or untracked files')
     parser.add_argument('--strict', action='store_true', help='with --check, exit 1 when a group is stale')
     parser.add_argument('--if-staged', action='store_true',
                         help='with --check, check only the groups whose inputs the index changes (for the pre-commit hook)')
     args = parser.parse_args(argv)
-    if (args.rev or args.stage) and not args.write:
-        parser.error('--rev and --stage need --write')
+    if (args.rev or args.stage or args.allow_unstaged) and not args.write:
+        parser.error('--rev, --stage and --allow-unstaged need --write')
     if (args.strict or args.if_staged) and (args.write or args.list):
         parser.error('--strict and --if-staged need --check')
     if args.write and not args.groups:
@@ -253,7 +270,7 @@ def main(argv=None):
     if unknown:
         parser.error(f'unknown group {", ".join(unknown)}. Groups: {", ".join(groups)}')
     if args.write:
-        return write(ROOT, groups, args.groups, args.rev, args.stage)
+        return write(ROOT, groups, args.groups, args.rev, args.stage, args.allow_unstaged)
     if args.list:
         return list_groups(ROOT, groups)
     return check(ROOT, groups, args.groups, args.strict, args.if_staged)

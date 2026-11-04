@@ -92,6 +92,7 @@ Add `--strict` to exit with status 1 when a group is stale.
 To refresh a group, run its refresh steps in one shell from the repository root.
 The last step records the new stamp with `python3 scripts/render-status.py --write <group>`.
 Use `--write <group> --rev <commit>` to record the inputs of a commit instead of the index.
+If an input is unstaged or untracked, `--write` records nothing, so run `git add`, or add `--allow-unstaged` to record the index.
 
 The pre-commit hook records the stamps of the groups that it regenerates. Then it checks each group that a staged file feeds. The check only shows a warning.
 If you add an image or a video under `docs/readme-assets/` or `site/assets/`, add it to a group. Otherwise `scripts/tests/test_render_status.py` fails.

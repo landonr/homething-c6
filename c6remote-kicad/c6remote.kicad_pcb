@@ -9045,7 +9045,7 @@
 		(uuid "e1f454f4-b187-4c91-9e65-47d3a2f44500")
 		(at 52.227297 68.824158)
 		(property "Reference" "ENC1"
-			(at 7.272703 18.675842 0)
+			(at 9.772703 -18.824158 0)
 			(unlocked yes)
 			(layer "F.SilkS")
 			(uuid "d497abcf-9212-4edf-99ee-63604c9474fd")
@@ -9791,7 +9791,7 @@
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236)")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "Q2"
-			(at 0 -2.4 90)
+			(at 0 2.5 90)
 			(layer "F.SilkS")
 			(uuid "db90018c-8b4a-4b73-bcf0-c34bffdb160d")
 			(effects

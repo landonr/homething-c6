@@ -310,7 +310,8 @@
     ],
     "recipe": [
       "The hero-banner-crowd preset sets 2880x1440 px, 1024 samples, and the LED glow. --jpeg 82 writes a quality 82 JPEG beside the dated PNG.",
-      "The committed hero.jpg is the JPEG of the 2026-10-31T18-17-39-356Z render without a change. Its .png.log records the preset, the size, the samples, and the JPEG quality.",
+      "The preset ledColors list has one colour for each status LED, D2 to D7 in reference order. It must agree with readme-annotated-front.json.",
+      "The committed hero.jpg is the JPEG of the 2026-11-04T10-15-35-326Z render without a change. Its .png.log records the preset, the size, the samples, and the JPEG quality.",
       "The preset is in c6remote-explode, so the fingerprint cannot see a change to it."
     ]
   },

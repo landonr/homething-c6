@@ -8,8 +8,8 @@
     "source": "d34941aae7fae86fc4023cbe9b44bdab36467b46"
   },
   "case-annotated": {
-    "fingerprint": "ebb03e5f5c9dfde79ea5d54de8bfa26b39b7e26d4e8cf6a1e03c1729ff8753be",
-    "source": "6110a1872bcfb8307a5d960e9b437bcff94ac6a8"
+    "fingerprint": "0a52804939a63f01c624550cab37790ae9bf22457b0b419d3f3c3bcaa1f6b1a8",
+    "source": "index"
   },
   "case-front-face": {
     "fingerprint": "537ea07b35b6a42773d58c60c92b443f70c4a3e518ada48dd148c95f14696c6d",
@@ -20,24 +20,24 @@
     "source": "index"
   },
   "case-stills": {
-    "fingerprint": "aaf01be30d27d14c6730307fb5066b3288380589567d818f3c2b20471c88837d",
-    "source": "6110a1872bcfb8307a5d960e9b437bcff94ac6a8"
+    "fingerprint": "6a6e92870756d9bbd6abb88c90109da398ec6a5dcf6f7bf6d4ad718ec366f44b",
+    "source": "index"
   },
   "schematic": {
     "fingerprint": "703542497a45460075af28a9378758f1aa35aa111d47d91fc97ac799ed360749",
     "source": "d34941aae7fae86fc4023cbe9b44bdab36467b46"
   },
   "site-hero": {
-    "fingerprint": "d3392d0d105654d80f0e01d037d62faacbafcc27b024679857f6cadc8d6cef57",
-    "source": "51e4516ba189fb7a4659b7525bbf2ac056c9a9f1"
+    "fingerprint": "6a6e92870756d9bbd6abb88c90109da398ec6a5dcf6f7bf6d4ad718ec366f44b",
+    "source": "index"
   },
   "site-media": {
-    "fingerprint": "4fc979bece1343860d33530e3c49030b11f09eb242a39973821a4789b02bca31",
-    "source": "d4e9f333bddcf8dd2510d4342bd7844eb102b753"
+    "fingerprint": "f4632df1b33a6d45769f81ddb65926965f8a000b4837a6c725e071891c794e29",
+    "source": "index"
   },
   "site-voice": {
-    "fingerprint": "d256523f2f17532c9897cc8bda5028c0d1e3717a748ce72d644daf77d320ee37",
-    "source": "22866f5056fd4115af241b2307be6503246483c2"
+    "fingerprint": "b90fccebf5c65db5158d199d82fd76768077987fbfc3af8d9a2a9ce771103dba",
+    "source": "index"
   },
   "web-page-framed": {
     "fingerprint": "7ab5c2813c769c5f8e4aa956efba116a3d3a978e59a425aa928a7d37c80126a8",

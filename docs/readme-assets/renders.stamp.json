@@ -12,12 +12,12 @@
     "source": "6110a1872bcfb8307a5d960e9b437bcff94ac6a8"
   },
   "case-front-face": {
-    "fingerprint": "dff0c89ecdad7d894bc93d4b6f96b27eac679a190acb9c2d63a920d6e0bacd58",
-    "source": "dbce51ea0fd80606a71e7f3ba0d9955525329e27"
+    "fingerprint": "537ea07b35b6a42773d58c60c92b443f70c4a3e518ada48dd148c95f14696c6d",
+    "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "035728cb2edb87bca2a18457b7c21c50a8c91b7dc4703370294053fc534f1d12",
-    "source": "fc3f20649251554b0f2336e7c85360dcb4e0324a"
+    "fingerprint": "699949f61acdd94245b9125eecf7bc66fbe1ab57f32e3ef0a403fff331b66b4c",
+    "source": "index"
   },
   "case-stills": {
     "fingerprint": "aaf01be30d27d14c6730307fb5066b3288380589567d818f3c2b20471c88837d",
@@ -40,11 +40,11 @@
     "source": "22866f5056fd4115af241b2307be6503246483c2"
   },
   "web-page-framed": {
-    "fingerprint": "9f1cf668d380db17a54410af9f04565b1a8f80e46905e907693770e7c526b649",
-    "source": "ab917913dd0bc2bfab7a0d5b03c7b501e46ca234"
+    "fingerprint": "7ab5c2813c769c5f8e4aa956efba116a3d3a978e59a425aa928a7d37c80126a8",
+    "source": "index"
   },
   "web-page-shots": {
-    "fingerprint": "fd1caae74cd1bd50bec21fdfaebdeacac3fc46cc846646507abc3a665716f592",
-    "source": "baf4713c54ca2e5f16cc699af2d48430a21a66f3"
+    "fingerprint": "e3c5c4a095143b97d16fb59c969a72f37a4616cc5ba2bae52c5b1afa1601e4cd",
+    "source": "index"
   }
 }

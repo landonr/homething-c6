@@ -1,0 +1,362 @@
+{
+  "board": {
+    "description": "The two 3D board PNGs and the two flat board SVGs in the README.",
+    "made_by": "hook",
+    "outputs": [
+      "docs/readme-assets/board-3d-rotated-top.png",
+      "docs/readme-assets/board-3d-rotated-bottom.png",
+      "docs/readme-assets/board-flat-top.svg",
+      "docs/readme-assets/board-flat-bottom.svg"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "c6remote-kicad/3dmodels/",
+      "scripts/render-readme-assets.sh",
+      "scripts/render-2d.sh",
+      "scripts/render-board-blender.py",
+      "scripts/board_extras.py",
+      "scripts/assets/env-studio.hdr"
+    ],
+    "refresh": [
+      "scripts/render-readme-assets.sh --only board",
+      "python3 scripts/render-status.py --write board"
+    ],
+    "recipe": [
+      "The script exports a board GLB with kicad-cli and renders it with Blender Cycles at 1600 samples.",
+      "If magick is on PATH, the script trims each PNG.",
+      "If you stage the PCB, the pre-commit hook runs these steps."
+    ]
+  },
+  "board-annotated": {
+    "description": "The labelled board SVGs. Each SVG embeds a PNG from the board group.",
+    "made_by": "hook",
+    "outputs": [
+      "docs/readme-assets/board-front-annotated.svg",
+      "docs/readme-assets/board-front-annotated-dark.svg",
+      "docs/readme-assets/board-back-annotated.svg",
+      "docs/readme-assets/board-back-annotated-dark.svg"
+    ],
+    "inputs": [
+      "docs/readme-assets/board-3d-rotated-top.png",
+      "docs/readme-assets/board-3d-rotated-bottom.png",
+      "scripts/render-annotated-remote.py",
+      "scripts/annotation-callouts.json"
+    ],
+    "refresh": [
+      "python3 scripts/render-annotated-remote.py --only board",
+      "python3 scripts/render-status.py --write board-annotated"
+    ],
+    "recipe": [
+      "If you stage the PCB or a board PNG, the pre-commit hook runs these steps."
+    ]
+  },
+  "schematic": {
+    "description": "The schematic SVG in a light version and a dark version.",
+    "made_by": "hook",
+    "outputs": [
+      "docs/readme-assets/schematic.svg",
+      "docs/readme-assets/schematic-dark.svg"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_sch",
+      "scripts/render-readme-assets.sh"
+    ],
+    "refresh": [
+      "scripts/render-readme-assets.sh --only schematic",
+      "python3 scripts/render-status.py --write schematic"
+    ],
+    "recipe": [
+      "kicad-cli draws the symbol copies in the lib_symbols block of the schematic, so the symbol library files are not inputs.",
+      "If you stage the schematic, the pre-commit hook runs these steps."
+    ]
+  },
+  "case-stills": {
+    "description": "The case stills and the explode loop in the README. Blender renders them in c6remote-explode.",
+    "made_by": "c6remote-explode",
+    "outputs": [
+      "docs/readme-assets/case-annotated-front.png",
+      "docs/readme-assets/case-annotated-back.png",
+      "docs/readme-assets/case-assembled.png",
+      "docs/readme-assets/case-exploded.png",
+      "docs/readme-assets/case-explode-loop.webp"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "scripts/board_extras.py",
+      "case/case.py",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "export EXPLODE=\"${C6REMOTE_EXPLODE:-$PWD/../c6remote-explode}\"",
+      "scripts/export-case-refs.sh",
+      "case/.venv/bin/python case/case.py",
+      "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
+      "\"$EXPLODE/scripts/render-case-assembled.sh\" --blender",
+      "\"$EXPLODE/scripts/render-case-exploded.sh\" --blender",
+      "\"$EXPLODE/scripts/render-case-explode-loop.sh\"",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --width 900 --out-default case-annotated-front.png)",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-back --width 900 --out-default case-annotated-back.png)",
+      "cp \"$(ls -t \"$EXPLODE\"/case-assembled-blender-*.png | head -1)\" docs/readme-assets/case-assembled.png",
+      "cp \"$(ls -t \"$EXPLODE\"/case-exploded-blender-*.png | head -1)\" docs/readme-assets/case-exploded.png",
+      "cp \"$(ls -t \"$EXPLODE\"/case-explode-loop-blender-*.webp | head -1)\" docs/readme-assets/case-explode-loop.webp",
+      "cp \"$(ls -t \"$EXPLODE\"/case-annotated-front-blender-*.png | head -1)\" docs/readme-assets/case-annotated-front.png",
+      "cp \"$(ls -t \"$EXPLODE\"/case-annotated-back-blender-*.png | head -1)\" docs/readme-assets/case-annotated-back.png",
+      "python3 scripts/render-status.py --write case-stills"
+    ],
+    "recipe": [
+      "The renders read the case and board geometry that refresh-assets.sh copies into the assets/ set of the viewer.",
+      "case-assembled.png and the two case-annotated PNGs are 900 px wide. case-exploded.png is 1200 px wide. All four use 1600 samples from their presets.",
+      "render-case-explode-loop.sh writes a 720x540 WebP at 15 fps for 15.6 s and 256 samples for each frame.",
+      "Each render writes a dated file in c6remote-explode. The cp steps copy the newest dated file without a change.",
+      "The presets and the render scripts are in c6remote-explode, so the fingerprint cannot see a change to them.",
+      "After you refresh this group, refresh case-annotated and site-media too, because they read these files."
+    ]
+  },
+  "case-annotated": {
+    "description": "The labelled case SVGs. Each SVG embeds a case-annotated PNG from the case-stills group.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/remote-controls-annotated.svg",
+      "docs/readme-assets/remote-controls-annotated-dark.svg",
+      "docs/readme-assets/remote-back-annotated.svg",
+      "docs/readme-assets/remote-back-annotated-dark.svg"
+    ],
+    "inputs": [
+      "docs/readme-assets/case-annotated-front.png",
+      "docs/readme-assets/case-annotated-back.png",
+      "scripts/render-annotated-remote.py",
+      "scripts/annotation-callouts.json"
+    ],
+    "refresh": [
+      "python3 scripts/render-annotated-remote.py --only case",
+      "python3 scripts/render-status.py --write case-annotated"
+    ],
+    "recipe": [
+      "The pre-commit hook does not draw these SVGs, because ImageMagick can change the PNG bytes without a design change."
+    ]
+  },
+  "case-fronts": {
+    "description": "The SLS and FDM front face plans and the isometric clay renders of the two front shells, for case/README.md.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/case-front-face-sls.svg",
+      "docs/readme-assets/case-front-face-fdm.svg",
+      "docs/readme-assets/case-front-iso-sls.png",
+      "docs/readme-assets/case-front-iso-fdm.png"
+    ],
+    "inputs": [
+      "scripts/render-face-svg.py",
+      "scripts/render-case-fronts-blender.py",
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "case/case.py",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "case/.venv/bin/python scripts/render-face-svg.py --version sls",
+      "case/.venv/bin/python scripts/render-face-svg.py --version fdm",
+      "case/.venv/bin/python case/case.py",
+      "python3 scripts/render-case-fronts-blender.py",
+      "python3 scripts/render-status.py --write case-fronts"
+    ],
+    "recipe": [
+      "render-face-svg.py reads the case model directly. render-case-fronts-blender.py reads the STLs that case.py writes into case/export/.",
+      "The Blender script uses its defaults: 1200 px wide at 512 samples, with one camera for the two shells."
+    ]
+  },
+  "case-front-face": {
+    "description": "The front face plan on the web page. The firmware build embeds this file, so a stale copy ships in the firmware.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/case-front-face.svg"
+    ],
+    "inputs": [
+      "scripts/render-face-svg.py",
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "case/.venv/bin/python scripts/render-face-svg.py",
+      "python3 scripts/render-status.py --write case-front-face"
+    ],
+    "recipe": [
+      "components/button_config/__init__.py embeds the file at build time. scripts/preview-buttons-page.py reads it for each request.",
+      "Keep the file small, because the firmware stores it in flash. After you refresh the file, build the firmware again.",
+      "web-page-shots reads this file, so refresh that group too."
+    ]
+  },
+  "web-page-shots": {
+    "description": "The two web page screenshots in the README. buttons-page-assign.png also feeds the site.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/buttons-page-assign.png",
+      "docs/readme-assets/buttons-page-config.png"
+    ],
+    "inputs": [
+      "components/button_config/button_config_page.h",
+      "docs/readme-assets/case-front-face.svg",
+      "scripts/preview-buttons-page.py",
+      "scripts/preview-c6remote-config.json"
+    ],
+    "refresh": [
+      "export EXPLODE=\"${C6REMOTE_EXPLODE:-$PWD/../c6remote-explode}\"",
+      "python3 scripts/preview-buttons-page.py --port 8123 & PREVIEW=$!; sleep 1",
+      "node --input-type=module - <<'EOF'\nconst { chromium } = await import(`${process.env.EXPLODE}/node_modules/playwright/index.mjs`);\nconst b = await chromium.launch();\nconst p = await b.newPage({ viewport: { width: 1100, height: 800 }, deviceScaleFactor: 2, colorScheme: 'light' });\nawait p.goto('http://127.0.0.1:8123/', { waitUntil: 'networkidle' });\nawait p.waitForTimeout(1000);\nawait p.click('button[aria-label^=\"Button 7:\"]');\nawait p.waitForTimeout(800);\nawait p.screenshot({ path: 'docs/readme-assets/buttons-page-assign.png', fullPage: true });\nawait p.click('#tabc');\nawait p.waitForTimeout(800);\nconst y = await p.evaluate(() => {\n  const h = [...document.querySelectorAll('h1,h2,h3')].find(e => /Import/.test(e.textContent));\n  return h.getBoundingClientRect().top + window.scrollY;\n});\nawait p.screenshot({ path: 'docs/readme-assets/buttons-page-config.png', fullPage: true, clip: { x: 0, y: 0, width: 1100, height: Math.round(y - 8) } });\nawait b.close();\nEOF",
+      "kill $PREVIEW",
+      "python3 scripts/render-status.py --write web-page-shots"
+    ],
+    "recipe": [
+      "The fake remote in preview-buttons-page.py supplies the page state. The capture uses the Playwright copy in c6remote-explode/node_modules.",
+      "The capture uses a 1100x800 viewport, a device scale factor of 2, and the light colour scheme.",
+      "The assign view selects Button 7. The config view shows the Config tab down to the Import Export heading.",
+      "At baf4713 the outputs were 2200x1878 and 2200x3306 px. The config height follows the page.",
+      "After you refresh this group, refresh web-page-framed and site-media too, because they read these files."
+    ]
+  },
+  "web-page-framed": {
+    "description": "The two web page screenshots inside a drawn browser window, for the README.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/buttons-page-assign-framed.png",
+      "docs/readme-assets/buttons-page-config-framed.png"
+    ],
+    "inputs": [
+      "docs/readme-assets/buttons-page-assign.png",
+      "docs/readme-assets/buttons-page-config.png",
+      "scripts/browser-frame.sh"
+    ],
+    "refresh": [
+      "scripts/browser-frame.sh docs/readme-assets/buttons-page-assign.png docs/readme-assets/buttons-page-assign-framed.png",
+      "scripts/browser-frame.sh docs/readme-assets/buttons-page-config.png docs/readme-assets/buttons-page-config-framed.png",
+      "python3 scripts/render-status.py --write web-page-framed"
+    ],
+    "recipe": [
+      "browser-frame.sh needs ImageMagick. The default address in the frame is homething-c6-13f498.local."
+    ]
+  },
+  "site-media": {
+    "description": "The four feature clips and their posters, the explode video and its poster, and the web page crop on the C6 site page.",
+    "made_by": "repo",
+    "outputs": [
+      "site/assets/c6/clip-tv.mp4",
+      "site/assets/c6/clip-tv.jpg",
+      "site/assets/c6/clip-lights.mp4",
+      "site/assets/c6/clip-lights.jpg",
+      "site/assets/c6/clip-fireplace.mp4",
+      "site/assets/c6/clip-fireplace.jpg",
+      "site/assets/c6/clip-sleep.mp4",
+      "site/assets/c6/clip-sleep.jpg",
+      "site/assets/c6/explode.mp4",
+      "site/assets/c6/explode.jpg",
+      "site/assets/c6/feature-web-page.jpg"
+    ],
+    "inputs": [
+      "scripts/site-media.sh",
+      "docs/readme-assets/case-explode-loop.webp",
+      "docs/readme-assets/buttons-page-assign.png"
+    ],
+    "refresh": [
+      "scripts/site-media.sh ../homeThingContent/IMG_7480/IMG_7480_clicks.mp4",
+      "python3 scripts/render-status.py --write site-media"
+    ],
+    "recipe": [
+      "The clips come from the demo video IMG_7480/IMG_7480_clicks.mp4 in the homeThingContent checkout. Git does not track that video, so the fingerprint cannot see it.",
+      "site-media.sh crops each clip to 1080x1440, scales it to 480x640, and encodes it as H.264 at CRF 26.",
+      "site-media.sh flattens case-explode-loop.webp onto white and encodes explode.mp4 at 1000/33 fps. Frame 106 becomes explode.jpg at quality 85.",
+      "explode.mp4 keeps the size of the loop. The committed file is 960x720 from the loop at d4e9f33, but the loop is now 720x540.",
+      "feature-web-page.jpg is a 900x1020 crop of buttons-page-assign.png at 600 px wide and quality 82.",
+      "One run writes all eleven files. With the d4e9f33 inputs, the script makes explode.jpg and feature-web-page.jpg again byte for byte."
+    ]
+  },
+  "site-hero": {
+    "description": "The hero and preview image of the C6 site page: the C6 with lit status LEDs in front of a crowd of remotes.",
+    "made_by": "c6remote-explode",
+    "outputs": [
+      "site/assets/c6/hero.jpg"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "scripts/board_extras.py",
+      "case/case.py",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "export EXPLODE=\"${C6REMOTE_EXPLODE:-$PWD/../c6remote-explode}\"",
+      "scripts/export-case-refs.sh",
+      "case/.venv/bin/python case/case.py",
+      "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset hero-banner-crowd --jpeg 82)",
+      "cp \"$(ls -t \"$EXPLODE\"/hero-banner-crowd-blender-*.jpg | head -1)\" site/assets/c6/hero.jpg",
+      "python3 scripts/render-status.py --write site-hero"
+    ],
+    "recipe": [
+      "The hero-banner-crowd preset sets 2880x1440 px, 1024 samples, and the LED glow. --jpeg 82 writes a quality 82 JPEG beside the dated PNG.",
+      "The committed hero.jpg is the JPEG of the 2026-10-31T18-17-39-356Z render without a change. Its .png.log records the preset, the size, the samples, and the JPEG quality.",
+      "The preset is in c6remote-explode, so the fingerprint cannot see a change to it."
+    ]
+  },
+  "site-voice": {
+    "description": "The close-up of the mic sound hole on the Ask Home Assistant tile of the C6 site page.",
+    "made_by": "c6remote-explode",
+    "outputs": [
+      "site/assets/c6/feature-voice.jpg"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "c6remote-kicad/3dmodels/",
+      "scripts/board_extras.py"
+    ],
+    "refresh": [
+      "export EXPLODE=\"${C6REMOTE_EXPLODE:-$PWD/../c6remote-explode}\"",
+      "scripts/export-case-refs.sh",
+      "case/.venv/bin/python case/case.py",
+      "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
+      "TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset voice-mic-front --width 960 --height 1280 --samples 512 --out \"hero-drafts/voice/voice-mic-front-$TS.png\")",
+      "magick \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.png\" -background \"#141414\" -flatten -alpha off -colorspace sRGB -strip -quality 82 -sampling-factor 4:2:0 -interlace Plane \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.jpg\"",
+      "cp \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.jpg\" site/assets/c6/feature-voice.jpg",
+      "python3 scripts/render-status.py --write site-voice"
+    ],
+    "recipe": [
+      "The voice-mic-front preset shows the board alone, so the case model is not an input. refresh-assets.sh still needs the case STLs.",
+      "The render is 960x1280 px at 512 samples on a transparent film. The magick step puts it on #141414 and writes a quality 82 JPEG.",
+      "The committed file is hero-drafts/voice/voice-mic-front-2026-11-01T21-32-00Z.jpg in c6remote-explode without a change.",
+      "The preset is in c6remote-explode, so the fingerprint cannot see a change to it."
+    ]
+  },
+  "photo-build-stages": {
+    "description": "A photo of the remote at each build stage. No script makes it.",
+    "made_by": "static",
+    "outputs": [
+      "docs/readme-assets/remote-build-stages.jpg"
+    ]
+  },
+  "logos-and-legacy": {
+    "description": "The homeThing logos and the images of the legacy site pages. No script in this repository makes them.",
+    "made_by": "static",
+    "outputs": [
+      "docs/readme-assets/homeThingLogo.svg",
+      "docs/readme-assets/homeThingLogoWhite.svg",
+      "site/assets/legacy/"
+    ]
+  }
+}

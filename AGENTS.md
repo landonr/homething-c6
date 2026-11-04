@@ -210,7 +210,9 @@ When you stage the schematic or board, the hook performs these actions:
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
 - A staged PCB runs `scripts/render-annotated-remote.py --only board`. This step updates the four annotated board SVGs from the new board PNGs.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
-- If you stage a case render source, the hook runs `scripts/stamp-case-renders.py --check`. The `INPUTS` constant in that script lists the sources. This check also runs without a staged schematic or board. The check only shows a warning. The hook never stages `docs/readme-assets/case-renders.stamp`.
+- After the hook regenerates a render group, it runs `scripts/render-status.py --write <group> --stage`. That step stages only the entry of that group in `docs/readme-assets/renders.stamp.json`.
+- Last, the hook runs `scripts/render-status.py --check --if-staged`. This check also runs without a staged schematic or board. It shows a warning for each stale group that a staged file feeds. It never blocks the commit.
+- `scripts/renders.json` lists every render group with its outputs, inputs, and refresh steps. If you add an image or a video under `docs/readme-assets/` or `site/assets/`, add it to a group.
 
 The iBOM is a gitignored pre-fabrication pin-1 artifact. Never stage it.
 

@@ -62,14 +62,6 @@ The script writes each annotated SVG in a light version and a `-dark` version.
 Add `--only board` or `--only case` to draw one image set. The default is `--only all`.
 The pre-commit hook uses `--only board`, because the case sets go through ImageMagick and can change without a design change.
 
-`scripts/stamp-case-renders.py` tells you when the case renders are stale.
-It calculates a hash from the git blob IDs of the case render sources. The `INPUTS` constant in the script lists these sources.
-`docs/readme-assets/case-renders.stamp` records the hash of the sources for the current case renders.
-Run `scripts/stamp-case-renders.py --check` to compare the index with the stamp. Add `--strict` to exit with status 1 when the renders are stale.
-The pre-commit hook runs the check when you stage a case render source. The check only shows a warning.
-After you copy new case renders into `docs/readme-assets/`, run `scripts/stamp-case-renders.py --write`.
-Use `--rev <commit>` to record the sources of a commit instead of the index.
-
 After a new `case-explode-loop.webp`, run `scripts/site-media.sh <IMG_7480_clicks.mp4>` to make the C6 page videos in `site/assets/c6/`.
 The script also cuts the four feature clips from the living room demo video. It needs `ffmpeg` and ImageMagick.
 It also crops the web page image for the "No flashing needed" card from `buttons-page-assign.png`.
@@ -86,3 +78,20 @@ Run `python3 scripts/render-case-fronts-blender.py` to render the two front shel
 The script needs Blender, and it runs itself under Blender. Set `BLENDER` to override the binary path.
 It reads `case/export/c6remote-case-front.stl` and `c6remote-case-front-fdm.stl`. It writes `case-front-iso-sls.png` and `case-front-iso-fdm.png` into `docs/readme-assets/`.
 Both renders use one camera and one light set, so they show the same scale.
+
+## Render registry
+
+`scripts/renders.json` lists each group of generated images and videos. A group has its outputs, its tracked inputs, and its refresh steps.
+`made_by` tells you what makes the group: `hook`, `repo`, `c6remote-explode`, or `static`. A `static` group holds photos or logos that no script makes. It is never stale.
+`docs/readme-assets/renders.stamp.json` records a fingerprint for each group. The fingerprint is a hash of the git blob IDs of the group inputs.
+
+Run `python3 scripts/render-status.py --list` to see the status of each group.
+Run `python3 scripts/render-status.py --check [GROUP...]` to examine the groups. For a stale group, the script shows the changed inputs and the refresh steps.
+Add `--strict` to exit with status 1 when a group is stale.
+
+To refresh a group, run its refresh steps in one shell from the repository root.
+The last step records the new stamp with `python3 scripts/render-status.py --write <group>`.
+Use `--write <group> --rev <commit>` to record the inputs of a commit instead of the index.
+
+The pre-commit hook records the stamps of the groups that it regenerates. Then it checks each group that a staged file feeds. The check only shows a warning.
+If you add an image or a video under `docs/readme-assets/` or `site/assets/`, add it to a group. Otherwise `scripts/tests/test_render_status.py` fails.

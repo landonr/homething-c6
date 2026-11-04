@@ -214,9 +214,7 @@ The FDM front's face sits `FDM_FACE_DROP` below the recessed front's, so the par
 
 The caps and the wheel stand proud by that much. The recessed front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth.
 
-The drop thins three ceilings that the dish never reaches. The USB pocket roof is the tight one, and `check.py --only fdm` holds all three.
-
-The USB pocket roof and the USB slot roof are flush, at the connector envelope plus `USB_CLEARANCE`. Do not raise one without the other.
+The drop thins the ceilings that the dish never reaches. Run `check.py --only fdm` to check their thickness.
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
@@ -246,6 +244,10 @@ The preload holds the seam closed.
 
 One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt.
 
+The Qwiic opening has a flush cover with two breakaway bridges. The cover stays in place unless you need the port.
+
+To open the port, remove the cover before you install the board. Break both bridges carefully and trim any nubs that obstruct the plug. Do not press on the connector.
+
 Prepare the back shell first:
 
 1. Insert the IR window from inside the back shell.
@@ -253,7 +255,7 @@ Prepare the back shell first:
 3. Apply adhesive to the continuous shoulder below the interior flange.
 4. Let the adhesive set.
 
-Prepare the battery before shell assembly. Stretch-release adhesive strips hold the pouch cell:
+Prepare the battery before shell assembly. Use the PicoBlade plug for J1. The model reserves a wire path from the connector, but does not measure the mating plug. Verify the plug and wire fit on the first print. Stretch-release adhesive strips hold the pouch cell:
 
 1. Stick two stretch-release adhesive strips to the pouch.
 2. Put the pouch on the back face of the board in the cell position, with its leads toward J1.
@@ -280,9 +282,9 @@ Install the IR window before shell assembly. Its flange is not accessible after 
 
 ## V2 board
 
-The case does not make a V2 board compatible with the V3 case. The V2 IR parts and upper keys do not align with the current openings. Use a V2 board only as a bench aid.
+The case is for the current board. A V2 board has different IR parts, connectors, and XIAO placement. Its USB connector does not align with the opening. Its fit in these shells is not verified.
 
-A V2 board rests on the back shell support ledges, `SUPPORT_GAP` lower than the V3 board. The front ledges do not touch it. Its SW1 and SW2 also sit nearer the grip end.
+The V2 pad models place SW1 and SW2 for a board at `SUPPORT_GAP` below the current board. Their fit does not establish compatibility with the shells.
 
 For a V2 board, print `c6remote-case-pad-fdm-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad-fdm.stl`.
 
@@ -323,7 +325,9 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.
-- Keep the USB slot and pocket clear of the connector shell.
+- Keep the USB slot clear of the connector shell.
+- Keep the Qwiic plug path clear after removal of the breakaway cover.
+- Keep the battery plug and wire path clear of the case and cell.
 - Keep support ledges clear of board parts, the end screw block, and the cell.
 - Keep the front ledges clear of top parts, the button pad, and the caps.
 - Keep the cell envelope clear of board parts and the end screw block.

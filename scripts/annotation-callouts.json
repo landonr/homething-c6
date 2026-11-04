@@ -17,14 +17,15 @@
     {"name": "switches", "points": [[564, 365], [410, 365]], "label": "11 tactile\nswitches", "tx": 400, "ty": 381, "anchor": "end"},
     {"name": "leds", "points": [[582, 579], [410, 579]], "label": "RGB status\nLEDs", "tx": 400, "ty": 595, "anchor": "end"},
     {"name": "encoder", "points": [[808, 829], [410, 829]], "label": "Rotary encoder\n+ 5 addressable\nbuttons", "tx": 400, "ty": 845, "anchor": "end"},
-    {"name": "expander", "points": [[781, 1538], [410, 1538]], "label": "GPIO expander", "tx": 400, "ty": 1554, "anchor": "end"},
-    {"name": "module", "points": [[832, 1744], [410, 1744]], "label": "XIAO ESP32-C6", "tx": 400, "ty": 1760, "anchor": "end"}
+    {"name": "expander", "points": [[781, 1538], [410, 1538]], "label": "GPIO expander", "tx": 400, "ty": 1554, "anchor": "end"}
   ],
   "board_back": [
     {"name": "receiver", "points": [[471, 184], [647, 184]], "label": "IR receiver", "tx": 660, "ty": 200, "anchor": "start"},
     {"name": "mic", "points": [[307, 229], [307, 290], [647, 290]], "label": "I²S microphone", "tx": 660, "ty": 306, "anchor": "start"},
     {"name": "emitter", "points": [[188, 266], [188, 400], [647, 400]], "label": "IR emitter", "tx": 660, "ty": 416, "anchor": "start"},
     {"name": "pouch", "points": [[740, 875], [740, 645]], "label": "1000 mAh LiPo\nbattery", "tx": 660, "ty": 560, "anchor": "start"},
-    {"name": "connector", "points": [[516, 1774], [647, 1774]], "label": ["Battery\nconnector", "JST PH 2-pin"], "tx": 660, "ty": 1790, "anchor": "start"}
+    {"name": "qwiic", "points": [[520, 1510], [647, 1510]], "label": ["Qwiic I²C port", "JST SH 4-pin"], "tx": 660, "ty": 1526, "anchor": "start"},
+    {"name": "module", "points": [[280, 1735], [365, 1735], [365, 1625], [647, 1625]], "label": "XIAO ESP32-C6", "tx": 660, "ty": 1641, "anchor": "start"},
+    {"name": "connector", "points": [[500, 1718], [647, 1718]], "label": ["Battery\nconnector", "Molex PicoBlade 2-pin"], "tx": 660, "ty": 1734, "anchor": "start"}
   ]
 }

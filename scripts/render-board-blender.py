@@ -24,7 +24,7 @@ FLIP = ((106.67491, 0, 3.26), (0, 1, 0, 0))
 ID = ((0, 0, 0), (0, 0, 0, 1))
 # From above the encoder end, so the board stands upright and leans toward the viewer.
 # Battery set offset in grp space (Blender mm), bottom view only, so it sits beside the board.
-BATTERY_SHIFT_BOTTOM = (-30.0, 8.0, 0.0)
+BATTERY_SHIFT_BOTTOM = (-30.0, 11.0, 0.0)
 ISO = (200, -200, -282.842712474619)
 VIEWS = [
     ("board-3d-rotated-top.png", ISO, (0, 1, 0), 1200, 900, 1600, *ID),
@@ -104,6 +104,43 @@ for o in new:
                 nd.inputs["Metallic"].default_value = 1.0 if metal else 0.0
                 nd.inputs["Roughness"].default_value = 0.3 if metal else 0.5
 
+# The board has copper finish "None", so the pad copper exports grey. The boards ship
+# HASL, so exposed pads are tin-silver solder, the same as the joints.
+hasl = bpy.data.materials.new("pad-hasl")
+hasl.use_nodes = True
+bsdf(hasl).inputs["Base Color"].default_value = lin(0xC9CACC)
+bsdf(hasl).inputs["Metallic"].default_value = 1.0
+bsdf(hasl).inputs["Roughness"].default_value = 0.12
+for o in new:
+    if o.type == "MESH" and o.data.name.startswith("c6remote_pad"):
+        for slot in o.material_slots:
+            slot.material = hasl
+
+# Tracks and tented vias are copper under black mask: darker than the board and glossy.
+# Their tops sit 5 um under the pad tops and 40 um under the silkscreen, so nothing z-fights.
+trace = bpy.data.materials.new("trace-under-mask")
+trace.use_nodes = True
+bsdf(trace).inputs["Base Color"].default_value = lin(0x25282C)
+bsdf(trace).inputs["Metallic"].default_value = 0.1
+bsdf(trace).inputs["Roughness"].default_value = 0.18
+for o in new:
+    if o.type == "MESH" and o.data.name.startswith(("c6remote_copper", "c6remote_via")):
+        for slot in o.material_slots:
+            slot.material = trace
+
+# The silkscreen ink is semi-gloss. It keeps the GLB yellow.
+silk = {}
+for o in new:
+    if o.type == "MESH" and o.data.name.startswith("c6remote_silkscreen"):
+        for slot in o.material_slots:
+            if slot.material and slot.material.name not in silk:
+                m = silk[slot.material.name] = slot.material.copy()
+                m.name = "silk-semigloss"
+                bsdf(m).inputs["Metallic"].default_value = 0.0
+                bsdf(m).inputs["Roughness"].default_value = 0.4
+            if slot.material:
+                slot.material = silk[slot.material.name]
+
 # The GLB shares one material per colour across unrelated parts, so dress copies.
 for ref, (color, metallic, roughness, *clear) in DRESS.items():
     node = next((o for o in new if o.name == ref), None)
@@ -132,6 +169,22 @@ for ref, (color, metallic, roughness, *clear) in DRESS.items():
                 if clear:
                     b.inputs["Transmission Weight"].default_value = clear[0]
                     b.inputs["IOR"].default_value = 1.5
+# The TL3315 caps are polished gold. The model colours them a saturated yellow-orange,
+# which the metal pass above leaves matte. The grey leads keep their material.
+for o in new:
+    if not (o.name.startswith("SW") and o.name[2:].isdigit()):
+        continue
+    for c in [o, *o.children_recursive]:
+        for slot in c.material_slots if c.type == "MESH" else []:
+            m = slot.material
+            if not m or m.name.startswith("switch-gold"):
+                continue
+            h, _, s = colorsys.rgb_to_hls(*bsdf(m).inputs["Base Color"].default_value[:3])
+            if 0.05 < h < 0.19 and s > 0.5:
+                m = slot.material = m.copy()
+                m.name = "switch-gold"
+                bsdf(m).inputs["Metallic"].default_value = 1.0
+                bsdf(m).inputs["Roughness"].default_value = 0.1
 for ref, color in LED_COLORS.items():
     node = next((o for o in new if o.name == ref), None)
     if node is None:
@@ -147,7 +200,7 @@ for ref, color in LED_COLORS.items():
 print(f"board: {len(new)} objects, {len(seen)} materials", flush=True)
 
 
-# KiCad 10 ships no J1 model, and the GLB has no battery.
+# The GLB has no battery. J1 is the stock KiCad PicoBlade model in the GLB.
 extras = bpy.data.objects.new("extras", None)
 scene.collection.objects.link(extras)
 extras.parent = grp
@@ -164,11 +217,13 @@ def world_pts(o):
     return co.reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
 
 
-# The extras must not touch any GLB part below the board.
+# The extras must not touch any GLB part below the board. The mated plug sits inside J1.
+j1 = next((o for o in new if o.name == "J1"), None)
+in_j1 = set(j1.children_recursive) if j1 else set()
 for e in EXTRAS:
     e_lo, e_hi = world_pts(e).min(0), world_pts(e).max(0)
     for o in new:
-        if o.type == "MESH":
+        if o.type == "MESH" and not (e.name.startswith("plug") and o in in_j1):
             p = world_pts(o)
             if (p.min(0) < e_hi).all() and (p.max(0) > e_lo).all() and p.min(0)[2] < -0.05:
                 print(f"board: extra {e.name} overlaps {o.name}", flush=True)

@@ -153,7 +153,7 @@ SETS = {
                    dict(trim=True, **text)),
     'case_back': ('remote-back-annotated', case_canvas, 'case-annotated-back.png', (1.28, 30, 114),
                   dict(trim=True, **text)),
-    'board_front': ('board-front-annotated', board_canvas, 'board-3d-rotated-top.png', (1.0, 500, 30), board_text),
+    'board_front': ('board-front-annotated', board_canvas, 'board-3d-rotated-top.png', (1.0, 508, 30), board_text),
     'board_back': ('board-back-annotated', board_canvas, 'board-3d-rotated-bottom.png', (1.0, 30, 30), board_text),
 }
 

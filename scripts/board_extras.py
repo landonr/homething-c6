@@ -1,10 +1,19 @@
-"""Render-only board parts the board GLB lacks: the J1 socket and the battery set.
+"""Render-only parts the board GLB lacks: the battery set that mates with J1.
 
-Shared by render-board-blender.py and the c6remote-explode viewer render scripts.
+The GLB carries J1 itself, the stock KiCad PicoBlade 53261-0271 model. Shared by
+render-board-blender.py and the c6remote-explode viewer render scripts.
 """
+import math
+import os
+import re
+
 import bmesh
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
+
+PCB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "c6remote-kicad", "c6remote.kicad_pcb")
+# The c6remote-explode viewer copies this module without the board, so it uses this placement.
+J1_FALLBACK = (38.55, 149.625, -90.0)
 
 
 def lin(hexv):
@@ -49,14 +58,33 @@ BARS = (0.3, 0.15, 0.45, 0.15, 0.15, 0.3, 0.3, 0.15, 0.15, 0.45, 0.3, 0.3, 0.15,
         0.45, 0.3, 0.15, 0.15, 0.3, 0.15, 0.3, 0.45, 0.15, 0.15, 0.3, 0.15, 0.45, 0.15, 0.3, 0.3)
 
 
-def build(scene, board, battery=None):
-    """Create J1 under board and the plug, leads, pouch and label under battery (board if None).
+def j1_placement(pcb=PCB):
+    """Return J1 (x, y, rotation) in KiCad mm and degrees from the board file."""
+    if not os.path.isfile(pcb):
+        print(f"board_extras: no {pcb}, J1 at the fallback {J1_FALLBACK}", flush=True)
+        return J1_FALLBACK
+    with open(pcb, encoding="utf-8") as f:
+        text = f.read()
+    ref = re.search(r'\(property\s+"Reference"\s+"J1"', text)
+    if ref is None:
+        raise ValueError(f"{pcb}: no J1 footprint")
+    # KiCad writes the footprint layer and position before its properties.
+    head = text[text.rfind("(footprint ", 0, ref.start()):ref.start()]
+    layer = re.search(r'\(layer\s+"([^"]+)"\)', head).group(1)
+    at = re.search(r"\(at\s+(\S+)\s+(\S+?)(?:\s+(\S+?))?\)", head)
+    if layer != "B.Cu":
+        raise ValueError(f"{pcb}: J1 is on {layer}, but the J1 model is built for B.Cu")
+    return float(at.group(1)), float(at.group(2)), float(at.group(3) or 0)
+
+
+def build(scene, board, battery=None, pcb=PCB):
+    """Create the plug, leads, pouch and label under battery (board if None).
 
     Parents are in KiCad mm as Blender (x, -y, z) with the board bottom face at z=0.
-    Returns the created objects.
+    The plug follows the J1 placement in pcb. Returns the created objects.
     """
     # Render-only parts the board GLB lacks. Args are KiCad mm (x right, y down, z below the
-    # bottom face is negative). Blender mm is (x, -y, z). KiCad 10 ships no J1 model.
+    # bottom face is negative). Blender mm is (x, -y, z).
     EXTRA_MATS = {}
     parent = [board]
     made = []
@@ -88,13 +116,14 @@ def build(scene, board, battery=None):
         made.append(o)
         return o
 
-    def xbox(name, x0, x1, y0, y1, z0, z1, mat, bevel=0.0, seg=3):
+    def xbox(name, x0, x1, y0, y1, z0, z1, mat, bevel=0.0, seg=3, place=Matrix()):
+        """place maps the box from its local KiCad frame, as Blender mm, onto the board."""
         me = bpy.data.meshes.new(name)
         bm = bmesh.new()
         bmesh.ops.create_cube(bm, size=1.0)
         bm.to_mesh(me)
         bm.free()
-        me.transform(Matrix.Translation(((x0 + x1) / 2, -(y0 + y1) / 2, (z0 + z1) / 2))
+        me.transform(place @ Matrix.Translation(((x0 + x1) / 2, -(y0 + y1) / 2, (z0 + z1) / 2))
                      @ Matrix.Diagonal((x1 - x0, y1 - y0, z1 - z0, 1)))
         o = bpy.data.objects.new(name, me)
         scene.collection.objects.link(o)
@@ -121,31 +150,31 @@ def build(scene, board, battery=None):
         return bake(o, mat)
 
 
-    ivory, white = xmat("ivory", 0xE6DCC0, 0, 0.45), xmat("plug", 0xF2EEE2, 0, 0.4)
-    tin = xmat("tin", 0xC9CBCF, 1.0, 0.28)
+    white = xmat("plug", 0xF2EEE2, 0, 0.4)
     red, blk = xmat("red", 0xC41414, 0, 0.4), xmat("black", 0x141414, 0, 0.4)
     pouch, kapton = xmat("pouch", 0xB8BCC2, 0.5, 0.7), xmat("kapton", 0xCC8A18, 0, 0.3)
 
-    # J1 JST S2B-PH-SM4-TB, bottom side, origin (40.25, 152.4). Pads are at y +2.85, the
-    # nails at y -2.9 and the mating opening faces -y (inboard).
-    JX, ZT, ZB = 40.25, -0.1, -4.9
-    xbox("J1-rear", JX - 3.95, JX + 3.95, 153.2, 154.0, ZB, ZT, ivory)
-    xbox("J1-roof", JX - 3.95, JX + 3.95, 148.0, 154.0, ZT - 0.8, ZT, ivory)
-    xbox("J1-floor", JX - 3.95, JX + 3.95, 148.0, 154.0, ZB, ZB + 0.5, ivory)
-    for sx in (-1, 1):
-        xbox(f"J1-wall{sx}", JX + sx * 3.1 if sx > 0 else JX - 3.95, JX + 3.95 if sx > 0 else JX - 3.1,
-             148.0, 154.0, ZB, ZT, ivory)
-        xbox(f"J1-post{sx}", JX + sx - 0.25, JX + sx + 0.25, 149.0, 153.3, -2.9, -2.4, tin)
-        xbox(f"J1-tail{sx}", JX + sx - 0.3, JX + sx + 0.3, 153.0, 157.0, -0.3, -0.1, tin)
-        nx0, nx1 = (JX + 3.95, JX + 4.2) if sx > 0 else (JX - 4.2, JX - 3.95)
-        xbox(f"J1-nail{sx}", nx0, nx1, 148.3, 150.7, -3.4, -0.1, tin)
-        xbox(f"J1-nailfoot{sx}", min(nx0, JX + sx * 2.6), max(nx1, JX + sx * 2.6),
-             148.3, 150.7, -0.3, -0.1, tin)
+    # Molex 53261-0271 frame on the bottom side, footprint-local KiCad mm: pads at y +2.4, mouth
+    # face at y -2.6, so the plug points -y. The GLB J1 model fills z -0.085 to -3.485.
+    jx, jy, jrot = j1_placement(pcb)
+    J1 = Matrix.Translation((jx, -jy, 0)) @ Matrix.Rotation(math.radians(jrot), 4, "Z")
 
-    # PHR-2 plug, seated, rear at y 145. Everything from here on is the separable battery part.
+    def on_j1(lx, ly, z):
+        v = J1 @ Vector((lx, -ly, z))
+        return (v.x, -v.y, v.z)
+
+    # 51021-0200 plug, 4.25 wide, 3.2 high and 3.95 long. Molex 532610001-SD puts the mated plug
+    # rear 1.0 mm past the mouth. The rest sits inside the J1 model, so a detached battery shows a
+    # whole plug. Everything from here on is the separable battery part.
     parent[0] = battery if battery is not None else board
-    xbox("plug", JX - 2.95, JX + 2.95, 145.0, 153.0, -4.3, -1.0, white, bevel=0.25)
-    xbox("plug-rib", JX - 1.5, JX + 1.5, 145.0, 147.0, -1.0, -0.7, white, bevel=0.15)
+    MOUTH, REAR, ZT, ZB = -2.62, -3.62, -0.2, -3.4
+    FRONT, ZC = REAR + 3.95, (ZT + ZB) / 2
+    xbox("plug", -2.125, 2.125, REAR, FRONT, ZB, ZT, white, bevel=0.2, place=J1)
+    xbox("plug-rib", -1.2, 1.2, REAR + 0.3, MOUTH - 0.6, ZB - 0.25, ZB + 0.1, white, bevel=0.1, place=J1)
+    # Contact openings on the mating face, 0.01 proud of it so the faces do not z-fight.
+    hole = xmat("socket", 0x0A0A0A, 0, 0.9)
+    for nm, xp in (("plug-socket-bat", -0.625), ("plug-socket-gnd", 0.625)):
+        xbox(nm, xp - 0.3, xp + 0.3, FRONT - 0.5, FRONT + 0.01, ZC - 0.35, ZC + 0.35, hole, place=J1)
 
     # 102050 pouch, 10 x 20 x 50, 0.6 below the bottom face, centred under the board on the case model's cell axis.
     PX0, PX1, PZ, PT = 43.337, 63.337, -0.6, 10.0
@@ -191,11 +220,19 @@ def build(scene, board, battery=None):
     scene.collection.objects.link(t)
     bake(t, ink)
 
-    # Leads leave the Kapton end 1 to 5 mm in from PX0 and enter the plug rear at the BAT and GND pads.
-    LZ, PZL = PZ - PT / 2, -2.65
-    for nm, mat, x0, xp in (("lead-bat", red, PX0 + 2, JX - 1), ("lead-gnd", blk, PX0 + 4, JX + 1)):
-        xlead(nm, [((x0, 139.25, LZ), (x0, 137.25, LZ), (x0, 142.85, LZ)),
-                   ((xp, 145.4, PZL), (xp, 142.0, PZL), (xp, 146.4, PZL))], mat)
+    # Leads leave the plug rear toward the U1 side, turn on one centre toward the pouch, and drop
+    # straight to the Kapton end. BAT (pin 1, local x -0.625) is on the inside of the turn.
+    LZ = PZ - PT / 2
+    TY, TX = REAR - 0.25, -0.625 - 1.0
+    for nm, mat, xp in (("lead-bat", red, -0.625), ("lead-gnd", blk, 0.625)):
+        r = xp - TX
+        k = 0.5523 * r
+        bx, by, _ = on_j1(TX, TY - r, ZC)
+        xlead(nm, [((bx, 139.25, LZ), (bx, 138.25, LZ), (bx, 142.25, LZ)),
+                   ((bx, by, ZC), (bx, by - 3.0, ZC), on_j1(TX + k, TY - r, ZC)),
+                   (on_j1(xp, TY, ZC), on_j1(xp, TY - k, ZC), on_j1(xp, TY + 0.2, ZC)),
+                   (on_j1(xp, REAR + 0.4, ZC), on_j1(xp, REAR + 0.2, ZC), on_j1(xp, REAR + 0.6, ZC))],
+              mat, radius=0.45)
 
     bpy.context.view_layer.update()
     return made

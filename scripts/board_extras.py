@@ -52,7 +52,8 @@ GLYPHS = {
 }
 DOT, PITCH = 0.21, 0.27
 CHAR = 6 * PITCH
-LABEL_L, LABEL_DX, LABEL_KY0 = 25.6, 6.4, 126.55
+PY0, PY1 = 84.754, 134.754
+LABEL_L, LABEL_DX, LABEL_KY0 = 25.6, 6.4, PY1 - 13.0
 BARS = (0.3, 0.15, 0.45, 0.15, 0.15, 0.3, 0.3, 0.15, 0.15, 0.45, 0.3, 0.3, 0.15, 0.15, 0.15, 0.3,
         0.45, 0.15, 0.3, 0.15, 0.15, 0.45, 0.3, 0.15, 0.3, 0.3, 0.15, 0.15, 0.45, 0.15, 0.3, 0.15,
         0.45, 0.3, 0.15, 0.15, 0.3, 0.15, 0.3, 0.45, 0.15, 0.15, 0.3, 0.15, 0.45, 0.15, 0.3, 0.3)
@@ -176,11 +177,11 @@ def build(scene, board, battery=None, pcb=PCB):
     for nm, xp in (("plug-socket-bat", -0.625), ("plug-socket-gnd", 0.625)):
         xbox(nm, xp - 0.3, xp + 0.3, FRONT - 0.5, FRONT + 0.01, ZC - 0.35, ZC + 0.35, hole, place=J1)
 
-    # 102050 pouch, 10 x 20 x 50, 0.6 below the bottom face, centred under the board on the case model's cell axis.
+    # 102050 pouch 0.6 below the bottom face. Y span: centred in case/model/cell.py cell_axis(), must follow it.
     PX0, PX1, PZ, PT = 43.337, 63.337, -0.6, 10.0
-    xbox("pouch", PX0, PX1, 89.55, 139.55, PZ - PT, PZ, pouch, bevel=1.7, seg=6)
+    xbox("pouch", PX0, PX1, PY0, PY1, PZ - PT, PZ, pouch, bevel=1.7, seg=6)
     # Kapton wraps the PCM end, 0.05 proud of the pouch so the faces do not z-fight.
-    xbox("pouch-pcm", PX0 - 0.05, PX1 + 0.05, 133.55, 139.55, PZ - PT - 0.05, PZ + 0.05, kapton, bevel=1.7, seg=6)
+    xbox("pouch-pcm", PX0 - 0.05, PX1 + 0.05, PY1 - 6.0, PY1, PZ - PT - 0.05, PZ + 0.05, kapton, bevel=1.7, seg=6)
 
     # Cell label replica on the outer pouch face: 5x7 dot-matrix print and a barcode. It reads
     # away from the Kapton end (toward -y) with its up toward +x, so the face reads correctly
@@ -228,7 +229,7 @@ def build(scene, board, battery=None, pcb=PCB):
         r = xp - TX
         k = 0.5523 * r
         bx, by, _ = on_j1(TX, TY - r, ZC)
-        xlead(nm, [((bx, 139.25, LZ), (bx, 138.25, LZ), (bx, 142.25, LZ)),
+        xlead(nm, [((bx, PY1 - 0.3, LZ), (bx, PY1 - 1.3, LZ), (bx, PY1 + 2.7, LZ)),
                    ((bx, by, ZC), (bx, by - 3.0, ZC), on_j1(TX + k, TY - r, ZC)),
                    (on_j1(xp, TY, ZC), on_j1(xp, TY - k, ZC), on_j1(xp, TY + 0.2, ZC)),
                    (on_j1(xp, REAR + 0.4, ZC), on_j1(xp, REAR + 0.2, ZC), on_j1(xp, REAR + 0.6, ZC))],

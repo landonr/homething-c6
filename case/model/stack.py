@@ -36,12 +36,7 @@ LEGACY_SWITCH_TOP = LEGACY_BOARD_TOP + params.SWITCH_HEIGHT
 The V2 top pad's nibs are built down to this."""
 
 KEYPAD_KEEPOUT = params.SWITCH_HEIGHT + params.KEYPAD_PLUNGER_STUB
-"""Vertical clearance the keypad region of the ceiling actually needs: the
-switch, plus KEYPAD_PLUNGER_STUB standing above it before the web begins.
-FRONT_KEEPOUT was this before the face dropped, sized to the USB-C shell
-rather than to anything under the keys, which is what left 1.7 of dead air
-above every switch. FRONT_KEEPOUT still governs CAVITY_FRONT_USB, the one
-region that still needs it."""
+"""Clearance above the board for the switch and its short pad plunger."""
 
 PAD_WEB_BOTTOM = BOARD_TOP + KEYPAD_KEEPOUT
 """Underside of the pad's web, over the keypad: SWITCH_TOP plus
@@ -55,18 +50,7 @@ skirt ends on one plane whichever board it is on."""
 
 PAD_WEB_TOP = PAD_WEB_BOTTOM + params.PAD_WEB_T
 CAVITY_FRONT = PAD_WEB_TOP
-"""The keypad region's own cavity ceiling: the web's own top, the same
-relationship CAVITY_FRONT always had to the web, just built up from the
-switch now instead of down from FRONT_KEEPOUT. This is the default ceiling
-height almost everything in the front shell uses; only the USB connector's
-own local footprint needs CAVITY_FRONT_USB's deeper pocket instead."""
-
-CAVITY_FRONT_USB = BOARD_TOP + params.FRONT_KEEPOUT
-"""The USB connector's own local cavity ceiling, the full clearance
-FRONT_KEEPOUT was always sized for. Local to its footprint now rather than
-the whole shell: usb_pocket() cuts this depth only over
-board.usb_envelope(), inside an outer face that stays flat everywhere at
-SHELL_FRONT."""
+"""The front ceiling meets the top of the pad web."""
 
 WHEEL = board.wheel_profile()
 """ENC1's revolved profile, measured off the assembly STEP by
@@ -95,9 +79,8 @@ the face closes flush to the knob by construction rather than by tuning a
 height constant against it. FACE_HEIGHT used to fix this independently and
 left the wheel recessed under the face; deriving it means a wheel change
 moves the face with it. Everything under the face is unchanged in kind: the
-keypad ceiling is whatever gap this leaves over CAVITY_FRONT, and the USB
-pocket's roof is whatever it leaves over CAVITY_FRONT_USB, deliberately the
-thinnest ceiling anywhere (usb_pocket_clearance holds its floor)."""
+keypad ceiling is whatever gap this leaves over CAVITY_FRONT.
+The LED channel and counterbore checks hold their remaining face thickness."""
 
 FDM_FACE = SHELL_FRONT - params.FDM_FACE_DROP
 """The FDM front's own outer face, FDM_FACE_DROP below the recessed front's.

@@ -43,8 +43,7 @@ stops giving, the groove lands on the bevel instead of on flat face, and at
 the limit its outer edge goes coincident with the chamfer's inner edge and
 tears the exported mesh.
 
-Ceilings hold: the three thicknesses FDM_FACE_DROP takes from, the USB
-pocket's roof, the LED ring's roof and every counterbore's land, are each still
+Ceilings hold: the LED ring roof and each counterbore land remain
 above the floor the recessed front's own pass holds them to. The drop is the
 one part of this variant that removes material the keypad recess never reached,
 so it is the one part that cannot be justified by saying the recessed front
@@ -71,7 +70,6 @@ import params
 
 from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _ray_runs, _volume
 from .keypad import LAND_FLOOR_MIN, _probe_sites
-from .usb import USB_CEILING_MIN
 from .wheel_ring import ROOF_LEFT_MIN
 
 FACE_PROBE_START = 0.2
@@ -675,26 +673,11 @@ def _roof_at(front, x, y):
 
 
 def ceilings_hold(front):
-    """The three ceilings FDM_FACE_DROP thins are all still above their floors.
-
-    The drop is the one thing about this variant that takes material from
-    somewhere the keypad recess never touched. The recess is a dish in the
-    middle of the face; the drop is the whole plane, so it comes off the USB
-    pocket's roof, the LED ring's roof and every counterbore's land alike, none
-    of which the dish reaches. Each is read off the built shell against the same
-    floor the recessed front's own pass holds it to, so the two fronts are
-    judged by one standard and the drop cannot be widened past what any of them
-    can give.
-
-    The FDM channel is shallower now, but its roof remains a ceiling the flat
-    face thins and is kept in this shared floor check.
-    """
+    """Probe the LED roof and counterbore lands on the built FDM front."""
     problems = []
-    usb = board.usb_envelope()
     ring_r = (case.led_ring_roof_inner_r() + case.led_ring_roof_outer_r()) / 2
     wx, wy = board.wheel_center()
     sites = [
-        ("the USB pocket's roof", usb.center().X, usb.center().Y, USB_CEILING_MIN),
         ("the LED ring's roof", wx + ring_r, wy, ROOF_LEFT_MIN),
         ("the LED ring's roof opposite", wx - ring_r, wy, ROOF_LEFT_MIN),
     ]

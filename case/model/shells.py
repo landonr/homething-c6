@@ -35,10 +35,11 @@ from .hardware import (
     end_screw_wall_chamfer,
 )
 from .front_ledge import front_ledge_runs
-from .support import front_support_cuts, support_runs
+from .support import front_support_cuts, support_obstacles, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import face_depth_at, keypad_outline_groove, keypad_recess
 from .mic import mic_bore, mic_duct
+from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
 from .shape import (
     _cut,
     _fuse,
@@ -63,7 +64,7 @@ from .stack import (
     STIFFENED_WALL,
     SUPPORT_TOP,
 )
-from .usb import usb_pocket, usb_slot
+from .usb import usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
@@ -404,6 +405,33 @@ def catch_x():
     ]
 
 
+def qwiic_skirt_relief():
+    """Join the port to its support reliefs without a thin skirt tongue."""
+    obstacle = next(solid for name, solid in support_obstacles() if name == "J2")
+    bounds = obstacle.bounding_box()
+    opening = qwiic_slot().bounding_box()
+    if not bounds.min.Y < opening.min.Y < opening.max.Y < bounds.max.Y:
+        raise ValueError("J2 support keepout does not contain the Qwiic opening")
+    floor = SKIRT_BOTTOM - MERGE
+    roof = opening.max.Z + params.QWIIC_SKIRT_CLEARANCE
+    if params.SKIRT_TRANSITION_CHAMFER <= 0:
+        return Pos(bounds.center().X, bounds.center().Y, (floor + roof) / 2) * Box(
+            bounds.size.X, bounds.size.Y, roof - floor,
+        )
+    if not 0 < params.SKIRT_LEAD_ANGLE < 90:
+        raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
+    run = (roof - SKIRT_BOTTOM) / math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
+    left = bounds.min.Y - params.SKIRT_LEAD_FIT
+    right = bounds.max.Y + params.SKIRT_LEAD_FIT
+    plane = Plane(origin=(bounds.min.X, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
+    profile = plane * Polygon(
+        (left - run, floor), (right + run, floor),
+        (right + run, SKIRT_BOTTOM), (right, roof),
+        (left, roof), (left - run, SKIRT_BOTTOM), align=None,
+    )
+    return extrude(profile, amount=bounds.size.X, dir=(1, 0, 0))
+
+
 @cache.solid
 def skirt_lead_in_cuts():
     """Return material removed from the skirt for the folding lead-ins."""
@@ -414,7 +442,7 @@ def skirt_lead_in_cuts():
         skirt_stiffener(),
     )
     cuts = front_support_cuts()
-    skirt = _cut(skirt, *cuts)
+    skirt = _cut(skirt, *cuts, qwiic_skirt_relief())
     original = skirt
     tolerance = 1e-5
     profiles = []
@@ -525,8 +553,8 @@ def catch_detents():
 
 
 def shared_cuts():
-    """D1 and USB end-wall cuts shared by both shells, unchanged for U2's move."""
-    return [usb_slot(), emitter_bore()]
+    """The USB, Qwiic, and emitter cuts pass through both shells."""
+    return [usb_slot(), qwiic_slot(), emitter_bore()]
 
 
 @cache.solid
@@ -552,7 +580,7 @@ def back_shell():
         *catch_detents(),
         *side_catch_detents(),
     )
-    return _cut(
+    shell = _cut(
         shell,
         *shared_cuts(),
         ir_window_opening(),
@@ -560,63 +588,7 @@ def back_shell():
         *end_screw_cuts(),
         end_screw_wall_chamfer(),
     )
-
-
-OCC_CHAMFER_GAP = 1e-3
-"""One micron, under print resolution: see _chamfer_usb_pocket_lip()."""
-
-
-def _chamfer_usb_pocket_lip(shell):
-    """Chamfer the pocket's inboard lip, where the USB connector catches.
-
-    usb_pocket() leaves a square convex corner where its inboard wall meets
-    the cavity ceiling at CAVITY_FRONT. The chamfer must come off the shell
-    after the cut, not off the cut box: chamfering the box shrinks the void
-    and adds material, which makes the catch worse. At the full wall height
-    the cut consumes that face completely and leaves one 45 degree ramp with
-    no square arris on top of it.
-
-    The wall is measured off the built pocket, not off CAVITY_FRONT_USB: the
-    pocket roof stands MERGE above that plane, and a chamfer sized from the
-    plane alone leaves exactly the MERGE-tall arris this exists to remove.
-
-    Where that wall stands is read off the same solid, and for the same reason.
-    usb_pocket() reaches USB_POCKET_INBOARD_REACH past the connector's envelope
-    and its clearance on this side alone, so the envelope plus USB_CLEARANCE is
-    no longer where the wall is; reading the pocket is what makes the ramp
-    follow the wall wherever the pocket puts it rather than having to be told
-    twice. Its span across the pocket comes off the same box.
-
-    Selected by position, as _uncut_support() selects its own edges: the one
-    edge lying in the CAVITY_FRONT plane on the pocket's inboard wall that
-    spans the pocket's width. Call this directly after the pocket cut, while
-    the corner is still the only edge that matches. The count assertion makes
-    a later geometry change fail here instead of cutting some other edge.
-    """
-    pocket = usb_pocket().bounding_box()
-    wall = pocket.max.Z - CAVITY_FRONT
-    if params.USB_POCKET_LIP_CHAMFER > wall + OCC_CHAMFER_GAP:
-        raise ValueError(
-            f"USB_POCKET_LIP_CHAMFER {params.USB_POCKET_LIP_CHAMFER} is past the "
-            f"pocket wall's own {wall:.2f} height"
-        )
-    # OCCT refuses a chamfer that consumes its face exactly, and the full-height
-    # value asks for exactly that, so stop one micron short of the pocket roof.
-    length = min(params.USB_POCKET_LIP_CHAMFER, wall - OCC_CHAMFER_GAP)
-    wall_y = pocket.max.Y
-    span = pocket.size.X
-    tol = 1e-4
-    lip = [
-        edge
-        for edge in shell.edges()
-        if abs(edge.bounding_box().min.Z - CAVITY_FRONT) < tol
-        and abs(edge.bounding_box().max.Z - CAVITY_FRONT) < tol
-        and abs(edge.center().Y - wall_y) < tol
-        and edge.bounding_box().size.X > span / 2
-    ]
-    if len(lip) != 1:
-        raise ValueError(f"expected one USB pocket lip edge, found {len(lip)}")
-    return chamfer(lip, length)
+    return _fuse(shell, qwiic_knockout_panel(), *qwiic_knockout_tabs())
 
 
 def _cap_face_hole_cut(ref, fdm=False):
@@ -731,11 +703,10 @@ def front_shell(fdm=False):
     # through the board, which stop well under CAVITY_FRONT.
     # The support ledges cross the skirt plane to reach the back lap. Match their
     # derived breaks in the skirt so the shells can close around them.
-    shell = _cut(shell, usb_pocket())
-    shell = _chamfer_usb_pocket_lip(shell)
     shell = _cut(
         shell,
         *front_support_cuts(),
+        qwiic_skirt_relief(),
         *skirt_lead_in_cuts().solids(),
         grip_skirt_relief(),
     )

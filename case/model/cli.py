@@ -88,7 +88,6 @@ from .stack import (
     LAP_OUT,
     CAP_BOTTOM,
     CAVITY_FRONT,
-    CAVITY_FRONT_USB,
     COUNTERBORE_TOP,
     DISH_HEADROOM,
     EXPORT,
@@ -212,15 +211,9 @@ def main():
         f"{front + contour_depth(box.max.Y):.2f} at the IR end, "
         f"{front + contour_depth(box.max.Y + over):.2f} at its tip"
     )
-    usb_box = board.usb_envelope()
     print(
-        f"front face one flat plane at {SHELL_FRONT:.2f}: keypad region ceiling "
-        f"{CAVITY_FRONT:.2f} to {SHELL_FRONT:.2f} ({KEYPAD_CEILING:.2f} thick, "
-        f"keepout {KEYPAD_KEEPOUT:.2f} off the board, switch plus "
-        f"{params.KEYPAD_PLUNGER_STUB:.2f} of plunger stub), USB region a local "
-        f"pocket to {CAVITY_FRONT_USB:.2f} over {usb_box.size.X:.1f}x"
-        f"{usb_box.size.Y:.1f} of connector, leaving "
-        f"{SHELL_FRONT - CAVITY_FRONT_USB:.2f} of ceiling above it"
+        f"front face {SHELL_FRONT:.2f}: keypad ceiling {CAVITY_FRONT:.2f}, "
+        f"{KEYPAD_CEILING:.2f} thick; USB and Qwiic open below the board"
     )
     print(
         f"face flat at {SHELL_FRONT:.2f}; wheel top measured at {WHEEL_TOP:.3f}, "

@@ -1,18 +1,16 @@
 """Cell clearance: the cell envelope against every modelled solid and both
 shells.
 
-Feature clashes: the mic duct, the front ledges and the end screw block against
-every part's courtyard. The
-only pass that sees the eleven switches and J1, none of which reach the STEP
-assembly. 2D, so it answers where a part sits, never how tall it is.
+Feature clashes: the mic duct, front ledges, and end screw block against component courtyards.
+This pass also covers the eleven switches, which have no STEP model.
 
 End screw: the one fastener that closes the two shells, read off both built
 shells rather than off the stack that sized it.
 
-End screw side tie: the web's tie from that block into the +X side skirt, at
+End screw side tie: the web's tie from that block into the selected side skirt, at
 web height only, on both built fronts.
 
-End screw grip corner: the block and its root fillet stop at the +X grip
+End screw grip corner: the block and its root fillet stop at the selected grip
 corner tangent, and the back's wall chamfer follows the arc past it, so nothing
 stands in the round and the lap keeps its wall.
 """
@@ -91,8 +89,8 @@ def _part_z(ref, side):
 def feature_clashes():
     """Case features that sit inside the cavity, against every part's courtyard.
 
-    This is the only pass that sees the switches and J1, none of which reach
-    the STEP assembly. Courtyards carry no height, so a part's z span comes
+    This pass also covers switches that have no STEP model.
+    Courtyards carry no height, so a part's z span comes
     from its model where it has one, and is assumed to fill its side of the cavity
     where it does not. The end screw block is read on its built solid.
     """
@@ -220,9 +218,10 @@ def end_screw(front, back):
     # The bottom end rounds, on the 45 degree bisector of each corner at the
     # block's mid Y, clear of the +Y base chamfer and plan rounds. Void at the
     # corner, material just inside the arc.
-    radius = params.END_SCREW_BLOCK_END_R
     mid = box.max.Y - params.END_SCREW_BLOCK_D / 2
     for end, sign, face in (("+X", 1, x1), ("-X", -1, x0)):
+        radius = (params.END_SCREW_BLOCK_END_R if sign == case.end_screw_side()
+                  else params.END_SCREW_BLOCK_MODULE_END_R)
         for what, depth, empty in (
             ("corner", 0.15 * radius, True),
             ("inside the arc", 0.414 * radius + 0.8, False),
@@ -510,10 +509,10 @@ def end_screw(front, back):
 
 
 def end_screw_side_tie(front, part="case-front"):
-    """The web's tie from the end screw block into the +X side skirt, on the
+    """The web's tie from the end screw block into the selected side skirt, on the
     built front.
 
-    A bar at web height from the block's +X face to the side skirt's inner face
+    A bar at web height from the block's selected-side face to the side skirt's inner face
     must be material. Without the tie the cavity's round corner leaves most of
     it open. Halfway down the ramp's fall, so the bar stays under the ramp.
 
@@ -522,7 +521,8 @@ def end_screw_side_tie(front, part="case-front"):
     block's width, and neither grows toward the back's side wall.
     """
     problems = []
-    _, face = case.end_screw_block_span()
+    span = case.end_screw_block_span()
+    face = span[0] if case.end_screw_side() < 0 else span[1]
     side = case.side_skirt_inner_x()
     start = (
         case.end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_RAMP_LEDGE
@@ -531,15 +531,15 @@ def end_screw_side_tie(front, part="case-front"):
     ramp = case.SUPPORT_TOP - (y + 0.1 - start)
     z0, z1 = case.SKIRT_BOTTOM + 0.1, ramp - 0.1
     bar = Pos((face + side) / 2, y, (z0 + z1) / 2) * Box(
-        side - face + 0.2, 0.2, z1 - z0
+        abs(side - face) + 0.2, 0.2, z1 - z0
     )
     filled = _fill_fraction(front, bar)
     if filled < 1 - TOLERANCE:
         problems.append(
             Problem(
-                f"only {filled:.0%} of the bar from the end screw block's +X "
+                f"only {filled:.0%} of the bar from the end screw block's selected-side "
                 "face to the side skirt is material, so the web does not tie "
-                "the block into the +X side skirt",
+                "the block into the selected side skirt",
                 box=bar,
                 part=part,
             )
@@ -547,14 +547,14 @@ def end_screw_side_tie(front, part="case-front"):
 
     y0 = case.end_screw_fillet_start() + 0.1
     below = Pos((face + side) / 2, (y0 + y + 0.1) / 2, case.SKIRT_BOTTOM - 0.2) * Box(
-        side - face - 0.2, y + 0.1 - y0, 0.2
+        abs(side - face) - 0.2, y + 0.1 - y0, 0.2
     )
     filled = _fill_fraction(front, below)
     if filled > TOLERANCE:
         problems.append(
             Problem(
                 f"{filled:.0%} of the span below SKIRT_BOTTOM between the end "
-                "screw block's +X face and the side skirt is material, so the "
+                "screw block's selected-side face and the side skirt is material, so the "
                 "side tie or the root fillet grows toward the back's side wall",
                 box=below,
                 part=part,
@@ -565,7 +565,7 @@ def end_screw_side_tie(front, part="case-front"):
 
 def end_screw_grip_corner(back, *fronts):
     """The end screw block, its root fillet and the back's end wall chamfer at
-    the +X grip corner, on the built shells.
+    the selected grip corner, on the built shells.
 
     The block stops at the corner tangent, where the board's -Y edge meets the
     arc. The tangent is read off the board here, not off the block. Below
@@ -579,16 +579,18 @@ def end_screw_grip_corner(back, *fronts):
     """
     problems = []
     edge = case.end_wall_edge()
-    tangent = max(
-        e.bounding_box().max.X
+    sign = case.end_screw_side()
+    tangent = (min if sign < 0 else max)(
+        (e.bounding_box().min.X if sign < 0 else e.bounding_box().max.X)
         for e in board.board_profile().outer_wire().edges()
         if e.geom_type == GeomType.LINE
         and e.bounding_box().size.Y < 1e-6
         and abs(e.bounding_box().min.Y - edge) < 1e-6
     )
     block = case.end_screw_block().bounding_box()
-    lo = (tangent + 0.05, case.end_screw_fillet_start() + 0.05, block.min.Z + 0.05)
-    hi = (case.side_skirt_inner_x() - 0.05, block.max.Y - 0.05, case.SKIRT_BOTTOM - 0.05)
+    left, right = sorted((tangent + sign * 0.05, case.side_skirt_inner_x() - sign * 0.05))
+    lo = (left, case.end_screw_fillet_start() + 0.05, block.min.Z + 0.05)
+    hi = (right, block.max.Y - 0.05, case.SKIRT_BOTTOM - 0.05)
     zone = Pos(*((a + b) / 2 for a, b in zip(lo, hi))) * Box(
         *(b - a for a, b in zip(lo, hi))
     )
@@ -597,7 +599,7 @@ def end_screw_grip_corner(back, *fronts):
         filled = crop.fill_fraction(zone) * zone.volume
         if filled > TOLERANCE:
             problems.append(Problem(
-                f"the front holds {filled:.2f} mm3 below SKIRT_BOTTOM in the +X "
+                f"the front holds {filled:.2f} mm3 below SKIRT_BOTTOM in the selected-side "
                 f"grip corner round, past the tangent at x {tangent:.3f}, so the "
                 "end screw block or its root fillet stands in the round",
                 box=zone,
@@ -606,7 +608,8 @@ def end_screw_grip_corner(back, *fronts):
 
     floor = case.SKIRT_BOTTOM - params.SKIRT_FIT
     lap = case.end_wall_edge() - case.LAP_IN
-    bx = case.end_screw_wall_chamfer().bounding_box().max.X - 0.05
+    chamfer_box = case.end_screw_wall_chamfer().bounding_box()
+    bx = (chamfer_box.min.X if sign < 0 else chamfer_box.max.X) - sign * 0.05
     crop = _Crop(back, (bx - 0.5, lap - 1, floor - 1), (bx + 0.5, lap + 1, floor + 1))
     runs = crop.ray_runs((bx, lap + 0.9, floor + 0.3), (bx, lap - 0.9, floor + 0.3))
     if not runs:
@@ -626,7 +629,7 @@ def end_screw_grip_corner(back, *fronts):
         if filled < 1 - TOLERANCE:
             problems.append(Problem(
                 f"the back's lap is only {filled:.0%} material {where} the relief "
-                f"floor at the +X grip corner, 0.08 outboard of its inner face at "
+                f"floor at the selected grip corner, 0.08 outboard of its inner face at "
                 f"y {lap_y:.3f}, so the end wall chamfer notches it",
                 box=probe,
                 part="case-back",

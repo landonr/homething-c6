@@ -30,19 +30,7 @@ def deep_span():
 
 @functools.cache
 def under_board():
-    """[(y0, y1, depth)] of everything hanging below the board.
-
-    Measured off the assembly where a part has a model, and assumed
-    UNMODELLED_DEPTH deep where it does not. This is what the contour's ends are
-    sized from, rather than one constant for both: U2 is the deepest thing at the
-    +Y end and J1 at the -Y end, they are measured and assumed respectively, and
-    no single number serves both.
-
-    Neither reaches CONTOUR_END_DEPTH as the board stands, so both ends fall back
-    to it and this only says by how much. U2 did reach past it while it was a
-    through-hole receiver straddling the board; the SMD part that replaced it
-    hangs nothing like as far, which is what let CONTOUR_END_DEPTH come down.
-    """
+    """Read each component depth from STEP, with a fallback for absent models."""
     spans = []
     for solid in board.assembly_solids():
         box = solid.bounding_box()

@@ -9,7 +9,7 @@ import csv
 import functools
 import math
 import re
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 from pathlib import Path
 
 from build123d import Axis, Box, Face, Plane, Pos, Rot, import_step
@@ -145,36 +145,63 @@ def board_profile():
 
 
 @functools.cache
+def _assembly():
+    return import_step(_require(ASSEMBLY_STEP))
+
+
+@functools.cache
 def assembly_solids():
-    return import_step(_require(ASSEMBLY_STEP)).solids()
+    return _assembly().solids()
 
 
 @functools.cache
 def _assembly_boxes():
-    """[(solid, bounding_box)] over assembly_solids(), measured once.
-
-    Shape.bounding_box() is an OCC call every time it is asked, and the lookups
-    below sweep all 79 solids per part, so leaving it uncached costs about 0.8s
-    per part asked for.
-    """
     return [(solid, solid.bounding_box()) for solid in assembly_solids()]
 
 
 @functools.cache
 def placement_groups():
-    """{ref: [solid]} over assembly_solids(), each solid under the V3 placement
-    nearest its bounding-box centre. ENC1 has no row in the position file, so
-    wheel_center() stands in for it. A part with no 3D model has no entry."""
-    placements = {ref: (x, y) for ref, (x, y, _, _) in components().items()}
-    placements["ENC1"] = wheel_center()
+    """Map STEP component occurrences to their complete imported solids.
+
+    KiCad records reference names on assembly occurrences. The importer keeps
+    product names instead, so verify the product order before pairing them.
+    """
+    src = _require(ASSEMBLY_STEP).read_text()
+    entities = dict(re.findall(r"#(\d+)\s*=\s*(.*?);", src, re.S))
+    occurrences = re.findall(
+        r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'[^']*',\s*'([^']*)',"
+        r"\s*'[^']*',\s*#(\d+)\s*,\s*#(\d+)\s*,", src,
+    )
+    roots = {parent for _, parent, _ in occurrences} - {
+        child for _, _, child in occurrences
+    }
+    if len(roots) != 1:
+        raise ValueError("STEP assembly does not have one root occurrence")
+    root = roots.pop()
+    rows = [(ref, child) for ref, parent, child in occurrences if parent == root]
+    children = _assembly().children
+    if len(rows) != len(children):
+        raise ValueError("STEP occurrence count differs from imported components")
     groups = {}
-    for solid, box in _assembly_boxes():
-        c = box.center()
-        ref = min(
-            placements,
-            key=lambda r: math.hypot(placements[r][0] - c.X, placements[r][1] - c.Y),
-        )
-        groups.setdefault(ref, []).append(solid)
+    courts = courtyards()
+    mid_z = sum(board_z_span()) / 2
+    for (ref, definition), child in zip(rows, children):
+        formation = re.search(r"PRODUCT_DEFINITION\('.*?','.*?',#(\d+),", entities[definition], re.S)
+        product = re.search(r"PRODUCT_DEFINITION_FORMATION\('.*?','.*?',#(\d+)\)", entities[formation[1]], re.S)
+        name = re.search(r"PRODUCT\(\s*'([^']*)'", entities[product[1]])[1]
+        if child.label != name.replace(" ", "_").replace(".", "_"):
+            raise ValueError(f"STEP product order differs at {ref}: {child.label!r} != {name!r}")
+        if re.fullmatch(r"[A-Z]+\d+", ref):
+            if ref in groups:
+                raise ValueError(f"STEP repeats component {ref}")
+            if ref in courts:
+                x0, y0, x1, y1, side = courts[ref]
+                centre = child.bounding_box().center()
+                if not (x0 <= centre.X <= x1 and y0 <= centre.Y <= y1):
+                    raise ValueError(f"STEP component {ref} is outside its footprint courtyard")
+                if (centre.Z < mid_z) != (side == "bottom"):
+                    raise ValueError(f"STEP component {ref} is on the wrong board side")
+            groups[ref] = tuple(child.solids())
     return groups
 
 
@@ -223,69 +250,30 @@ def legacy_part_solids(ref):
     return tuple(out)
 
 
-MAX_ENVELOPE_OFFSET = 4.0
-"""How far a solid may sit from a placement and still be taken for that part.
-Without this, asking for a part that has no 3D model quietly returns its
-neighbour: part_envelope("D2") answered with Q2, 3.9 away and 0.4 taller."""
-
-
 @functools.cache
 def part_solid(ref):
-    """The assembly solid that is the part's body at that placement, as a solid
-    rather than a box: the largest one within MAX_ENVELOPE_OFFSET.
-
-    Largest, not nearest. A footprint anchor is not a part centre, so proximity
-    does not tell a body from a lead: each of U2's four leads sits closer to its
-    own anchor than its body does, and asking by distance answered with a
-    0.5 x 1.6 x 1.5 lead, which the receiver's window was then sized off.
-    Volume is what separates them, and it separates them by two orders of
-    magnitude here, so it needs no threshold of its own beyond the offset
-    guard that already excludes a neighbouring part.
-
-    What part_envelope() measures. Exposed separately because a bounding box
-    is not always enough: emitter_envelope() has to clip D1's solid before
-    boxing it, and boxing first would already have thrown away the shape it
-    needs to clip.
-    """
-    x, y, _, _ = components()[ref]
-    near = [
-        solid
-        for solid, box in _assembly_boxes()
-        if math.hypot(box.center().X - x, box.center().Y - y) <= MAX_ENVELOPE_OFFSET
-    ]
-    if not near:
-        raise ValueError(
-            f"nothing within {MAX_ENVELOPE_OFFSET} of {ref}; it has no 3D model, "
-            "so its size has to come from a parameter"
-        )
-    return max(near, key=lambda solid: solid.volume)
+    """Return the largest body from the component's own STEP occurrence."""
+    solids = placement_groups().get(ref, ())
+    if not solids:
+        raise ValueError(f"{ref} has no 3D model in the assembly STEP")
+    return max(solids, key=lambda solid: solid.volume)
 
 
 @functools.cache
 def part_envelope(ref, radius=None):
-    """Bounding box of the part's own body at that placement (see part_solid),
-    or with a radius, of every solid centred within it, which is what a
-    multi-solid part needs measured whole rather than body alone.
+    """Return a body box, or the complete component box when radius is set.
 
-    Footprint anchors are not part centres: U2's is 1.2 off its body and
-    closer to each of its leads than to it, so an aperture placed on the
-    anchor misses and a solid picked by proximity is the wrong solid.
+    The optional argument retains the existing multi-solid reader interface.
+    Component ownership comes from STEP occurrences, without a distance guess.
     """
-    x, y, _, _ = components()[ref]
-
     if radius is None:
         return part_solid(ref).bounding_box()
-
-    near = [
-        box
-        for _, box in _assembly_boxes()
-        if math.hypot(box.center().X - x, box.center().Y - y) <= radius
-    ]
-    if not near:
-        raise ValueError(f"no solid within {radius} of {ref}")
-    box = near[0]
-    for other in near[1:]:
-        box = box.add(other)
+    solids = placement_groups().get(ref, ())
+    if not solids:
+        raise ValueError(f"{ref} has no 3D model in the assembly STEP")
+    box = solids[0].bounding_box()
+    for solid in solids[1:]:
+        box = box.add(solid.bounding_box())
     return box
 
 
@@ -309,12 +297,8 @@ def wheel_profile():
     """ENC1's revolved shape, measured off the assembly STEP rather than
     hand-entered: WheelProfile(top, lip_od, lip_z0, lip_z1, main_od).
 
-    ENC1 carries no row in c6remote-pos.csv, so it never reaches
-    part_envelope(), which needs a placement to anchor on. Its solids are
-    found the same way keepouts() finds it instead: nearest wheel_center(),
-    filtered to WHEEL_ENVELOPE_OFFSET and to a square bounding box
-    (WHEEL_SQUARENESS), which is what separates the revolved discs from the
-    part's own pin and mounting legs.
+    The reader selects solids near wheel_center(). WHEEL_ENVELOPE_OFFSET and
+    WHEEL_SQUARENESS separate the revolved discs from the pins and mounting legs.
 
     `top` is the highest point of anything in that set: the knob. `lip` is
     the widest disc, the flange a panel would normally clamp against; the
@@ -376,10 +360,8 @@ def _graphic_items(body):
 def courtyards():
     """{ref: (x0, y0, x1, y1, side)} in STEP frame, from the board's courtyards.
 
-    The only keepout that covers every part. Both 3D assemblies are blind to the
-    eleven switches, whose model is VRML and so absent from the STEP, and to
-    J1, which has no model at all. Courtyards are 2D, so this bounds
-    where a part sits, never how tall it is.
+    Courtyards cover parts that have no STEP model, including the eleven switches.
+    These planar bounds give each part's location, but not its height.
     """
     src = _require(KICAD_PCB).read_text()
     out = {}
@@ -446,15 +428,9 @@ def npth_pads(ref):
 
 
 def usb_envelope():
-    """Full bounding box of the XIAO's USB-C shell, the solid overhanging
-    the board's -Y edge: the U1 footprint anchor is a module corner and
-    lands nowhere near the connector, so this is found by shape, not by
-    ref. Every case feature near the connector, the local ceiling pocket
-    over it and the blind relief in the end wall alike, needs the full
-    plan footprint now that neither punches through to daylight, not just
-    where it used to cross the board edge for a through-slot."""
+    """Read the USB shell that extends past the board's -Y edge from U1."""
     edge_y = board_profile().bounding_box().min.Y
-    overhang = min(assembly_solids(), key=lambda s: s.bounding_box().min.Y)
+    overhang = min(placement_groups()["U1"], key=lambda s: s.bounding_box().min.Y)
     box = overhang.bounding_box()
     if box.min.Y >= edge_y:
         raise RuntimeError("no solid overhangs the board edge; USB not located")
@@ -501,19 +477,12 @@ def emitter_envelope():
 
 
 def keepouts():
-    """{ref: (min_z, max_z)} derived by matching assembly solids to placements."""
-    placements = [(r, x, y) for r, (x, y, _, _) in components().items()]
-    placements.append(("ENC1", *wheel_center()))
-    agg = defaultdict(lambda: [math.inf, -math.inf])
-    for solid in assembly_solids():
-        box = solid.bounding_box()
-        center = box.center()
-        ref = min(
-            placements, key=lambda p: math.hypot(p[1] - center.X, p[2] - center.Y)
-        )[0]
-        agg[ref][0] = min(agg[ref][0], box.min.Z)
-        agg[ref][1] = max(agg[ref][1], box.max.Z)
-    return {ref: tuple(z) for ref, z in agg.items()}
+    """Return each component's measured Z span from its STEP occurrence."""
+    return {
+        ref: (min(s.bounding_box().min.Z for s in solids),
+              max(s.bounding_box().max.Z for s in solids))
+        for ref, solids in placement_groups().items()
+    }
 
 
 if __name__ == "__main__":
@@ -526,7 +495,7 @@ if __name__ == "__main__":
     z = keepouts()
     top = max(hi for _, hi in z.values()) - params.BOARD_THICKNESS
     bottom = -min(lo for lo, _ in z.values())
-    print(f"\nfront keepout {top:.2f} (param {params.FRONT_KEEPOUT})")
+    print(f"\nfront keepout {top:.2f} (wheel excluded by its opening)")
     print(f"back keepout {bottom:.2f} (param {params.BACK_KEEPOUT})")
     print("\ntallest above board face:")
     for ref, (_, hi) in sorted(z.items(), key=lambda kv: -kv[1][1])[:5]:

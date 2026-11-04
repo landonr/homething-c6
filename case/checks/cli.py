@@ -143,7 +143,8 @@ from .support import (
     support_skirt_fit,
     support_wall_merge,
 )
-from .usb import usb_pocket_clearance, usb_pocket_reach
+from .usb import usb_clearance
+from .qwiic import qwiic_access, qwiic_knockout, qwiic_skirt_transition, battery_lead_clearance
 from .wheel_ring import (
     fdm_wheel_seat,
     inner_chamfer_is_cut,
@@ -735,22 +736,42 @@ def _recess_land(s):
 
 
 @_check("usb")
-def _usb_pocket_clearance(s):
+def _usb_clearance(s):
     return _report(
-        usb_pocket_clearance(s.front),
-        f"USB pocket clears the connector by USB_CLEARANCE and is flush with "
-        f"the slot at {case.usb_roof():.2f}, leaving "
-        f"{case.SHELL_FRONT - case.usb_roof():.2f} of ceiling above it",
+        usb_clearance(s.front, s.front_fdm, s.back),
+        "USB shell and plug approach clear both front variants and the back with 0.20 mm minimum margin",
     )
 
 
-@_check("usb")
-def _usb_pocket_reach(s):
+@_check("qwiic")
+def _qwiic_access(s):
     return _report(
-        usb_pocket_reach(s.front),
-        f"USB pocket reaches {params.USB_POCKET_INBOARD_REACH:.2f} inboard of "
-        f"the connector's own clearance, with the lip's 45 degree ramp starting "
-        f"at that wall",
+        qwiic_access(s.front, s.front_fdm, s.back),
+        "J2 plug approach clears both fronts, the back after panel removal, and the cell",
+    )
+
+
+@_check("qwiic")
+def _qwiic_knockout(s):
+    return _report(
+        qwiic_knockout(s.back),
+        "Qwiic is covered by a flush panel with a free border and exactly two printable side bridges",
+    )
+
+
+@_check("qwiic")
+def _qwiic_skirt_transition(s):
+    return _report(
+        qwiic_skirt_transition(s.front, s.front_fdm),
+        "both front skirts join the Qwiic opening to the support reliefs without a thin tongue",
+    )
+
+
+@_check("hardware")
+def _battery_lead_clearance(s):
+    return _report(
+        battery_lead_clearance(s.front, s.front_fdm, s.back),
+        "J1 plug and wire corridor clears both built shells, the cell, and board parts",
     )
 
 
@@ -825,7 +846,7 @@ def _end_screw_side_tie(s):
     return _report(
         end_screw_side_tie(s.front)
         + end_screw_side_tie(s.front_fdm, part="case-front-fdm"),
-        "end screw block's web ties into the +X side skirt at web height only, "
+        "end screw block's web ties into the selected side skirt at web height only, "
         "on both fronts",
     )
 
@@ -836,7 +857,7 @@ def _end_screw_grip_corner(s):
         end_screw_grip_corner(
             s.back, (s.front, "case-front"), (s.front_fdm, "case-front-fdm")
         ),
-        "end screw block and root fillet stay out of the +X grip corner round "
+        "end screw block and root fillet stay out of the selected grip corner round "
         "on both fronts, and the back's wall chamfer leaves the lap whole there",
     )
 
@@ -1356,7 +1377,8 @@ _FEATURE_SOLIDS = {
     "mic": ("front",),
     "shells": ("front", "back"),
     "support": ("back",),
-    "usb": ("front",),
+    "usb": ("front", "front_fdm", "back"),
+    "qwiic": ("front", "front_fdm", "back"),
     "wheel_ring": ("front", "front_fdm", "back", "pad"),
 }
 """Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.

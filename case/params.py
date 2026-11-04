@@ -90,22 +90,11 @@ and the ledges must stay clear of it, so the window ends 0.7 short of that.
 checks/front_ledge.py measures the clearance on the built pad."""
 
 # Vertical clearance measured from the board faces, not from z=0.
-FRONT_KEEPOUT = 4.5
-"""Clears the USB-C shell at 4.21 above the board face, the tallest thing under
-the ceiling anywhere near it. ENC1 reaches 5.75 but passes through the wheel
-opening rather than under the ceiling, so it does not set this.
-
-Local to the USB connector's own footprint now, not the whole ceiling: the
-keypad has nothing tall over it, so its own region drops to KEYPAD_KEEPOUT
-instead, and the USB region keeps a locally deeper cavity, reaching this
-full depth, inside an outer face that is flat everywhere. Case.py's
-CAVITY_FRONT_USB is that local boundary; CAVITY_FRONT is the keypad one."""
-
 KEYPAD_PLUNGER_STUB = 0.3
 """How far a plunger stands proud of the switch top before the pad's web
 begins, over the keypad: KEYPAD_KEEPOUT in case.py is SWITCH_HEIGHT plus
 this, so the web's underside lands just above the switches instead of
-FRONT_KEEPOUT's old, USB-sized margin, which left 1.7 of unsupported
+the old USB-sized margin, which left 1.7 of unsupported
 plunger spanning dead air between the two.
 
 Kept a real, nonzero stub rather than shrinking it to nothing: a press
@@ -303,12 +292,11 @@ SHELL_SCREW_HEAD_H = 1.7
 lands a shade below the outer face instead of standing in it. It comes out of
 the end wall rather than out of FLOOR now, and WALL is 3.0 there, so 1.3 of
 wall is left under the head."""
-END_SCREW_X_OFFSET = 5.8
-"""How far +x of the board's centreline the end screw's axis runs.
-
-This sets where the head counterbore sits on the -Y wall, +x of R8. The block
-the screw threads into reaches half END_SCREW_BLOCK_W to each side of this
-axis, but its +x side stops at the grip corner tangent."""
+END_SCREW_X_OFFSET = -5.8
+"""The screw sits left of centre to keep the USB opening clear.
+The negative sign also selects the left side skirt for the block's tie."""
+END_SCREW_MODULE_WALL = 0.8
+"""Additional separation beyond USB_CLEARANCE between the screw block and the complete module envelope."""
 END_SCREW_Z = -5.5
 """Height of the end screw's axis, below the board.
 
@@ -330,14 +318,9 @@ that load goes across the layer lines of a face down print. The 45 degree ramp
 takes the depth off the upper block, so width is the only remaining lever on
 that bending section and on the web's neck to the skirt.
 
-Bounded by J1 on the -x side. On the +x side, end_screw_block_span() stops
-the block at the grip corner tangent, where the round starts, so the block is
-narrower than this value. The web's tie into the +x side skirt is not part of
-this width. It stops at SKIRT_BOTTOM, so the +x bound applies to the block
-below it. The -x end
-passes under R8, because the ramp falls well below R8's underside at R8's Y.
-checks/hardware.py's feature_clashes reads that clearance on the built block,
-not on its bounding box."""
+The board grip tangents and the complete module envelope limit the actual block width.
+The side tie stays at web height. The built-shell checks hold the neck,
+thread cover, end rounds, and clearance to J1."""
 END_SCREW_BLOCK_GAP = 0.5
 """How far the block's own -Y face stands off the back's inner end wall.
 
@@ -395,16 +378,9 @@ chamfer on that chain tore the exported mesh.
 Well under END_SCREW_BLOCK_BOTTOM, so the wedge stays in the material carried
 below the screw and never reaches the thread."""
 END_SCREW_BLOCK_END_R = 5.0
-"""Round on the block's two bottom end edges, the +X and -X ones that run along Y.
-
-It takes the square bottom corners off a block that only needs material around
-the thread, which saves material and print time. Bounded below SKIRT_BOTTOM so
-the web and the +X side tie keep their full height, and kept outside
-END_SCREW_BLOCK_BOTTOM around the screw axis at each end so the thread keeps
-its wall. The block bottom now sits higher, and this bounds the round.
-
-Cut as a profile across the block's whole Y extent, never an edge fillet, for
-the reason END_SCREW_BLOCK_BASE_CHAMFER is (see _ramp_block_top)."""
+"""The outer block end follows the back cavity near the grip corner."""
+END_SCREW_BLOCK_MODULE_END_R = 1.0
+"""The smaller inner end round preserves thread cover beside the module."""
 END_SCREW_BLOCK_RAMP_LEDGE = 0.4
 """Flat step the block's top keeps before its 45 degree ramp, measured from the
 plain board fit plane, not from the skirt face. skirt_stiffener() moves that
@@ -426,7 +402,7 @@ block would keep a flat ceiling again. checks/hardware.py reads the cover over
 the pilot and the neck on the built front."""
 
 # Cell: a generic 102050 LiPo pouch lying flat along the board underneath it. Its
-# leads and JST-PH plug leave the protection-board end, which faces J1 at the -Y
+# leads and PicoBlade plug leave the protection-board end, which faces J1 at the -Y
 # (grip) end. The XIAO's charger wants a single-cell 3.0 to 4.2V lithium cell.
 CELL_T = 10.0
 """Pouch thickness along Z."""
@@ -467,9 +443,8 @@ fail below this value."""
 CONTOUR_END_DEPTH = 7.0
 """Floor under the tapered ends, not the value they take. Each end is derived
 from what actually hangs below the board on that side and only falls back to
-this when nothing does. Both ends fall back to it as the board stands: U2 is a
-low SMD part and receives through the back floor rather than setting an end
-depth, while the -Y end asks for J1's assumed depth and comes up short too.
+this when no part needs more depth. Both ends use this minimum with the current board.
+The assembly STEP supplies the measured component depths.
 
 The +Y budget is still tight because D1's unchanged bore is drilled to its lens.
 The back rolls up through CONTOUR_TIP_R to meet that face, and reducing this
@@ -507,9 +482,7 @@ EDGE_R_FRONT = 3.0
 """Round on the front's top edge. Small: it is a face full of key holes, and the
 outermost sit close to the wall. The FDM front carries its own, see
 EDGE_R_FRONT_FDM.
-
-The USB pocket ceiling at the pocket's outer end bounds it. The round thins the
-roof there, and that roof must stay above USB_CEILING_MIN."""
+"""
 EDGE_R_FRONT_FDM = 0.85
 """Leg length of the FDM front's 45 degree top-edge chamfer. The established
 name remains because the FDM and recessed fronts share front_edge_round() as a
@@ -517,10 +490,8 @@ size reader; the recessed front still uses EDGE_R_FRONT as a fillet radius.
 
 The smaller FDM groove leaves room for this bevel and flat face beyond the
 groove. The bound is KEYPAD_EDGE_MARGIN less half FDM_OUTLINE_W less
-FDM_OUTLINE_EDGE_CLEAR. The leg passes below the USB slot roof at the exterior
-wall, so the slot opens a small notch into the chamfer face. The recessed
-front's round already does the same. checks/fdm.py measures the built face's
-flat margin, and checks/shells.py guards the exported mesh."""
+FDM_OUTLINE_EDGE_CLEAR. The USB opening is below the board.
+checks/fdm.py measures the built face's flat margin. checks/shells.py guards the exported mesh."""
 
 # Apertures in the front shell
 KEY_GAP = 1.6
@@ -800,7 +771,7 @@ letting it talk to a 21mm box."""
 TUBE_WALL = 1.2
 UNMODELLED_DEPTH = 6.0
 """How far a part with no 3D model is assumed to hang below the board, used only
-to keep the cell off it. J1 is the one that matters."""
+to keep the cell clear if the assembly STEP omits a component."""
 IR_CLEARANCE = 0.5
 """Margin around U2's complete multi-solid envelope from
 board.part_envelope("U2", radius=3.0). It alone sets aperture size.
@@ -839,58 +810,30 @@ IR_WINDOW_FLANGE_T = 0.8
 IR_WINDOW_R = 1.0
 """Corner round on aperture, inherited concentrically by pane and flange."""
 USB_CLEARANCE = 0.5
-"""Margin around the USB-C shell, sizing the -Y end wall's own through-cut
-past the connector's measured envelope at its sides and roof, the same role
-IR_CLEARANCE plays at the other end. USB_SLOT_BOTTOM_RAISE reduces the slot's
-lower margin separately. Also the plan margin usb_pocket() keeps clear of the
-connector's footprint in the ceiling above it."""
-USB_SLOT_BOTTOM_RAISE = 1.0
-"""Raise only the USB end-wall slot's lower edge for the requested opening
-position, leaving its roof aligned with usb_pocket(). This trades away 1 mm of
-clearance below the measured connector; the assembly checks guard whether
-that change collides with the board assembly."""
-USB_CORNER_CHAMFER = 1.0
-"""45 degree trim at both lower slot corners and both shared upper corners
-of the USB slot and pocket. The cuts meet at the same roof, so their upper
-chamfers use one size and leave one continuous opening."""
-USB_POCKET_LIP_CHAMFER = 1.6
-"""Chamfer on the pocket's inboard lip, the convex corner where usb_pocket()'s
-wall meets the cavity ceiling one board width in from the end wall. The USB-C
-connector catches on that square corner during assembly, so the 45 degree cut
-gives it a lead-in instead.
-
-This is the wall's full height, CAVITY_FRONT up to the pocket roof, so the
-wall becomes one ramp with no square face left anywhere on it. That roof is
-case.usb_roof(), the connector's own envelope plus USB_CLEARANCE, so the wall
-is 1.6 and not the 1.4 the stack planes suggest. It was 1.9 while the pocket
-stood MERGE higher than the slot for no reason the connector asked for. The
-roof also bounds the cut, which cannot climb past it, so the ceiling over the
-ramp stays as thick as the ceiling over the connector.
-_chamfer_usb_pocket_lip() measures the built wall and fails if this value goes
-past it, which is what caught the change."""
-USB_POCKET_INBOARD_REACH = 2.0
-"""How much further inboard usb_pocket() reaches than the connector's own
-envelope plus USB_CLEARANCE, on the +Y side alone.
-
-What it buys is run. The plug enters along +Y and wants the connector's full
-height under it for a while before the ceiling steps back down to CAVITY_FRONT,
-so it slides home instead of catching on the lip. USB_POCKET_LIP_CHAMFER
-already ramps that lip over the whole of its own height and
-_chamfer_usb_pocket_lip() refuses any more, so the lip itself cannot give
-anything further; moving the wall is what is left, and the ramp rides with it
-because that function reads the wall off the built pocket.
-
-A separate number rather than more USB_CLEARANCE because that one also sizes
-usb_slot(), the through-cut in the end wall, and the opening the connector
-shows through must not grow: it is the line around the plug on the exterior
-face. This pocket is blind and internal, so it can grow where the slot cannot,
-and asymmetric because only the inboard side is in the plug's way.
-
-What it costs is reach on the thinnest roof in the model. usb_roof() up to the
-face leaves 1.04 on the recessed front and 0.64 on the FDM front, and this
-carries that run this much further inboard. Nothing structural is in the band;
-nothing else stands near it. checks/usb.py reads the wall
-and its ramp off the built front rather than off this."""
+"""Clearance around the underside USB shell and through its end-wall opening."""
+USB_CORNER_CHAMFER = 0.4
+"""The corner trim stays within USB_CLEARANCE, so the complete shell remains clear."""
+QWIIC_CLEARANCE = 0.5
+"""Clearance around the Qwiic housing for a plug approach from the left side."""
+QWIIC_CORNER_CHAMFER = 0.3
+"""The small corner trim stays within the connector clearance at each corner."""
+QWIIC_SKIRT_CLEARANCE = 0.2
+"""The hidden front skirt clears the port roof and joins the adjacent support reliefs."""
+QWIIC_KNOCKOUT_T = 0.8
+"""The flush cover uses two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_GAP = 0.3
+"""The border separates the cover from the wall except at two side bridges."""
+QWIIC_KNOCKOUT_TAB_W = 0.8
+"""Each side bridge spans four 0.2 mm layers from the panel's lower edge."""
+QWIIC_KNOCKOUT_TAB_T = 0.8
+"""The two bridges use two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_ANCHOR = 0.4
+"""Each bridge overlaps the panel and wall to keep the back shell one solid."""
+BATTERY_PLUG_REACH = 7.0
+"""Free space past the PicoBlade mouth for the plug and wire bend.
+This is a routing allowance, not a measured plug dimension."""
+BATTERY_PLUG_CLEARANCE = 0.5
+"""Clearance around the battery connector height and width for the mating plug."""
 
 # Button pad: one soft moulding, flat web with raised keys. The moulded pad has a
 # skirt on each lobe's outer edge. Held up against the ceiling by its own
@@ -1111,18 +1054,8 @@ one leaves a part thicker than the one it replaces for no reason: the material
 the dish took out is simply kept. So this front's face lands at the sunken
 level instead, and the part comes out that much slimmer.
 
-What bounds it is not the dish's own depth, which is 0.6 to 0.9, but the
-ceilings the drop thins outside that dish: the USB pocket's roof against
-USB_CEILING_MIN and the thinnest counterbore land against LAND_FLOOR_MIN. The
-USB pocket is the tight one: its roof is 1.04 on the recessed front, against
-USB_CEILING_MIN's 0.4, so 0.64 is all there is. The FDM LED channel is only
-half the recessed front's depth and therefore leaves a thicker roof of its own.
-This takes most of the USB bound while retaining a real margin.
-
-The drop is therefore a little short of the dish it stands in for, which runs
-0.6 to 1.1. The face lands near the shallow end of the recess rather than on
-its floor. Going further means raising usb_roof(), and the connector's own
-envelope is what sets that.
+The LED channel roof and the counterbore lands limit the drop. The built-shell
+checks hold both thicknesses. The underside USB connector needs no front pocket.
 
 Caps and the wheel stand proud by this much, against the 0.47 to 0.80 the caps
 already stand proud by on the recessed front, so a cap on a flat face reads as

@@ -1240,7 +1240,7 @@ def _skirt_ring(name, bottom=PAD_SKIRT_BOTTOM):
 
 @functools.cache
 def _v3_skirt_obstacles():
-    """[(ref, solid)] every V3 assembly solid under the V3 placement nearest it."""
+    """[(ref, solid)] every V3 assembly solid under its STEP component reference."""
     return [
         (ref, solid)
         for ref, solids in sorted(board.placement_groups().items())

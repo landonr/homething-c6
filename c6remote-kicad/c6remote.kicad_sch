@@ -6038,6 +6038,17 @@
 		)
 		(uuid "7e871fb5-c5f1-48aa-82be-96fd1fce0031")
 	)
+	(text "TP1-TP6: bare debug pads on the\nboard front, not assembled."
+		(exclude_from_sim no)
+		(at 250.19 100.33 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "9acdce4d-9cef-4f78-8902-56ee1050f530")
+	)
 	(text "IR Receiver"
 		(exclude_from_sim no)
 		(at 24.13 133.858 0)
@@ -7220,6 +7231,28 @@
 			)
 		)
 	)
+	(global_label "ws"
+		(shape bidirectional)
+		(at 264.16 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "41c1e789-157c-48d0-8ac2-f9bc5bae46d0")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 66.04 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "ano_sw3"
 		(shape input)
 		(at 52.07 109.22 0)
@@ -7598,6 +7631,28 @@
 		(uuid "6b64abcb-bfb1-4e18-9bb5-504304ebe6a3")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 234.95 102.87 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "led_1"
+		(shape bidirectional)
+		(at 264.16 91.44 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6d08739d-5975-4511-889f-9cc4a7744aaa")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 91.44 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8209,6 +8264,28 @@
 			)
 		)
 	)
+	(global_label "IR EMIT"
+		(shape bidirectional)
+		(at 264.16 81.28 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a0d2e4d8-c22f-469c-8efb-dd15da86d5cc")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw3"
 		(shape input)
 		(at 52.07 78.74 0)
@@ -8395,6 +8472,50 @@
 			)
 		)
 	)
+	(global_label "sck"
+		(shape bidirectional)
+		(at 264.16 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bc4f12a5-4231-426e-93fb-7a7f4122ad97")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 71.12 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "IR REC"
+		(shape bidirectional)
+		(at 264.16 86.36 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "be521928-7aeb-41c2-a01a-23512d284b7c")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sw4"
 		(shape input)
 		(at 130.81 68.58 180)
@@ -8431,6 +8552,28 @@
 		(uuid "bff3ee35-d25e-42fb-8137-9679c7234196")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 232.41 152.4 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "sd"
+		(shape bidirectional)
+		(at 264.16 76.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c18df345-4e2f-4223-bd3e-849bccee0381")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 264.16 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -10096,6 +10239,84 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 86.36 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "194ccfac-9427-4c8a-a2a1-6298d39bbb59")
+		(property "Reference" "TP5"
+			(at 269.24 85.09 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "IR_RX"
+			(at 269.24 87.63 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "350b1557-65c7-4a46-b25f-09a3c6d6e273")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:C")
 		(at 146.05 189.23 90)
 		(unit 1)
@@ -10213,6 +10434,84 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "C4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 66.04 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "1ffaac59-08c9-4286-97d7-fbca236d02dd")
+		(property "Reference" "TP1"
+			(at 269.24 64.77 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "WS"
+			(at 269.24 67.31 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 71.12 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 71.12 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 66.04 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "0425f666-d3cc-41c1-ac32-4887cc57c485")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP1")
 					(unit 1)
 				)
 			)
@@ -10524,6 +10823,84 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR_FLAG02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 81.28 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "2b553ac2-b310-40ae-8454-60e30438e3f4")
+		(property "Reference" "TP4"
+			(at 269.24 80.01 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "IR_TX"
+			(at 269.24 82.55 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8278ef71-fbcf-4352-b83b-ca18352b3c17")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP4")
 					(unit 1)
 				)
 			)
@@ -12245,6 +12622,84 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 76.2 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "5ccdd0ca-6178-4515-b6cc-e59ca874109d")
+		(property "Reference" "TP3"
+			(at 269.24 74.93 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "SD"
+			(at 269.24 77.47 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 76.2 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5d8c67f6-4f65-432a-8702-5d4fd8a846fb")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3.3V")
 		(at 142.24 171.45 0)
 		(unit 1)
@@ -13005,6 +13460,84 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR015")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 71.12 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "794af019-881c-4365-be76-b5d38230389b")
+		(property "Reference" "TP2"
+			(at 269.24 69.85 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "SCK"
+			(at 269.24 72.39 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 76.2 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 76.2 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 71.12 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e9824a29-643d-4b59-88ab-d041376c5512")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP2")
 					(unit 1)
 				)
 			)
@@ -17386,6 +17919,84 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "MK1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 264.16 91.44 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files no)
+		(dnp no)
+		(uuid "de565ee9-f634-4c0a-b078-9c991e6c9a47")
+		(property "Reference" "TP6"
+			(at 269.24 90.17 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "LED_DIN"
+			(at 269.24 92.71 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 264.16 96.52 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 96.52 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Bare test pad for debug probing"
+			(at 264.16 91.44 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "793a19da-b298-4404-b35b-c4e31c79759f")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "TP6")
 					(unit 1)
 				)
 			)

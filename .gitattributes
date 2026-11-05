@@ -3,3 +3,5 @@ docs/readme-assets/*.svg linguist-generated=true
 docs/readme-assets/homeThingLogo*.svg -linguist-generated
 c6remote-kicad/export/** linguist-generated=true
 case/board/*.step linguist-generated=true
+c6remote-kicad/3dmodels/*.step linguist-generated=true
+c6remote-kicad/3dmodels/*.STEP linguist-generated=true

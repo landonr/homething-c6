@@ -22,8 +22,10 @@ pcbway/
 # Local component datasheets used for bench investigation.
 localdatasheets/
 
-# Local-only agent config: hookify rules and anything else *.local.md.
+# Local-only agent config: hookify rules, local settings, and preview server entries.
 .claude/*.local.md
+.claude/settings.local.json
+.claude/launch.json
 
 # Case model. The board-only STEP and the outline DXF are tracked, so the shells
 # build from a fresh clone without KiCad. The two assembly exports are 5MB of

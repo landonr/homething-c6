@@ -43,7 +43,10 @@ from .keypad import (
     button_pad,
     centerline_keys_span,
     centerline_x,
+    exterior_x_bounds,
+    exterior_y_bounds,
     face_depth_at,
+    face_floor_at,
     key_pitch,
     key_size,
     keypad_recess_facts,
@@ -71,6 +74,8 @@ from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     LED_RING_TOP,
+    led_ring_ceiling_at,
+    led_ring_chamfer_left,
     led_ring_clip_reach,
     led_ring_inner_r,
     led_ring_mouth_outer_r,
@@ -91,6 +96,8 @@ from .stack import (
     COUNTERBORE_TOP,
     DISH_HEADROOM,
     EXPORT,
+    FACE_ARCH_X,
+    FACE_WALL_TOP,
     KEYPAD_CEILING,
     KEYPAD_KEEPOUT,
     LIP_CLEAR_R,
@@ -100,13 +107,15 @@ from .stack import (
     SHELL_SEAM,
     SKIRT_BOTTOM,
     SKIRT_OUT,
-    STEM_TOP,
     WHEEL_LIP_OD,
     WHEEL_LIP_Z0,
     WHEEL_LIP_Z1,
     WHEEL_MAIN_OD,
     WHEEL_OPENING_R,
     WHEEL_TOP,
+    cap_top,
+    face_z,
+    stem_top,
 )
 
 
@@ -212,25 +221,55 @@ def main():
         f"{front + contour_depth(box.max.Y + over):.2f} at its tip"
     )
     print(
-        f"front face {SHELL_FRONT:.2f}: keypad ceiling {CAVITY_FRONT:.2f}, "
-        f"{KEYPAD_CEILING:.2f} thick; USB and Qwiic open below the board"
+        f"front face {SHELL_FRONT:.2f} at its crown: keypad ceiling {CAVITY_FRONT:.2f}, "
+        f"{KEYPAD_CEILING:.2f} thick there; USB and Qwiic open below the board"
     )
+    ex0, ex1 = exterior_x_bounds()
+    ey1 = exterior_y_bounds()[1]
     print(
-        f"face flat at {SHELL_FRONT:.2f}; wheel top measured at {WHEEL_TOP:.3f}, "
+        f"  face a power {params.FACE_POWER:g} superellipse across x from wall "
+        f"to wall: crown {SHELL_FRONT:.3f} at x {FACE_ARCH_X:.3f}, meeting every "
+        f"wall vertically at {FACE_WALL_TOP:.3f} (FACE_SIDE_DROP "
+        f"{params.FACE_SIDE_DROP:.3f}), rolled into each end wall over "
+        f"{params.FACE_END_ROLL:.2f}"
+    )
+    wy = board.wheel_center()[1]
+    reads = ", ".join(
+        f"{face_z(ex1 - d, wy):.3f} at {d:g}" for d in (9.55, 6, 4, 2, 1, 0.25)
+    )
+    ends = ", ".join(
+        f"{face_z(FACE_ARCH_X, ey1 - d):.3f} at {d:g}" for d in (4, 2, 1, 0.25)
+    )
+    print(f"  face at the +x side wall less: {reads}; at the IR end wall less: {ends}")
+    print(
+        f"wheel top measured at {WHEEL_TOP:.3f}, "
         f"lip {WHEEL_LIP_OD:.2f} OD (WHEEL_OD param {board.WHEEL_OD:.2f}) over z "
         f"{WHEEL_LIP_Z0:.3f} .. {WHEEL_LIP_Z1:.3f}, main body {WHEEL_MAIN_OD:.2f} OD above it"
     )
     print(
         f"  shell opening a {2 * WHEEL_OPENING_R:.2f} bore, flush to the main "
-        f"body at {params.WHEEL_OPENING_CLEARANCE:.2f} rotating clearance and "
-        f"flush to the wheel top by construction (face is WHEEL_TOP)"
+        f"body at {params.WHEEL_OPENING_CLEARANCE:.2f} rotating clearance; the "
+        f"crown stands {SHELL_FRONT - WHEEL_TOP:.3f} above the knob top by "
+        f"construction (crown is WHEEL_TOP + FACE_CROWN_OVER_WHEEL)"
     )
     wheel = keypad_recess_facts()["dishes"]["wheel"]
     wx, wy = board.wheel_center()
+    rim = {
+        "west": face_floor_at(wx - WHEEL_OPENING_R, wy),
+        "east": face_floor_at(wx + WHEEL_OPENING_R, wy),
+        "south": face_floor_at(wx, wy - WHEEL_OPENING_R),
+        "north": face_floor_at(wx, wy + WHEEL_OPENING_R),
+    }
+    print(
+        "  bore rim "
+        + ", ".join(f"{side} {z:.3f}" for side, z in rim.items())
+        + f": the knob top stands {WHEEL_TOP - rim['west']:.2f} and "
+        f"{WHEEL_TOP - rim['east']:.2f} above it at its west and east sides"
+    )
     print(
         f"  seated in the keypad recess's own wheel basin: a "
         f"{2 * wheel['half'][0]:.2f} angular blend ({params.WHEEL_BASIN_SPREAD:.2f} "
-        f"past the bore on its axes), dishing to "
+        f"past the bore on its axes), dishing below the face to "
         f"{face_depth_at(wx + WHEEL_OPENING_R, wy):.2f} at the bore on the axes, "
         f"{face_depth_at(wx + WHEEL_OPENING_R * 0.7071, wy + WHEEL_OPENING_R * 0.7071):.2f} "
         f"on the diagonals and "
@@ -250,13 +289,21 @@ def main():
         f"  LEDs uncovered by {pad_clear_y() - led_y_reach():.2f}, "
         f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
         f"package, firing into the ring channel: {led_ring_inner_r():.2f} to "
-        f"{led_ring_outer_r():.2f} around the wheel, void up to {LED_RING_TOP:.2f}, "
-        f"{params.LED_RING_ROOF:.2f} of translucent roof over it "
-        f"({ring_roof_left():.2f} where the recess crosses it)"
+        f"{led_ring_outer_r():.2f} around the wheel, void up to {LED_RING_TOP:.2f} "
+        f"at the crown and {led_ring_ceiling_at(wx + led_ring_inner_r()):.2f} at "
+        f"the inner wall's east side, {params.LED_RING_ROOF:.2f} of translucent "
+        f"roof under the undished crown line ({ring_roof_left():.2f} where the "
+        f"recess or the face thins it)"
+    )
+    print(
+        f"  ceiling is its own arch, {params.LED_RING_SAG:.2f} lower at each side "
+        f"wall, so the {params.LED_RING_INNER_CHAMFER:.2f} "
+        f"inner chamfer keeps {led_ring_chamfer_left():.2f} of height at its "
+        f"lowest, the wall's east and west sides"
     )
     print(
         f"  inner wall plumb at {led_ring_inner_r():.2f} over the full "
-        f"{led_ring_wall_height():.2f} of height, outer wall raked 45 degrees "
+        f"{led_ring_wall_height():.2f} of height at the crown, outer wall raked 45 degrees "
         f"and widest at the mouth: {led_ring_mouth_outer_r():.2f} there, closing "
         f"to {led_ring_roof_outer_r():.2f} at the roof, so "
         f"{led_ring_roof_flat():.2f} of flat glows and {led_ring_web_left():.2f} "
@@ -298,10 +345,25 @@ def main():
     lands = sorted((counterbore_land(ref), ref) for ref in cap_refs())
     print(
         f"caps on all {len(cap_refs())} keys, {params.CAP_PROTRUSION:.2f} proud of "
-        f"the face and standing "
+        f"the face at their own centre and standing "
         f"{proud[0][0]:.2f} ({proud[0][1]}) to {proud[-1][0]:.2f} ({proud[-1][1]}) "
         f"proud of the recess floor around them"
     )
+    columns = []
+    for ref in sorted(cap_refs(), key=lambda r: placements[r][0]):
+        x = placements[ref][0]
+        if columns and abs(x - columns[-1][0][0]) < 1.0:
+            columns[-1].append((x, ref))
+        else:
+            columns.append([(x, ref)])
+    for column in columns:
+        tops = [cap_top(ref) for _, ref in column]
+        xs = [x for x, _ in column]
+        print(
+            f"  column at x {sum(xs) / len(xs):.2f} "
+            f"({', '.join(ref for _, ref in column)}): cap tops "
+            f"{min(tops):.3f} .. {max(tops):.3f}"
+        )
     full = max(cap_refs(), key=key_size)
     print(
         f"  bodies {cap_body(full):.2f} square through {cap_face_hole(full):.2f} face "
@@ -310,12 +372,15 @@ def main():
     print(
         f"  flange {cap_flange(full):.2f} in a {cap_counterbore(full):.2f} counterbore, "
         f"{COUNTERBORE_TOP - (CAP_BOTTOM + params.CAP_FLANGE_T):.2f} of float under a "
-        f"face land of {DISH_HEADROOM:.2f} flat, {lands[0][0]:.2f} at its thinnest "
-        f"({lands[0][1]}, under the deepest point of a recess)"
+        f"face land of {DISH_HEADROOM:.2f} at the crown, {lands[0][0]:.2f} at its thinnest "
+        f"({lands[0][1]}, under its dish and a {params.CAP_FACE_HOLE_CHAMFER:.2f} "
+        f"face-hole lead-in)"
     )
+    engagements = [stem_top(ref) - CAP_BOTTOM for ref in cap_refs()]
     print(
-        f"  locating recess {STEM_TOP - CAP_BOTTOM:.2f} deep on a {params.STEM_W:.1f} "
-        f"stem, {params.STEM_GRIP:.2f} interference per side"
+        f"  locating recess {min(engagements):.2f} to {max(engagements):.2f} deep "
+        f"on a {params.STEM_W:.1f} stem, {params.STEM_GRIP:.2f} interference per "
+        f"side; each stem stops at its own cap's socket ceiling"
     )
     print(
         f"  flange rests on the pad web with {params.CAP_LIFT:.2f} of lift, so a press "
@@ -388,13 +453,14 @@ def main():
     )
     print(
         f"  top edge has a {front_edge_round(True):.2f} 45 degree chamfer "
-        f"rather than a {front_edge_round():.2f} round, leaving the outline "
+        f"rather than the {front_edge_round():.2f} end roll, leaving the outline "
         f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it"
     )
     print(
         f"  face sits {params.FDM_FACE_DROP:.2f} below the recessed front's, at "
         f"{FDM_FACE:.2f}, so flattening the dish does not keep the material the "
-        f"dish took out; caps and the wheel stand that far proud, against the "
+        f"dish took out; caps and the wheel stand that much further proud, "
+        f"the knob {WHEEL_TOP - FDM_FACE:.2f} above this face, against the "
         f"{min(cap_proud(r) for r in cap_refs()):.2f} to "
         f"{max(cap_proud(r) for r in cap_refs()):.2f} a cap already stands proud "
         f"of the dish around it"

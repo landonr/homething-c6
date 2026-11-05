@@ -109,14 +109,15 @@ def inset_outline(d):
 
 
 def spine_depth(y):
-    return kp.recess_spine(y)[1]
+    return kp.recess_spine(y).depth
 
 
 def _half_at(y, level):
     """Half width of the level-depth contour at y, zero where the recess never
     reaches that level. Bisected on _cross(), which falls monotonically from
     one on the centreline to zero at the rim."""
-    width, depth, shape, n, axis_rounding, edge_width = kp.recess_spine(y)
+    spine = kp.recess_spine(y)
+    width, depth = spine.width, spine.depth
     if width <= 0.0 or depth <= 0.0:
         return 0.0
     target = level / depth
@@ -127,11 +128,7 @@ def _half_at(y, level):
     lo, hi = 0.0, 1.0
     for _ in range(46):
         mid = (lo + hi) / 2
-        lo, hi = (
-            (mid, hi)
-            if kp._cross(mid, shape, n, axis_rounding, edge_width) > target
-            else (lo, mid)
-        )
+        lo, hi = (mid, hi) if kp._cross(spine, mid) > target else (lo, mid)
     return width * (lo + hi) / 2
 
 
@@ -324,22 +321,103 @@ def dish_gradient(P):
     return "".join(out + topo)
 
 
+FACE_GRID_STEPS = (160, 420)
+"""Grid points from one wall to the centre, across x and along y, that the face
+tilt is sampled on. They crowd toward the walls, where the face turns down."""
+
+
+def face_cover():
+    """(xs, ys, cover): the round band's shading on a plan grid. cover[j][i] at
+    (xs[i], ys[j]) is ROUND_MAX times one less the z part of the face normal, so
+    it rises from zero on the crown to ROUND_MAX where the face turns vertical.
+    It is ROUND_MAX on and outside the plan outline, so every contour closes."""
+    import numpy as np
+
+    ex0, ex1 = kp.exterior_x_bounds()
+    ey0, ey1 = kp.exterior_y_bounds()
+
+    def crowded(a, b, steps):
+        half = (b - a) / 2
+        d = half * (np.arange(steps + 1) / steps) ** 2
+        return np.unique(np.concatenate([a + d, b - d]))
+
+    xs = crowded(ex0, ex1, FACE_GRID_STEPS[0])
+    ys = crowded(ey0, ey1, FACE_GRID_STEPS[1])
+    z = np.array([[stack.face_z(x, y) for x in xs] for y in ys])
+    dz_dy, dz_dx = np.gradient(z, ys, xs)
+    cover = ROUND_MAX * (1 - 1 / np.sqrt(1 + dz_dx**2 + dz_dy**2))
+    for j, y in enumerate(ys):
+        x0, x1 = stack._span(y)
+        outside = (xs <= x0) | (xs >= x1) | (y <= ey0) | (y >= ey1)
+        cover[j, outside] = ROUND_MAX
+    return xs, ys, cover
+
+
+# Marching squares: corner bits are 1 bottom left, 2 bottom right, 4 top right
+# and 8 top left. Each case joins the cell edges its contour crosses.
+SQUARE_SEGMENTS = {
+    1: ["LB"], 2: ["BR"], 3: ["LR"], 4: ["RT"], 6: ["BT"], 7: ["LT"],
+    8: ["TL"], 9: ["BT"], 11: ["RT"], 12: ["LR"], 13: ["BR"], 14: ["LB"],
+}
+SADDLE_SEGMENTS = {
+    (5, True): ["LT", "BR"], (5, False): ["LB", "RT"],
+    (10, True): ["LB", "RT"], (10, False): ["BR", "TL"],
+}
+
+
+def iso_loops(xs, ys, field, level):
+    """Closed loops where field crosses level, by marching squares on the grid
+    of xs by ys. The field must stay above level all round the grid's edge."""
+    import numpy as np
+
+    above = field >= level
+    case = (
+        above[:-1, :-1] * 1 | above[:-1, 1:] * 2 | above[1:, 1:] * 4 | above[1:, :-1] * 8
+    )
+    links = {}
+    for j, i in np.argwhere((case != 0) & (case != 15)):
+        c = int(case[j, i])
+        centre = field[j : j + 2, i : i + 2].mean() >= level
+        edges = {"B": ("h", j, i), "T": ("h", j + 1, i), "L": ("v", j, i), "R": ("v", j, i + 1)}
+        for seg in SQUARE_SEGMENTS.get(c) or SADDLE_SEGMENTS[(c, bool(centre))]:
+            a, b = edges[seg[0]], edges[seg[1]]
+            links.setdefault(a, []).append(b)
+            links.setdefault(b, []).append(a)
+
+    def point(edge):
+        kind, j, i = edge
+        j1, i1 = (j, i + 1) if kind == "h" else (j + 1, i)
+        t = (level - field[j, i]) / (field[j1, i1] - field[j, i])
+        return xs[i] + t * (xs[i1] - xs[i]), ys[j] + t * (ys[j1] - ys[j])
+
+    loops, seen = [], set()
+    for start in links:
+        if start in seen:
+            continue
+        loop, prev, edge = [], None, start
+        while edge not in seen:
+            seen.add(edge)
+            loop.append(point(edge))
+            nxt = [e for e in links[edge] if e != prev and e not in seen]
+            prev, edge = edge, (nxt[0] if nxt else start)
+        if len(loop) > 2:
+            loops.append(loop)
+    return loops
+
+
 def round_band(P, outer):
-    """The top edge round as rings from the outer wall to ever deeper insets.
-    Stacked, they darken toward the wall as the round turns away from a light
-    straight above."""
-    r = params.EDGE_R_FRONT
-    edges = [r * k / ROUND_BANDS for k in range(1, ROUND_BANDS + 1)]
-    mids = [r * (k - 0.5) / ROUND_BANDS for k in range(1, ROUND_BANDS + 1)]
-    cover = [ROUND_MAX * (1 - math.sqrt(1 - ((r - s) / r) ** 2)) for s in mids]
-    alphas, inner = [0.0] * ROUND_BANDS, 0.0
-    for k in reversed(range(ROUND_BANDS)):
-        alphas[k] = 1 - (1 - cover[k]) / (1 - inner)
-        inner = cover[k]
+    """The face's fall toward the walls as nested bands, one per shading level.
+    Each band is the plan where the face tilts past its level, so the stack
+    darkens toward the walls as the face turns away from a light straight
+    above. The tilt comes from stack.face_z(), so the bands follow the
+    superellipse across the width and the roll into each end wall."""
+    xs, ys, cover = face_cover()
+    levels = [ROUND_MAX * k / ROUND_BANDS for k in range(1, ROUND_BANDS)]
+    mids = [ROUND_MAX * (k + 0.5) / ROUND_BANDS for k in range(1, ROUND_BANDS)]
     return "".join(
         f'<path class="round" fill-rule="evenodd" fill-opacity="{fmt(a, 4)}" '
-        f'd="{path_d([outer, inset_outline(d)], P)}"/>'
-        for d, a in zip(edges, alphas)
+        f'd="{path_d([outer] + iso_loops(xs, ys, cover, level), P)}"/>'
+        for level, a in zip(levels, stacked_alphas(mids))
     )
 
 

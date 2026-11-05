@@ -478,15 +478,10 @@ EDGE_R_BACK_IR = 8.0
 """Round on the back's bottom edge near U2. It is smaller than EDGE_R_BACK_CELL so
 the upper taper stays light and every lifted form used by the IR insert remains a
 valid rounded section. The profile blends from the cell radius over CONTOUR_BLEND."""
-EDGE_R_FRONT = 3.0
-"""Round on the front's top edge. Small: it is a face full of key holes, and the
-outermost sit close to the wall. The FDM front carries its own, see
-EDGE_R_FRONT_FDM.
-"""
 EDGE_R_FRONT_FDM = 0.85
-"""Leg length of the FDM front's 45 degree top-edge chamfer. The established
-name remains because the FDM and recessed fronts share front_edge_round() as a
-size reader; the recessed front still uses EDGE_R_FRONT as a fillet radius.
+"""Leg length of the FDM front's 45 degree top-edge chamfer. The FDM front is
+flat, so it does not take the recessed front's rolled face. front_edge_round()
+reads this value.
 
 The smaller FDM groove leaves room for this bevel and flat face beyond the
 groove. The bound is KEYPAD_EDGE_MARGIN less half FDM_OUTLINE_W less
@@ -592,16 +587,115 @@ superellipse's exact reach.
 Two is the lower limit. Below two, the diagonals move inside the axes and can
 reduce WHEEL_RIM_LEDGE. The wheel's large KEYPAD_JOIN_REACH keeps both necks
 wide enough for their minimum outline radius."""
-WHEEL_DISH_DEPTH = 1.1
-"""Depth of the wheel basin at its own centre. This gives a little more finger
-access around the knob. The centre is inside the bore, so
-none of it is ever cut: what the number really sets is the seat depth at the bore
-wall, which is about a third of this on the free axis and just under half on the
-diagonals, WHEEL_SQUIRCLE_N having brought the diagonals in from where the
-squircle put them. Bounded by LED_RING_ROOF rather than by any counterbore, no
-key sitting under this basin: the roof over the ring channel is thinnest where
-this basin's diagonals or one of its joins cross the channel, and check.py holds
-a floor under what is left there."""
+WHEEL_DISH_DEPTH = 1.4
+"""Depth of the wheel basin at its own centre. This gives more finger access
+around the knob. The centre is inside the bore, so the cut never reaches it.
+What the number really sets is the seat depth at the bore wall. That depth is
+about 0.62 of this value on the free axis and about 0.65 on the diagonals.
+WHEEL_SQUIRCLE_N sets how much deeper the diagonals are.
+
+LED_RING_ROOF bounds this value, not a counterbore, because no key sits under
+this basin. The roof over the ring channel is thinnest where this basin's
+diagonals or one of its joins cross the channel. check.py holds a floor under
+what is left there."""
+WHEEL_RIM_SOFT = 0.6
+"""Dish depth over which the wheel basin's floor rolls into the face at its rim.
+
+The plain dish section meets its rim with a vertical tangent, which reads as a
+cliff. Where the depth d is less than this value c, keypad.py uses
+d^3 (3c - 2d) / c^3 instead. The last c of depth before the rim then rolls in
+with zero slope, so the rim has no cliff. Deeper floor does not change.
+
+Floors only rise, so the counterbore lands and the LED roof only get thicker.
+The value must stay below the basin's depth, so the dish centre keeps its
+depth, and keypad_recesses() stops with an error if it does not. Also keep it
+below the depth at the bore wall on the east and west, about 0.87, or the bore
+rim rises and the knob loses exposure. KEYPAD_RIM_SOFT and KEYPAD_RIM_SOFT_2 do
+the same for the key basins, and the necks blend between the three."""
+KEYPAD_RIM_SOFT = 0.5
+"""Dish depth over which the grid basin's floor rolls into the face at its rim.
+See WHEEL_RIM_SOFT for the map and the rules. It must stay below
+KEYPAD_DISH_DEPTH."""
+KEYPAD_RIM_SOFT_2 = 0.35
+"""Dish depth over which the second basin's floor rolls into the face at its
+rim. See WHEEL_RIM_SOFT for the map and the rules. It must stay below
+KEYPAD_DISH_DEPTH_2."""
+KEYPAD_LIP_LIFT = 0.6
+"""Fraction of the dish depth that the grid and second basins give back at and
+past KEYPAD_LIP_CREST.
+
+Each dish floor follows the face, and the face falls toward the side walls.
+Without this lift, a key dish floor falls all the way from the centreline to
+the rim, and the dish has no lip. keypad.py multiplies the softened depth by
+one less this value times a smoothstep of the face drop. The floor then rises
+to a crest near the outer key columns and rolls into the face at the same rim.
+
+The rim does not move, and the floors only rise. As a result, the counterbore
+lands over the outer columns get thicker. The wheel basin has no lift, and the
+necks blend between the basins. The value must be from zero to one."""
+KEYPAD_LIP_CREST = 16.0
+"""Distance in x from the centreline at which KEYPAD_LIP_LIFT has its full
+effect.
+
+The lift follows the face drop at x over the face drop at this distance, so
+it follows the superellipse and not x itself. A smaller value moves the crest
+toward the centreline and makes the climb to it steeper."""
+FACE_CROWN_OVER_WHEEL = 0.135
+"""How far the crown of the recessed front's face stands above the knob's
+measured top, WHEEL_TOP.
+
+SHELL_FRONT is WHEEL_TOP plus this value, so a wheel change still moves the
+face. The crown runs along the centreline over the knob, but the wheel dish
+lowers the face around the knob. As a result, the knob still stands above its
+own seat.
+
+This value and FACE_SIDE_DROP set the face together. They hold FACE_WALL_TOP at
+the height that the walls, catches and seam are made to. The superellipse then
+crosses the wheel bore edge at the height that the keys, the bore and the LED
+ring are sized to.
+
+A larger value raises the dish floors and the bore seat with the face, so the
+knob stands less proud of its seat. A smaller value lowers the floors, and each
+counterbore land gets thinner by the same value, because COUNTERBORE_TOP does
+not move with the face."""
+
+FACE_SIDE_DROP = 3.805
+"""How far the recessed front's face falls from its crown, SHELL_FRONT, to
+FACE_WALL_TOP, where it meets each exterior wall.
+
+Across the width the face is one superellipse of FACE_POWER from side wall to
+side wall. It is level at the crown and vertical at each wall, so the face
+reads as one round section. No edge shows where a flat panel turns into a
+round. This value is the section's height, and FACE_ARCH_HALF is its half
+width.
+
+Together with FACE_CROWN_OVER_WHEEL, this value sets FACE_WALL_TOP. A larger
+value lowers the face everywhere off the crown. Over the outer key columns and
+at the east and west sides of the knob, the counterbore lands and the LED ring
+roof then get thinner. checks/keypad.py and checks/wheel_ring.py hold both."""
+
+FACE_POWER = 3.0
+"""Exponent of the recessed front's superellipse, across the width and in each
+end roll.
+
+At 2 the section is an ellipse. A larger value keeps the face fuller toward
+the walls and turns it down faster near them. At 3 and above the face meets
+each wall with zero curvature, so the wall runs into the face without a
+highlight line. Below 2 the crown has infinite curvature, which shows as a
+line along the centreline."""
+
+FACE_END_ROLL = 6.0
+"""How far into the plan the recessed front's face rolls down into each end
+wall.
+
+Over this length the face section falls to FACE_WALL_TOP with the same
+FACE_POWER as across the width, and it meets the end wall vertically. Around
+the plan corners the section's half width follows the corner arc, so the face
+meets the corner walls vertically too.
+
+The IR-end top-key recess reaches into this roll. Its floor stays under the
+face, because every dish depth is measured down from face_z(). A longer roll
+lowers the face over the recess tip and toward the mic inlet."""
 
 # Status LEDs: the pad's wheel bore is cut wide enough that the pad never
 # reaches over them, and they shine straight through the translucent shell.
@@ -641,9 +735,9 @@ keeps the opening a closed cylinder the wheel seats against, and it is the
 ring's inner light barrier, so it is not free to thin toward zero. The inner
 wall stands at this radius below its top chamfer and widens the web above it.
 The check still probes it on the built shell rather than trusting the sum."""
-LED_RING_INNER_CHAMFER = 0.7
+LED_RING_INNER_CHAMFER = 0.53
 """45 degree bevel at the inner wall's top edge on both LED channels. It steps
-0.7 mm out from the bore and 0.7 mm down from each channel roof, leaving the
+0.53 mm out from the bore and 0.53 mm down from each channel roof, leaving the
 recessed channel's lower wall upright and nearly using the shorter FDM wall's
 height. It must remain shorter than both walls so the channel stays open to
 the cavity below."""
@@ -679,14 +773,38 @@ furthest around the channel, which is the best effect this feature has. The
 light_path check asks a different question, that the column straight above each
 package is void up to the roof, so it catches a package firing into material
 without asking it to fire past the reflector."""
-LED_RING_ROOF = 1.2
-"""Translucent roof left over the channel, face side: the surface the ring
-actually glows through. The keypad recess overlaps the channel in plan where the
-wheel basin's diagonals reach past its own half axis and where either of its
-joins runs out across the annulus, and what the recess sinks there comes out of
-this roof; the difference is the thinnest the roof gets anywhere, and check.py's
-ring stack guard is what holds a floor under it, walking the whole annulus rather
-than one radius."""
+LED_RING_ROOF = 1.675
+"""Translucent roof over the LED ring channel on the crown line, under the
+undished face: the surface the ring glows through. LED_RING_TOP, the channel
+ceiling on the crown line, is SHELL_FRONT less this value.
+
+The ceiling does not follow the face. The face falls steeply at the east and
+west sides of the knob, and a ceiling under it would drop below CAVITY_FRONT at
+the channel mouth. The ceiling is an arch of its own instead, LED_RING_SAG lower
+at each side wall.
+
+The keypad recess sinks the roof where the wheel basin's diagonals and both
+necks cross the channel. check.py's ring stack guard walks the whole annulus
+and holds a floor under the thinnest roof.
+
+A smaller value thins the roof north and south of the knob, so the ring is
+brighter there. But it raises the whole ceiling, so LED_RING_SAG must grow to
+keep the east and west roof, and the inner chamfer gets shorter. The FDM
+front's channel depth is a fraction of this channel's, so a change here also
+changes the FDM front."""
+LED_RING_SAG = 0.7
+"""How far the LED ring channel ceiling falls from LED_RING_TOP on the crown
+line to each exterior side wall. The ceiling is a circular arch with its axis
+along y.
+
+The face falls faster than this arch at the east and west sides of the knob,
+so the roof there is thinner than LED_RING_ROOF. A larger value lowers the
+ceiling there and keeps more roof. The ring roof floor in checks/wheel_ring.py
+sets the lower limit.
+
+The inner wall's 45 degree top chamfer sets the upper limit. The arch cuts the
+chamfer short at the east and west sides. At about 0.88 no chamfer is left
+there, and led_ring_channel() stops with an error."""
 # Apertures in the back shell
 MIC_THROAT_MARGIN = 2 * BOARD_FIT
 """How much wider than the board's own acoustic port the inlet's throat is,
@@ -920,21 +1038,24 @@ corners land on the curve, which at n=4 is a growth of about a fifth.
 The wheel's basin has its own, see WHEEL_SQUIRCLE_N. A basin that is a field of
 square keys wants a rounded rectangle; one that is a ring around a round knob
 does not."""
-KEYPAD_PROFILE_POINTS = 64
+KEYPAD_PROFILE_POINTS = 80
 """Points the floor profile across one loft station is drawn through. A
 polyline rather than a fitted spline so every station carries the same vertex
-count and the loft between them has nothing to match up; spaced by angle across
-the section, so at this count the chord sag on the widest station is a few
-thousandths, well under a print layer."""
+count and the loft between them has nothing to match up. The points sit at the
+same fractions of the half width on every station, placed by arc length and by
+how far the floor turns there, so the soft rims and the face's fall toward the
+side walls get most of them. At this count no two neighbouring facets differ by
+more than about two degrees."""
 KEYPAD_RECESS_STATIONS = 20
-"""Stations per dish half the recess is lofted through, spaced by the
-superellipse's own parameter rather than evenly in y: both the half width and
-the depth turn fastest at a rim and barely at all in the middle, so even steps
-in the parameter put the stations where the turning is."""
+"""Stations per dish half the recess is lofted through before refinement,
+spaced by the superellipse's own parameter rather than evenly in y: both the
+half width and the depth turn fastest at a rim and barely at all in the middle,
+so even steps in the parameter put the stations where the turning is.
+keypad.recess_stations() then adds stations wherever the loft would crease."""
 KEYPAD_NECK_STATIONS = 12
-"""Extra stations across each neck, evenly spaced. Nothing is singular there,
-and the two Hermite halves want resolving on their own terms rather than on the
-spacing the neighbouring dish's rim happens to leave."""
+"""Extra stations across each neck before refinement, evenly spaced. Nothing is
+singular there, and the two Hermite halves want resolving on their own terms
+rather than on the spacing the neighbouring dish's rim happens to leave."""
 KEYPAD_TIP_WIDTH = 0.15
 """Half width the outermost station still carries, as a fraction of that dish's
 own half axis, in place of lofting to a point. A degenerate section is what
@@ -942,18 +1063,24 @@ makes a loft come back non-manifold. It costs nothing in fidelity: a
 superellipse's own end is flat to within microns over this much of its width,
 so the blunt tip it leaves sits a few thousandths inside the true rim at a
 depth of almost nothing."""
-KEYPAD_DISH_DEPTH = 0.8
-"""How deep the grid recess is at its own centre, which is where SW7 sits, so
-this is also the whole land the deepest counterbore gives up. What bounds it is
-SHELL_FRONT less COUNTERBORE_TOP less check.py's LAND_FLOOR_MIN, which
-case.DISH_HEADROOM is the first two terms of; this spends about seven tenths of
-that budget and leaves the rest, rather than being tuned to land exactly on the
-floor the way the old flat pocket's inset was."""
-KEYPAD_DISH_DEPTH_2 = 0.6
-"""Depth of the second dish at its own centre. Shallower than the grid's
-because it is less than half as wide in y, so the same depth would curve it
-visibly harder; chosen so a cap on SW1 or SW2 stands proud by about what a cap
-on the grid's outer ring does, rather than so the two centres match."""
+KEYPAD_DISH_DEPTH = 0.87
+"""How deep the grid recess is at its own centre, measured down from the
+face. SW7 sits at that centre.
+
+Every dish follows the face, so the face lowers the floors toward the side
+walls by its own drop. KEYPAD_LIP_LIFT gives part of that drop back near
+the outer key columns. Each counterbore land is the lowest floor over the
+counterbore less COUNTERBORE_TOP, and check.py holds it above LAND_FLOOR_MIN.
+At this value the thinnest land is about 0.55, on SW4, under the outer edge of
+the key. Above about 1.08, the land on SW7 is the thinnest. It reaches
+LAND_FLOOR_MIN at about 1.28. Both values assume that KEYPAD_DISH_DEPTH_2
+moves by the same amount."""
+KEYPAD_DISH_DEPTH_2 = 0.67
+"""Depth of the second dish at its own centre, measured down from the
+face. It is shallower than the grid's because it is less than half as wide in
+y. The same depth would curve it visibly harder. The value sets a cap on SW1
+or SW2 about as proud as a cap on the grid's outer ring. It changes by the same
+amount as KEYPAD_DISH_DEPTH, so the two depths keep their 0.2 difference."""
 
 KEYPAD_JOIN_REACH = {
     "grid": 3.0,
@@ -1045,7 +1172,7 @@ is given up is dish beyond the box's own corners."""
 # given up with the dish is the finger access around the wheel: the seat that
 # dished down to the knob's own lip is flat here, so the wheel is reachable
 # across its top face only.
-FDM_FACE_DROP = 0.4
+FDM_FACE_DROP = 0.875
 """How far the FDM front's outer face sits below the recessed front's.
 
 The recessed front's face is the raised land the dish is sunk out of. Flatten
@@ -1057,10 +1184,15 @@ level instead, and the part comes out that much slimmer.
 The LED channel roof and the counterbore lands limit the drop. The built-shell
 checks hold both thicknesses. The underside USB connector needs no front pocket.
 
-Caps and the wheel stand proud by this much, against the 0.47 to 0.80 the caps
-already stand proud by on the recessed front, so a cap on a flat face reads as
-one sitting a little shallower in a dish. The wheel standing proud gives the
-knob back some of the finger access a flat face takes from it.
+FDM_FACE is SHELL_FRONT less this value. If FACE_CROWN_OVER_WHEEL moves the
+crown, change this value by the same amount to keep the FDM face where it is.
+
+Caps and the wheel stand this much further proud of the face here than on the
+recessed front. Here the caps stand about 1.38 to 1.63 above the face. On the
+recessed front they stand about 1.28 to 1.62 above the dish floor. As a result,
+a cap on the flat face looks like a cap in a slightly shallower dish. The wheel
+standing proud gives the knob back some of the finger access a flat face takes
+from it.
 
 checks/fdm.py reads all three ceilings off the built shell, against the same
 floors the recessed front's own passes hold them to."""
@@ -1185,7 +1317,7 @@ keytop.
 This removes the sharp edge a finger meets without changing the cap's body at
 the face hole, its flange, or its captive retention geometry. Three bounds:
 
-The round's lower tangent sits this far below CAP_TOP, while a released cap
+The round's lower tangent sits this far below the cap top, while a released cap
 stands only CAP_PROTRUSION proud of the face. Above CAP_PROTRUSION, the round
 therefore dips into the face hole, and the cap is already curving inward where
 it meets the hole rim. At the rim the cap is pulled in from its full
@@ -1253,19 +1385,30 @@ through the front face. The previous 0.15 mm clearance was too tight for the
 printed button and front-shell tolerances. The face land and counterbore still
 guide the cap. The retention check holds the flange overlap after this change."""
 
-CAP_FACE_HOLE_CHAMFER = 1.00
-"""Small edge break around each rigid cap's opening in the front face.
+CAP_FACE_HOLE_CHAMFER = 0.55
+"""Radial width of the lead-in cutter around each rigid cap's face hole, on the
+axes.
 
-The cap is still guided by the straight face hole below this chamfer, and its
-flange is still retained by the unchanged CAP_FLANGE_OVERLAP. 1.00 mm gives a
-visible lead-in without consuming much of the face land or making the
-gap around a flush cap read as another counterbore."""
+The slope wall of the cutter starts below the face at the hole edge. It rises
+to MERGE above the face at this width. As a result, the cut meets the face
+inside this width, and the built slope is steeper than
+CAP_FACE_HOLE_CHAMFER_ANGLE. counterbore_land() reads the same slope wall.
+
+The straight face hole below the lead-in guides the cap. CAP_FLANGE_OVERLAP
+retains the flange.
+
+The land ring over each counterbore sets the upper limit. Each ring must stay
+solid over LAND_FLOOR_MIN in checks/keypad.py. The rings on the outer side of
+SW4 and SW10 are the thinnest. At about 0.88, the lead-in reaches the mid-line
+of the SW4 ring. At about 1.22, counterbore_land() for SW4 goes below
+LAND_FLOOR_MIN, and recess_land() fails."""
 
 CAP_FACE_HOLE_CHAMFER_ANGLE = 30.0
-"""Angle of the rigid-cap hole lead-in measured up from the outer face.
+"""Sets how far below the face the lead-in cutter starts at the hole edge.
 
-Thirty degrees gives the 1.00 mm radial break a shallow lead-in while leaving
-the unchanged straight bore below it to guide the cap."""
+That depth is CAP_FACE_HOLE_CHAMFER times the tangent of this angle. This angle
+is not the built slope. The outer edge of the cutter is MERGE above the face,
+so the built slope is steeper. See CAP_FACE_HOLE_CHAMFER."""
 
 STEM_W = 4.0
 """Side of the square stem. Square rather than cross or round because a legend

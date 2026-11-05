@@ -521,7 +521,7 @@ def _edge_chamfer_is_sized(s):
     return _report(
         edge_chamfer_is_sized(s.front_fdm),
         f"the FDM front's top edge has a {case.front_edge_round(True):.2f} "
-        f"45 degree chamfer rather than a {case.front_edge_round():.2f} round, "
+        f"45 degree chamfer rather than the {case.front_edge_round():.2f} end roll, "
         f"leaving the outline "
         f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it",
     )
@@ -730,8 +730,8 @@ def _recess_land(s):
     thinnest = min(case.counterbore_land(ref) for ref in case.cap_refs())
     return _report(
         recess_land(s.front),
-        f"every counterbore keeps a solid face land under its recess, "
-        f"{thinnest:.2f} at the thinnest",
+        f"every counterbore keeps a solid face land on all four sides under its "
+        f"recess and face-hole lead-in, {thinnest:.2f} at the thinnest",
     )
 
 

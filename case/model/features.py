@@ -344,7 +344,7 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.led_ring_channel(fdm),
         ),
-        _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore()),
+        _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)),
     ]
     # Both holes per key, at the depths front_shell() cuts them, so a box is the
     # cut rather than the ceiling it opens in.
@@ -480,7 +480,7 @@ def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTE
         ]
     for ref in keypad.island_refs(name):
         x, y = placements[ref][:2]
-        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(x, y)))
+        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(ref)))
         out.append(
             _entry(
                 f"plunger.{ref}",

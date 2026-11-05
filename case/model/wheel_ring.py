@@ -43,15 +43,56 @@ from .stack import (
     SHELL_FRONT,
     STIFFENED_WALL,
     WHEEL_OPENING_R,
+    arch_block,
+    arch_z,
 )
 
 LED_RING_TOP = SHELL_FRONT - params.LED_RING_ROOF
-"""Ceiling of the channel, and so the underside of the roof the ring glows
-through."""
+"""Ceiling of the recessed front's channel on the crown line, and so the
+underside of the roof the ring glows through there. The ceiling is an arch of
+its own, so it is lower everywhere off the crown line: led_ring_ceiling_at()
+gives it at each x. The FDM channel depth comes from this value."""
+
+
+def led_ring_ceiling_at(x):
+    """Ceiling of the recessed front's channel at x: LED_RING_TOP on the crown
+    line, on a circular arch that falls LED_RING_SAG to each side wall.
+
+    It does not follow the face. At the east and west sides of the knob the face
+    falls steeply, and a ceiling under it would drop below CAVITY_FRONT at the
+    channel mouth. The roof is thinner there instead, and
+    keypad.ring_roof_left() counts that."""
+    return arch_z(x, LED_RING_TOP, params.LED_RING_SAG)
+
+
+def led_ring_chamfer_at(angle):
+    """Height of the recessed channel's inner top chamfer that the arched
+    ceiling leaves on the bearing `angle`, in radians from +X. Zero if the arch
+    removes all of it there.
+
+    The chamfer is revolved at LED_RING_TOP. Where the ceiling drops, the
+    ceiling cuts the chamfer off before it reaches its full
+    LED_RING_INNER_CHAMFER. The height h left satisfies h = chamfer less the
+    ceiling's drop at radius inner + h, which converges in a few steps."""
+    wx, _ = board.wheel_center()
+    inner, chamfer = led_ring_inner_r(), params.LED_RING_INNER_CHAMFER
+    h = chamfer
+    for _ in range(20):
+        h = chamfer - (
+            LED_RING_TOP
+            - led_ring_ceiling_at(wx + (inner + max(h, 0.0)) * math.cos(angle))
+        )
+    return max(h, 0.0)
+
+
+def led_ring_chamfer_left():
+    """The least of led_ring_chamfer_at(), on the east and west bearings where
+    the ceiling drops furthest."""
+    return min(led_ring_chamfer_at(0.0), led_ring_chamfer_at(math.pi))
 
 
 def led_ring_top(fdm=False):
-    """Ceiling of the channel on either front.
+    """Ceiling of the channel on either front, at the crown.
 
     The recessed front uses the full channel. The FDM front shortens that wall
     from the cavity side, leaving a thicker roof under its lower flat face.
@@ -201,11 +242,26 @@ def led_ring_wall_height(fdm=False):
     return led_ring_top(fdm) - CAVITY_FRONT
 
 
+ARCH_CEILING_OVERRUN = 0.3
+"""How far above LED_RING_TOP the recessed channel's section is revolved before
+the arch block trims it. The arched ceiling touches LED_RING_TOP along the
+crown line. A section that stops at that height meets the block tangentially
+there, and booleans do not handle a tangent contact well."""
+
+
 def led_ring_channel(fdm=False):
     """The channel itself, as the cut: an annular void from below the ceiling
     underside (open to the cavity, which is where the LED light comes from) up
     to LED_RING_TOP, clipped by _channel_clip() where its outer radius would
     otherwise run past the cavity wall.
+
+    On the recessed front the ceiling is an arch. Both 45 degree walls are
+    revolved ARCH_CEILING_OVERRUN past LED_RING_TOP, and the result is
+    intersected with arch_block() at LED_RING_TOP and LED_RING_SAG. The ceiling
+    is then led_ring_ceiling_at() everywhere, and the inner chamfer is shorter
+    where the ceiling drops. The face does not lower the ceiling, see
+    led_ring_ceiling_at(). led_ring_chamfer_left() gives what is left of the
+    chamfer at its lowest. The FDM front's channel stays flat.
 
     The inner wall stands at led_ring_inner_r() from the mouth to
     LED_RING_INNER_CHAMFER below the roof, then bevels out 45 degrees. The web
@@ -229,20 +285,31 @@ def led_ring_channel(fdm=False):
     if params.LED_RING_INNER_CHAMFER >= led_ring_wall_height(fdm):
         raise ValueError("LED_RING_INNER_CHAMFER consumes the LED channel wall")
     inner, mouth_outer = led_ring_inner_r(), led_ring_mouth_outer_r()
+    if not fdm and led_ring_chamfer_left() <= 0:
+        raise ValueError(
+            f"LED_RING_SAG {params.LED_RING_SAG:.2f} lowers the LED channel "
+            f"ceiling past all of LED_RING_INNER_CHAMFER at the inner wall's "
+            f"east and west sides"
+        )
+    rise = 0.0 if fdm else ARCH_CEILING_OVERRUN
+    top = z1 + rise
     with BuildSketch(Plane.XZ) as section:
         with BuildLine():
             Polyline(
                 (inner, z0),
                 (mouth_outer, z0),
                 (mouth_outer, CAVITY_FRONT),
-                (led_ring_roof_outer_r(fdm), z1),
-                (led_ring_roof_inner_r(), z1),
+                (led_ring_roof_outer_r(fdm) - rise, top),
+                (led_ring_roof_inner_r() + rise, top),
                 (inner, z1 - params.LED_RING_INNER_CHAMFER),
                 close=True,
             )
         make_face()
     channel = Pos(x, y, 0) * revolve(section.sketch, Axis.Z)
-    return _isect(channel, _slab(_channel_clip(), z0, z1))
+    channel = _isect(channel, _slab(_channel_clip(), z0, top))
+    if fdm:
+        return channel
+    return _isect(channel, arch_block(z0 - 1, LED_RING_TOP, params.LED_RING_SAG))
 
 
 def fdm_wheel_opening_r():
@@ -288,7 +355,7 @@ def _fdm_mouth_budget():
 
 def wheel_opening(z0, z1, fdm=False):
     """The shell's wheel opening: one plain bore at WHEEL_OPENING_R, ceiling
-    underside to flat face, so below the keypad recess's wheel basin the face closes in flush
+    underside to the face, so below the keypad recess's wheel basin the face closes in flush
     to the wheel's main rotating body with only WHEEL_OPENING_CLEARANCE between
     them. The top of the bore is opened out by that recess instead, a dish on
     the same axis whose floor the bore breaks through. No countersink and no

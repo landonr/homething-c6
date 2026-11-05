@@ -16,7 +16,7 @@ bore that used to sever one slab into them is gone, so what used to be
 guaranteed by a cut has to be measured instead. Both the lip's rotating
 clearance and the LEDs' sight line depend on it.
 
-Recesses open: the front face is genuinely dished at the depth face_depth_at()
+Recesses open: the front face is genuinely dished at the floor face_floor_at()
 says, probed beside every key, beside the mic, on the wheel's own seat on four
 bearings, and at each neck's waist. Beside, not over: over a key the face is
 open from the cavity right through, so a probe there reads open whether the
@@ -36,9 +36,10 @@ junction and waist, in depth and in plan width both, which is what says a neck
 meets a dish with no tangent break and the outline has no cusp.
 
 Recess land: the ceiling left over each counterbore, at the deepest point the
-dish reaches over it, has not gone below what the flange stack can spare.
-Probed and then checked arithmetically, because the solids build a
-valid-looking shell right up until it goes negative.
+dish reaches over it and on the land ring's mid-line under the face-hole
+lead-in, has not gone below what the flange stack can spare. Checked
+arithmetically and then probed on all four sides of each key, because the
+solids build a valid-looking shell right up until it goes negative.
 
 Recess margins: every counterbore stays inside the recess's rim in plan (a
 superellipse inscribed in the coverage box rather than bounding it would put
@@ -80,8 +81,9 @@ CLEARANCE_SLOP = 0.005
 def _grid_pad(pad):
     """Built grid lobe, isolated from the unchanged SW1/SW2 lobe."""
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
-    crop = Pos((x0 + x1) / 2, (y0 + y1) / 2, (case.SWITCH_TOP + case.STEM_TOP) / 2)
-    crop *= Box(x1 - x0 + 0.2, y1 - y0 + 0.2, case.STEM_TOP - case.SWITCH_TOP + 0.2)
+    top = max(case.stem_top(ref) for ref in case.island_refs("grid"))
+    crop = Pos((x0 + x1) / 2, (y0 + y1) / 2, (case.SWITCH_TOP + top) / 2)
+    crop *= Box(x1 - x0 + 0.2, y1 - y0 + 0.2, top - case.SWITCH_TOP + 0.2)
     return pad.intersect(crop)
 
 
@@ -735,7 +737,7 @@ TOLERANCE in mm3. An undished face reads 1.0."""
 FLOOR_PROBE_LIFT = 0.025
 """How far above a floor the open half of a probe starts, and how far below it
 the solid half stops. Small: the point is to straddle the surface
-face_depth_at() predicts, not to confirm that a hole several millimetres deep
+face_floor_at() predicts, not to confirm that a hole several millimetres deep
 is a hole. It also has to clear the loft's own faceting between stations, which
 is a few thousandths at worst, and it does by several times over."""
 FLOOR_PROBE_MIN_DEPTH = 4 * FLOOR_PROBE_LIFT
@@ -792,7 +794,8 @@ def _probe_sites():
     own edge in whichever of the four axis directions the dish is deepest,
     which is always the one facing the recess centre. That is what makes the
     reading local: it is the floor immediately around that key's own cap, at
-    whatever depth face_depth_at() says the recess is worth there, so a dish
+    whatever depth face_depth_at() says the dish sinks below the curved face
+    there, so a dish
     built on the wrong centre or at the wrong depth disagrees at the key
     nearest it and not only in aggregate.
 
@@ -865,7 +868,7 @@ def _probe_sites():
 
 
 def recesses_open(front):
-    """The front face is genuinely dished, at the depth face_depth_at() says,
+    """The front face is genuinely dished, at the floor face_floor_at() says,
     at every site in _probe_sites().
 
     Two readings per site: open from just above the local floor to the face,
@@ -886,7 +889,7 @@ def recesses_open(front):
                 f"pass to mean anything"
             )
             continue
-        floor = case.SHELL_FRONT - depth
+        floor = case.face_floor_at(x, y)
         z0, z1 = floor + FLOOR_PROBE_LIFT, case.SHELL_FRONT + 0.05
         air = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
         if _fill_fraction(front, air) > AIR_PROBE_SLOP:
@@ -911,37 +914,36 @@ def recess_land(front):
     """The land over every counterbore has not gone below LAND_FLOOR_MIN.
 
     The arithmetic first, because it is the half that knows where the dish
-    reaches deepest over a given counterbore and by how much it misses. Then the
-    built shell, in the ring between the face hole and the counterbore wall,
-    which is the land itself: it has to be solid over the whole of
-    LAND_FLOOR_MIN above the shoulder, which is what says the two holes and the
-    dish above them actually left a ledge rather than the numbers merely
-    allowing one.
+    reaches deepest over a given counterbore and how far the face-hole lead-in
+    cuts into the ring, and by how much it misses. Then the built shell, in the
+    ring between the face hole and the counterbore wall, which is the land
+    itself: it has to be solid over the whole of LAND_FLOOR_MIN above the
+    shoulder, which is what says the two holes, the lead-in and the dish above
+    them actually left a ledge rather than the numbers merely allowing one.
+
+    The built probe stands on the ring's mid-line on all four axis sides,
+    counterbore_land_sites(). One side is not enough: the dish slopes across a
+    key, so the land is thinner on the side that faces the dish centre.
     """
     problems = []
-    parts = board.components()
     for ref in board.refs("SW"):
         land = case.counterbore_land(ref)
         if land < LAND_FLOOR_MIN:
             problems.append(
-                f"{ref}'s counterbore is left {land:.2f} of land under its recess, "
-                f"wants {LAND_FLOOR_MIN:.2f}"
+                f"{ref}'s counterbore is left {land:.2f} of land under its recess "
+                f"and face-hole lead-in, wants {LAND_FLOOR_MIN:.2f}"
             )
             continue
-        x, y = parts[ref][:2]
-        # Mid-ring between the face hole and the counterbore wall, on the +x
-        # side. The counterbore is square, so the ring is a constant width
-        # everywhere along a flat and this is as good a spot on it as any.
-        r = (case.cap_face_hole(ref) + case.cap_counterbore(ref)) / 4
         z0, z1 = case.COUNTERBORE_TOP, case.COUNTERBORE_TOP + LAND_FLOOR_MIN
-        probe = Pos(x + r, y, (z0 + z1) / 2) * Cylinder(
-            radius=PROBE_D / 2, height=z1 - z0
-        )
-        if _fill_fraction(front, probe) < 0.99:
-            problems.append(
-                f"{ref}'s face land is not solid over the {LAND_FLOOR_MIN:.2f} "
-                "above its counterbore shoulder"
+        for side, px, py in case.counterbore_land_sites(ref):
+            probe = Pos(px, py, (z0 + z1) / 2) * Cylinder(
+                radius=PROBE_D / 2, height=z1 - z0
             )
+            if _fill_fraction(front, probe) < 0.99:
+                problems.append(
+                    f"{ref}'s face land on its {side} side is not solid over the "
+                    f"{LAND_FLOOR_MIN:.2f} above its counterbore shoulder"
+                )
     return problems
 
 
@@ -1294,6 +1296,10 @@ def recess_solid_sane():
     two features at the far end of the case failing for no reason. So the built
     solid is measured against its own definition before anything else probes it,
     and the loft is ruled now precisely so this cannot recur quietly.
+
+    The lowest point the field gives is recess_floor_min(), read at the loft's
+    own points. It is not the deepest dish under the crown, because the face
+    can put a rim point near a side wall lower than that.
     """
     solid = case.keypad_recess()
     problems = []
@@ -1306,7 +1312,7 @@ def recess_solid_sane():
         )
     cx = case.centerline_x()
     widest = max(r.ax for r in case.keypad_recesses().values())
-    deepest = max(r.depth for r in case.keypad_recesses().values())
+    lowest = case.recess_floor_min()[0]
     y0, y1 = case.recess_span()
     box = solid.bounding_box()
     for what, got, want in (
@@ -1314,7 +1320,7 @@ def recess_solid_sane():
         ("max x", box.max.X, cx + widest),
         ("min y", box.min.Y, y0),
         ("max y", box.max.Y, y1),
-        ("min z", box.min.Z, case.SHELL_FRONT - deepest),
+        ("min z", box.min.Z, lowest),
         ("max z", box.max.Z, case.SHELL_FRONT + case.MERGE),
     ):
         if abs(got - want) > SOLID_BOX_TOLERANCE:
@@ -1327,7 +1333,7 @@ def recess_solid_sane():
 
 def recess_edge_clearance(front):
     """The built recess stays clear of the case's exterior side wall, keeping it
-    out of EDGE_R_FRONT's fillet zone.
+    off the wall itself, where the face turns down vertically.
 
     Measured on the built solid's own bounding box rather than on the
     superellipse recess_margins() reads, so a cut that came out wider than its
@@ -1363,10 +1369,7 @@ def tpu_pad_fits(front, pad, part=TPU_PART, refs=None, label="TPU pad"):
     face is, then takes the keytop top from it. `refs` defaults to every
     key and the V2 top pad passes its own.
     """
-    from model.stack import CAP_TOP
-
     refs = case.cap_refs() if refs is None else refs
-    top = CAP_TOP
     problems = []
     for state, offset in (("released", 0), ("pressed", -params.SWITCH_TRAVEL)):
         fouled = _volume(front.intersect(Pos(0, 0, offset) * pad))
@@ -1380,6 +1383,7 @@ def tpu_pad_fits(front, pad, part=TPU_PART, refs=None, label="TPU pad"):
             )
     for ref in refs:
         x, y = board.components()[ref][:2]
+        top = case.cap_top(ref)
         keytop = case.fdm_keycap(ref, legend=False)
         box = keytop.bounding_box()
         crop = _Crop(
@@ -1443,8 +1447,6 @@ def blank_tpu_pads(pairs):
     centre ray alone cannot prove a legend is absent, because a glyph may miss
     the exact centre, so the volume reading backs it.
     """
-    from model.stack import CAP_TOP
-
     refs = case.cap_refs()
     marks = sum(
         _volume(shape) for ref in refs for shape in case.legend_solids(ref)
@@ -1484,15 +1486,16 @@ def blank_tpu_pads(pairs):
             )
         for ref in refs:
             x, y = board.components()[ref][:2]
-            runs = _ray_runs(blank, (x, y, CAP_TOP + 1), (x, y, CAP_TOP - 1))
+            top = case.cap_top(ref)
+            runs = _ray_runs(blank, (x, y, top + 1), (x, y, top - 1))
             if not runs or abs(runs[0][0] - 1) > 0.02:
-                first = "no material" if not runs else f"{CAP_TOP + 1 - runs[0][0]:.3f}"
+                first = "no material" if not runs else f"{top + 1 - runs[0][0]:.3f}"
                 problems.append(
                     Problem(
                         f"the blank {label} keytop {ref} first meets material at "
-                        f"z {first}, not CAP_TOP {CAP_TOP:.3f}",
+                        f"z {first}, not its cap_top() {top:.3f}",
                         part=TPU_PART,
-                        at=(x, y, CAP_TOP),
+                        at=(x, y, top),
                     )
                 )
         lines.append(f"{label} +{gain:.2f}")

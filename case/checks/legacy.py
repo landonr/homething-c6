@@ -24,7 +24,6 @@ import board
 import case
 import params
 from model.stack import (
-    CAP_TOP,
     FDM_FACE,
     LEGACY_SWITCH_TOP,
     SWITCH_TOP,
@@ -144,7 +143,7 @@ LEGEND_RAYS = 6
 """Points per glyph the legend probe casts a ray down through."""
 
 LEGEND_START_ABOVE = 0.5
-"""How far above CAP_TOP each legend ray starts."""
+"""How far above the keytop top each legend ray starts."""
 
 
 def _inside_points(glyph, count):
@@ -164,36 +163,44 @@ def _inside_points(glyph, count):
     return found[::stride][:count]
 
 
-def _column_top(pad, x, y, side):
-    """Highest point of `pad` over a keytop column at (x, y), read off the built pad."""
-    column = Pos(x, y, CAP_TOP) * Box(side, side, 2.0)
+def _column_top(pad, x, y, side, top):
+    """Highest point of `pad` over a keytop column at (x, y), read off the built
+    pad. The column is centred on `top`, the keytop's design top."""
+    column = Pos(x, y, top) * Box(side, side, 2.0)
     hit = pad.intersect(column).solids()
     return max((v.bounding_box().max.Z for v in hit), default=float("-inf"))
 
 
 def legacy_keytops_level(top, main, part=TOP_PAD):
     """Each SW1/SW2 keytop of the V2 top pad stands level with a grid keytop of
-    the main pad `main`, with its legend cut open at that top.
+    the main pad `main` in the same column, with its legend cut open at that
+    top.
 
-    Both tops are read off the built pads, the grid reference being SW7 on
-    `main`. The copies are deep because a boolean against the shared cached
+    Both tops are read off the built pads. The grid reference is the grid key
+    nearest in x on `main`, because the keytops follow the curved face and so
+    a keytop in an outer column stands lower than one on the centreline. The
+    copies are deep because a boolean against the shared cached
     pad leaves it unusable for the next pass (fits, below). The legend is read
     by rays cast down through points inside each glyph: the first material
     along each must start LEGEND_DEPTH below the keytop top.
     """
     pad = copy.deepcopy(top)
     grid = copy.deepcopy(main)
-    gx, gy = board.components()["SW7"][:2]
-    level = _column_top(grid, gx, gy, case.fdm_cap_body("SW7"))
+    parts = board.components()
     problems = []
     for ref in case.island_refs("second"):
-        x, y = board.components()[ref][:2]
-        column_top = _column_top(pad, x, y, case.fdm_cap_body(ref))
+        x, y = parts[ref][:2]
+        twin = min(case.island_refs("grid"), key=lambda r: abs(parts[r][0] - x))
+        gx, gy = parts[twin][:2]
+        level = _column_top(
+            grid, gx, gy, case.fdm_cap_body(twin), case.cap_top(twin)
+        )
+        column_top = _column_top(pad, x, y, case.fdm_cap_body(ref), case.cap_top(ref))
         if abs(column_top - level) > TOLERANCE:
             problems.append(
                 Problem(
                     f"{ref}'s V2 keytop tops out at {column_top:.3f} against "
-                    f"SW7's {level:.3f} on the main pad, so it is not level",
+                    f"{twin}'s {level:.3f} on the main pad, so it is not level",
                     at=(x, y, column_top),
                     part=part,
                 )

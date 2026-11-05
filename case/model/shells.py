@@ -18,7 +18,6 @@ from build123d import (
     Compound,
     chamfer,
     extrude,
-    fillet,
     loft,
 )
 
@@ -27,7 +26,7 @@ import cache
 import params
 
 from .backform import back_form
-from .caps import _key_prism, cap_counterbore, cap_face_hole, cap_outline
+from .caps import _key_prism, cap_counterbore, cap_face_hole, cap_face_hole_lead_in
 from .hardware import (
     end_screw_block,
     end_screw_cuts,
@@ -37,8 +36,8 @@ from .hardware import (
 from .front_ledge import front_ledge_runs
 from .support import front_support_cuts, support_obstacles, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
-from .keypad import face_depth_at, keypad_outline_groove, keypad_recess
-from .mic import mic_bore, mic_duct
+from .keypad import keypad_outline_groove, keypad_recess
+from .mic import mic_bore, mic_duct, mic_face
 from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
 from .shape import (
     _cut,
@@ -63,18 +62,20 @@ from .stack import (
     SKIRT_OUT,
     STIFFENED_WALL,
     SUPPORT_TOP,
+    face_body,
 )
 from .usb import usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
 def front_edge_round(fdm=False):
-    """Top-edge size: FDM chamfer leg or recessed-front fillet radius.
+    """Top-edge size in plan: the FDM chamfer leg, or how far the recessed
+    front's face rolls into each end wall.
 
     Here rather than read at the edge operation so checks/fdm.py can ask for the
     number it is about to measure on the built shell without restating the
     choice."""
-    return params.EDGE_R_FRONT_FDM if fdm else params.EDGE_R_FRONT
+    return params.EDGE_R_FRONT_FDM if fdm else params.FACE_END_ROLL
 
 
 def skirt_relief():
@@ -596,58 +597,19 @@ def _cap_face_hole_cut(ref, fdm=False):
 
     The recessed front meets a key hole at different Z around its perimeter,
     so a post-boolean edge chamfer is a fragmented non-planar loop that OCCT
-    cannot chamfer reliably. Build a triangulated taper from the face depth at
+    cannot chamfer reliably. Build a triangulated taper from the face height at
     each outline point instead. The straight prism beneath it preserves the
     guide and the counterbore shoulder preserves the cap's retention.
+
+    The triangles come from cap_face_hole_lead_in(), which counterbore_land()
+    also reads, so the land arithmetic sees the surface this cut leaves.
     """
     x, y = board.components()[ref][:2]
-    size = cap_face_hole(ref)
-    amount = params.CAP_FACE_HOLE_CHAMFER
-    depth = amount * math.tan(math.radians(params.CAP_FACE_HOLE_CHAMFER_ANGLE))
-    inner_xy = cap_outline(size, x, y)
-    outer_xy = cap_outline(size + 2 * amount, x, y)
-
-    def surface_z(px, py):
-        return front_face(True) if fdm else SHELL_FRONT - face_depth_at(px, py)
-
-    inner_low = [(px, py, surface_z(px, py) - depth) for px, py in inner_xy]
-    inner_high = [(px, py, surface_z(px, py) + MERGE) for px, py in inner_xy]
-    outer_high = [(px, py, surface_z(px, py) + MERGE) for px, py in outer_xy]
-
-    # A triangular tube around the opening: its sloped A-B wall is the visible
-    # chamfer, while the other two walls merely close the cutter for OCCT. Each
-    # quad is split into triangles because the dish makes its four corners
-    # non-coplanar. This follows the face locally instead of introducing the
-    # shelf a single planar loft made in an X/Y bisect.
-    faces = []
-    count = len(inner_xy)
-    for index in range(count):
-        following = (index + 1) % count
-        for a, b, c, d in (
-            (
-                inner_low[index],
-                inner_low[following],
-                inner_high[following],
-                inner_high[index],
-            ),
-            (
-                inner_high[index],
-                inner_high[following],
-                outer_high[following],
-                outer_high[index],
-            ),
-            (
-                inner_low[index],
-                inner_low[following],
-                outer_high[following],
-                outer_high[index],
-            ),
-        ):
-            faces.append(Polygon(a, b, c))
-            faces.append(Polygon(a, c, d))
-    taper = Solid(Shell(faces))
+    taper = Solid(
+        Shell([Polygon(*corners) for _, corners in cap_face_hole_lead_in(ref, fdm)])
+    )
     return _fuse(
-        _key_prism(x, y, size, CAVITY_FRONT - 1, SHELL_FRONT + 1), taper
+        _key_prism(x, y, cap_face_hole(ref), CAVITY_FRONT - 1, SHELL_FRONT + 1), taper
     )
 
 
@@ -670,19 +632,23 @@ def front_shell(fdm=False):
     carries a 45 degree chamfer where the recessed front has a round, leaving
     flat face outside the finer groove. See
     params.FDM_FACE_DROP, params.FDM_OUTLINE_W and params.EDGE_R_FRONT_FDM.
+
+    The recessed front's face is not flat. It is the superellipse that
+    face_z() states, crown at SHELL_FRONT, rolled down into every wall to
+    FACE_WALL_TOP. face_body() builds it. The FDM face stays flat, because it
+    prints face down.
     """
     # The body is built to its own face and finished there before any key or
     # wheel hole is cut into it: the only top edge loop is the outer perimeter,
-    # so its chamfer or fillet cannot land on an aperture's own edge.
+    # so its chamfer or roll cannot land on an aperture's own edge.
     face = front_face(fdm)
     inner, outer = _profiles()
-    body = _slab(outer, SKIRT_BOTTOM, face)
-    top_edges = [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01]
-    body = (
-        chamfer(top_edges, front_edge_round(True))
-        if fdm
-        else fillet(top_edges, front_edge_round(False))
-    )
+    if fdm:
+        body = _slab(outer, SKIRT_BOTTOM, face)
+        top_edges = [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01]
+        body = chamfer(top_edges, front_edge_round(True))
+    else:
+        body = face_body()
     shell = _cut(body, _slab(inner, SHELL_SEAM - 0.01, CAVITY_FRONT), *skirt_cuts())
 
     # The mic hears through the board, so the inlet is on the front. A duct down
@@ -690,9 +656,11 @@ def front_shell(fdm=False):
     # the whole cavity, and mic_bore() drills the funnel through it as one solid,
     # opening in the keypad recess's own curved floor rather than SHELL_FRONT.
     # The duct goes in solid: see mic_duct() for why it cannot be the tube it was.
+    # On the recessed front the post stops inside the ceiling. A post top at the
+    # crown touches the face tangentially along the crown line.
     shell = _fuse(
         shell,
-        mic_duct(face),
+        mic_duct(face if fdm else (CAVITY_FRONT + mic_face()) / 2),
         skirt_stiffener(),
         end_screw_block(),
         *front_ledge_runs(),
@@ -730,7 +698,7 @@ def front_shell(fdm=False):
         *side_catch_pockets(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(fdm),
-        mic_bore(),
+        mic_bore(fdm),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess(),
         *shared_cuts(),

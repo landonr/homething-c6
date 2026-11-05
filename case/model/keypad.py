@@ -3,10 +3,11 @@ recess sunk into the front face around them and around the wheel, and the soft
 pad that carries a stem and a plunger under every switch.
 
 The recess has two superellipse basins and one angular-blend wheel basin. Two
-Hermite bridges make one C1 depth field, cut as one loft along y. Read
+necks join them into one C1 depth field, cut as one loft along y. Read
 recess_spine() and face_depth_at() first: everything else about it, including
 every check, is built off those two."""
 
+import bisect
 import functools
 import math
 from collections import namedtuple
@@ -24,6 +25,7 @@ from build123d import (
     Polyline,
     Pos,
     RectangleRounded,
+    Wire,
     extrude,
     fillet,
     loft,
@@ -49,7 +51,7 @@ from .shape import (
 )
 from .stack import (
     CAP_BOTTOM,
-    CAP_TOP,
+    EXTERIOR,
     FDM_FACE,
     LEGACY_SWITCH_TOP,
     MERGE,
@@ -57,12 +59,15 @@ from .stack import (
     PAD_WEB_BOTTOM,
     PAD_WEB_TOP,
     SHELL_FRONT,
-    STEM_TOP,
     STIFFENED_WALL,
     SWITCH_TOP,
     WHEEL_OPENING_R,
+    cap_top,
+    face_z,
+    stem_top,
 )
 from .wheel_ring import (
+    led_ring_ceiling_at,
     led_ring_roof_inner_r,
     led_ring_roof_outer_r,
     pad_clear_y,
@@ -98,11 +103,6 @@ def island_refs(name):
     if name == "second":
         return [ref for ref in board.refs("SW") if ref in params.KEYPAD_ISLAND_2]
     return [ref for ref in board.refs("SW") if ref not in params.KEYPAD_ISLAND_2]
-
-
-def key_recess(ref):
-    """Which recess a switch sits in."""
-    return "second" if ref in params.KEYPAD_ISLAND_2 else "grid"
 
 
 def _key_bounds(refs):
@@ -150,21 +150,23 @@ def keypad_coverage():
 
 def exterior_x_bounds():
     """(x0, x1) of the case's own exterior side walls, the LAP_OUT profile's
-    own extent. What KEYPAD_EDGE_MARGIN is measured from, and what
-    EDGE_R_FRONT's fillet is cut from."""
-    box = board.board_profile().bounding_box()
-    over = params.BOARD_FIT + params.WALL
-    return box.min.X - over, box.max.X + over
+    own extent. What KEYPAD_EDGE_MARGIN is measured from, and where the face
+    meets the wall at FACE_WALL_TOP."""
+    return EXTERIOR[0], EXTERIOR[2]
 
 
 def exterior_y_bounds():
     """(y0, y1) of the case's own exterior end walls, the same profile the
-    other way. The recesses are far clear of both ends, but the cap in
-    keypad_recesses() is written for either axis so a layout change cannot
-    quietly walk one off the end of the case."""
-    box = board.board_profile().bounding_box()
-    over = params.BOARD_FIT + params.WALL
-    return box.min.Y - over, box.max.Y + over
+    other way. keypad_recesses() caps the half axes on this axis as well, so a
+    layout change cannot walk a recess off the end of the case."""
+    return EXTERIOR[1], EXTERIOR[3]
+
+
+def _centres():
+    """The x of the three coverage centres and of the wheel's own centre."""
+    xs = [(x0 + x1) / 2 for _, x0, _, x1, _ in keypad_coverage()]
+    return xs + [board.wheel_center()[0]]
+
 
 @functools.cache
 def centerline_x():
@@ -177,40 +179,21 @@ def centerline_x():
     the spread, so a layout that pulled them apart would fail loudly instead of
     quietly shearing a dish sideways.
     """
-    xs = [(x0 + x1) / 2 for _, x0, _, x1, _ in keypad_coverage()]
-    xs.append(board.wheel_center()[0])
+    xs = _centres()
     return sum(xs) / len(xs)
 
 
 def centerline_spread():
     """How far the furthest of those centres sits from centerline_x()."""
-    xs = [(x0 + x1) / 2 for _, x0, _, x1, _ in keypad_coverage()]
-    xs.append(board.wheel_center()[0])
-    return max(abs(x - centerline_x()) for x in xs)
+    return max(abs(x - centerline_x()) for x in _centres())
 
 
-def _edge_room_x():
-    """Half axis in x the exterior wall leaves, once KEYPAD_EDGE_MARGIN is taken
-    off. Read at the centerline rather than at each recess's own centre, so
-    both keyed dishes cap at the same half axis and the merged outline is
-    symmetric about one line."""
-    ex0, ex1 = exterior_x_bounds()
-    cx = centerline_x()
-    return min(cx - ex0, ex1 - cx) - params.KEYPAD_EDGE_MARGIN
-
-
-def _edge_room_y(cy):
-    """The same in y, for a dish centred there. Idle on this board, the recess
-    running nowhere near either end wall, but written for either axis so a
-    layout change cannot quietly walk one off the end of the case."""
-    ey0, ey1 = exterior_y_bounds()
-    return min(cy - ey0, ey1 - cy) - params.KEYPAD_EDGE_MARGIN
-
-
-Recess = namedtuple("Recess", "name cy ax ay depth n")
+Recess = namedtuple("Recess", "name cy ax ay depth n rounding soft lift")
 """One basin on the spine: where its centre sits along y, its two superellipse
-half axes, how deep it is at that centre, and the exponent its own outline is
-drawn with. All three share centerline_x()."""
+half axes, its depth at that centre, and the exponent of its outline. Then how
+far its outline rounds toward a circle on the axes (see _level()), the depth of
+its soft rim, and its lip lift (see _spine_depth()). All three basins share
+centerline_x()."""
 
 
 @functools.cache
@@ -219,11 +202,11 @@ def keypad_recesses():
     built from: the grid, the second island, and the wheel, in that order along
     y and disjoint in y.
 
-    Each is a superellipse of exponent KEYPAD_SQUIRCLE_N about its own centre,
-    with a depth that is zero on that curve and greatest at the centre. They
-    are no longer separate cuts: keypad_necks() bridges them into one recess
-    and recess_spine() is the merged field. What survives per dish is the
-    outboard half of its rim, its own depth, and its own deepest point.
+    Each is a superellipse of its own exponent about its own centre, with a
+    depth that is zero on that curve and greatest at the centre. They are not
+    separate cuts: keypad_necks() bridges them into one recess and
+    recess_spine() is the merged field. What survives per dish is the outboard
+    half of its rim, its own depth, and its own deepest point.
 
     The two keyed recesses are sized to *bound* their coverage box rather than
     to be inscribed in it. A superellipse inscribed in a box touches it only at
@@ -236,15 +219,17 @@ def keypad_recesses():
     The x half axis is capped there and the y one is left alone rather than
     both being scaled back together: the cap costs dish beyond the coverage
     box's corners, and taking it out of one axis leaves more of the margin
-    around the corner keys themselves than taking it out of both would.
+    around the corner keys themselves than taking it out of both would. The
+    same cap applies in y, which no basin reaches on this board.
 
     The wheel's is not sized off a coverage box at all. It has no keys under
     it, so its half axes are stated outright, WHEEL_BASIN_SPREAD past the bore on
     each axis and square, and what the bore does not swallow is the seat ring
     around the knob. WHEEL_RIM_LEDGE used to be that spread and is only the floor
     now: sizing the basin on the clearance minimum is what left the ring as
-    narrow as the minimum. Its angular blend gives the cardinal axes circular
-    curvature. WHEEL_SQUIRCLE_N keeps exact superellipse reach on the diagonals.
+    narrow as the minimum. Its full axis rounding gives the cardinal axes
+    circular curvature. WHEEL_SQUIRCLE_N keeps exact superellipse reach on the
+    diagonals.
 
     That sizing rule still delivers WHEEL_RIM_LEDGE at every angle, and it does
     so for the same reason at either exponent. Above n=2 a superellipse's own
@@ -255,7 +240,18 @@ def keypad_recesses():
     """
     keyed = params.KEYPAD_SQUIRCLE_N
     grow = 2 ** (1 / keyed)
-    room_x = _edge_room_x()
+    ex0, ey0, ex1, ey1 = EXTERIOR
+    cx = centerline_x()
+    room_x = min(cx - ex0, ex1 - cx) - params.KEYPAD_EDGE_MARGIN
+
+    def room_y(cy):
+        return min(cy - ey0, ey1 - cy) - params.KEYPAD_EDGE_MARGIN
+
+    soft = {
+        "grid": "KEYPAD_RIM_SOFT",
+        "second": "KEYPAD_RIM_SOFT_2",
+        "wheel": "WHEEL_RIM_SOFT",
+    }
     out = {}
     for name, x0, y0, x1, y1 in keypad_coverage():
         cy = (y0 + y1) / 2
@@ -264,9 +260,12 @@ def keypad_recesses():
             name,
             cy,
             min((x1 - x0) / 2 * grow, room_x),
-            min((y1 - y0) / 2 * grow, _edge_room_y(cy)),
+            min((y1 - y0) / 2 * grow, room_y(cy)),
             depth,
             keyed,
+            0.0,
+            getattr(params, soft[name]),
+            params.KEYPAD_LIP_LIFT,
         )
     _, wy = board.wheel_center()
     half = WHEEL_OPENING_R + params.WHEEL_BASIN_SPREAD
@@ -274,10 +273,25 @@ def keypad_recesses():
         "wheel",
         wy,
         min(half, room_x),
-        min(half, _edge_room_y(wy)),
+        min(half, room_y(wy)),
         params.WHEEL_DISH_DEPTH,
         params.WHEEL_SQUIRCLE_N,
+        1.0,
+        getattr(params, soft["wheel"]),
+        0.0,
     )
+    for recess in out.values():
+        if not 0.0 <= recess.soft < recess.depth:
+            raise ValueError(
+                f"{soft[recess.name]} {recess.soft:.2f} must be at least zero and "
+                f"less than the {recess.name} basin's depth {recess.depth:.2f}, "
+                f"or the dish centre loses depth"
+            )
+    if not 0.0 <= params.KEYPAD_LIP_LIFT <= 1.0:
+        raise ValueError(
+            f"KEYPAD_LIP_LIFT {params.KEYPAD_LIP_LIFT:.2f} must be from zero to "
+            "one, or the key dish floors rise above the face"
+        )
     return {name: out[name] for name in sorted(out, key=lambda n: out[n].cy)}
 
 
@@ -288,77 +302,164 @@ def recess_span():
     return dishes[0].cy - dishes[0].ay, dishes[-1].cy + dishes[-1].ay
 
 
-# The three spine quantities, per dish, on the centerline. Each is a plain
-# function of y and each is what the merged field reduces to inside that dish's
-# own body.
-def _dish_shape(recess, y):
-    """The cross-section shape parameter: the superellipse's own |dy/ay|^n.
+def _level(x, v, n, rounding):
+    """How far out the normalized point (x, v) = (|dx/ax|, |dy/ay|) sits in a
+    basin: zero at its centre and one on its rim.
 
-    Zero on the basin's centre row, one at its rim. With the local exponent it
-    is the only thing besides the local depth and the local half width that the
-    cross-section depends on, which is what lets the merged field be exact
-    inside a basin and still be built from four scalars per station."""
-    return min(abs(y - recess.cy) / recess.ay, 1.0) ** recess.n
+    With no rounding it is the superellipse level (x^n + v^n)^(1/n). The
+    rounding blends the outline's radius toward the unit circle by cos^2 of
+    twice the point's angle. As a result, the curvature on each axis is
+    circular and the reach on the diagonals stays the superellipse's own."""
+    h = math.hypot(x, v)
+    if h == 0.0:
+        return 0.0
+    squircle = h / (x**n + v**n) ** (1 / n)
+    blend = rounding * ((x * x - v * v) / (h * h)) ** 2
+    return h / (squircle + blend * (1.0 - squircle))
 
 
-def _dish_width(recess, y):
-    """Half width of one basin's plan outline at y."""
-    if recess.name != "wheel":
-        return recess.ax * max(0.0, 1.0 - _dish_shape(recess, y)) ** (1 / recess.n)
-
-    v = min(abs(y - recess.cy) / recess.ay, 1.0)
+def _rim_x(v, n, rounding):
+    """Half width of a basin's plan outline at v = |dy/ay|, over its x half
+    axis: where _level() reaches one. A plain superellipse has a closed form.
+    A rounded one is bisected, its rim lying inside 2^(1/2 - 1/n)."""
     if v >= 1.0:
         return 0.0
-    lo, hi = 0.0, 2 ** (0.5 - 1 / recess.n)
+    if rounding == 0.0:
+        return (1.0 - v**n) ** (1 / n)
+    lo, hi = 0.0, 2 ** (0.5 - 1 / n)
     for _ in range(52):
         mid = (lo + hi) / 2
-        theta = math.atan2(v, mid)
-        radius = _angular_radius(theta, recess.n, 1.0)
-        if math.hypot(mid, v) < radius:
+        if _level(mid, v, n, rounding) < 1.0:
             lo = mid
         else:
             hi = mid
-    return recess.ax * (lo + hi) / 2
+    return (lo + hi) / 2
 
 
-def _dish_axis_rounding(recess, _y):
-    """Amount of circular-axis angular blending in one basin."""
-    return 1.0 if recess.name == "wheel" else 0.0
+Spine = namedtuple("Spine", "width depth shape n rounding edge soft lift")
+"""Everything the cross-section at one y needs: the half width, the depth on
+the centerline, the shape |dy/ay|^n, the exponent, the axis rounding, the half
+width over the x half axis, the soft rim depth, and the lip lift."""
+
+SPINE_LIMITS = (
+    (0.0, math.inf),
+    (0.0, math.inf),
+    (0.0, 1.0),
+    (2.0, math.inf),
+    (0.0, 1.0),
+    (0.0, math.inf),
+    (0.0, math.inf),
+    (0.0, 1.0),
+)
+"""The range each Spine field of a neck is held to. A cubic with end slopes
+can overshoot its two ends."""
 
 
-def _dish_edge_width(recess, y):
-    """Plan half width at y, normalized by the basin's x half axis."""
-    return _dish_width(recess, y) / recess.ax
+def _basin_spine(recess, y):
+    """One basin's own Spine at y.
+
+    The shape is the only thing besides the depth, the half width and the
+    exponent that the basin's cross-section depends on. That is what lets the
+    merged field be exact inside a basin and still be built from one Spine per
+    station. The centerline depth is the superellipse's own sag: at dx=0 the
+    exponent drops out and the profile is a plain circular arc in |dy/ay|."""
+    v = min(abs(y - recess.cy) / recess.ay, 1.0)
+    edge = _rim_x(v, recess.n, recess.rounding)
+    return Spine(
+        recess.ax * edge,
+        recess.depth * math.sqrt(max(0.0, 1.0 - v * v)),
+        v**recess.n,
+        recess.n,
+        recess.rounding,
+        edge,
+        recess.soft,
+        recess.lift,
+    )
 
 
 def wheel_basin_width(y):
     """Half width of the unjoined wheel basin outline at y."""
-    return _dish_width(keypad_recesses()["wheel"], y)
-
-
-def _dish_depth(recess, y):
-    """Depth on the centerline at y, which is the superellipse's own sag there:
-    at dx=0 the exponent drops out and the profile is a plain circular arc in
-    |dy/ay|."""
-    u = min(abs(y - recess.cy) / recess.ay, 1.0)
-    return recess.depth * math.sqrt(max(0.0, 1.0 - u * u))
+    return _basin_spine(keypad_recesses()["wheel"], y).width
 
 
 SLOPE_STEP = 1e-6
-"""Step the junction slopes are read off the dish functions with, by central
-difference rather than by differentiating three functions by hand. At this step
+"""Step the junction slopes are read off the basin's Spine with, by central
+difference rather than by differentiating each field by hand. At this step
 the slope is right to about a part in a million, so the tangent break it leaves
 at a junction is nine orders of magnitude under a print layer; check.py
 measures the continuity rather than trusting it."""
 
 
-def _slope(f, y):
-    return (f(y + SLOPE_STEP) - f(y - SLOPE_STEP)) / (2 * SLOPE_STEP)
+def _basin_slope(recess, y):
+    """d/dy of one basin's Spine at y. The fields that are constant in a basin
+    come out exactly zero."""
+    above = _basin_spine(recess, y + SLOPE_STEP)
+    below = _basin_spine(recess, y - SLOPE_STEP)
+    return Spine(*((a - b) / (2 * SLOPE_STEP) for a, b in zip(above, below)))
 
 
-Neck = namedtuple("Neck", "name lower upper reach y0 y1")
+Neck = namedtuple("Neck", "name lower upper reach y0 y1 ends floor")
 """One join between two basins: which two, how far into each it reaches (a pair,
-lower then upper), and the two y stations the bridge runs between."""
+lower then upper), and the two y stations the bridge runs between. `ends` is
+the lower basin's Spine and its slope at y0, then the upper basin's at y1.
+`floor` is the centreline depth across the join, see _neck_floor()."""
+
+
+KEY_ROW_FLATTEN = 3.0
+"""How far in from its key row nearest a neck a keyed basin's centreline floor
+turns flat. The basin's own floor still climbs about 0.02 per mm at that row,
+and over this length the turn stays gentle and inside the row's counterbores."""
+
+
+def _depth_and_slope(recess, y):
+    return _basin_spine(recess, y).depth, _basin_slope(recess, y).depth
+
+
+def _piece(ya, da, ma, yb, db, mb):
+    """A Hermite piece (y0, y1, d0, m0, d1, m1) of depth, in y order."""
+    return (ya, yb, da, ma, db, mb) if ya < yb else (yb, ya, db, mb, da, ma)
+
+
+def _neck_floor(lower, upper):
+    """[(y0, y1, d0, m0, d1, m1)]: the two Hermite pieces, in y order, that the
+    centreline depth follows across the join of a keyed basin and the wheel
+    basin.
+
+    The floor must not rise between the two basins. Each basin's own depth falls
+    toward its rim, so a bridge between those two ends leaves a ridge across the
+    join. Here the keyed basin's floor turns flat at its key row nearest the
+    wheel, over KEY_ROW_FLATTEN. From that row the depth grows as the cube of
+    the distance, so the floor leaves the row flat and then only falls. The
+    cube meets the wheel basin's own profile at the point where its end slope
+    equals the wheel's own slope. On this board that point is inside the bore.
+    The plan outline does not change, because only the depth is bridged."""
+    keyed, wheel = (upper, lower) if lower.name == "wheel" else (lower, upper)
+    toward = 1.0 if wheel.cy > keyed.cy else -1.0
+    rows = [board.components()[ref][1] for ref in island_refs(keyed.name)]
+    row = max(rows) if toward > 0 else min(rows)
+    start = row - toward * min(KEY_ROW_FLATTEN, abs(row - keyed.cy))
+    level = _basin_spine(keyed, row).depth
+    if _basin_spine(wheel, wheel.cy).depth <= level:
+        raise ValueError(
+            f"the wheel basin must be deeper than the {keyed.name} basin's key "
+            "row, or the floor across their join cannot fall into the wheel"
+        )
+
+    def short(y):
+        depth, slope = _depth_and_slope(wheel, y)
+        return slope * (y - row) > 3 * (depth - level)
+
+    near, far = row, wheel.cy
+    for _ in range(60):
+        mid = (near + far) / 2
+        near, far = (mid, far) if short(mid) else (near, mid)
+    meet = (near + far) / 2
+    return sorted(
+        [
+            _piece(start, *_depth_and_slope(keyed, start), row, level, 0.0),
+            _piece(row, level, 0.0, meet, *_depth_and_slope(wheel, meet)),
+        ]
+    )
 
 
 @functools.cache
@@ -380,30 +481,42 @@ def keypad_necks():
     dishes = list(keypad_recesses().values())
     out = []
     for lower, upper in zip(dishes, dishes[1:]):
-        reaches = []
         for recess in (lower, upper):
             if recess.name not in params.KEYPAD_JOIN_REACH:
                 raise ValueError(
                     f"no KEYPAD_JOIN_REACH entry for the {recess.name} basin: it "
                     "was renamed and how far a join may reach into it is unstated"
                 )
-            reaches.append(params.KEYPAD_JOIN_REACH[recess.name])
-        out.append(
-            Neck(
-                f"{lower.name}-{upper.name}",
-                lower,
-                upper,
-                tuple(reaches),
-                lower.cy + lower.ay - reaches[0],
-                upper.cy - upper.ay + reaches[1],
-            )
+        reach = (
+            params.KEYPAD_JOIN_REACH[lower.name],
+            params.KEYPAD_JOIN_REACH[upper.name],
         )
+        y0 = lower.cy + lower.ay - reach[0]
+        y1 = upper.cy - upper.ay + reach[1]
+        ends = (
+            _basin_spine(lower, y0),
+            _basin_slope(lower, y0),
+            _basin_spine(upper, y1),
+            _basin_slope(upper, y1),
+        )
+        name = f"{lower.name}-{upper.name}"
+        floor = _neck_floor(lower, upper)
+        out.append(Neck(name, lower, upper, reach, y0, y1, ends, floor))
     return out
 
 
 NECK_WAIST_SAMPLES = 400
 """How finely a join is walked to find its own waist and its own radius. Both
 fall out of the bridge rather than being set, so both are measured."""
+
+
+def _neck_walk(neck):
+    """[(y, half width)] at NECK_WAIST_SAMPLES even steps across one join, both
+    ends included."""
+    span = neck.y1 - neck.y0
+    count = NECK_WAIST_SAMPLES
+    ys = [neck.y0 + span * i / count for i in range(count + 1)]
+    return [(y, recess_spine(y).width) for y in ys]
 
 
 def neck_waist(neck):
@@ -413,14 +526,8 @@ def neck_waist(neck):
     other's, so where it is narrowest and how narrow that is are whatever the
     two ends and the reach leave.
     """
-    span = neck.y1 - neck.y0
-    best = None
-    for i in range(NECK_WAIST_SAMPLES + 1):
-        y = neck.y0 + span * i / NECK_WAIST_SAMPLES
-        width = recess_spine(y)[0]
-        if best is None or width < best[1]:
-            best = (y, width, face_depth_at(centerline_x(), y))
-    return best
+    width, y = min((width, y) for y, width in _neck_walk(neck))
+    return y, width, face_depth_at(centerline_x(), y)
 
 
 def neck_radius(neck):
@@ -429,21 +536,14 @@ def neck_radius(neck):
     This is what "rounder" means and it is the number to read when changing a
     reach. The outline is x = centerline_x() +/- the spine's own width, so its
     curvature is the width function's, and a join that pinches shows up here as
-    a small radius long before it shows up as a narrow waist: the waist width
-    barely moved when the old two-cubic bridge was dropped, and this roughly
-    tripled.
+    a small radius long before it shows up as a narrow waist.
     """
-    span = neck.y1 - neck.y0
-    step = span / NECK_WAIST_SAMPLES
-    tightest = float("inf")
+    widths = [width for _, width in _neck_walk(neck)]
+    step = (neck.y1 - neck.y0) / NECK_WAIST_SAMPLES
+    tightest = math.inf
     for i in range(2, NECK_WAIST_SAMPLES - 1):
-        y = neck.y0 + span * i / NECK_WAIST_SAMPLES
-        first = (recess_spine(y + step)[0] - recess_spine(y - step)[0]) / (2 * step)
-        second = (
-            recess_spine(y + step)[0]
-            - 2 * recess_spine(y)[0]
-            + recess_spine(y - step)[0]
-        ) / step**2
+        first = (widths[i + 1] - widths[i - 1]) / (2 * step)
+        second = (widths[i + 1] - 2 * widths[i] + widths[i - 1]) / step**2
         if abs(second) > 1e-12:
             tightest = min(tightest, (1 + first * first) ** 1.5 / abs(second))
     return tightest
@@ -461,191 +561,194 @@ def _hermite(t, p0, m0, p1, m1, span):
 
 
 def recess_spine(y):
-    """(half_width, depth, shape, exponent, axis_rounding, edge_width) at y:
-    everything the cross-section at that station needs.
+    """The Spine at y: everything the cross-section at that station needs.
 
-    Inside a dish's body all six are that dish's own functions. Inside a neck,
-    all six are Hermite bridges that match value and slope at both ends. This
-    makes the merged field C1 across a junction rather than only continuous.
+    Inside a dish's body it is that dish's own _basin_spine(). Inside a neck,
+    each field but the depth is one Hermite cubic across the whole join. The
+    cubic matches the value and the slope of each basin at its end of the join,
+    so the merged field is C1 across a junction rather than only continuous.
+    The exponent, the axis rounding, the soft rim and the lip lift are constant
+    in a basin, so they leave either end with zero slope. The section then morphs from one
+    basin's curve to the other's without a tangent break of its own.
 
-    All six get one cubic across the whole join, so nothing has a waypoint of
-    its own: the floor simply ramps from one basin surface to the other and the
-    outline simply turns from one rim into the other. Width used to get two
-    cubics instead, meeting at the join's midpoint at a stated waist with zero
-    slope, and that flat spot is what made the joins read as tight pinches: a
-    single cubic at the same reach turns through roughly three times the radius.
-    What the waist comes out as is now measured (neck_waist()) and bounded from
-    below (KEYPAD_NECK_MIN) rather than set.
+    The depth follows the neck's own floor instead (_neck_floor()), from the
+    key row nearest the wheel into the wheel basin, so the floor does not rise
+    between the two. It is C1 as well.
 
-    The exponent is bridged as well, the wheel's basin carrying its own. It is
-    constant inside a basin, so its bridge leaves either end with zero slope and
-    the cross-section morphs from one basin's curve to the other's without a
-    tangent break of its own.
+    The outline has no waypoint of its own: it turns from one rim into the
+    other. What the waist comes out as is measured (neck_waist()) and bounded
+    from below (KEYPAD_NECK_MIN) rather than set.
 
     Joins are tested first because their intervals deliberately reach inside the
     dishes they bridge.
     """
+    spine = _plain_spine(y)
+    for neck in keypad_necks():
+        for y0, y1, *ends in neck.floor:
+            if y0 <= y <= y1:
+                depth = _hermite((y - y0) / (y1 - y0), *ends, y1 - y0)
+                return spine._replace(depth=max(depth, 0.0))
+        if neck.y0 <= y <= neck.y1:
+            side = neck.lower if y < neck.floor[0][0] else neck.upper
+            return spine._replace(depth=_basin_spine(side, y).depth)
+    return spine
+
+
+def _plain_spine(y):
+    """recess_spine() before a neck's floor sets the depth."""
     for neck in keypad_necks():
         if neck.y0 <= y <= neck.y1:
-            lower, upper = neck.lower, neck.upper
             span = neck.y1 - neck.y0
             t = (y - neck.y0) / span
-            depth = _hermite(
-                t,
-                _dish_depth(lower, neck.y0),
-                _slope(lambda v: _dish_depth(lower, v), neck.y0),
-                _dish_depth(upper, neck.y1),
-                _slope(lambda v: _dish_depth(upper, v), neck.y1),
-                span,
-            )
-            shape = _hermite(
-                t,
-                _dish_shape(lower, neck.y0),
-                _slope(lambda v: _dish_shape(lower, v), neck.y0),
-                _dish_shape(upper, neck.y1),
-                _slope(lambda v: _dish_shape(upper, v), neck.y1),
-                span,
-            )
-            width = _hermite(
-                t,
-                _dish_width(lower, neck.y0),
-                _slope(lambda v: _dish_width(lower, v), neck.y0),
-                _dish_width(upper, neck.y1),
-                _slope(lambda v: _dish_width(upper, v), neck.y1),
-                span,
-            )
-            exponent = _hermite(t, lower.n, 0.0, upper.n, 0.0, span)
-            axis_rounding = _hermite(
-                t,
-                _dish_axis_rounding(lower, neck.y0),
-                0.0,
-                _dish_axis_rounding(upper, neck.y1),
-                0.0,
-                span,
-            )
-            edge_width = _hermite(
-                t,
-                _dish_edge_width(lower, neck.y0),
-                _slope(lambda v: _dish_edge_width(lower, v), neck.y0),
-                _dish_edge_width(upper, neck.y1),
-                _slope(lambda v: _dish_edge_width(upper, v), neck.y1),
-                span,
-            )
-            return (
-                max(width, 0.0),
-                max(depth, 0.0),
-                min(max(shape, 0.0), 1.0),
-                max(exponent, 2.0),
-                min(max(axis_rounding, 0.0), 1.0),
-                max(edge_width, 0.0),
+            return Spine(
+                *(
+                    min(max(_hermite(t, *ends, span), lo), hi)
+                    for *ends, (lo, hi) in zip(*neck.ends, SPINE_LIMITS)
+                )
             )
     for recess in keypad_recesses().values():
         if abs(y - recess.cy) <= recess.ay:
-            return (
-                _dish_width(recess, y),
-                _dish_depth(recess, y),
-                _dish_shape(recess, y),
-                recess.n,
-                _dish_axis_rounding(recess, y),
-                _dish_edge_width(recess, y),
-            )
-    return 0.0, 0.0, 1.0, params.KEYPAD_SQUIRCLE_N, 0.0, 0.0
+            return _basin_spine(recess, y)
+    return Spine(0.0, 0.0, 1.0, params.KEYPAD_SQUIRCLE_N, 0.0, 0.0, 0.0, 0.0)
 
 
-SHAPE_LIMIT = 1e-9
-"""How close the shape parameter may come to one before _cross() switches to
-its own limit. At one the normalised profile is 0/0, and the limit it tends to
-is the superellipse's own outline exponent."""
-
-
-def _angular_radius(theta, n, axis_rounding):
-    """Normalized radius of the angular circle-to-superellipse blend."""
-    c, s = abs(math.cos(theta)), abs(math.sin(theta))
-    squircle = (c**n + s**n) ** (-1 / n)
-    weight = axis_rounding * (1.0 - math.sin(2 * theta) ** 2)
-    return squircle + weight * (1.0 - squircle)
-
-
-def _cross(u, shape, n, axis_rounding=0.0, edge_width=0.0):
+def _cross(spine, u):
     """The cross-section profile across x, normalised to one on the centerline
     and zero at the rim: u is |dx| over the local half width.
 
-    This is the superellipse's own section rather than a shape of its own,
-    which is what makes the merged field exactly the basin's own field inside a
-    basin body. Substituting the local half width into
-    |dx/ax|^n + |dy/ay|^n = s^n leaves s^n = shape + u^n (1 - shape), so the
-    whole section is fixed by the shape parameter and the exponent, and dividing
-    by its own value at u=0 leaves this.
+    This is the basin's own section rather than a shape of its own, which is
+    what makes the merged field exactly the basin's own field inside a basin
+    body. With v = shape^(1/n), the point sits at (u * edge, v) and the rim at
+    (edge, v). Their _level() values rho and rim give the section
+    sqrt((rim^2 - rho^2) / (rim^2 - v^2)). Inside a basin the rim level is one,
+    so depth * _cross() is the basin's own depth * sqrt(1 - rho^2).
     """
     if u >= 1.0:
         return 0.0
-    if axis_rounding > 0.0 and edge_width > 0.0:
-        x = u * edge_width
-        y = shape ** (1 / n)
-        theta = math.atan2(y, x)
-        rho = math.hypot(x, y) / _angular_radius(theta, n, axis_rounding)
-        edge_theta = math.atan2(y, edge_width)
-        edge_rho = math.hypot(edge_width, y) / _angular_radius(
-            edge_theta, n, axis_rounding
-        )
-        span = edge_rho * edge_rho - y * y
-        if span <= 0.0:
-            return 0.0
-        return math.sqrt(max(0.0, edge_rho * edge_rho - rho * rho) / span)
-    if 1.0 - shape < SHAPE_LIMIT:
-        return math.sqrt(max(0.0, 1.0 - u**n))
-    top = 1.0 - (shape + u**n * (1.0 - shape)) ** (2 / n)
-    bottom = 1.0 - shape ** (2 / n)
-    return math.sqrt(max(0.0, top / bottom))
+    _, _, shape, n, rounding, edge, _, _ = spine
+    v = shape ** (1 / n)
+    rim = _level(edge, v, n, rounding)
+    span = rim * rim - v * v
+    if span <= 0.0:
+        return 0.0
+    rho = _level(u * edge, v, n, rounding)
+    return math.sqrt(max(0.0, rim * rim - rho * rho) / span)
 
 
 def face_depth_at(x, y):
-    """How far below SHELL_FRONT the merged recess's floor sits at (x, y), zero
-    outside its rim.
+    """The merged recess's depth field at (x, y), zero outside its rim: how far
+    its floor sits below the built face, stack.face_z().
+
+    Every basin is cut down from that face, so the field's zero contour is the
+    rim and the rim is the recess_outline() plan outline. The face lowers each
+    floor by its own drop off the crown, but it does not move the rim. In the
+    two key basins, the lip lift gives part of that drop back, see
+    _spine_depth(). Each basin's last few tenths of depth roll into the face
+    with zero slope, see _soft_rim() and WHEEL_RIM_SOFT.
 
     The one piece of recess arithmetic in the model. The loft is built from it,
     check.py measures the built solid against it, and mic.py opens the inlet at
     whatever it says the floor is over the board's acoustic port, so none of
     the three can drift from the others.
     """
-    width, depth, shape, n, axis_rounding, edge_width = recess_spine(y)
-    if width <= 0.0 or depth <= 0.0:
+    return _spine_depth(recess_spine(y), x, y)
+
+
+def _spine_depth(spine, x, y, least=None):
+    """face_depth_at() at (x, y), from a recess_spine(y) result already in hand.
+    A softened depth under `least`, RIM_DEPTH_MIN by default, is zero.
+
+    The lip lift then multiplies the softened depth by one less spine.lift
+    times _lip_rise(). The floor then sits closer to the face toward the side
+    walls, so a key dish has a crest near its outer key columns. The
+    cutoff reads the depth before the lift, so the rim does not move."""
+    if spine.width <= 0.0 or spine.depth <= 0.0:
         return 0.0
-    return depth * _cross(
-        abs(x - centerline_x()) / width,
-        shape,
-        n,
-        axis_rounding,
-        edge_width,
-    )
+    dx = abs(x - centerline_x())
+    soft = _soft_rim(spine.depth * _cross(spine, dx / spine.width), spine.soft)
+    if soft < (RIM_DEPTH_MIN if least is None else least):
+        return 0.0
+    if spine.lift <= 0.0:
+        return soft
+    return soft * (1.0 - spine.lift * _lip_rise(dx, y))
+
+
+def _lip_rise(dx, y):
+    """Smoothstep, from zero on the centerline to one at and past
+    KEYPAD_LIP_CREST, of the face drop at dx from the centerline over the drop
+    at KEYPAD_LIP_CREST. The drop is read at the same y, so the rise follows
+    the superellipse and not dx itself."""
+    cx = centerline_x()
+    crown = face_z(cx, y)
+    reach = crown - face_z(cx + params.KEYPAD_LIP_CREST, y)
+    if reach <= 1e-9:
+        return 1.0
+    t = min(max((crown - face_z(cx + dx, y)) / reach, 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+RIM_DEPTH_MIN = 0.005
+"""Least dish depth the field keeps. A softened depth under this is zero.
+
+The soft rim meets the face with zero slope, so near a rim, and over a long
+stretch near each tip, the floor is only microns under the face. The loft then
+crosses the face at a grazing angle, and the cut leaves slivers that mesh torn.
+With this floor, the field ends with a step of this height, and every loft
+point that has less depth is lifted RIM_LIFT above the face, so the loft
+crosses the face steeply. The step is far under a print layer, and the rim
+moves inward by about a tenth."""
+
+
+def _soft_rim(d, c):
+    """Depth d with its last c rolled into the face: d^3 (3c - 2d) / c^3 below
+    c, and d itself from c down.
+
+    The plain section meets its rim with a vertical tangent. This map has value
+    c and slope one at d = c, and it goes as 3 d^3 / c^2 near zero. As a
+    result, the floor meets the face with zero slope, and nothing deeper than c
+    changes. Every basin has its own c, and the necks blend between them. See
+    WHEEL_RIM_SOFT."""
+    if c <= 0.0 or d >= c:
+        return d
+    return d**3 * (3 * c - 2 * d) / c**3
 
 
 def face_floor_at(x, y):
-    """The z of that floor."""
-    return SHELL_FRONT - face_depth_at(x, y)
+    """The z of the built recessed front's outer surface at (x, y): the depth
+    field under the built face. It is the face itself outside the rim, and it
+    is never above the face, because every basin is cut down from the face."""
+    return face_z(x, y) - face_depth_at(x, y)
 
 
-DEPTH_OVER_SAMPLES = 400
-"""How finely face_depth_over() walks y across a footprint. The x half of that
-search is exact, so this is the whole resolution of it; over a counterbore's
-own width it puts the samples a few thousandths apart."""
+FLOOR_OVER_SAMPLES = 80
+"""How finely face_floor_over() walks each axis across a footprint. Over a
+counterbore's own width it puts the samples about 0.15 apart. Five times as
+many rows moves no land by more than a nanometre."""
 
 
-def face_depth_over(x, y, half):
-    """Deepest the recess gets anywhere over an axis-aligned square of side
-    2*half centred at (x, y).
+def face_floor_over(x, y, half):
+    """Lowest the built surface gets anywhere over an axis-aligned square of
+    side 2*half centred at (x, y).
 
-    Exact in x, sampled in y. The profile falls off monotonically with |dx|, so
-    at any y the deepest x over the square is whichever of the centerline or
-    the nearer edge lies in it, which is a clamp. Along y the spine has three
-    humps and two necks and is not monotone anywhere useful, so that half is
-    walked rather than solved.
+    The surface is the built face less the dish depth. Across x the face falls
+    away from the crown and the dish gets shallower away from the centerline.
+    As a result, the lowest point can be inside the square, so both axes are
+    walked. The centerline is added to the x samples, because the dish is
+    deepest there.
     """
-    xs = min(max(centerline_x(), x - half), x + half)
-    return max(
-        face_depth_at(xs, y - half + 2 * half * i / DEPTH_OVER_SAMPLES)
-        for i in range(DEPTH_OVER_SAMPLES + 1)
-    )
+    cx = centerline_x()
+    count = FLOOR_OVER_SAMPLES
+    steps = [2 * half * i / count - half for i in range(count + 1)]
+    xs = [x + step for step in steps]
+    if x - half < cx < x + half:
+        xs.append(cx)
+    lowest = math.inf
+    for py in (y + step for step in steps):
+        spine = recess_spine(py)
+        lowest = min(
+            lowest, *(face_z(px, py) - _spine_depth(spine, px, py) for px in xs)
+        )
+    return lowest
 
 
 def face_plan_margin(x, y, half, samples=None):
@@ -672,7 +775,7 @@ def face_plan_margin(x, y, half, samples=None):
     cx = centerline_x()
     count = params.KEY_SQUIRCLE_POINTS if samples is None else samples
     outline = _squircle_points(x, y, half, half, params.KEY_SQUIRCLE_N, count)
-    return min(recess_spine(py)[0] - abs(px - cx) for px, py in outline)
+    return min(recess_spine(py).width - abs(px - cx) for px, py in outline)
 
 
 RING_ROOF_ANGLES = 180
@@ -687,11 +790,14 @@ single radius answers for one of the three and not the others."""
 def ring_roof_left():
     """Thinnest translucent roof left over the LED ring channel, face side.
 
-    LED_RING_ROOF is what the roof would be under a flat face. Three things
-    dish the face over the channel: the wheel basin reaching past its own
-    half axis on the diagonals, and both necks running out across the annulus
-    on the way to the dishes either side. What any of them sinks there comes
-    out of this.
+    LED_RING_ROOF is the roof under the undished crown line. The channel
+    ceiling is an arch of its own and does not follow the face, so the roof is
+    the built surface less led_ring_ceiling_at(). The face thins it at the east
+    and west sides of the knob, where the channel comes near the side walls.
+    Three things dish the face over the channel: the wheel basin reaching past
+    its own half axis on the diagonals, and both necks running out across the
+    annulus on the way to the dishes either side. What any of them sinks there
+    comes out of this as well.
 
     The annulus walked is the roof's own, inner wall to outer. The inner wall
     is plumb, so that end is simply led_ring_inner_r() and the walk runs nearer
@@ -700,15 +806,14 @@ def ring_roof_left():
     """
     wx, wy = board.wheel_center()
     lo, hi = led_ring_roof_inner_r(), led_ring_roof_outer_r()
-    deepest = 0.0
+    thinnest = math.inf
     for i in range(RING_ROOF_ANGLES):
         a = 2 * math.pi * i / RING_ROOF_ANGLES
         for j in range(RING_ROOF_RADII):
             r = lo + (hi - lo) * j / (RING_ROOF_RADII - 1)
-            deepest = max(
-                deepest, face_depth_at(wx + r * math.cos(a), wy + r * math.sin(a))
-            )
-    return params.LED_RING_ROOF - deepest
+            x, y = wx + r * math.cos(a), wy + r * math.sin(a)
+            thinnest = min(thinnest, face_floor_at(x, y) - led_ring_ceiling_at(x))
+    return thinnest
 
 
 LEDGE_SAMPLES = 2000
@@ -740,7 +845,7 @@ def wheel_ledge_left():
     best = float("inf")
     for i in range(LEDGE_SAMPLES + 1):
         y = y0 + (y1 - y0) * i / LEDGE_SAMPLES
-        width = recess_spine(y)[0]
+        width = recess_spine(y).width
         if width <= 0:
             continue
         for x in (cx - width, cx + width):
@@ -748,8 +853,8 @@ def wheel_ledge_left():
     return best
 
 
-def recess_stations():
-    """The y values the merged recess is lofted through, sorted.
+def _base_stations():
+    """The y values recess_stations() refines, sorted.
 
     Per dish, stations at the superellipse's own parameter rather than at even
     steps in y: both the half width and the depth turn fastest at a rim and
@@ -760,9 +865,9 @@ def recess_stations():
     microns over that width, so the blunt tip it leaves is faithful rather than
     a compromise.
 
-    Plus even steps across each neck, where nothing is singular and the two
-    Hermite halves want resolving on their own terms rather than on the
-    neighbouring dish's.
+    Plus even steps across each neck, and the ends of each neck's floor pieces,
+    where the floor's curvature steps. Stations closer than STATION_GAP_MIN
+    merge into one, but the two tips stay where they are.
     """
     count = params.KEYPAD_RECESS_STATIONS
     ys = set()
@@ -774,13 +879,156 @@ def recess_stations():
         ]
         offsets.append(recess.ay * (1 - params.KEYPAD_TIP_WIDTH**n) ** (1 / n))
         for dy in offsets:
-            ys.add(round(recess.cy + dy, 9))
-            ys.add(round(recess.cy - dy, 9))
+            ys.add(recess.cy + dy)
+            ys.add(recess.cy - dy)
     for neck in keypad_necks():
         steps = params.KEYPAD_NECK_STATIONS
-        for i in range(steps + 1):
-            ys.add(round(neck.y0 + (neck.y1 - neck.y0) * i / steps, 9))
-    return sorted(ys)
+        ys.update(neck.y0 + (neck.y1 - neck.y0) * i / steps for i in range(steps + 1))
+        ys.update(y for piece in neck.floor for y in piece[:2])
+    ys = sorted(ys)
+    out = [ys[0]]
+    for y in ys[1:-1]:
+        if y - out[-1] >= STATION_GAP_MIN and ys[-1] - y >= STATION_GAP_MIN:
+            out.append(y)
+    return out + [ys[-1]]
+
+
+PROFILE_SAMPLES = 800
+"""Points each base station is sampled at to place the profile points."""
+
+
+@functools.cache
+def _profile_u():
+    """The u = dx / half width of each profile point, rim to rim, that every
+    station uses: KEYPAD_PROFILE_POINTS + 1 values from -1 to 1.
+
+    Half of the points go by arc length and half by how far the floor turns.
+    The arc length and the turn at each u are the most any base station has
+    there, mirrored about the centerline. One set for every station keeps each
+    ruling of the loft at one u, so no patch twists where two stations would
+    have placed their points differently."""
+    count = PROFILE_SAMPLES
+    dense = [math.sin(-math.pi / 2 + math.pi * k / count) for k in range(count + 1)]
+    length = [0.0] * count
+    turn = [0.0] * (count + 1)
+    for y in _base_stations():
+        points = _floor_points(y, dense)
+        width = max(recess_spine(y).width, SECTION_MIN_WIDTH)
+        angles = []
+        for k in range(count):
+            (xa, _, za), (xb, _, zb) = points[k], points[k + 1]
+            length[k] = max(length[k], math.hypot(xb - xa, zb - za) / width)
+            angles.append(math.atan2(zb - za, xb - xa))
+        for k in range(1, count):
+            turn[k] = max(turn[k], abs(angles[k] - angles[k - 1]))
+    weight = [
+        length[k] / sum(length) + (turn[k] + turn[k + 1]) / sum(turn)
+        for k in range(count)
+    ]
+    weight = [(w + v) / 2 for w, v in zip(weight, reversed(weight))]
+    total = [0.0]
+    for w in weight:
+        total.append(total[-1] + w)
+    out = []
+    for i in range(1, params.KEYPAD_PROFILE_POINTS):
+        target = total[-1] * i / params.KEYPAD_PROFILE_POINTS
+        k = bisect.bisect_left(total, target)
+        f = (target - total[k - 1]) / (total[k] - total[k - 1])
+        out.append(dense[k - 1] + f * (dense[k] - dense[k - 1]))
+    return (-1.0, *out, 1.0)
+
+
+def _floor_points(y, us):
+    """[(x, y, z)] of the floor at station y at each u: the built face less the
+    softened depth after the lip lift, with no RIM_DEPTH_MIN cut and no
+    RIM_LIFT."""
+    spine = recess_spine(y)
+    width = max(spine.width, SECTION_MIN_WIDTH)
+    xs = [centerline_x() + u * width for u in us]
+    return [(x, y, face_z(x, y) - _spine_depth(spine, x, y, 0.0)) for x in xs]
+
+
+FACET_ANGLE = 2.0
+"""Largest angle, in degrees, the loft may leave between the normals of two
+neighbouring patches across a station, or between two corners of one patch.
+recess_stations() halves every span that leaves more."""
+
+STATION_GAP_MIN = 0.025
+"""Closest two stations may sit. recess_stations() does not halve a span
+shorter than twice this, so no loft face becomes a sliver."""
+
+
+def _patch_normal(p00, p10, p01, p11, u, v):
+    """Unit normal of the ruled patch on four corners at (u, v): u runs from
+    p00 to p10 across a station, v from p00 to p01 along y."""
+    su = [(1 - v) * (b - a) + v * (d - c) for a, b, c, d in zip(p00, p10, p01, p11)]
+    sv = [(1 - u) * (c - a) + u * (d - b) for a, b, c, d in zip(p00, p10, p01, p11)]
+    n = (
+        su[1] * sv[2] - su[2] * sv[1],
+        su[2] * sv[0] - su[0] * sv[2],
+        su[0] * sv[1] - su[1] * sv[0],
+    )
+    size = math.sqrt(sum(c * c for c in n)) or 1.0
+    return [c / size for c in n]
+
+
+def _angle(a, b):
+    return math.acos(max(-1.0, min(1.0, sum(p * q for p, q in zip(a, b)))))
+
+
+def _crease(a, m, b):
+    """Largest angle at section m between the patches from a to m and m to b."""
+    return max(
+        _angle(
+            _patch_normal(a[k], a[k + 1], m[k], m[k + 1], 0.5, 1.0),
+            _patch_normal(m[k], m[k + 1], b[k], b[k + 1], 0.5, 0.0),
+        )
+        for k in range(len(m) - 1)
+    )
+
+
+def _twist(a, b):
+    """Largest angle between opposite corners of a patch from a to b."""
+    worst = 0.0
+    for k in range(len(a) - 1):
+        corners = (a[k], a[k + 1], b[k], b[k + 1])
+        for (u, v), (s, t) in (((0, 0), (1, 1)), ((1, 0), (0, 1))):
+            n0 = _patch_normal(*corners, u, v)
+            worst = max(worst, _angle(n0, _patch_normal(*corners, s, t)))
+    return worst
+
+
+@functools.cache
+def recess_stations():
+    """The y values the merged recess is lofted through, sorted.
+
+    It starts from _base_stations(). Then it halves each span whose patches
+    crease or twist more than FACET_ANGLE, or that shows such a crease at its
+    midpoint. At a station that creases, it halves the spans on both sides.
+    The soft rims, the end roll and the necks bend the floor fastest, so the
+    new stations go there. It does not halve a span shorter than twice
+    STATION_GAP_MIN.
+    """
+    ys = _base_stations()
+    inner = _profile_u()[1:-1]
+    section = functools.lru_cache(maxsize=None)(lambda y: _floor_points(y, inner))
+    limit = math.radians(FACET_ANGLE)
+    while True:
+        split = set()
+        for i, (ya, yb) in enumerate(zip(ys, ys[1:])):
+            if yb - ya < 2 * STATION_GAP_MIN:
+                continue
+            a, b = section(ya), section(yb)
+            if _twist(a, b) > limit or _crease(a, section((ya + yb) / 2), b) > limit:
+                split.add(i)
+        for i in range(1, len(ys) - 1):
+            if _crease(section(ys[i - 1]), section(ys[i]), section(ys[i + 1])) > limit:
+                split.update(
+                    j for j in (i - 1, i) if ys[j + 1] - ys[j] >= 2 * STATION_GAP_MIN
+                )
+        if not split:
+            return tuple(ys)
+        ys = sorted(set(ys) | {(ys[i] + ys[i + 1]) / 2 for i in split})
 
 
 SECTION_MIN_WIDTH = 0.01
@@ -791,42 +1039,74 @@ clear of a rim, so this never fires on the present layout; it is here so that a
 future station list cannot turn a loft into a crash."""
 
 
-def _station_section(y):
+RIM_LIFT = 0.02
+"""How far above the built face each station's two rim points sit. The floor
+follows the face, so its rim lands on the face itself. The face is curved
+and the loft is ruled between stations. Without the lift, the rim edge between
+two stations dips a few hundred-thousandths into the shell and leaves a sliver
+of rim wall. The lift keeps that edge above the face, so the floor's steep last
+facet crosses the face cleanly. The visible rim moves inward by about a
+hundredth."""
+
+
+def _station_floor(y, tip=False):
+    """[(x, z)] of the floor curve at one station, rim to rim: the points
+    _station_section() closes into a face.
+
+    The floor is face_floor_at(). The two rim points, and every point with no
+    depth under RIM_DEPTH_MIN, are held RIM_LIFT above the built face. At a
+    `tip` station, one of the two ends of the recess, every point is held
+    there. The points sit at the same _profile_u() on every station.
+
+    A tip is only microns deep, and its section is the loft's end cap. Left at
+    that depth, the cap cuts a step wall microns high into the face. Where the
+    second dish's tip reaches the IR end roll, the face slopes steeply in y,
+    and that wall meshed torn. With the tip lifted, the ruled faces from the
+    station before it cross the face instead, as the rim faces do."""
+    spine = recess_spine(y)
+    width = max(spine.width, SECTION_MIN_WIDTH)
+    cx = centerline_x()
+    us = _profile_u()
+    points = []
+    for i, u in enumerate(us):
+        px = cx + u * width
+        face = face_z(px, y)
+        depth = _spine_depth(spine, px, y)
+        lifted = tip or i in (0, len(us) - 1) or depth <= 0.0
+        points.append((px, face + RIM_LIFT if lifted else face - depth))
+    return points
+
+
+def recess_floor_min():
+    """(z, x, y) of the lowest point the recess loft is built through.
+
+    The loft is ruled between stations and its sections are polylines, so its
+    lowest point is one of these points. It is not always the deepest dish
+    centre. The face can put a rim point near a side wall lower than any floor
+    under the crown."""
+    stations = recess_stations()
+    return min(
+        (z, x, y)
+        for i, y in enumerate(stations)
+        for x, z in _station_floor(y, tip=i in (0, len(stations) - 1))
+    )
+
+
+def _station_section(y, tip=False):
     """The merged recess's cross-section at one station, as a face in that
     station's own plane: the floor curve under the recess, carried up the two
-    vertical rim walls and closed across MERGE above the face.
+    vertical rim walls and closed across MERGE above the crown.
 
-    Wound counter-clockwise in (x, z) deliberately. BuildSketch mirrors a
-    clockwise sketch about the workplane's own axis, so the sag would come back
-    above the face instead of below it.
+    The floor is face_floor_at(): the depth field under the built face. The
+    two rim points are held RIM_LIFT above that face.
 
-    The floor's points are spaced by angle across the section rather than
-    evenly in x, for the same reason the stations are: the profile stands
-    vertical where it meets a rim, and even steps in x leave the last chord
-    cutting the corner off.
+    The floor's points sit where the floor turns, not at even steps in x. See
+    _profile_u().
     """
-    width, depth, shape, n, axis_rounding, edge_width = recess_spine(y)
-    width = max(width, SECTION_MIN_WIDTH)
-    cx = centerline_x()
-    count = params.KEYPAD_PROFILE_POINTS
-    points = []
-    for i in range(count + 1):
-        u = math.sin(-math.pi / 2 + math.pi * i / count)
-        points.append(
-            (
-                cx + u * width,
-                SHELL_FRONT
-                - depth * _cross(abs(u), shape, n, axis_rounding, edge_width),
-            )
-        )
-    points.append((cx + width, SHELL_FRONT + MERGE))
-    points.append((cx - width, SHELL_FRONT + MERGE))
-    plane = Plane.XZ.offset(-y)
-    with BuildSketch(plane) as sketch:
-        with BuildLine(plane):
-            Polyline(*points, close=True)
-        make_face()
-    return sketch.sketch.faces()[0]
+    points = _station_floor(y, tip)
+    top = SHELL_FRONT + MERGE
+    points += [(points[-1][0], top), (points[0][0], top)]
+    return Face(Wire.make_polygon([(x, y, z) for x, z in points], close=True))
 
 
 @cache.solid
@@ -846,23 +1126,26 @@ def keypad_recess():
     wheel basin took its own exponent: fitting a spline in y through this many
     sections is unstable, and the parameter change was enough to tip it over
     into diverging outright, returning a solid of negative volume spread over
-    half a metre. The stations are what carry the fidelity in y instead, and
-    they carry it easily. They are spaced by the superellipse's own parameter,
-    so the chord between two of them departs from the field by well under a
-    micron anywhere, which is three orders under a print layer and two under
-    what check.py's own probes straddle. The other axis is a polyline already
-    (KEYPAD_PROFILE_POINTS), so this makes the surface a fine polygonal
-    approximation in both directions rather than one, which is the honest
-    description of what it always was.
+    half a metre. The stations are what carry the fidelity in y instead.
+    recess_stations() adds them until no two neighbouring patches differ in
+    normal by more than FACET_ANGLE, so the faceting does not show on the soft
+    rims. The other axis is a polyline already (KEYPAD_PROFILE_POINTS), so this
+    makes the surface a fine polygonal approximation in both directions rather
+    than one, which is the honest description of what it always was.
 
-    Every station carries the same point count regardless, so the loft has a
-    vertex to match at each and nothing to guess.
+    Every station carries the same points at the same _profile_u(), so the
+    loft has a vertex to match at each and nothing to guess.
 
     backform.py gave up a fitted loft for the same underlying reason, where it
     overshot its sections rather than diverging. Treat one through many sections
     as suspect in this model.
     """
-    return loft([_station_section(y) for y in recess_stations()], ruled=True)
+    stations = recess_stations()
+    last = len(stations) - 1
+    return loft(
+        [_station_section(y, i in (0, last)) for i, y in enumerate(stations)],
+        ruled=True,
+    )
 
 
 def recess_outline():
@@ -875,17 +1158,17 @@ def recess_outline():
     station by construction, which is what makes the outline a single closed
     polygon rather than several loops.
 
-    Nothing clamps it. The rim runs inside EDGE_R_FRONT, so an outline drawn on
-    a front with that round would spend most of its length on the round's
-    curve; on the FDM front a smaller chamfer leaves flat face for it.
+    Nothing clamps it. On the recessed front the rim runs where the face
+    already turns down toward the side walls. On the FDM front a small chamfer
+    leaves flat face for it.
     Clamping the outline was the other way round and it
     showed: it flat-sided the line over most of its length and carried it into
     the LED ring channel.
     """
     cx = centerline_x()
-    ys = recess_stations()
-    points = [(cx + recess_spine(y)[0], y) for y in ys]
-    points += [(cx - recess_spine(y)[0], y) for y in reversed(ys)]
+    rim = [(recess_spine(y).width, y) for y in recess_stations()]
+    points = [(cx + width, y) for width, y in rim]
+    points += [(cx - width, y) for width, y in reversed(rim)]
     with BuildSketch(Plane.XY) as sketch:
         with BuildLine(Plane.XY):
             Polyline(*points, close=True)
@@ -931,10 +1214,11 @@ def keypad_recess_facts():
     """
     ex0, ex1 = exterior_x_bounds()
     cx = centerline_x()
+    parts = board.components()
     out = {"dishes": {}, "necks": {}}
     for name, recess in keypad_recesses().items():
         depths = [
-            face_depth_at(*board.components()[ref][:2]) for ref in island_refs(name)
+            face_depth_at(*parts[ref][:2]) for ref in island_refs(name)
         ] if name != "wheel" else []
         out["dishes"][name] = {
             "center": (cx, recess.cy),
@@ -944,19 +1228,13 @@ def keypad_recess_facts():
             "key_depths": (min(depths), max(depths)) if depths else None,
         }
     for neck in keypad_necks():
-        span = neck.y1 - neck.y0
-        floor = min(
-            face_depth_at(cx, neck.y0 + span * i / NECK_WAIST_SAMPLES)
-            for i in range(NECK_WAIST_SAMPLES + 1)
-        )
-        waist_y, waist_half, waist_depth = neck_waist(neck)
         out["necks"][neck.name] = {
             "reach": neck.reach,
             "span": (neck.y0, neck.y1),
-            "waist": (waist_y, waist_half, waist_depth),
+            "waist": neck_waist(neck),
             "radius": neck_radius(neck),
-            "floor": floor,
-            "ends": (_dish_width(neck.lower, neck.y0), _dish_width(neck.upper, neck.y1)),
+            "floor": min(face_depth_at(cx, y) for y, _ in _neck_walk(neck)),
+            "ends": (neck.ends[0].width, neck.ends[2].width),
         }
     widest = max(r.ax for r in keypad_recesses().values())
     out["edge_gap"] = min(cx - widest - ex0, ex1 - cx - widest)
@@ -1141,7 +1419,7 @@ def _pad_grooves():
     return cuts
 
 
-def _stem(x, y):
+def _stem(ref):
     """The soft stem a cap sits over, raised out of the pad where a keytop was.
 
     Square rather than round, because the legend on the cap has an orientation
@@ -1152,8 +1430,14 @@ def _stem(x, y):
     A plain prism, no barb. The flange retains the cap now, and a barb would put
     an undercut on every stem in a moulded pad while fighting the blind assembly
     that seats nine of them at once.
+
+    It stops at stem_top(ref), so a stem under a lower cap in an outer column is
+    shorter by the same value.
     """
-    return _rounded_prism(x, y, params.STEM_W, params.STEM_R, PAD_WEB_BOTTOM, STEM_TOP)
+    x, y = board.components()[ref][:2]
+    return _rounded_prism(
+        x, y, params.STEM_W, params.STEM_R, PAD_WEB_BOTTOM, stem_top(ref)
+    )
 
 
 def fdm_cap_body(ref):
@@ -1185,12 +1469,12 @@ def fdm_keycap(ref, legend=True):
         params.KEY_SQUIRCLE_N,
         params.KEY_SQUIRCLE_POINTS,
         fdm_keycap_bottom(),
-        CAP_TOP,
+        cap_top(ref),
     )
     top_edges = [
         edge
         for edge in body.edges()
-        if edge.bounding_box().min.Z > CAP_TOP - 0.01
+        if edge.bounding_box().min.Z > cap_top(ref) - 0.01
     ]
     if not top_edges:
         raise ValueError(f"{ref}'s FDM keytop has no top perimeter edges to fillet")
@@ -1393,7 +1677,7 @@ def _pad_lobe(
     raised = []
     for ref in island_refs(name):
         x, y = parts[ref][:2]
-        raised.append(_stem(x, y))
+        raised.append(_stem(ref))
         raised.append(plunger(x, y, extension=plunger_extension))
         if fdm:
             raised.append(fdm_keycap(ref, legend=legend))

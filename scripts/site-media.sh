@@ -5,7 +5,7 @@
 #   scripts/site-media.sh <IMG_7480_clicks.mp4>
 #
 # The feature clips come from the living room demo video. The explode clip comes from
-# docs/readme-assets/case-explode-loop.webp. Needs ffmpeg and ImageMagick.
+# docs/readme-assets/case-explode-loop.webp. Needs ffmpeg, ImageMagick, and webpmux (libwebp).
 #
 set -euo pipefail
 
@@ -35,12 +35,18 @@ for clip in "${CLIPS[@]}"; do
 	ffmpeg -v error -y -ss "$poster" -i "$SRC" -frames:v 1 -vf "$crop" -q:v 4 "$OUT/clip-$name.jpg"
 done
 
+LOOP="$REPO_ROOT/docs/readme-assets/case-explode-loop.webp"
 FRAMES="$(mktemp -d)"
 trap 'rm -rf "$FRAMES"' EXIT
-magick "$REPO_ROOT/docs/readme-assets/case-explode-loop.webp" -coalesce \
+magick "$LOOP" -coalesce \
 	-background "$CARD" -alpha remove -alpha off "$FRAMES/f_%04d.png"
-# The WebP frames are 33 ms each.
-ffmpeg -v error -y -framerate 1000/33 -i "$FRAMES/f_%04d.png" \
+# ImageMagick rounds the frame delay to centiseconds, so read it in ms with webpmux.
+MS="$(webpmux -info "$LOOP" | awk '$1 == "1:" && !d { d = $7 } END { print d }')"
+if ! [[ "$MS" =~ ^[1-9][0-9]*$ ]]; then
+	echo "site-media.sh: no valid frame duration in $LOOP (got '$MS')" >&2
+	exit 1
+fi
+ffmpeg -v error -y -framerate "1000/$MS" -i "$FRAMES/f_%04d.png" \
 	-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" \
 	-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
 	-c:v libx264 -profile:v high -preset slow -crf 26 -movflags +faststart \

@@ -928,9 +928,26 @@ IR_WINDOW_FLANGE_T = 0.8
 IR_WINDOW_R = 1.0
 """Corner round on aperture, inherited concentrically by pane and flange."""
 USB_CLEARANCE = 0.5
-"""Clearance around the underside USB shell and through its end-wall opening."""
-USB_CORNER_CHAMFER = 0.4
-"""The corner trim stays within USB_CLEARANCE, so the complete shell remains clear."""
+"""Clearance per side around the measured outline of the USB shell in the -Y end
+wall. The end screw block also keeps this clearance from the U1 module envelope.
+In both places, it must not be less than BOARD_FIT, because the board can sit
+BOARD_FIT off centre."""
+USB_BOOT_W = 12.5
+"""Width of the outside pocket in the -Y end wall for the cable boot. The pocket
+outline is an allowance for common USB-C cable boots, not a measured part. A
+larger boot does not enter the pocket, so its plug does not seat. The first
+print must verify plug seating."""
+USB_BOOT_H = 6.6
+"""Height of the cable boot pocket. It is an allowance, as USB_BOOT_W is."""
+USB_BOOT_R = 1.5
+"""Corner radius of the cable boot pocket. It is an allowance, as USB_BOOT_W is."""
+USB_BOOT_REACH = 0.35
+"""Largest distance from the boot pocket floor to the receptacle mouth while the
+plug pushes the board +Y by WHEEL_OPENING_CLEARANCE. A plug extends
+approximately 6.65 mm past its boot, and the receptacle shell is 6.20 mm deep.
+As a result, the boot must stop within approximately 0.45 mm of the mouth, and this
+value keeps a 0.1 mm margin. With this value, the floor is just outboard of the
+front skirt."""
 QWIIC_CLEARANCE = 0.5
 """Clearance around the Qwiic housing for a plug approach from the left side."""
 QWIIC_CORNER_CHAMFER = 0.3

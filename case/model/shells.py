@@ -64,7 +64,7 @@ from .stack import (
     SUPPORT_TOP,
     face_body,
 )
-from .usb import usb_slot
+from .usb import usb_boot_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
@@ -554,8 +554,8 @@ def catch_detents():
 
 
 def shared_cuts():
-    """The USB, Qwiic, and emitter cuts pass through both shells."""
-    return [usb_slot(), qwiic_slot(), emitter_bore()]
+    """The USB, USB boot, Qwiic, and emitter cuts pass through both shells."""
+    return [usb_slot(), usb_boot_pocket(), qwiic_slot(), emitter_bore()]
 
 
 @cache.solid

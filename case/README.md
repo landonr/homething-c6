@@ -262,6 +262,8 @@ The preload holds the seam closed.
 
 One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt.
 
+The negative Y end wall has a pocket for the USB cable boot outside the USB opening. A boot larger than the pocket cannot enter, so its plug does not seat. Verify plug seating on the first print.
+
 The Qwiic opening has a flush cover with two breakaway bridges. The cover stays in place unless you need the port.
 
 To open the port, remove the cover before you install the board. Break both bridges carefully and trim any nubs that obstruct the plug. Do not press on the connector.
@@ -344,6 +346,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.
 - Keep the USB slot clear of the connector shell.
+- Keep the USB boot pocket clear, with its floor near enough to the receptacle for a standard plug to seat.
 - Keep the Qwiic plug path clear after removal of the breakaway cover.
 - Keep the battery plug and wire path clear of the case and cell.
 - Keep support ledges clear of board parts, the end screw block, and the cell.

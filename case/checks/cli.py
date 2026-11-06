@@ -739,7 +739,11 @@ def _recess_land(s):
 def _usb_clearance(s):
     return _report(
         usb_clearance(s.front, s.front_fdm, s.back),
-        "USB shell and plug approach clear both front variants and the back with 0.20 mm minimum margin",
+        "USB plug approach clears both front variants and the back, and the USB tip "
+        "clears both fronts as the board drops in and the back as it folds closed, "
+        "with 0.20 mm minimum margin. The cable boot pocket is clear in all three "
+        "shells, and its floor stops near enough to the receptacle mouth for the "
+        "plug to seat",
     )
 
 

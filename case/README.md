@@ -206,7 +206,7 @@ Every dish follows the face, so the bore rim is lower at the east and west sides
 
 The LED ring channel ceiling does not follow the face. A ceiling under the face would drop below the cavity ceiling at the channel mouth. The ceiling is a circular arch of its own instead, `LED_RING_SAG` lower at each side wall. The roof over the channel is `LED_RING_ROOF` thick on the crown line, under the undished face. The face falls faster than the ceiling at the east and west sides of the knob, so the roof is thinner there. The ring roof check holds it above its floor.
 
-The last few tenths of each dish's depth roll into the face with zero slope, so no rim is a cliff. `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` set it per basin, and the necks blend between them. Deeper floor does not change. The floors only rise, so the lands and the LED roof only get thicker.
+A straight chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the matte face and the glossy dish. In each section across the rim, it goes straight from the face at the rim down to the dish floor. It has a crease at each edge and no step. It replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
 The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring channel north and south of the knob, so the ring roof check limits how deep they can go.
 

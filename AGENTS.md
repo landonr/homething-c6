@@ -187,9 +187,9 @@ The BOM groups by Value+Footprint. It joins references with `, ` and includes th
 
 Set `KICAD_CLI=/path/to/kicad-cli` to override the binary.
 
-Store a product URL in `LCSC`, not a bare C-number. Only `Q2`, `Q3`, and `D2`-`D7` have LCSC values.
+Store a product URL in `LCSC`, not a bare C-number. Only `Q2`, `Q3`, `D2`-`D7`, `J1`, and `J2` have LCSC values.
 
-`Q2` and `Q3` use `C15127`. `D2`-`D7` use `C5349955`.
+`Q2` and `Q3` use `C15127`. `D2`-`D7` use `C5349955`. `J1` uses `C177225`. `J2` uses `C160404`.
 
 Regenerate the BOM with `scripts/export-bom.sh` or `scripts/regen-fab.sh`. Do not use the MCP `export_bom` tool.
 
@@ -210,7 +210,9 @@ When you stage the schematic or board, the hook performs these actions:
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
 - A staged PCB runs `scripts/render-annotated-remote.py --only board`. This step updates the four annotated board SVGs from the new board PNGs.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
-- If you stage a case render source, the hook runs `scripts/stamp-case-renders.py --check`. The `INPUTS` constant in that script lists the sources. This check also runs without a staged schematic or board. The check only shows a warning. The hook never stages `docs/readme-assets/case-renders.stamp`.
+- After the hook regenerates a render group, it runs `scripts/render-status.py --write <group> --stage`. That step stages only the entry of that group in `docs/readme-assets/renders.stamp.json`.
+- Last, the hook runs `scripts/render-status.py --check --if-staged`. This check also runs without a staged schematic or board. It shows a warning for each stale group that a staged file feeds. It never blocks the commit.
+- `scripts/renders.json` lists every render group with its outputs, inputs, and refresh steps. If you add an image or a video under `docs/readme-assets/` or `site/assets/`, add it to a group.
 
 The iBOM is a gitignored pre-fabrication pin-1 artifact. Never stage it.
 
@@ -226,8 +228,10 @@ Gerber and drill headers contain timestamps. A board commit restages all files i
 - `pcb drc` reports 0 errors, 0 unconnected items, and 1 allowed warning.
 - The `lib_footprint_mismatch` warning is for `U1`.
 - `U1` is the only footprint that differs from its library footprint.
+- In the board copy of `U1`, pads 24-31 are plated holes, and pads 32 and 33 are SMD pads. The library footprint has the opposite pad types.
+- The board copy of `U1` also has F.Mask on pads 24-31, so their copper is open on the front.
 - Parity reports 0 issues.
-- The board has no `TP_*` test points or board-only items.
+- `TP1`-`TP6` are bare debug pads. The BOM and the position file exclude them. The board has no board-only items.
 
 Treat these counts as the baseline unless the task targets them. A second warning is a new regression.
 
@@ -303,6 +307,12 @@ Do not add this command to the hook. The release workflow publishes the fabricat
 
 `U1` is a Seeed Studio XIAO ESP32-C6 module. The single sheet uses global labels for most connections.
 
+`U1` is on B.Cu at `(52.85, 137.12)` with orientation 0, against the +x long edge. The position file lists `U1` on the `bottom` side.
+
+The `U1` USB-C connector extends past the +y short edge. Some B.Cu tracks run under the module body.
+
+The `U1 antenna keepout` rule area prohibits tracks, vias, and copper pour on F.Cu and B.Cu at x 62.35-67.55, y 137.1-139.5.
+
 Follow named nets across the schematic. Then verify the corresponding board nets and footprints.
 
 - Audio uses `MK1`, a PUI Audio `DMM-4026-B-I2S-R` I2S microphone, on `sck`, `ws`, and `sd`.
@@ -315,6 +325,20 @@ Follow named nets across the schematic. Then verify the corresponding board nets
 - `D1`, `Q1`, and `R1` transmit IR from `IR EMIT`.
 - `U3` is a `PCF8575DBR` expander on `sda` and `scl`.
 - `U3` carries `sw1`-`sw11` and `ano_sw1`-`ano_sw5`. It uses all 16 I/O pins.
+- `U3` has A0-A2 on GND, so its I2C address is `0x20`. `R4` and `R5` are the 4.7k bus pull-ups to `+3.3V`.
+- `J2` is a JST `SM04B-SRSS-TB(LF)(SN)` Qwiic connector. Its pins use Qwiic order: 1 GND, 2 `+3.3V`, 3 `sda`, and 4 `scl`.
+- `J2` uses the `Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal` footprint. Its two MP mounting pads have no connection.
+- `J2` is on B.Cu at `(38.125, 135.25)`, rotation 90, on the -x long edge. The connector mouth faces the board edge.
+- `J2` pin 1 is at y 136.75, and pin 4 is at y 133.75.
+- `J2` takes power from `+3.3V`, not from `led_vdd` or `ir_vdd`. A Qwiic device must not use address `0x20`.
+- The assembler fits `J2`. The BOM lists `J2`, and the position file lists it on the `bottom` side.
+- B.SilkS shows "Qwiic" and a "GND" pin-1 marker for `J2`.
+- `J1` is the battery connector, a Molex PicoBlade 1.25 mm `53261-0271`. Pin 1 is `BAT` (+), and pin 2 is `GND`.
+- `J1` uses the `Connector_Molex:Molex_PicoBlade_53261-0271_1x02-1MP_P1.25mm_Horizontal` footprint and its stock 3D model. Its MP pads have no connection.
+- `J1` is on B.Cu at `(38.55, 149.625)`, rotation -90. The connector mouth faces +x, toward `U1`. The 0.5 mm copper-to-edge rule on pads 1 and 2 sets this x.
+- The `J1` mating parts are the `51021-0200` plug housing and `50079-8000` crimp terminals.
+- B.SilkS shows "+" and "-" beside the `J1` pins and a "Battery" label.
+- `J1` pad 1 agrees with circuit 1 on sheet 2 of the Molex drawing `532610001-SD`. The verification date is 2026-11-02.
 - `ENC1` is the custom Ano Rotary part. It uses `ano_enc1`, `ano_enc2`, and `ano_sw1`-`ano_sw5`.
 - `D2`-`D7` form a cascade of six XINGLIGHT `XL-2020RGBC-WS2812B` status LEDs round the `ENC1` wheel.
 
@@ -332,9 +356,19 @@ The encoder directions map to these expander bits. Measured on unit 1 on 2026-07
 
 All 11 XIAO edge pads, D0-D10, are in use. `D10` or `GPIO18` carries `led_en`.
 
-The board has no test points. It has no probe pads for signals.
+`TP1`-`TP6` and `U1` pads 24-31 give probe access on the front. The front shell covers them, so remove the shell before you probe.
 
-The bottom pad row is routable. `GPIO4` carries `bat_sense`, and `GPIO5` carries `exp_int`.
+`TP1` to `TP6` connect to `ws`, `sck`, `sd`, `IR EMIT`, `IR REC`, and `led_1`, in that order.
+
+`U1` pads 24, 27, 28, 29, and 31 carry `exp_int`, GND, `bat_sense`, `ir_en`, and `+3.3V`. Pads 25 (`GPIO7`), 26 (`CHIP_EN`), and 30 (`GPIO9`) have no board connection.
+
+The `J2` Qwiic connector gives access to `sda` and `scl`.
+
+The module underside pads, 24-33, face the board back. Pads 24-31 are plated holes, so tracks on F.Cu and B.Cu can reach them.
+
+`GPIO4` carries `bat_sense`, and `GPIO5` carries `exp_int`.
+
+`U1` pads 32 (BAT) and 33 (GND) are SMD pads on B.Cu, and the assembler reflows them. A via next to each pad connects it to F.Cu.
 
 `GPIO6`, pad 29, carries `ir_en`. `GPIO7`, pad 25, is the only free usable pad.
 
@@ -361,6 +395,8 @@ Do not rename or combine these rails. Do not reconnect a switched branch directl
 Each switched rail uses an `AO3401A` P-channel high-side MOSFET and a 1M gate pull-up.
 
 The pull-up keeps the rail off by default. Drive the enable net low to enable the rail.
+
+The F.Cu pour is GND, and the B.Cu pour is `+3.3V`. A GND pad on B.Cu needs a via to the F.Cu GND pour.
 
 `Q2`, `R10`, and `led_en` control the LEDs. `Q3`, `R11`, and `ir_en` control the receiver.
 
@@ -416,9 +452,9 @@ The Dialight `587-1024-147F` has a 3.3-5.5 V rating but zero LCSC stock. See `do
 
 ### IR rail
 
-`Q3` is an `AO3401A` at F.Cu `(38.45, 140.3125)`. It switches `ir_vdd` from `+3.3V`.
+`Q3` is an `AO3401A` at F.Cu `(62.6745, 145.9)`, rotation 180. It switches `ir_vdd` from `+3.3V`.
 
-`ir_vdd` feeds `R6` and `U2`. `R11` is a 1M 0603 resistor at F.Cu `(37.5, 144.0)`.
+`ir_vdd` feeds `R6` and `U2`. `R11` is a 1M 0603 resistor at F.Cu `(64.75, 150.2631)`, rotation 90.
 
 `R11` pulls `ir_en` to `+3.3V`, so the hardware rail is off by default.
 
@@ -428,9 +464,9 @@ The downstream filter uses `R6` 100R and `C3` 100nF. It remains unchanged and su
 
 As a result, `Q3` needs no reservoir.
 
-Keep `Q3` and `R11` near `U1`. Do not move them next to `U2`.
+Keep `Q3` and `R11` near `U1`. Do not move them next to `U2`. Both parts are beside `U1` pad 29.
 
-This placement keeps the high-impedance 1M `ir_en` net short. The approximately 110 mm `ir_vdd` run loses 0.2 mV at 350 uA.
+This placement keeps the high-impedance 1M `ir_en` net short, at approximately 5.5 mm. The approximately 147 mm `ir_vdd` run loses approximately 0.13 mV at 350 uA.
 
 Firmware defaults the IR rail on, although the hardware pull-up defaults it off.
 

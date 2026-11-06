@@ -11,7 +11,7 @@ import board
 import params
 
 from .shape import _chamfered_post, _cut, _fuse, _hole
-from .stack import BOARD_TOP, CAVITY_FRONT, MERGE, SHELL_FRONT
+from .stack import BOARD_TOP, CAVITY_FRONT, FDM_FACE, MERGE, SHELL_FRONT
 
 
 def mic_port():
@@ -40,11 +40,12 @@ def mic_duct_footprint():
     return ("mic duct", x - r, y - r, x + r, y + r)
 
 
-def mic_face():
+def mic_face(fdm=False):
     """The z the inlet actually opens at, which is the keypad recess's own
     floor directly over the board's port rather than SHELL_FRONT: the mic sits
     inside the second island's dish, so the surface around it is already dished
-    down by whatever case.face_depth_at() says there.
+    down by whatever case.face_depth_at() says there. On the FDM front it is
+    that front's own flat face, FDM_FACE.
 
     A function, and a curved surface underneath it, where this was a constant
     over a flat pocket floor. The dish's floor is not level across the mouth,
@@ -56,6 +57,8 @@ def mic_face():
     mic_duct_or() to size the recess this asks about, so the two modules cannot
     both name each other at import time.
     """
+    if fdm:
+        return FDM_FACE
     from .keypad import face_floor_at
 
     return face_floor_at(*mic_port())
@@ -96,9 +99,9 @@ def mic_fillet_r():
     return mic_mouth_r() - mic_taper_r()
 
 
-def mic_taper_top():
+def mic_taper_top(fdm=False):
     """Where the taper stops and the fillet band begins."""
-    return mic_face() - mic_fillet_r()
+    return mic_face(fdm) - mic_fillet_r()
 
 
 def mic_taper_angle():
@@ -174,10 +177,13 @@ def mic_duct(face=SHELL_FRONT):
     )
 
 
-def mic_bore():
+def mic_bore(fdm=False):
     """The whole funnel as a single cut: a stub of the throat at the board, the
     taper's cone opening up off it, the concave quarter-round where that reaches
     mic_face(), and the mouth carried on past that face.
+
+    With fdm, the funnel ends at the FDM front's own flat face, so that front
+    does not move when the recessed front's face moves.
 
     One solid rather than a hole plus separate end features, which is what the
     countersink this replaces was. A tangent arc's base radius *is* the radius
@@ -207,7 +213,7 @@ def mic_bore():
     """
     x, y = mic_port()
     r = mic_fillet_r()
-    base = mic_taper_top()
+    base = mic_taper_top(fdm)
     stub = _hole(x, y, mic_throat_d(), BOARD_TOP - 1, BOARD_TOP + MERGE)
     # Slope carried a MERGE below the board so the cone ends inside the stub
     # rather than on the face the stub is there to pierce.

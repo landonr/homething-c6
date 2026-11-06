@@ -125,8 +125,11 @@ if [[ "${ONLY}" != "schematic" ]]; then
   trap 'rm -rf "${BOARD_DIR}"' EXIT
   # The export exits non-zero when a footprint names a 3D model that is not installed
   # (see export-case-refs.sh), so check the file rather than the status.
+  # --include-tracks also exports the vias. render-board-blender.py puts both under the mask.
+  # Zones stay out because the pours would cover the board. The soldermask layers stay out
+  # because they change the board body colour and the camera framing.
   "${KICAD_CLI}" pcb export glb "${PCB_FILE}" -o "${BOARD_DIR}/c6remote-board.glb" \
-    --force --include-silkscreen >/dev/null 2>&1 || true
+    --force --include-silkscreen --include-pads --include-tracks >/dev/null 2>&1 || true
   if [[ ! -s "${BOARD_DIR}/c6remote-board.glb" ]]; then
     echo "Board GLB export failed: ${PCB_FILE}" >&2
     exit 1

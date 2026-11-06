@@ -25,13 +25,13 @@ It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 bo
 ## SLS and FDM versions
 
 <p align="center">
-  <img alt="Plan of the SLS front face. Shading shows the depth of the dish around the keys and the wheel. The top edge is round." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
+  <img alt="Plan of the SLS front face. Shading shows the depth of the dish around the keys and the wheel. The face rolls down into every wall." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
   <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="260">
 </p>
 <p align="center"><sub>The SLS face (left) shows the dish as a depth gradient. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
 
 <p align="center">
-  <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the top edge is round." src="../docs/readme-assets/case-front-iso-sls.png" width="400">
+  <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the face rolls down into every wall." src="../docs/readme-assets/case-front-iso-sls.png" width="400">
   <img alt="Isometric view of the FDM front shell alone. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-iso-fdm.png" width="400">
 </p>
 <p align="center"><sub>SLS front (left) and FDM front (right), isometric</sub></p>
@@ -43,7 +43,7 @@ Both versions use the same back shell, IR window, interior, and board position. 
 | Front shell | `c6remote-case-front.stl` | `c6remote-case-front-fdm.stl` |
 | Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
 | Face height | Base level | `FDM_FACE_DROP` lower |
-| Top edge | Round, `EDGE_R_FRONT` | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
+| Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
 | LED ring channel | Full depth | Half depth, for a thicker roof |
 | Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
 | Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
@@ -196,7 +196,25 @@ The export contains two front shells. Both shells have the same interior, so the
 
 `c6remote-case-front.stl` is the recessed front. Its face carries a shallow dish around the keys and around the wheel.
 
-`c6remote-case-front-fdm.stl` is the FDM front. Its face is one flat plane and carries the same dish outline as a shallow groove.
+The recessed front's face is one superellipse across its width, from side wall to side wall. `FACE_POWER` is its exponent. The crown runs along the centreline, `FACE_CROWN_OVER_WHEEL` above the knob's measured top. The face falls `FACE_SIDE_DROP` from the crown to each side wall and meets the wall vertically. No edge shows where a flat panel turns into a round.
+
+Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall with the same exponent. Around the plan corners, the section follows the corner arc. As a result, the face meets every wall vertically at one height, `FACE_WALL_TOP`.
+
+`face_z()` states the face. `face_body()` builds a spline fit to it, and the build stops if the fit strays past `FACE_FIT_TOLERANCE`.
+
+Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
+
+The LED ring channel ceiling does not follow the face. A ceiling under the face would drop below the cavity ceiling at the channel mouth. The ceiling is a circular arch of its own instead, `LED_RING_SAG` lower at each side wall. The roof over the channel is `LED_RING_ROOF` thick on the crown line, under the undished face. The face falls faster than the ceiling at the east and west sides of the knob, so the roof is thinner there. The ring roof check holds it above its floor.
+
+The last few tenths of each dish's depth roll into the face with zero slope, so no rim is a cliff. `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` set it per basin, and the necks blend between them. Deeper floor does not change. The floors only rise, so the lands and the LED roof only get thicker.
+
+The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring channel north and south of the knob, so the ring roof check limits how deep they can go.
+
+Each dish depth is measured down from the face, so the dish rim keeps its designed outline. The face falls toward the side walls, so it lowers the dish floor under the outer edge of each outer-column key. In the key dishes, `KEYPAD_LIP_LIFT` gives part of that drop back, so the floor rises to a crest before the rim. The counterbore lands there are the thinnest. The counterbore lands limit how deep `KEYPAD_DISH_DEPTH` and `KEYPAD_DISH_DEPTH_2` can go.
+
+Each cap top is flat and stands `CAP_PROTRUSION` above the face at the cap's centre. The caps in the outer columns stand lower than the caps on the centreline. Each stem stops at its own cap's socket ceiling.
+
+`c6remote-case-front-fdm.stl` is the FDM front. Its face is one flat plane and carries the same dish outline as a shallow groove. It does not roll into the walls.
 
 Use `c6remote-case-pad-fdm.stl` with this front. The keytops have no captive
 flanges, so install this pad from inside before the board. The face holes guide
@@ -210,19 +228,17 @@ Support under the face marks the one cosmetic surface on the case. The other ori
 
 The groove is narrow, so the layer above it bridges the gap in one span. The FDM front needs no support on its face.
 
-The FDM front's face sits `FDM_FACE_DROP` below the recessed front's, so the part is slimmer than a flat face at the raised level.
+The FDM front's face sits `FDM_FACE_DROP` below the recessed front's crown, so the part is slimmer than a flat face at the raised level.
 
-The caps and the wheel stand proud by that much. The recessed front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth.
+On the FDM front, the caps and the wheel stand that much higher above the face than on the recessed front. The recessed front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth. The recessed front's crown stands `FACE_CROWN_OVER_WHEEL` above the knob top.
 
-The drop thins three ceilings that the dish never reaches. The USB pocket roof is the tight one, and `check.py --only fdm` holds all three.
-
-The USB pocket roof and the USB slot roof are flush, at the connector envelope plus `USB_CLEARANCE`. Do not raise one without the other.
+The drop thins the ceilings that the dish never reaches. Run `check.py --only fdm` to check their thickness.
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
-The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed front keeps its round.
+The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed front's face rolls into the walls instead.
 
-The rim runs inside the recessed front's round. The FDM front keeps its groove on flat face outside the chamfer.
+On the recessed front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
 
 `FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. The LED ring channel is half-depth on this front, leaving a thicker printable roof. Run `check.py --only fdm` to validate it.
 
@@ -246,6 +262,10 @@ The preload holds the seam closed.
 
 One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt.
 
+The Qwiic opening has a flush cover with two breakaway bridges. The cover stays in place unless you need the port.
+
+To open the port, remove the cover before you install the board. Break both bridges carefully and trim any nubs that obstruct the plug. Do not press on the connector.
+
 Prepare the back shell first:
 
 1. Insert the IR window from inside the back shell.
@@ -253,7 +273,7 @@ Prepare the back shell first:
 3. Apply adhesive to the continuous shoulder below the interior flange.
 4. Let the adhesive set.
 
-Prepare the battery before shell assembly. Stretch-release adhesive strips hold the pouch cell:
+Prepare the battery before shell assembly. Use the PicoBlade plug for J1. The model reserves a wire path from the connector, but does not measure the mating plug. Verify the plug and wire fit on the first print. Stretch-release adhesive strips hold the pouch cell:
 
 1. Stick two stretch-release adhesive strips to the pouch.
 2. Put the pouch on the back face of the board in the cell position, with its leads toward J1.
@@ -280,9 +300,9 @@ Install the IR window before shell assembly. Its flange is not accessible after 
 
 ## V2 board
 
-The case does not make a V2 board compatible with the V3 case. The V2 IR parts and upper keys do not align with the current openings. Use a V2 board only as a bench aid.
+The case is for the current board. A V2 board has different IR parts, connectors, and XIAO placement. Its USB connector does not align with the opening. Its fit in these shells is not verified.
 
-A V2 board rests on the back shell support ledges, `SUPPORT_GAP` lower than the V3 board. The front ledges do not touch it. Its SW1 and SW2 also sit nearer the grip end.
+The V2 pad models place SW1 and SW2 for a board at `SUPPORT_GAP` below the current board. Their fit does not establish compatibility with the shells.
 
 For a V2 board, print `c6remote-case-pad-fdm-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad-fdm.stl`.
 
@@ -323,7 +343,9 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
 - Keep the microphone funnel aligned with the board port.
-- Keep the USB slot and pocket clear of the connector shell.
+- Keep the USB slot clear of the connector shell.
+- Keep the Qwiic plug path clear after removal of the breakaway cover.
+- Keep the battery plug and wire path clear of the case and cell.
 - Keep support ledges clear of board parts, the end screw block, and the cell.
 - Keep the front ledges clear of top parts, the button pad, and the caps.
 - Keep the cell envelope clear of board parts and the end screw block.

@@ -9,10 +9,10 @@
 #   - c6remote-board.step       full assembly, source of the keepout heights (untracked)
 #   - c6remote-board.glb        mesh assembly for viewers (untracked)
 #
-# J1 is absent from both assembly exports: its footprint points at a 3D model path
-# that does not exist. J1 is a battery connector, so its height is a real gap in
-# the bottom-side keepout, not a cosmetic one. D2-D7 use the checked-in
-# 3dmodels/WS2812C-2020.step and are present.
+# J1 uses the stock KiCad PicoBlade 53261-0271 model, so both assembly exports
+# include the battery connector. D2-D7 use the checked-in
+# 3dmodels/WS2812C-2020.step and are present. SW1-SW11 have only the
+# 3dmodels/TL3315NF160Q.wrl model, so the STEP export omits them.
 #
 # Override the kicad-cli path on non-default installs:
 #   KICAD_CLI=/path/to/kicad-cli scripts/export-case-refs.sh
@@ -31,8 +31,8 @@ fi
 
 mkdir -p "$OUT"
 
-# The assembly exports exit 2 because J1 references a 3D model that is not
-# installed, so check the output file rather than the status.
+# The STEP export exits 2 because a STEP file cannot use the VRML switch models.
+# Check the output file, not the status.
 export_assembly() {
 	local out="$1"
 	shift

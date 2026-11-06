@@ -15,6 +15,7 @@ from .backform import *  # noqa: F401,F403
 from .hardware import *  # noqa: F401,F403
 from .wheel_ring import *  # noqa: F401,F403
 from .mic import *  # noqa: F401,F403
+from .qwiic import *  # noqa: F401,F403
 from .usb import *  # noqa: F401,F403
 from .ir import *  # noqa: F401,F403
 from .legends import *  # noqa: F401,F403

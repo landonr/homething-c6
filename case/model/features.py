@@ -47,7 +47,7 @@ import board
 import cache
 import params
 
-from . import caps, cell, front_ledge, hardware, ir, keypad, mic, shells, support, usb, wheel_ring
+from . import caps, cell, front_ledge, hardware, ir, keypad, mic, shells, support, usb, wheel_ring, qwiic
 from .shape import _cut, _slab
 from .stack import (
     CAVITY_FRONT,
@@ -70,6 +70,7 @@ MODULES = {
     "shells": shells,
     "support": support,
     "usb": usb,
+    "qwiic": qwiic,
     "wheel_ring": wheel_ring,
 }
 
@@ -286,11 +287,15 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             sorted(set(
                 _reads("hardware.end_screw_block")
                 + _reads("hardware.side_skirt_inner_x")
+                + _reads("hardware.end_screw_axis")
+                + _reads("hardware.end_screw_side")
                 + _reads("hardware.end_screw_block_span")
             )),
         )
     )
-    out.append(_entry("usb_pocket", "usb.usb_pocket", "cut", usb.usb_pocket()))
+    out.append(_entry(
+        "qwiic_skirt_relief", "shells.qwiic_skirt_relief", "cut", shells.qwiic_skirt_relief(),
+    ))
     out.append(_entry(
         "grip_skirt_relief", "shells.grip_skirt_relief", "cut",
         shells.grip_skirt_relief(),
@@ -339,7 +344,7 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.led_ring_channel(fdm),
         ),
-        _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore()),
+        _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)),
     ]
     # Both holes per key, at the depths front_shell() cuts them, so a box is the
     # cut rather than the ceiling it opens in.
@@ -383,6 +388,7 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "keypad_recess", "keypad.keypad_recess", "cut", keypad.keypad_recess()
         ),
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
     ]
     return out
@@ -427,12 +433,18 @@ def _back(runs, obstacles):
     )
     out += [
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
         _entry(
             "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
         ),
         _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
     ]
+    out.append(_entry("qwiic_knockout_panel", "qwiic.qwiic_knockout_panel", "add", qwiic.qwiic_knockout_panel()))
+    out += _split(
+        "qwiic_knockout_tab", "qwiic.qwiic_knockout_tabs", "add", qwiic.qwiic_knockout_tabs(), axis="y",
+        reads=sorted(set(_reads("qwiic.qwiic_knockout_tabs") + _reads("qwiic.qwiic_knockout_panel"))),
+    )
     return out
 
 
@@ -468,7 +480,7 @@ def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTE
         ]
     for ref in keypad.island_refs(name):
         x, y = placements[ref][:2]
-        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(x, y)))
+        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(ref)))
         out.append(
             _entry(
                 f"plunger.{ref}",

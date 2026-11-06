@@ -37,7 +37,7 @@ Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 
 | Microphone | MK1 wired to INMP441 pin numbers, so the ICS-43434 gets the bit clock on WS and its SD pad buried in the GND pour | MK1 on the ICS-43434 numbering, `sck`/`ws`/`sd` on GPIO2/GPIO0/GPIO21 |
 | Battery sense | Absent, no `bat_sense` net and no R7/R8 divider | R7/R8 100k divider to GPIO4 |
 | Expander interrupt | Absent, no `exp_int` net and no R9 pull-up | R9 100k pull-up, nINT to GPIO5 |
-| Battery connector | J1 through-hole `S2B-PH-K` | J1 SMD `S2B-PH-SM4-TB` |
+| Battery connector | J1 through-hole `S2B-PH-K` | J1 SMD Molex PicoBlade 1.25 mm `53261-0271` on the back, mouth toward `U1` |
 | Board edge | Square corners, four square encoder cutouts | 3mm filleted corners, real Adafruit ANO cutout shapes |
 | Mounting | No fixing points | No mounting holes. `H1`-`H3` were removed on 2026-10-14 |
 | IR emitter | D1 on a plain 3mm LED footprint on the front (F.Cu), leads bent 90° by PCBWay at assembly | D1 on the back face (B.Cu) at 61.98,32.75 on a forked horizontal footprint with + and - silk glyphs, so the bend is designed in, and `R3` at 10R for about 150mA |

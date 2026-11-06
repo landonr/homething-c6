@@ -18,7 +18,6 @@ from build123d import (
     Compound,
     chamfer,
     extrude,
-    fillet,
     loft,
 )
 
@@ -27,7 +26,7 @@ import cache
 import params
 
 from .backform import back_form
-from .caps import _key_prism, cap_counterbore, cap_face_hole, cap_outline
+from .caps import _key_prism, cap_counterbore, cap_face_hole, cap_face_hole_lead_in
 from .hardware import (
     end_screw_block,
     end_screw_cuts,
@@ -35,10 +34,11 @@ from .hardware import (
     end_screw_wall_chamfer,
 )
 from .front_ledge import front_ledge_runs
-from .support import front_support_cuts, support_runs
+from .support import front_support_cuts, support_obstacles, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
-from .keypad import face_depth_at, keypad_outline_groove, keypad_recess
-from .mic import mic_bore, mic_duct
+from .keypad import keypad_outline_groove, keypad_recess
+from .mic import mic_bore, mic_duct, mic_face
+from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
 from .shape import (
     _cut,
     _fuse,
@@ -62,18 +62,20 @@ from .stack import (
     SKIRT_OUT,
     STIFFENED_WALL,
     SUPPORT_TOP,
+    face_body,
 )
-from .usb import usb_pocket, usb_slot
+from .usb import usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
 def front_edge_round(fdm=False):
-    """Top-edge size: FDM chamfer leg or recessed-front fillet radius.
+    """Top-edge size in plan: the FDM chamfer leg, or how far the recessed
+    front's face rolls into each end wall.
 
     Here rather than read at the edge operation so checks/fdm.py can ask for the
     number it is about to measure on the built shell without restating the
     choice."""
-    return params.EDGE_R_FRONT_FDM if fdm else params.EDGE_R_FRONT
+    return params.EDGE_R_FRONT_FDM if fdm else params.FACE_END_ROLL
 
 
 def skirt_relief():
@@ -404,6 +406,33 @@ def catch_x():
     ]
 
 
+def qwiic_skirt_relief():
+    """Join the port to its support reliefs without a thin skirt tongue."""
+    obstacle = next(solid for name, solid in support_obstacles() if name == "J2")
+    bounds = obstacle.bounding_box()
+    opening = qwiic_slot().bounding_box()
+    if not bounds.min.Y < opening.min.Y < opening.max.Y < bounds.max.Y:
+        raise ValueError("J2 support keepout does not contain the Qwiic opening")
+    floor = SKIRT_BOTTOM - MERGE
+    roof = opening.max.Z + params.QWIIC_SKIRT_CLEARANCE
+    if params.SKIRT_TRANSITION_CHAMFER <= 0:
+        return Pos(bounds.center().X, bounds.center().Y, (floor + roof) / 2) * Box(
+            bounds.size.X, bounds.size.Y, roof - floor,
+        )
+    if not 0 < params.SKIRT_LEAD_ANGLE < 90:
+        raise ValueError("SKIRT_LEAD_ANGLE must be between 0 and 90 degrees")
+    run = (roof - SKIRT_BOTTOM) / math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
+    left = bounds.min.Y - params.SKIRT_LEAD_FIT
+    right = bounds.max.Y + params.SKIRT_LEAD_FIT
+    plane = Plane(origin=(bounds.min.X, 0, 0), x_dir=(0, 1, 0), z_dir=(1, 0, 0))
+    profile = plane * Polygon(
+        (left - run, floor), (right + run, floor),
+        (right + run, SKIRT_BOTTOM), (right, roof),
+        (left, roof), (left - run, SKIRT_BOTTOM), align=None,
+    )
+    return extrude(profile, amount=bounds.size.X, dir=(1, 0, 0))
+
+
 @cache.solid
 def skirt_lead_in_cuts():
     """Return material removed from the skirt for the folding lead-ins."""
@@ -414,7 +443,7 @@ def skirt_lead_in_cuts():
         skirt_stiffener(),
     )
     cuts = front_support_cuts()
-    skirt = _cut(skirt, *cuts)
+    skirt = _cut(skirt, *cuts, qwiic_skirt_relief())
     original = skirt
     tolerance = 1e-5
     profiles = []
@@ -525,8 +554,8 @@ def catch_detents():
 
 
 def shared_cuts():
-    """D1 and USB end-wall cuts shared by both shells, unchanged for U2's move."""
-    return [usb_slot(), emitter_bore()]
+    """The USB, Qwiic, and emitter cuts pass through both shells."""
+    return [usb_slot(), qwiic_slot(), emitter_bore()]
 
 
 @cache.solid
@@ -552,7 +581,7 @@ def back_shell():
         *catch_detents(),
         *side_catch_detents(),
     )
-    return _cut(
+    shell = _cut(
         shell,
         *shared_cuts(),
         ir_window_opening(),
@@ -560,63 +589,7 @@ def back_shell():
         *end_screw_cuts(),
         end_screw_wall_chamfer(),
     )
-
-
-OCC_CHAMFER_GAP = 1e-3
-"""One micron, under print resolution: see _chamfer_usb_pocket_lip()."""
-
-
-def _chamfer_usb_pocket_lip(shell):
-    """Chamfer the pocket's inboard lip, where the USB connector catches.
-
-    usb_pocket() leaves a square convex corner where its inboard wall meets
-    the cavity ceiling at CAVITY_FRONT. The chamfer must come off the shell
-    after the cut, not off the cut box: chamfering the box shrinks the void
-    and adds material, which makes the catch worse. At the full wall height
-    the cut consumes that face completely and leaves one 45 degree ramp with
-    no square arris on top of it.
-
-    The wall is measured off the built pocket, not off CAVITY_FRONT_USB: the
-    pocket roof stands MERGE above that plane, and a chamfer sized from the
-    plane alone leaves exactly the MERGE-tall arris this exists to remove.
-
-    Where that wall stands is read off the same solid, and for the same reason.
-    usb_pocket() reaches USB_POCKET_INBOARD_REACH past the connector's envelope
-    and its clearance on this side alone, so the envelope plus USB_CLEARANCE is
-    no longer where the wall is; reading the pocket is what makes the ramp
-    follow the wall wherever the pocket puts it rather than having to be told
-    twice. Its span across the pocket comes off the same box.
-
-    Selected by position, as _uncut_support() selects its own edges: the one
-    edge lying in the CAVITY_FRONT plane on the pocket's inboard wall that
-    spans the pocket's width. Call this directly after the pocket cut, while
-    the corner is still the only edge that matches. The count assertion makes
-    a later geometry change fail here instead of cutting some other edge.
-    """
-    pocket = usb_pocket().bounding_box()
-    wall = pocket.max.Z - CAVITY_FRONT
-    if params.USB_POCKET_LIP_CHAMFER > wall + OCC_CHAMFER_GAP:
-        raise ValueError(
-            f"USB_POCKET_LIP_CHAMFER {params.USB_POCKET_LIP_CHAMFER} is past the "
-            f"pocket wall's own {wall:.2f} height"
-        )
-    # OCCT refuses a chamfer that consumes its face exactly, and the full-height
-    # value asks for exactly that, so stop one micron short of the pocket roof.
-    length = min(params.USB_POCKET_LIP_CHAMFER, wall - OCC_CHAMFER_GAP)
-    wall_y = pocket.max.Y
-    span = pocket.size.X
-    tol = 1e-4
-    lip = [
-        edge
-        for edge in shell.edges()
-        if abs(edge.bounding_box().min.Z - CAVITY_FRONT) < tol
-        and abs(edge.bounding_box().max.Z - CAVITY_FRONT) < tol
-        and abs(edge.center().Y - wall_y) < tol
-        and edge.bounding_box().size.X > span / 2
-    ]
-    if len(lip) != 1:
-        raise ValueError(f"expected one USB pocket lip edge, found {len(lip)}")
-    return chamfer(lip, length)
+    return _fuse(shell, qwiic_knockout_panel(), *qwiic_knockout_tabs())
 
 
 def _cap_face_hole_cut(ref, fdm=False):
@@ -624,58 +597,19 @@ def _cap_face_hole_cut(ref, fdm=False):
 
     The recessed front meets a key hole at different Z around its perimeter,
     so a post-boolean edge chamfer is a fragmented non-planar loop that OCCT
-    cannot chamfer reliably. Build a triangulated taper from the face depth at
+    cannot chamfer reliably. Build a triangulated taper from the face height at
     each outline point instead. The straight prism beneath it preserves the
     guide and the counterbore shoulder preserves the cap's retention.
+
+    The triangles come from cap_face_hole_lead_in(), which counterbore_land()
+    also reads, so the land arithmetic sees the surface this cut leaves.
     """
     x, y = board.components()[ref][:2]
-    size = cap_face_hole(ref)
-    amount = params.CAP_FACE_HOLE_CHAMFER
-    depth = amount * math.tan(math.radians(params.CAP_FACE_HOLE_CHAMFER_ANGLE))
-    inner_xy = cap_outline(size, x, y)
-    outer_xy = cap_outline(size + 2 * amount, x, y)
-
-    def surface_z(px, py):
-        return front_face(True) if fdm else SHELL_FRONT - face_depth_at(px, py)
-
-    inner_low = [(px, py, surface_z(px, py) - depth) for px, py in inner_xy]
-    inner_high = [(px, py, surface_z(px, py) + MERGE) for px, py in inner_xy]
-    outer_high = [(px, py, surface_z(px, py) + MERGE) for px, py in outer_xy]
-
-    # A triangular tube around the opening: its sloped A-B wall is the visible
-    # chamfer, while the other two walls merely close the cutter for OCCT. Each
-    # quad is split into triangles because the dish makes its four corners
-    # non-coplanar. This follows the face locally instead of introducing the
-    # shelf a single planar loft made in an X/Y bisect.
-    faces = []
-    count = len(inner_xy)
-    for index in range(count):
-        following = (index + 1) % count
-        for a, b, c, d in (
-            (
-                inner_low[index],
-                inner_low[following],
-                inner_high[following],
-                inner_high[index],
-            ),
-            (
-                inner_high[index],
-                inner_high[following],
-                outer_high[following],
-                outer_high[index],
-            ),
-            (
-                inner_low[index],
-                inner_low[following],
-                outer_high[following],
-                outer_high[index],
-            ),
-        ):
-            faces.append(Polygon(a, b, c))
-            faces.append(Polygon(a, c, d))
-    taper = Solid(Shell(faces))
+    taper = Solid(
+        Shell([Polygon(*corners) for _, corners in cap_face_hole_lead_in(ref, fdm)])
+    )
     return _fuse(
-        _key_prism(x, y, size, CAVITY_FRONT - 1, SHELL_FRONT + 1), taper
+        _key_prism(x, y, cap_face_hole(ref), CAVITY_FRONT - 1, SHELL_FRONT + 1), taper
     )
 
 
@@ -698,19 +632,23 @@ def front_shell(fdm=False):
     carries a 45 degree chamfer where the recessed front has a round, leaving
     flat face outside the finer groove. See
     params.FDM_FACE_DROP, params.FDM_OUTLINE_W and params.EDGE_R_FRONT_FDM.
+
+    The recessed front's face is not flat. It is the superellipse that
+    face_z() states, crown at SHELL_FRONT, rolled down into every wall to
+    FACE_WALL_TOP. face_body() builds it. The FDM face stays flat, because it
+    prints face down.
     """
     # The body is built to its own face and finished there before any key or
     # wheel hole is cut into it: the only top edge loop is the outer perimeter,
-    # so its chamfer or fillet cannot land on an aperture's own edge.
+    # so its chamfer or roll cannot land on an aperture's own edge.
     face = front_face(fdm)
     inner, outer = _profiles()
-    body = _slab(outer, SKIRT_BOTTOM, face)
-    top_edges = [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01]
-    body = (
-        chamfer(top_edges, front_edge_round(True))
-        if fdm
-        else fillet(top_edges, front_edge_round(False))
-    )
+    if fdm:
+        body = _slab(outer, SKIRT_BOTTOM, face)
+        top_edges = [e for e in body.edges() if e.bounding_box().min.Z > face - 0.01]
+        body = chamfer(top_edges, front_edge_round(True))
+    else:
+        body = face_body()
     shell = _cut(body, _slab(inner, SHELL_SEAM - 0.01, CAVITY_FRONT), *skirt_cuts())
 
     # The mic hears through the board, so the inlet is on the front. A duct down
@@ -718,9 +656,11 @@ def front_shell(fdm=False):
     # the whole cavity, and mic_bore() drills the funnel through it as one solid,
     # opening in the keypad recess's own curved floor rather than SHELL_FRONT.
     # The duct goes in solid: see mic_duct() for why it cannot be the tube it was.
+    # On the recessed front the post stops inside the ceiling. A post top at the
+    # crown touches the face tangentially along the crown line.
     shell = _fuse(
         shell,
-        mic_duct(face),
+        mic_duct(face if fdm else (CAVITY_FRONT + mic_face()) / 2),
         skirt_stiffener(),
         end_screw_block(),
         *front_ledge_runs(),
@@ -731,11 +671,10 @@ def front_shell(fdm=False):
     # through the board, which stop well under CAVITY_FRONT.
     # The support ledges cross the skirt plane to reach the back lap. Match their
     # derived breaks in the skirt so the shells can close around them.
-    shell = _cut(shell, usb_pocket())
-    shell = _chamfer_usb_pocket_lip(shell)
     shell = _cut(
         shell,
         *front_support_cuts(),
+        qwiic_skirt_relief(),
         *skirt_lead_in_cuts().solids(),
         grip_skirt_relief(),
     )
@@ -759,7 +698,7 @@ def front_shell(fdm=False):
         *side_catch_pockets(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(fdm),
-        mic_bore(),
+        mic_bore(fdm),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess(),
         *shared_cuts(),

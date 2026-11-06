@@ -142,11 +142,11 @@ The page has no password, so use it only on a trusted network.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-front-annotated-dark.svg">
-    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder with 5 addressable buttons, RGB status LEDs, tactile switches, GPIO expander, and XIAO ESP32-C6 module." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
+    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder with 5 addressable buttons, RGB status LEDs, tactile switches, and GPIO expander." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-back-annotated-dark.svg">
-    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, and JST PH battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, XIAO ESP32-C6 module, Qwiic I2C port, and Molex PicoBlade battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 <p align="center"><sub>PCB front and back</sub></p>
@@ -168,7 +168,8 @@ The page has no password, so use it only on a trusted network.
 | `ENC1` | [Adafruit ANO rotary encoder](https://cdn-learn.adafruit.com/assets/assets/000/104/942/original/tsw.pdf) | Scroll wheel: encoder channels plus five switch signals |
 | `D2`–`D7` | [XL-2020RGBC-WS2812B addressable LEDs](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf) | Status light ring of 6 round the scroll wheel, WS2812B protocol: `GPIO17` drives `D2` DIN, and DOUT cascades clockwise through `D3`, `D6`, `D4`, and `D5` to `D7`. VDD sits on the switched `led_vdd` rail rather than straight on `+3.3V`, gated by `Q2` below, with `C4` as the only bulk cap on the chain (see [`docs/timeline.md`](docs/timeline.md)) |
 | `Q2`, `R10`, `C4` | [AO3401A P-channel MOSFET](https://www.aosmd.com/res/datasheets/AO3401A.pdf), 1M 0603 pull-up, 1µF X7R 0805 cap | LED rail load switch: high-side `Q2` gates `+3.3V` (source) onto `led_vdd` (drain) for `D2`–`D7`, gate net `led_en` on `U1` pad 11 (`GPIO18`/`D10`), driven low for rail on. `R10` pulls the gate to the source so the rail is off by default at boot while `GPIO18` floats as an input; `C4` is the mid-chain bulk cap on `led_vdd`. Cuts the ~3.0mA the six LEDs draw when dark to tens of µA (calculated, not yet measured). Firmware must hold `GPIO17` low or high-impedance whenever the rail is down, or DIN pushes current into the dead rail |
-| `J1` | [JST S2B-PH-SM4-TB(LF)(SN)](https://www.jst-mfg.com/product/pdf/eng/ePH.pdf) | Battery connector, PH series right-angle SMD |
+| `J1` | [Molex PicoBlade 53261-0271](https://www.molex.com/content/dam/molex/molex-dot-com/products/automated/en-us/salesdrawingpdf/532/53261/532610271_sd.pdf) | Battery connector, PicoBlade 1.25 mm right-angle SMD on the back copper. Its mouth faces `U1`. Pin 1 is BAT, next to the "+" silk. The cell plug is a `51021-0200` housing with `50079-8000` terminals. Cells with 1.25 mm plugs have no standard polarity, so some cells have reversed leads. Before you connect a cell, make sure that its polarity agrees with the silk |
+| `J2` | [JST SM04B-SRSS-TB(LF)(SN)](https://www.jst-mfg.com/product/pdf/eng/eSH.pdf) | Qwiic I2C port, SH series right-angle SMD on the back copper. Its mouth faces the long edge opposite `U1`. A Qwiic device must not use `0x20`, the `U3` address |
 
 The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
 

@@ -14,12 +14,17 @@ from build123d import Box, Pos
 import board
 import params
 
+from .qwiic import battery_plug_envelope
+
 
 @functools.cache
 def cell_obstacles(top, x0, x1):
     """(y_min, y_max) of everything under the board reaching below the cell's top
-    face, within the cell's width. Only two do: U2's leads and J1."""
+    face, within the cell's width. Include the battery plug and wire corridor."""
     spans = []
+    plug = battery_plug_envelope().bounding_box()
+    if plug.min.Z < top and plug.max.X > x0 and plug.min.X < x1:
+        spans.append((plug.min.Y, plug.max.Y))
     for solid in board.assembly_solids():
         box = solid.bounding_box()
         if box.min.Z >= top or box.max.X <= x0 or box.min.X >= x1:
@@ -37,7 +42,13 @@ def cell_obstacles(top, x0, x1):
             pass
         if -params.UNMODELLED_DEPTH < top:
             spans.append((cy0, cy1))
-    return sorted(spans)
+    merged = []
+    for lo, hi in sorted(spans):
+        if merged and lo <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(hi, merged[-1][1]))
+        else:
+            merged.append((lo, hi))
+    return merged
 
 
 @functools.cache
@@ -76,6 +87,8 @@ def cell_axis():
     z = -(params.CELL_TOP_GAP + params.CELL_T / 2)
     lo, hi = cell_bay()
     length = params.CELL_L + params.CELL_END_FIT
+    if hi - lo < length:
+        raise ValueError(f"cell bay is {hi - lo:.2f} long, needs {length:.2f}")
     y0 = min(lo + params.CELL_END_MARGIN, hi - length)
     return x, z, y0, y0 + length
 

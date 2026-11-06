@@ -104,16 +104,20 @@ def light_path(shells, pad):
 
         # The package's own column, not its footprint: its outer edge sits under
         # the raked outer wall by design, because that rake is what the LEDs are
-        # aimed at. See LED_RING_OVER.
-        channel = Pos(x, y, (z0 + case.LED_RING_TOP) / 2) * Cylinder(
-            radius=PROBE_D / 2, height=case.LED_RING_TOP - z0 - 0.02
+        # aimed at. See LED_RING_OVER. The ceiling is an arch, so the
+        # column stops under the lowest ceiling across its own width and the
+        # roof probe starts over the highest.
+        ceilings = [case.led_ring_ceiling_at(x + d) for d in (-PROBE_D / 2, PROBE_D / 2)]
+        low, high = min(ceilings), max(ceilings)
+        channel = Pos(x, y, (z0 + low) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=low - z0 - 0.02
         )
         if _volume(shells.intersect(channel)) > TOLERANCE:
             problems.append(f"{ref} fires into material: the channel is not open over it")
 
         floor = case.face_floor_at(x, y)
-        roof = Pos(x, y, (case.LED_RING_TOP + floor) / 2) * Cylinder(
-            radius=PROBE_D / 2, height=floor - case.LED_RING_TOP - 0.04
+        roof = Pos(x, y, (high + floor) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=floor - high - 0.04
         )
         if _fill_fraction(shells, roof) < 0.99:
             problems.append(f"{ref} has no solid roof above the channel to shine through")
@@ -346,7 +350,7 @@ def led_ring(front):
     wx, wy = board.wheel_center()
     r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
     r_out = case.led_ring_mouth_outer_r()
-    z0, z1 = case.CAVITY_FRONT + 0.05, case.LED_RING_TOP - 0.05
+    z0 = case.CAVITY_FRONT + 0.05
     per_sector = math.ceil(LED_RING_SAMPLES / RING_CROP_SECTORS)
     problems = []
     for first in range(0, LED_RING_SAMPLES, per_sector):
@@ -360,6 +364,11 @@ def led_ring(front):
             deg = round(math.degrees(a))
             cos_a, sin_a = math.cos(a), math.sin(a)
             crop = _Crop(sector, *_ring_crop_box(wx, wy, r_web, r_out, [a], z0))
+            # The ceiling is an arch and is lowest at the far end of this
+            # ray, so every reading on it stays under that.
+            z1 = min(
+                case.led_ring_ceiling_at(wx + r * cos_a) for r in (r_web, r_out)
+            ) - 0.05
 
             web = Pos(
                 wx + r_web * cos_a, wy + r_web * sin_a, (z0 + z1) / 2
@@ -406,8 +415,11 @@ def led_ring(front):
                 )
 
             floor = case.face_floor_at(rx, ry)
-            roof = Pos(rx, ry, (case.LED_RING_TOP + floor) / 2) * Cylinder(
-                radius=PROBE_D / 2, height=floor - case.LED_RING_TOP - 0.04
+            ceiling = max(
+                case.led_ring_ceiling_at(rx + d) for d in (-PROBE_D / 2, PROBE_D / 2)
+            )
+            roof = Pos(rx, ry, (ceiling + floor) / 2) * Cylinder(
+                radius=PROBE_D / 2, height=floor - ceiling - 0.04
             )
             if crop.fill_fraction(roof) < 0.99:
                 problems.append(f"roof open over the channel at {deg} degrees")
@@ -424,6 +436,10 @@ def inner_chamfer_is_cut(front, front_fdm):
     The FDM channel is only a little taller than the bevel, so probes stay
     inside the bevel itself rather than on its nearly vanished upright foot.
     Four bearings also catch a section clipped or omitted on one side.
+
+    The recessed front's ceiling is an arch, which cuts the bevel short
+    on the east and west bearings. There a height counts only while it stays
+    INNER_CHAMFER_TOLERANCE under what led_ring_chamfer_at() says is left.
     """
     problems = []
     wx, wy = board.wheel_center()
@@ -438,8 +454,16 @@ def inner_chamfer_is_cut(front, front_fdm):
                 shell,
                 *_ring_crop_box(wx, wy, r_web, r_out, [angle], case.CAVITY_FRONT),
             )
+            left = (
+                params.LED_RING_INNER_CHAMFER
+                if fdm
+                else case.led_ring_chamfer_at(angle)
+            )
             for fraction in (0.25, 0.5, 0.75):
-                z = base + fraction * params.LED_RING_INNER_CHAMFER
+                rise = fraction * params.LED_RING_INNER_CHAMFER
+                if rise > left - INNER_CHAMFER_TOLERANCE:
+                    continue
+                z = base + rise
                 width = _channel_width(crop, angle, z)
                 if width is None:
                     problems.append(
@@ -493,11 +517,10 @@ def wheel_seat_clearance(front):
     what it claimed before. The bore is cut from under the ceiling to past the
     face, but the shell it is cut out of ends at the face, and over the wheel
     that face is the keypad recess's wheel basin: a dish whose floor is
-    case.face_floor_at() and not SHELL_FRONT. Just outside the bore that floor
-    sits half a millimetre below the knob's own top, so between the two there is
-    no front shell on this ray at any radius the search covers. Sampling up
-    there sent the bisection to find a wall above all the material there was,
-    and a bisection that meets nothing used to return its own upper bound:
+    case.face_floor_at() and not SHELL_FRONT. Just outside the bore the dish
+    takes that floor below the knob's own top on every bearing, so between the
+    two there is no front shell on this ray at any radius the search covers. Sampling up there sent the bisection to find
+    a wall above all the material there was, and a bisection that meets nothing used to return its own upper bound:
     17.03 against a requirement of 16.05, which passes, and passes no matter
     what the opening does. So the span ends at that floor, read at `needed`,
     the tightest radius the seat is allowed to have and therefore the lowest the

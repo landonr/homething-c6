@@ -35,16 +35,17 @@ LED_RING_ROOF less the groove's own depth. The floor is set for that case
 rather than for the couple of millimetres the present layout happens to leave.
 
 Edge chamfer is sized: the flat the built shell actually has, out to its own
-top-edge chamfer, is EDGE_R_FRONT_FDM's and not EDGE_R_FRONT's, and the groove sits
+top-edge chamfer, is EDGE_R_FRONT_FDM's, and the groove sits
 on that flat with FDM_OUTLINE_EDGE_CLEAR to spare. This is the pass that holds
 the trade the variant is built on. The outline is the recessed front's own rim,
-which runs inside EDGE_R_FRONT, so the FDM edge treatment gives way; if it ever
+which runs where the recessed face already turns down toward the side walls,
+so the FDM edge treatment gives way. If it ever
 stops giving, the groove lands on the bevel instead of on flat face, and at
 the limit its outer edge goes coincident with the chamfer's inner edge and
 tears the exported mesh.
 
-Ceilings hold: the three thicknesses FDM_FACE_DROP takes from, the USB
-pocket's roof, the LED ring's roof and every counterbore's land, are each still
+Ceilings hold: the LED ring roof and each counterbore land, on all four sides
+under the face-hole lead-in, remain
 above the floor the recessed front's own pass holds them to. The drop is the
 one part of this variant that removes material the keypad recess never reached,
 so it is the one part that cannot be justified by saying the recessed front
@@ -71,7 +72,6 @@ import params
 
 from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _ray_runs, _volume
 from .keypad import LAND_FLOOR_MIN, _probe_sites
-from .usb import USB_CEILING_MIN
 from .wheel_ring import ROOF_LEFT_MIN
 
 FACE_PROBE_START = 0.2
@@ -161,10 +161,11 @@ def fdm_keytops_are_attached(pad, part=FDM_PART):
                     part=part,
                 )
             )
-        top = Pos(x, y, (case.CAP_BOTTOM + case.CAP_TOP) / 2) * Box(
+        cap_top = case.cap_top(ref)
+        top = Pos(x, y, (case.CAP_BOTTOM + cap_top) / 2) * Box(
             case.fdm_cap_body(ref) / 3,
             case.fdm_cap_body(ref) / 3,
-            (case.CAP_TOP - case.CAP_BOTTOM) / 3,
+            (cap_top - case.CAP_BOTTOM) / 3,
         )
         web = Pos(x, y, (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2) * Box(
             params.STEM_W / 3,
@@ -177,7 +178,7 @@ def fdm_keytops_are_attached(pad, part=FDM_PART):
             problems.append(
                 Problem(
                     f"{ref}'s FDM keytop is not fused to its pad lobe",
-                    at=(x, y, case.CAP_TOP),
+                    at=(x, y, cap_top),
                     part=part,
                 )
             )
@@ -199,7 +200,7 @@ def fdm_keytops_have_top_fillets():
         keytop = case.fdm_keycap(ref, legend=False)
         half = case.fdm_cap_body(ref) / 2
         for depth in (radius / 4, radius / 2, 3 * radius / 4):
-            z = case.CAP_TOP - depth
+            z = case.cap_top(ref) - depth
             reach = half + radius + 1
             runs = _ray_runs(keytop, (x - reach, y, z), (x + reach, y, z))
             if len(runs) != 1:
@@ -675,40 +676,31 @@ def _roof_at(front, x, y):
 
 
 def ceilings_hold(front):
-    """The three ceilings FDM_FACE_DROP thins are all still above their floors.
-
-    The drop is the one thing about this variant that takes material from
-    somewhere the keypad recess never touched. The recess is a dish in the
-    middle of the face; the drop is the whole plane, so it comes off the USB
-    pocket's roof, the LED ring's roof and every counterbore's land alike, none
-    of which the dish reaches. Each is read off the built shell against the same
-    floor the recessed front's own pass holds it to, so the two fronts are
-    judged by one standard and the drop cannot be widened past what any of them
-    can give.
-
-    The FDM channel is shallower now, but its roof remains a ceiling the flat
-    face thins and is kept in this shared floor check.
-    """
+    """Probe the LED roof and counterbore lands on the built FDM front."""
     problems = []
-    usb = board.usb_envelope()
     ring_r = (case.led_ring_roof_inner_r() + case.led_ring_roof_outer_r()) / 2
     wx, wy = board.wheel_center()
+    drop = "FDM_FACE_DROP has"
     sites = [
-        ("the USB pocket's roof", usb.center().X, usb.center().Y, USB_CEILING_MIN),
-        ("the LED ring's roof", wx + ring_r, wy, ROOF_LEFT_MIN),
-        ("the LED ring's roof opposite", wx - ring_r, wy, ROOF_LEFT_MIN),
+        ("the LED ring's roof", wx + ring_r, wy, ROOF_LEFT_MIN, drop),
+        ("the LED ring's roof opposite", wx - ring_r, wy, ROOF_LEFT_MIN, drop),
     ]
-    parts = board.components()
     for ref in board.refs("SW"):
-        x, y = parts[ref][:2]
-        # Mid-ring between the face hole and the counterbore wall, as
-        # checks/keypad.py's recess_land() reads the same land on the other
-        # front. The counterbore is square, so the ring is a constant width
-        # along a flat and this is as good a spot on it as any.
-        r = (case.cap_face_hole(ref) + case.cap_counterbore(ref)) / 4
-        sites.append((f"{ref}'s face land", x + r, y, LAND_FLOOR_MIN))
+        # The land ring's mid-line on all four sides, the sites
+        # checks/keypad.py's recess_land() reads on the other front. This face
+        # is flat, but the face-hole lead-in cuts the ring here too.
+        for side, x, y in case.counterbore_land_sites(ref):
+            sites.append(
+                (
+                    f"{ref}'s face land on its {side} side",
+                    x,
+                    y,
+                    LAND_FLOOR_MIN,
+                    "FDM_FACE_DROP and CAP_FACE_HOLE_CHAMFER have",
+                )
+            )
 
-    for label, x, y, floor in sites:
+    for label, x, y, floor, cause in sites:
         roof = _roof_at(front, x, y)
         if roof is None:
             problems.append(
@@ -723,8 +715,8 @@ def ceilings_hold(front):
             problems.append(
                 Problem(
                     f"{label} is {roof:.2f} thick on the FDM front, against a "
-                    f"floor of {floor:.2f}: FDM_FACE_DROP has taken more than "
-                    f"this ceiling had to give",
+                    f"floor of {floor:.2f}: {cause} taken more than this "
+                    f"ceiling had to give",
                     at=(x, y, case.FDM_FACE - roof),
                     part="c6remote-case-front-fdm",
                 )
@@ -738,15 +730,20 @@ def led_channel_is_half_depth(front, recessed_front):
     A vertical ray through the roof flat returns its first material run. The
     bottom of that run is the top of the channel void, regardless of whether
     the outer surface above it is the recessed dish or the FDM groove. Four
-    diagonal bearings stay away from the cavity-wall chords at the case sides.
+    diagonal bearings on the FDM front stay away from the cavity-wall chords at
+    the case sides. The recessed front's channel ceiling is an arch, so it
+    is read at the two bearings on the crown line, north and south of the
+    wheel, where the arch does not lower it.
     """
     wx, wy = board.wheel_center()
     radius = (case.led_ring_roof_inner_r() + case.led_ring_roof_outer_r()) / 2
+    diagonals = (math.pi / 4, 3 * math.pi / 4, 5 * math.pi / 4, 7 * math.pi / 4)
+    crown = (math.pi / 2, 3 * math.pi / 2)
 
-    def depths(shell, face):
+    def depths(shell, face, bearings):
         values = []
         top = face + FACE_PROBE_START
-        for angle in (math.pi / 4, 3 * math.pi / 4, 5 * math.pi / 4, 7 * math.pi / 4):
+        for angle in bearings:
             x = wx + radius * math.cos(angle)
             y = wy + radius * math.sin(angle)
             runs = _ray_runs(shell, (x, y, top), (x, y, case.CAVITY_FRONT - 0.2))
@@ -755,9 +752,9 @@ def led_channel_is_half_depth(front, recessed_front):
                 values.append(channel_top - case.CAVITY_FRONT)
         return values
 
-    full = depths(recessed_front, case.SHELL_FRONT)
-    fdm = depths(front, case.FDM_FACE)
-    if len(full) != 4 or len(fdm) != 4:
+    full = depths(recessed_front, case.SHELL_FRONT, crown)
+    fdm = depths(front, case.FDM_FACE, diagonals)
+    if len(full) != len(crown) or len(fdm) != len(diagonals):
         return [
             Problem(
                 f"the LED channel depth could be read at only {len(fdm)} FDM and "

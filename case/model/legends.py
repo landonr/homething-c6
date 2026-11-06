@@ -11,7 +11,7 @@ from build123d import (
 import board
 import params
 
-from .stack import CAP_TOP, HERE, MERGE
+from .stack import HERE, MERGE, cap_top
 
 
 def _bounds(shapes):
@@ -144,12 +144,14 @@ def legend_solids(ref, x=None, y=None):
     the finished cap: an entry that resolves to no faces at all, a missing
     glyph or an empty string, builds a perfectly good blank cap and nothing
     else in the model would notice.
+
+    The cut starts at cap_top(ref), so a legend moves with its cap.
     """
     if x is None or y is None:
         x, y = board.components()[ref][:2]
     spec, size = legend_entry(ref)
     return [
-        extrude(Pos(x, y, CAP_TOP + MERGE) * face, amount=MERGE + params.LEGEND_DEPTH,
+        extrude(Pos(x, y, cap_top(ref) + MERGE) * face, amount=MERGE + params.LEGEND_DEPTH,
                 dir=(0, 0, -1))
         for face in _legend_faces(spec, size)
     ]

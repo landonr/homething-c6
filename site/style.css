@@ -311,6 +311,32 @@ h2:has(+ .features-lede) {
   filter: brightness(1.08);
 }
 
+.cta-icon {
+  width: 1.25em;
+  height: 1.25em;
+  margin-right: 0.45em;
+  vertical-align: -0.3em;
+  fill: currentColor;
+}
+
+.status-pill {
+  display: inline-block;
+  margin: 0 0 0.9em;
+  padding: 0.4em 1em;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: clamp(12px, 0.9vw, 14px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
 /* Two-column rows */
 
 .row {

@@ -8,14 +8,14 @@
 #   GPIO2  sck             GPIO18 led_en (D10)  GPIO23 scl
 #   GPIO4  bat_sense /2    GPIO19 ano_enc2
 #   GPIO5  exp_int (nINT)  GPIO20 ano_enc1
-#   GPIO6  ir_en
+#   GPIO6  ir_en           GPIO7  usb_present_n (current design)
 #
 # led_en gates Q2, a high-side P-FET feeding led_vdd on D2-D5: low powers the
 # rail, and R10 1M holds it off while GPIO18 floats. ir_en gates Q3 the same way
 # for ir_vdd on U2, but defaults on, since the receiver is useless unpowered.
 #
-# Spare, unconnected at U1: GPIO7 only. It is deep-sleep wake capable (C6 wakes
-# only on GPIO0-7); IR REC on GPIO16 is not, so IR cannot wake from deep sleep.
+# GPIO7 is unconnected on rev-B but carries usb_present_n on the current design.
+# IR REC uses GPIO16, outside the GPIO0-7 deep-sleep wake range.
 
 # Defaults; version files override (main config wins per packages docs).
 substitutions:

@@ -102,7 +102,7 @@ def end_ports_open(shells):
     """D1 and USB retain real through-openings at their exterior centrelines."""
     edge = board.board_profile().bounding_box()
     lens = board.emitter_envelope()
-    usb = board.usb_envelope()
+    usb = board.usb_profile().center()
     probes = (
         (
             "D1 bore",
@@ -112,9 +112,9 @@ def end_ports_open(shells):
         ),
         (
             "USB",
-            usb.center().X,
+            usb.X,
             edge.min.Y - case.LAP_OUT + OPENING_INSET / 2,
-            usb.center().Z,
+            usb.Z,
         ),
     )
     problems = []

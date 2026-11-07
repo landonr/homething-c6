@@ -427,14 +427,38 @@ def npth_pads(ref):
     raise KeyError(f"no footprint {ref}")
 
 
-def usb_envelope():
-    """Read the USB shell that extends past the board's -Y edge from U1."""
+def _usb_overhang():
+    """Return the U1 solid that extends past the board's -Y edge, and that edge."""
     edge_y = board_profile().bounding_box().min.Y
     overhang = min(placement_groups()["U1"], key=lambda s: s.bounding_box().min.Y)
-    box = overhang.bounding_box()
-    if box.min.Y >= edge_y:
+    if overhang.bounding_box().min.Y >= edge_y:
         raise RuntimeError("no solid overhangs the board edge; USB not located")
-    return box
+    return overhang, edge_y
+
+
+def usb_envelope():
+    """Read the USB shell that extends past the board's -Y edge from U1."""
+    return _usb_overhang()[0].bounding_box()
+
+
+def usb_profile():
+    """Return the outer outline of the USB shell in the -Y end wall.
+
+    The face is in the XZ plane, halfway between the board edge and the shell
+    tip. Use this section, not the bounding box, because the legs inside the
+    footprint add approximately 1 mm to the box height.
+    """
+    overhang, edge_y = _usb_overhang()
+    y = (edge_y + overhang.bounding_box().min.Y) / 2
+    section = overhang.intersect(
+        Plane(origin=(0, y, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+    )
+    faces = section.faces() if section else []
+    if len(faces) != 1:
+        raise RuntimeError(
+            f"USB shell section at y {y:.3f} gives {len(faces)} outer outlines, not 1"
+        )
+    return Face(faces[0].outer_wire())
 
 
 def emitter_envelope():

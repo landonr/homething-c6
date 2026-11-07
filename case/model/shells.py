@@ -36,7 +36,7 @@ from .hardware import (
 from .front_ledge import front_ledge_runs
 from .support import front_support_cuts, support_obstacles, support_runs
 from .ir import emitter_bore, ir_window_opening, ir_window_rebate
-from .keypad import keypad_outline_groove, keypad_recess
+from .keypad import keypad_outline_groove, keypad_recess_cut
 from .mic import mic_bore, mic_duct, mic_face
 from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
 from .shape import (
@@ -64,7 +64,7 @@ from .stack import (
     SUPPORT_TOP,
     face_body,
 )
-from .usb import usb_slot
+from .usb import usb_boot_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
@@ -554,8 +554,8 @@ def catch_detents():
 
 
 def shared_cuts():
-    """The USB, Qwiic, and emitter cuts pass through both shells."""
-    return [usb_slot(), qwiic_slot(), emitter_bore()]
+    """The USB, USB boot, Qwiic, and emitter cuts pass through both shells."""
+    return [usb_slot(), usb_boot_pocket(), qwiic_slot(), emitter_bore()]
 
 
 @cache.solid
@@ -620,8 +620,9 @@ def front_shell(fdm=False):
     Everything under the face is identical between the two, and deliberately
     so: the same ledges, ceiling, holes, counterbores, ducts and skirt, so a
     cap, a pad and a back shell fit either one. Two things differ, both on the
-    outer plane. The recessed front takes keypad_recess(), the dish the keys sit
-    in; the FDM front takes keypad_outline_groove(), that same recess's plan
+    outer plane. The recessed front takes keypad_recess_cut(), the dish the keys
+    sit in with a straight chamfer round its rim (params.RECESS_CHAMFER_W);
+    the FDM front takes keypad_outline_groove(), that same recess's plan
     outline as a shallow slot, and stays flat everywhere else, because a dish
     that shallow over a span that wide cannot be printed face down and face down
     is the only way to print this part without support on its one cosmetic
@@ -700,6 +701,6 @@ def front_shell(fdm=False):
         led_ring_channel(fdm),
         mic_bore(fdm),
         *keys,
-        keypad_outline_groove() if fdm else keypad_recess(),
+        keypad_outline_groove() if fdm else keypad_recess_cut(),
         *shared_cuts(),
     )

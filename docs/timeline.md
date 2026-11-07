@@ -19,6 +19,7 @@ Rev-B is the `2026.8.0` board. It is a later design than unit 1, but it is not t
 - Mounting is three routed 2.9mm holes for M2.5 screws, not `H1`-`H3` 2.4mm M2 NPTH.
 - The front silk reads `2026.8.0`, the back silk keeps the old origin wording, and the stackup declares no colours.
 - `U1` is on the front, `J1` is a JST PH header and not the PicoBlade, and the board has no `J2` Qwiic connector.
+- The USB-detect circuit is absent. `U1` pad 14 and `GPIO7` have no board connection.
 
 So rev-B has the `led_vdd` gate (`Q2`, `R10`, `C4`), the four `XL-2020RGBC-WS2812B` LEDs and the TL3315 terminal remap. It also has the `ENC1` pad 6/8 fix, the ICS-43434 pin numbering, no `TP_*` test points and no `VCC` rail.
 
@@ -38,6 +39,7 @@ Both columns are the flat copper SVGs, which KiCad exports tight to the 36.98 x 
 | Microphone | MK1 wired to INMP441 pin numbers, so the ICS-43434 gets the bit clock on WS and its SD pad buried in the GND pour | MK1 on the ICS-43434 numbering, `sck`/`ws`/`sd` on GPIO2/GPIO0/GPIO21 |
 | Battery sense | Absent, no `bat_sense` net and no R7/R8 divider | R7/R8 100k divider to GPIO4 |
 | Expander interrupt | Absent, no `exp_int` net and no R9 pull-up | R9 100k pull-up, nINT to GPIO5 |
+| USB detection | Absent | `usb_vbus` feeds `Q4` through `R13`. The active-low `usb_present_n` signal connects to `GPIO7` |
 | Battery connector | J1 through-hole `S2B-PH-K` | J1 SMD Molex PicoBlade 1.25 mm `53261-0271` on the back, mouth toward `U1` |
 | XIAO module | `U1` on the front (F.Cu) | `U1` on the back (B.Cu) at `(52.85, 137.12)` against the +x long edge, mirrored left to right so the USB-C connector stays on the grip end |
 | Qwiic port | Absent | `J2` JST `SM04B-SRSS-TB(LF)(SN)` Qwiic connector on the back at the -x long edge, pins 1 GND, 2 `+3.3V`, 3 `sda` and 4 `scl` |
@@ -83,6 +85,7 @@ Unit 1 hand rework so far: `sw*` traces cut and jumpered to the free terminal on
 | 2026-10-14 | **Mounting holes removed.** `H1`-`H3` left the board, so it now has no mounting holes. The case holds the board with side ledges and the microphone duct. Only the end-wall closure screw remains, and it passes through no board hole. The `Library:MountingHole_2.4mm_M2` footprint stays in the library |
 | 2026-10-15 | **OSHW logo removed.** The OSHW gear group of 18 `gr_poly` left `B.SilkS`. The Canadian flag and the made-in text stay on the back. |
 | 2026-11-05 | **`U1` moved to the board back.** The XIAO module moved from F.Cu to B.Cu at `(52.85, 137.12)`. Its pin map did not change, so the firmware did not change. The same work added the `J2` Qwiic connector, changed `J1` to a Molex PicoBlade `53261-0271` and refit the case for the back-side module. PR #26 merged into `develop` at `6dd7b7c` and closes issues #15 and #23 |
+| 2026-11-06 | **USB detection added to the board design.** `U1` pad 14 supplies `usb_vbus` to the `Q4` base through `R13` (100k). `R15` (1M) pulls the base to GND. `R14` (100k) pulls the collector to `+3.3V`. The collector connects to `GPIO7` on `U1` pad 25 as `usb_present_n`. The signal is low when USB VBUS is present and high when it is absent. This circuit is not present on unit 1 or rev-B. |
 
 ## Design decisions and closed findings
 

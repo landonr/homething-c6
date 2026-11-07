@@ -6040,7 +6040,7 @@
 	)
 	(text "TP1-TP6: bare debug pads on the\nboard front, not assembled."
 		(exclude_from_sim no)
-		(at 250.19 100.33 0)
+		(at 157.48 123.19 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6058,6 +6058,18 @@
 			)
 		)
 		(uuid "9d677633-8725-476f-95e2-66c853fd76e2")
+	)
+	(text "USB detection"
+		(exclude_from_sim no)
+		(at 234.95 127 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left bottom)
+		)
+		(uuid "a099015f-08d0-496d-b577-f11f1ea49577")
 	)
 	(text "Microphone"
 		(exclude_from_sim no)
@@ -6096,6 +6108,12 @@
 		(uuid "38870ec1-3aeb-4a40-b6ce-558c58bdf8ec")
 	)
 	(junction
+		(at 255.27 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "3fe75a28-2758-4947-b3b6-c696a86013ef")
+	)
+	(junction
 		(at 20.32 68.58)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6130,6 +6148,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9631f1bb-6f8e-4f74-8af3-9256c478b22c")
+	)
+	(junction
+		(at 265.43 127)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "9717ccb5-c7f3-40ce-afda-d208deb5fe03")
 	)
 	(junction
 		(at 167.64 102.87)
@@ -6179,14 +6203,6 @@
 		(at 148.59 115.57)
 		(uuid "7603e8a5-c256-4d28-922f-63d96a10cbb6")
 	)
-	(no_connect
-		(at 234.95 87.63)
-		(uuid "a5583de3-e2d8-4b69-b443-a52f185e8200")
-	)
-	(no_connect
-		(at 204.47 68.58)
-		(uuid "e6f2abdf-a775-48f2-9fef-ec0e86a460f9")
-	)
 	(wire
 		(pts
 			(xy 185.42 142.24) (xy 185.42 144.78)
@@ -6206,6 +6222,16 @@
 			(type default)
 		)
 		(uuid "06104dc2-7e3f-4be9-b803-fe00d5768304")
+	)
+	(wire
+		(pts
+			(xy 255.27 113.03) (xy 255.27 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "063ac638-ccb6-4f89-95a0-8c3f73673899")
 	)
 	(wire
 		(pts
@@ -6429,6 +6455,16 @@
 	)
 	(wire
 		(pts
+			(xy 251.46 113.03) (xy 255.27 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "71a5e85b-11d5-4cec-8866-59f0b881a2c2")
+	)
+	(wire
+		(pts
 			(xy 166.37 34.29) (xy 166.37 38.1)
 		)
 		(stroke
@@ -6436,6 +6472,16 @@
 			(type default)
 		)
 		(uuid "75200b83-c88b-44ea-89e6-5473b0cf0460")
+	)
+	(wire
+		(pts
+			(xy 265.43 118.11) (xy 265.43 127)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "75d15052-749a-4260-8b92-095e1711e90f")
 	)
 	(polyline
 		(pts
@@ -6599,6 +6645,16 @@
 	)
 	(wire
 		(pts
+			(xy 255.27 127) (xy 265.43 127)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9e0c18ce-a5ee-4909-aa10-879596d3bc28")
+	)
+	(wire
+		(pts
 			(xy 152.4 38.1) (xy 156.21 38.1)
 		)
 		(stroke
@@ -6709,6 +6765,16 @@
 	)
 	(wire
 		(pts
+			(xy 265.43 105.41) (xy 265.43 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "adc1fd06-2fb0-46bd-81bb-8ab7381cdb47")
+	)
+	(wire
+		(pts
 			(xy 35.56 163.83) (xy 34.29 163.83)
 		)
 		(stroke
@@ -6726,6 +6792,16 @@
 			(type default)
 		)
 		(uuid "b2c881f4-d3f1-4a3d-8ddc-afe97ebc4b77")
+	)
+	(wire
+		(pts
+			(xy 234.95 87.63) (xy 240.03 87.63)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b30ef536-1e3e-41a0-96e0-aad6ad0df533")
 	)
 	(wire
 		(pts
@@ -6889,6 +6965,16 @@
 	)
 	(wire
 		(pts
+			(xy 255.27 113.03) (xy 257.81 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e9e5705b-ef4b-4f00-b4d8-069eb266eaa8")
+	)
+	(wire
+		(pts
 			(xy 149.86 189.23) (xy 154.94 189.23)
 		)
 		(stroke
@@ -6896,6 +6982,26 @@
 			(type default)
 		)
 		(uuid "eb75f423-e146-449b-993a-460b90543be9")
+	)
+	(wire
+		(pts
+			(xy 204.47 68.58) (xy 204.47 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f282c159-6cf9-4250-96ed-27bcc5e66c35")
+	)
+	(wire
+		(pts
+			(xy 265.43 106.68) (xy 265.43 107.95)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f7f585de-01fc-4ae4-8126-1f6000e6f720")
 	)
 	(polyline
 		(pts
@@ -7199,6 +7305,28 @@
 		(uuid "328929c2-c85c-4525-839f-2219a9ef48bd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 191.77 110.49 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
+	(global_label "usb_present_n"
+		(shape bidirectional)
+		(at 204.47 60.96 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3d0c8c35-f7ec-495e-b0f0-200baa2c2ec2")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 204.47 60.96 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7932,6 +8060,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+			)
+		)
+	)
+	(global_label "usb_vbus"
+		(shape bidirectional)
+		(at 240.03 87.63 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "8aa68de8-9ada-4131-9c82-00f75903129b")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 240.03 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -9339,6 +9489,83 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR012")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3.3V")
+		(at 265.43 97.79 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "03b0fd45-524b-480e-aab0-2ff291cab10f")
+		(property "Reference" "#PWR057"
+			(at 265.43 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 265.43 95.25 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 265.43 97.79 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 265.43 97.79 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
+			(at 265.43 97.79 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "12ad6245-d985-4694-9a2e-0b6411229db4")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR057")
 					(unit 1)
 				)
 			)
@@ -12272,6 +12499,84 @@
 	)
 	(symbol
 		(lib_id "power:GND")
+		(at 265.43 127 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "57d15eba-de07-47ce-b8e5-a3090b6cdcf4")
+		(property "Reference" "#PWR058"
+			(at 265.43 120.65 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 269.24 127 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 265.43 127 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 265.43 127 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 265.43 127 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "2729c83a-8d56-4ebd-ae7d-909340a645d1")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "#PWR058")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
 		(at 53.34 46.99 90)
 		(unit 1)
 		(body_style 1)
@@ -12342,6 +12647,137 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR053")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Transistor_BJT:MMBT2222A")
+		(at 262.89 113.03 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "5989dd8e-3b08-4ca8-af2d-9b1e37072442")
+		(property "Reference" "Q4"
+			(at 269.24 111.76 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "MMBT2222A"
+			(at 269.24 114.3 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 267.97 111.125 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+			)
+		)
+		(property "Datasheet" "https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Description" "Transistor: NPN 40V 600mA SOT-23 (USB detection)"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/nexperia-usa-inc/MMBT2222A-215/1156598"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/Nexperia/MMBT2222A215"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "MMBT2222A,215"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Nexperia"
+			(at 262.89 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "f177dd55-a14b-4ee7-b952-4abad5a3045a")
+		)
+		(pin "2"
+			(uuid "fe86029d-f540-4cef-81ba-33269a8dc7b9")
+		)
+		(pin "3"
+			(uuid "ec95d652-63eb-4724-a904-a370775c1fe9")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "Q4")
 					(unit 1)
 				)
 			)
@@ -12976,6 +13412,131 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "D2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 255.27 123.19 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "6740f48c-c77d-4727-8870-8695fbd2dabe")
+		(property "Reference" "R15"
+			(at 259.08 121.92 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1M"
+			(at 259.08 124.46 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 253.492 123.19 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor: 1M 1% 0.1W 0603 (USB detection base pull-down)"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-071ML"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-071ML/726844"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-071ML"
+			(at 255.27 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "251e14cf-2063-49e8-9a04-4fa4af72d48d")
+		)
+		(pin "2"
+			(uuid "8707ee98-2626-4a5b-bd2b-545aac340084")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "R15")
 					(unit 1)
 				)
 			)
@@ -13773,6 +14334,131 @@
 			(project "c6remote"
 				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
 					(reference "#PWR022")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 265.43 101.6 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "87e42aa3-a906-4628-bff0-3a1b38f91c6d")
+		(property "Reference" "R14"
+			(at 269.24 100.33 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100k"
+			(at 269.24 102.87 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 263.652 101.6 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor: 100k 1% 0.1W 0603 (USB detection collector pull-up)"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 265.43 101.6 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a4ea07c6-0938-4060-9262-d3db2b0a9be6")
+		)
+		(pin "2"
+			(uuid "11ba7626-a668-4407-9994-9bc5a4fb728c")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "R14")
 					(unit 1)
 				)
 			)
@@ -18628,6 +19314,129 @@
 	)
 	(symbol
 		(lib_id "Device:R")
+		(at 247.65 113.03 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "ee2719e0-fd40-4527-ac84-a6029c37f896")
+		(property "Reference" "R13"
+			(at 247.65 110.49 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100k"
+			(at 247.65 115.57 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 247.65 114.808 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor: 100k 1% 0.1W 0603 (USB detection base resistor)"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Manufacturer" "Yageo"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MPN" "RC0603FR-07100KL"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Digikey" "https://www.digikey.com/en/products/detail/yageo/RC0603FR-07100KL/726889"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Mouser" "https://www.mouser.com/ProductDetail/YAGEO/RC0603FR-07100KL"
+			(at 247.65 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "dc3edd6b-847b-44c4-ab35-c14bbb4aee1e")
+		)
+		(pin "2"
+			(uuid "8f468132-ea48-43c9-b7a6-d9c046e7574a")
+		)
+		(instances
+			(project "c6remote"
+				(path "/0cbb6fa3-42c1-48e5-afd9-e4923c6691f6"
+					(reference "R13")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
 		(at 147.32 26.67 0)
 		(unit 1)
 		(body_style 1)
@@ -18980,6 +19789,62 @@
 				)
 			)
 		)
+	)
+	(wire
+		(pts
+			(xy 243.84 113.03) (xy 240.03 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9752c80c-a39b-468d-b965-1b392428e720")
+	)
+	(wire
+		(pts
+			(xy 240.03 113.03) (xy 240.03 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "12b4a1ce-b620-4fc6-8292-4fba9d392ce9")
+	)
+	(global_label "usb_vbus"
+		(at 240.03 121.92 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "994ad3e6-b436-4a2a-a444-2a89e1992328")
+	)
+	(wire
+		(pts
+			(xy 265.43 106.68) (xy 266.7 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aca26755-c2eb-4b59-ab41-ca5c1c7e3a54")
+	)
+	(junction
+		(at 265.43 106.68)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d4dcb281-095b-4bac-a3b2-05fb10aae2cb")
+	)
+	(global_label "usb_present_n"
+		(at 266.7 106.68 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "a3f68307-2a90-4486-b66c-f5dc5a272d73")
 	)
 	(sheet_instances
 		(path "/"

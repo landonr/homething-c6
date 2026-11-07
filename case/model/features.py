@@ -388,6 +388,13 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "keypad_recess", "keypad.keypad_recess", "cut", keypad.keypad_recess()
         ),
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry(
+            "usb_boot_pocket", "usb.usb_boot_pocket", "cut", usb.usb_boot_pocket(),
+            sorted(set(
+                _reads("usb.usb_boot_pocket") + _reads("usb.usb_boot_floor_y")
+                + _reads("usb.usb_boot_outline")
+            )),
+        ),
         _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
     ]
@@ -433,6 +440,13 @@ def _back(runs, obstacles):
     )
     out += [
         _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry(
+            "usb_boot_pocket", "usb.usb_boot_pocket", "cut", usb.usb_boot_pocket(),
+            sorted(set(
+                _reads("usb.usb_boot_pocket") + _reads("usb.usb_boot_floor_y")
+                + _reads("usb.usb_boot_outline")
+            )),
+        ),
         _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
         _entry(

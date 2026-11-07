@@ -598,28 +598,27 @@ LED_RING_ROOF bounds this value, not a counterbore, because no key sits under
 this basin. The roof over the ring channel is thinnest where this basin's
 diagonals or one of its joins cross the channel. check.py holds a floor under
 what is left there."""
-WHEEL_RIM_SOFT = 0.6
+WHEEL_RIM_SOFT = 0.0
 """Dish depth over which the wheel basin's floor rolls into the face at its rim.
 
-The plain dish section meets its rim with a vertical tangent, which reads as a
-cliff. Where the depth d is less than this value c, keypad.py uses
-d^3 (3c - 2d) / c^3 instead. The last c of depth before the rim then rolls in
-with zero slope, so the rim has no cliff. Deeper floor does not change.
+It is zero, so the dish has no roll. The rim chamfer, RECESS_CHAMFER_W,
+replaces it. The plain dish section meets its rim with a vertical tangent,
+but the chamfer cuts away the dish within RECESS_CHAMFER_W of the rim, so that
+tangent is not built.
 
-Floors only rise, so the counterbore lands and the LED roof only get thicker.
-The value must stay below the basin's depth, so the dish centre keeps its
-depth, and keypad_recesses() stops with an error if it does not. Also keep it
-below the depth at the bore wall on the east and west, about 0.87, or the bore
-rim rises and the knob loses exposure. KEYPAD_RIM_SOFT and KEYPAD_RIM_SOFT_2 do
-the same for the key basins, and the necks blend between the three."""
-KEYPAD_RIM_SOFT = 0.5
+If the value is more than zero, keypad.py uses d^3 (3c - 2d) / c^3 where the
+depth d is less than this value c. The last c of depth then rolls into the
+face with zero slope. The value must stay below the basin's depth, and
+keypad_recesses() stops with an error if it does not. KEYPAD_RIM_SOFT and
+KEYPAD_RIM_SOFT_2 do the same for the key basins, and the necks blend between
+the three."""
+KEYPAD_RIM_SOFT = 0.0
 """Dish depth over which the grid basin's floor rolls into the face at its rim.
-See WHEEL_RIM_SOFT for the map and the rules. It must stay below
-KEYPAD_DISH_DEPTH."""
-KEYPAD_RIM_SOFT_2 = 0.35
+It is zero, because the rim chamfer replaces the roll. See WHEEL_RIM_SOFT."""
+KEYPAD_RIM_SOFT_2 = 0.0
 """Dish depth over which the second basin's floor rolls into the face at its
-rim. See WHEEL_RIM_SOFT for the map and the rules. It must stay below
-KEYPAD_DISH_DEPTH_2."""
+rim. It is zero, because the rim chamfer replaces the roll. See
+WHEEL_RIM_SOFT."""
 KEYPAD_LIP_LIFT = 0.6
 """Fraction of the dish depth that the grid and second basins give back at and
 past KEYPAD_LIP_CREST.
@@ -928,9 +927,26 @@ IR_WINDOW_FLANGE_T = 0.8
 IR_WINDOW_R = 1.0
 """Corner round on aperture, inherited concentrically by pane and flange."""
 USB_CLEARANCE = 0.5
-"""Clearance around the underside USB shell and through its end-wall opening."""
-USB_CORNER_CHAMFER = 0.4
-"""The corner trim stays within USB_CLEARANCE, so the complete shell remains clear."""
+"""Clearance per side around the measured outline of the USB shell in the -Y end
+wall. The end screw block also keeps this clearance from the U1 module envelope.
+In both places, it must not be less than BOARD_FIT, because the board can sit
+BOARD_FIT off centre."""
+USB_BOOT_W = 12.5
+"""Width of the outside pocket in the -Y end wall for the cable boot. The pocket
+outline is an allowance for common USB-C cable boots, not a measured part. A
+larger boot does not enter the pocket, so its plug does not seat. The first
+print must verify plug seating."""
+USB_BOOT_H = 6.6
+"""Height of the cable boot pocket. It is an allowance, as USB_BOOT_W is."""
+USB_BOOT_R = 1.5
+"""Corner radius of the cable boot pocket. It is an allowance, as USB_BOOT_W is."""
+USB_BOOT_REACH = 0.35
+"""Largest distance from the boot pocket floor to the receptacle mouth while the
+plug pushes the board +Y by WHEEL_OPENING_CLEARANCE. A plug extends
+approximately 6.65 mm past its boot, and the receptacle shell is 6.20 mm deep.
+As a result, the boot must stop within approximately 0.45 mm of the mouth, and this
+value keeps a 0.1 mm margin. With this value, the floor is just outboard of the
+front skirt."""
 QWIIC_CLEARANCE = 0.5
 """Clearance around the Qwiic housing for a plug approach from the left side."""
 QWIIC_CORNER_CHAMFER = 0.3
@@ -1043,7 +1059,7 @@ KEYPAD_PROFILE_POINTS = 80
 polyline rather than a fitted spline so every station carries the same vertex
 count and the loft between them has nothing to match up. The points sit at the
 same fractions of the half width on every station, placed by arc length and by
-how far the floor turns there, so the soft rims and the face's fall toward the
+how far the floor turns there, so the rims and the face's fall toward the
 side walls get most of them. At this count no two neighbouring facets differ by
 more than about two degrees."""
 KEYPAD_RECESS_STATIONS = 20
@@ -1071,7 +1087,7 @@ Every dish follows the face, so the face lowers the floors toward the side
 walls by its own drop. KEYPAD_LIP_LIFT gives part of that drop back near
 the outer key columns. Each counterbore land is the lowest floor over the
 counterbore less COUNTERBORE_TOP, and check.py holds it above LAND_FLOOR_MIN.
-At this value the thinnest land is about 0.55, on SW4, under the outer edge of
+At this value the thinnest land is about 0.54, on SW4, under the outer edge of
 the key. Above about 1.08, the land on SW7 is the thinnest. It reaches
 LAND_FLOOR_MIN at about 1.28. Both values assume that KEYPAD_DISH_DEPTH_2
 moves by the same amount."""
@@ -1149,6 +1165,20 @@ Live, not idle: the grid's coverage box is wide enough that the superellipse
 bounding it would reach inside this, so case.keypad_recesses() caps that half
 axis here instead. The keys still sit inside the curve with room to spare; what
 is given up is dish beyond the box's own corners."""
+RECESS_CHAMFER_W = 0.5
+"""Width in plan of the rim chamfer, on the recessed front only. The chamfer
+runs all the way round the merged recess, from the rim in toward the dish.
+
+In each section normal to the outline, the chamfer is a straight line. It
+goes from the face at the rim down to the dish floor at this distance in. As
+a result, the face turns into the chamfer at a crease on the rim, and the
+chamfer turns into the dish at a second crease. There is no step. The
+chamfer replaces the soft roll the dish had, so WHEEL_RIM_SOFT,
+KEYPAD_RIM_SOFT and KEYPAD_RIM_SOFT_2 are zero.
+
+The chamfer does not move the rim. recess_outline(), the FDM front's groove
+and the outline that the renders read stay where they are. If this value is
+zero, the front has no chamfer, and the dish runs to the rim."""
 
 
 # FDM front: a second front shell for a filament printer. Its face carries the

@@ -360,7 +360,7 @@ All 11 XIAO edge pads, D0-D10, are in use. `D10` or `GPIO18` carries `led_en`.
 
 `TP1` to `TP6` connect to `ws`, `sck`, `sd`, `IR EMIT`, `IR REC`, and `led_1`, in that order.
 
-`U1` pads 24, 27, 28, 29, and 31 carry `exp_int`, GND, `bat_sense`, `ir_en`, and `+3.3V`. Pads 25 (`GPIO7`), 26 (`CHIP_EN`), and 30 (`GPIO9`) have no board connection.
+`U1` pads 24, 25, 27, 28, 29, and 31 carry `exp_int`, `usb_present_n`, GND, `bat_sense`, `ir_en`, and `+3.3V`. Pads 26 (`CHIP_EN`) and 30 (`GPIO9`) have no board connection.
 
 The `J2` Qwiic connector gives access to `sda` and `scl`.
 
@@ -370,11 +370,9 @@ The module underside pads, 24-33, face the board back. Pads 24-31 are plated hol
 
 `U1` pads 32 (BAT) and 33 (GND) are SMD pads on B.Cu, and the assembler reflows them. A via next to each pad connects it to F.Cu.
 
-`GPIO6`, pad 29, carries `ir_en`. `GPIO7`, pad 25, is the only free usable pad.
+`GPIO6`, pad 29, carries `ir_en`. `GPIO7`, pad 25, carries the active-low `usb_present_n` signal.
 
-`GPIO7` is in the `GPIO0`-`GPIO7` low-power range. It is the last possible deep-sleep wake pin.
-
-Use `GPIO7` only after deliberate review.
+`GPIO7` is in the `GPIO0`-`GPIO7` low-power range, but it is not free for another function.
 
 `IR REC` uses `GPIO16`, outside the low-power range. IR cannot wake this board from deep sleep.
 
@@ -400,9 +398,17 @@ The F.Cu pour is GND, and the B.Cu pour is `+3.3V`. A GND pad on B.Cu needs a vi
 
 `Q2`, `R10`, and `led_en` control the LEDs. `Q3`, `R11`, and `ir_en` control the receiver.
 
-The old `VCC` rail no longer exists. `U1` pad 14 has a no-connect flag and no board VBUS connection.
+The old `VCC` rail no longer exists. `U1` pad 14 connects USB VBUS to the `usb_vbus` detection net.
 
-The board net is `unconnected-(U1-VBUS-Pad14)`. A 5 V feature needs a new net. Do not restore `VCC`.
+`R13` (100k) feeds `usb_vbus` to the base of `Q4` (`MMBT2222A`). `R15` (1M) pulls the base to GND.
+
+`R14` (100k) pulls the `Q4` collector to `+3.3V`. USB VBUS turns `Q4` on and pulls `usb_present_n` low.
+
+Without USB VBUS, `Q4` is off and `usb_present_n` is high. Do not restore `VCC`.
+
+`Q4`, `R13`, and `R14` are on F.Cu at `(44, 150.5)`, `(43, 146.5)`, and `(46, 153.75)`.
+
+`R15` is at F.Cu `(41, 150)`. Its GND pad uses a solid pour connection because the nearby tracks restrict thermal spokes.
 
 ### LED rail
 

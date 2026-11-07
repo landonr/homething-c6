@@ -25,6 +25,8 @@ from build123d import (
     Polyline,
     Pos,
     RectangleRounded,
+    Shell,
+    Solid,
     Wire,
     extrude,
     fillet,
@@ -43,6 +45,7 @@ from .shape import (
     _cut,
     _fuse,
     _hole,
+    _isect,
     _offset_face,
     _rounded_prism,
     _slab,
@@ -643,20 +646,113 @@ def face_depth_at(x, y):
     rim and the rim is the recess_outline() plan outline. The face lowers each
     floor by its own drop off the crown, but it does not move the rim. In the
     two key basins, the lip lift gives part of that drop back, see
-    _spine_depth(). Each basin's last few tenths of depth roll into the face
-    with zero slope, see _soft_rim() and WHEEL_RIM_SOFT.
+    _spine_depth(). The soft rim roll, _soft_rim(), is set to zero, because
+    the rim chamfer replaces it.
 
     The one piece of recess arithmetic in the model. The loft is built from it,
     check.py measures the built solid against it, and mic.py opens the inlet at
     whatever it says the floor is over the board's acoustic port, so none of
     the three can drift from the others.
+
+    Within RECESS_CHAMFER_W inside the rim, the depth is the rim chamfer's: a
+    straight facet in each section normal to the outline, from the face at
+    the rim down to the dish floor RECESS_CHAMFER_W in (_chamfer_z()). The
+    loft reads the dish alone, _spine_depth(), and keypad_chamfer() cuts the
+    chamfer.
     """
-    return _spine_depth(recess_spine(y), x, y)
+    return _field_depth(recess_spine(y), x, y)
+
+
+def _field_depth(spine, x, y):
+    """face_depth_at() at (x, y), from a recess_spine(y) result already in hand:
+    the chamfer's depth between the outline and the chamfer's inner ring, the
+    dish's own depth inside that ring, and zero outside the outline."""
+    if params.RECESS_CHAMFER_W <= 0.0:
+        return _spine_depth(spine, x, y)
+    if not _in_ring(_outline_index(), x, y):
+        return 0.0
+    if _in_ring(_chamfer_index(), x, y):
+        return _spine_depth(spine, x, y)
+    return max(0.0, face_z(x, y) - _chamfer_z(x, y))
+
+
+CHAMFER_GRID = 0.5
+"""Cell size, in mm, of the plan grids that the chamfer's lookups file
+polygon edges and floor triangles in, so a query reads a few and not all."""
+
+
+def _ring_index(ring):
+    """{row: [(x0, y0, x1, y1)]}: the edges of one closed polygon, filed under
+    each CHAMFER_GRID row of y that they span."""
+    index = {}
+    for (x0, y0, *_), (x1, y1, *_) in zip(ring, ring[1:] + ring[:1]):
+        j0 = math.floor(min(y0, y1) / CHAMFER_GRID)
+        j1 = math.floor(max(y0, y1) / CHAMFER_GRID)
+        for j in range(j0, j1 + 1):
+            index.setdefault(j, []).append((x0, y0, x1, y1))
+    return index
+
+
+@functools.cache
+def _outline_index():
+    return _ring_index(_outline_points())
+
+
+@functools.cache
+def _chamfer_index():
+    return _ring_index(_chamfer_rings()[1])
+
+
+def _in_ring(index, x, y):
+    """Whether (x, y) is inside the polygon of one _ring_index(): an even-odd
+    count of the edges that a ray from the point toward +x crosses."""
+    inside = False
+    for x0, y0, x1, y1 in index.get(math.floor(y / CHAMFER_GRID), ()):
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
+
+
+@functools.cache
+def _chamfer_cells():
+    """{cell: [triangle]}: the chamfer floor's triangles, filed under each
+    CHAMFER_GRID cell that their plan bounding box touches."""
+    cells = {}
+    for tri in _chamfer_floor():
+        xs = [p[0] for p in tri]
+        ys = [p[1] for p in tri]
+        i0, i1 = (math.floor(v / CHAMFER_GRID) for v in (min(xs), max(xs)))
+        j0, j1 = (math.floor(v / CHAMFER_GRID) for v in (min(ys), max(ys)))
+        for i in range(i0, i1 + 1):
+            for j in range(j0, j1 + 1):
+                cells.setdefault((i, j), []).append(tri)
+    return cells
+
+
+def _chamfer_z(x, y):
+    """The chamfer floor's z over (x, y), by barycentric weights in the floor
+    triangle that holds the point. A point on no triangle, which only float
+    error at a triangle edge can leave, takes the triangle it is least
+    outside."""
+    best = None
+    cell = (math.floor(x / CHAMFER_GRID), math.floor(y / CHAMFER_GRID))
+    for a, b, c in _chamfer_cells().get(cell, ()):
+        det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        wa = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / det
+        wb = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / det
+        wc = 1.0 - wa - wb
+        least = min(wa, wb, wc)
+        if best is None or least > best[0]:
+            best = (least, wa * a[2] + wb * b[2] + wc * c[2])
+        if least >= 0.0:
+            break
+    return best[1] if best else face_z(x, y)
 
 
 def _spine_depth(spine, x, y, least=None):
-    """face_depth_at() at (x, y), from a recess_spine(y) result already in hand.
-    A softened depth under `least`, RIM_DEPTH_MIN by default, is zero.
+    """The dish's own depth at (x, y), from a recess_spine(y) result already in
+    hand, with no rim chamfer. The loft is built from this. A softened depth under
+    `least`, RIM_DEPTH_MIN by default, is zero.
 
     The lip lift then multiplies the softened depth by one less spine.lift
     times _lip_rise(). The floor then sits closer to the face toward the side
@@ -715,8 +811,9 @@ def _soft_rim(d, c):
 
 def face_floor_at(x, y):
     """The z of the built recessed front's outer surface at (x, y): the depth
-    field under the built face. It is the face itself outside the rim, and it
-    is never above the face, because every basin is cut down from the face."""
+    field under the built face. It is the face itself outside the rim, the
+    rim chamfer just inside it, and the dish further in. It is never above
+    the face, because every basin is cut down from the face."""
     return face_z(x, y) - face_depth_at(x, y)
 
 
@@ -730,11 +827,11 @@ def face_floor_over(x, y, half):
     """Lowest the built surface gets anywhere over an axis-aligned square of
     side 2*half centred at (x, y).
 
-    The surface is the built face less the dish depth. Across x the face falls
-    away from the crown and the dish gets shallower away from the centerline.
-    As a result, the lowest point can be inside the square, so both axes are
-    walked. The centerline is added to the x samples, because the dish is
-    deepest there.
+    The surface is the built face less the depth field, the rim chamfer's
+    depth near the rim and the dish further in. Across x the face falls away from the
+    crown and the dish gets shallower away from the centerline. As a result,
+    the lowest point can be inside the square, so both axes are walked. The
+    centerline is added to the x samples, because the dish is deepest there.
     """
     cx = centerline_x()
     count = FLOOR_OVER_SAMPLES
@@ -746,7 +843,7 @@ def face_floor_over(x, y, half):
     for py in (y + step for step in steps):
         spine = recess_spine(py)
         lowest = min(
-            lowest, *(face_z(px, py) - _spine_depth(spine, px, py) for px in xs)
+            lowest, *(face_z(px, py) - _field_depth(spine, px, py) for px in xs)
         )
     return lowest
 
@@ -1005,7 +1102,7 @@ def recess_stations():
     It starts from _base_stations(). Then it halves each span whose patches
     crease or twist more than FACET_ANGLE, or that shows such a crease at its
     midpoint. At a station that creases, it halves the spans on both sides.
-    The soft rims, the end roll and the necks bend the floor fastest, so the
+    The rims, the end roll and the necks bend the floor fastest, so the
     new stations go there. It does not halve a span shorter than twice
     STATION_GAP_MIN.
     """
@@ -1053,10 +1150,12 @@ def _station_floor(y, tip=False):
     """[(x, z)] of the floor curve at one station, rim to rim: the points
     _station_section() closes into a face.
 
-    The floor is face_floor_at(). The two rim points, and every point with no
-    depth under RIM_DEPTH_MIN, are held RIM_LIFT above the built face. At a
-    `tip` station, one of the two ends of the recess, every point is held
-    there. The points sit at the same _profile_u() on every station.
+    The floor is the dish alone, face_z() less _spine_depth(), with no rim
+    chamfer.
+    The two rim points, and every point with no depth under RIM_DEPTH_MIN, are
+    held RIM_LIFT above the built face. At a `tip` station, one of the two
+    ends of the recess, every point is held there. The points sit at the same
+    _profile_u() on every station.
 
     A tip is only microns deep, and its section is the loft's end cap. Left at
     that depth, the cap cuts a step wall microns high into the face. Where the
@@ -1097,8 +1196,8 @@ def _station_section(y, tip=False):
     station's own plane: the floor curve under the recess, carried up the two
     vertical rim walls and closed across MERGE above the crown.
 
-    The floor is face_floor_at(): the depth field under the built face. The
-    two rim points are held RIM_LIFT above that face.
+    The floor is the dish's own depth field under the built face, with no
+    rim chamfer. The two rim points are held RIM_LIFT above that face.
 
     The floor's points sit where the floor turns, not at even steps in x. See
     _profile_u().
@@ -1128,7 +1227,7 @@ def keypad_recess():
     into diverging outright, returning a solid of negative volume spread over
     half a metre. The stations are what carry the fidelity in y instead.
     recess_stations() adds them until no two neighbouring patches differ in
-    normal by more than FACET_ANGLE, so the faceting does not show on the soft
+    normal by more than FACET_ANGLE, so the faceting does not show near the
     rims. The other axis is a polyline already (KEYPAD_PROFILE_POINTS), so this
     makes the surface a fine polygonal approximation in both directions rather
     than one, which is the honest description of what it always was.
@@ -1165,15 +1264,22 @@ def recess_outline():
     showed: it flat-sided the line over most of its length and carried it into
     the LED ring channel.
     """
+    with BuildSketch(Plane.XY) as sketch:
+        with BuildLine(Plane.XY):
+            Polyline(*_outline_points(), close=True)
+        make_face()
+    return sketch.sketch.faces()[0]
+
+
+@functools.cache
+def _outline_points():
+    """[(x, y)] of the outline polygon, counter-clockwise: up the right-hand
+    rim at each recess_stations() station and back down the left."""
     cx = centerline_x()
     rim = [(recess_spine(y).width, y) for y in recess_stations()]
     points = [(cx + width, y) for width, y in rim]
     points += [(cx - width, y) for width, y in reversed(rim)]
-    with BuildSketch(Plane.XY) as sketch:
-        with BuildLine(Plane.XY):
-            Polyline(*points, close=True)
-        make_face()
-    return sketch.sketch.faces()[0]
+    return tuple(points)
 
 
 @cache.solid
@@ -1197,6 +1303,241 @@ def keypad_outline_groove():
     ) - offset(face, amount=-params.FDM_OUTLINE_W / 2, kind=Kind.ARC)
     groove = extrude(band, amount=params.FDM_OUTLINE_DEPTH + MERGE)
     return Pos(0, 0, FDM_FACE - params.FDM_OUTLINE_DEPTH) * groove
+
+
+CHAMFER_POINT_GAP = 0.25
+"""Longest edge, in mm, on each ring of the chamfer cutter. The floor triangles
+follow the chamfer linearly between the points."""
+
+CHAMFER_SKIRT = 0.05
+"""How far outside the outline the chamfer cutter's floor reaches, rising
+RIM_LIFT above the face there. The floor then crosses the face at the outline
+at an angle, so the rim crease is on the outline and no sliver of wall is
+left at the rim. The face outside the outline is not cut."""
+
+CHAMFER_RIM_LIFT = 0.001
+"""How far above the face the chamfer cutter's floor sits on the outline.
+
+The face is convex upward, so between two outline points it stands up to
+0.0001 above the straight edge that joins them. On the face itself, the
+skirt dips under the face along those edges and leaves lens-shaped slivers,
+and then the cut fails without an error and leaves the face whole. With
+this lift the skirt stays above the face. The chamfer then crosses the face
+less than 0.01 inside the outline."""
+
+
+def _segment_foot(segment, x, y):
+    """(distance, px, py, s) from (x, y) to its nearest point on one outline
+    segment, s the arc length of that point along the outline."""
+    ax, ay, bx, by, s, length = segment
+    dx, dy = bx - ax, by - ay
+    t = ((x - ax) * dx + (y - ay) * dy) / (length * length) if length > 0 else 0.0
+    t = min(max(t, 0.0), 1.0)
+    px, py = ax + t * dx, ay + t * dy
+    return math.hypot(x - px, y - py), px, py, s + t * length
+
+
+@functools.cache
+def _outline_segments():
+    """((ax, ay, bx, by, s, length), ...) round the outline polygon, with s the
+    arc length at each segment's start."""
+    points = _outline_points()
+    out, s = [], 0.0
+    for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
+        length = math.hypot(bx - ax, by - ay)
+        out.append((ax, ay, bx, by, s, length))
+        s += length
+    return tuple(out)
+
+
+def _offset_ring(amount, z_at):
+    """[(x, y, z, s)] the true 2D offset of the outline by `amount`, out when
+    positive, each edge cut to CHAMFER_POINT_GAP, counter-clockwise and
+    starting at its least s. z is z_at(x, y, px, py) with (px, py) the nearest
+    outline point, and s is that point's arc length."""
+    faces = offset(recess_outline(), amount=amount, kind=Kind.ARC).faces()
+    if len(faces) != 1 or faces[0].inner_wires():
+        raise ValueError(
+            f"the outline offset {amount:.2f} is not one simple loop, so "
+            "RECESS_CHAMFER_W is too wide for the recess"
+        )
+    plan = []
+    for edge in faces[0].outer_wire().order_edges():
+        count = max(1, math.ceil(edge.length / CHAMFER_POINT_GAP))
+        for i in range(count):
+            point = edge.position_at(i / count)
+            if not plan or math.dist(plan[-1], (point.X, point.Y)) > 1e-6:
+                plan.append((point.X, point.Y))
+    if math.dist(plan[0], plan[-1]) <= 1e-6:
+        plan.pop()
+    area = sum(
+        ax * by - bx * ay for (ax, ay), (bx, by) in zip(plan, plan[1:] + plan[:1])
+    )
+    if area < 0.0:
+        plan.reverse()
+    segments = _outline_segments()
+    ring = []
+    for x, y in plan:
+        _, px, py, s = min(_segment_foot(segment, x, y) for segment in segments)
+        ring.append((x, y, z_at(x, y, px, py), s))
+    start = min(range(len(ring)), key=lambda i: ring[i][3])
+    ring = ring[start:] + ring[:start]
+    for a, b in zip(ring, ring[1:]):
+        if b[3] < a[3] - 1e-9:
+            raise ValueError(
+                f"the outline offset {amount:.2f} turns back along the outline "
+                f"near ({b[0]:.2f}, {b[1]:.2f})"
+            )
+    return ring
+
+
+@functools.lru_cache(maxsize=None)
+def _station_points(i):
+    """The loft's floor points at station i, as _station_floor() gives them."""
+    stations = recess_stations()
+    return _station_floor(stations[i], tip=i in (0, len(stations) - 1))
+
+
+def _loft_z(x, y):
+    """The z of the built loft's floor over (x, y). Each loft face is ruled
+    between the same edge of two neighbouring stations, so at a given y it is
+    a straight line between the two stations' points, and x places the point
+    on it."""
+    stations = recess_stations()
+    i = min(max(bisect.bisect_right(stations, y) - 1, 0), len(stations) - 2)
+    v = (y - stations[i]) / (stations[i + 1] - stations[i])
+    a, b = _station_points(i), _station_points(i + 1)
+    for (ax0, az0), (ax1, az1), (bx0, bz0), (bx1, bz1) in zip(a, a[1:], b, b[1:]):
+        x0, x1 = ax0 + v * (bx0 - ax0), ax1 + v * (bx1 - ax1)
+        if x0 <= x <= x1 and x1 > x0:
+            u = (x - x0) / (x1 - x0)
+            z0, z1 = az0 + v * (bz0 - az0), az1 + v * (bz1 - az1)
+            return z0 + u * (z1 - z0)
+    raise ValueError(f"({x:.2f}, {y:.2f}) is not over the recess loft's floor")
+
+
+@functools.cache
+def _chamfer_rings():
+    """(outer, inner, skirt), the three rings of the chamfer cutter's floor,
+    each a list of (x, y, z, s), counter-clockwise from the same place.
+
+    The outer ring is the outline polygon CHAMFER_RIM_LIFT above the face,
+    each edge cut to CHAMFER_POINT_GAP. The inner ring is the true 2D offset of the outline
+    RECESS_CHAMFER_W in, on the loft's own floor, so the chamfer meets the
+    dish with no step. The skirt is the offset CHAMFER_SKIRT out, RIM_LIFT
+    above the face at its nearest outline point. s is the arc length of each
+    point's nearest outline point."""
+    outer = []
+    for ax, ay, bx, by, s, length in _outline_segments():
+        count = max(1, math.ceil(length / CHAMFER_POINT_GAP))
+        for i in range(count):
+            t = i / count
+            x, y = ax + t * (bx - ax), ay + t * (by - ay)
+            outer.append((x, y, face_z(x, y) + CHAMFER_RIM_LIFT, s + t * length))
+    inner = _offset_ring(
+        -params.RECESS_CHAMFER_W, lambda x, y, px, py: _loft_z(x, y)
+    )
+    skirt = _offset_ring(
+        CHAMFER_SKIRT, lambda x, y, px, py: face_z(px, py) + RIM_LIFT
+    )
+    return outer, inner, skirt
+
+
+def _strip(outer, inner):
+    """[(a, b, c)] the triangles between two rings, outer around inner.
+
+    The two rings advance together in s, one point at a time on whichever ring
+    is behind, so each triangle spans one ring edge and one point of the
+    other ring, and every triangle is planar. Each must turn counter-clockwise
+    in plan, or the strip has folded over itself."""
+    total = sum(segment[5] for segment in _outline_segments())
+    n_out, n_in = len(outer), len(inner)
+    i = j = 0
+    triangles = []
+    while i < n_out or j < n_in:
+        s_out = outer[i + 1][3] if i + 1 < n_out else total + outer[0][3]
+        s_in = inner[j + 1][3] if j + 1 < n_in else total + inner[0][3]
+        if i < n_out and (j >= n_in or s_out <= s_in):
+            triangles.append((outer[i], outer[(i + 1) % n_out], inner[j % n_in]))
+            i += 1
+        else:
+            triangles.append((outer[i % n_out], inner[(j + 1) % n_in], inner[j]))
+            j += 1
+    for a, b, c in triangles:
+        turn = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        if turn <= 0.0:
+            raise ValueError(
+                f"the chamfer floor folds near ({a[0]:.2f}, {a[1]:.2f}): its "
+                "rings do not advance together"
+            )
+    return triangles
+
+
+@functools.cache
+def _chamfer_floor():
+    """The chamfer's own triangles, between the outline and the inner ring."""
+    outer, inner, _ = _chamfer_rings()
+    return tuple(_strip(outer, inner))
+
+
+def _polygon_face(points):
+    return Face(Wire.make_polygon([p[:3] for p in points], close=True))
+
+
+@cache.solid
+def keypad_chamfer():
+    """The rim chamfer cutter: the column over the strip between the skirt and
+    the chamfer's inner ring, from its floor up to MERGE above the crown.
+
+    The floor is _chamfer_floor() inside the outline, and the skirt strip
+    outside it, which stays above the face. Its two walls are vertical and
+    its top is flat. Raises when RECESS_CHAMFER_W is zero."""
+    if params.RECESS_CHAMFER_W <= 0.0:
+        raise ValueError("RECESS_CHAMFER_W is zero, so there is no chamfer")
+    outer, inner, skirt = _chamfer_rings()
+    top = SHELL_FRONT + MERGE
+    faces = [_polygon_face(t) for t in (*_chamfer_floor(), *_strip(skirt, outer))]
+    for ring in (skirt, inner):
+        for a, b in zip(ring, ring[1:] + ring[:1]):
+            faces.append(
+                _polygon_face([a, b, (b[0], b[1], top), (a[0], a[1], top)])
+            )
+    faces.append(
+        Face(
+            Wire.make_polygon([(p[0], p[1], top) for p in skirt], close=True),
+            [Wire.make_polygon([(p[0], p[1], top) for p in inner], close=True)],
+        )
+    )
+    chamfer = Solid(Shell(faces))
+    if not chamfer.is_valid or chamfer.volume <= 0.0:
+        raise ValueError("the chamfer cutter did not close into a valid solid")
+    return chamfer
+
+
+def _chamfer_prism():
+    """The column over the chamfer's inner ring, through the whole height of
+    the recess loft. Its walls stand on the same points as the chamfer
+    cutter's inner wall."""
+    _, inner, _ = _chamfer_rings()
+    box = keypad_recess().bounding_box()
+    z0, z1 = box.min.Z - 1.0, box.max.Z + 1.0
+    base = Face(Wire.make_polygon([(p[0], p[1], z0) for p in inner], close=True))
+    return extrude(base, amount=z1 - z0, dir=(0, 0, 1))
+
+
+@cache.solid
+def keypad_recess_cut():
+    """What the recessed front cuts for its recess: the loft, keypad_recess(),
+    kept inside the chamfer's inner ring, fused with the rim chamfer cutter,
+    keypad_chamfer().
+
+    Between the outline and that ring the surface is the chamfer, a straight
+    facet from the face at the rim to the dish floor. Inside the ring the dish
+    does not change, and neither do the loft and the outline. With
+    RECESS_CHAMFER_W at zero it is the loft alone."""
+    if params.RECESS_CHAMFER_W <= 0.0:
+        return keypad_recess()
+    return _fuse(_isect(keypad_recess(), _chamfer_prism()), keypad_chamfer())
 
 
 def outline_length():

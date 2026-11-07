@@ -406,6 +406,10 @@ The old `VCC` rail no longer exists. `U1` pad 14 connects USB VBUS to the `usb_v
 
 Without USB VBUS, `Q4` is off and `usb_present_n` is high. Do not restore `VCC`.
 
+`Q4`, `R13`, and `R14` are on F.Cu at `(44, 150.5)`, `(43, 146.5)`, and `(46, 153.75)`.
+
+`R15` is at F.Cu `(41, 150)`. Its GND pad uses a solid pour connection because the nearby tracks restrict thermal spokes.
+
 ### LED rail
 
 `GPIO17` drives `D2` DIN on `led_1` without a series resistor.

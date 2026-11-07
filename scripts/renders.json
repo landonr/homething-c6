@@ -332,14 +332,14 @@
       "case/.venv/bin/python case/case.py",
       "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
       "TS=$(date -u +%Y-%m-%dT%H-%M-%SZ)",
-      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset voice-mic-front --width 960 --height 1280 --samples 512 --out \"hero-drafts/voice/voice-mic-front-$TS.png\")",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset voice-mic-front --width 360 --height 480 --samples 512 --out \"hero-drafts/voice/voice-mic-front-$TS.png\")",
       "magick \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.png\" -background \"#141414\" -flatten -alpha off -colorspace sRGB -strip -quality 82 -sampling-factor 4:2:0 -interlace Plane \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.jpg\"",
       "cp \"$EXPLODE/hero-drafts/voice/voice-mic-front-$TS.jpg\" site/assets/c6/feature-voice.jpg",
       "python3 scripts/render-status.py --write site-voice"
     ],
     "recipe": [
       "The voice-mic-front preset shows the board alone, so the case model is not an input. refresh-assets.sh still needs the case STLs.",
-      "The render is 960x1280 px at 512 samples on a transparent film. The magick step puts it on #141414 and writes a quality 82 JPEG.",
+      "The render is 360x480 px at 512 samples on a transparent film. The magick step puts it on #141414 and writes a quality 82 JPEG.",
       "The committed file is hero-drafts/voice/voice-mic-front-2026-11-01T21-32-00Z.jpg in c6remote-explode without a change.",
       "The preset is in c6remote-explode, so the fingerprint cannot see a change to it."
     ]

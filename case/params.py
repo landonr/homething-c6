@@ -947,6 +947,14 @@ approximately 6.65 mm past its boot, and the receptacle shell is 6.20 mm deep.
 As a result, the boot must stop within approximately 0.45 mm of the mouth, and this
 value keeps a 0.1 mm margin. With this value, the floor is just outboard of the
 front skirt."""
+USB_BOOT_RIM_R = 0.35
+"""The outside mouth radius keeps the exported mesh closed at the right contour."""
+RESET_BORE_D = 1.6
+"""Bore diameter with clearance for a straightened paper clip."""
+RESET_GUIDE_WALL = 0.8
+"""Guide wall thickness for two 0.4 mm extrusion widths."""
+RESET_GUIDE_GAP = 0.6
+"""Minimum gap between the guide tip and the RESET contact face."""
 QWIIC_CLEARANCE = 0.5
 """Clearance around the Qwiic housing for a plug approach from the left side."""
 QWIIC_CORNER_CHAMFER = 0.3

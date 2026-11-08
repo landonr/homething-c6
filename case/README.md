@@ -264,6 +264,10 @@ One M2 x 5 screw secures the grip end. It enters horizontally through the back s
 
 The negative Y end wall has a pocket for the USB cable boot outside the USB opening. A boot larger than the pocket cannot enter, so its plug does not seat. Verify plug seating on the first print.
 
+The back shell has one pinhole near the USB-C port. A guide tube leads a straightened paper clip to the XIAO RESET button. Open the shell to reach BOOT.
+
+On the first print, insert a straightened paper clip in the pinhole. Press gently and verify that the board restarts with power still connected.
+
 The Qwiic opening has a flush cover with two breakaway bridges. The cover stays in place unless you need the port.
 
 To open the port, remove the cover before you install the board. Break both bridges carefully and trim any nubs that obstruct the plug. Do not press on the connector.

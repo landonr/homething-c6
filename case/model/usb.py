@@ -1,6 +1,11 @@
 """The USB-C opening and the cable boot pocket in the -Y end wall."""
 
-from build123d import Kind, Plane, Pos, RectangleRounded, extrude, offset
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from build123d import (
+    Edge, Kind, Plane, Pos, RectangleRounded, export_brep, extrude, import_brep, offset,
+)
 
 import board
 import params
@@ -54,3 +59,33 @@ def usb_boot_pocket():
     floor_y = usb_boot_floor_y()
     y_out = board.board_profile().bounding_box().min.Y - params.WALL * 6
     return extrude(usb_boot_outline(y_out), floor_y - y_out, dir=(0, 1, 0))
+
+
+def round_usb_boot_rim(shell, exterior):
+    """Round the outside lip where the pocket meets the back contour."""
+    # OCCT rejects these edges on the live boolean result but accepts the BREP copy.
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "back.brep"
+        export_brep(shell, path)
+        shell = import_brep(path).solids()[0]
+
+    floor_y = usb_boot_floor_y()
+    outline = usb_boot_outline(floor_y).faces()[0].outer_wire()
+    outside_y = exterior.bounding_box().min.Y - params.WALL
+    tolerance = 1e-5
+    rim = []
+    for edge in shell.edges():
+        box = edge.bounding_box()
+        if box.max.Y >= floor_y - tolerance or box.size.X + box.size.Z < tolerance:
+            continue
+        x, y, z = edge.position_at(0.5)
+        if outline.distance_to((x, floor_y, z)) >= tolerance:
+            continue
+        # The pocket crosses the lap inside the case as well as the outer wall.
+        ray = Edge.make_line((x, outside_y, z), (x, floor_y, z))
+        crossing = exterior.intersect(ray)
+        if crossing and abs(y - min(v.Y for v in crossing.vertices())) < tolerance:
+            rim.append(edge)
+    if not rim:
+        raise ValueError("USB boot pocket has no exterior rim")
+    return shell.fillet(params.USB_BOOT_RIM_R, rim)

@@ -441,6 +441,26 @@ def usb_envelope():
     return _usb_overhang()[0].bounding_box()
 
 
+@functools.cache
+def reset_actuator():
+    """Return the centre of U1's RESET contact face in the assembly frame."""
+    solids = placement_groups()["U1"]
+    # KiCad flattens the STEP subassemblies. Their solid volumes survive placement.
+    switches = [s for s in solids if math.isclose(s.volume, 1.359781, abs_tol=1e-3)]
+    antennas = [s for s in solids if math.isclose(s.volume, 3.355715, abs_tol=1e-3)]
+    if len(switches) != 2 or len(antennas) != 1:
+        raise ValueError("U1 STEP must contain two SKTAAAE010 switches and one U.FL body")
+    # The Seeed front pinout puts RESET on the U.FL connector side.
+    antenna = antennas[0].bounding_box().center()
+    reset = min(switches, key=lambda s: (s.bounding_box().center() - antenna).length)
+    faces = reset.faces().filter_by(Plane.XY).sort_by(Axis.Z)
+    if not faces or not math.isclose(
+        faces[0].center().Z, reset.bounding_box().min.Z, abs_tol=1e-5
+    ):
+        raise ValueError("U1 RESET contact face must face the back shell")
+    return faces[0].center()
+
+
 def usb_profile():
     """Return the outer outline of the USB shell in the -Y end wall.
 

@@ -63,7 +63,8 @@ STATE = {
         "mac": "A4:CF:12:34:56:78",
     },
     # Production links idle_sleep. A build without it serves available false and zeros.
-    "sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False, "replay_ir": False},
+    "sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False,
+              "replay_ir": False, "replay_ha": False, "replay_zigbee": False, "replay_ble": False},
     # Production links the battery sensors. A build without them serves available false and zeros.
     "battery": {"available": True, "percent": 72, "volts": 3.87},
     "radios": {"zigbee": True, "ble": True, "home_assistant": True},
@@ -443,6 +444,16 @@ class Handler(BaseHTTPRequestHandler):
             if not (hold_slot.isdigit() and len(hold_slot) <= 2 and int(hold_slot) in HOLD_SLOTS):
                 self.send_json({"ok": False, "error": "a hold slot is 3 to 16, 19, or 20"}, 400)
                 return
+        replay_action = action in ("set_sleep_replay", "set_sleep_replay_ir")
+        if replay_action:
+            radio = "ir" if action == "set_sleep_replay_ir" else form.get("radio", [""])[0]
+            if radio not in ("", "ir", "ha", "zigbee", "ble"):
+                self.send_json({"ok": False, "error": "invalid wake press radio"}, 400)
+                return
+            replay_value = form.get("enabled", [""])[0]
+            if replay_value not in ("0", "1"):
+                self.send_json({"ok": False, "error": "invalid wake press switch"}, 400)
+                return
         STATE["action_id"] += 1
         STATE["action_ok"] = True
 
@@ -463,10 +474,11 @@ class Handler(BaseHTTPRequestHandler):
             STATE["boot_leds"] = form.get("enabled", ["0"])[0] == "1"
         elif action == "set_sleep_enabled":
             STATE["sleep"]["enabled"] = form.get("enabled", ["0"])[0] == "1"
-        elif action == "set_sleep_replay":
-            STATE["sleep"]["replay"] = form.get("enabled", ["0"])[0] == "1"
-        elif action == "set_sleep_replay_ir":
-            STATE["sleep"]["replay_ir"] = form.get("enabled", ["0"])[0] == "1"
+        elif replay_action:
+            sleep = STATE["sleep"]
+            for target in (radio,) if radio else ("ha", "zigbee"):
+                sleep[f"replay_{target}"] = replay_value == "1"
+            sleep["replay"] = sleep["replay_ha"] and sleep["replay_zigbee"]
         elif action == "set_sleep_after":
             STATE["sleep"]["after_s"] = int(seconds)
         elif action == "set_name":

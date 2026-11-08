@@ -268,10 +268,9 @@ class SettingsTest(unittest.TestCase):
             "bool enabled() const { return this->enabled_.load(std::memory_order_relaxed); }",
             "uint32_t sleep_after_s() const { return this->sleep_after_s_.load(std::memory_order_relaxed); }",
             "bool set_enabled(bool enabled);",
-            "bool wake_replay() const { return this->wake_replay_.load(std::memory_order_relaxed); }",
-            "bool set_wake_replay(bool replay);",
-            "std::atomic<bool> wake_replay_{false};",
-            "std::atomic<bool> wake_replay_ir_{false};",
+            "uint8_t wake_replay_mask() const { return this->wake_replay_mask_.load(std::memory_order_relaxed); }",
+            "bool set_wake_replay(uint8_t mask, bool enabled);",
+            "std::atomic<uint8_t> wake_replay_mask_{0};",
             "bool set_sleep_after_s(uint32_t seconds);",
             "static constexpr uint32_t MIN_SLEEP_AFTER_S = 10;",
             "static constexpr uint32_t MAX_SLEEP_AFTER_S = 3600;",
@@ -289,8 +288,7 @@ class SettingsTest(unittest.TestCase):
         for signature, store in (
             ("bool IdleSleep::set_enabled(bool enabled)", "this->enabled_.store(enabled"),
             ("bool IdleSleep::set_sleep_after_s(uint32_t seconds)", "this->sleep_after_s_.store(seconds"),
-            ("bool IdleSleep::set_wake_replay(bool replay)", "this->wake_replay_.store(replay"),
-            ("bool IdleSleep::set_wake_replay_ir(bool replay)", "this->wake_replay_ir_.store(replay"),
+            ("bool IdleSleep::set_wake_replay(uint8_t mask, bool enabled)", "this->wake_replay_mask_.store(next"),
         ):
             body = function_body(CPP, signature)
             save = body.index("if (!this->save_settings_(")
@@ -316,17 +314,13 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("MAX_SLEEP_AFTER = cv.TimePeriod(seconds=3600)", INIT)
 
     def test_the_wake_press_replay_is_a_stored_setting_that_defaults_off(self) -> None:
-        self.assertRegex(HEADER, r"uint8_t wake_replay;\n    uint8_t wake_replay_ir;[^\n]*\n    uint8_t reserved;")
-        load = function_body(CPP, "void IdleSleep::load_settings_()")
-        self.assertIn("this->wake_replay_.store(valid && loaded.wake_replay == 1", load)
-        self.assertIn("this->wake_replay_ir_.store(valid && loaded.wake_replay_ir == 1", load)
+        self.assertIn("static_assert(sizeof(SettingsPref) == 12);", HEADER)
         setup = function_body(CPP, "void IdleSleep::setup()")
         self.assertLess(setup.index("this->load_settings_();"), setup.index("this->replay_pending_ ="))
         self.assertIn("this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_) &&"
                       " replay_enabled;", setup)
-        self.assertIn("this->wake_replay() || this->wake_replay_ir()", setup)
+        self.assertIn("const bool replay_enabled = this->wake_replay_mask() != 0;", setup)
         self.assertIn("wake press replay is off", setup)
-        self.assertIn("YESNO(this->wake_replay())", function_body(CPP, "void IdleSleep::dump_config()"))
 
     def test_off_stops_only_the_idle_path(self) -> None:
         body = function_body(CPP, "void IdleSleep::try_sleep_()")
@@ -444,7 +438,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         boot = PRODUCTION.split("    - priority: 800\n", 1)[1].split("    - priority: 600\n", 1)[0]
         mark = function_body(boot, "if (id(idle).woke_from_sleep())")
         self.assertIn("const uint16_t held = id(idle).held_at_wake();", mark)
-        self.assertIn("const bool silent = !id(idle).wake_replay() && !id(idle).wake_replay_ir();", mark)
+        self.assertIn("const bool silent = id(idle).wake_replay_mask() == 0;", mark)
         self.assertIn("if (held & (1u << bit))\n                  hold_actions.wake_held(HoldActions::SLOT_OF_BIT[bit], silent);",
                       mark)
         for gone in ("hold_consumed", "sw8_hold_consumed", "sw9_hold_consumed", "detect_peek_hold",
@@ -483,9 +477,12 @@ class ProductionSleepConfigTest(unittest.TestCase):
     def test_a_held_replay_skips_an_input_with_an_active_hold(self) -> None:
         """That input taps on release, so a replay as well would send its assignment
         twice. The check comes before the Home Assistant queue, so it covers that kind too."""
-        replay = PRODUCTION.split("  replay: !lambda |-\n", 1)[1].split("\n\n", 1)[0]
+        replay = PRODUCTION.split("  replay: !lambda |-\n", 1)[1].split("\n\ni2c:", 1)[0]
         defer = replay.index("if (held && hold_actions.defers(slot))\n      return Sleep::REPLAY_SKIP;")
-        for action in ("id(ha_actions).play(slot)", "zigbee_assignments.play(slot)", "id(send_wake_ir).execute()"):
+        for action in (
+            "id(ble_hid_remote).set_pressed(slot, true)", "id(ha_actions).play(slot)",
+            "zigbee_assignments.play(slot)", "id(send_wake_ir).execute()",
+        ):
             self.assertLess(defer, replay.index(action))
         self.assertIn("HoldActions::WAKE_TAP_AND_RELEASE", PRODUCTION)
         self.assertIn("id(idle).replay_on_release(bit);", PRODUCTION)

@@ -56,7 +56,7 @@ function mk(tag) {
 for (const id of ["lnk", "lnb", "remote", "ed", "edpanel", "z2m", "bst", "bfr", "cfg", "cfgio",
                   "zsum", "zrs", "zrb", "zrw", "zpj", "zpjs", "zcs", "bhs", "brb", "brw",
                   "hab", "haw", "scb", "scw", "tabb", "tabc", "buttonstab", "configtab", "wfb", "wfd", "wfs", "has",
-                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srw", "srb", "sri", "srh", "slh", "lgm", "lgs", "blw", "blb", "bls", "wfh", "rss", "rsb",
+                  "wip", "dip", "wmac", "fwv", "bat", "devcfg", "slpcfg", "slw", "slb", "sls", "sla", "slr", "slap", "srb", "sri", "srha", "srz", "srh", "slh", "lgm", "lgs", "blw", "blb", "bls", "wfh", "rss", "rsb",
                   "dn", "dnr", "dnv", "dne", "dni", "dns", "dnc", "dnm"])
   els[id] = mk("section");
 els.scb.checked = true;
@@ -66,7 +66,8 @@ const STATE = {
   status_leds: "on", boot_leds: true,
   network: {wifi: true, wifi_enabled: true, wifi_always_on: false,
             home_assistant: true, api_gated: false, ip: "192.168.1.86", mac: "A4:CF:12:34:56:78"},
-  sleep: {available: true, enabled: true, after_s: 300, replay: false, replay_ir: false},
+  sleep: {available: true, enabled: true, after_s: 300, replay: false,
+          replay_ir: false, replay_ha: false, replay_zigbee: false, replay_ble: false},
   battery: {available: true, percent: 72, volts: 3.87},
   result_slot: 0, result: "none", action_id: 0, action_ok: false,
   radios: {zigbee: true, ble: true, home_assistant: true},
@@ -1633,6 +1634,7 @@ setTimeout(() => {
   });
   step("the sleep block shows only with idle_sleep and names its state", () => {
     global.st = STATE;
+    const previous = STATE.sleep;
     const block = document.getElementById("slpcfg");
     const box = document.getElementById("slb");
     const minutes = document.getElementById("sla");
@@ -1657,7 +1659,7 @@ setTimeout(() => {
     sleepStatus();
     if (!line.innerHTML.includes("after 90 seconds") || minutes.value !== "2")
       throw new Error("a YAML default in seconds reads " + line.innerHTML + " / " + minutes.value);
-    STATE.sleep = {available: true, enabled: true, after_s: 300};
+    STATE.sleep = previous;
     sleepStatus();
   });
   step("the battery line shows percent and volts and names a missing reading", () => {
@@ -1706,44 +1708,37 @@ setTimeout(() => {
     global.sleepBusy = false;
     sleepStatus();
   });
-  step("the wake press switch reflects the state and posts the new value", () => {
+  step("each wake switch changes only its own radio", () => {
     global.st = STATE;
     global.sleepBusy = false;
-    sleepStatus();
-    const box = document.getElementById("srb");
-    if (box.checked || box.disabled) throw new Error("the wake press switch did not start off and live");
-    STATE.sleep.replay = true;
-    sleepStatus();
-    if (!box.checked) throw new Error("the wake press switch ignored replay true");
+    const radios = {ir: "sri", ha: "srha", zigbee: "srz", ble: "srb"};
     const realFetch = global.fetch;
-    let body = "";
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    box.checked = false;
-    box.onchange();
-    global.fetch = realFetch;
-    if (new URLSearchParams(body).get("action") !== "set_sleep_replay" || !body.includes("enabled=0"))
-      throw new Error("wake press switch posted " + body);
-    if (!box.disabled || box.checked) throw new Error("wake press switch lost the pending state");
-    if (!document.getElementById("slb").checked) throw new Error("the sleep switch lost its value");
-    global.sleepBusy = false;
-    STATE.sleep.replay = false;
+    STATE.sleep.replay_ha = true;
     sleepStatus();
-    const ir = document.getElementById("sri");
-    if (ir.checked || ir.disabled) throw new Error("the IR switch did not start off and live");
-    global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
-    ir.checked = true;
-    ir.onchange();
-    global.fetch = realFetch;
-    const post = new URLSearchParams(body);
-    if (post.get("action") !== "set_sleep_replay_ir" || post.get("enabled") !== "1")
-      throw new Error("IR switch posted " + body);
-    if (!ir.checked || !ir.disabled || box.checked || !box.disabled)
-      throw new Error("the pending IR switch changed the network switch");
-    STATE.sleep.replay_ir = true;
-    global.sleepBusy = false;
-    sleepStatus();
-    if (!ir.checked || ir.disabled || box.checked) throw new Error("the IR state changed the network switch");
-    STATE.sleep.replay_ir = false;
+    for (const [radio, id] of Object.entries(radios)) {
+      const box = document.getElementById(id);
+      const previous = STATE.sleep["replay_" + radio];
+      if (box.checked !== previous || box.disabled) throw new Error("wrong initial " + radio + " state");
+      let body = "";
+      global.fetch = (u, o) => { if (o && o.body) body = o.body; return realFetch(u, o); };
+      box.checked = !previous;
+      box.onchange();
+      global.fetch = realFetch;
+      const post = new URLSearchParams(body);
+      if (post.get("action") !== "set_sleep_replay" || post.get("radio") !== radio ||
+          post.get("enabled") !== (previous ? "0" : "1"))
+        throw new Error(radio + " switch posted " + body);
+      for (const [other, otherId] of Object.entries(radios)) {
+        const toggle = document.getElementById(otherId);
+        const expected = other === radio ? !previous : STATE.sleep["replay_" + other];
+        if (toggle.checked !== expected || !toggle.disabled)
+          throw new Error(radio + " write displayed the wrong " + other + " state");
+      }
+      if (!document.getElementById("slb").checked) throw new Error("the sleep switch lost its value");
+      global.sleepBusy = false;
+      sleepStatus();
+    }
+    STATE.sleep.replay_ha = false;
     sleepStatus();
   });
   step("the minutes box posts seconds and refuses a value outside 1 to 60", () => {
@@ -2151,7 +2146,7 @@ setTimeout(() => {
     const j = JSON.parse(cfgBlob());
     const want = {zigbee: true, ble: true, home_assistant: true, wifi_always_on: false,
                   status_leds: "on", boot_leds: true, sleep: true, sleep_after_s: 300, wake_replay: false,
-                  wake_replay_ir: false};
+                  wake_replay_ir: false, wake_replay_ha: false, wake_replay_zigbee: false, wake_replay_ble: false};
     if (JSON.stringify(j.settings) !== JSON.stringify(want))
       throw new Error("settings are wrong: " + JSON.stringify(j.settings));
     if ("name" in j.settings) throw new Error("the name was exported");
@@ -2159,7 +2154,7 @@ setTimeout(() => {
     global.st.sleep = {available: false, enabled: false, after_s: 0, replay: false};
     const bare = JSON.parse(cfgBlob()).settings;
     global.st.sleep = prev;
-    if ("sleep" in bare || "sleep_after_s" in bare || "wake_replay" in bare || "wake_replay_ir" in bare)
+    if ("sleep" in bare || "sleep_after_s" in bare || Object.keys(bare).some(k => k.startsWith("wake_replay")))
       throw new Error("a remote without sleep exported sleep keys: " + JSON.stringify(bare));
     if (bare.zigbee !== true) throw new Error("the radio keys went missing");
   });
@@ -2177,7 +2172,8 @@ setTimeout(() => {
     bad({sleep_after_s: "300"}, "sleep_after_s");
     bad({ble: "yes"}, "ble");
     bad({wake_replay: 1}, "wake_replay");
-    bad({wake_replay_ir: 1}, "wake_replay_ir");
+    for (const radio of ["ir", "ha", "zigbee", "ble"])
+      bad({["wake_replay_" + radio]: 1}, "wake_replay_" + radio);
     bad([true], "object");
     bad(null, "object");
     const ok = cfgParse(JSON.stringify(Object.assign({}, base, {settings: {sleep_after_s: 10, ble: false}})));
@@ -2195,11 +2191,14 @@ setTimeout(() => {
     if (l.skipped) throw new Error("a sleep remote skipped a key");
     if (cfgSetList({zigbee: true, sleep_after_s: 300}).list.length)
       throw new Error("a matching setting was sent");
-    if (cfgSetList({wake_replay: true}).list[0].args !== "&enabled=1")
-      throw new Error("the wake press argument is wrong");
-    const ir = cfgSetList({wake_replay: false, wake_replay_ir: true}).list;
-    if (ir.length !== 1 || ir[0].action !== "set_sleep_replay_ir" || ir[0].args !== "&enabled=1")
-      throw new Error("the IR wake press import changed the network setting");
+    const legacy = cfgSetList({wake_replay: true}).list.map(e => e.action + e.args);
+    const network = ["set_sleep_replay&radio=ha&enabled=1", "set_sleep_replay&radio=zigbee&enabled=1"];
+    if (JSON.stringify(legacy) !== JSON.stringify(network))
+      throw new Error("legacy wake replay must affect only Home Assistant and Zigbee");
+    const mixed = cfgSetList({wake_replay: true, wake_replay_ha: false, wake_replay_ir: true}).list;
+    const explicit = ["set_sleep_replay&radio=ir&enabled=1", "set_sleep_replay&radio=zigbee&enabled=1"];
+    if (JSON.stringify(mixed.map(e => e.action + e.args)) !== JSON.stringify(explicit))
+      throw new Error("a per-radio setting did not override the legacy value");
     if (cfgSetList({home_assistant: false}).list[0].args !== "&radio=home_assistant&on=0")
       throw new Error("the Home Assistant argument is wrong");
   });
@@ -2280,9 +2279,9 @@ setTimeout(() => {
   step("an import skips the sleep keys on a remote without sleep", () => {
     const prev = global.st.sleep;
     global.st.sleep = {available: false, enabled: false, after_s: 0, replay: false};
-    const l = cfgSetList({ble: false, sleep: true, sleep_after_s: 600, wake_replay: true});
+    const l = cfgSetList({ble: false, sleep: true, sleep_after_s: 600, wake_replay: true, wake_replay_zigbee: false});
     global.st.sleep = prev;
-    if (l.skipped !== 3 || l.list.length !== 1 || l.list[0].action !== "set_radio")
+    if (l.skipped !== 4 || l.list.length !== 1 || l.list[0].action !== "set_radio")
       throw new Error("sleep keys were not skipped: " + JSON.stringify(l));
   });
   step("an import with only settings posts the first setting and a matching file says so", () => {

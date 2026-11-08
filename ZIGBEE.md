@@ -493,7 +493,7 @@ A join clears the state back to unknown. The warm-cache pass that follows a join
 is the one probe the remote makes without a press.
 
 After a deep-sleep wake, the remote rejoins the network.
-If **Send Home Assistant and Zigbee on wake** is on, the remote sends the Zigbee command when the link is ready.
+If **Send Zigbee on wake** is on, the remote sends the Zigbee command when the link is ready.
 If the link takes more than 3 s after setup, the remote discards the wake press.
 See [Wake](RECEIVER.md#wake) in RECEIVER.md.
 

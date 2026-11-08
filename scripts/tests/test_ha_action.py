@@ -370,13 +370,13 @@ class ReplayTest(unittest.TestCase):
 
     def test_production_sends_an_ha_slot_without_the_link_and_zigbee_with_it(self) -> None:
         replay = section(CONFIG, "  replay: !lambda |-\n", "\n\ni2c:")
-        ha = replay.index("id(idle).wake_replay() && id(ha_actions).enabled() && id(ha_actions).play(slot)")
+        ha = replay.index("(replay & Sleep::WAKE_HA) && id(ha_actions).enabled() && id(ha_actions).play(slot)")
         zigbee = replay.index("if (zigbee_assignments.has_assignment(slot))")
         link = replay.index("if (!link)\n        return Sleep::REPLAY_WAIT_LINK;", zigbee)
         self.assertLess(ha, zigbee)
-        self.assertLess(replay.index("if (!id(idle).wake_replay()", zigbee), link)
+        self.assertLess(replay.index("if (!(replay & Sleep::WAKE_ZIGBEE)", zigbee), link)
         self.assertLess(link, replay.index("zigbee_assignments.play(slot)", link))
-        self.assertIn("if (!id(idle).wake_replay_ir() || !ir_ui.prepare_ir(slot))", replay)
+        self.assertIn("if (!(replay & Sleep::WAKE_IR) || !ir_ui.prepare_ir(slot))", replay)
         self.assertIn("id(send_wake_ir).execute();", replay)
 
     def test_a_bit_waits_only_when_the_callback_requests_a_link(self) -> None:
@@ -387,7 +387,7 @@ class ReplayTest(unittest.TestCase):
         self.assertIn("if (result == REPLAY_WAIT_LINK)\n        continue;", replay)
         self.assertIn("this->replay_left_ &= static_cast<uint16_t>(~(1u << bit));", replay)
         self.assertIn("if (this->replay_left_ == 0) {", replay)
-        self.assertIn("Replay dropped: no link 3 s after setup", replay)
+        self.assertIn("Wake replay dropped: no connection within 3 s of setup", replay)
         # The stub mask is what the log and the held logic read, so it stays whole.
         self.assertIn("this->replay_left_ = rec.stub_down;", IDLE_CPP)
         self.assertIn("this->replay_mask_ = rec.stub_down;", IDLE_CPP)

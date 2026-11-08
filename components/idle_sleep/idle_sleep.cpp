@@ -208,7 +208,7 @@ void IdleSleep::setup() {
   this->replay_left_ = rec.stub_down;
   this->held_mask_ = rec.stub_down & first_down;
   this->load_settings_();
-  const bool replay_enabled = this->wake_replay() || this->wake_replay_ir();
+  const bool replay_enabled = this->wake_replay_mask() != 0;
   this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_) && replay_enabled;
   if (this->replay_mask_ != 0 && !replay_enabled)
     ESP_LOGI(TAG, "Wake press 0x%04X not sent because wake press replay is off", this->replay_mask_);
@@ -225,8 +225,18 @@ void IdleSleep::load_settings_() {
                       (loaded.stored_after_s >= MIN_SLEEP_AFTER_S && loaded.stored_after_s <= MAX_SLEEP_AFTER_S));
   this->stored_after_s_ = valid ? loaded.stored_after_s : 0;
   this->enabled_.store(!valid || loaded.enabled == 1, std::memory_order_relaxed);
-  this->wake_replay_.store(valid && loaded.wake_replay == 1, std::memory_order_relaxed);
-  this->wake_replay_ir_.store(valid && loaded.wake_replay_ir == 1, std::memory_order_relaxed);
+  uint8_t wake_mask = 0;
+  if (valid) {
+    if ((loaded.tagged_wake_mask & ~WAKE_ALL) == WAKE_MASK_TAG) {
+      wake_mask = loaded.tagged_wake_mask & WAKE_ALL;
+    } else {
+      if (loaded.legacy_wake_network == 1)
+        wake_mask |= WAKE_NETWORK;
+      if (loaded.legacy_wake_ir == 1)
+        wake_mask |= WAKE_IR;
+    }
+  }
+  this->wake_replay_mask_.store(wake_mask, std::memory_order_relaxed);
   this->sleep_after_s_.store(this->stored_after_s_ != 0 ? this->stored_after_s_ : this->default_sleep_after_s_,
                              std::memory_order_relaxed);
 }
@@ -240,9 +250,11 @@ void IdleSleep::replay_on_release(uint8_t bit) {
   this->replay_pending_ = true;
 }
 
-bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay, bool wake_replay_ir) {
+bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, uint8_t wake_replay_mask) {
   SettingsPref next{SETTINGS_MAGIC, stored_after_s, enabled ? uint8_t{1} : uint8_t{0},
-                    wake_replay ? uint8_t{1} : uint8_t{0}, wake_replay_ir ? uint8_t{1} : uint8_t{0}, 0};
+                    static_cast<uint8_t>((wake_replay_mask & WAKE_NETWORK) == WAKE_NETWORK),
+                    static_cast<uint8_t>((wake_replay_mask & WAKE_IR) != 0),
+                    static_cast<uint8_t>(WAKE_MASK_TAG | wake_replay_mask)};
   if (!this->settings_pref_.save(&next)) {
     ESP_LOGE(TAG, "Failed to save the sleep settings");
     return false;
@@ -251,7 +263,7 @@ bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, bool wake_
 }
 
 bool IdleSleep::set_enabled(bool enabled) {
-  if (!this->save_settings_(enabled, this->stored_after_s_, this->wake_replay(), this->wake_replay_ir()))
+  if (!this->save_settings_(enabled, this->stored_after_s_, this->wake_replay_mask()))
     return false;
   this->enabled_.store(enabled, std::memory_order_relaxed);
   this->last_activity_ms_ = millis();
@@ -259,28 +271,23 @@ bool IdleSleep::set_enabled(bool enabled) {
   return true;
 }
 
-bool IdleSleep::set_wake_replay(bool replay) {
-  if (!this->save_settings_(this->enabled(), this->stored_after_s_, replay, this->wake_replay_ir()))
+bool IdleSleep::set_wake_replay(uint8_t mask, bool enabled) {
+  if (mask == 0 || (mask & ~WAKE_ALL) != 0)
     return false;
-  this->wake_replay_.store(replay, std::memory_order_relaxed);
-  this->last_activity_ms_ = millis();
-  ESP_LOGI(TAG, "Network wake replay %s, idle window restarted", replay ? "on" : "off");
-  return true;
-}
-
-bool IdleSleep::set_wake_replay_ir(bool replay) {
-  if (!this->save_settings_(this->enabled(), this->stored_after_s_, this->wake_replay(), replay))
+  const uint8_t current = this->wake_replay_mask();
+  const uint8_t next = enabled ? current | mask : current & ~mask;
+  if (!this->save_settings_(this->enabled(), this->stored_after_s_, next))
     return false;
-  this->wake_replay_ir_.store(replay, std::memory_order_relaxed);
+  this->wake_replay_mask_.store(next, std::memory_order_relaxed);
   this->last_activity_ms_ = millis();
-  ESP_LOGI(TAG, "IR wake replay %s, idle window restarted", replay ? "on" : "off");
+  ESP_LOGI(TAG, "Wake replay mask 0x%02X, idle window restarted", static_cast<unsigned>(next));
   return true;
 }
 
 bool IdleSleep::set_sleep_after_s(uint32_t seconds) {
   if (seconds < MIN_SLEEP_AFTER_S || seconds > MAX_SLEEP_AFTER_S)
     return false;
-  if (!this->save_settings_(this->enabled(), seconds, this->wake_replay(), this->wake_replay_ir()))
+  if (!this->save_settings_(this->enabled(), seconds, this->wake_replay_mask()))
     return false;
   this->stored_after_s_ = seconds;
   this->sleep_after_s_.store(seconds, std::memory_order_relaxed);
@@ -320,16 +327,19 @@ void IdleSleep::detach_int_isr_() {
 }
 
 void IdleSleep::dump_config() {
+  const uint8_t wake_mask = this->wake_replay_mask();
   ESP_LOGCONFIG(TAG,
                 "Idle sleep:\n"
                 "  Enabled: %s\n"
                 "  Sleep after: %" PRIu32 " s (%s, YAML default %" PRIu32 " s)\n"
-                "  Network wake replay: %s\n"
                 "  IR wake replay: %s\n"
+                "  Home Assistant wake replay: %s\n"
+                "  Zigbee wake replay: %s\n"
+                "  Bluetooth wake replay: %s\n"
                 "  Cold boot grace: %" PRIu32 " ms",
                 YESNO(this->enabled()), this->sleep_after_s(), this->stored_after_s_ != 0 ? "stored" : "default",
-                this->default_sleep_after_s_, YESNO(this->wake_replay()), YESNO(this->wake_replay_ir()),
-                this->cold_boot_grace_ms_);
+                this->default_sleep_after_s_, YESNO(wake_mask & WAKE_IR), YESNO(wake_mask & WAKE_HA),
+                YESNO(wake_mask & WAKE_ZIGBEE), YESNO(wake_mask & WAKE_BLE), this->cold_boot_grace_ms_);
   if (this->sleep_hold_bit_ != NO_BIT) {
     ESP_LOGCONFIG(TAG, "  Sleep hold: bit %u for %" PRIu32 " ms", this->sleep_hold_bit_, this->sleep_hold_time_ms_);
   } else {
@@ -392,8 +402,9 @@ void IdleSleep::loop() {
     if (this->replay_left_ == 0) {
       this->replay_pending_ = false;
     } else if (esp_timer_get_time() - this->setup_us_ > REPLAY_TIMEOUT_US) {
+      this->replay_left_ = 0;
       this->replay_pending_ = false;
-      ESP_LOGW(TAG, "Replay dropped: no link 3 s after setup");
+      ESP_LOGW(TAG, "Wake replay dropped: no connection within 3 s of setup");
     }
   }
 

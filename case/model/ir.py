@@ -1,8 +1,9 @@
-"""U2's bottom window insert and D1's unchanged +Y emitter bore."""
+"""U2's bottom window insert and D1's chamfered +Y emitter bore."""
 
 import functools
+import math
 
-from build123d import Cylinder, Pos, RectangleRounded, Rot, extrude
+from build123d import Cone, Cylinder, Pos, RectangleRounded, Rot, extrude
 
 import board
 import cache
@@ -10,7 +11,7 @@ import params
 
 from .backform import back_form
 from .shape import _cut, _fuse, _isect
-from .stack import BOARD_TOP, LAP_OUT, SHELL_BACK
+from .stack import BOARD_TOP, LAP_OUT, MERGE, SHELL_BACK
 
 
 @functools.cache
@@ -83,15 +84,26 @@ def ir_window_retention():
 
 
 def emitter_bore():
-    """D1's unchanged round port through the +Y end wall."""
+    """Close fit around the lens with a chamfer at the outer face."""
     lens = board.emitter_envelope()
     edge_y = board.board_profile().bounding_box().max.Y
     radius = max(lens.size.X, lens.size.Z) / 2 + params.IR_EMITTER_FIT
+    x, _, z = lens.center()
     y_in = edge_y - params.IR_RELIEF_DEPTH
-    y_out = edge_y + params.WALL * 6
-    return Pos(lens.center().X, (y_in + y_out) / 2, lens.center().Z) * Rot(90, 0, 0) * (
-        Cylinder(radius=radius, height=y_out - y_in)
+    face_y = edge_y + LAP_OUT
+    chamfer_y = face_y - params.IR_EMITTER_CHAMFER_DEPTH
+    throat = Pos(x, (y_in + chamfer_y) / 2, z) * Rot(-90, 0, 0) * Cylinder(
+        radius=radius,
+        height=chamfer_y - y_in,
     )
+    depth = face_y + MERGE - chamfer_y
+    angle = math.radians(params.IR_EMITTER_CHAMFER_ANGLE)
+    chamfer = Pos(x, chamfer_y + depth / 2, z) * Rot(-90, 0, 0) * Cone(
+        bottom_radius=radius,
+        top_radius=radius + depth * math.tan(angle),
+        height=depth,
+    )
+    return _fuse(throat, chamfer)
 
 
 def emitter_reach():

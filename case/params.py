@@ -165,12 +165,11 @@ sized off BOARD_FIT, so it passes a thicker skirt's inner face by only 0.1.
 The IR end skirt's flex also sets how the catches close, and this extra wall
 makes that skirt about 1.59 times stiffer. The grip end has no catches,
 because one screw closes it."""
-SIDE_SKIRT_THICKEN_RUN = 1.5
+SIDE_SKIRT_THICKEN_RUN = 0.30
 """Length along each long side over which the stiffener tapers from its full
 thickness to the plain board fit at the IR corner tangent. The IR corner arcs
 keep the plain fit. The grip end has no taper, because the stiffener runs round
-it at full thickness. The taper must stay clear of the support-cut lead-in
-ramps, and skirt_lead_in_cuts() fails if it does not."""
+it at full thickness. The run clears the support-cut lead-in beside D1."""
 SIDE_CATCH_CENTER_OFFSET = 3.5
 """Position of the side catches toward the IR end from the board's lengthwise
 midpoint. The reported bow is near that midpoint; this offset centres each
@@ -270,7 +269,7 @@ CATCH_EMITTER_CLEAR = 2.5
 
 The +x catch is placed off that bore rather than off the centreline, which is
 what CATCH_SPACING would do: mirroring the grip end's spacing lands the window
-squarely on the bore, and the bore is drilled to D1's own lens and cannot move.
+squarely on the bore, whose position follows D1's lens.
 So shells.catch_x() takes whichever is further -x of the spacing and this
 clearance, and at the present layout this one governs."""
 
@@ -446,7 +445,7 @@ from what actually hangs below the board on that side and only falls back to
 this when no part needs more depth. Both ends use this minimum with the current board.
 The assembly STEP supplies the measured component depths.
 
-The +Y budget is still tight because D1's unchanged bore is drilled to its lens.
+The +Y budget is tight around D1's flared bore.
 The back rolls up through CONTOUR_TIP_R to meet that face, and reducing this
 depth can make the bore break out through the underside. U2's bottom aperture
 does not share that constraint; its conformal insert follows whatever back form
@@ -893,19 +892,14 @@ IR_CLEARANCE = 0.5
 """Margin around U2's complete multi-solid envelope from
 board.part_envelope("U2", radius=3.0). It alone sets aperture size.
 
-U2 receives through the back along -Z. D1 still fires along +Y through a bore
-drilled to its lens, sized by IR_EMITTER_FIT."""
+U2 receives through the back along -Z."""
 IR_EMITTER_FIT = 0.2
-"""Radial gap between D1's lens and the bore it fires through, the emitter's
-half of what IR_CLEARANCE is for the receiver. The bore is round and drilled
-to board.emitter_envelope()'s own measured lens rather than boxed with a
-margin, because the lens is a 3.0 dome and a rounded rectangle around it
-would open the end wall wider than the part it passes.
-
-Deliberately a fit rather than a clearance: nothing has to pass through it
-on assembly, the board being lowered in from the front with the lens landing
-in the bore from behind, so it only has to not touch. Snug also keeps the
-open port small, which is the one hole in this case with nothing behind it."""
+"""Radial assembly clearance around D1's measured lens at the bore throat."""
+IR_EMITTER_CHAMFER_ANGLE = 45.0
+"""Chamfer angle per side from D1's optical axis."""
+IR_EMITTER_CHAMFER_DEPTH = 0.60
+"""Axial chamfer depth from the outer end face. It opens the bore around the
+lens tip and keeps a lower lip at the back shell's end roll."""
 IR_RELIEF_DEPTH = 1.5
 """How far inside the board edge an end-wall cut reaches, shared by D1's
 emitter bore and the USB shell's slot. Both are

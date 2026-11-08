@@ -72,6 +72,8 @@ from .hardware import (
     feature_clashes,
 )
 from .ir import (
+    emitter_beam_clearance,
+    emitter_chamfer_angle,
     end_ports_open,
     receiver_clearance,
     receiver_paths,
@@ -1183,6 +1185,14 @@ def _end_ports_open(s):
     return _report(
         end_ports_open(s.shells),
         "D1's bore and the USB shell remain open at their end-wall centrelines",
+    )
+
+
+@_check("ir")
+def _emitter_beam_clearance(s):
+    return _report(
+        emitter_beam_clearance(s.shells) + emitter_chamfer_angle(s.shells),
+        "D1's 45° chamfer clears the 15° half-intensity angle in eight directions",
     )
 
 

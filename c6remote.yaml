@@ -45,11 +45,10 @@ esphome:
               ESP_LOGI("button_config", "Home Assistant is off, so the API server stays down");
             }
             // Must run before any loop, so a held button cannot release first. A
-            // button held through the boot fires no on_press. With wake press
-            // replay off, its release must not tap. A later press clears the mark.
+            // button held through the boot fires no on_press.
             if (id(idle).woke_from_sleep()) {
               const uint16_t held = id(idle).held_at_wake();
-              const bool silent = !id(idle).wake_replay();
+              const bool silent = !id(idle).wake_replay() && !id(idle).wake_replay_ir();
               for (uint8_t bit = 0; bit < 16; bit++) {
                 if (held & (1u << bit))
                   hold_actions.wake_held(HoldActions::SLOT_OF_BIT[bit], silent);
@@ -346,17 +345,26 @@ idle_sleep:
     }
     return mask != 0;
   replay: !lambda |-
-    // The wake press replay setting gates this hook. An input with an active
-    // hold taps on release, so its on_release owns a held bit.
+    using Sleep = idle_sleep::IdleSleep;
     const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];
     if (held && hold_actions.defers(slot))
-      return false;
-    // A Home Assistant action needs Wi-Fi and the API, not the Zigbee link, so
-    // it queues at once. Every other kind waits for the link. play() is also
-    // true when the Home Assistant switch skips the press, so the bit settles.
-    if (id(ha_actions).play(slot))
-      return true;
-    return link && zigbee_assignments.play(slot);
+      return Sleep::REPLAY_SKIP;
+    if (ir_code_store.is_voice(slot) || id(ble_hid_remote).assignment(slot).assigned)
+      return Sleep::REPLAY_SKIP;
+    if (id(ha_actions).has_assignment(slot))
+      return id(idle).wake_replay() && id(ha_actions).enabled() && id(ha_actions).play(slot)
+                 ? Sleep::REPLAY_SENT : Sleep::REPLAY_SKIP;
+    if (zigbee_assignments.has_assignment(slot)) {
+      if (!id(idle).wake_replay() || !zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())
+        return Sleep::REPLAY_SKIP;
+      if (!link)
+        return Sleep::REPLAY_WAIT_LINK;
+      return zigbee_assignments.play(slot) ? Sleep::REPLAY_SENT : Sleep::REPLAY_SKIP;
+    }
+    if (!id(idle).wake_replay_ir() || !ir_ui.prepare_ir(slot))
+      return Sleep::REPLAY_SKIP;
+    id(send_wake_ir).execute();
+    return Sleep::REPLAY_SENT;
 
 i2c:
   sda: GPIO22
@@ -1067,6 +1075,9 @@ microphone:
     bits_per_sample: 32bit
 
 script:
+  - id: send_wake_ir
+    then:
+      - if: *send_learned_code
   # Shared press path for the sixteen expander inputs. HoldActions latches the
   # hold decision here, so a settings change during a hold does not move it.
   - id: button_press
@@ -1114,6 +1125,19 @@ script:
       slot: int
     then:
       - lambda: id(hold_release) = hold_actions.release(static_cast<uint8_t>(slot));
+      - lambda: |-
+          if (id(hold_release) == HoldActions::WAKE_TAP_AND_RELEASE) {
+            if (id(idle).wake_replay() && (ir_code_store.is_voice(slot) || id(ble_hid_remote).assignment(slot).assigned)) {
+              id(hold_release) = HoldActions::TAP_AND_RELEASE;
+              return;
+            }
+            for (uint8_t bit = 0; bit < 16; bit++) {
+              if (HoldActions::SLOT_OF_BIT[bit] == slot) {
+                id(idle).replay_on_release(bit);
+                break;
+              }
+            }
+          }
       - if:
           condition:
             lambda: return id(hold_release) == HoldActions::TAP_AND_RELEASE;
@@ -1405,8 +1429,7 @@ interval:
           if (!id(idle).woke_from_sleep())
             return;
           // A button held from sleep published its first state without on_press,
-          // so its hold starts here. With wake press replay on, its release taps
-          // like a normal press. With it off, on_boot marked the release silent.
+          // so its hold starts here. A short release uses the wake replay settings.
           // The hold itself starts in both cases, except assignment mode.
           // ButtonConfig loads the hold buttons in setup, so wait for it.
           static bool held_checked = false;

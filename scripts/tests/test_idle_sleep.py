@@ -271,6 +271,7 @@ class SettingsTest(unittest.TestCase):
             "bool wake_replay() const { return this->wake_replay_.load(std::memory_order_relaxed); }",
             "bool set_wake_replay(bool replay);",
             "std::atomic<bool> wake_replay_{false};",
+            "std::atomic<bool> wake_replay_ir_{false};",
             "bool set_sleep_after_s(uint32_t seconds);",
             "static constexpr uint32_t MIN_SLEEP_AFTER_S = 10;",
             "static constexpr uint32_t MAX_SLEEP_AFTER_S = 3600;",
@@ -289,13 +290,14 @@ class SettingsTest(unittest.TestCase):
             ("bool IdleSleep::set_enabled(bool enabled)", "this->enabled_.store(enabled"),
             ("bool IdleSleep::set_sleep_after_s(uint32_t seconds)", "this->sleep_after_s_.store(seconds"),
             ("bool IdleSleep::set_wake_replay(bool replay)", "this->wake_replay_.store(replay"),
+            ("bool IdleSleep::set_wake_replay_ir(bool replay)", "this->wake_replay_ir_.store(replay"),
         ):
             body = function_body(CPP, signature)
             save = body.index("if (!this->save_settings_(")
             self.assertLess(save, body.index(store))
             self.assertLess(save, body.index("this->last_activity_ms_ = millis();"))
             self.assertIn("return true;", body)
-        save = function_body(CPP, "bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay)")
+        save = function_body(CPP, "bool IdleSleep::save_settings_(bool enabled, uint32_t stored_after_s,")
         self.assertIn("this->settings_pref_.save(&next)", save)
 
     def test_settings_load_from_a_fixed_key_and_fall_back_to_yaml(self) -> None:
@@ -314,14 +316,15 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("MAX_SLEEP_AFTER = cv.TimePeriod(seconds=3600)", INIT)
 
     def test_the_wake_press_replay_is_a_stored_setting_that_defaults_off(self) -> None:
-        self.assertIn("    uint8_t wake_replay;\n    uint8_t reserved[2];", HEADER)
+        self.assertRegex(HEADER, r"uint8_t wake_replay;\n    uint8_t wake_replay_ir;[^\n]*\n    uint8_t reserved;")
         load = function_body(CPP, "void IdleSleep::load_settings_()")
         self.assertIn("this->wake_replay_.store(valid && loaded.wake_replay == 1", load)
-        self.assertNotIn("loaded.wake_replay <= 1", load)
+        self.assertIn("this->wake_replay_ir_.store(valid && loaded.wake_replay_ir == 1", load)
         setup = function_body(CPP, "void IdleSleep::setup()")
         self.assertLess(setup.index("this->load_settings_();"), setup.index("this->replay_pending_ ="))
         self.assertIn("this->replay_pending_ = this->replay_mask_ != 0 && static_cast<bool>(this->replay_) &&"
-                      " this->wake_replay();", setup)
+                      " replay_enabled;", setup)
+        self.assertIn("this->wake_replay() || this->wake_replay_ir()", setup)
         self.assertIn("wake press replay is off", setup)
         self.assertIn("YESNO(this->wake_replay())", function_body(CPP, "void IdleSleep::dump_config()"))
 
@@ -345,8 +348,8 @@ class ProductionSleepConfigTest(unittest.TestCase):
         self.assertIn("\nidle_sleep:\n", PRODUCTION)
         self.assertIn("return id(zigbee_radio).is_connected();", PRODUCTION)
         self.assertIn("const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];", PRODUCTION)
-        self.assertIn("return link && zigbee_assignments.play(slot);", PRODUCTION)
-        self.assertIn("if (id(ha_actions).play(slot))", PRODUCTION)
+        self.assertIn("return Sleep::REPLAY_WAIT_LINK;", PRODUCTION)
+        self.assertIn("id(ha_actions).play(slot)", PRODUCTION)
 
     def test_the_sleep_hold_flashes_the_awake_led_once_when_armed(self) -> None:
         self.assertIn("bool sleep_armed() const { return this->forced_sleep_; }", HEADER)
@@ -441,7 +444,7 @@ class ProductionSleepConfigTest(unittest.TestCase):
         boot = PRODUCTION.split("    - priority: 800\n", 1)[1].split("    - priority: 600\n", 1)[0]
         mark = function_body(boot, "if (id(idle).woke_from_sleep())")
         self.assertIn("const uint16_t held = id(idle).held_at_wake();", mark)
-        self.assertIn("const bool silent = !id(idle).wake_replay();", mark)
+        self.assertIn("const bool silent = !id(idle).wake_replay() && !id(idle).wake_replay_ir();", mark)
         self.assertIn("if (held & (1u << bit))\n                  hold_actions.wake_held(HoldActions::SLOT_OF_BIT[bit], silent);",
                       mark)
         for gone in ("hold_consumed", "sw8_hold_consumed", "sw9_hold_consumed", "detect_peek_hold",
@@ -481,14 +484,19 @@ class ProductionSleepConfigTest(unittest.TestCase):
         """That input taps on release, so a replay as well would send its assignment
         twice. The check comes before the Home Assistant queue, so it covers that kind too."""
         replay = PRODUCTION.split("  replay: !lambda |-\n", 1)[1].split("\n\n", 1)[0]
-        self.assertEqual(statements(replay), [
-            "const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];",
-            "if (held && hold_actions.defers(slot))",
-            "return false;",
-            "if (id(ha_actions).play(slot))",
-            "return true;",
-            "return link && zigbee_assignments.play(slot);",
-        ])
+        defer = replay.index("if (held && hold_actions.defers(slot))\n      return Sleep::REPLAY_SKIP;")
+        for action in ("id(ha_actions).play(slot)", "zigbee_assignments.play(slot)", "id(send_wake_ir).execute()"):
+            self.assertLess(defer, replay.index(action))
+        self.assertIn("HoldActions::WAKE_TAP_AND_RELEASE", PRODUCTION)
+        self.assertIn("id(idle).replay_on_release(bit);", PRODUCTION)
+        release = function_body(CPP, "void IdleSleep::replay_on_release(uint8_t bit)")
+        self.assertIn("if ((this->held_mask_ & mask) == 0 || !this->replay_)", release)
+        self.assertIn("this->held_mask_ &=", release)
+        self.assertIn("this->replay_left_ |= mask;", release)
+        self.assertIn("this->replay_pending_ = true;", release)
+        loop = function_body(CPP, "void IdleSleep::loop()")
+        self.assertLess(loop.index("this->held_mask_ &= static_cast<uint16_t>(~port);"),
+                        loop.index("this->replay_(bit, held, this->link_seen_)"))
 
     def test_production_awake_led_is_the_inverted_gpio15_output(self) -> None:
         output = PRODUCTION[PRODUCTION.index("    id: awake_led_pwm\n") - len("  - platform: ledc\n"):]
@@ -548,12 +556,6 @@ class HomeAssistantSleepTest(unittest.TestCase):
         self.assertIn("  - platform: esphome\n", ota)
         self.assertIn("  - platform: http_request\n", ota)
         self.assertIn("  - id: ota_busy\n    type: bool\n    restore_value: false\n", PRODUCTION)
-
-    def test_the_replay_settles_a_bit_without_the_link_only_when_it_sends(self) -> None:
-        self.assertIn("this->replay_(bit, held, this->link_seen_)", CPP)
-        self.assertIn("if (!this_sent && !this->link_seen_)", CPP)
-        self.assertIn("bool, bool)> replay_{};", HEADER)
-        self.assertIn("return link && zigbee_assignments.play(slot);", PRODUCTION)
 
 
 if __name__ == "__main__":

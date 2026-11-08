@@ -353,7 +353,7 @@ class ExclusivityTest(unittest.TestCase):
         play = section(STORE, "void play_(uint8_t button) {", "\n  }")
         self.assertLess(play.index("hid_play_callback_(button, true)"), play.index("zigbee_play_callback_(button)"))
         self.assertLess(play.index("zigbee_play_callback_(button)"), play.index("ha_play_callback_(button)"))
-        self.assertLess(play.index("ha_play_callback_(button)"), play.index("ir_code_store.load(button, code_)"))
+        self.assertLess(play.index("ha_play_callback_(button)"), play.index("prepare_ir(button)"))
         self.assertIn("::ir_ui.set_ha_play_callback([this](uint8_t slot) { return this->play(slot); });", CPP)
 
     def test_every_tap_path_reaches_play(self) -> None:
@@ -365,26 +365,26 @@ class ReplayTest(unittest.TestCase):
     def test_the_replay_hook_takes_the_link_state(self) -> None:
         self.assertIn('[(cg.uint8, "bit"), (cg.bool_, "held"), (cg.bool_, "link")]', IDLE_INIT)
         header = (ROOT / "components" / "idle_sleep" / "idle_sleep.h").read_text()
-        self.assertIn("std::function<bool(uint8_t, bool, bool)> replay_{};", header)
+        self.assertIn("std::function<uint8_t(uint8_t, bool, bool)> replay_{};", header)
         self.assertIn("uint16_t replay_left_{0};", header)
 
     def test_production_sends_an_ha_slot_without_the_link_and_zigbee_with_it(self) -> None:
         replay = section(CONFIG, "  replay: !lambda |-\n", "\n\ni2c:")
-        ha = replay.index("if (id(ha_actions).play(slot))\n      return true;")
-        zigbee = replay.index("return link && zigbee_assignments.play(slot);")
+        ha = replay.index("id(idle).wake_replay() && id(ha_actions).enabled() && id(ha_actions).play(slot)")
+        zigbee = replay.index("if (zigbee_assignments.has_assignment(slot))")
+        link = replay.index("if (!link)\n        return Sleep::REPLAY_WAIT_LINK;", zigbee)
         self.assertLess(ha, zigbee)
-        # A held input with an active hold taps on release, so its action must not queue here too.
-        self.assertLess(replay.index("if (held && hold_actions.defers(slot))\n      return false;"), ha)
-        self.assertNotIn("return zigbee_assignments.play(", replay)
-        # A skipped press settles its bit, so the hook does not call it again every loop.
-        self.assertIn("play() is also\n    // true when the Home Assistant switch skips the press, so the bit settles.",
-                      replay)
+        self.assertLess(replay.index("if (!id(idle).wake_replay()", zigbee), link)
+        self.assertLess(link, replay.index("zigbee_assignments.play(slot)", link))
+        self.assertIn("if (!id(idle).wake_replay_ir() || !ir_ui.prepare_ir(slot))", replay)
+        self.assertIn("id(send_wake_ir).execute();", replay)
 
-    def test_a_bit_settles_when_it_sends_or_when_the_link_is_up(self) -> None:
+    def test_a_bit_waits_only_when_the_callback_requests_a_link(self) -> None:
         loop = section(IDLE_CPP, "void IdleSleep::loop() {", "\n}")
-        replay = section(loop, "  if (this->replay_pending_) {", "  if (now - this->last_poll_ms_")
+        replay = section(loop, "  if (this->replay_pending_ && App.is_setup_complete()) {",
+                         "  if (now - this->last_poll_ms_")
         self.assertIn("this->replay_(bit, held, this->link_seen_)", replay)
-        self.assertIn("if (!this_sent && !this->link_seen_)\n        continue;", replay)
+        self.assertIn("if (result == REPLAY_WAIT_LINK)\n        continue;", replay)
         self.assertIn("this->replay_left_ &= static_cast<uint16_t>(~(1u << bit));", replay)
         self.assertIn("if (this->replay_left_ == 0) {", replay)
         self.assertIn("Replay dropped: no link 3 s after setup", replay)

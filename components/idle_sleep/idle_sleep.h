@@ -28,12 +28,10 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   void set_sleep_hold_time(uint32_t ms) { this->sleep_hold_time_ms_ = ms; }
   void set_link_probe(std::function<bool()> probe) { this->link_probe_ = std::move(probe); }
   void set_block_probe(std::function<bool()> probe) { this->block_probe_ = std::move(probe); }
-  // bit is the expander pin. held is true when the first read still showed it
-  // down. link is false until link_probe has been true. Returns true when
-  // something was sent. A call with link false is an early try: send only an
-  // action that needs no link and return false for the rest. The call with
-  // link true is the last one for the bit.
-  void set_replay(std::function<bool(uint8_t, bool, bool)> replay) { this->replay_ = std::move(replay); }
+  enum Replay : uint8_t { REPLAY_SKIP, REPLAY_SENT, REPLAY_WAIT_LINK };
+  // A bit is retried only when the callback returns REPLAY_WAIT_LINK.
+  // held is true when the expander pin is still down after setup.
+  void set_replay(std::function<uint8_t(uint8_t, bool, bool)> replay) { this->replay_ = std::move(replay); }
 
   bool woke_from_sleep() const { return !this->cold_boot_; }
   // True once the hold arms the forced sleep. Main loop only, like the setters.
@@ -41,18 +39,20 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   // Arms the forced sleep from outside, as a button hold does. Main loop only.
   void arm_sleep();
   void arm_sleep(std::function<bool()> guard);
-  // True until the latched wake press is sent or dropped.
-  // Bits down at the stub read and at the first read. Zero without the stub latch.
+  // Bits held from wake. Replay clears bits that are up after setup.
   uint16_t held_at_wake() const { return this->held_mask_; }
+  void replay_on_release(uint8_t bit);
 
   // The getters are safe from any task. Call the setters on the main loop only.
   // A successful set is stored in flash and restarts the idle window.
   bool enabled() const { return this->enabled_.load(std::memory_order_relaxed); }
   uint32_t sleep_after_s() const { return this->sleep_after_s_.load(std::memory_order_relaxed); }
-  // True when the press that woke the remote is also sent. Off by default.
+  // Network and IR wake replay are independent and off by default.
   bool wake_replay() const { return this->wake_replay_.load(std::memory_order_relaxed); }
+  bool wake_replay_ir() const { return this->wake_replay_ir_.load(std::memory_order_relaxed); }
   bool set_enabled(bool enabled);
   bool set_wake_replay(bool replay);
+  bool set_wake_replay_ir(bool replay);
   bool set_sleep_after_s(uint32_t seconds);
 
  protected:
@@ -62,7 +62,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   void try_sleep_();
   [[noreturn]] void enter_sleep_();
   void load_settings_();
-  bool save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay);
+  bool save_settings_(bool enabled, uint32_t stored_after_s, bool wake_replay, bool wake_replay_ir);
   void attach_int_isr_();
   void detach_int_isr_();
 
@@ -74,13 +74,15 @@ class IdleSleep : public Component, public i2c::I2CDevice {
     uint32_t stored_after_s;
     uint8_t enabled;
     uint8_t wake_replay;
-    uint8_t reserved[2];
+    uint8_t wake_replay_ir;  // The old record stored zero in this byte.
+    uint8_t reserved;
   };
 
   uint32_t default_sleep_after_s_{300};
   uint32_t stored_after_s_{0};
   std::atomic<bool> enabled_{true};
   std::atomic<bool> wake_replay_{false};
+  std::atomic<bool> wake_replay_ir_{false};
   std::atomic<uint32_t> sleep_after_s_{300};
   ESPPreferenceObject settings_pref_;
   bool int_isr_tried_{false};
@@ -91,7 +93,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   uint32_t sleep_hold_time_ms_{2000};
   std::function<bool()> link_probe_{};
   std::function<bool()> block_probe_{};
-  std::function<bool(uint8_t, bool, bool)> replay_{};
+  std::function<uint8_t(uint8_t, bool, bool)> replay_{};
 
   bool cold_boot_{true};
   uint16_t replay_mask_{0};
@@ -99,6 +101,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   uint16_t replay_left_{0};
   uint16_t held_mask_{0};
   bool replay_pending_{false};
+  bool replay_started_{false};
   bool link_seen_{false};
   int64_t setup_us_{0};
   uint32_t last_activity_ms_{0};

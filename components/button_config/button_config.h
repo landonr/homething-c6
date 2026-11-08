@@ -125,6 +125,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
     bool enabled;
     uint32_t after_s;
     bool replay;
+    bool replay_ir;
   };
   SleepState sleep_state_() const;
   // Zeros and available=false when unlinked or when either reading is NAN.
@@ -136,7 +137,7 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   BatteryState battery_state_() const;
   bool set_sleep_enabled_(bool enabled);
   bool set_sleep_after_(uint32_t seconds);
-  bool set_sleep_replay_(bool replay);
+  bool set_sleep_replay_(bool replay, bool ir);
   void load_name_pref_();
   bool set_friendly_name_(const std::string &name);
   void apply_friendly_name_(const std::string &name);

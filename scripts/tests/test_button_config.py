@@ -217,19 +217,22 @@ class SleepSettingsTest(unittest.TestCase):
 
     def test_the_state_reports_sleep_with_zeros_when_absent(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
-        self.assertIn('"mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{', state)
+        self.assertIn('"mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s,"replay_ir":%s},"battery":{', state)
         self.assertIn("const SleepState sleep = this->sleep_state_();", state)
         self.assertIn('sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",', state)
         body = section(CPP, "ButtonConfig::SleepState ButtonConfig::sleep_state_() const {", "\n}")
         self.assertIn("return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s(), "
-                      "this->idle_sleep_->wake_replay()};", body)
-        self.assertTrue(body.rstrip().endswith("return {false, false, 0, false};"))
+                      "this->idle_sleep_->wake_replay(),", body)
+        self.assertIn("this->idle_sleep_->wake_replay_ir()};", body)
+        self.assertTrue(body.rstrip().endswith("return {false, false, 0, false, false};"))
 
     def test_both_sleep_actions_follow_the_wifi_action_pattern(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
         known = section(action, "const bool known = ", ";")
-        self.assertIn('action == "set_sleep_enabled"', known)
-        self.assertIn('action == "set_sleep_after"', known)
+        self.assertIn("sleep_action", known)
+        sleep_action = section(action, "const bool sleep_action =", ";")
+        self.assertIn('action == "set_sleep_enabled"', sleep_action)
+        self.assertIn('action == "set_sleep_after"', sleep_action)
         # Every refusal comes before the busy claim, so none holds action_pending_.
         claim = action.index("compare_exchange_strong(expected, true")
         for error in ("sleep is not configured", "invalid sleep switch", "sleep after is 10 to 3600 seconds"):
@@ -287,7 +290,7 @@ class SleepSettingsTest(unittest.TestCase):
                       '<option value="off">Off</option><option value="hold">Hold button</option>'
                       '<option value="on">Always on</option></select></h2>', PAGE)
         self.assertNotIn('id="lgb"', PAGE)
-        self.assertIn('var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"];',
+        self.assertIn('var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay","wake_replay_ir"];',
                       PAGE)
         self.assertIn("o.status_leds=ledMode();", PAGE)
         self.assertIn('function ledMode(){var m=st&&st.status_leds;return m==="off"||m==="hold"?m:m===false?"off":"on"}',
@@ -315,24 +318,20 @@ class SleepSettingsTest(unittest.TestCase):
     def test_the_wake_replay_action_follows_the_sleep_switch_pattern(self) -> None:
         action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
         known = section(action, "const bool known = ", ";")
-        self.assertIn('action == "set_sleep_replay"', known)
-        sleep_action = section(action, "const bool sleep_action =", ";")
-        self.assertIn('action == "set_sleep_replay"', sleep_action)
+        self.assertIn("sleep_action", known)
+        self.assertIn('const bool replay_ir = action == "set_sleep_replay_ir";', action)
+        self.assertIn('const bool replay_action = action == "set_sleep_replay" || replay_ir;', action)
+        self.assertIn("replay_action", section(action, "const bool sleep_action =", ";"))
         claim = action.index("compare_exchange_strong(expected, true")
-        self.assertIn('R"({"ok":false,"error":"invalid wake press switch"})"', action)
         self.assertLess(action.index("invalid wake press switch"), claim)
         self.assertIn('const std::string enabled = request->arg("enabled");', section(
-            action, 'if (action == "set_sleep_replay") {', "\n  }"))
-        branch = section(action, '} else if (action == "set_sleep_replay") {', "\n  } else")
-        self.assertIn("this->defer([this, action_id, replay_on]() {", branch)
-        self.assertIn("this->complete_action_(action_id, this->set_sleep_replay_(replay_on));", branch)
-        setter = section(CPP, "bool ButtonConfig::set_sleep_replay_(bool replay) {", "\n}")
-        self.assertIn("return this->idle_sleep_ != nullptr && this->idle_sleep_->set_wake_replay(replay);", setter)
+            action, "if (replay_action) {", "\n  }"))
+        branch = section(action, "} else if (replay_action) {", "\n  } else")
+        self.assertIn("this->defer([this, action_id, replay_on, replay_ir]() {", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_sleep_replay_(replay_on, replay_ir));", branch)
+        setter = section(CPP, "bool ButtonConfig::set_sleep_replay_(bool replay, bool ir) {", "\n}")
+        self.assertIn("set_wake_replay_ir(replay) : this->idle_sleep_->set_wake_replay(replay)", setter)
         self.assertIn("return false;", setter.split("#else", 1)[1])
-        self.assertIn("    bool replay;\n  };\n  SleepState sleep_state_() const;", HEADER)
-        self.assertIn("bool set_sleep_replay_(bool replay);", HEADER)
-        self.assertIn('id="srb"', PAGE)
-        self.assertIn('sleepSave("set_sleep_replay"', PAGE)
 
     def test_the_setters_pass_through_and_the_range_matches_idle_sleep(self) -> None:
         enabled = section(CPP, "bool ButtonConfig::set_sleep_enabled_(bool enabled) {", "\n}")
@@ -386,7 +385,7 @@ class SleepSettingsTest(unittest.TestCase):
 
     def test_the_preview_serves_the_sleep_block(self) -> None:
         preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
-        self.assertIn('"sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False}', preview)
+        self.assertIn('"sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False, "replay_ir": False}', preview)
         self.assertIn('elif action == "set_sleep_enabled":', preview)
         self.assertIn('elif action == "set_sleep_after":', preview)
         self.assertIn("10 <= int(seconds) <= 3600", preview)

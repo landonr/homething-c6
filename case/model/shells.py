@@ -39,6 +39,7 @@ from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import keypad_outline_groove, keypad_recess_cut
 from .mic import mic_bore, mic_duct, mic_face
 from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
+from .reset import reset_bore, reset_guide
 from .shape import (
     _cut,
     _fuse,
@@ -64,7 +65,7 @@ from .stack import (
     SUPPORT_TOP,
     face_body,
 )
-from .usb import usb_boot_pocket, usb_slot
+from .usb import round_usb_boot_rim, usb_boot_pocket, usb_slot
 from .wheel_ring import led_ring_channel, wheel_opening
 
 
@@ -566,9 +567,9 @@ def back_shell():
     # around the rounded corner instead of thinning into it.
     cavity = back_form(params.WALL, params.FLOOR, params.FLOOR)
 
-    shell = _isect(_slab(outer, SHELL_BACK, SHELL_SEAM), form)
+    exterior = _isect(_slab(outer, SHELL_BACK, SHELL_SEAM), form)
     shell = _cut(
-        shell,
+        exterior,
         _isect(_slab(inner, SHELL_BACK, SHELL_SEAM + 1), cavity),
         *skirt_relief(),
     )
@@ -580,6 +581,7 @@ def back_shell():
         *support_runs(),
         *catch_detents(),
         *side_catch_detents(),
+        reset_guide(),
     )
     shell = _cut(
         shell,
@@ -589,7 +591,9 @@ def back_shell():
         *end_screw_cuts(),
         end_screw_wall_chamfer(),
     )
-    return _fuse(shell, qwiic_knockout_panel(), *qwiic_knockout_tabs())
+    shell = _fuse(shell, qwiic_knockout_panel(), *qwiic_knockout_tabs())
+    shell = round_usb_boot_rim(shell, exterior)
+    return _cut(shell, reset_bore())
 
 
 def _cap_face_hole_cut(ref, fdm=False):

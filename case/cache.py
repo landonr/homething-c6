@@ -29,6 +29,8 @@ from pathlib import Path
 
 from build123d import export_brep, export_stl, import_brep
 
+import params
+
 HERE = Path(__file__).resolve().parent
 CACHE = HERE / ".cache"
 
@@ -206,12 +208,17 @@ def bytes_cached(name, build):
 def export_stl_cached(shape, dest):
     """Write dest, from the cached bytes if this shape has been meshed before."""
     dest = Path(dest)
+    angular_tolerance = (
+        params.BACK_STL_ANGULAR_TOLERANCE
+        if dest.name == "c6remote-case-back.stl"
+        else STL_ANGULAR_TOLERANCE
+    )
     if not enabled():
         export_stl(
             shape,
             str(dest),
             tolerance=STL_TOLERANCE,
-            angular_tolerance=STL_ANGULAR_TOLERANCE,
+            angular_tolerance=angular_tolerance,
         )
         return
     blob = _dir() / dest.name
@@ -222,7 +229,7 @@ def export_stl_cached(shape, dest):
         shape,
         str(dest),
         tolerance=STL_TOLERANCE,
-        angular_tolerance=STL_ANGULAR_TOLERANCE,
+        angular_tolerance=angular_tolerance,
     )
     _open_for_write()
     partial = _partial(blob)

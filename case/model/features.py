@@ -47,7 +47,7 @@ import board
 import cache
 import params
 
-from . import caps, cell, front_ledge, hardware, ir, keypad, mic, shells, support, usb, wheel_ring, qwiic
+from . import caps, cell, front_ledge, hardware, ir, keypad, mic, reset, shells, support, usb, wheel_ring, qwiic
 from .shape import _cut, _slab
 from .stack import (
     CAVITY_FRONT,
@@ -67,6 +67,7 @@ MODULES = {
     "ir": ir,
     "keypad": keypad,
     "mic": mic,
+    "reset": reset,
     "shells": shells,
     "support": support,
     "usb": usb,
@@ -419,6 +420,7 @@ def _back(runs, obstacles):
             + _reads("shells.side_catch_bottom")
         )),
     )
+    out.append(_entry("reset_guide", "reset.reset_guide", "add", reset.reset_guide()))
     # The two end-screw cuts share one hole, so the shank and the head
     # counterbore are told apart by what each does rather than by where it is.
     # No refdes: this screw goes into a case feature, not a board hole.
@@ -445,6 +447,7 @@ def _back(runs, obstacles):
             sorted(set(
                 _reads("usb.usb_boot_pocket") + _reads("usb.usb_boot_floor_y")
                 + _reads("usb.usb_boot_outline")
+                + _reads("usb.round_usb_boot_rim")
             )),
         ),
         _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
@@ -453,6 +456,7 @@ def _back(runs, obstacles):
             "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
         ),
         _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
+        _entry("reset_bore", "reset.reset_bore", "cut", reset.reset_bore()),
     ]
     out.append(_entry("qwiic_knockout_panel", "qwiic.qwiic_knockout_panel", "add", qwiic.qwiic_knockout_panel()))
     out += _split(

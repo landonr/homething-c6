@@ -947,8 +947,10 @@ approximately 6.65 mm past its boot, and the receptacle shell is 6.20 mm deep.
 As a result, the boot must stop within approximately 0.45 mm of the mouth, and this
 value keeps a 0.1 mm margin. With this value, the floor is just outboard of the
 front skirt."""
-USB_BOOT_RIM_R = 0.35
-"""The outside mouth radius keeps the exported mesh closed at the right contour."""
+USB_BOOT_RIM_R = 0.6
+"""Radius at the outside mouth of the USB boot pocket."""
+BACK_STL_ANGULAR_TOLERANCE = 0.06
+"""Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
 RESET_GUIDE_WALL = 0.8

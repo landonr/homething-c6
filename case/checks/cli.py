@@ -120,7 +120,7 @@ from .keypad import (
     recess_margins,
     recess_solid_sane,
     recesses_open,
-    rim_chamfer_is_straight,
+    rim_chamfer_profile,
     wheel_basin_shape,
 )
 from .mic import mic_fillet
@@ -716,13 +716,13 @@ def _recesses_open(s):
 
 
 @_check("keypad")
-def _rim_chamfer_is_straight(s):
+def _rim_chamfer_profile(s):
     return _report(
-        rim_chamfer_is_straight(s.front),
+        rim_chamfer_profile(s.front),
         f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
         f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
-        "a straight section down to the dish floor, with no soft roll left in "
-        "the dish",
+        f"a {params.RECESS_CHAMFER_INNER_ROUND_W:.2f} round into the dish floor, "
+        "with no soft roll left in the dish",
     )
 
 

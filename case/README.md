@@ -340,7 +340,7 @@ On the first print, make sure that SW1 and SW2 operate and do not bind. Each V3 
 
 The IR window insert enters this opening from inside. Its exterior pane must be flush with the back shell.
 
-`D1` emits through the positive Y end wall. The emitter uses a separate bare bore.
+`D1` emits through a separate bore in the positive Y end wall. A 45 degree chamfer clears the 15 degree half-intensity angle on each side of the emitter axis.
 
 ## Functional constraints
 

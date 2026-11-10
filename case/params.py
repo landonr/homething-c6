@@ -1168,21 +1168,54 @@ trading margin.
 Live, not idle: the grid's coverage box is wide enough that the superellipse
 bounding it would reach inside this, so case.keypad_recesses() caps that half
 axis here instead. The keys still sit inside the curve with room to spare; what
-is given up is dish beyond the box's own corners."""
-RECESS_CHAMFER_W = 0.5
+is given up is dish beyond the box's own corners.
+
+The rim chamfer's top round starts RECESS_CHAMFER_ROUND_OUT outside the rim,
+so the face is cut to within this margin less that of the wall."""
+RECESS_CHAMFER_W = 1.0
 """Width in plan of the rim chamfer, on the recessed front only. The chamfer
 runs all the way round the merged recess, from the rim in toward the dish.
 
-In each section normal to the outline, the chamfer is a straight line. It
-goes from the face at the rim down to the dish floor at this distance in. As
-a result, the face turns into the chamfer at a crease on the rim, and the
-chamfer turns into the dish at a second crease. There is no step. The
-chamfer replaces the soft roll the dish had, so WHEEL_RIM_SOFT,
-KEYPAD_RIM_SOFT and KEYPAD_RIM_SOFT_2 are zero.
+In each section normal to the outline, the chamfer starts with the top
+round, RECESS_CHAMFER_ROUND_W, and ends with the inner round,
+RECESS_CHAMFER_INNER_ROUND_W, on the dish floor at this distance in. Any
+width that the two rounds leave is straight. The two rounds fill the width
+now, so the section is one S-curve from the face to the dish. The chamfer
+replaces the soft roll the dish had, so WHEEL_RIM_SOFT, KEYPAD_RIM_SOFT and
+KEYPAD_RIM_SOFT_2 are zero.
 
-The chamfer does not move the rim. recess_outline(), the FDM front's groove
-and the outline that the renders read stay where they are. If this value is
+The chamfer does not move the rim outline. recess_outline(), the FDM front's
+groove and the outline that the renders read stay where they are. The top
+round starts RECESS_CHAMFER_ROUND_OUT outside that outline. If this value is
 zero, the front has no chamfer, and the dish runs to the rim."""
+RECESS_CHAMFER_ROUND_W = 0.5
+"""Width in plan, inside the outline, of the round at the top edge of the rim
+chamfer, where the chamfer meets the face. With RECESS_CHAMFER_INNER_ROUND_W
+it must not be wider than RECESS_CHAMFER_W.
+
+In each section the round is a parabola. It leaves the face
+RECESS_CHAMFER_ROUND_OUT outside the outline with the face's own slope, and
+it meets the rest of the section at the same slope. As a result, the rim has
+no sharp crease. The built round leaves the face 0.04 to 0.15 inside its
+start, at 0.4 to 1.6 degrees. A ring exactly on the face would make the shell
+cut fail."""
+RECESS_CHAMFER_ROUND_OUT = 0.5
+"""How far outside the rim outline the rim chamfer's top round starts, on the
+face. The round then has this much more width to turn in, so it is gentler.
+On the wheel's east and west sides, where the face still rises to the crown
+at the rim, it turns at about 41 degrees per mm, against 92 when it starts on
+the outline. The round cuts the face out here, so the face is cut to within
+KEYPAD_EDGE_MARGIN less this value of the side wall. The outline, the FDM
+front's groove and the dish do not move."""
+RECESS_CHAMFER_INNER_ROUND_W = 0.5
+"""Width in plan of the round at the inner edge of the rim chamfer, where the
+chamfer meets the dish floor. With RECESS_CHAMFER_ROUND_W it must not be
+wider than RECESS_CHAMFER_W.
+
+In each section the round is a parabola that ends on the dish floor at
+RECESS_CHAMFER_W with the floor's own slope. It curves up into the dish all
+the way round. The dish and the inner edge do not move. If this value is
+zero, the chamfer meets the dish at a crease."""
 
 
 # FDM front: a second front shell for a filament printer. Its face carries the

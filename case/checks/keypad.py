@@ -22,11 +22,14 @@ bearings, and at each neck's waist. Beside, not over: over a key the face is
 open from the cavity right through, so a probe there reads open whether the
 recess was cut or not.
 
-Rim chamfer is straight: the built recessed front has a straight chamfer
-RECESS_CHAMFER_W wide round the whole recess, from the face at the rim down to
-the dish floor. Rays read it across its width at stations all the way round,
-with the dish just inside it and the face just outside it, and its depth at
-its inner edge shows the dish has no soft roll.
+Rim chamfer profile: the built recessed front has a chamfer
+RECESS_CHAMFER_W wide round the whole recess, with a round of
+RECESS_CHAMFER_ROUND_W at its top edge and a round of
+RECESS_CHAMFER_INNER_ROUND_W into the dish floor, straight between them if
+they leave room. Rays read each part at stations all the way round, with the
+dish just inside and the face just outside. The top round must curve down,
+the inner round must curve up, and a straight part must not bend. The depth
+at the inner edge shows that the dish has no soft roll.
 
 Neck continuity: the recess runs unbroken along its centreline from one
 island's keys to the other's, so no parameter change can silently pinch it
@@ -910,31 +913,62 @@ def recesses_open(front):
 
 
 CHAMFER_STATIONS = 36
-"""Stations at even arc length round the outline that rim_chamfer_is_straight()
+"""Stations at even arc length round the outline that rim_chamfer_profile()
 reads, before the named stations it adds."""
 
 CHAMFER_PROBE_FRACTIONS = (1 / 6, 1 / 2, 5 / 6)
-"""Where rim_chamfer_is_straight() reads the chamfer at each station, as
-fractions of RECESS_CHAMFER_W in from the outline along its inward normal:
-about 0.083, 0.25 and 0.417 at a 0.5 chamfer."""
+"""Where rim_chamfer_profile() reads a straight section at each station, as
+fractions of the way from the top round's end to the inner round's start.
+The three readings are evenly spaced."""
+
+CHAMFER_TOP_FRACTIONS = (1 / 4, 1 / 2, 3 / 4, 1)
+"""Where rim_chamfer_profile() reads the top round at each station, as
+fractions of its whole width, counted in from its start,
+RECESS_CHAMFER_ROUND_OUT outside the outline. Four readings give two
+overlapping sets of three, and a sharp edge at the outline leaves the second
+set straight. The first facet can reach past the first reading."""
+
+CHAMFER_INNER_FRACTIONS = (1 / 3, 2 / 3, 1)
+"""Where rim_chamfer_profile() reads the inner round at each station, as
+fractions of its width, counted back from the chamfer's inner edge."""
 
 CHAMFER_PROBE_MIN_W = 0.15
-"""Narrowest RECESS_CHAMFER_W that rim_chamfer_is_straight() can read. Under
-it the chamfer readings crowd against the two creases."""
+"""Narrowest part of the rim chamfer, round or straight, that
+rim_chamfer_profile() reads. Under it the readings crowd together."""
+
+CHAMFER_ROUND_TOLERANCE = 0.002
+"""Slack between a built reading on either round and face_floor_at(), the
+model's faceted floor. Near its start the top round's first facet runs up to
+0.0075 under the parabola, _rim_section(), where the face itself curves, so
+the readings want the facets. The built rounds stand within 0.00001 of them."""
+
+CHAMFER_BEND_TOLERANCE = 0.002
+"""Most that the three readings on a straight section can bend, as the
+second difference z1 - 2 z2 + z3. A built straight section bends less than
+0.0007."""
+
+CHAMFER_TOP_CURVE_MIN = 0.003
+"""Least that every three neighbouring built readings on the top round curve
+down, as the second difference z1 - 2 z2 + z3 below zero. The built round
+reads 0.008 to 0.048 on both sets. A sharp edge at the outline leaves the
+readings inside it straight, at about zero."""
+
+CHAMFER_INNER_CURVE_MIN = 0.0006
+"""Least that the three built readings on the inner round curve up into the
+dish, as the second difference z1 - 2 z2 + z3. The inner round reads 0.0011
+to 0.016. A crease into the dish leaves the readings straight, at 0.0000."""
 
 CHAMFER_DISH_PAST = 0.1
 """How far past the chamfer's inner edge the dish reading stands."""
 
 CHAMFER_OUTSIDE = 0.05
-"""How far outside the outline the face reading stands."""
+"""How far outside the top round's start the face reading stands."""
 
 CHAMFER_TOLERANCE = 0.005
-"""Slack between a built chamfer reading and the straight line from the face
-at the rim to the dish floor at the chamfer's inner edge. The chamfer meets
-the loft's own floor there, and the loft stands up to 0.003 off the dish
-field. CHAMFER_RIM_LIFT adds 0.001 near the rim. The built readings stand
-within 0.0034 of the line at every station. Without the chamfer, the dish
-stands 0.011 to 0.046 below the line at the first reading."""
+"""Slack between a built reading on a straight section and face_floor_at().
+The cutter crosses the clip wall CHAMFER_SEAM_LIFT above the dish, so a
+straight section near the inner edge stands up to that much over the model's
+floor."""
 
 CHAMFER_DEPTH_MIN = 0.03
 """Least depth under the face the built chamfer reaches at its inner edge.
@@ -949,7 +983,7 @@ is ruled between stations, and at these readings it stands under 0.005 off
 the field."""
 
 CHAMFER_CROP_GROUPS = 8
-"""How many runs of neighbouring stations rim_chamfer_is_straight() cuts one
+"""How many runs of neighbouring stations rim_chamfer_profile() cuts one
 crop of the front for. Each ray is read against its group's crop. A crop is a
 box boolean, and one through the chamfer's inner crease can come back empty
 although the shell is whole there. So a ray that finds nothing in the crop is
@@ -1002,7 +1036,7 @@ def _station_at(segment, t):
 
 
 def _rim_stations(segments):
-    """[(label, px, py, nx, ny)] where rim_chamfer_is_straight() reads the
+    """[(label, px, py, nx, ny)] where rim_chamfer_profile() reads the
     chamfer.
 
     CHAMFER_STATIONS at even arc length, then the named ones: the middle of each
@@ -1049,27 +1083,77 @@ def _rim_stations(segments):
 
 def _chamfer_sites(station, width):
     """[(kind, d, x, y, want)] the readings at one station, d along the inward
-    normal from the outline, each with the z it wants. The chamfer readings
-    want the straight line from the face at the rim to the dish floor at d =
-    width, and the "edge" reading stands on that inner edge."""
+    normal from the outline, each with the z it wants. The "round" (top),
+    "inner" and straight ("chamfer") readings want the model's faceted floor,
+    face_floor_at(): the face or the chamfer's floor triangles, whichever is
+    lower. The "edge" reading stands on the chamfer's inner edge. A part
+    narrower than CHAMFER_PROBE_MIN_W is not read."""
     _, px, py, nx, ny = station
-    ex, ey = px + width * nx, py + width * ny
-    rim = case.face_z(px, py)
-    edge = case.face_z(ex, ey) - keypad_model._spine_depth(case.recess_spine(ey), ex, ey)
-    sites = [("face", -CHAMFER_OUTSIDE)]
-    sites += [("chamfer", f * width) for f in CHAMFER_PROBE_FRACTIONS]
+    top, inner = params.RECESS_CHAMFER_ROUND_W, params.RECESS_CHAMFER_INNER_ROUND_W
+    out = params.RECESS_CHAMFER_ROUND_OUT
+    straight = width - top - inner
+    section = keypad_model._rim_section(px, py, nx, ny)
+    sites = [("face", -out - CHAMFER_OUTSIDE)]
+    if top + out >= CHAMFER_PROBE_MIN_W:
+        sites += [("round", -out + f * (top + out)) for f in CHAMFER_TOP_FRACTIONS]
+    if straight >= CHAMFER_PROBE_MIN_W:
+        sites += [("chamfer", top + f * straight) for f in CHAMFER_PROBE_FRACTIONS]
+    if inner >= CHAMFER_PROBE_MIN_W:
+        sites += [("inner", width - f * inner) for f in CHAMFER_INNER_FRACTIONS]
     sites += [("edge", width), ("dish", width + CHAMFER_DISH_PAST)]
     out = []
     for kind, d in sites:
         x, y = px + d * nx, py + d * ny
         if kind == "face":
             want = case.face_z(x, y)
-        elif kind == "dish":
-            want = case.face_floor_at(x, y)
+        elif kind == "edge":
+            want = section(d)
         else:
-            want = rim + (edge - rim) * d / width
+            want = case.face_floor_at(x, y)
         out.append((kind, d, x, y, want))
     return out
+
+
+def _chamfer_shape(label, points, read):
+    """Problems with the shape of one station's built readings, `read` {d: z},
+    as second differences z1 - 2 z2 + z3 of every three neighbouring, evenly
+    spaced readings on one part: a straight section must not bend, the top
+    round must curve down, and the inner round must curve up into the dish.
+    Each part reports its worst set. None of them reads the model."""
+    problems = []
+    for kind in ("chamfer", "round", "inner"):
+        sites = [(d, x, y) for k, d, x, y, _ in points if k == kind]
+        if len(sites) < 3 or any(d not in read for d, _, _ in sites):
+            continue
+        sets = []
+        for (d1, x, y), (d2, _, _), (d3, _, _) in zip(sites, sites[1:], sites[2:]):
+            sets.append((read[d1] - 2 * read[d2] + read[d3], x, y, read[d1]))
+        if kind == "chamfer":
+            bend, x, y, z = max(sets, key=lambda e: abs(e[0]))
+        elif kind == "round":
+            bend, x, y, z = max(sets)
+        else:
+            bend, x, y, z = min(sets)
+        if kind == "chamfer" and abs(bend) > CHAMFER_BEND_TOLERANCE:
+            problem = (
+                f"the straight chamfer at {label} bends by {bend:+.4f} across "
+                f"its three readings, over {CHAMFER_BEND_TOLERANCE}"
+            )
+        elif kind == "round" and bend > -CHAMFER_TOP_CURVE_MIN:
+            problem = (
+                f"the top edge at {label} is not rounded: three of its readings "
+                f"bend by {bend:+.4f}, wants -{CHAMFER_TOP_CURVE_MIN} or less"
+            )
+        elif kind == "inner" and bend < CHAMFER_INNER_CURVE_MIN:
+            problem = (
+                f"the inner edge at {label} is not rounded into the dish: its "
+                f"three readings bend by {bend:+.4f}, wants "
+                f"{CHAMFER_INNER_CURVE_MIN} or more"
+            )
+        else:
+            continue
+        problems.append(Problem(problem, at=(x, y, z)))
+    return problems
 
 
 def _sites_box(points):
@@ -1083,19 +1167,22 @@ def _sites_box(points):
     )
 
 
-def rim_chamfer_is_straight(front):
-    """The recessed front has a straight rim chamfer RECESS_CHAMFER_W wide all
-    the way round the merged recess, read on the built shell.
+def rim_chamfer_profile(front):
+    """The recessed front has a rim chamfer RECESS_CHAMFER_W wide all the way
+    round the merged recess, with a round at its top edge, a round into the
+    dish at its inner edge, and a straight section between them where they
+    leave room, read on the built shell.
 
-    At each station a ray down reads the built surface at three points across
-    the chamfer, along the outline's inward normal. Each must lie on the
-    straight line from the face at the rim to the dish floor at the chamfer's
-    inner edge. At that edge the built surface must stand at least
-    CHAMFER_DEPTH_MIN under the face, which a dish with its soft roll does not
-    reach. A reading CHAMFER_DISH_PAST beyond the edge must be the dish,
-    face_floor_at(), and one CHAMFER_OUTSIDE outside the outline must be the
-    face. Without the chamfer, the dish runs to the rim and stands below the
-    line.
+    At each station rays down read the built surface along the outline's
+    inward normal, three or four times on each part. Each reading must lie on
+    the model's faceted floor, face_floor_at(). Without the model, the readings
+    on each part must also have their own shape (_chamfer_shape()): a straight
+    section does not bend, the top round curves down, and the inner round
+    curves up into the dish, which a sharp edge does not. At the inner edge
+    the built surface must stand at least CHAMFER_DEPTH_MIN under the face,
+    which a dish with its soft roll does not reach. A reading
+    CHAMFER_DISH_PAST beyond the edge must be the dish, face_floor_at(), and
+    one CHAMFER_OUTSIDE outside the top round's start must be the face.
 
     The stations include the steepest points on the long sides, the corners,
     both flat ends and the join waists. A station whose readings are not clear
@@ -1103,8 +1190,8 @@ def rim_chamfer_is_straight(front):
     width = params.RECESS_CHAMFER_W
     if width < CHAMFER_PROBE_MIN_W:
         return [
-            f"RECESS_CHAMFER_W is {width:.3f}, under {CHAMFER_PROBE_MIN_W:.2f}: "
-            "the rim chamfer is too narrow for this pass to read"
+            f"the rim chamfer is {width:.3f} wide, under "
+            f"{CHAMFER_PROBE_MIN_W:.2f}: too narrow for this pass to read"
         ]
     segments = _outline_segments()
     stations = _rim_stations(segments)
@@ -1136,6 +1223,7 @@ def rim_chamfer_is_straight(front):
         )
         for (_, station, points), (lo, hi) in zip(group, boxes):
             label = station[0]
+            read = {}
             for kind, d, x, y, want in points:
                 top = hi[2] - 0.01
                 ray = ((x, y, top), (x, y, lo[2] + 0.01))
@@ -1151,6 +1239,7 @@ def rim_chamfer_is_straight(front):
                     )
                     continue
                 z = top - runs[0][0]
+                read[d] = z
                 if kind == "edge":
                     depth = case.face_z(x, y) - z
                     if depth < CHAMFER_DEPTH_MIN:
@@ -1163,16 +1252,20 @@ def rim_chamfer_is_straight(front):
                             )
                         )
                     continue
-                slack = CHAMFER_DISH_TOLERANCE if kind == "dish" else CHAMFER_TOLERANCE
+                slack = {
+                    "dish": CHAMFER_DISH_TOLERANCE,
+                    "round": CHAMFER_ROUND_TOLERANCE,
+                }.get(kind, CHAMFER_TOLERANCE)
                 if abs(z - want) > slack:
                     problems.append(
                         Problem(
                             f"the built surface at {label}, {where}, is at z "
-                            f"{z:.3f}, wants the {kind} at {want:.3f} "
-                            f"({z - want:+.3f})",
+                            f"{z:.4f}, wants the {kind} at {want:.4f} "
+                            f"({z - want:+.4f})",
                             at=(x, y, z),
                         )
                     )
+            problems += _chamfer_shape(label, points, read)
     return problems
 
 

@@ -719,9 +719,10 @@ def _recesses_open(s):
 def _rim_chamfer_is_straight(s):
     return _report(
         rim_chamfer_is_straight(s.front),
-        f"the recess has a straight {params.RECESS_CHAMFER_W:.2f} rim chamfer all "
-        "the way round, from the face at the rim to the dish floor, with no soft "
-        "roll left in the dish",
+        f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
+        f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
+        "a straight section down to the dish floor, with no soft roll left in "
+        "the dish",
     )
 
 

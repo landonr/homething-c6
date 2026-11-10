@@ -1175,20 +1175,30 @@ Live, not idle: the grid's coverage box is wide enough that the superellipse
 bounding it would reach inside this, so case.keypad_recesses() caps that half
 axis here instead. The keys still sit inside the curve with room to spare; what
 is given up is dish beyond the box's own corners."""
-RECESS_CHAMFER_W = 0.5
+RECESS_CHAMFER_W = 1.0
 """Width in plan of the rim chamfer, on the recessed front only. The chamfer
 runs all the way round the merged recess, from the rim in toward the dish.
 
-In each section normal to the outline, the chamfer is a straight line. It
-goes from the face at the rim down to the dish floor at this distance in. As
-a result, the face turns into the chamfer at a crease on the rim, and the
-chamfer turns into the dish at a second crease. There is no step. The
+In each section normal to the outline, the chamfer starts with the top
+round, RECESS_CHAMFER_ROUND_W, and then runs straight down to the dish floor
+at this distance in. The chamfer turns into the dish at a crease. The
 chamfer replaces the soft roll the dish had, so WHEEL_RIM_SOFT,
 KEYPAD_RIM_SOFT and KEYPAD_RIM_SOFT_2 are zero.
 
 The chamfer does not move the rim. recess_outline(), the FDM front's groove
 and the outline that the renders read stay where they are. If this value is
 zero, the front has no chamfer, and the dish runs to the rim."""
+RECESS_CHAMFER_ROUND_W = 0.3
+"""Width in plan of the round at the top edge of the rim chamfer, where the
+chamfer meets the face. It must be less than RECESS_CHAMFER_W, so a straight
+section remains.
+
+In each section the round is a parabola. It leaves the face at the outline
+with the face's own slope, and it meets the straight section at the same
+slope. As a result, the rim keeps its outline but has no sharp crease. The
+built round leaves the face within 0.05 of the outline, at 1.4 to 3
+degrees. A ring exactly on the face would make the shell cut fail. If this
+value is zero, the chamfer is straight from the rim."""
 
 
 # FDM front: a second front shell for a filament printer. Its face carries the

@@ -654,10 +654,11 @@ def face_depth_at(x, y):
     whatever it says the floor is over the board's acoustic port, so none of
     the three can drift from the others.
 
-    Within RECESS_CHAMFER_W inside the rim, the depth is the rim chamfer's: a
-    straight facet in each section normal to the outline, from the face at
-    the rim down to the dish floor RECESS_CHAMFER_W in (_chamfer_z()). The
-    loft reads the dish alone, _spine_depth(), and keypad_chamfer() cuts the
+    Within RECESS_CHAMFER_W inside the rim, the depth is the rim chamfer's
+    (_chamfer_z()). In each section normal to the outline, a round leaves the
+    face at the rim for RECESS_CHAMFER_ROUND_W, and a straight facet then goes
+    down to the dish floor RECESS_CHAMFER_W in (_rim_section()). The loft
+    reads the dish alone, _spine_depth(), and keypad_chamfer() cuts the
     chamfer.
     """
     return _field_depth(recess_spine(y), x, y)
@@ -700,7 +701,7 @@ def _outline_index():
 
 @functools.cache
 def _chamfer_index():
-    return _ring_index(_chamfer_rings()[1])
+    return _ring_index(_chamfer_rings()[2])
 
 
 def _in_ring(index, x, y):
@@ -1325,6 +1326,55 @@ and then the cut fails without an error and leaves the face whole. With
 this lift the skirt stays above the face. The chamfer then crosses the face
 less than 0.01 inside the outline."""
 
+CHAMFER_SLOPE_STEP = 0.005
+"""Step, in mm along the inward normal, of the difference that reads the
+face's slope at the outline for the top round."""
+
+CHAMFER_ROUND_RINGS = 8
+"""Rings of the top round, from its first ring to its end. The chamfer turns
+at most 28 degrees from the face, so each facet of the round turns less than
+4 degrees."""
+
+CHAMFER_ROUND_GAP = 0.002
+"""How far under the face the top round's first ring sits in each section.
+
+The round leaves the face with the face's own slope, so near the outline it
+stays within the face's 0.0001 chord bulge. A ring of points there leaves
+slivers, and the shell cut then fails without an error and leaves the front
+whole. The first ring sits where the round is this far under the face. The
+facet from the outline to it crosses the face at 1.4 to 3 degrees, and it
+stands less than 0.001 off the round."""
+
+CHAMFER_SEAM_LIFT = 0.001
+"""How far above the dish the chamfer cutter's floor crosses the clip wall.
+
+The loft is clipped by a prism on the chamfer's inner ring, so the clip has a
+vertical wall there. If the cutter's own inner wall or floor edge stands on
+the same points, the fuse or the shell cut fails, and at a 1.0 chamfer the
+front lost the whole recess. The cutter's floor therefore crosses the clip
+wall at this height, and the chamfer ends in a step this tall. The step is
+far under a print layer."""
+
+CHAMFER_SEAM_REACH = 0.004
+"""How far past the inner ring the straight chamfer of the cutter's floor
+runs, CHAMFER_SEAM_LIFT above the dish. Its points are staggered half a
+point gap from the inner ring's points. If a floor edge crossed the clip wall
+on one of the wall's vertical edges, the mesh would get zero-area triangles
+along the seam."""
+
+CHAMFER_OVERLAP = 0.1
+"""How far past the inner ring the chamfer cutter reaches over the dish. Its
+floor rises from CHAMFER_SEAM_REACH to CHAMFER_OVERLAP_RISE above the dish,
+so it does not touch the dish floor, and its inner wall stands inside the
+clipped loft."""
+
+CHAMFER_OVERLAP_RISE = 0.05
+"""Height of the chamfer cutter's floor above the dish at its inner wall."""
+
+CHAMFER_TOP_RISE = 0.5
+"""How far the chamfer cutter's top stands above the loft's top, so that the
+two tops are not coplanar."""
+
 
 def _segment_foot(segment, x, y):
     """(distance, px, py, s) from (x, y) to its nearest point on one outline
@@ -1350,11 +1400,12 @@ def _outline_segments():
     return tuple(out)
 
 
-def _offset_ring(amount, z_at):
+def _offset_ring(amount, z_at, phase=0.0):
     """[(x, y, z, s)] the true 2D offset of the outline by `amount`, out when
     positive, each edge cut to CHAMFER_POINT_GAP, counter-clockwise and
     starting at its least s. z is z_at(x, y, px, py) with (px, py) the nearest
-    outline point, and s is that point's arc length."""
+    outline point, and s is that point's arc length. A phase of 0.5 puts each
+    point half a step along its edge."""
     faces = offset(recess_outline(), amount=amount, kind=Kind.ARC).faces()
     if len(faces) != 1 or faces[0].inner_wires():
         raise ValueError(
@@ -1365,7 +1416,7 @@ def _offset_ring(amount, z_at):
     for edge in faces[0].outer_wire().order_edges():
         count = max(1, math.ceil(edge.length / CHAMFER_POINT_GAP))
         for i in range(count):
-            point = edge.position_at(i / count)
+            point = edge.position_at((i + phase) / count)
             if not plan or math.dist(plan[-1], (point.X, point.Y)) > 1e-6:
                 plan.append((point.X, point.Y))
     if math.dist(plan[0], plan[-1]) <= 1e-6:
@@ -1416,17 +1467,89 @@ def _loft_z(x, y):
     raise ValueError(f"({x:.2f}, {y:.2f}) is not over the recess loft's floor")
 
 
+def _rim_section(px, py, nx, ny):
+    """z(t), the rim chamfer's section at t in from outline point (px, py)
+    along the inward normal (nx, ny).
+
+    For RECESS_CHAMFER_ROUND_W the section is a parabola that leaves the face
+    at the outline with the face's slope. It then runs straight, tangent to
+    the parabola, to the loft's floor RECESS_CHAMFER_W in, and on past it. The
+    outline point stands CHAMFER_RIM_LIFT above the face. With no round the
+    section is straight from the outline."""
+    width, rounding = params.RECESS_CHAMFER_W, params.RECESS_CHAMFER_ROUND_W
+    if not 0.0 <= rounding < width:
+        raise ValueError(
+            f"RECESS_CHAMFER_ROUND_W is {rounding:.2f}, but it must be from "
+            f"zero to less than RECESS_CHAMFER_W, {width:.2f}"
+        )
+    z0 = face_z(px, py) + CHAMFER_RIM_LIFT
+    zw = _loft_z(px + width * nx, py + width * ny)
+    if rounding == 0.0:
+        slope = (zw - z0) / width
+        return lambda t: z0 + slope * t
+    step = CHAMFER_SLOPE_STEP
+    face_slope = (face_z(px + step * nx, py + step * ny) - face_z(px, py)) / step
+    bend = (zw - z0 - face_slope * width) / (rounding * (2 * width - rounding))
+    zb = z0 + rounding * (face_slope + bend * rounding)
+    slope = (zw - zb) / (width - rounding)
+
+    def z(t):
+        if t <= rounding:
+            return z0 + t * (face_slope + bend * t)
+        return zb + slope * (t - rounding)
+
+    return z
+
+
+def _round_rings(outer):
+    """[ring], the CHAMFER_ROUND_RINGS rings of the top round, each a list of
+    (x, y, z, s) with one point for each point of the outer ring.
+
+    Each section marches along its own normal, from where the round is
+    CHAMFER_ROUND_GAP under the face to RECESS_CHAMFER_ROUND_W in. s is the
+    outer point's own s. Empty with no round."""
+    rounding = params.RECESS_CHAMFER_ROUND_W
+    if rounding <= 0.0:
+        return []
+    rings = [[] for _ in range(CHAMFER_ROUND_RINGS)]
+    count = len(outer)
+    for i, (px, py, _, s) in enumerate(outer):
+        ax, ay = outer[i - 1][:2]
+        bx, by = outer[(i + 1) % count][:2]
+        length = math.hypot(bx - ax, by - ay)
+        nx, ny = (ay - by) / length, (bx - ax) / length
+        section = _rim_section(px, py, nx, ny)
+
+        def under(t):
+            return face_z(px + t * nx, py + t * ny) - section(t)
+
+        if under(rounding) < CHAMFER_ROUND_GAP:
+            raise ValueError(
+                f"the top round ends less than {CHAMFER_ROUND_GAP} under the "
+                f"face near ({px:.2f}, {py:.2f}), so RECESS_CHAMFER_ROUND_W is "
+                "too narrow"
+            )
+        lo, hi = 0.0, rounding
+        for _ in range(30):
+            mid = (lo + hi) / 2
+            lo, hi = (lo, mid) if under(mid) >= CHAMFER_ROUND_GAP else (mid, hi)
+        for j, ring in enumerate(rings):
+            t = hi + (rounding - hi) * j / (CHAMFER_ROUND_RINGS - 1)
+            ring.append((px + t * nx, py + t * ny, section(t), s))
+    return rings
+
+
 @functools.cache
 def _chamfer_rings():
-    """(outer, inner, skirt), the three rings of the chamfer cutter's floor,
-    each a list of (x, y, z, s), counter-clockwise from the same place.
+    """(outer, rounds, inner, skirt), the rings of the chamfer's floor, each a
+    list of (x, y, z, s), counter-clockwise from the same place.
 
     The outer ring is the outline polygon CHAMFER_RIM_LIFT above the face,
-    each edge cut to CHAMFER_POINT_GAP. The inner ring is the true 2D offset of the outline
-    RECESS_CHAMFER_W in, on the loft's own floor, so the chamfer meets the
-    dish with no step. The skirt is the offset CHAMFER_SKIRT out, RIM_LIFT
-    above the face at its nearest outline point. s is the arc length of each
-    point's nearest outline point."""
+    each edge cut to CHAMFER_POINT_GAP. rounds are _round_rings(). The inner
+    ring is the true 2D offset of the outline RECESS_CHAMFER_W in, on the
+    loft's own floor, so the chamfer meets the dish there. The skirt is the
+    offset CHAMFER_SKIRT out, RIM_LIFT above the face at its nearest outline
+    point. s is the arc length of each point's nearest outline point."""
     outer = []
     for ax, ay, bx, by, s, length in _outline_segments():
         count = max(1, math.ceil(length / CHAMFER_POINT_GAP))
@@ -1440,7 +1563,7 @@ def _chamfer_rings():
     skirt = _offset_ring(
         CHAMFER_SKIRT, lambda x, y, px, py: face_z(px, py) + RIM_LIFT
     )
-    return outer, inner, skirt
+    return outer, _round_rings(outer), inner, skirt
 
 
 def _strip(outer, inner):
@@ -1473,31 +1596,83 @@ def _strip(outer, inner):
     return triangles
 
 
+def _index_strip(outer, inner):
+    """[(a, b, c)] the triangles between two rings with one point each for the
+    same outline points, two triangles between each pair of neighbours. Each
+    must turn counter-clockwise in plan, or the strip has folded."""
+    count = len(outer)
+    triangles = []
+    for i in range(count):
+        k = (i + 1) % count
+        triangles.append((outer[i], outer[k], inner[i]))
+        triangles.append((outer[k], inner[k], inner[i]))
+    for a, b, c in triangles:
+        turn = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        if turn <= 0.0:
+            raise ValueError(
+                f"the top round folds near ({a[0]:.2f}, {a[1]:.2f}): "
+                "RECESS_CHAMFER_ROUND_W is too wide for the outline's curves"
+            )
+    return triangles
+
+
+def _rim_floor(outer, rounds, last):
+    """The floor triangles from the outer ring through the top round's rings
+    to the ring `last`."""
+    rings = [outer, *rounds]
+    triangles = []
+    for a, b in zip(rings, rings[1:]):
+        triangles += _index_strip(a, b)
+    return triangles + _strip(rings[-1], last)
+
+
 @functools.cache
 def _chamfer_floor():
-    """The chamfer's own triangles, between the outline and the inner ring."""
-    outer, inner, _ = _chamfer_rings()
-    return tuple(_strip(outer, inner))
+    """The chamfer's own triangles, from the outline through the top round to
+    the inner ring."""
+    outer, rounds, inner, _ = _chamfer_rings()
+    return tuple(_rim_floor(outer, rounds, inner))
 
 
 def _polygon_face(points):
     return Face(Wire.make_polygon([p[:3] for p in points], close=True))
 
 
+def _seam_z(x, y, px, py):
+    """z of the chamfer cutter's floor just past the inner ring: the straight
+    chamfer run on, or the dish if that is higher, CHAMFER_SEAM_LIFT up."""
+    t = math.hypot(x - px, y - py)
+    section = _rim_section(px, py, (x - px) / t, (y - py) / t)
+    return max(section(t), _loft_z(x, y)) + CHAMFER_SEAM_LIFT
+
+
 @cache.solid
 def keypad_chamfer():
-    """The rim chamfer cutter: the column over the strip between the skirt and
-    the chamfer's inner ring, from its floor up to MERGE above the crown.
+    """The rim chamfer cutter: the column over the strip from the skirt to
+    CHAMFER_OVERLAP past the chamfer's inner ring, from its floor up to
+    CHAMFER_TOP_RISE over the loft's top.
 
-    The floor is _chamfer_floor() inside the outline, and the skirt strip
-    outside it, which stays above the face. Its two walls are vertical and
-    its top is flat. Raises when RECESS_CHAMFER_W is zero."""
+    Outside the outline the floor is the skirt strip, which stays above the
+    face. From the outline it is the top round and the straight chamfer, as
+    _chamfer_floor() has them, but the straight chamfer runs on past the
+    inner ring to the seam ring and crosses the clip wall
+    CHAMFER_SEAM_LIFT above the dish. The floor then rises clear of the dish
+    to the inner wall. Both walls are vertical and the top is flat. Raises
+    when RECESS_CHAMFER_W is zero."""
     if params.RECESS_CHAMFER_W <= 0.0:
         raise ValueError("RECESS_CHAMFER_W is zero, so there is no chamfer")
-    outer, inner, skirt = _chamfer_rings()
-    top = SHELL_FRONT + MERGE
-    faces = [_polygon_face(t) for t in (*_chamfer_floor(), *_strip(skirt, outer))]
-    for ring in (skirt, inner):
+    outer, rounds, _, skirt = _chamfer_rings()
+    seam = _offset_ring(
+        -(params.RECESS_CHAMFER_W + CHAMFER_SEAM_REACH), _seam_z, phase=0.5
+    )
+    wall = _offset_ring(
+        -(params.RECESS_CHAMFER_W + CHAMFER_OVERLAP),
+        lambda x, y, px, py: _loft_z(x, y) + CHAMFER_OVERLAP_RISE,
+    )
+    top = SHELL_FRONT + MERGE + CHAMFER_TOP_RISE
+    floor = [*_strip(skirt, outer), *_rim_floor(outer, rounds, seam)]
+    faces = [_polygon_face(t) for t in (*floor, *_strip(seam, wall))]
+    for ring in (skirt, wall):
         for a, b in zip(ring, ring[1:] + ring[:1]):
             faces.append(
                 _polygon_face([a, b, (b[0], b[1], top), (a[0], a[1], top)])
@@ -1505,7 +1680,7 @@ def keypad_chamfer():
     faces.append(
         Face(
             Wire.make_polygon([(p[0], p[1], top) for p in skirt], close=True),
-            [Wire.make_polygon([(p[0], p[1], top) for p in inner], close=True)],
+            [Wire.make_polygon([(p[0], p[1], top) for p in wall], close=True)],
         )
     )
     chamfer = Solid(Shell(faces))
@@ -1516,9 +1691,8 @@ def keypad_chamfer():
 
 def _chamfer_prism():
     """The column over the chamfer's inner ring, through the whole height of
-    the recess loft. Its walls stand on the same points as the chamfer
-    cutter's inner wall."""
-    _, inner, _ = _chamfer_rings()
+    the recess loft. The chamfer cutter's floor crosses its walls."""
+    _, _, inner, _ = _chamfer_rings()
     box = keypad_recess().bounding_box()
     z0, z1 = box.min.Z - 1.0, box.max.Z + 1.0
     base = Face(Wire.make_polygon([(p[0], p[1], z0) for p in inner], close=True))
@@ -1531,10 +1705,10 @@ def keypad_recess_cut():
     kept inside the chamfer's inner ring, fused with the rim chamfer cutter,
     keypad_chamfer().
 
-    Between the outline and that ring the surface is the chamfer, a straight
-    facet from the face at the rim to the dish floor. Inside the ring the dish
-    does not change, and neither do the loft and the outline. With
-    RECESS_CHAMFER_W at zero it is the loft alone."""
+    Between the outline and that ring the surface is the chamfer: the top
+    round from the face, then a straight facet down to the dish floor. Inside
+    the ring the dish does not change, and neither do the loft and the
+    outline. With RECESS_CHAMFER_W at zero it is the loft alone."""
     if params.RECESS_CHAMFER_W <= 0.0:
         return keypad_recess()
     return _fuse(_isect(keypad_recess(), _chamfer_prism()), keypad_chamfer())

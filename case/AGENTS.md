@@ -39,7 +39,7 @@ README case renders live in the explode viewer. From the board repo root:
 ../c6remote-explode/scripts/render-case-explode-loop.sh        # looping explode turntable (WebP)
 ```
 
-All three render with Blender's Cycles; add `--rig` to render on the Windows Rig.
+All three render with Blender's Cycles.
 
 Presets sit in `~/dev/c6remote-explode/presets/`. Pose a shot in the viewer, press Copy preset JSON, and overwrite the preset to lock the camera.
 

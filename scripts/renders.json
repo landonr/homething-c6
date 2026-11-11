@@ -122,7 +122,7 @@
     ]
   },
   "case-white-roof-glow": {
-    "description": "The white-shell comparison in case/README.md: the status LED glow through the old LED ring roof and through the thin roof.",
+    "description": "The white-shell comparison in case/README.md: the status LED glow through the old LED ring roof and through the even roof.",
     "made_by": "c6remote-explode",
     "outputs": [
       "docs/readme-assets/case-white-roof-glow.png"
@@ -152,13 +152,13 @@
       "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --geometry \"$T/geo-old\" --out \"$T/old-on.png\")",
       "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --geometry \"$T/geo-old\" --leds off --out \"$T/old-off.png\")",
       "for r in old new; do for s in on off; do magick \"$T/$r-$s.png\" -background white -flatten -crop 900x1150+0+60 +repage \"$T/$r-$s-c.png\"; done; magick \"$T/$r-on-c.png\" \"$T/$r-off-c.png\" -compose minus_src -composite -evaluate multiply 4 \"$T/$r-glow.png\"; done",
-      "magick -size 900x64 -background white -fill black -gravity center -pointsize 18 label:\"White shell, status LEDs on. Left: old roof. Right: thin roof.\\nBottom row: the LED light alone, four times brighter.\" \"$T/title.png\"",
+      "magick -size 900x64 -background white -fill black -gravity center -pointsize 18 label:\"White shell, status LEDs on. Left: old roof. Right: even roof.\\nBottom row: the LED light alone, four times brighter.\" \"$T/title.png\"",
       "magick \"$T/title.png\" \\( \\( \"$T/old-on-c.png\" -resize 50% \\) \\( \"$T/new-on-c.png\" -resize 50% \\) +append \\) \\( \\( \"$T/old-glow.png\" -resize 50% \\) \\( \"$T/new-glow.png\" -resize 50% \\) +append \\) -append -strip docs/readme-assets/case-white-roof-glow.png",
       "git worktree remove --force \"$T/old\"",
       "python3 scripts/render-status.py --write case-white-roof-glow"
     ],
     "recipe": [
-      "The old roof is the front shell at 6a8f978, the last develop commit before LED_RING_FACE_ROOF. The thin roof is the working tree.",
+      "The old roof is the front shell at 6a8f978, the last develop commit before LED_RING_FACE_ROOF. The even roof is the working tree.",
       "All four renders use the readme-annotated-front preset with the white colorway, 1600 samples and 900 px wide. Two have the status LEDs on and two have them off.",
       "The bottom row is the LEDs-on render less the LEDs-off render, four times brighter, so it shows only the LED light that passes through the roof.",
       "The white colorway renders the shell with random-walk subsurface scattering, so the glow depends on the wall thickness. The preset and the material are in c6remote-explode, so the fingerprint cannot see a change to them."

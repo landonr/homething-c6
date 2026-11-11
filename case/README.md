@@ -154,6 +154,13 @@ The model derives geometry from the board where possible. Manual values include 
 
 Print the shells with a tinted translucent filament. The STL files contain no color or material data.
 
+A white filament also works. The roof over the LED ring channel is `LED_RING_FACE_ROOF` thick under the face, so the status LEDs glow through a white front.
+
+<p align="center">
+  <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan through the white shell around the scroll wheel" src="../docs/readme-assets/case-annotated-front-white.png" width="260">
+</p>
+<p align="center"><sub>White front with the status LEDs on</sub></p>
+
 The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
 
 If the shell filament blocks too much infrared light, make the same insert from IR-pass acrylic.

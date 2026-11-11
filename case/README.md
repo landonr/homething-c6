@@ -44,7 +44,7 @@ Both versions use the same back shell, IR window, interior, and board position. 
 | Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
 | Face height | Base level | `FDM_FACE_DROP` lower |
 | Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
-| LED ring channel | Full depth | Half depth, for a thicker roof |
+| LED ring channel | Full depth, with an even roof under the face | Half the arch depth, for a thicker roof |
 | Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
 | Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
 | Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
@@ -154,6 +154,20 @@ The model derives geometry from the board where possible. Manual values include 
 
 Print the shells with a tinted translucent filament. The STL files contain no color or material data.
 
+A white filament also works. The roof over the LED ring channel is `LED_RING_FACE_ROOF` thick under the face, so the status LEDs glow through a white front.
+
+<p align="center">
+  <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan through the white shell around the scroll wheel" src="../docs/readme-assets/case-annotated-front-white.png" width="260">
+</p>
+<p align="center"><sub>White front with the status LEDs on</sub></p>
+
+A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through. The comparison shows the glow through the old roof and through the even roof.
+
+<p align="center">
+  <img alt="Two white c6remote fronts with the status LEDs on. The front with the even roof over the LED ring channel shows a slightly brighter ring nearer the wheel. A second row shows only the LED light for each front" src="../docs/readme-assets/case-white-roof-glow.png" width="450">
+</p>
+<p align="center"><sub>Old roof (left) and even roof (right) in a white shell</sub></p>
+
 The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
 
 If the shell filament blocks too much infrared light, make the same insert from IR-pass acrylic.
@@ -204,7 +218,9 @@ Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall w
 
 Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
 
-The LED ring channel ceiling does not follow the face. A ceiling under the face would drop below the cavity ceiling at the channel mouth. The ceiling is a circular arch of its own instead, `LED_RING_SAG` lower at each side wall. The roof over the channel is `LED_RING_ROOF` thick on the crown line, under the undished face. The face falls faster than the ceiling at the east and west sides of the knob, so the roof is thinner there. The ring roof check holds it above its floor.
+The LED ring channel ceiling keeps a vertical roof of `LED_RING_FACE_ROOF` under the built face all the way round, so the six LEDs glow through an even roof. `LED_RING_FACE_ROOF` is the minimum wall that PCBWay publishes for SLA resin. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. `LED_RING_SAG` keeps the arch below the ceiling at the east and west sides of the knob, where the face is lowest. As a result, the channel is shallowest there. The ring roof check holds the roof above its floor.
+
+The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling. Where the channel is too shallow for the full bevel, at the east and west sides, the bevel shortens and keeps `LED_RING_INNER_FOOT_MIN` of upright inner wall. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
 
 A chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the face and the dish. In each section across the rim, a round leaves the face `RECESS_CHAMFER_ROUND_OUT` outside the rim with the face's own slope and runs `RECESS_CHAMFER_ROUND_W` inside it. Its start outside the rim gives it room to turn gently, and the face is cut there. A second round, `RECESS_CHAMFER_INNER_ROUND_W` wide, meets the dish floor with the floor's own slope. If the two rounds leave room, the section is straight between them. The two rounds fill the chamfer, so the section is one S-curve from the face to the dish. The chamfer replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
@@ -240,7 +256,7 @@ The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed
 
 On the recessed front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
 
-`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. The LED ring channel is half-depth on this front, leaving a thicker printable roof. Run `check.py --only fdm` to validate it.
+`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the recessed front's arch depth, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
 
 ## Assembly
 

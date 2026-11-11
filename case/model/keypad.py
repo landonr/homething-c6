@@ -70,9 +70,10 @@ from .stack import (
     stem_top,
 )
 from .wheel_ring import (
-    led_ring_ceiling_at,
-    led_ring_roof_inner_r,
-    led_ring_roof_outer_r,
+    led_ring_bevel_edge_r,
+    led_ring_ceiling_under,
+    led_ring_clip_reach,
+    led_ring_flat_outer_r,
     pad_clear_y,
 )
 
@@ -891,29 +892,32 @@ single radius answers for one of the three and not the others."""
 def ring_roof_left():
     """Thinnest translucent roof left over the LED ring channel, face side.
 
-    LED_RING_ROOF is the roof under the undished crown line. The channel
-    ceiling is an arch of its own and does not follow the face, so the roof is
-    the built surface less led_ring_ceiling_at(). The face thins it at the east
-    and west sides of the knob, where the channel comes near the side walls.
-    Three things dish the face over the channel: the wheel basin reaching past
-    its own half axis on the diagonals, and both necks running out across the
-    annulus on the way to the dishes either side. What any of them sinks there
-    comes out of this as well.
+    The roof is the built surface less led_ring_ceiling_under(). That ceiling
+    is the arch, or LED_RING_FACE_ROOF under the built face where that is
+    higher. As a result, the roof is LED_RING_FACE_ROOF wherever the ceiling
+    follows the face, and LED_RING_SAG keeps the arch low enough that it does
+    all the way round. The roof is thinner only where the face falls to the
+    arch. That can happen at the east and west sides of the knob, where the
+    face is lowest. Three things dish the face over the channel: the wheel
+    basin past its own half axis on the diagonals, and both necks on their way
+    to the dishes either side. The ceiling goes down with them until the arch
+    stops it, and what they sink past that comes out of this value.
 
-    The annulus walked is the roof's own, inner wall to outer. The inner wall
-    is plumb, so that end is simply led_ring_inner_r() and the walk runs nearer
-    the bore than it did when the wall raked away from it, which is where the
-    wheel basin is deepest.
+    The walk covers the roof flat on each bearing, from the top of that
+    bearing's inner bevel, led_ring_bevel_edge_r(), out to
+    led_ring_flat_outer_r(). Near the X axis the cavity wall cuts the channel
+    off inside that radius, so there the walk stops at led_ring_clip_reach().
     """
     wx, wy = board.wheel_center()
-    lo, hi = led_ring_roof_inner_r(), led_ring_roof_outer_r()
     thinnest = math.inf
     for i in range(RING_ROOF_ANGLES):
         a = 2 * math.pi * i / RING_ROOF_ANGLES
+        lo = led_ring_bevel_edge_r(a)
+        hi = min(led_ring_flat_outer_r(a), led_ring_clip_reach(a))
         for j in range(RING_ROOF_RADII):
             r = lo + (hi - lo) * j / (RING_ROOF_RADII - 1)
             x, y = wx + r * math.cos(a), wy + r * math.sin(a)
-            thinnest = min(thinnest, face_floor_at(x, y) - led_ring_ceiling_at(x))
+            thinnest = min(thinnest, face_floor_at(x, y) - led_ring_ceiling_under(x, y))
     return thinnest
 
 

@@ -6,6 +6,7 @@ case.py is the entry point that calls main() here.
 
 import argparse
 import json
+import math
 
 from build123d import Pos
 
@@ -73,13 +74,18 @@ from .mic import (
 from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
+    LED_RING_STATIONS,
     LED_RING_TOP,
+    led_ring_bevel,
+    led_ring_bevel_top,
     led_ring_ceiling_at,
-    led_ring_chamfer_left,
     led_ring_clip_reach,
+    led_ring_flat_outer_r,
+    led_ring_inner_foot,
     led_ring_inner_r,
     led_ring_mouth_outer_r,
     led_ring_outer_r,
+    led_ring_rake_foot,
     led_ring_roof_flat,
     led_ring_roof_outer_r,
     led_ring_wall_height,
@@ -289,25 +295,44 @@ def main():
         f"  LEDs uncovered by {pad_clear_y() - led_y_reach():.2f}, "
         f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
         f"package, firing into the ring channel: {led_ring_inner_r():.2f} to "
-        f"{led_ring_outer_r():.2f} around the wheel, void up to {LED_RING_TOP:.2f} "
-        f"at the crown and {led_ring_ceiling_at(wx + led_ring_inner_r()):.2f} at "
-        f"the inner wall's east side, {params.LED_RING_ROOF:.2f} of translucent "
-        f"roof under the undished crown line ({ring_roof_left():.2f} where the "
-        f"recess or the face thins it)"
+        f"{led_ring_outer_r():.2f} around the wheel, under an arch from "
+        f"{LED_RING_TOP:.2f} at the crown to "
+        f"{led_ring_ceiling_at(wx + led_ring_inner_r()):.2f} at the inner wall's "
+        f"east side, {params.LED_RING_SAG:.2f} lower at each side wall"
+    )
+    bevel = {
+        side: led_ring_bevel_top(math.radians(deg))
+        for side, deg in (("east", 0), ("north", 90), ("west", 180), ("south", 270))
+    }
+    print(
+        f"  ceiling raised off the arch to keep {params.LED_RING_FACE_ROOF:.2f} "
+        f"of translucent roof under the built face wherever that is higher, "
+        f"so the roof is {ring_roof_left():.2f} at its thinnest; at the inner "
+        f"bevel's top it stands "
+        + ", ".join(f"{side} {z:.2f}" for side, z in bevel.items())
+    )
+    legs = [
+        led_ring_bevel(2 * math.pi * i / LED_RING_STATIONS)
+        for i in range(LED_RING_STATIONS)
+    ]
+    short = [leg for leg in legs if leg < params.LED_RING_INNER_CHAMFER]
+    print(
+        f"  the {params.LED_RING_INNER_CHAMFER:.2f} inner chamfer hangs from the "
+        f"local ceiling, shortened to {min(legs):.2f} on {len(short)} of "
+        f"{len(legs)} stations where the channel is shallow, and leaves at least "
+        f"{led_ring_inner_foot():.2f} of upright inner wall over the cavity "
+        f"ceiling"
     )
     print(
-        f"  ceiling is its own arch, {params.LED_RING_SAG:.2f} lower at each side "
-        f"wall, so the {params.LED_RING_INNER_CHAMFER:.2f} "
-        f"inner chamfer keeps {led_ring_chamfer_left():.2f} of height at its "
-        f"lowest, the wall's east and west sides"
-    )
-    print(
-        f"  inner wall plumb at {led_ring_inner_r():.2f} over the full "
-        f"{led_ring_wall_height():.2f} of height at the crown, outer wall raked 45 degrees "
-        f"and widest at the mouth: {led_ring_mouth_outer_r():.2f} there, closing "
-        f"to {led_ring_roof_outer_r():.2f} at the roof, so "
-        f"{led_ring_roof_flat():.2f} of flat glows and {led_ring_web_left():.2f} "
-        f"of web is left to the bore at every height"
+        f"  inner wall plumb at {led_ring_inner_r():.2f} below the bevel, outer "
+        f"wall plumb at the mouth, {led_ring_mouth_outer_r():.2f}, up to "
+        f"{led_ring_rake_foot(math.pi / 2):.2f} at the crown and "
+        f"{led_ring_rake_foot(math.pi / 4):.2f} on the diagonals, then raked 45 "
+        f"degrees over {led_ring_wall_height():.2f} at the crown to meet the "
+        f"ceiling at {led_ring_roof_outer_r():.2f} on the crown line and "
+        f"{led_ring_flat_outer_r(math.pi / 4):.2f} on the diagonals, so at least "
+        f"{led_ring_roof_flat():.2f} of flat glows and "
+        f"{led_ring_web_left():.2f} of web is left to the bore at every height"
     )
     print(
         f"  chorded flush against the cavity wall at "
@@ -508,8 +533,8 @@ def main():
     )
     print(
         f"  every counterbore inside the rim, thinnest land {lands[0][0]:.2f} at "
-        f"{lands[0][1]}; ring roof down to {ring_roof_left():.2f} where the recess "
-        f"crosses it"
+        f"{lands[0][1]}; ring roof down to {ring_roof_left():.2f} at its "
+        f"thinnest, against LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}"
     )
     print(
         f"pad two lobes, {params.PAD_MARGIN:.1f} of web past each island's own "

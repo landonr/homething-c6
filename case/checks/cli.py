@@ -544,7 +544,7 @@ def _led_channel_is_half_depth(s):
     return _report(
         led_channel_is_half_depth(s.front_fdm, s.front),
         f"the FDM LED ring channel is "
-        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's depth",
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's arch depth",
     )
 
 
@@ -665,7 +665,9 @@ def _inner_chamfer_is_cut(s):
     return _report(
         inner_chamfer_is_cut(s.front, s.front_fdm),
         f"both LED channels have a {params.LED_RING_INNER_CHAMFER:.2f} mm "
-        "chamfer at the inner roof edge",
+        "chamfer at the inner roof edge, shorter on the recessed front where "
+        f"its channel is shallow, over {params.LED_RING_INNER_FOOT_MIN:.2f} mm "
+        "of upright inner wall",
     )
 
 

@@ -271,6 +271,10 @@ Their front-skirt pockets are blind, rounded, and bevelled at the mouth, with
 continuous material behind them. The seam sits above the board top.
 Each pocket sits a short lower lip above the front skirt's support relief, so a long solid skirt land stays above each catch.
 The support relief stands `SUPPORT_SKIRT_FIT` above the ledge tops, so the front skirt never lands on a ledge. The seam shoulder is the only vertical stop.
+A rectangular groove runs without a break round the outer top edge of the back lap. It makes the seam a deliberate shadow line, so a small step or gap between the shells does not show.
+`SEAM_SHADOW_DEPTH` sets how far the groove cuts into the lap. `SEAM_SHADOW_H` sets how far it runs down from the seam.
+Both fronts pair with the same back, so the groove is the same on both versions. The front shoulder bears on the lap top that remains and closes over the groove.
+The lap behind the groove must keep `LAP_MIN_WALL`.
 The back detents ramp on both sides so the shells can be opened for service.
 Each back detent sits lower than its pocket and bears on the lower lip with a light preload.
 The preload holds the seam closed.
@@ -391,7 +395,7 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Microphone and USB geometry
 - IR receiver clearance and window installation
 - Board support ledges, front ledges, the end screw, cell clearance, and the V2 top pad
-- Shell mating and component interference
+- Shell mating, the seam shadow groove, and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes
 

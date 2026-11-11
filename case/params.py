@@ -136,6 +136,9 @@ usual M2 insert OD."""
 # wall is hollowed out over that same band down to a thinner outer lap that closes
 # over it. The seam is the top edge of that lap, and the outer faces are flush
 # across it, so nothing of the front is visible from the side below the seam.
+# A shallow groove runs round the outer top edge of the lap. It makes the seam
+# a deliberate shadow line, so a small step or gap between the shells does not
+# show.
 SKIRT_H = 4.0
 """How far the skirt drops below the board top. Raising the seam grows the
 skirt upward without moving its lower edge into the support ledges or screw."""
@@ -152,7 +155,20 @@ LAP_MIN_WALL = 1.0
 """Thinnest wall that the back lap can keep to the outer round under the front
 skirt. The shells check measures this wall on the built back shell around the
 IR end. A deeper IR-end skirt needs a deeper lap relief. That relief left the
-lap near a third of this value, so the IR end uses the plain skirt."""
+lap near a third of this value, so the IR end uses the plain skirt.
+
+The seam shadow groove also keeps this wall. SKIRT_T less SEAM_SHADOW_DEPTH
+must not go below this value."""
+SEAM_SHADOW_DEPTH = 0.4
+"""How far the seam shadow groove cuts into the back lap, inward from the
+outer wall. The groove runs unbroken round the outer top edge of the lap, on
+the one back that both fronts use. This depth casts a clear shadow and keeps
+1.1 of lap, above LAP_MIN_WALL. The front shoulder bears on the lap top that
+is left, SKIRT_T less this value wide."""
+SEAM_SHADOW_H = 0.6
+"""How far the seam shadow groove runs down the outer wall from the seam. A
+taller groove gives a wider shadow line. The groove must stay above every
+opening and detent in the back wall, or it cuts into them."""
 SIDE_SKIRT_THICKEN = 0.20
 """Extra inward wall on the front skirt, round the grip end and its two corners
 and up both long runs. The nominal 0.5 board fit still leaves 0.3 at the board

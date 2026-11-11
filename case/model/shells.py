@@ -1,5 +1,5 @@
 """The two shells and their joint features: the front skirt, the end catch
-windows, the back lap, and the detents.
+windows, the back lap with its seam shadow groove, and the detents.
 """
 
 import functools
@@ -90,6 +90,27 @@ def skirt_relief():
             SHELL_SEAM + 1,
         )
     ]
+
+
+def seam_shadow():
+    """The shadow groove round the outer top edge of the back's lap.
+
+    A rectangular band SEAM_SHADOW_DEPTH into the outer wall and SEAM_SHADOW_H
+    down from the seam, unbroken round the whole perimeter. Both fronts pair
+    with this one back, so the line is the same on either. The front shoulder
+    overhangs the groove and forms its ceiling."""
+    depth, height = params.SEAM_SHADOW_DEPTH, params.SEAM_SHADOW_H
+    if depth <= 0:
+        raise ValueError(f"SEAM_SHADOW_DEPTH {depth} must be above zero")
+    if height <= 0:
+        raise ValueError(f"SEAM_SHADOW_H {height} must be above zero")
+    wall = LAP_OUT - LAP_IN - depth
+    if wall < params.LAP_MIN_WALL:
+        raise ValueError(
+            f"SEAM_SHADOW_DEPTH {depth} leaves {wall:.2f} of back lap, under "
+            f"LAP_MIN_WALL {params.LAP_MIN_WALL}"
+        )
+    return [_ring(LAP_OUT - depth, LAP_OUT + 1, SHELL_SEAM - height, SHELL_SEAM + 1)]
 
 
 def skirt_cuts():
@@ -572,6 +593,7 @@ def back_shell():
         exterior,
         _isect(_slab(inner, SHELL_BACK, SHELL_SEAM + 1), cavity),
         *skirt_relief(),
+        *seam_shadow(),
     )
 
     # U2 receives through this shell's floor. Its opening and inside flange

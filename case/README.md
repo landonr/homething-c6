@@ -25,10 +25,10 @@ It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 bo
 ## SLS and FDM versions
 
 <p align="center">
-  <img alt="Plan of the SLS front face. Shading shows the depth of the dish around the keys and the wheel. The face rolls down into every wall." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
+  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
   <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="260">
 </p>
-<p align="center"><sub>The SLS face (left) shows the dish as a depth gradient. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
+<p align="center"><sub>On the SLS face (left), the shading is darker where the face or the dish is steeper. The arched face and the basins show without contour lines. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
 
 <p align="center">
   <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the face rolls down into every wall." src="../docs/readme-assets/case-front-iso-sls.png" width="400">

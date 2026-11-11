@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Draw the c6remote front face plan as one SVG: the shell face, the keypad
 recess outline, the wheel, and the keycaps with their legends. Every coordinate
-comes from the build123d case model at run time."""
+comes from the build123d case model at run time.
+
+The SLS version also shades the built top surface, the face less the recess,
+as one embedded PNG that darkens where the surface slopes. The FDM version
+draws its flat face's chamfer and outline groove instead."""
 
 import argparse
 import math
@@ -36,12 +40,9 @@ COORD_PLACES = 1
 # The README versions are not embedded in flash, so they trade size for detail.
 DETAIL = dict(OUTLINE_STEPS=2400, CONTOUR_STEPS=1600, LEGEND_PTS_PER_MM=12.0,
               CIRCLE_PTS=180, SIMPLIFY_TOL=0.01, COORD_PLACES=2)
-DISH_LEVELS = 72
-ROUND_BANDS = 32
-DISH_MAX = 0.92  # dish tone coverage at the deepest point
-DISH_GAMMA = 1.1  # near linear, so the shallow dish near the rim shades too
-TOPO_LINES = 12  # evenly spaced depth contour lines drawn over the shading
-ROUND_MAX = 0.8  # round tone coverage where the edge turns vertical
+SHADE_STEP = 0.1  # plan grid step of the SLS shading image, in mm
+SHADE_MAX = 0.48  # shade coverage where the built surface turns vertical
+SHADE_TONE = "#4f493f"  # baked into the PNG, so no theme token can reach it
 LABELS = {"web": "", "sls": "SLS ", "fdm": "FDM "}
 OUTPUTS = {
     "web": "case-front-face.svg",
@@ -76,12 +77,9 @@ DARK = {
     "glyph": "#ffffff",
 }
 
-# Shading tones for the README versions. The face is white in both themes, so
+# Extra tones for the README versions. The face is white in both themes, so
 # one set serves both.
 DETAIL_TONES = {
-    "dish": "#5b5348",
-    "topo": "#3a342c",
-    "round": "#4f493f",
     "chamfer": "#e3ddd2",
     "groove": "#8a8174",
 }
@@ -292,132 +290,50 @@ def wheel_controls(P, cx, cy):
 # --- the sheet ------------------------------------------------------------
 
 
-def stacked_alphas(coverage):
-    """Fill opacities for nested layers, each painted over the last, that reach
-    the given cumulative coverages in order."""
-    out, prev = [], 0.0
-    for c in coverage:
-        out.append(1 - (1 - c) / (1 - prev))
-        prev = c
-    return out
+def face_shading(P, outer):
+    """The SLS built top surface, stack.face_z() less kp.face_depth_at(), as
+    one shaded image clipped to the plan outline. Coverage is SHADE_MAX times
+    the square root of the surface tilt, so the arched face and the basins
+    darken where they slope, steeper darker, with no contour lines."""
+    import base64
+    import io
 
-
-def dish_gradient(P):
-    """The recess as nested depth contours, shallow first, each a little
-    darker, so the basins read as smooth shading."""
-    y0, y1 = kp.recess_span()
-    deepest = max(spine_depth(y0 + (y1 - y0) * i / 2000) for i in range(2001))
-    levels = [deepest * k / DISH_LEVELS for k in range(1, DISH_LEVELS)]
-    alphas = stacked_alphas([DISH_MAX * (lv / deepest) ** DISH_GAMMA for lv in levels])
-    out, topo = [], []
-    every = DISH_LEVELS // TOPO_LINES
-    for k, (level, alpha) in enumerate(zip(levels, alphas), start=1):
-        loops = contour_loops(level)
-        if loops:
-            d = path_d(loops, P)
-            out.append(f'<path class="dish" fill-opacity="{fmt(alpha, 4)}" d="{d}"/>')
-            if k % every == 0:
-                topo.append(f'<path class="topo" d="{d}"/>')
-    return "".join(out + topo)
-
-
-FACE_GRID_STEPS = (160, 420)
-"""Grid points from one wall to the centre, across x and along y, that the face
-tilt is sampled on. They crowd toward the walls, where the face turns down."""
-
-
-def face_cover():
-    """(xs, ys, cover): the round band's shading on a plan grid. cover[j][i] at
-    (xs[i], ys[j]) is ROUND_MAX times one less the z part of the face normal, so
-    it rises from zero on the crown to ROUND_MAX where the face turns vertical.
-    It is ROUND_MAX on and outside the plan outline, so every contour closes."""
     import numpy as np
+    from PIL import Image
 
     ex0, ex1 = kp.exterior_x_bounds()
     ey0, ey1 = kp.exterior_y_bounds()
-
-    def crowded(a, b, steps):
-        half = (b - a) / 2
-        d = half * (np.arange(steps + 1) / steps) ** 2
-        return np.unique(np.concatenate([a + d, b - d]))
-
-    xs = crowded(ex0, ex1, FACE_GRID_STEPS[0])
-    ys = crowded(ey0, ey1, FACE_GRID_STEPS[1])
-    z = np.array([[stack.face_z(x, y) for x in xs] for y in ys])
-    dz_dy, dz_dx = np.gradient(z, ys, xs)
-    cover = ROUND_MAX * (1 - 1 / np.sqrt(1 + dz_dx**2 + dz_dy**2))
+    nx = round((ex1 - ex0) / SHADE_STEP)
+    ny = round((ey1 - ey0) / SHADE_STEP)
+    dx, dy = (ex1 - ex0) / nx, (ey1 - ey0) / ny
+    xs = ex0 + dx * (np.arange(nx) + 0.5)
+    # Rows run from the IR end down, so row 0 is the top of the sheet.
+    ys = ey1 - dy * (np.arange(ny) + 0.5)
+    z = np.full((ny, nx), np.nan)
     for j, y in enumerate(ys):
         x0, x1 = stack._span(y)
-        outside = (xs <= x0) | (xs >= x1) | (y <= ey0) | (y >= ey1)
-        cover[j, outside] = ROUND_MAX
-    return xs, ys, cover
+        for i in np.nonzero((xs > x0) & (xs < x1))[0]:
+            z[j, i] = stack.face_z(xs[i], y) - kp.face_depth_at(xs[i], y)
+    inside = ~np.isnan(z)
+    # The walls drop away outside the outline, so the edge shades dark.
+    z[~inside] = z[inside].min() - 5
+    dz_dy, dz_dx = np.gradient(z, -dy, dx)
+    tilt = np.clip(np.arctan(np.hypot(dz_dx, dz_dy)) / (math.pi / 2), 0, 1)
+    # The clip edge resamples outside pixels too, so they hold full coverage.
+    cover = np.where(inside, SHADE_MAX * np.sqrt(tilt), SHADE_MAX)
 
-
-# Marching squares: corner bits are 1 bottom left, 2 bottom right, 4 top right
-# and 8 top left. Each case joins the cell edges its contour crosses.
-SQUARE_SEGMENTS = {
-    1: ["LB"], 2: ["BR"], 3: ["LR"], 4: ["RT"], 6: ["BT"], 7: ["LT"],
-    8: ["TL"], 9: ["BT"], 11: ["RT"], 12: ["LR"], 13: ["BR"], 14: ["LB"],
-}
-SADDLE_SEGMENTS = {
-    (5, True): ["LT", "BR"], (5, False): ["LB", "RT"],
-    (10, True): ["LB", "RT"], (10, False): ["BR", "TL"],
-}
-
-
-def iso_loops(xs, ys, field, level):
-    """Closed loops where field crosses level, by marching squares on the grid
-    of xs by ys. The field must stay above level all round the grid's edge."""
-    import numpy as np
-
-    above = field >= level
-    case = (
-        above[:-1, :-1] * 1 | above[:-1, 1:] * 2 | above[1:, 1:] * 4 | above[1:, :-1] * 8
-    )
-    links = {}
-    for j, i in np.argwhere((case != 0) & (case != 15)):
-        c = int(case[j, i])
-        centre = field[j : j + 2, i : i + 2].mean() >= level
-        edges = {"B": ("h", j, i), "T": ("h", j + 1, i), "L": ("v", j, i), "R": ("v", j, i + 1)}
-        for seg in SQUARE_SEGMENTS.get(c) or SADDLE_SEGMENTS[(c, bool(centre))]:
-            a, b = edges[seg[0]], edges[seg[1]]
-            links.setdefault(a, []).append(b)
-            links.setdefault(b, []).append(a)
-
-    def point(edge):
-        kind, j, i = edge
-        j1, i1 = (j, i + 1) if kind == "h" else (j + 1, i)
-        t = (level - field[j, i]) / (field[j1, i1] - field[j, i])
-        return xs[i] + t * (xs[i1] - xs[i]), ys[j] + t * (ys[j1] - ys[j])
-
-    loops, seen = [], set()
-    for start in links:
-        if start in seen:
-            continue
-        loop, prev, edge = [], None, start
-        while edge not in seen:
-            seen.add(edge)
-            loop.append(point(edge))
-            nxt = [e for e in links[edge] if e != prev and e not in seen]
-            prev, edge = edge, (nxt[0] if nxt else start)
-        if len(loop) > 2:
-            loops.append(loop)
-    return loops
-
-
-def round_band(P, outer):
-    """The face's fall toward the walls as nested bands, one per shading level.
-    Each band is the plan where the face tilts past its level, so the stack
-    darkens toward the walls as the face turns away from a light straight
-    above. The tilt comes from stack.face_z(), so the bands follow the
-    superellipse across the width and the roll into each end wall."""
-    xs, ys, cover = face_cover()
-    levels = [ROUND_MAX * k / ROUND_BANDS for k in range(1, ROUND_BANDS)]
-    mids = [ROUND_MAX * (k + 0.5) / ROUND_BANDS for k in range(1, ROUND_BANDS)]
-    return "".join(
-        f'<path class="round" fill-rule="evenodd" fill-opacity="{fmt(a, 4)}" '
-        f'd="{path_d([outer] + iso_loops(xs, ys, cover, level), P)}"/>'
-        for level, a in zip(levels, stacked_alphas(mids))
+    rgba = np.empty((ny, nx, 4), np.uint8)
+    rgba[..., :3] = [int(SHADE_TONE[k : k + 2], 16) for k in (1, 3, 5)]
+    rgba[..., 3] = np.round(cover * 255)
+    png = io.BytesIO()
+    Image.fromarray(rgba).save(png, "PNG", optimize=True)
+    data = base64.b64encode(png.getvalue()).decode()
+    x, y = P(ex0, ey1)
+    return (
+        f'<clipPath id="faceclip"><path d="{path_d([outer], P)}"/></clipPath>'
+        f'<image x="{fmt(x)}" y="{fmt(y)}" width="{fmt((ex1 - ex0) * SCALE)}" '
+        f'height="{fmt((ey1 - ey0) * SCALE)}" preserveAspectRatio="none" '
+        f'clip-path="url(#faceclip)" href="data:image/png;base64,{data}"/>'
     )
 
 
@@ -435,8 +351,7 @@ def plan_view(P, version="web"):
     out = ['<g id="plan">']
     out.append(f'<path class="face" d="{path_d([outer], P)}"/>')
     if version == "sls":
-        out.append(round_band(P, outer))
-        out.append(dish_gradient(P))
+        out.append(face_shading(P, outer))
     if version == "fdm":
         out.append(chamfer_band(P, outer))
         out.append(f'<path class="groove" d="{path_d(contour_loops(0.0), P)}"/>')
@@ -533,9 +448,6 @@ def _style(version="web"):
 
         groove_w = fmt(params.FDM_OUTLINE_W * SCALE)
         rules += [
-            f".dish{{{dtok('fill', 'dish')}}}",
-            f".topo{{{dtok('stroke', 'topo')};stroke-width:.6;stroke-opacity:.55}}",
-            f".round{{{dtok('fill', 'round')}}}",
             f".chamfer{{{dtok('fill', 'chamfer')}}}",
             f".chamferline{{{tok('stroke', 'edge')};stroke-width:.5}}",
             f".groove{{{dtok('stroke', 'groove')};stroke-width:{groove_w};stroke-linejoin:round}}",

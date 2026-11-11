@@ -25,14 +25,14 @@
 <circle cx="1427.0" cy="2474.0" r="18.9" fill="#f2f2e8"/>
 <path d="M 1427.0 2760.0 L 740.0 2760.0" fill="none" stroke="#f2f2e8" stroke-width="10.5" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="1427.0" cy="2760.0" r="18.9" fill="#f2f2e8"/>
-<text x="727" y="236" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">Microphone</text>
-<text x="727" y="311" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400">for voice assistant</text>
-<text x="727" y="852" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">Scroll wheel</text>
-<text x="727" y="927" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400">+ 5-way control</text>
-<text x="727" y="1215" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">RGB status LEDs</text>
-<text x="727" y="1716" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">11 assignable</text>
-<text x="727" y="1822" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">buttons</text>
-<text x="727" y="2505" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">XIAO ESP32-C6</text>
-<text x="727" y="2580" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400">Zigbee · Wi-Fi · BLE</text>
-<text x="727" y="2791" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400">USB-C</text>
+<text x="727" y="236" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">Microphone</text>
+<text x="727" y="311" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">for voice assistant</text>
+<text x="727" y="852" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">Scroll wheel</text>
+<text x="727" y="927" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">+ 5-way control</text>
+<text x="727" y="1215" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">RGB status LEDs</text>
+<text x="727" y="1716" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">11 assignable</text>
+<text x="727" y="1822" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">buttons</text>
+<text x="727" y="2505" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">XIAO ESP32-C6</text>
+<text x="727" y="2580" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="66" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">Zigbee · Wi-Fi · BLE</text>
+<text x="727" y="2791" text-anchor="end" fill="#f2f2e8" font-family="Arial,sans-serif" font-size="88" font-weight="400" stroke="#151515" stroke-width="12.6" stroke-linejoin="round" paint-order="stroke">USB-C</text>
 </svg>

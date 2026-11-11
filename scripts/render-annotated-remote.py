@@ -103,7 +103,8 @@ def render(output, canvas, source, placement, callouts, rotate=False, text_color
 
     def line(index, text, x, y, size, anchor):
         return (f'<text{tag(index)} x="{x}" y="{y}" text-anchor="{anchor}" fill="{text_color}" font-family="Arial,sans-serif" '
-                f'font-size="{size}" font-weight="400">{escape(text)}</text>')
+                f'font-size="{size}" font-weight="400" stroke="{halo_color}" stroke-width="{2 * halo:.1f}" '
+                f'stroke-linejoin="round" paint-order="stroke">{escape(text)}</text>')
 
     for index, (_, _, label, tx, ty, align) in enumerate(scaled_callouts):
         text_anchor = 'end' if align in ('left', 'end') else 'start'

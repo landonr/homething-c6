@@ -204,6 +204,57 @@ The chamfer on both lips of each groove and on the grid lobe outer top edge runs
 
 If you print keytops down, the grooves face the support. Then the supports fill the grooves and are hard to remove.
 
+## PCBWay limits
+
+PCBWay prints the front and back shells, and it publishes these limits for each process.
+
+| Process | Materials | Minimum wall | Tolerance | Maximum size | Source |
+| --- | --- | --- | --- | --- | --- |
+| SLA | UTR 8360 (white), Somos Ledo (white), UTR-8100 (clear) | 0.8 mm | ±0.2 mm under 100 mm, ±0.2% of the length over 100 mm | 2100 x 800 x 700 mm | [SLA](https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLA.html) |
+| SLS | PA12 | 1 mm | ±0.25 mm under 100 mm, ±0.3 mm from 100 to 200 mm | 400 x 390 x 390 mm | [SLS](https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLS.html) |
+
+The values in this section are from the vendor pages on 2026-11-11. The vendor can change these values, so read the pages again before an order.
+
+The [wall thickness page](https://www.pcbway.com/helpcenter/3d_engineering_questions/Wall_thickness_issue.html) also gives a minimum wall for each part size:
+
+| Process | 5 x 5 mm | 10 x 10 mm | 50 x 50 mm | 100 x 100 mm | 200 x 200 mm |
+| --- | --- | --- | --- | --- | --- |
+| SLA | 0.5 mm | 0.8 mm | 1 mm | 1.2 mm | 1.5 mm |
+| SLS and MJF | 0.8 mm | 1 mm | 1.2 mm | 1.5 mm | 2.0 mm |
+
+The shells are longer than 100 mm, so this table asks for a thicker wall than the process page. The `fab` pass uses the value from the process page.
+
+For transparent resin, PCBWay asks for walls of "at least 0.8 mm". Thinner clear parts can break or change shape when PCBWay sands and varnishes them. UTR-8100 can also have air bubbles. Read the [transparent materials page](https://www.pcbway.com/helpcenter/3d_engineering_questions/Wall_thickness_requirements_for_transparent_materials.html) and the [UTR-8100 page](https://www.pcbway.com/rapid-prototyping/3d-printing/plastic/resin/UTR-8100/).
+
+If a wall is thinner than the minimum, PCBWay suspends the order. It sends photos that show the thin areas in red. You then accept the risk or make the wall thicker. The order page has an option to accept the risk before the review.
+
+PCBWay does not publish a minimum hole size or a minimum embossed or engraved detail. It also does not publish a clearance between parts or rules for drain holes and overhangs.
+
+`LED_RING_FACE_ROOF` is equal to the SLA minimum. `ROOF_LEFT_MIN` in `case/checks/wheel_ring.py` holds the thinnest roof to a floor just under this value. The table in [SLS and FDM versions](#sls-and-fdm-versions) calls the recessed front "SLS". If you order the recessed front in SLS PA12, the roof is thinner than the 1 mm minimum.
+
+The `fab` pass of `check.py` measures the walls of the exported `c6remote-case-front.stl` and `c6remote-case-back.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
+
+The pass sorts each thin reading by the angle at the far face. A wall reading has two faces that are almost parallel. A taper reading is near an edge where two faces meet at a sharp angle. The material is thin only in a narrow band along that edge. A square corner is not thin, so the pass ignores it.
+
+Other features are also thinner than the minimum. `ACCEPTED` in `case/checks/fab.py` lists them as accepted, and the pass shows each one as a warning. PCBWay holds an order with these features until you accept the risk. The pass fails if a feature that is not accepted goes under the minimum. Each accepted feature has a floor on its wall reading and a cap on its thin area. The pass also fails if a wall reading goes below its floor or the thin area goes above its cap. A taper reading has no floor, because its value changes with the distance from a sample to the edge. To see the features that an SLS order puts on hold, set `FAB_PROCESS` to `"SLS"`.
+
+These features are under the SLA minimum on the current shells:
+
+- The counterbore lands under the key dishes are real thin walls. `LAND_FLOOR_MIN` in `case/checks/keypad.py` holds them, but it is below the PCBWay minimum. The lead-in chamfer of each face hole makes a taper at the hole wall.
+- The LED ring roof is `LED_RING_FACE_ROOF` thick in the vertical direction. The face slopes, so the wall normal to the face is a little thinner than the minimum.
+- The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
+- On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`. Parts of the reset guide tube are thinner than `RESET_GUIDE_WALL`.
+- The catch detent noses, the end screw cuts and the skirt lead-ins are tapers. They are thin only along an edge.
+
+The vendor tolerance is close to the size of these print fits, so a printed fit can be tighter or looser than the model:
+
+- `CAP_GUIDE_CLEARANCE` between each cap and its face hole
+- `KEY_CLEARANCE` round the SW1 and SW2 keytops in their holes
+- `WHEEL_OPENING_CLEARANCE` between the wheel and its bore
+- `SKIRT_FIT` in the lap joint between the shells
+
+Check these fits on the first print.
+
 ## FDM front
 
 The export contains two front shells. Both shells have the same interior, so the caps, the pad, and the back shell fit either one.
@@ -394,6 +445,7 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Shell mating and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes
+- Wall thickness of the front and back shells against the PCBWay minimum
 
 Run the full validation before export:
 

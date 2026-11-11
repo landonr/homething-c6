@@ -458,7 +458,8 @@ def main():
     lens = board.emitter_envelope()
     print(
         f"  D1 fires through its own {2 * (max(lens.size.X, lens.size.Z) / 2 + params.IR_EMITTER_FIT):.2f} "
-        f"bore, uncovered, {params.IR_EMITTER_FIT:.2f} around a {lens.size.X:.2f} "
+        f"bore with a {params.IR_EMITTER_CHAMFER_ANGLE:.0f}° chamfer per side, "
+        f"{params.IR_EMITTER_FIT:.2f} around a {lens.size.X:.2f} "
         f"lens that stops {emitter_reach():.2f} short of the exterior face"
     )
     print(

@@ -72,6 +72,8 @@ from .hardware import (
     feature_clashes,
 )
 from .ir import (
+    emitter_beam_clearance,
+    emitter_chamfer_angle,
     end_ports_open,
     receiver_clearance,
     receiver_paths,
@@ -120,7 +122,7 @@ from .keypad import (
     recess_margins,
     recess_solid_sane,
     recesses_open,
-    rim_chamfer_is_straight,
+    rim_chamfer_profile,
     wheel_basin_shape,
 )
 from .mic import mic_fillet
@@ -716,12 +718,13 @@ def _recesses_open(s):
 
 
 @_check("keypad")
-def _rim_chamfer_is_straight(s):
+def _rim_chamfer_profile(s):
     return _report(
-        rim_chamfer_is_straight(s.front),
-        f"the recess has a straight {params.RECESS_CHAMFER_W:.2f} rim chamfer all "
-        "the way round, from the face at the rim to the dish floor, with no soft "
-        "roll left in the dish",
+        rim_chamfer_profile(s.front),
+        f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
+        f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
+        f"a {params.RECESS_CHAMFER_INNER_ROUND_W:.2f} round into the dish floor, "
+        "with no soft roll left in the dish",
     )
 
 
@@ -1183,6 +1186,14 @@ def _end_ports_open(s):
     return _report(
         end_ports_open(s.shells),
         "D1's bore and the USB shell remain open at their end-wall centrelines",
+    )
+
+
+@_check("ir")
+def _emitter_beam_clearance(s):
+    return _report(
+        emitter_beam_clearance(s.shells) + emitter_chamfer_angle(s.shells),
+        "D1's 45° chamfer clears the 15° half-intensity angle in eight directions",
     )
 
 

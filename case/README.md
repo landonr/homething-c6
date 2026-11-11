@@ -208,7 +208,7 @@ The LED ring channel ceiling keeps a vertical roof of `LED_RING_FACE_ROOF` under
 
 The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling on every bearing. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
 
-A straight chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the matte face and the glossy dish. In each section across the rim, it goes straight from the face at the rim down to the dish floor. It has a crease at each edge and no step. It replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
+A chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the face and the dish. In each section across the rim, a round leaves the face `RECESS_CHAMFER_ROUND_OUT` outside the rim with the face's own slope and runs `RECESS_CHAMFER_ROUND_W` inside it. Its start outside the rim gives it room to turn gently, and the face is cut there. A second round, `RECESS_CHAMFER_INNER_ROUND_W` wide, meets the dish floor with the floor's own slope. If the two rounds leave room, the section is straight between them. The two rounds fill the chamfer, so the section is one S-curve from the face to the dish. The chamfer replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
 The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring channel north and south of the knob, so the ring roof check limits how deep they can go.
 
@@ -342,7 +342,7 @@ On the first print, make sure that SW1 and SW2 operate and do not bind. Each V3 
 
 The IR window insert enters this opening from inside. Its exterior pane must be flush with the back shell.
 
-`D1` emits through the positive Y end wall. The emitter uses a separate bare bore.
+`D1` emits through a separate bore in the positive Y end wall. A 45 degree chamfer clears the 15 degree half-intensity angle on each side of the emitter axis.
 
 ## Functional constraints
 

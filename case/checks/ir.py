@@ -1,4 +1,6 @@
-"""Built-solid checks for U2's bottom-facing window and unchanged end ports."""
+"""Built-solid checks for U2's bottom-facing window and the end ports."""
+
+import math
 
 from build123d import Box, Pos
 
@@ -22,6 +24,9 @@ PRESS_INTERFERENCE_REQUIRED = 0.05
 PRESS_PROBE_D = 0.02
 FLANGE_OVERLAP_MIN = 0.4
 ADHESIVE_LAND_MIN = 0.4
+EMITTER_HALF_ANGLE_REQUIRED = 15.0
+"""Half-intensity angle of the INL-3AHIR30 from the optical axis."""
+EMITTER_CHAMFER_ANGLE_REQUIRED = 45.0
 
 
 def _receiver_span():
@@ -127,6 +132,52 @@ def end_ports_open(shells):
                 at=(x, y, z), box=probe,
             ))
     return problems
+
+
+def emitter_beam_clearance(shells):
+    """Read off-axis rays through the assembled end wall."""
+    lens = board.emitter_envelope()
+    x, _, z = lens.center()
+    outer_y = board.board_profile().bounding_box().max.Y + case.LAP_OUT
+    radius = max(lens.size.X, lens.size.Z) / 2 + params.IR_EMITTER_FIT - TOLERANCE
+    throat_y = outer_y - params.IR_EMITTER_CHAMFER_DEPTH
+    start_y = min(lens.max.Y, throat_y)
+    depth = outer_y - start_y
+    outer_radius = radius + depth * math.tan(math.radians(EMITTER_HALF_ANGLE_REQUIRED))
+    problems = []
+    for azimuth in range(0, 360, 45):
+        angle = math.radians(azimuth)
+        dx, dz = math.cos(angle), math.sin(angle)
+        start = (x + radius * dx, start_y, z + radius * dz)
+        end = (x + outer_radius * dx, outer_y, z + outer_radius * dz)
+        runs = _ray_runs(shells, start, end)
+        if runs:
+            problems.append(Problem(
+                f"D1 beam clearance at {azimuth}° around the axis is blocked "
+                f"for {runs[0][1] - runs[0][0]:.2f} mm",
+                at=end,
+            ))
+    return problems
+
+
+def emitter_chamfer_angle(shells):
+    """Measure radial growth between two sections of the built chamfer."""
+    lens = board.emitter_envelope()
+    x, _, z = lens.center()
+    outer_y = board.board_profile().bounding_box().max.Y + case.LAP_OUT
+    span = params.IR_EMITTER_CHAMFER_DEPTH / 2
+    reach = lens.size.X / 2 + params.IR_EMITTER_FIT + params.IR_EMITTER_CHAMFER_DEPTH + OPENING_INSET
+    inner_y = outer_y - 1.5 * span
+    outer_section_y = inner_y + span
+    inner = _ray_runs(shells, (x, inner_y, z), (x + reach, inner_y, z))
+    outer = _ray_runs(shells, (x, outer_section_y, z), (x + reach, outer_section_y, z))
+    if inner and outer:
+        angle = math.degrees(math.atan2(outer[0][0] - inner[0][0], span))
+        expected_growth = span * math.tan(math.radians(EMITTER_CHAMFER_ANGLE_REQUIRED))
+        if abs(outer[0][0] - inner[0][0] - expected_growth) <= TOLERANCE:
+            return []
+        return [Problem(f"D1 chamfer measures {angle:.1f}°, wants 45°", at=(x, outer_section_y, z))]
+    return [Problem("no built wall beside D1's chamfer", at=(x, outer_section_y, z))]
 
 
 def receiver_paths(shells, back):

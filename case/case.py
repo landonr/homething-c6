@@ -29,8 +29,7 @@ The IR window insert closes the receiver's rounded -Z aperture in the back
 floor. Its pane follows the built back contour, presses into the aperture, and
 lands flush outside; its open interior flange retains on a continuous shell
 shoulder that also carries adhesive. It installs from inside the back shell
-before the shells close. The emitter remains separate and unchanged, firing
-along +Y through a bare bore drilled to its own lens.
+before the shells close. The emitter fires along +Y through a separate flared bore.
 
     python case.py            write an STL for each part, shells, pad, window
                               and caps

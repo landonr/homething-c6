@@ -625,7 +625,7 @@ def front_shell(fdm=False):
     so: the same ledges, ceiling, holes, counterbores, ducts and skirt, so a
     cap, a pad and a back shell fit either one. Two things differ, both on the
     outer plane. The recessed front takes keypad_recess_cut(), the dish the keys
-    sit in with a straight chamfer round its rim (params.RECESS_CHAMFER_W);
+    sit in with a round-topped chamfer round its rim (params.RECESS_CHAMFER_W);
     the FDM front takes keypad_outline_groove(), that same recess's plan
     outline as a shallow slot, and stays flat everywhere else, because a dish
     that shallow over a span that wide cannot be printed face down and face down

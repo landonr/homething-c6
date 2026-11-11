@@ -1,26 +1,26 @@
 {
   "board": {
-    "fingerprint": "b87246952f3de21c3b40fc5ed4642948edb1a2baae7438c90b6724d0bdb3f099",
+    "fingerprint": "a12c4517c5c50031785d94d7a3673a3d554ba9a7fcbcc0a9eeda5acaa259bcb1",
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "4368495966f3610692bc3af2b0880a92c9d00294d900066b143f621f119bd2b2",
+    "fingerprint": "8ea4b6c13209b9f2e3ffea185e660876c5b91361b2b7db32e03996bf2427c1e8",
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "2dc0a27a793909e78c7c48482a7cf46abaa519dccba893d6be42121f967f7cff",
+    "fingerprint": "7b355246f1e9eeb521ab227b439b63d43fae430a6d3ec0476a1be3c894166337",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "5d0c77123745ce68c758f7f2c2b355f45e1091bfe9c8379d00c657b606480d74",
+    "fingerprint": "2810e3aafc80af6042cfa265e1a80f657eada310da185890745308294691b7be",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "77adea8216b4652b794ea53a500589834afe4fa57ccb9b4ae801bd3334cfa7cc",
+    "fingerprint": "a94ed7c4b8b4ca3e6cda004047d56e72f9f5a33b6aba852dc8321e70804198de",
     "source": "index"
   },
   "case-stills": {
-    "fingerprint": "43e3e1f52e557c6a0f5d269a995020896259f4515758fc05bdd36a12b67c23c0",
+    "fingerprint": "61cc50e51c389be6acfb3f09f96a284df330f9f78267389d168d14b89bf72f72",
     "source": "index"
   },
   "schematic": {
@@ -28,11 +28,11 @@
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "43e3e1f52e557c6a0f5d269a995020896259f4515758fc05bdd36a12b67c23c0",
+    "fingerprint": "61cc50e51c389be6acfb3f09f96a284df330f9f78267389d168d14b89bf72f72",
     "source": "index"
   },
   "site-media": {
-    "fingerprint": "5941082ba8f0a061afde16dfe6ff07f09ed7688abd868f74cf73116ee17ff13e",
+    "fingerprint": "e252f341d8e57872e6acdb316d3ca4334be206b804356b9a135cbe5533d8c7d6",
     "source": "index"
   },
   "site-voice": {

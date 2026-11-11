@@ -1621,3 +1621,27 @@ the arrows' ink.
 
 check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""
+
+FAB_PROCESS = "SLA"
+"""The PCBWay process that the front and back shells are ordered in. check.py
+measures the walls of the exported c6remote-case-front.stl and
+c6remote-case-back.stl against FAB_MIN_WALL[FAB_PROCESS]. SLA is the process
+that LED_RING_FACE_ROOF was set for. Set "SLS" to see the features that an SLS
+PA12 order puts on hold.
+
+If a wall is thinner than the minimum, PCBWay holds the order. You then accept
+the risk or make the wall thicker. Source, read on 2026-11-11:
+https://www.pcbway.com/helpcenter/3d_engineering_questions/Wall_thickness_issue.html"""
+
+FAB_MIN_WALL = {"SLA": 0.8, "SLS": 1.0}
+"""PCBWay's published minimum wall for each process, read on 2026-11-11.
+
+SLA (UTR 8360, Somos Ledo, UTR-8100) is "0.8 mm":
+https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLA.html
+SLS PA12 is "1 mm":
+https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLS.html
+
+These are the values on the process pages. The help centre's size table asks
+for a thicker wall on a larger part, so a part of the case's length can be held
+at a thicker wall than these. The vendor can change these values, so read the
+pages again before an order."""

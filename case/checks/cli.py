@@ -51,6 +51,7 @@ from .caps import (
     legends_are_strokes,
     legends_present,
 )
+from .fab import fab_walls
 from .fdm import (
     ceilings_hold,
     edge_chamfer_is_sized,
@@ -1260,6 +1261,26 @@ def _interference(s):
     return False
 
 
+@_check("fab")
+def _fab_walls(s):
+    lines, problems, accepted = fab_walls(s.front, s.back)
+    for line in lines:
+        print(line)
+    process = params.FAB_PROCESS
+    minimum = params.FAB_MIN_WALL[process]
+    exceptions = (
+        f"except {accepted} accepted features, none thinner than its floor or "
+        "larger than its area cap"
+        if accepted
+        else "everywhere"
+    )
+    return _report(
+        problems,
+        f"front and back walls meet the {process} {minimum:.2f} mm minimum "
+        f"{exceptions}",
+    )
+
+
 FEATURES = sorted({feature for feature, _ in CHECKS})
 
 
@@ -1387,6 +1408,7 @@ _FEATURE_SOLIDS = {
         "caps_plain",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
+    "fab": ("front", "back"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),

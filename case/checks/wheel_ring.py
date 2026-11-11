@@ -104,11 +104,11 @@ def light_path(shells, pad):
 
         # The package's own column, not its footprint: its outer edge sits under
         # the raked outer wall by design, because that rake is what the LEDs are
-        # aimed at. See LED_RING_OVER. The ceiling is an arch, so the
-        # column stops under the lowest ceiling across its own width and the
+        # aimed at. See LED_RING_OVER. The ceiling follows the face where it
+        # rises off the arch, so it changes across the column in x and y. The
+        # column stops under the lowest ceiling across its own width, and the
         # roof probe starts over the highest.
-        ceilings = [case.led_ring_ceiling_at(x + d) for d in (-PROBE_D / 2, PROBE_D / 2)]
-        low, high = min(ceilings), max(ceilings)
+        low, high = _ceiling_span(x, y, PROBE_D / 2)
         channel = Pos(x, y, (z0 + low) / 2) * Cylinder(
             radius=PROBE_D / 2, height=low - z0 - 0.02
         )
@@ -122,6 +122,23 @@ def light_path(shells, pad):
         if _fill_fraction(shells, roof) < 0.99:
             problems.append(f"{ref} has no solid roof above the channel to shine through")
     return problems
+
+
+def _ceiling_span(x, y, half):
+    """(lowest, highest) of the recessed channel's ceiling over a probe of
+    radius `half` centred at (x, y): its centre and eight points on its rim.
+    The ceiling is the arch, or LED_RING_FACE_ROOF under the built face, so it
+    slopes in both x and y."""
+    zs = [case.led_ring_ceiling_under(x, y)]
+    for i in range(8):
+        a = i * math.pi / 4
+        zs.append(case.led_ring_ceiling_under(x + half * math.cos(a), y + half * math.sin(a)))
+    return min(zs), max(zs)
+
+
+RAY_CEILING_SAMPLES = 9
+"""Radii along the roof flat that led_ring reads the ceiling at, on each
+bearing, to put its ray and void probe under the lowest of them."""
 
 
 WEB_PROBE_D = 0.2
@@ -238,10 +255,10 @@ def _ring_stack_sane():
         )
     if case.ring_roof_left() <= ROOF_LEFT_MIN:
         problems.append(
-            f"the keypad recess leaves only {case.ring_roof_left():.2f} of roof "
-            f"over the ring channel, wants {ROOF_LEFT_MIN:.2f}: the recess is "
-            "deeper than LED_RING_ROOF can spend where the wheel dish's "
-            "diagonals or a neck cross the channel"
+            f"the face leaves only {case.ring_roof_left():.2f} of roof over the "
+            f"ring channel, wants {ROOF_LEFT_MIN:.2f}: LED_RING_FACE_ROOF "
+            f"{params.LED_RING_FACE_ROOF:.2f} is too thin, or the face falls "
+            "too near the channel arch where LED_RING_ROOF and LED_RING_SAG put it"
         )
     if case.led_ring_roof_flat() <= ROOF_FLAT_MIN:
         problems.append(
@@ -303,9 +320,12 @@ def led_ring(front):
     in plan.
 
     The width is measured rather than assumed. _channel_width() reads it off
-    the shell at the roof, which is the narrow end: the inner wall bevels out and
-    the outer one rakes inward going up, so a width that clears ROOF_FLAT_MIN
-    there clears it over the whole height. Measuring is what lets one pass
+    the shell just under the lowest ceiling over the roof flat, near the narrow
+    end: the inner wall bevels out going up, and the outer one is plumb at the
+    mouth and then rakes inward up to the ceiling. As a result, a width that
+    clears ROOF_FLAT_MIN there clears it at every height below. Above the ray
+    the rake closes in further, by as much as the ceiling at the outer end of
+    the flat stands over the ray. Measuring is what lets one pass
     answer for both surfaces that close the channel. The outer wall closes it
     everywhere and the cavity wall closes it harder near the X axis, and
     that wall is nowhere in the radii the channel is revolved from, so probing at
@@ -364,10 +384,17 @@ def led_ring(front):
             deg = round(math.degrees(a))
             cos_a, sin_a = math.cos(a), math.sin(a)
             crop = _Crop(sector, *_ring_crop_box(wx, wy, r_web, r_out, [a], z0))
-            # The ceiling is an arch and is lowest at the far end of this
-            # ray, so every reading on it stays under that.
+            # The ceiling changes along this ray, so every reading on it stays
+            # under the lowest ceiling over the roof flat. On a bearing where
+            # the ceiling is raised, that is above the arch, so the void probe
+            # also proves the raise.
+            flat_in, flat_out = case.led_ring_roof_inner_r(), case.led_ring_flat_outer_r(a)
             z1 = min(
-                case.led_ring_ceiling_at(wx + r * cos_a) for r in (r_web, r_out)
+                case.led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)
+                for r in (
+                    flat_in + (flat_out - flat_in) * k / (RAY_CEILING_SAMPLES - 1)
+                    for k in range(RAY_CEILING_SAMPLES)
+                )
             ) - 0.05
 
             web = Pos(
@@ -397,7 +424,7 @@ def led_ring(front):
                     f"channel down to {outer - inner:.2f} at {deg} degrees, wants "
                     f"{ROOF_FLAT_MIN:.2f}: it runs {inner:.2f} to {outer:.2f} there, "
                     f"against an inner wall at {case.led_ring_inner_r():.2f} and an "
-                    f"outer one at {case.led_ring_roof_outer_r():.2f}"
+                    f"outer one at {flat_out:.2f}"
                 )
                 continue
 
@@ -415,9 +442,7 @@ def led_ring(front):
                 )
 
             floor = case.face_floor_at(rx, ry)
-            ceiling = max(
-                case.led_ring_ceiling_at(rx + d) for d in (-PROBE_D / 2, PROBE_D / 2)
-            )
+            ceiling = _ceiling_span(rx, ry, PROBE_D / 2)[1]
             roof = Pos(rx, ry, (ceiling + floor) / 2) * Cylinder(
                 radius=PROBE_D / 2, height=floor - ceiling - 0.04
             )
@@ -431,38 +456,32 @@ INNER_CHAMFER_TOLERANCE = 0.05
 
 
 def inner_chamfer_is_cut(front, front_fdm):
-    """Read the new inner bevel from both built channels at three heights.
+    """Read the inner bevel from both built channels at three heights.
 
     The FDM channel is only a little taller than the bevel, so probes stay
     inside the bevel itself rather than on its nearly vanished upright foot.
     Four bearings also catch a section clipped or omitted on one side.
 
-    The recessed front's ceiling is an arch, which cuts the bevel short
-    on the east and west bearings. There a height counts only while it stays
-    INNER_CHAMFER_TOLERANCE under what led_ring_chamfer_at() says is left.
+    The recessed front's ceiling changes around the ring, and the bevel hangs
+    the full LED_RING_INNER_CHAMFER from it on every bearing. So on each
+    bearing the heights are measured up from LED_RING_INNER_CHAMFER under that
+    bearing's own led_ring_bevel_top(), the east and west bearings included.
     """
     problems = []
     wx, wy = board.wheel_center()
     r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
     r_out = case.led_ring_mouth_outer_r()
     for label, shell, fdm in (("recessed", front, False), ("FDM", front_fdm, True)):
-        top = case.led_ring_top(fdm)
-        base = top - params.LED_RING_INNER_CHAMFER
         for i in range(4):
             angle = i * math.pi / 2
             crop = _Crop(
                 shell,
                 *_ring_crop_box(wx, wy, r_web, r_out, [angle], case.CAVITY_FRONT),
             )
-            left = (
-                params.LED_RING_INNER_CHAMFER
-                if fdm
-                else case.led_ring_chamfer_at(angle)
-            )
+            top = case.led_ring_top(True) if fdm else case.led_ring_bevel_top(angle)
+            base = top - params.LED_RING_INNER_CHAMFER
             for fraction in (0.25, 0.5, 0.75):
                 rise = fraction * params.LED_RING_INNER_CHAMFER
-                if rise > left - INNER_CHAMFER_TOLERANCE:
-                    continue
                 z = base + rise
                 width = _channel_width(crop, angle, z)
                 if width is None:

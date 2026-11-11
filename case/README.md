@@ -44,7 +44,7 @@ Both versions use the same back shell, IR window, interior, and board position. 
 | Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
 | Face height | Base level | `FDM_FACE_DROP` lower |
 | Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
-| LED ring channel | Full depth | Half depth, for a thicker roof |
+| LED ring channel | Full depth, with an even roof under the face | Half the arch depth, for a thicker roof |
 | Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
 | Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
 | Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
@@ -204,7 +204,9 @@ Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall w
 
 Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
 
-The LED ring channel ceiling does not follow the face. A ceiling under the face would drop below the cavity ceiling at the channel mouth. The ceiling is a circular arch of its own instead, `LED_RING_SAG` lower at each side wall. The roof over the channel is `LED_RING_ROOF` thick on the crown line, under the undished face. The face falls faster than the ceiling at the east and west sides of the knob, so the roof is thinner there. The ring roof check holds it above its floor.
+The LED ring channel ceiling keeps a vertical roof of `LED_RING_FACE_ROOF` under the built face, so the six LEDs glow through an even roof. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. At the east and west sides of the knob, the face falls steeply to the arch. There the arch holds the ceiling up, so the channel keeps its height and the roof is thinner. The ring roof check holds the roof above its floor.
+
+The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling on every bearing. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
 
 A straight chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the matte face and the glossy dish. In each section across the rim, it goes straight from the face at the rim down to the dish floor. It has a crease at each edge and no step. It replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
@@ -240,7 +242,7 @@ The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed
 
 On the recessed front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
 
-`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. The LED ring channel is half-depth on this front, leaving a thicker printable roof. Run `check.py --only fdm` to validate it.
+`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the recessed front's arch depth, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
 
 ## Assembly
 

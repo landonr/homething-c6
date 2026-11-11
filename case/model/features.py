@@ -339,11 +339,19 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         ),
+        # The recessed channel's sections take their ceiling from helpers, so
+        # those helpers' parameters move its box too.
         _entry(
             "led_ring_channel",
             "wheel_ring.led_ring_channel",
             "cut",
             wheel_ring.led_ring_channel(fdm),
+            None if fdm else sorted(set(
+                _reads("wheel_ring.led_ring_channel")
+                + _reads("wheel_ring._ring_section")
+                + _reads("wheel_ring.led_ring_ceiling_under")
+                + _reads("wheel_ring.led_ring_ceiling_at")
+            )),
         ),
         _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)),
     ]

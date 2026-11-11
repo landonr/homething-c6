@@ -70,7 +70,7 @@ import board
 import case
 import params
 
-from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _ray_runs, _volume
+from .common import CROP_MARGIN, RUN_MIN, TOLERANCE, Problem, _Crop, _ray_runs, _volume
 from .keypad import LAND_FLOOR_MIN, _probe_sites
 from .wheel_ring import ROOF_LEFT_MIN
 
@@ -724,36 +724,103 @@ def ceilings_hold(front):
     return problems
 
 
+RAKE_PROBE_FRACTIONS = (0.25, 0.6)
+"""Heights, as fractions of the outer rake's own height above its foot, where
+_rake_height() reads the recessed front's 45 degree outer rake. Both are well
+over the plumb part at the mouth and well under the ceiling, so each ray meets
+the rake."""
+
+PLUMB_PROBE_RISE = 0.02
+"""Least height over CAVITY_FRONT where _rake_height() reads the plumb part of
+the recessed front's outer wall. The ray goes halfway up the plumb part, but
+not lower than this, so it does not run along the cavity ceiling. Where the
+plumb part is shorter than twice this, the ray meets the foot of the rake, and
+the foot that it gives is at most this much too high."""
+
+CEILING_PROBE_INSET = 0.05
+"""How far inside the outer end of the roof flat _rake_height() reads the
+ceiling at the top of the rake, so that its vertical ray meets the ceiling and
+not the rake."""
+
+
+def _rake_height(shell, angle):
+    """Height of the 45 degree outer rake of the channel on the built recessed
+    front, on the bearing `angle`, or None if a ray cannot read it.
+
+    The outer wall is plumb at the mouth, then rakes in up to the ceiling. Two
+    horizontal rays read the rake. One horizontal ray under the rake reads the
+    plumb part. The foot of the rake is the height where the line through the
+    two rake readings meets the plumb radius. Each horizontal ray starts in the
+    void at the middle of the roof flat. One vertical ray just inside the outer
+    end of the roof flat reads the ceiling, which is the top of the rake."""
+    wx, wy = board.wheel_center()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    flat_out = case.led_ring_flat_outer_r(angle)
+    mouth = case.led_ring_mouth_outer_r()
+    r0 = (case.led_ring_roof_inner_r() + flat_out) / 2
+    r1 = mouth + CROP_MARGIN
+
+    def wall(z):
+        runs = _ray_runs(
+            shell,
+            (wx + r0 * cos_a, wy + r0 * sin_a, z),
+            (wx + r1 * cos_a, wy + r1 * sin_a, z),
+        )
+        if not runs or runs[0][0] <= RUN_MIN:
+            return None
+        return r0 + runs[0][0]
+
+    foot = case.led_ring_rake_foot(angle)
+    rise = mouth - flat_out
+    za, zb = (foot + f * rise for f in RAKE_PROBE_FRACTIONS)
+    plumb = max(foot - case.CAVITY_FRONT, 2 * PLUMB_PROBE_RISE)
+    zp = case.CAVITY_FRONT + plumb / 2
+    ra, rb, rp = wall(za), wall(zb), wall(zp)
+
+    rc = flat_out - CEILING_PROBE_INSET
+    xc, yc = wx + rc * cos_a, wy + rc * sin_a
+    start = case.SHELL_FRONT + CROP_MARGIN
+    runs = _ray_runs(shell, (xc, yc, start), (xc, yc, case.CAVITY_FRONT - CROP_MARGIN))
+    if None in (ra, rb, rp) or rb == ra or not runs:
+        return None
+    top = start - runs[0][1]
+    bottom = za + (rp - ra) * (zb - za) / (rb - ra)
+    return top - bottom
+
+
 def led_channel_is_half_depth(front, recessed_front):
     """Measure the two built channel depths and hold the FDM ratio.
 
-    A vertical ray through the roof flat returns its first material run. The
-    bottom of that run is the top of the channel void, regardless of whether
-    the outer surface above it is the recessed dish or the FDM groove. Four
-    diagonal bearings on the FDM front stay away from the cavity-wall chords at
-    the case sides. The recessed front's channel ceiling is an arch, so it
-    is read at the two bearings on the crown line, north and south of the
-    wheel, where the arch does not lower it.
+    On the FDM front, a vertical ray through the roof flat returns its first
+    material run. The bottom of that run is the top of the channel void, under
+    the FDM groove or the flat face. Four diagonal bearings stay away from the
+    cavity-wall chords at the case sides.
+
+    The recessed front's ceiling rises off its arch under the face, so its own
+    ceiling is not the depth that the FDM front is a fraction of. That depth is
+    the arch's crown over CAVITY_FRONT. The outer rake keeps that height on the
+    crown line, and the raised ceiling only lifts it on a plumb part at the
+    mouth. _rake_height() reads the rake on the two bearings on the crown line,
+    north and south of the wheel, where the arch is highest.
     """
     wx, wy = board.wheel_center()
     radius = (case.led_ring_roof_inner_r() + case.led_ring_roof_outer_r()) / 2
     diagonals = (math.pi / 4, 3 * math.pi / 4, 5 * math.pi / 4, 7 * math.pi / 4)
     crown = (math.pi / 2, 3 * math.pi / 2)
 
-    def depths(shell, face, bearings):
-        values = []
-        top = face + FACE_PROBE_START
-        for angle in bearings:
-            x = wx + radius * math.cos(angle)
-            y = wy + radius * math.sin(angle)
-            runs = _ray_runs(shell, (x, y, top), (x, y, case.CAVITY_FRONT - 0.2))
-            if runs:
-                channel_top = top - runs[0][1]
-                values.append(channel_top - case.CAVITY_FRONT)
-        return values
-
-    full = depths(recessed_front, case.SHELL_FRONT, crown)
-    fdm = depths(front, case.FDM_FACE, diagonals)
+    fdm = []
+    top = case.FDM_FACE + FACE_PROBE_START
+    for angle in diagonals:
+        x = wx + radius * math.cos(angle)
+        y = wy + radius * math.sin(angle)
+        runs = _ray_runs(front, (x, y, top), (x, y, case.CAVITY_FRONT - 0.2))
+        if runs:
+            fdm.append(top - runs[0][1] - case.CAVITY_FRONT)
+    full = [
+        h
+        for h in (_rake_height(recessed_front, angle) for angle in crown)
+        if h is not None
+    ]
     if len(full) != len(crown) or len(fdm) != len(diagonals):
         return [
             Problem(
@@ -771,8 +838,9 @@ def led_channel_is_half_depth(front, recessed_front):
         return [
             Problem(
                 f"the built FDM LED channel is {fdm_depth:.2f} deep against the "
-                f"recessed front's {full_depth:.2f}, a {ratio:.3f} ratio where "
-                f"FDM_LED_RING_DEPTH_RATIO says {params.FDM_LED_RING_DEPTH_RATIO:.3f}",
+                f"recessed front's {full_depth:.2f} arch depth, a {ratio:.3f} "
+                f"ratio where FDM_LED_RING_DEPTH_RATIO says "
+                f"{params.FDM_LED_RING_DEPTH_RATIO:.3f}",
                 at=(wx, wy, case.CAVITY_FRONT + fdm_depth),
                 part="c6remote-case-front-fdm",
             )

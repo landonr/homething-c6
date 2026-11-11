@@ -542,7 +542,7 @@ def _led_channel_is_half_depth(s):
     return _report(
         led_channel_is_half_depth(s.front_fdm, s.front),
         f"the FDM LED ring channel is "
-        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's depth",
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's arch depth",
     )
 
 

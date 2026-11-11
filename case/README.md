@@ -161,12 +161,7 @@ A white filament also works. The roof over the LED ring channel is `LED_RING_FAC
 </p>
 <p align="center"><sub>White front with the status LEDs on</sub></p>
 
-A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through. The comparison shows the glow through the old roof and through the even roof.
-
-<p align="center">
-  <img alt="Two white c6remote fronts with the status LEDs on. The front with the even roof over the LED ring channel shows a slightly brighter ring nearer the wheel. A second row shows only the LED light for each front" src="../docs/readme-assets/case-white-roof-glow.png" width="450">
-</p>
-<p align="center"><sub>Old roof (left) and even roof (right) in a white shell</sub></p>
+A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through.
 
 The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
 

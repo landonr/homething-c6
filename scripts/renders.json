@@ -114,11 +114,54 @@
     "recipe": [
       "The renders read the case and board geometry that refresh-assets.sh copies into the assets/ set of the viewer.",
       "case-assembled.png and the three case-annotated PNGs are 900 px wide. case-exploded.png is 1200 px wide. All five use 1600 samples from their presets.",
-      "case-annotated-front-white.png uses the readme-annotated-front preset with the white colorway, so the status LEDs glow through a white shell.",
+      "case-annotated-front-white.png uses the readme-annotated-front preset with the white colorway, so the status LEDs glow through a white shell. The white colorway renders the shell with random-walk subsurface scattering, so the glow depends on the wall thickness.",
       "render-case-explode-loop.sh writes a 720x540 WebP at 15 fps for 15.6 s and 256 samples for each frame.",
       "Each render writes a dated file in c6remote-explode. The cp steps copy the newest dated file without a change.",
       "The presets and the render scripts are in c6remote-explode, so the fingerprint cannot see a change to them.",
       "After you refresh this group, refresh case-annotated and site-media too, because they read these files."
+    ]
+  },
+  "case-white-roof-glow": {
+    "description": "The white-shell comparison in case/README.md: the status LED glow through the old LED ring roof and through the thin roof.",
+    "made_by": "c6remote-explode",
+    "outputs": [
+      "docs/readme-assets/case-white-roof-glow.png"
+    ],
+    "inputs": [
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "scripts/board_extras.py",
+      "case/case.py",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "export EXPLODE=\"${C6REMOTE_EXPLODE:-$PWD/../c6remote-explode}\"; R=\"$PWD\"; T=\"$(mktemp -d)\"",
+      "scripts/export-case-refs.sh",
+      "case/.venv/bin/python case/case.py",
+      "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
+      "git worktree add --detach \"$T/old\" 6a8f97854bcd8603a810916dbab511e3528243ac",
+      "ln -sfn \"$R/case/board/c6remote-board.step\" \"$T/old/case/board/c6remote-board.step\"; ln -sfn \"$R/case/board/c6remote-board.glb\" \"$T/old/case/board/c6remote-board.glb\"",
+      "(cd \"$T/old\" && \"$R/case/.venv/bin/python\" case/case.py)",
+      "cp -R \"$EXPLODE/assets\" \"$T/geo-old\" && cp \"$T/old/case/export/c6remote-case-front.stl\" \"$T/geo-old/\"",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --out \"$T/new-on.png\")",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --leds off --out \"$T/new-off.png\")",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --geometry \"$T/geo-old\" --out \"$T/old-on.png\")",
+      "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --geometry \"$T/geo-old\" --leds off --out \"$T/old-off.png\")",
+      "for r in old new; do for s in on off; do magick \"$T/$r-$s.png\" -background white -flatten -crop 900x1150+0+60 +repage \"$T/$r-$s-c.png\"; done; magick \"$T/$r-on-c.png\" \"$T/$r-off-c.png\" -compose minus_src -composite -evaluate multiply 4 \"$T/$r-glow.png\"; done",
+      "magick -size 900x64 -background white -fill black -gravity center -pointsize 18 label:\"White shell, status LEDs on. Left: old roof. Right: thin roof.\\nBottom row: the LED light alone, four times brighter.\" \"$T/title.png\"",
+      "magick \"$T/title.png\" \\( \\( \"$T/old-on-c.png\" -resize 50% \\) \\( \"$T/new-on-c.png\" -resize 50% \\) +append \\) \\( \\( \"$T/old-glow.png\" -resize 50% \\) \\( \"$T/new-glow.png\" -resize 50% \\) +append \\) -append -strip docs/readme-assets/case-white-roof-glow.png",
+      "git worktree remove --force \"$T/old\"",
+      "python3 scripts/render-status.py --write case-white-roof-glow"
+    ],
+    "recipe": [
+      "The old roof is the front shell at 6a8f978, the last develop commit before LED_RING_FACE_ROOF. The thin roof is the working tree.",
+      "All four renders use the readme-annotated-front preset with the white colorway, 1600 samples and 900 px wide. Two have the status LEDs on and two have them off.",
+      "The bottom row is the LEDs-on render less the LEDs-off render, four times brighter, so it shows only the LED light that passes through the roof.",
+      "The white colorway renders the shell with random-walk subsurface scattering, so the glow depends on the wall thickness. The preset and the material are in c6remote-explode, so the fingerprint cannot see a change to them."
     ]
   },
   "case-annotated": {

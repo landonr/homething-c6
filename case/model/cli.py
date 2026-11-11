@@ -74,7 +74,9 @@ from .mic import (
 from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
+    LED_RING_STATIONS,
     LED_RING_TOP,
+    led_ring_bevel,
     led_ring_bevel_top,
     led_ring_ceiling_at,
     led_ring_clip_reach,
@@ -305,13 +307,19 @@ def main():
     print(
         f"  ceiling raised off the arch to keep {params.LED_RING_FACE_ROOF:.2f} "
         f"of translucent roof under the built face wherever that is higher, "
-        f"so the roof is {ring_roof_left():.2f} at its thinnest, where the face "
-        f"falls to the arch; at the inner bevel's top it stands "
+        f"so the roof is {ring_roof_left():.2f} at its thinnest; at the inner "
+        f"bevel's top it stands "
         + ", ".join(f"{side} {z:.2f}" for side, z in bevel.items())
     )
+    legs = [
+        led_ring_bevel(2 * math.pi * i / LED_RING_STATIONS)
+        for i in range(LED_RING_STATIONS)
+    ]
+    short = [leg for leg in legs if leg < params.LED_RING_INNER_CHAMFER]
     print(
-        f"  the {params.LED_RING_INNER_CHAMFER:.2f} inner chamfer is full all "
-        f"the way round, down from the local ceiling, and leaves at least "
+        f"  the {params.LED_RING_INNER_CHAMFER:.2f} inner chamfer hangs from the "
+        f"local ceiling, shortened to {min(legs):.2f} on {len(short)} of "
+        f"{len(legs)} stations where the channel is shallow, and leaves at least "
         f"{led_ring_inner_foot():.2f} of upright inner wall over the cavity "
         f"ceiling"
     )
@@ -525,8 +533,8 @@ def main():
     )
     print(
         f"  every counterbore inside the rim, thinnest land {lands[0][0]:.2f} at "
-        f"{lands[0][1]}; ring roof down to {ring_roof_left():.2f} where the face "
-        f"falls to the channel arch"
+        f"{lands[0][1]}; ring roof down to {ring_roof_left():.2f} at its "
+        f"thinnest, against LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}"
     )
     print(
         f"pad two lobes, {params.PAD_MARGIN:.1f} of web past each island's own "

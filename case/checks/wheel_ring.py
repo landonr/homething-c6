@@ -179,11 +179,16 @@ ring glowing through a slit narrower than this is not the ring the feature is
 for. One value for both passes because both measure the same thing, the gap
 between whatever two surfaces are closest at the roof."""
 
-ROOF_LEFT_MIN = 0.5
-"""Thinnest translucent roof the ring may glow through, wherever the keypad
-recess crosses the channel. Bounded by the print, a roof this thin bridging a
-void, rather than by anything optical: the shell diffuses better the thicker it
-is, so nothing optical wants it near the floor."""
+ROOF_LEFT_MIN = 0.78
+"""Thinnest translucent roof the ring may glow through, anywhere on the roof
+flat. The print sets this limit, not the light: a thicker shell diffuses
+better, but less light gets through it. PCBWay publishes a minimum wall of
+0.8 mm for SLA resin, and a thinner wall puts the order on hold.
+LED_RING_FACE_ROOF is that minimum, and this floor is just under it. The
+difference allows for the ruled loft's chords and the fitted face.
+
+checks/fdm.py holds the FDM front's roof to the same floor. That roof is much
+thicker, because the FDM front's channel stops lower."""
 
 LED_RING_SAMPLES = 24
 """Angles sampled around the channel for led_ring: 15 degrees apart, a few
@@ -388,7 +393,8 @@ def led_ring(front):
             # under the lowest ceiling over the roof flat. On a bearing where
             # the ceiling is raised, that is above the arch, so the void probe
             # also proves the raise.
-            flat_in, flat_out = case.led_ring_roof_inner_r(), case.led_ring_flat_outer_r(a)
+            flat_in = case.led_ring_bevel_edge_r(a)
+            flat_out = case.led_ring_flat_outer_r(a)
             z1 = min(
                 case.led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)
                 for r in (
@@ -454,6 +460,11 @@ def led_ring(front):
 INNER_CHAMFER_TOLERANCE = 0.05
 """Allowance when rays measure the 45 degree inner LED channel wall."""
 
+FOOT_PROBE_DROP = 0.02
+"""How far under the top of the recessed channel's upright inner foot the foot
+reading stands. Far enough that the bevel's foot edge does not touch the ray,
+and near enough that a bevel only a little too low moves the wall out there."""
+
 
 def inner_chamfer_is_cut(front, front_fdm):
     """Read the inner bevel from both built channels at three heights.
@@ -463,9 +474,16 @@ def inner_chamfer_is_cut(front, front_fdm):
     Four bearings also catch a section clipped or omitted on one side.
 
     The recessed front's ceiling changes around the ring, and the bevel hangs
-    the full LED_RING_INNER_CHAMFER from it on every bearing. So on each
-    bearing the heights are measured up from LED_RING_INNER_CHAMFER under that
-    bearing's own led_ring_bevel_top(), the east and west bearings included.
+    from it. On each bearing the bevel is led_ring_bevel(): the full
+    LED_RING_INNER_CHAMFER, or shorter at the east and west sides, where the
+    channel is shallow. So on each bearing the heights are fractions of that
+    bearing's own bevel, measured up from its foot under led_ring_bevel_top().
+
+    On the recessed front one more reading stands just under the top of the
+    upright foot, LED_RING_INNER_FOOT_MIN above CAVITY_FRONT. There the inner
+    wall must still be at led_ring_inner_r(). A bevel that reaches lower than
+    the model says moves the wall out at that height, and the reading catches
+    it. The east and west bearings are where the foot is shortest.
     """
     problems = []
     wx, wy = board.wheel_center()
@@ -479,9 +497,10 @@ def inner_chamfer_is_cut(front, front_fdm):
                 *_ring_crop_box(wx, wy, r_web, r_out, [angle], case.CAVITY_FRONT),
             )
             top = case.led_ring_top(True) if fdm else case.led_ring_bevel_top(angle)
-            base = top - params.LED_RING_INNER_CHAMFER
+            leg = params.LED_RING_INNER_CHAMFER if fdm else case.led_ring_bevel(angle)
+            base = top - leg
             for fraction in (0.25, 0.5, 0.75):
-                rise = fraction * params.LED_RING_INNER_CHAMFER
+                rise = fraction * leg
                 z = base + rise
                 width = _channel_width(crop, angle, z)
                 if width is None:
@@ -491,15 +510,30 @@ def inner_chamfer_is_cut(front, front_fdm):
                     )
                     continue
                 inner = width[0]
-                want = (
-                    case.led_ring_inner_r()
-                    + fraction * params.LED_RING_INNER_CHAMFER
-                )
+                want = case.led_ring_inner_r() + fraction * leg
                 if abs(inner - want) > INNER_CHAMFER_TOLERANCE:
                     problems.append(
                         f"{label} LED inner chamfer stands at radius {inner:.2f} "
                         f"at {i * 90} degrees, z={z:.2f}, wants {want:.2f}"
                     )
+            if fdm:
+                continue
+            z = case.CAVITY_FRONT + params.LED_RING_INNER_FOOT_MIN - FOOT_PROBE_DROP
+            width = _channel_width(crop, angle, z)
+            if width is None:
+                problems.append(
+                    f"recessed LED channel has no inner wall at {i * 90} "
+                    f"degrees, z={z:.2f}, in its upright foot"
+                )
+                continue
+            want = case.led_ring_inner_r()
+            if abs(width[0] - want) > INNER_CHAMFER_TOLERANCE:
+                problems.append(
+                    f"recessed LED inner wall stands at radius {width[0]:.2f} at "
+                    f"{i * 90} degrees, z={z:.2f}, wants {want:.2f}: the inner "
+                    f"bevel reaches into the LED_RING_INNER_FOOT_MIN "
+                    f"{params.LED_RING_INNER_FOOT_MIN:.2f} of upright wall"
+                )
     return problems
 
 

@@ -665,7 +665,9 @@ def _inner_chamfer_is_cut(s):
     return _report(
         inner_chamfer_is_cut(s.front, s.front_fdm),
         f"both LED channels have a {params.LED_RING_INNER_CHAMFER:.2f} mm "
-        "chamfer at the inner roof edge",
+        "chamfer at the inner roof edge, shorter on the recessed front where "
+        f"its channel is shallow, over {params.LED_RING_INNER_FOOT_MIN:.2f} mm "
+        "of upright inner wall",
     )
 
 

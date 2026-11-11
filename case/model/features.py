@@ -349,6 +349,7 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             None if fdm else sorted(set(
                 _reads("wheel_ring.led_ring_channel")
                 + _reads("wheel_ring._ring_section")
+                + _reads("wheel_ring.led_ring_bevel")
                 + _reads("wheel_ring.led_ring_ceiling_under")
                 + _reads("wheel_ring.led_ring_ceiling_at")
             )),

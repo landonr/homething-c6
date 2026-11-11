@@ -727,7 +727,7 @@ instead."""
 # channel and reads as a ring on the face instead of six dots. The channel is
 # open to the cavity below (the pad's wheel cut already uncovers the LEDs) and
 # roofed by translucent shell, which is the diffuser. On the recessed front the
-# roof is LED_RING_FACE_ROOF under the face, except where the arch holds it up.
+# roof is LED_RING_FACE_ROOF under the face all the way round.
 LED_RING_WALL = 1.0
 """Web between the wheel opening's bore and the channel's inner wall. It is what
 keeps the opening a closed cylinder the wheel seats against, and it is the
@@ -737,14 +737,21 @@ The check still probes it on the built shell rather than trusting the sum."""
 LED_RING_INNER_CHAMFER = 0.53
 """45 degree bevel at the inner wall's top edge on both LED channels. It steps
 0.53 mm out from the inner wall and 0.53 mm down from the channel ceiling at the
-top of the bevel. On the recessed front that ceiling changes around the ring.
-The bevel follows it, so the bevel is the full height on every bearing. The
-inner wall stays upright below the bevel.
+top of the bevel. The inner wall stays upright below the bevel. On the FDM front
+the bevel uses nearly all of the wall.
 
-The bevel must stay shorter than the lowest inner wall, so the channel stays
-open to the cavity below. On the recessed front the inner wall is lowest at the
-east and west sides, where the ceiling is lowest. On the FDM front the bevel
-uses nearly all of the wall."""
+On the recessed front the ceiling changes around the ring, and the bevel hangs
+from the local ceiling. At the east and west sides the channel is too shallow
+for the full bevel. There the bevel shortens and stays at 45 degrees, so that
+LED_RING_INNER_FOOT_MIN of upright inner wall stays above CAVITY_FRONT.
+wheel_ring.led_ring_bevel() gives the bevel on each bearing. Everywhere else
+the bevel is this value."""
+LED_RING_INNER_FOOT_MIN = 0.12
+"""Least upright inner wall that the recessed front's LED ring channel keeps
+above CAVITY_FRONT, below the inner bevel. Where the channel is too shallow for
+the full LED_RING_INNER_CHAMFER, the bevel shortens to keep this much wall. The
+channel is shallowest at the east and west sides of the knob. The FDM front
+does not use this value."""
 LED_RING_CHAMFER = 0.0
 """How much wider than its nominal radius the channel's outer wall opens at the
 mouth. That wall rakes at 45 degrees, so this is also how far above the foot of
@@ -786,53 +793,52 @@ arch. LED_RING_TOP, the arch's crown, is SHELL_FRONT less this value.
 
 The arch is the lowest that the channel ceiling can be. The ceiling rises off
 the arch to keep LED_RING_FACE_ROOF of roof under the built face. As a result,
-the roof on the crown line is LED_RING_FACE_ROOF, not this value.
+the roof is LED_RING_FACE_ROOF, not this value.
 
-The ceiling does not drop below the arch, so the channel is never shallower
-than the arch makes it. The face falls steeply at the east and west sides of
-the knob, to within LED_RING_FACE_ROOF of the arch. The arch, LED_RING_SAG
-lower at each side wall, holds the ceiling up there, so the roof is thinner.
+The arch stays below the face less LED_RING_FACE_ROOF everywhere on the roof
+flat, so the ceiling follows the face all the way round. The keypad recess
+sinks the face where the wheel basin's diagonals and both necks cross the
+channel, and the ceiling goes down with the face there. check.py's ring stack
+guard walks the whole annulus and holds a floor under the thinnest roof.
 
-The keypad recess sinks the face where the wheel basin's diagonals and both
-necks cross the channel. The ceiling goes down with the face until the arch
-stops it. check.py's ring stack guard walks the whole annulus and holds a floor
-under the thinnest roof.
-
-A smaller value raises the arch. The roof at the east and west sides then gets
-thinner, and LED_RING_SAG must grow to keep it. The 45 degree line up from the
-mouth also meets the higher arch nearer the wheel. The outer rake ends at that
-radius, so the roof flat gets narrower. The FDM front's channel depth is a
-fraction of the arch's depth on the crown line, so a change here also changes
-the FDM front."""
-LED_RING_FACE_ROOF = 0.6
+A smaller value raises the arch. If the arch rises above the face less
+LED_RING_FACE_ROOF at the east and west sides, the arch holds the ceiling up
+there and the roof gets thinner, so LED_RING_SAG must grow to keep it. The 45
+degree line up from the mouth also meets the higher arch nearer the wheel. The
+outer rake ends at that radius, so the roof flat gets narrower. The FDM front's
+channel depth is a fraction of the arch's depth on the crown line, so a change
+here also changes the FDM front."""
+LED_RING_FACE_ROOF = 0.8
 """Vertical roof that the recessed front's LED ring channel keeps under the
-built face, where the arch is lower than the face less this value. The ceiling
-is at the face less this value there. As a result, the roof has this thickness
-over the diagonals and north and south of the knob. The six LEDs then glow
-through an even roof, and more light gets through a near-opaque white material.
+built face. The ceiling is at the face less this value all the way round,
+because LED_RING_SAG keeps the arch below it. As a result, the six LEDs glow
+through an even roof, and light gets through a near-opaque white material.
 
-The ceiling only rises off the arch. At the east and west sides of the knob the
-face falls to the arch, and the arch keeps the ceiling there. ROOF_LEFT_MIN in
-checks/wheel_ring.py sets the lower limit, because the roof must bridge the
-void in print. The FDM front does not use this value."""
-LED_RING_SAG = 0.7
+This value is the minimum wall that PCBWay publishes for SLA resin.
+ROOF_LEFT_MIN in checks/wheel_ring.py holds the thinnest roof just under it.
+A smaller value lets more light through but is under that minimum. A larger
+value makes the channel shallower, most at the east and west sides of the knob,
+where the face is lowest. The FDM front does not use this value."""
+LED_RING_SAG = 1.1
 """How far the LED ring channel's arch falls from LED_RING_TOP on the crown
 line to each exterior side wall. The arch is a circular arc with its axis along
 y.
 
 The ceiling is the arch, or LED_RING_FACE_ROOF under the built face where that
 is higher. At the east and west sides of the knob the face falls faster than
-this arch. The ceiling is the arch there, so the roof is thinner than
-LED_RING_FACE_ROOF. A larger value lowers the arch there, so the ceiling
-follows the face further around the ring and the roof is more even. The ring
-roof floor in checks/wheel_ring.py sets the lower limit.
+the arch. This value lowers the arch there, below the face less
+LED_RING_FACE_ROOF. As a result, the ceiling follows the face all the way round
+and the roof is LED_RING_FACE_ROOF everywhere. A smaller value lets the arch
+hold the ceiling up at the east and west sides, and the roof there gets thinner.
+The ring roof floor in checks/wheel_ring.py catches that.
 
 A lower arch also meets the 45 degree line up from the mouth further out, so the
 roof flat gets wider near the side walls. The outer rake then starts higher at
 the mouth, so the plumb part of the outer wall below the rake gets taller. The
-inner bevel is the full LED_RING_INNER_CHAMFER down from the ceiling. Where
-the arch is the ceiling, a lower arch leaves less upright inner wall above
-CAVITY_FRONT. If none is left, led_ring_channel() stops with an error."""
+inner bevel hangs from the ceiling, and the ceiling at the east and west sides
+is the face less LED_RING_FACE_ROOF. There the channel is too shallow for the
+full LED_RING_INNER_CHAMFER, so the bevel shortens to keep
+LED_RING_INNER_FOOT_MIN of upright inner wall."""
 # Apertures in the back shell
 MIC_THROAT_MARGIN = 2 * BOARD_FIT
 """How much wider than the board's own acoustic port the inlet's throat is,

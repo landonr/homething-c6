@@ -13,13 +13,14 @@ light's way entirely and the light pipe is now a void inside the shell: an
 annular channel circling the wheel opening, open to the cavity below, under a
 roof of translucent shell. On the recessed front the ceiling is
 LED_RING_FACE_ROOF under the built face, or the arch where the arch is higher.
-The inner wall is upright below a 45 degree bevel at the ceiling, so the web to
-the wheel's bore is at least LED_RING_WALL. The outer wall is plumb at the
-mouth, then rakes in at 45 degrees up to the ceiling. Where the ceiling is
-above the arch, the rake starts that much higher, so the roof flat keeps its
-width. The light enters across the flare of the rake. The six LEDs fire up into
-the channel, and the channel carries their light around the wheel, so the face
-shows a ring and not six dots.
+The arch is lower all the way round, so the roof is even. The inner wall is
+upright below a 45 degree bevel at the ceiling, so the web to the wheel's bore
+is at least LED_RING_WALL. The bevel shortens where the channel is shallow.
+The outer wall is plumb at the mouth, then rakes in at 45 degrees up to the
+ceiling. Where the ceiling is above the arch, the rake starts that much higher,
+so the roof flat keeps its width. The light enters across the flare of the
+rake. The six LEDs fire up into the channel, and the channel carries their
+light around the wheel, so the face shows a ring and not six dots.
 """
 
 import functools
@@ -68,9 +69,11 @@ def led_ring_ceiling_at(x):
     circular arc that falls LED_RING_SAG to each side wall.
 
     The arch is the lowest that the ceiling can be, so the channel is never
-    shallower than the arch makes it. At the east and west sides of the knob
-    the face falls steeply to the arch. The arch holds the ceiling up there, so
-    the roof is thinner, and keypad.ring_roof_left() counts that."""
+    shallower than the arch makes it. LED_RING_SAG keeps it below the face less
+    LED_RING_FACE_ROOF on the roof flat, so the ceiling follows the face all
+    the way round. If the arch rises above that at the east and west sides of
+    the knob, it holds the ceiling up and the roof gets thinner, and
+    keypad.ring_roof_left() counts that."""
     return arch_z(x, LED_RING_TOP, params.LED_RING_SAG)
 
 
@@ -80,8 +83,8 @@ def led_ring_ceiling_under(x, y):
     is higher.
 
     The ceiling only rises off the arch. As a result, the roof is never thicker
-    than LED_RING_FACE_ROOF, and it is thinner only where the face falls to the
-    arch."""
+    than LED_RING_FACE_ROOF. It is thinner only where the face falls to the
+    arch, and LED_RING_SAG keeps the arch low enough that it does not."""
     # keypad.py imports this module, so the import must stay local.
     from .keypad import face_floor_at
 
@@ -131,13 +134,55 @@ def led_ring_rake_foot(angle):
     return CAVITY_FRONT + max(0.0, ceiling - rake_top)
 
 
+def led_ring_bevel(angle):
+    """Leg of the recessed channel's 45 degree inner bevel on the bearing
+    `angle`, in radians from +X: how far the bevel steps out from the inner wall
+    and down from the ceiling at its top edge.
+
+    It is LED_RING_INNER_CHAMFER where the channel is tall enough. At the east
+    and west sides of the knob the channel is shallower, and the bevel shortens
+    so that LED_RING_INNER_FOOT_MIN of upright inner wall stays above
+    CAVITY_FRONT. The ceiling at the top edge moves with the leg, so a bisection
+    finds the leg. Zero means that the channel has no height for a bevel at
+    all, and led_ring_channel() stops with an error."""
+    wx, wy = board.wheel_center()
+    inner = led_ring_inner_r()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def spare(leg):
+        r = inner + leg
+        top = led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)
+        return top - CAVITY_FRONT - params.LED_RING_INNER_FOOT_MIN - leg
+
+    full = params.LED_RING_INNER_CHAMFER
+    if spare(full) >= 0:
+        return full
+    if spare(0.0) <= 0:
+        return 0.0
+    lo, hi = 0.0, full
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if spare(mid) >= 0:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def led_ring_bevel_edge_r(angle):
+    """Radius of the recessed channel's inner bevel top edge on the bearing
+    `angle`, in radians from +X. The roof flat starts here. It is
+    led_ring_roof_inner_r() where the bevel is full, and nearer the inner wall
+    where led_ring_bevel() shortens it."""
+    return led_ring_inner_r() + led_ring_bevel(angle)
+
+
 def led_ring_bevel_top(angle):
     """Height of the recessed channel's ceiling at the top edge of the inner
-    bevel, on the bearing `angle`. The bevel goes LED_RING_INNER_CHAMFER down
-    from this height to the inner wall, so it is the full chamfer on every
-    bearing."""
+    bevel, on the bearing `angle`. The bevel goes led_ring_bevel(angle) down
+    from this height to the inner wall."""
     wx, wy = board.wheel_center()
-    r = led_ring_roof_inner_r()
+    r = led_ring_bevel_edge_r(angle)
     return led_ring_ceiling_under(wx + r * math.cos(angle), wy + r * math.sin(angle))
 
 
@@ -267,7 +312,10 @@ def led_ring_mouth_outer_r():
 
 
 def led_ring_roof_inner_r():
-    """Inner edge of the channel roof after the shared top-wall chamfer."""
+    """Inner edge of the channel roof after the full LED_RING_INNER_CHAMFER.
+    This is the FDM front's on every bearing, and the recessed front's wherever
+    its bevel is full. led_ring_bevel_edge_r() gives the recessed front's on
+    each bearing."""
     return led_ring_inner_r() + params.LED_RING_INNER_CHAMFER
 
 
@@ -301,7 +349,8 @@ def led_ring_wall_height(fdm=False):
     On the recessed front the rake has this height on the crown line too, but
     the walls are taller where the ceiling rises off the arch. The outer wall is
     plumb at the mouth below the rake, up to led_ring_rake_foot(), and the inner
-    wall carries its bevel up to the raised ceiling."""
+    wall carries its bevel up to the raised ceiling. Where the ceiling is lower
+    than the arch's crown, at the east and west sides, the walls are shorter."""
     return led_ring_top(fdm) - CAVITY_FRONT
 
 
@@ -328,17 +377,18 @@ def _ring_angles():
 def led_ring_inner_foot():
     """Least upright inner wall that the recessed channel keeps above
     CAVITY_FRONT, below the foot of its inner bevel, over all stations. The
-    bevel hangs from the local ceiling, so this is least where the ceiling is
-    lowest, at the east and west sides."""
-    top = min(led_ring_bevel_top(a) for a in _ring_angles())
-    return top - params.LED_RING_INNER_CHAMFER - CAVITY_FRONT
+    bevel hangs from the local ceiling and shortens where the channel is
+    shallow, so this is LED_RING_INNER_FOOT_MIN at the east and west sides."""
+    foot = min(led_ring_bevel_top(a) - led_ring_bevel(a) for a in _ring_angles())
+    return foot - CAVITY_FRONT
 
 
 def _ring_section(angle):
     """[(r, z)] of the recessed channel's section on the bearing `angle`, as
     radius from the wheel axis and height, in order: the overrun's floor, the
     plumb part of the outer wall at the mouth, the 45 degree outer rake, the
-    ceiling, the inner bevel and the inner wall.
+    ceiling, the inner bevel and the inner wall. The ceiling ends at
+    led_ring_bevel_edge_r(), and the bevel goes led_ring_bevel() down from it.
 
     The rake goes up from the mouth at led_ring_rake_foot() to the ceiling at
     led_ring_flat_outer_r(). Where the ceiling is above the arch there, the
@@ -349,7 +399,8 @@ def _ring_section(angle):
     wx, wy = board.wheel_center()
     cos_a, sin_a = math.cos(angle), math.sin(angle)
     inner, mouth = led_ring_inner_r(), led_ring_mouth_outer_r()
-    flat_in, flat_out = led_ring_roof_inner_r(), led_ring_flat_outer_r(angle)
+    bevel = led_ring_bevel(angle)
+    flat_in, flat_out = inner + bevel, led_ring_flat_outer_r(angle)
     count = LED_RING_CEILING_POINTS
     ceiling = []
     for i in range(count):
@@ -362,7 +413,7 @@ def _ring_section(angle):
         (mouth, z0),
         (mouth, led_ring_rake_foot(angle)),
         *ceiling,
-        (inner, bevel_top - params.LED_RING_INNER_CHAMFER),
+        (inner, bevel_top - bevel),
     ]
 
 
@@ -412,8 +463,11 @@ def led_ring_channel(fdm=False):
     or LED_RING_FACE_ROOF under the built face where that is higher. That
     surface is not a revolution, so the channel is a ruled loft through one
     section at each of LED_RING_STATIONS bearings. The inner wall stands at
-    led_ring_inner_r() and bevels out 45 degrees through the full
-    LED_RING_INNER_CHAMFER, measured down from the local ceiling. The outer
+    led_ring_inner_r() and bevels out 45 degrees through led_ring_bevel(),
+    measured down from the local ceiling. That is the full
+    LED_RING_INNER_CHAMFER except at the east and west sides, where the channel
+    is shallow and the bevel shortens to keep LED_RING_INNER_FOOT_MIN of
+    upright inner wall. The outer
     wall is plumb at the mouth up to led_ring_rake_foot(), then rakes in at 45
     degrees up to the ceiling at led_ring_flat_outer_r(). Where the ceiling is
     above the arch, the rake starts that much higher. As a result, the raised
@@ -433,13 +487,16 @@ def led_ring_channel(fdm=False):
     feather.
     """
     if not fdm:
-        if led_ring_inner_foot() <= 0:
+        least = min(led_ring_bevel(a) for a in _ring_angles())
+        foot = led_ring_inner_foot()
+        if least <= 0 or foot < params.LED_RING_INNER_FOOT_MIN - 1e-6:
             raise ValueError(
-                f"LED_RING_INNER_CHAMFER {params.LED_RING_INNER_CHAMFER:.2f} "
-                f"reaches below CAVITY_FRONT at the inner wall's east and west "
-                f"sides, where LED_RING_SAG {params.LED_RING_SAG:.2f} and "
-                f"LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f} put the "
-                f"lowest ceiling"
+                f"the recessed LED channel has no room for its inner bevel at "
+                f"the inner wall's east and west sides: the bevel is "
+                f"{least:.2f} and leaves {foot:.2f} of upright wall, wants "
+                f"LED_RING_INNER_FOOT_MIN {params.LED_RING_INNER_FOOT_MIN:.2f}. "
+                f"LED_RING_SAG {params.LED_RING_SAG:.2f} and LED_RING_FACE_ROOF "
+                f"{params.LED_RING_FACE_ROOF:.2f} put the ceiling too low there"
             )
         return _recessed_ring_channel()
     x, y = board.wheel_center()

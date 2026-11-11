@@ -70,10 +70,10 @@ from .stack import (
     stem_top,
 )
 from .wheel_ring import (
+    led_ring_bevel_edge_r,
     led_ring_ceiling_under,
     led_ring_clip_reach,
     led_ring_flat_outer_r,
-    led_ring_roof_inner_r,
     pad_clear_y,
 )
 
@@ -895,23 +895,24 @@ def ring_roof_left():
     The roof is the built surface less led_ring_ceiling_under(). That ceiling
     is the arch, or LED_RING_FACE_ROOF under the built face where that is
     higher. As a result, the roof is LED_RING_FACE_ROOF wherever the ceiling
-    follows the face. It is thinner only where the face falls to the arch, at
-    the east and west sides of the knob, where the channel comes near the side
-    walls. Three things dish the face over the channel: the wheel basin past
-    its own half axis on the diagonals, and both necks on their way to the
-    dishes either side. The ceiling goes down with them until the arch stops
-    it, and what they sink past that comes out of this value.
+    follows the face, and LED_RING_SAG keeps the arch low enough that it does
+    all the way round. The roof is thinner only where the face falls to the
+    arch. That can happen at the east and west sides of the knob, where the
+    face is lowest. Three things dish the face over the channel: the wheel
+    basin past its own half axis on the diagonals, and both necks on their way
+    to the dishes either side. The ceiling goes down with them until the arch
+    stops it, and what they sink past that comes out of this value.
 
-    The walk covers the roof flat on each bearing, from the top of the inner
-    bevel out to led_ring_flat_outer_r(). Near the X axis the cavity wall cuts
-    the channel off inside that radius, so there the walk stops at
-    led_ring_clip_reach().
+    The walk covers the roof flat on each bearing, from the top of that
+    bearing's inner bevel, led_ring_bevel_edge_r(), out to
+    led_ring_flat_outer_r(). Near the X axis the cavity wall cuts the channel
+    off inside that radius, so there the walk stops at led_ring_clip_reach().
     """
     wx, wy = board.wheel_center()
-    lo = led_ring_roof_inner_r()
     thinnest = math.inf
     for i in range(RING_ROOF_ANGLES):
         a = 2 * math.pi * i / RING_ROOF_ANGLES
+        lo = led_ring_bevel_edge_r(a)
         hi = min(led_ring_flat_outer_r(a), led_ring_clip_reach(a))
         for j in range(RING_ROOF_RADII):
             r = lo + (hi - lo) * j / (RING_ROOF_RADII - 1)

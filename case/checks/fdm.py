@@ -757,7 +757,7 @@ def _rake_height(shell, angle):
     cos_a, sin_a = math.cos(angle), math.sin(angle)
     flat_out = case.led_ring_flat_outer_r(angle)
     mouth = case.led_ring_mouth_outer_r()
-    r0 = (case.led_ring_roof_inner_r() + flat_out) / 2
+    r0 = (case.led_ring_bevel_edge_r(angle) + flat_out) / 2
     r1 = mouth + CROP_MARGIN
 
     def wall(z):

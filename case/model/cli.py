@@ -30,6 +30,7 @@ from .cell import cell_axis, cell_bay
 from .features import write_features
 from .front_ledge import front_ledge_runs
 from .hardware import (
+    end_screw,
     end_screw_axis,
     end_screw_block_span,
     end_screw_length,
@@ -142,6 +143,7 @@ def main():
         "c6remote-case-back": back_shell(),
         "c6remote-case-pad": button_pad(),
         "c6remote-ir-window": ir_window(),
+        "c6remote-case-screw": end_screw(),
     }
     caps = {f"c6remote-cap-{ref.lower()}": keycap(ref) for ref in cap_refs()}
 
@@ -180,11 +182,11 @@ def main():
     EXPORT.mkdir(exist_ok=True)
     # Where each cap STL goes back to in the case frame, since the file itself no
     # longer says. Anything reassembling the export reads this rather than
-    # rediscovering the switch positions from the board. Caps only: the shells
-    # and the IR window plate are all exported where they belong, so they need
-    # no entry here and adding one would name them keycaps. The blank caps stay
-    # out too, because the viewer loads every entry as a cap. A blank cap goes
-    # where its legend twin goes (same name less "-blank").
+    # rediscovering the switch positions from the board. Caps only: the shells,
+    # the IR window plate and the screw are all exported where they belong, so
+    # they need no entry here and adding one would name them keycaps. The blank
+    # caps stay out too, because the viewer loads every entry as a cap. A blank
+    # cap goes where its legend twin goes (same name less "-blank").
     with (EXPORT / "c6remote-caps.json").open("w") as f:
         json.dump(
             {

@@ -67,6 +67,7 @@ from .fdm import (
 from .hardware import (
     cell_clearance,
     end_screw,
+    end_screw_fit,
     end_screw_grip_corner,
     end_screw_side_tie,
     feature_clashes,
@@ -220,6 +221,10 @@ class Solids:
     @functools.cached_property
     def window(self):
         return case.ir_window()
+
+    @functools.cached_property
+    def screw(self):
+        return case.end_screw()
 
     @functools.cached_property
     def caps(self):
@@ -882,6 +887,15 @@ def _end_screw(s):
 
 
 @_check("hardware")
+def _end_screw_fit(s):
+    return _report(
+        end_screw_fit(s.screw, s.front, s.back),
+        "end screw head seats in its counterbore below the back's outer surface, "
+        "clears the back, and its tip ends inside the pilot",
+    )
+
+
+@_check("hardware")
 def _end_screw_side_tie(s):
     return _report(
         end_screw_side_tie(s.front)
@@ -1257,6 +1271,7 @@ def _parts_are_sound(s):
         "blank V2 TPU pad": s.pad_tpu_v2_blank,
         "moulded V2 top pad": s.pad_v2_top,
         "IR window": s.window,
+        "end screw": s.screw,
         **{f"{ref} cap": cap for ref, cap in s.caps.items()},
         **{f"{ref} blank cap": cap for ref, cap in s.caps_plain.items()},
     }
@@ -1269,7 +1284,7 @@ def _parts_are_sound(s):
 
 @_check("assembly")
 def _interference(s):
-    hits = interference([s.back, s.front, s.window])
+    hits = interference([s.back, s.front, s.window, s.screw])
     if not hits:
         print("no interference")
         return True

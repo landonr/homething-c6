@@ -307,6 +307,12 @@ SHELL_SCREW_HEAD_H = 1.7
 lands a shade below the outer face instead of standing in it. It comes out of
 the end wall rather than out of FLOOR now, and WALL is 3.0 there, so 1.3 of
 wall is left under the head."""
+END_SCREW_HEAD_D = 4.0
+"""Head diameter of the modelled screw, the ISO 7045 dk for M2. It must stay
+under SHELL_SCREW_HEAD_D, or the head runs into the counterbore wall."""
+END_SCREW_HEAD_K = 1.6
+"""Head height of the modelled screw, the ISO 7045 k for M2. It must stay
+under SHELL_SCREW_HEAD_H, or the head stands proud of the end wall."""
 END_SCREW_X_OFFSET = -5.8
 """The screw sits left of centre to keep the USB opening clear.
 The negative sign also selects the left side skirt for the block's tie."""

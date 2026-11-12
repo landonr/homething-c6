@@ -4,6 +4,7 @@ and the block the front carries for it to thread into."""
 import functools
 
 from build123d import (
+    Axis,
     BuildLine,
     BuildSketch,
     Box,
@@ -13,7 +14,9 @@ from build123d import (
     Polyline,
     Pos,
     Rot,
+    chamfer,
     extrude,
+    fillet,
     make_face,
 )
 
@@ -376,6 +379,37 @@ def end_screw_cuts():
         _y_hole(x, z, params.SHELL_SCREW_CLEAR_D, y0, edge - params.BOARD_FIT + 0.1),
         _y_hole(x, z, params.SHELL_SCREW_HEAD_D, y0, outer + params.SHELL_SCREW_HEAD_H),
     ]
+
+
+def end_screw():
+    """The closure screw itself, an M2 x 5 ISO 7045 pan head, where it sits
+    when the case is closed. A reference part for the exports and the viewer.
+    Nobody prints it.
+
+    Placed off the same helpers as end_screw_cuts(): the head's underside sits
+    on the counterbore floor, and the shank runs end_screw_length() along +Y
+    from there into the pilot. The shank has no thread. The cross recess, the
+    top round and the tip chamfer scale off the head and the shank, because
+    they only make the part read as a screw.
+    """
+    x, z = end_screw_axis()
+    floor = end_wall_edge() - LAP_OUT + params.SHELL_SCREW_HEAD_H
+    head_d, k = params.END_SCREW_HEAD_D, params.END_SCREW_HEAD_K
+    shank_d = 2.0  # M2
+    tip = floor + end_screw_length()
+    head = _y_hole(x, z, head_d, floor - k, floor)
+    head = fillet(head.edges().sort_by(Axis.Y)[0], radius=k / 5)
+    # A plain cross stands in for the No. 1 Phillips recess.
+    span, width, depth = head_d / 2, head_d / 8, 0.55 * k
+    # The shank starts inside the head, between the floor and the recess, so
+    # the fuse joins two overlapped solids and not two faces that only touch.
+    shank = _y_hole(x, z, shank_d, floor - (k - depth) / 2, tip)
+    shank = chamfer(shank.edges().sort_by(Axis.Y)[-1], length=shank_d / 10)
+    cross = [
+        Pos(x, floor - k + (depth - MERGE) / 2, z) * Box(*size)
+        for size in ((span, depth + MERGE, width), (width, depth + MERGE, span))
+    ]
+    return _cut(_fuse(head, shank), *cross)
 
 
 def end_screw_wall_chamfer():

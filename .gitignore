@@ -85,6 +85,10 @@ KiCAD-MCP-Server/
 # Local-only Codex instruction override.
 AGENTS.override.md
 
+# Local-only agent skills and personal task notes.
+.agents/
+/TODO.md
+
 # Credentials for the part-sourcing APIs. Kept out of the repo rules until now
 # only because a machine-global excludes file caught it, which no clone inherits.
 **/.env

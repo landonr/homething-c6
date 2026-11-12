@@ -10,9 +10,12 @@
 #   - c6remote-board.glb        mesh assembly for viewers (untracked)
 #
 # J1 uses the stock KiCad PicoBlade 53261-0271 model, so both assembly exports
-# include the battery connector. D2-D7 use the checked-in
-# 3dmodels/WS2812C-2020.step and are present. SW1-SW11 have only the
-# 3dmodels/TL3315NF160Q.wrl model, so the STEP export omits them.
+# include the battery connector. D2-D7 use 3dmodels/WS2812C-2020.step and are
+# present. SW1-SW11 have only the 3dmodels/TL3315NF160Q.wrl model, so the STEP
+# export omits them.
+#
+# The 3dmodels/ models are in the private c6remote-explode repository. Run
+# scripts/link-3dmodels.sh once, or this script stops before it exports.
 #
 # Override the kicad-cli path on non-default installs:
 #   KICAD_CLI=/path/to/kicad-cli scripts/export-case-refs.sh
@@ -28,6 +31,8 @@ if [[ ! -x "$KICAD_CLI" ]]; then
 	echo "error: kicad-cli not found at '$KICAD_CLI' (set KICAD_CLI env var)" >&2
 	exit 1
 fi
+
+"$REPO_ROOT/scripts/check-3dmodels.sh" "$PCB"
 
 mkdir -p "$OUT"
 

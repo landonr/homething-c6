@@ -10,8 +10,18 @@ The `sym-lib-table` file registers these symbol libraries:
 - `ano rotary`: The local `ano rotary.kicad_sym` file contains the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001) symbol.
 - `Seeed_Studio_XIAO_Series`: [Seeed Studio's OPL KiCad library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library) supplies the XIAO module symbols.
 
-The `3dmodels/` directory contains the board models.
-See the [3D model sources](3dmodels/README.md) for the source of each file.
+### 3D models
+
+The custom footprints reference their 3D models in `3dmodels/`.
+This repository does not contain these models, because most are third-party files without a clear right to redistribute.
+The models are in the private `c6remote-explode` repository.
+
+Without the models, the KiCad 3D view shows bare pads for these parts.
+The fabrication outputs, ERC, and DRC do not use the models.
+
+If you have the `c6remote-explode` checkout, run `../scripts/link-3dmodels.sh` once for each clone or worktree.
+The script links `3dmodels/` to the models in that checkout.
+If the checkout is not at `~/dev/c6remote-explode`, set `EXPLODE` to its path.
 
 ## KiCad MCP
 

@@ -70,7 +70,7 @@ The hardware source files are in `c6remote-kicad/`:
 - `ano rotary.kicad_sym` contains only the custom `ENC1` symbol.
 - `Local.kicad_sym` contains `SW_TL3315NF160Q` and `TSOP61xx`.
 - `../kicad lib/Library.pretty/` contains the custom board footprints.
-- `3dmodels/` contains models that use `${KIPRJMOD}`.
+- `3dmodels/` is a gitignored link to the KiCad 3D models in the private `c6remote-explode` repository. See "Key repository conventions".
 - `export/` contains generated Gerber and drill files.
 
 The firmware files are in the repository root:
@@ -216,6 +216,7 @@ When you stage the schematic or board, the hook performs these actions:
 - It runs `regen-fab.sh` and stages `export/`.
 - It runs `scripts/render-readme-assets.sh` and stages `docs/readme-assets/`. The board PNGs render with Blender from `scripts/render-board-blender.py`.
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
+- The board renders need the linked 3D models. If a model is missing, a commit with a staged PCB fails.
 - A staged PCB runs `scripts/render-annotated-remote.py --only board`. This step updates the four annotated board SVGs from the new board PNGs.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
 - After the hook regenerates a render group, it runs `scripts/render-status.py --write <group> --stage`. That step stages only the entry of that group in `docs/readme-assets/renders.stamp.json`.
@@ -671,9 +672,25 @@ These custom footprints are part of the design:
 
 After a footprint edit, verify the schematic symbol properties and all PCB footprint instances.
 
-The models are in `c6remote-kicad/3dmodels/`. Record each new model citation in `c6remote-kicad/3dmodels/README.md`.
+The footprints and the board reference the custom 3D models as `${KIPRJMOD}/3dmodels/<file>`. Do not change these paths.
 
-That file also records model sources and orientation constraints.
+The models are in `3dmodels/` in the private `c6remote-explode` repository. Most are third-party files without a clear right to redistribute.
+
+Do not add a model to this repository. `.gitignore` excludes `c6remote-kicad/3dmodels`.
+
+Run `scripts/link-3dmodels.sh` once for each clone or worktree. It links `c6remote-kicad/3dmodels` to the models.
+
+If the `c6remote-explode` checkout is not at `~/dev/c6remote-explode`, set `EXPLODE` to its path.
+
+Without the link, the KiCad 3D view shows bare pads for the parts with custom models.
+
+Fabrication outputs, ERC, DRC, CI, and the iBOM do not use the models.
+
+`scripts/export-case-refs.sh` and the board renders in `scripts/render-readme-assets.sh` need the models.
+
+Before an export, both scripts run `scripts/check-3dmodels.sh`. If a model that the board names is missing, the check stops the script and names the file.
+
+Record each new model citation in `3dmodels/README.md` in `c6remote-explode`. That file also records model sources and orientation constraints.
 
 `ano rotary.kicad_sym` defines `ENC1`. Its pin electrical types are not clean ERC models.
 

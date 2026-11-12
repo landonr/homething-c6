@@ -8,6 +8,17 @@ It does not start if KiCad is open. It does not write the board if content outsi
 It then compares DRC with and without `--refill-zones`. Add `--dry-run` to write nothing, or `--no-drc` to skip DRC.
 Set `KICAD_PYTHON` or `KICAD_CLI` to override a binary path.
 
+## KiCad 3D models
+
+The custom 3D models are in the private `c6remote-explode` repository, not in this repository.
+Run `scripts/link-3dmodels.sh` once for each clone or worktree. It links `c6remote-kicad/3dmodels` to `$EXPLODE/3dmodels`.
+`EXPLODE` defaults to `~/dev/c6remote-explode`. If the link already points there, the script does nothing.
+The script replaces a link to a different path. It does not replace a real directory.
+
+`scripts/check-3dmodels.sh <board.kicad_pcb>` makes sure that each `${KIPRJMOD}/3dmodels/` model that the board names is present.
+If a model is missing, the script shows the missing files and exits with status 1.
+`export-case-refs.sh` and the board renders in `render-readme-assets.sh` run it before they export the board.
+
 ## Draft preview in 3D
 
 Run this command from the repository root to see the current case model in the exploded viewer:

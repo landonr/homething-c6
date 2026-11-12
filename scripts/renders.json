@@ -10,7 +10,6 @@
     ],
     "inputs": [
       "c6remote-kicad/c6remote.kicad_pcb",
-      "c6remote-kicad/3dmodels/",
       "scripts/render-readme-assets.sh",
       "scripts/render-2d.sh",
       "scripts/render-board-blender.py",
@@ -24,7 +23,8 @@
     "recipe": [
       "The script exports a board GLB with kicad-cli and renders it with Blender Cycles at 1600 samples.",
       "If magick is on PATH, the script trims each PNG.",
-      "If you stage the PCB, the pre-commit hook runs these steps."
+      "If you stage the PCB, the pre-commit hook runs these steps.",
+      "The KiCad 3D models are in c6remote-explode, so the fingerprint cannot see a change to them."
     ]
   },
   "board-annotated": {
@@ -326,7 +326,6 @@
     ],
     "inputs": [
       "c6remote-kicad/c6remote.kicad_pcb",
-      "c6remote-kicad/3dmodels/",
       "scripts/board_extras.py"
     ],
     "refresh": [
@@ -344,7 +343,7 @@
       "The voice-mic-front preset shows the board alone, so the case model is not an input. refresh-assets.sh still needs the case STLs.",
       "The render is 360x480 px at 512 samples on a transparent film. The magick step puts it on #141414 and writes a quality 82 JPEG.",
       "The committed file is hero-drafts/voice/voice-mic-front-2026-11-01T21-32-00Z.jpg in c6remote-explode without a change.",
-      "The preset is in c6remote-explode, so the fingerprint cannot see a change to it."
+      "The preset and the KiCad 3D models are in c6remote-explode, so the fingerprint cannot see a change to them."
     ]
   },
   "photo-build-stages": {

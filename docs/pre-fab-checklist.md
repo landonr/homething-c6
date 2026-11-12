@@ -15,6 +15,7 @@ Open findings: the GitHub issues. Board status and history: `docs/timeline.md`. 
 
 - [x] **STEP export** catches broken 3D model refs before they become mechanical surprises.
   `$KC pcb export step c6remote.kicad_pcb --subst-models -o /tmp/c6remote-check.step`
+  The custom models are in the private `c6remote-explode` repository. Run `../scripts/link-3dmodels.sh` first, or every custom model shows as missing.
   2026-07-28: succeeds, 3.0MB. Two models still missing, both cosmetic since STEP substitutes or omits and fab geometry is unaffected: `D2`-`D5` want `LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step`, `J1` wants `Connector_JST.3dshapes/JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal.step`. VRML-only models skip too, expected.
   2026-11-02: exits 2 but writes the file. `J1` uses the stock Molex PicoBlade model, and the file contains it. `SW1`-`SW11` have only a VRML model, so the file omits them.
 

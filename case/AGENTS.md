@@ -2,6 +2,8 @@
 
 build123d enclosure for the c6remote board. Everything geometric is read from the board (`board.py` readers over `c6remote.kicad_pcb`, `export/c6remote-pos.csv`, and the STEP assembly from `scripts/export-case-refs.sh`); never hand-transcribe a board coordinate, add a reader instead. Tunables live in `params.py` only, one file, each with a rationale docstring; change values there, nowhere else. Keep `README.md` concise. It contains setup, assembly, material, input, validation, and enduring design constraints. Do not use it as a chronological design log.
 
+`scripts/export-case-refs.sh` needs the KiCad 3D models from the private `c6remote-explode` repository. Run `scripts/link-3dmodels.sh` once for each clone or worktree.
+
 ## Commands
 
 ```bash

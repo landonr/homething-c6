@@ -184,7 +184,7 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 
 ## Status ([more info](docs/timeline.md))
 
-The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus current design comparison are in [`docs/timeline.md`](docs/timeline.md). Open work is in [`ROADMAP.md`](ROADMAP.md). The power budget is in [`docs/power-budget.md`](docs/power-budget.md).
+The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus current design comparison are in [`docs/timeline.md`](docs/timeline.md). Open work is in the [GitHub issues](https://github.com/landonr/homething-c6/issues). The power budget is in [`docs/power-budget.md`](docs/power-budget.md).
 
 ## Relationship to homeThing ([more info](https://github.com/landonr/homeThing))
 

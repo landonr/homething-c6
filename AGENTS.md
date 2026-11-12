@@ -96,7 +96,7 @@ The fake state can drift. If you change the page or `ButtonConfig::handle_state_
 
 A missing field makes the preview show a state that the firmware never serves.
 
-Read `ROADMAP.md` when the task needs the remaining open work. `docs/timeline.md` records board status, fabrication history, and closed findings.
+If the task needs the remaining open work, read the open GitHub issues. `docs/timeline.md` records board status, fabrication history, and closed findings.
 
 ### Website
 
@@ -319,7 +319,7 @@ Follow named nets across the schematic. Then verify the corresponding board nets
 - `MK1` pins are 1 LR, 2 CONFIG, 3 VDD, 4 GND, 5 WS, 6 SCK, and 7 SD. Pins 1, 2, and 4 go to GND.
 - Pin 1 low selects the left channel, so ESPHome must keep `channel: left`.
 - `C5` is the 100nF VDD decoupling capacitor. `R12` is the 100k pull-down that the datasheet requires on `sd`.
-- The part needs a 2.048 to 4.096 MHz bit clock in normal mode. See the sample-rate item in `ROADMAP.md`.
+- The part needs a 2.048 to 4.096 MHz bit clock in normal mode. GitHub issue #12 tracks the sample-rate change.
 - IR uses `U2`, a `TSOP6136TT` receiver, on `IR REC`.
 - `U2` is a Vishay Panhead SMD part on B.Cu. It receives through the board bottom face.
 - `D1`, `Q1`, and `R1` transmit IR from `IR EMIT`.

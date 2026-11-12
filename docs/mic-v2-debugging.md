@@ -111,8 +111,8 @@ Do not test these again. All are measured, and all are negative.
 | Bit depth | Not a fault | `MicrophoneSource::process_audio_` converts 32 to 16 by itself |
 | Sample rate and mic mode | Not a fault | Both modes are -26 dB FS, Table 3. The modes differ by 1 dBA of SNR |
 | `gain_factor` | Cannot correct it | It applies after the mic, so it scales signal and floor together |
-| Missing 100k `sd` pull-down | Real defect, not the cause | Bench A/B on 2026-08-24 read 9 to 53 either way. The tristate window lands in the low 8 bits that `>> 16` discards. See `ROADMAP.md` |
-| Missing `MK1` 0.1uF decoupling | Real defect, not the cause | Raised 2026-08-25. The nearest `+3.3V` cap is `C1`, 92.75 mm away. It explains about 10 dB of excess floor. It cannot subtract 21 dB of signal. See `ROADMAP.md` |
+| Missing 100k `sd` pull-down | Real defect, not the cause | Bench A/B on 2026-08-24 read 9 to 53 either way. The tristate window lands in the low 8 bits that `>> 16` discards. The `MK1` swap on 2026-09-07 closed it. See `docs/timeline.md` |
+| Missing `MK1` 0.1uF decoupling | Real defect, not the cause | Raised 2026-08-25. The nearest `+3.3V` cap is `C1`, 92.75 mm away. It explains about 10 dB of excess floor. It cannot subtract 21 dB of signal. The `MK1` swap on 2026-09-07 closed it. See `docs/timeline.md` |
 | Absent acoustic port drill | Ruled out | The drill is in the fab output, checked 2026-08-24. See the inspection section |
 
 No supply fault can be the cause, for three reasons. Sensitivity is flat from 1.65 to 3.63 V. The part is digital, so its output is a fixed-point sample and not an analog level. The button-press transient reads a full -35 dB FS through this same undecoupled supply. Supply noise raises the floor, but it cannot subtract signal.
@@ -164,7 +164,7 @@ Tie `CONFIG` and `LR` to ground for left-channel operation. Fit 0.1 uF from VDD 
 
 Do not reuse the ICS-43434 footprint. The `DMM-4026-B-I2S-R` uses a different body, land pattern, pin count, and acoustic-port position.
 
-All of the paragraph above is done as of 2026-09-07, with one exception. `c6remote.yaml` still runs the mic at 16 kHz, which is a 1.024 MHz bit clock and below the 2.048 MHz normal-mode minimum of the new part. That change waits for a board that carries the part. The item is in [`ROADMAP.md`](../ROADMAP.md).
+All of the paragraph above is done as of 2026-09-07, with one exception. `c6remote.yaml` still runs the mic at 16 kHz, which is a 1.024 MHz bit clock and below the 2.048 MHz normal-mode minimum of the new part. That change waits for a board that carries the part. GitHub issue [#12](https://github.com/landonr/homething-c6/issues/12) tracks the item.
 
 ## Firmware-independent test
 

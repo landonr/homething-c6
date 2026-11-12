@@ -2,7 +2,7 @@
 
 Run before every board order, on top of routine ERC/DRC. Covers what ERC/DRC cannot see: real manufacturer capability limits, mechanical fit, pin-1 orientation.
 
-Open findings: `ROADMAP.md`. Board status and history: `docs/timeline.md`. Commands assume `cd c6remote-kicad` and `KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli`.
+Open findings: the GitHub issues. Board status and history: `docs/timeline.md`. Commands assume `cd c6remote-kicad` and `KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli`.
 
 ## Automated
 

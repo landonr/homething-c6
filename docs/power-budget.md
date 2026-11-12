@@ -1,6 +1,6 @@
 # Power budget
 
-This file is datasheet arithmetic as of 2026-09-07. No bench measurement exists. The measurement task is in [`ROADMAP.md`](../ROADMAP.md).
+This file is datasheet arithmetic as of 2026-09-07. No bench measurement exists. GitHub issue [#11](https://github.com/landonr/homething-c6/issues/11) tracks the measurement task.
 
 Every figure below is a typical value at 25 °C unless noted. `U1` figures are Seeed's for the module, so they already include its LDO and power-path quiescent.
 

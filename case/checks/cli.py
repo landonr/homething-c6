@@ -130,6 +130,7 @@ from .shells import (
     interference,
     ir_end_lap_wall,
     parts_are_sound,
+    seam_shadow_line,
     shells_mate,
     side_seam_retention,
     side_skirt_lead_ins,
@@ -639,6 +640,25 @@ def _ir_end_lap_wall(s):
         problems,
         f"back lap keeps LAP_MIN_WALL {params.LAP_MIN_WALL:.2f} of wall to its "
         f"outer round around the IR end: {where}",
+    )
+
+
+@_check("shells")
+def _seam_shadow_line(s):
+    problems, readings = seam_shadow_line(
+        s.back, [(s.front, "case-front"), (s.front_fdm, "case-front-fdm")]
+    )
+    spans = [
+        f"{label} {readings[key][0]:.3f}..{readings[key][1]:.3f}"
+        for key, label in (("depth", "depth"), ("height", "height"), ("wall", "lap wall"))
+        if readings[key]
+    ]
+    return _report(
+        problems,
+        f"seam shadow groove is open round all {readings['stations']} stations "
+        f"of the back lap, {', '.join(spans)} over LAP_MIN_WALL "
+        f"{params.LAP_MIN_WALL:.2f}, and both fronts roof it and leave it open "
+        f"at {readings['fronts']} stations",
     )
 
 
@@ -1403,7 +1423,7 @@ _FEATURE_SOLIDS = {
         "pad_v2_top", "pad", "pad_tpu", "caps",
     ),
     "mic": ("front",),
-    "shells": ("front", "back"),
+    "shells": ("front", "front_fdm", "back"),
     "support": ("back",),
     "usb": ("front", "front_fdm", "back"),
     "qwiic": ("front", "front_fdm", "back"),

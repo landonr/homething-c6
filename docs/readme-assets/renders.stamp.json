@@ -4,44 +4,40 @@
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "80cad493b6f8b5dcd65327f870449ce19bfdb09bbea402f839a64adf989546e8",
+    "fingerprint": "0a5161a398a1e81958b73c16e474ea1e7787339adcc01038b36c159d7ad4e3af",
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "7b355246f1e9eeb521ab227b439b63d43fae430a6d3ec0476a1be3c894166337",
+    "fingerprint": "86ec24728890ec64de526dc40d429cf8e3bb3a25b6864890c40d8eeaeb24e9c9",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "751c9d46f6f4dbc508d413413d022ee82a940e81b164c47b69670b7ed41a01f6",
+    "fingerprint": "0b3fda801f149865762a41ddbd2bda8f9063c7f3cb2cd28b2a300a73beb90072",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "68a8070c2be939f13f84aa1d154c8801a5ed01e0a4daa87478f9dd4fe5cc2738",
-    "source": "index"
+    "fingerprint": "bca15601ce2a377971c65081652b8d8a211ef1a82993f2a66316e52518071db9",
+    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "case-stills": {
-    "fingerprint": "09af418e5acf15e0f2de638b9729f1c771ebd651aeb5aa939ad7d32f23f85124",
-    "source": "index"
-  },
-  "case-white-roof-glow": {
-    "fingerprint": "09af418e5acf15e0f2de638b9729f1c771ebd651aeb5aa939ad7d32f23f85124",
-    "source": "index"
+    "fingerprint": "022ac5155046b8fa6fd5c9adba3d58aade678c8d811e31b1f5927da36c85f764",
+    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "schematic": {
     "fingerprint": "b9d433423dba0b1de9c78f0e3cbe3057d780fc9c3068171209f2130268fd38ea",
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "09af418e5acf15e0f2de638b9729f1c771ebd651aeb5aa939ad7d32f23f85124",
-    "source": "index"
+    "fingerprint": "022ac5155046b8fa6fd5c9adba3d58aade678c8d811e31b1f5927da36c85f764",
+    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "site-media": {
     "fingerprint": "e252f341d8e57872e6acdb316d3ca4334be206b804356b9a135cbe5533d8c7d6",
     "source": "index"
   },
   "site-voice": {
-    "fingerprint": "911d421624dd1499a2aec7b70716a4af2b1b711c974e57428c7e34f0b98d6220",
-    "source": "index"
+    "fingerprint": "67b71813b1a95b344ff20d9bdf2f57b1595af252a7167560841df2e20656e6d7",
+    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "web-page-framed": {
     "fingerprint": "7ab5c2813c769c5f8e4aa956efba116a3d3a978e59a425aa928a7d37c80126a8",

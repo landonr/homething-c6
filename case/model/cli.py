@@ -577,6 +577,8 @@ def main():
         f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick at the IR end and "
         f"{SKIRT_OUT - params.BOARD_FIT + params.SIDE_SKIRT_THICKEN:.2f} round the "
         f"grip end and sides, under a {params.SKIRT_T:.2f} lap, "
-        f"{SHELL_SEAM - SKIRT_BOTTOM:.1f} deep"
+        f"{SHELL_SEAM - SKIRT_BOTTOM:.1f} deep, with a seam shadow groove "
+        f"{params.SEAM_SHADOW_DEPTH:.2f} into it and {params.SEAM_SHADOW_H:.2f} "
+        f"down its outer top edge"
     )
     print(f"written to {EXPORT}")

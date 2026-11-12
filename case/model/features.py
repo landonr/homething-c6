@@ -415,6 +415,7 @@ def _back(runs, obstacles):
     """The back shell, in the order back_shell() builds and cuts it."""
     out = [
         _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
+        _entry("seam_shadow", "shells.seam_shadow", "cut", shells.seam_shadow()),
     ]
     out += _support_entries(runs, "add")
     out += _support_gaps(runs, obstacles)

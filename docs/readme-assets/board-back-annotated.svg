@@ -29,15 +29,15 @@
 <circle cx="280.0" cy="1735.0" r="11.0" fill="#151515"/>
 <path d="M 500.0 1718.0 L 647.0 1718.0" fill="none" stroke="#151515" stroke-width="6.1" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="500.0" cy="1718.0" r="11.0" fill="#151515"/>
-<text x="660" y="200" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">IR receiver</text>
-<text x="660" y="306" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">I²S microphone</text>
-<text x="660" y="416" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">IR emitter</text>
-<text x="660" y="560" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">1000 mAh LiPo</text>
-<text x="660" y="615" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">battery</text>
-<text x="660" y="1526" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">Qwiic I²C port</text>
-<text x="660" y="1566" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="35" font-weight="400">JST SH 4-pin</text>
-<text x="660" y="1641" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">XIAO ESP32-C6</text>
-<text x="660" y="1734" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">Battery</text>
-<text x="660" y="1789" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">connector</text>
-<text x="660" y="1829" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="35" font-weight="400">Molex PicoBlade 2-pin</text>
+<text x="660" y="200" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">IR receiver</text>
+<text x="660" y="306" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">I²S microphone</text>
+<text x="660" y="416" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">IR emitter</text>
+<text x="660" y="560" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">1000 mAh LiPo</text>
+<text x="660" y="615" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">battery</text>
+<text x="660" y="1526" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">Qwiic I²C port</text>
+<text x="660" y="1566" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="35" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">JST SH 4-pin</text>
+<text x="660" y="1641" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">XIAO ESP32-C6</text>
+<text x="660" y="1734" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">Battery</text>
+<text x="660" y="1789" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">connector</text>
+<text x="660" y="1829" text-anchor="start" fill="#151515" font-family="Arial,sans-serif" font-size="35" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">Molex PicoBlade 2-pin</text>
 </svg>

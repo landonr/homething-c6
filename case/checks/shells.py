@@ -9,6 +9,11 @@ IR-end lap wall: the back lap keeps LAP_MIN_WALL of wall to its outer round
 around the IR end, from the floor of the skirt relief up. The pass measures the
 built back shell, so a deeper relief behind the lap fails it.
 
+Seam shadow line: the groove round the outer top edge of the back lap is open
+at stations round the whole perimeter, stops at its depth and height, and
+leaves LAP_MIN_WALL of lap behind it. Each front closes over the groove as its
+ceiling and leaves the groove open.
+
 Parts are sound: every part that gets exported is a valid solid and meshes to a
 closed manifold. This is the only pass in the suite that looks at a mesh, and it
 exists because everything else looks at the BRep instead. A shell can be torn
@@ -23,10 +28,12 @@ from collections import Counter
 import board
 import params
 
-from build123d import Box, Compound, GeomType, Pos
+from build123d import Box, Compound, GeomType, Pos, Rot
 
 from model import shells
-from model.hardware import end_screw_block_span
+from model.hardware import end_screw_axis, end_screw_block_span
+from model.ir import emitter_bore
+from model.qwiic import qwiic_slot
 from model.stack import (
     CAVITY_FRONT,
     LAP_IN,
@@ -622,6 +629,276 @@ def ir_end_lap_wall(back):
                 at=point,
             ))
     return problems, thinnest
+
+
+SEAM_SHADOW_RUN_STATIONS = 5
+"""Evenly spaced stations along each long side between its corner tangents."""
+
+SEAM_SHADOW_END_STATIONS = 3
+"""Evenly spaced stations along each end between its corner tangents."""
+
+SEAM_SHADOW_CORNER_ANGLES = (20.0, 45.0, 70.0)
+"""Plan angles of the corner stations, in degrees from the side normal toward
+the end normal."""
+
+SEAM_SHADOW_INSET = 0.03
+"""Inset of the open groove probe from each face of the groove, so the probe
+reads the whole groove section but not the faces round it."""
+
+SEAM_SHADOW_PROBE_W = 0.2
+"""Length of each probe along the perimeter."""
+
+SEAM_SHADOW_READ_TOL = 0.02
+"""How far the built groove depth and height may differ from SEAM_SHADOW_DEPTH
+and SEAM_SHADOW_H."""
+
+
+def seam_shadow_stations():
+    """(name, plan point, outward plan normal, front) round the whole perimeter.
+
+    Evenly spaced stations on both long sides and both ends, three on each
+    corner arc, and one over each opening, catch and screw in the wall below
+    the seam, so a groove that breaks over one of them fails. The plan point is
+    on the board outline. A point at offset `d` is the plan point plus `d` along
+    the normal, because the offset profiles keep the board's corner centres.
+    `front` marks the stations that the front shells are also read at: the
+    middle of each side and end, and each corner at 45 degrees.
+    """
+    profile = board.board_profile()
+    box = profile.bounding_box()
+    edges = profile.outer_wire().edges()
+    yt0, yt1 = shells.corner_tangent_y()
+    ends = [
+        e.bounding_box() for e in edges
+        if e.geom_type == GeomType.LINE and e.bounding_box().size.Y < 1e-6
+    ]
+    xt0, xt1 = min(b.min.X for b in ends), max(b.max.X for b in ends)
+    middle_run = SEAM_SHADOW_RUN_STATIONS // 2
+    middle_end = SEAM_SHADOW_END_STATIONS // 2
+    stations = []
+    for side, x, label in ((-1, box.min.X, "-X"), (1, box.max.X, "+X")):
+        for i in range(SEAM_SHADOW_RUN_STATIONS):
+            y = yt0 + (i + 0.5) / SEAM_SHADOW_RUN_STATIONS * (yt1 - yt0)
+            stations.append(
+                (f"{label} side at y {y:.2f}", (x, y), (float(side), 0.0), i == middle_run)
+            )
+        stations.append((
+            f"{label} side over the side catch", (x, shells.side_catch_y()),
+            (float(side), 0.0), False,
+        ))
+    for end, y, label in ((-1, box.min.Y, "grip end"), (1, box.max.Y, "IR end")):
+        for i in range(SEAM_SHADOW_END_STATIONS):
+            x = xt0 + (i + 0.5) / SEAM_SHADOW_END_STATIONS * (xt1 - xt0)
+            stations.append(
+                (f"{label} at x {x:.2f}", (x, y), (0.0, float(end)), i == middle_end)
+            )
+    slot = qwiic_slot().bounding_box()
+    qwiic_side = -1 if slot.center().X < box.center().X else 1
+    stations.append((
+        f"{'-X' if qwiic_side < 0 else '+X'} side over the Qwiic slot",
+        (box.min.X if qwiic_side < 0 else box.max.X, slot.center().Y),
+        (float(qwiic_side), 0.0), False,
+    ))
+    grip = [
+        ("grip end over the USB slot", usb_slot().bounding_box().center().X),
+        ("grip end over the end screw", end_screw_axis()[0]),
+    ]
+    ir_end = [("IR end over the D1 bore", emitter_bore().bounding_box().center().X)]
+    ir_end += [
+        (f"IR end over the catch at x {x:.2f}", x) for x in shells.catch_x()
+    ]
+    for name, x in grip:
+        stations.append((name, (x, box.min.Y), (0.0, -1.0), False))
+    for name, x in ir_end:
+        stations.append((name, (x, box.max.Y), (0.0, 1.0), False))
+    for edge in edges:
+        if edge.geom_type != GeomType.CIRCLE:
+            continue
+        centre, radius = edge.arc_center, edge.radius
+        side = 1 if centre.X > box.center().X else -1
+        end = 1 if centre.Y > box.center().Y else -1
+        label = f"{'+X' if side > 0 else '-X'} {'IR' if end > 0 else 'grip'} corner"
+        for angle in SEAM_SHADOW_CORNER_ANGLES:
+            a = math.radians(angle)
+            normal = (side * math.cos(a), end * math.sin(a))
+            stations.append((
+                f"{label} at {angle:.0f} degrees",
+                (centre.X + radius * normal[0], centre.Y + radius * normal[1]),
+                normal, angle == 45.0,
+            ))
+    return stations
+
+
+def seam_shadow_line(back, fronts):
+    """The seam shadow groove on the built back, and each front over it.
+
+    `fronts` is a list of (shell, export stem). At every station, read along
+    the outward plan normal. The groove section must be open, inset
+    SEAM_SHADOW_INSET from each face it should have. The lap just behind the
+    groove floor and the outer wall just under the groove must be material, so
+    the groove neither cuts through the lap nor runs down past SEAM_SHADOW_H.
+
+    Rays then measure the built groove. One ray at mid groove height starts in
+    the skirt relief void and finds the lap wall left behind the groove. One
+    ray under the groove finds the outer wall. The difference is the built
+    depth. A ray down from above the seam finds the groove bottom, and so the
+    built height. The lap wall must keep LAP_MIN_WALL.
+
+    At the front stations, each front must be material just above the seam
+    across the groove's whole depth, because that shoulder is the groove's
+    ceiling, and it must leave the groove open.
+
+    Returns the problems and the readings as {"stations", "fronts", "wall",
+    "depth", "height"}, each of the last three a (min, max) pair or None.
+    """
+    depth, height = params.SEAM_SHADOW_DEPTH, params.SEAM_SHADOW_H
+    inset, wide = SEAM_SHADOW_INSET, SEAM_SHADOW_PROBE_W
+    mid_z = SHELL_SEAM - height / 2
+    under_z = SHELL_SEAM - height - 0.1
+    top_z = SHELL_SEAM + 0.5
+    z_lo = SHELL_SEAM - height - 0.5
+    z_hi = SHELL_SEAM + 0.6
+    near, far = LAP_IN - 0.5, LAP_OUT + 0.5
+    groove = LAP_OUT - depth / 2
+    stations = seam_shadow_stations()
+    box = board.board_profile().bounding_box()
+    reach = LAP_OUT + 2
+    band = (
+        (box.min.X - reach, box.min.Y - reach, z_lo - CROP_MARGIN),
+        (box.max.X + reach, box.max.Y + reach, z_hi + CROP_MARGIN),
+    )
+
+    def at(point, normal, offset, z):
+        return (point[0] + normal[0] * offset, point[1] + normal[1] * offset, z)
+
+    def probe(point, normal, offset, z, radial, tall):
+        angle = math.degrees(math.atan2(normal[1], normal[0]))
+        return Pos(*at(point, normal, offset, z)) * Rot(0, 0, angle) * Box(
+            radial, wide, tall
+        )
+
+    def crop(parent, point, normal):
+        ends = [at(point, normal, offset, 0) for offset in (near, far)]
+        lo = (min(e[0] for e in ends) - CROP_MARGIN,
+              min(e[1] for e in ends) - CROP_MARGIN, z_lo)
+        hi = (max(e[0] for e in ends) + CROP_MARGIN,
+              max(e[1] for e in ends) + CROP_MARGIN, z_hi)
+        return _Crop(parent, lo, hi)
+
+    def open_groove(point, normal):
+        return probe(
+            point, normal, groove, mid_z, depth - 2 * inset, height - 2 * inset
+        )
+
+    problems = []
+    walls, depths, heights = [], [], []
+    back_band = _Crop(back, *band)
+    for name, point, normal, _ in stations:
+        local = crop(back_band, point, normal)
+        site = open_groove(point, normal)
+        filled = local.fill_fraction(site)
+        if filled > 0.1:
+            problems.append(Problem(
+                f"{name}: the seam shadow groove is {filled:.0%} material, "
+                "expected open",
+                box=site, part="case-back",
+            ))
+            continue
+        for label, offset, z, tall in (
+            ("lap behind the groove floor", LAP_OUT - depth - 0.1, mid_z,
+             height - 2 * inset),
+            ("outer wall under the groove", LAP_OUT - 0.1, under_z, 0.1),
+        ):
+            site = probe(point, normal, offset, z, 0.1, tall)
+            filled = local.fill_fraction(site)
+            if filled < 0.9:
+                problems.append(Problem(
+                    f"{name}: the {label} is {filled:.0%} material, expected "
+                    "solid, so the groove runs past SEAM_SHADOW_DEPTH or "
+                    "SEAM_SHADOW_H",
+                    box=site, part="case-back",
+                ))
+        lap = local.ray_runs(at(point, normal, near, mid_z), at(point, normal, far, mid_z))
+        wall = local.ray_runs(
+            at(point, normal, near, under_z), at(point, normal, far, under_z)
+        )
+        if len(lap) != 1 or len(wall) != 1:
+            problems.append(Problem(
+                f"{name}: rays across the lap read {len(lap)} runs of material "
+                f"at z {mid_z:.2f} and {len(wall)} at z {under_z:.2f}, expected "
+                "one each",
+                at=at(point, normal, LAP_OUT, mid_z), part="case-back",
+            ))
+            continue
+        left = lap[0][1] - lap[0][0]
+        built_depth = wall[0][1] - lap[0][1]
+        walls.append(left)
+        depths.append(built_depth)
+        if left < params.LAP_MIN_WALL - 0.02:
+            problems.append(Problem(
+                f"{name}: the back lap is {left:.2f} mm behind the seam shadow "
+                f"groove, under LAP_MIN_WALL {params.LAP_MIN_WALL:.2f}",
+                at=at(point, normal, near + lap[0][1], mid_z), part="case-back",
+            ))
+        if abs(built_depth - depth) > SEAM_SHADOW_READ_TOL:
+            problems.append(Problem(
+                f"{name}: the built seam shadow groove is {built_depth:.3f} deep, "
+                f"SEAM_SHADOW_DEPTH is {depth:.3f}",
+                at=at(point, normal, near + lap[0][1], mid_z), part="case-back",
+            ))
+        down = local.ray_runs(
+            at(point, normal, groove, top_z), at(point, normal, groove, z_lo + 0.1)
+        )
+        if not down:
+            problems.append(Problem(
+                f"{name}: no wall under the seam shadow groove down to "
+                f"z {z_lo + 0.1:.2f}",
+                at=at(point, normal, groove, mid_z), part="case-back",
+            ))
+            continue
+        built_height = SHELL_SEAM - (top_z - down[0][0])
+        heights.append(built_height)
+        if abs(built_height - height) > SEAM_SHADOW_READ_TOL:
+            problems.append(Problem(
+                f"{name}: the built seam shadow groove is {built_height:.3f} tall, "
+                f"SEAM_SHADOW_H is {height:.3f}",
+                at=at(point, normal, groove, top_z - down[0][0]), part="case-back",
+            ))
+
+    front_stations = [s for s in stations if s[3]]
+    for front, part in fronts:
+        front_band = _Crop(front, *band)
+        for name, point, normal, _ in front_stations:
+            local = crop(front_band, point, normal)
+            ceiling = probe(
+                point, normal, groove, SHELL_SEAM + 0.1, depth - 2 * inset, 0.1
+            )
+            filled = local.fill_fraction(ceiling)
+            if filled < 0.9:
+                problems.append(Problem(
+                    f"{name}: the {part} shoulder over the seam shadow groove is "
+                    f"{filled:.0%} material, expected solid",
+                    box=ceiling, part=part,
+                ))
+            site = open_groove(point, normal)
+            filled = local.fill_fraction(site)
+            if filled > 0.1:
+                problems.append(Problem(
+                    f"{name}: the {part} fills {filled:.0%} of the seam shadow "
+                    "groove, expected open",
+                    box=site, part=part,
+                ))
+
+    def span(values):
+        return (min(values), max(values)) if values else None
+
+    return problems, {
+        "stations": len(stations),
+        "fronts": len(front_stations),
+        "wall": span(walls),
+        "depth": span(depths),
+        "height": span(heights),
+    }
 
 
 MESH_TOLERANCE = 0.05

@@ -17,12 +17,12 @@
 <circle cx="808.0" cy="829.0" r="11.0" fill="#151515"/>
 <path d="M 781.0 1538.0 L 410.0 1538.0" fill="none" stroke="#151515" stroke-width="6.1" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="781.0" cy="1538.0" r="11.0" fill="#151515"/>
-<text x="400" y="381" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">11 tactile</text>
-<text x="400" y="436" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">switches</text>
-<text x="400" y="595" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">RGB status</text>
-<text x="400" y="650" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">LEDs</text>
-<text x="400" y="845" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">Rotary encoder</text>
-<text x="400" y="900" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">+ 5 addressable</text>
-<text x="400" y="955" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">buttons</text>
-<text x="400" y="1554" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400">GPIO expander</text>
+<text x="400" y="381" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">11 tactile</text>
+<text x="400" y="436" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">switches</text>
+<text x="400" y="595" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">RGB status</text>
+<text x="400" y="650" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">LEDs</text>
+<text x="400" y="845" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">Rotary encoder</text>
+<text x="400" y="900" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">+ 5 addressable</text>
+<text x="400" y="955" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">buttons</text>
+<text x="400" y="1554" text-anchor="end" fill="#151515" font-family="Arial,sans-serif" font-size="46" font-weight="400" stroke="#f2f2e8" stroke-width="7.4" stroke-linejoin="round" paint-order="stroke">GPIO expander</text>
 </svg>

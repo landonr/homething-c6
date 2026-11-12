@@ -25,10 +25,10 @@ It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 bo
 ## SLS and FDM versions
 
 <p align="center">
-  <img alt="Plan of the SLS front face. Shading shows the depth of the dish around the keys and the wheel. The face rolls down into every wall." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
+  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
   <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="260">
 </p>
-<p align="center"><sub>The SLS face (left) shows the dish as a depth gradient. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
+<p align="center"><sub>On the SLS face (left), the shading is darker where the face or the dish is steeper. The arched face and the basins show without contour lines. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
 
 <p align="center">
   <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the face rolls down into every wall." src="../docs/readme-assets/case-front-iso-sls.png" width="400">
@@ -161,12 +161,7 @@ A white filament also works. The roof over the LED ring channel is `LED_RING_FAC
 </p>
 <p align="center"><sub>White front with the status LEDs on</sub></p>
 
-A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through. The comparison shows the glow through the old roof and through the even roof.
-
-<p align="center">
-  <img alt="Two white c6remote fronts with the status LEDs on. The front with the even roof over the LED ring channel shows a slightly brighter ring nearer the wheel. A second row shows only the LED light for each front" src="../docs/readme-assets/case-white-roof-glow.png" width="450">
-</p>
-<p align="center"><sub>Old roof (left) and even roof (right) in a white shell</sub></p>
+A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through.
 
 The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
 
@@ -271,6 +266,10 @@ Their front-skirt pockets are blind, rounded, and bevelled at the mouth, with
 continuous material behind them. The seam sits above the board top.
 Each pocket sits a short lower lip above the front skirt's support relief, so a long solid skirt land stays above each catch.
 The support relief stands `SUPPORT_SKIRT_FIT` above the ledge tops, so the front skirt never lands on a ledge. The seam shoulder is the only vertical stop.
+A rectangular groove runs without a break round the outer top edge of the back lap. It makes the seam a deliberate shadow line, so a small step or gap between the shells does not show.
+`SEAM_SHADOW_DEPTH` sets how far the groove cuts into the lap. `SEAM_SHADOW_H` sets how far it runs down from the seam.
+Both fronts pair with the same back, so the groove is the same on both versions. The front shoulder bears on the lap top that remains and closes over the groove.
+The lap behind the groove must keep `LAP_MIN_WALL`.
 The back detents ramp on both sides so the shells can be opened for service.
 Each back detent sits lower than its pocket and bears on the lower lip with a light preload.
 The preload holds the seam closed.
@@ -391,7 +390,7 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Microphone and USB geometry
 - IR receiver clearance and window installation
 - Board support ledges, front ledges, the end screw, cell clearance, and the V2 top pad
-- Shell mating and component interference
+- Shell mating, the seam shadow groove, and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes
 

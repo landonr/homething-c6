@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run ERC and DRC and compare the result against the documented baseline.
 
-The baseline in AGENTS.md has no ERC violations and one allowed DRC warning.
+The baseline in AGENTS.md has no ERC violations and no DRC violations.
 It has no unconnected items or schematic parity issues. Anything else is a
 regression from the change under test.
 
@@ -32,11 +32,9 @@ PCB = PROJECT / "c6remote.kicad_pcb"
 
 DEFAULT_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
-# (type, first item description) pairs that predate current work. U1 has an
-# edited board footprint.
-ALLOWED_DRC = {
-    ("lib_footprint_mismatch", "Footprint U1"),
-}
+# (type, first item description) pairs that predate current work. The
+# baseline has none.
+ALLOWED_DRC = set()
 
 
 def kicad_cli():

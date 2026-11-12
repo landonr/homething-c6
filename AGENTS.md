@@ -174,7 +174,7 @@ The script shows the fill outlines of each zone and fails if DRC with and withou
 
 Do not use the MCP `refill_zones` tool. It first saves the board that the MCP server holds in memory, and that copy can be older than the file. Its fill subprocess also does not protect the project files.
 
-`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented one-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
+`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
 
 ```bash
 python3 scripts/check-design.py            # both checks
@@ -231,18 +231,17 @@ The iBOM step is nonfatal because it needs KiCad Python and a first-run network 
 
 Gerber and drill headers contain timestamps. A board commit restages all files in `export/`, even without geometry changes.
 
-### Validation baseline from 2026-08-31
+### Validation baseline from 2026-11-12
 
 - `sch erc` reports 0 violations.
-- `pcb drc` reports 0 errors, 0 unconnected items, and 1 allowed warning.
-- The `lib_footprint_mismatch` warning is for `U1`.
-- `U1` is the only footprint that differs from its library footprint.
-- In the board copy of `U1`, pads 24-31 are plated holes, and pads 32 and 33 are SMD pads. The library footprint has the opposite pad types.
-- The board copy of `U1` also has F.Mask on pads 24-31, so their copper is open on the front.
+- `pcb drc` reports 0 errors, 0 unconnected items, and 0 warnings.
+- Each footprint on the board is equal to its library footprint, so DRC reports no `lib_footprint_mismatch` warning.
+- `U1` uses `Library:XIAO-ESP32C6-SMD`, which this project drew. Pads 24-31 are plated holes, and pads 32 and 33 are SMD pads.
+- `U1` pads 24-31 also have F.Mask, so their copper is open on the front.
 - Parity reports 0 issues.
 - `TP1`-`TP6` are bare debug pads. The BOM and the position file exclude them. The board has no board-only items.
 
-Treat these counts as the baseline unless the task targets them. A second warning is a new regression.
+Treat these counts as the baseline unless the task targets them. A DRC warning is a new regression.
 
 Two choices keep the silkscreen text checks quiet. `min_text_height` is 0.8mm, because the XIAO pin labels need it.
 
@@ -657,12 +656,13 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 
 The repository tracks both configured library tables. Do not map libraries manually.
 
-`sym-lib-table` defines symbols. `fp-lib-table` defines `Library`, `Local`, and `Seeed_Studio_XIAO_Series`.
+`sym-lib-table` defines symbols. `fp-lib-table` defines `Library` and `Local`.
 
-`Library` points to `../kicad lib/Library.pretty`. The other names point to adjacent `.pretty` directories.
+`Library` points to `../kicad lib/Library.pretty`. `Local` points to the adjacent `Local.pretty` directory.
 
 These custom footprints are part of the design:
 
+- `XIAO-ESP32C6-SMD.kicad_mod`
 - `XIAO-ESP32C6-DIP.kicad_mod`
 - `SW_TL3315NF160Q.kicad_mod`
 - `Ano Rotary.kicad_mod`

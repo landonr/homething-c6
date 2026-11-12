@@ -6168,6 +6168,12 @@
 		(uuid "a7529152-0501-4c44-90d8-75d7460e14af")
 	)
 	(junction
+		(at 265.43 106.68)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d4dcb281-095b-4bac-a3b2-05fb10aae2cb")
+	)
+	(junction
 		(at 34.29 181.61)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6292,6 +6298,16 @@
 			(type default)
 		)
 		(uuid "11c818bd-c588-49f4-9ba0-c89dd4fb6617")
+	)
+	(wire
+		(pts
+			(xy 240.03 113.03) (xy 240.03 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "12b4a1ce-b620-4fc6-8292-4fba9d392ce9")
 	)
 	(wire
 		(pts
@@ -6615,6 +6631,16 @@
 	)
 	(wire
 		(pts
+			(xy 243.84 113.03) (xy 240.03 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9752c80c-a39b-468d-b965-1b392428e720")
+	)
+	(wire
+		(pts
 			(xy 212.09 39.37) (xy 212.09 36.83)
 		)
 		(stroke
@@ -6752,6 +6778,16 @@
 			(type default)
 		)
 		(uuid "ac62860d-1b51-4cd3-9ebd-77bd75d616a2")
+	)
+	(wire
+		(pts
+			(xy 265.43 106.68) (xy 266.7 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aca26755-c2eb-4b59-ab41-ca5c1c7e3a54")
 	)
 	(wire
 		(pts
@@ -8227,6 +8263,28 @@
 			)
 		)
 	)
+	(global_label "usb_vbus"
+		(shape bidirectional)
+		(at 240.03 121.92 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "994ad3e6-b436-4a2a-a444-2a89e1992328")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 240.03 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+	)
 	(global_label "sd"
 		(shape input)
 		(at 20.32 48.26 180)
@@ -8457,6 +8515,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "usb_present_n"
+		(shape bidirectional)
+		(at 266.7 106.68 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "a3f68307-2a90-4486-b66c-f5dc5a272d73")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 266.7 106.68 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
 			)
 		)
 	)
@@ -17442,7 +17522,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Seeed_Studio_XIAO_Series:XIAO-ESP32-C6-SMD"
+		(property "Footprint" "Library:XIAO-ESP32C6-SMD"
 			(at 208.788 109.982 0)
 			(hide yes)
 			(show_name no)
@@ -19789,62 +19869,6 @@
 				)
 			)
 		)
-	)
-	(wire
-		(pts
-			(xy 243.84 113.03) (xy 240.03 113.03)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "9752c80c-a39b-468d-b965-1b392428e720")
-	)
-	(wire
-		(pts
-			(xy 240.03 113.03) (xy 240.03 121.92)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "12b4a1ce-b620-4fc6-8292-4fba9d392ce9")
-	)
-	(global_label "usb_vbus"
-		(at 240.03 121.92 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "994ad3e6-b436-4a2a-a444-2a89e1992328")
-	)
-	(wire
-		(pts
-			(xy 265.43 106.68) (xy 266.7 106.68)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "aca26755-c2eb-4b59-ab41-ca5c1c7e3a54")
-	)
-	(junction
-		(at 265.43 106.68)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "d4dcb281-095b-4bac-a3b2-05fb10aae2cb")
-	)
-	(global_label "usb_present_n"
-		(at 266.7 106.68 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "a3f68307-2a90-4486-b66c-f5dc5a272d73")
 	)
 	(sheet_instances
 		(path "/"

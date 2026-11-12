@@ -1,10 +1,10 @@
 {
   "board": {
-    "fingerprint": "cadd5384d757d881c66e22d067a4227f38168b46e5623987fa7e771eca52df3e",
+    "fingerprint": "c2c182e2e52ee53014b8db8ca79cc2012c1f59d26689d0f9f82ef2f6d27cfad7",
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "1a28f0dec8b48ff9cab795fdd8c2eced07e65538bfa75f29a1021c70d137d39a",
+    "fingerprint": "f4c4163e25a744de626720a03cfee1cdaa04c50809d40ce100ece2bd353b7120",
     "source": "index"
   },
   "case-annotated": {
@@ -24,7 +24,7 @@
     "source": "index"
   },
   "schematic": {
-    "fingerprint": "9e9d899f988e3c25e6c4f46ce187be31eb64641b7ed07f1bac4dad8dd2b5f02b",
+    "fingerprint": "46637fb3ac1d4144e7c7e6b64100566c5c3652edc87b83dfd6f619874e329e76",
     "source": "index"
   },
   "site-hero": {

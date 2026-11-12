@@ -67,8 +67,7 @@ The hardware source files are in `c6remote-kicad/`:
 - `c6remote.kicad_sch` is the single-sheet schematic.
 - `c6remote.kicad_pcb` is the board layout.
 - `c6remote.kicad_pro` contains ERC settings, DRC settings, BOM settings, and project metadata.
-- `ano rotary.kicad_sym` contains only the custom `ENC1` symbol.
-- `Local.kicad_sym` contains `SW_TL3315NF160Q`, `TSOP61xx`, and `XIAO-ESP32C6`.
+- `Local.kicad_sym` contains `ANO-Rotary-Encoder`, `SW_TL3315NF160Q`, `TSOP61xx`, and `XIAO-ESP32C6`.
 - `../kicad lib/Library.pretty/` contains the custom board footprints.
 - `3dmodels/` is a gitignored link to the KiCad 3D models in the private `c6remote-explode` repository. See "Key repository conventions".
 - `export/` contains generated Gerber and drill files.
@@ -257,9 +256,9 @@ Use the KiCad DRC panel or ratsnest airwire to locate an island.
 
 The project ignores `silk_over_copper` and `silk_edge_clearance`. Do not enable these rules to restore the baseline.
 
-The artwork still has 24 `silk_over_copper` and 4 `silk_edge_clearance` cases.
+The artwork still has 8 `silk_over_copper` cases, all at `D1`, and no `silk_edge_clearance` case.
 
-Five `silk_over_copper` cases are intentional ENC1 wheel-outline crossings.
+The ENC1 wheel-outline silk has a gap at each pad, so it has no `silk_over_copper` case.
 
 ## Branches and releases
 
@@ -656,7 +655,7 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 
 The repository tracks both configured library tables. Do not map libraries manually.
 
-`sym-lib-table` defines the `ano rotary`, `dmm_4026_b_i2s_r`, and `Local` symbol libraries. `fp-lib-table` defines only `Library`.
+`sym-lib-table` defines the `dmm_4026_b_i2s_r` and `Local` symbol libraries. `fp-lib-table` defines only `Library`.
 
 `Library` points to `../kicad lib/Library.pretty`.
 
@@ -664,7 +663,7 @@ These custom footprints are part of the design:
 
 - `XIAO-ESP32C6-SMD.kicad_mod`
 - `SW_TL3315NF160Q.kicad_mod`
-- `Ano Rotary.kicad_mod`
+- `ANO-Rotary-Encoder.kicad_mod`
 - `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`
 - `Vishay_PANHEAD-4Pin_TopView.kicad_mod`
 
@@ -690,7 +689,7 @@ Before an export, both scripts run `scripts/check-3dmodels.sh`. If a model that 
 
 Record each new model citation in `3dmodels/README.md` in `c6remote-explode`. That file also records model sources and orientation constraints.
 
-`ano rotary.kicad_sym` defines `ENC1`. Its pin electrical types are not clean ERC models.
+The `ANO-Rotary-Encoder` symbol in `Local.kicad_sym` defines `ENC1`. Its pin electrical types are not clean ERC models.
 
 If you change that symbol, expect a possible ERC baseline change.
 

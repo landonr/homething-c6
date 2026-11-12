@@ -731,6 +731,11 @@ h2:has(+ .features-lede) {
 
 /* Image pairs and figures */
 
+.plan {
+  width: 200px;
+  margin: 0 auto 1.5rem;
+}
+
 .pair {
   display: grid;
   grid-template-columns: 1fr 1fr;

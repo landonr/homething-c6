@@ -24,6 +24,8 @@ README_ASSETS=(
 	case-exploded.png
 	case-front-iso-sls.png
 	case-front-iso-fdm.png
+	case-front-face-sls.svg
+	case-front-face-fdm.svg
 	buttons-page-assign.png
 )
 

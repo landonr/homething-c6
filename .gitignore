@@ -72,9 +72,12 @@ c6remote-kicad/drc-*.json
 c6remote-kicad/_restore_backup_*/
 c6remote-kicad/*.kicad_pcb.*.bak
 
-# Stray KiCad local settings written at the repo root. The real one is
-# c6remote-kicad/c6remote.kicad_prl.
-/c6remote.kicad_prl
+# Files that KiCad writes on its own: the footprint cache, the autosave
+# archives, the schematic backup, and the local view settings.
+c6remote-kicad/fp-info-cache
+c6remote-kicad/c6remote-backups/
+c6remote-kicad/*-bak
+*.kicad_prl
 
 # Local MCP server clone. The canonical checkout is ~/dev/KiCAD-MCP-Server.
 KiCAD-MCP-Server/

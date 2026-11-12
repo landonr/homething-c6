@@ -663,7 +663,6 @@ The repository tracks both configured library tables. Do not map libraries manua
 These custom footprints are part of the design:
 
 - `XIAO-ESP32C6-SMD.kicad_mod`
-- `XIAO-ESP32C6-DIP.kicad_mod`
 - `SW_TL3315NF160Q.kicad_mod`
 - `Ano Rotary.kicad_mod`
 - `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`

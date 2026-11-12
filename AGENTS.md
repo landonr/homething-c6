@@ -162,7 +162,15 @@ If a board edit can affect pours, write a refilled board before the commit. This
 
 Run `python3 scripts/refill-zones.py` from the repository root. To fill and check without a change to the board file, add `--dry-run`.
 
-The script fills a copy of the board in a temporary directory, then copies only the board file back. If content outside the `filled_polygon` blocks changes, the script does not write the board. It shows the fill outlines of each zone and fails if DRC with and without `--refill-zones` gives different results. If KiCad is open, the script does not start.
+The script fills a copy of the board in a temporary directory, then copies only the board file back. If content outside the `filled_polygon` blocks changes, the script does not write the board.
+
+The comparison ignores three changes that a KiCad save makes. It ignores the order of the top-level items and the format of a number. It also ignores a number change that is not more than `NOISE_MM` in the script.
+
+KiCad makes these changes after a script or a manual patch writes the board. When the script writes the board, the board gets the KiCad format.
+
+The comparison finds each top-level item by its `uuid` and compares its content in order. As a result, a moved track end, a new item, or a changed net stops the write.
+
+The script shows the fill outlines of each zone and fails if DRC with and without `--refill-zones` gives different results. If KiCad is open, the script does not start.
 
 Do not use the MCP `refill_zones` tool. It first saves the board that the MCP server holds in memory, and that copy can be older than the file. Its fill subprocess also does not protect the project files.
 

@@ -517,6 +517,10 @@ h2:has(+ .features-lede) {
   display: block;
   width: 100%;
   height: auto;
+  /* The poster is a portrait render. Without a fixed box the video jumps when playback starts. */
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
   border-radius: 16px;
 }
 

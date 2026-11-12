@@ -51,7 +51,6 @@ ffmpeg -v error -y -framerate "1000/$MS" -i "$FRAMES/f_%04d.png" \
 	-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
 	-c:v libx264 -profile:v high -preset slow -crf 26 -movflags +faststart \
 	"$OUT/explode.mp4"
-magick "$FRAMES/f_0106.png" -quality 85 "$OUT/explode.jpg"
 
 # The remote drawing and the edge of the Button 7 actions from the Buttons page, for the
 # "No flashing needed" card.

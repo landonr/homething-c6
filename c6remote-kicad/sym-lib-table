@@ -1,7 +1,6 @@
 (sym_lib_table
   (version 7)
   (lib (name "ano rotary")(type "KiCad")(uri "${KIPRJMOD}/ano rotary.kicad_sym")(options "")(descr ""))
-  (lib (name "Seeed_Studio_XIAO_Series")(type "KiCad")(uri "${KIPRJMOD}/Seeed_Studio_XIAO_Series.kicad_sym")(options "")(descr "Seeed Studio XIAO Series"))
 	(lib (name "dmm_4026_b_i2s_r")(type "KiCad")(uri "${KIPRJMOD}/dmm_4026_b_i2s_r.kicad_sym")(options "")(descr "PUI Audio DMM-4026-B-I2S-R I2S microphone"))
   (lib (name "Local")(type "KiCad")(uri "${KIPRJMOD}/Local.kicad_sym")(options "")(descr "Local project symbols"))
 )

@@ -8,7 +8,8 @@ KiCad must resolve `../kicad lib/Library.pretty/` with the `Library` nickname.
 The `sym-lib-table` file registers these symbol libraries:
 
 - `ano rotary`: The local `ano rotary.kicad_sym` file contains the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001) symbol.
-- `Seeed_Studio_XIAO_Series`: [Seeed Studio's OPL KiCad library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library) supplies the XIAO module symbols.
+- `dmm_4026_b_i2s_r`: The local `dmm_4026_b_i2s_r.kicad_sym` file contains the `MK1` microphone symbol.
+- `Local`: The local `Local.kicad_sym` file contains the switch, IR receiver, and XIAO ESP32-C6 module symbols.
 
 ### 3D models
 

@@ -68,7 +68,7 @@ The hardware source files are in `c6remote-kicad/`:
 - `c6remote.kicad_pcb` is the board layout.
 - `c6remote.kicad_pro` contains ERC settings, DRC settings, BOM settings, and project metadata.
 - `ano rotary.kicad_sym` contains only the custom `ENC1` symbol.
-- `Local.kicad_sym` contains `SW_TL3315NF160Q` and `TSOP61xx`.
+- `Local.kicad_sym` contains `SW_TL3315NF160Q`, `TSOP61xx`, and `XIAO-ESP32C6`.
 - `../kicad lib/Library.pretty/` contains the custom board footprints.
 - `3dmodels/` is a gitignored link to the KiCad 3D models in the private `c6remote-explode` repository. See "Key repository conventions".
 - `export/` contains generated Gerber and drill files.
@@ -656,9 +656,9 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 
 The repository tracks both configured library tables. Do not map libraries manually.
 
-`sym-lib-table` defines symbols. `fp-lib-table` defines `Library` and `Local`.
+`sym-lib-table` defines the `ano rotary`, `dmm_4026_b_i2s_r`, and `Local` symbol libraries. `fp-lib-table` defines only `Library`.
 
-`Library` points to `../kicad lib/Library.pretty`. `Local` points to the adjacent `Local.pretty` directory.
+`Library` points to `../kicad lib/Library.pretty`.
 
 These custom footprints are part of the design:
 

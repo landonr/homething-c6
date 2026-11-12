@@ -666,7 +666,6 @@ These custom footprints are part of the design:
 - `SW_TL3315NF160Q.kicad_mod`
 - `Ano Rotary.kicad_mod`
 - `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`
-- `Vishay_PANHEAD-4Pin_SideView.kicad_mod`
 - `Vishay_PANHEAD-4Pin_TopView.kicad_mod`
 
 After a footprint edit, verify the schematic symbol properties and all PCB footprint instances.

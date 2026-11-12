@@ -253,7 +253,7 @@
     ]
   },
   "site-media": {
-    "description": "The four feature clips and their posters, the explode video and its poster, and the web page crop on the C6 site page.",
+    "description": "The four feature clips and their posters, the explode video, and the web page crop on the C6 site page. The explode video's poster is case-exploded.png from case-stills.",
     "made_by": "repo",
     "outputs": [
       "site/assets/c6/clip-tv.mp4",
@@ -265,7 +265,6 @@
       "site/assets/c6/clip-sleep.mp4",
       "site/assets/c6/clip-sleep.jpg",
       "site/assets/c6/explode.mp4",
-      "site/assets/c6/explode.jpg",
       "site/assets/c6/feature-web-page.jpg"
     ],
     "inputs": [
@@ -280,10 +279,10 @@
     "recipe": [
       "The clips come from the demo video IMG_7480/IMG_7480_clicks.mp4 in the homeThingContent checkout. Git does not track that video, so the fingerprint cannot see it.",
       "site-media.sh crops each clip to 1080x1440, scales it to 480x640, and encodes it as H.264 at CRF 26.",
-      "site-media.sh flattens case-explode-loop.webp onto white and encodes explode.mp4. The script reads the frame duration from the loop with webpmux. Frame 106 becomes explode.jpg at quality 85.",
+      "site-media.sh flattens case-explode-loop.webp onto white and encodes explode.mp4. The script reads the frame duration from the loop with webpmux.",
       "explode.mp4 keeps the size and the frame timing of the loop.",
       "feature-web-page.jpg is a 900x1020 crop of buttons-page-assign.png at 600 px wide and quality 82.",
-      "One run writes all eleven files. With the d4e9f33 inputs, the script makes explode.jpg and feature-web-page.jpg again byte for byte."
+      "One run writes all ten files. With the d4e9f33 inputs, the script makes feature-web-page.jpg again byte for byte."
     ]
   },
   "site-hero": {

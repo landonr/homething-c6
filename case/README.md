@@ -21,6 +21,7 @@ The model exports a front shell, back shell, soft button pad, IR window insert, 
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [SLS and FDM versions](#sls-and-fdm-versions).
 It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
+It also exports the end-wall screw, `c6remote-case-screw.stl`, in its installed position. Buy this screw. Do not print it. Read [Parts](#parts).
 
 ## SLS and FDM versions
 
@@ -253,6 +254,23 @@ On the recessed front, the rim runs where the face already turns down toward the
 
 `FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the recessed front's arch depth, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
 
+## Parts
+
+Buy these parts in addition to the board and the printed parts.
+
+| Part | Specification | Qty | Use |
+| --- | --- | --- | --- |
+| End-wall screw | M2 x 5 pan head Phillips screw, ISO 7045 (DIN 7985 H), A2 or 18-8 stainless steel. [Westfield Fasteners](https://www.westfieldfasteners.co.uk/A2-ScrewBolt-PhilRaPan-M2.html) | 1 | Closes the shells at the grip end |
+| Battery | 102050 LiPo pouch cell, single cell, 1000 mAh | 1 | Supplies power to the board |
+| Battery plug housing | Molex PicoBlade `51021-0200` | 1 | Mates with `J1` |
+| Battery plug terminals | Molex PicoBlade `50079-8000` crimp terminals | 2 | Go in the plug housing |
+| Battery strips | Stretch-release adhesive strips | 2 | Hold the pouch cell on the back face of the board |
+| IR window adhesive | Adhesive | As needed | Bonds the IR window flange to the shoulder in the back shell |
+
+If the cell has a PicoBlade plug, do not buy the plug housing and the terminals. Make sure that the plug polarity agrees with the "+" mark on the board.
+
+`c6remote-case-screw.stl` shows the screw in its installed position. Do not print it.
+
 ## Assembly
 
 No screw holds the board. The cavity walls locate it, `BOARD_FIT` per side. The back shell support ledges carry it from below.
@@ -275,7 +293,9 @@ Each back detent sits lower than its pocket and bears on the lower lip with a li
 The preload holds the seam closed.
 `SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
 
-One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and threads into a block behind the front skirt.
+One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and cuts its own thread in a block behind the front skirt.
+
+If you install the screw again, turn it counterclockwise until it drops into its thread. Then turn it clockwise and tighten it lightly, so that it does not cut a new thread.
 
 The negative Y end wall has a pocket for the USB cable boot outside the USB opening. A boot larger than the pocket cannot enter, so its plug does not seat. Verify plug seating on the first print.
 
@@ -373,6 +393,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the cell envelope clear of board parts and the end screw block.
 - Keep the front skirt clear above the support ledge tops.
 - Keep the end screw block clear of the back shell. Its web ties it to the end skirt and the side skirt at skirt height only.
+- Keep the end screw head in its counterbore, below the outer surface of the back shell. Keep the screw tip inside the pilot.
 - Keep the IR window shoulder continuous for adhesive.
 - Keep the front and back shell mating volumes separate. The side catch preload is the only exception. The checks allow this overlap only at the lower pocket lip.
 
@@ -437,3 +458,4 @@ The STL cache absorbs one known nondeterministic tessellation result in the back
 | `glyphs/` | SVG legend centerline strokes |
 | `board/` | Generated board references and the fixed V2 reference |
 | `export/` | Generated STLs and JSON metadata |
+| `export/c6remote-case-screw.stl` | The end-wall screw in its installed position. Do not print it. |

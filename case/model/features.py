@@ -660,6 +660,25 @@ def _window():
     ]
 
 
+def _screw():
+    """The end screw, one part with one id. It is placed off the counterbore
+    floor and runs end_screw_length(), so the parameters those read move its
+    box too."""
+    return [
+        _entry(
+            "end_screw",
+            "hardware.end_screw",
+            "add",
+            hardware.end_screw(),
+            sorted(set(
+                _reads("hardware.end_screw")
+                + _reads("hardware.end_screw_axis")
+                + _reads("hardware.end_screw_length")
+            )),
+        )
+    ]
+
+
 def features():
     """{stl name: [entry]}, keyed by the file the viewer loads.
 
@@ -688,6 +707,7 @@ def features():
         "c6remote-case-pad-tpu-v2-top.stl": _v2_top(skirt=True),
         "c6remote-case-pad-v2-top.stl": _v2_top(skirt=True, fdm=False),
         "c6remote-ir-window.stl": _window(),
+        "c6remote-case-screw.stl": _screw(),
     }
     # An id is what a viewer hands back to be acted on, so two features holding
     # the same one is worse than either being unnamed. This is the guard the

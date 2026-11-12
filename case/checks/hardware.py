@@ -7,6 +7,10 @@ This pass also covers the eleven switches, which have no STEP model.
 End screw: the one fastener that closes the two shells, read off both built
 shells rather than off the stack that sized it.
 
+End screw fit: the modelled screw on the built shells. The head seats on the
+counterbore floor below the back's outer surface, the screw clears the back,
+and the tip ends inside the pilot.
+
 End screw side tie: the web's tie from that block into the selected side skirt, at
 web height only, on both built fronts.
 
@@ -36,7 +40,7 @@ import board
 import case
 import params
 
-from .common import TOLERANCE, Problem, _Crop, _fill_fraction, _volume
+from .common import TOLERANCE, Problem, _Crop, _fill_fraction, _ray_runs, _volume
 
 
 def cell_clearance():
@@ -505,6 +509,146 @@ def end_screw(front, back):
                     part="case-front",
                 )
             )
+    return problems
+
+
+def end_screw_fit(screw, front, back):
+    """The modelled end screw against both built shells.
+
+    Nothing prints the screw, but the exports and the exploded view show it,
+    so it must sit where the cuts are. Every reading starts from the screw's
+    own built solid: its axis and its two ends come off its box, and the shells
+    are read along that axis rather than along end_screw_axis().
+
+    The head: a ray between the shank and the head's rim reads the counterbore
+    floor off the built back and the head's underside off the screw, and the
+    two must agree. Rays just outside the counterbore rim read the back's outer
+    surface, and the head's outer face must stay inboard of all four.
+
+    The back: the screw and the back share no more than TOLERANCE.
+
+    The tip: a ray under the pilot reads the block's -Y face off the built
+    front, and the tip must pass it. A ray on the screw's own axis reads the
+    first front material, the pilot floor, and the tip must not pass it. A
+    screw off the pilot's axis reads the block face there instead and fails the
+    same way.
+    """
+    problems = []
+    box = screw.bounding_box()
+    sx, sz = box.center().X, box.center().Z
+    top, tip = box.min.Y, box.max.Y
+    head_r = box.size.X / 2
+    # The front rays run past the block's back as well as past the tip, so a
+    # short screw still finds the block face and the pilot floor ahead of it.
+    far = max(tip, case.end_screw_block().bounding_box().max.Y) + 0.3
+    lo = (box.min.X - 1, box.min.Y - 2, box.min.Z - 1)
+    hi = (box.max.X + 1, far + 0.5, box.max.Z + 1)
+    back_crop = _Crop(back, lo, hi)
+    front_crop = _Crop(front, lo, hi)
+    start = top - 1.5
+
+    # Halfway between the clearance bore and the head's rim, the ray meets the
+    # counterbore floor in the back and the head's full height in the screw.
+    seat_r = (params.SHELL_SCREW_CLEAR_D / 2 + head_r) / 2
+    ray = ((sx + seat_r, start, sz), (sx + seat_r, tip, sz))
+    floor_runs = back_crop.ray_runs(*ray)
+    head_runs = _ray_runs(screw, *ray)
+    if not floor_runs or not head_runs:
+        problems.append(Problem(
+            f"no counterbore floor or no screw head on the ray {seat_r:.2f} off "
+            "the end screw's axis, so the seat cannot be read",
+            at=ray[0],
+            part="case-screw",
+        ))
+    else:
+        floor = start + floor_runs[0][0]
+        under = start + head_runs[0][1]
+        if abs(under - floor) > 0.01:
+            problems.append(Problem(
+                f"the end screw head's underside is at y {under:.2f}, "
+                f"{under - floor:+.2f} from the counterbore floor at y "
+                f"{floor:.2f}, so the head does not seat",
+                at=(sx + seat_r, floor, sz),
+                part="case-screw",
+            ))
+
+    rim = params.SHELL_SCREW_HEAD_D / 2 + 0.3
+    surfaces = []
+    for dx, dz, where in (
+        (rim, 0, "+x"), (-rim, 0, "-x"), (0, rim, "above"), (0, -rim, "below"),
+    ):
+        runs = back_crop.ray_runs(
+            (sx + dx, start, sz + dz), (sx + dx, top + 1, sz + dz)
+        )
+        if not runs:
+            problems.append(Problem(
+                f"the back has no outer surface {where} the end screw's "
+                "counterbore rim to read the head against",
+                at=(sx + dx, top, sz + dz),
+                part="case-back",
+            ))
+            continue
+        surfaces.append(start + runs[0][0])
+    if surfaces:
+        surface = max(surfaces)
+        if top - surface < 1e-3:
+            problems.append(Problem(
+                f"the end screw head's outer face at y {top:.2f} stands "
+                f"{surface - top:.2f} proud of the back's outer surface at y "
+                f"{surface:.2f}, so the head is not below the end wall",
+                at=(sx, top, sz),
+                part="case-screw",
+            ))
+
+    fouled = back_crop.fill_fraction(screw) * _volume(screw)
+    if fouled > TOLERANCE:
+        problems.append(Problem(
+            f"the end screw shares {fouled:.2f} mm3 with the back shell, so its "
+            "head or its shank runs into the end wall",
+            box=screw,
+            part="case-screw",
+        ))
+
+    # Under the pilot, midway to the block's bottom, the first front material
+    # along +Y is the block's -Y face.
+    below = (params.END_SCREW_PILOT_D / 2 + params.END_SCREW_BLOCK_BOTTOM) / 2
+    runs = front_crop.ray_runs((sx, top, sz - below), (sx, far, sz - below))
+    if not runs:
+        problems.append(Problem(
+            f"the front has no block {below:.2f} under the end screw's axis to "
+            "read its -Y face from",
+            at=(sx, tip, sz - below),
+            part="case-front",
+        ))
+    else:
+        face = top + runs[0][0]
+        if tip <= face:
+            problems.append(Problem(
+                f"the end screw tip at y {tip:.2f} stops {face - tip:.2f} short "
+                f"of the block's -Y face at y {face:.2f}, so it never enters "
+                "the pilot",
+                at=(sx, tip, sz),
+                part="case-screw",
+            ))
+    runs = front_crop.ray_runs((sx, top, sz), (sx, far, sz))
+    if not runs:
+        problems.append(Problem(
+            f"the front has no material on the end screw's axis up to y "
+            f"{far:.2f}, past the block's back, so the pilot has no floor",
+            at=(sx, tip, sz),
+            part="case-front",
+        ))
+    else:
+        pilot_floor = top + runs[0][0]
+        if tip > pilot_floor + 0.01:
+            problems.append(Problem(
+                f"the end screw tip at y {tip:.2f} runs {tip - pilot_floor:.2f} "
+                f"past the first front material on its axis at y "
+                f"{pilot_floor:.2f}, so it passes the pilot floor or misses "
+                "the pilot",
+                at=(sx, pilot_floor, sz),
+                part="case-screw",
+            ))
     return problems
 
 

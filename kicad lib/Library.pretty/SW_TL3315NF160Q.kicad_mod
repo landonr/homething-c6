@@ -145,6 +145,17 @@
 		(layer "F.SilkS")
 		(uuid "a7a3702e-d43f-4f8f-9b14-bd1898afe5ed")
 	)
+	(fp_circle
+		(center -3.2 -1.75)
+		(end -3.075 -1.75)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.SilkS")
+		(uuid "80771231-43cc-41fc-acec-e87651267f0a")
+	)
 	(fp_poly
 		(pts
 			(xy -2.375 -1.2) (xy -2.575 -1.2) (xy -2.575 -2.3) (xy -2.375 -2.3) (xy -2.375 -2.1) (xy -1.875 -2.1)

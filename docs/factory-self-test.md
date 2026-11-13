@@ -39,14 +39,18 @@ The top of the board is the end with the microphone hole and the IR LED `D1`. Th
 
 ## LED positions
 
-| LED | Position | Check | Board |
-| --- | --- | --- | --- |
-| `D2` | Bottom left | Buttons and wheel | V2 and V3 |
-| `D3` | Top left | Microphone | V2 and V3 |
-| `D6` | Top center | IR transmit | V3 |
-| `D4` | Top right | IR receive | V2 and V3 |
-| `D5` | Bottom right | Battery | V2 and V3 |
-| `D7` | Bottom center | USB power | V3 |
+Each diagram in this procedure shows the front face. An orange outline marks a control to press. A blue ring marks the LED that answers.
+
+![Front face of the remote with the six status LEDs named round the wheel. D3 is at the top left for the microphone, D6 at the top center for IR transmit on V3, D4 at the top right for IR receive, D5 at the bottom right for the battery, D7 at the bottom center for USB power on V3, and D2 at the bottom left for the buttons and wheel.](readme-assets/self-test-led-map.svg)
+
+| LED | Check | Board |
+| --- | --- | --- |
+| `D2` | Buttons and wheel | V2 and V3 |
+| `D3` | Microphone | V2 and V3 |
+| `D6` | IR transmit | V3 |
+| `D4` | IR receive | V2 and V3 |
+| `D5` | Battery | V2 and V3 |
+| `D7` | USB power | V3 |
 
 At power-on, the firmware shows this first overview after the boot animation. Each check LED has two states:
 
@@ -99,6 +103,8 @@ The battery keeps the results if you disconnect USB power alone.
 
 ### Step 1: Power on and boot animation
 
+![Front face of the remote with the boot animation. Arrows run clockwise round the wheel in chain order from D2 at the bottom left, through D3 at the top left, D6 at the top center, D4 at the top right and D5 at the bottom right, to D7 at the bottom center. D2 lights red, D3 azure, D6 magenta, D4 green, D5 blue and D7 cyan.](readme-assets/self-test-step-1-boot.svg)
+
 1. Put the board front up in your hand or on a non-conductive surface.
 2. Look at the ring and connect the charged battery to `J1`. The board starts.
 3. Make sure that a wave of color goes clockwise round the ring two times. This is the boot animation.
@@ -107,14 +113,14 @@ The battery keeps the results if you disconnect USB power alone.
 
 The boot animation is the animation of the full firmware. It lights the LEDs in chain order, and it gives each LED its own color.
 
-| LED | Position | Boot animation color |
-| --- | --- | --- |
-| `D2` | Bottom left | Red |
-| `D3` | Top left | Azure |
-| `D6` | Top center | Magenta |
-| `D4` | Top right | Green |
-| `D5` | Bottom right | Blue |
-| `D7` | Bottom center | Cyan |
+| LED | Boot animation color |
+| --- | --- |
+| `D2` | Red |
+| `D3` | Azure |
+| `D6` | Magenta |
+| `D4` | Green |
+| `D5` | Blue |
+| `D7` | Cyan |
 
 The azure of `D3` is a lighter blue than the blue of `D5`. A V2 board shows only red, azure, green, and blue.
 
@@ -129,6 +135,8 @@ After the boot animation, each check LED shows dim amber. A wake from deep sleep
 If the ring stays dark when you connect the battery, connect USB power. If the board then starts, the battery is flat or `J1` has a fault.
 
 ### Step 2: Buttons and wheel (`D2`)
+
+![Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, the wheel direction ring and the wheel center. D2, at the bottom left of the wheel, answers.](readme-assets/self-test-step-2-inputs.svg)
 
 1. Press and hold each button, `SW1` to `SW11`, for less than 1 s. Then release it.
 2. Press each wheel direction for less than 1 s: up, down, left, right, and the wheel center.
@@ -177,7 +185,9 @@ The sleep check is 1 s longer than the other holds, so a shorter hold in this st
 
 ### Step 3: Microphone (`D3`)
 
-The microphone receives sound through the small hole at the top center of the front. Do not cover this hole.
+![Front face of the remote with the wheel center marked for a 2 s hold and the microphone hole marked at the top center of the face. D3, at the top left of the wheel, answers.](readme-assets/self-test-step-3-microphone.svg)
+
+The diagram shows the microphone hole. Do not cover this hole.
 
 1. Press and hold the wheel center for 2 s. The ring changes to the VU meter.
 2. Speak toward the front of the board, at a distance of approximately 30 cm.
@@ -194,6 +204,8 @@ If the bar does not move with a voice, the microphone or its sound hole has a fa
 
 ### Step 4: IR receive (`D4`)
 
+![Front face of the remote for the IR receive check. The sheet marks no button, because the receiver is on the back of the board. D4, at the top right of the wheel, answers.](readme-assets/self-test-step-4-ir-receive.svg)
+
 The IR receiver `U2` is on the back of the board, and it receives through the back face.
 
 1. Hold the board with its back toward the IR remote, at a distance of 0.3 m to 1 m.
@@ -205,6 +217,8 @@ The IR receiver `U2` is on the back of the board, and it receives through the ba
 The board ignores its own IR transmit, so step 5 cannot pass this step.
 
 ### Step 5: IR transmit (`D6` on V3)
+
+![Front face of the remote with the top right button SW1 marked for a 2 s hold, and the IR LED D1 marked inside the top end. D6, at the top center of the wheel, answers on a V3 board.](readme-assets/self-test-step-5-ir-transmit.svg)
 
 1. Start the camera of the phone. Aim it at `D1` on the top edge of the board.
 2. Press and hold `SW1` for 2 s.
@@ -219,6 +233,8 @@ On a V3 board, `D6` is green when the transmit ends. `D6` shows only that the fi
 The IR LED transmits only during this step. Each burst is 50 ms of 38 kHz carrier. No common IR protocol has a mark this long, so a TV near the board does not respond.
 
 ### Step 6: Battery (`D5`)
+
+![Front face of the remote for the battery check. The sheet marks no button, because the step disconnects USB power. D5, at the bottom right of the wheel, answers.](readme-assets/self-test-step-6-battery.svg)
 
 1. Disconnect USB power. Keep the battery connected.
 2. Make sure that the board stays on. On a V3 board, the ring also flashes orange one time.
@@ -235,6 +251,8 @@ On a V2 board, `D5` is green approximately 4 s after the board starts with the b
 
 ### Step 7: USB power (`D7`, V3 only)
 
+![Front face of the remote for the USB power check. The sheet marks no button, because the step connects USB power again. D7, at the bottom center of the wheel, answers on a V3 board.](readme-assets/self-test-step-7-usb-power.svg)
+
 Skip this check on a V2 board, because it has no USB detector. Connect USB power before step 8 on both board versions.
 
 1. Connect USB power again. Keep the battery connected.
@@ -244,6 +262,8 @@ Skip this check on a V2 board, because it has no USB detector. Connect USB power
 - Fail: A connection or disconnection gives no flash, or `D7` stays dim amber.
 
 ### Step 8: Radios (`D2`, second overview)
+
+![Front face of the remote with the top left button SW2 marked for a 2 s hold, which changes to the second overview. D5, at the bottom right of the wheel, is then the dim blue page indicator, and D2, at the bottom left, answers the radio check.](readme-assets/self-test-step-8-radios.svg)
 
 1. Make sure that a nearby Wi-Fi access point or phone hotspot sends a network name.
 2. Hold `SW2` for 2 s, then release it. Make sure that `D5` is dim blue.
@@ -267,6 +287,8 @@ The station has no BLE receiver, so this check cannot confirm BLE reception over
 Do not give the board Wi-Fi credentials during this procedure.
 
 ### Step 9: Sleep and wake (`D3`, second overview)
+
+![Front face of the remote with SW3, the top left button below the wheel, marked for the 3 s hold that sleeps the board and for the press that wakes it. D5, at the bottom right of the wheel, is the dim blue page indicator, and D3, at the top left, answers the sleep and wake check.](readme-assets/self-test-step-9-sleep-wake.svg)
 
 Do this step last. The shutdown and restart make this the slowest operator step.
 
@@ -361,6 +383,8 @@ These checks and parts are on V3 boards only:
 - The battery check on battery power only.
 - The `ir_vdd` switch `Q3`, which the firmware turns on for the IR receive check.
 - The `DMM-4026-B-I2S-R` microphone. A V2 board has the ICS-43434.
+
+The diagrams show a V3 board. A V2 board has no `D6` and no `D7`, so ignore those two positions on a V2 board.
 
 Both board versions have the radio check and the sleep and wake check on the second overview.
 

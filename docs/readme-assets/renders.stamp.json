@@ -12,7 +12,7 @@
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "0b3fda801f149865762a41ddbd2bda8f9063c7f3cb2cd28b2a300a73beb90072",
+    "fingerprint": "20bc5b35f4683264f1673da7154f4f96e6a856b3ea309685a97fb0d8a48b3151",
     "source": "index"
   },
   "case-fronts": {
@@ -25,6 +25,10 @@
   },
   "schematic": {
     "fingerprint": "b9d433423dba0b1de9c78f0e3cbe3057d780fc9c3068171209f2130268fd38ea",
+    "source": "index"
+  },
+  "self-test-diagrams": {
+    "fingerprint": "53387e510db8c547fce1accf55b8b22e94f33b6066beb17369175054af224f15",
     "source": "index"
   },
   "site-hero": {

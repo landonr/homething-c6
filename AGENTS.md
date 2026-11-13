@@ -421,7 +421,9 @@ The second overview uses `D2` for the radio check, `D3` for sleep and wake, and 
 
 All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
 
-The procedure holds the tables of LED positions. If you move a check, change the table in the same commit.
+The procedure holds one table of the check that each LED carries, and one table of the boot chase colours. If you move a check, change the table in the same commit.
+
+`scripts/render-self-test-svg.py` draws the operator diagrams of the procedure: the labelled LED map and one sheet for each step. It reuses `plan_view()` of `scripts/face_plan.py`, and it reads the six LED positions from the board through `case/board.py`. `LED_CHAIN` in that script is the chain order of `self_test.cpp`, and the diagrams hold the LED positions that the tables no longer give. The `self-test-diagrams` group of `scripts/renders.json` holds its inputs and its refresh step. `scripts/tests/test_self_test_diagrams.py` checks the document, the render group, and the chain order together.
 
 While an operator holds an input, the ring shows one colour on its top half and another colour on its bottom half. `INPUT_PAIR` in `self_test.cpp` gives the pair of each expander bit. The procedure holds the same table, so change both in the same commit.
 

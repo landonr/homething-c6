@@ -687,7 +687,7 @@ class DocTest(unittest.TestCase):
         code = {}
         for index, check in re.findall(r"show\((\w+), this->(\w+?)(?:\(\))?\);", overview):
             code[self.LED_OF_INDEX[index]] = self.CHECKS[check]
-        doc = dict(re.findall(r"(?m)^\| `(D\d)` \| [^|]+ \| ([^|]+?) \| [^|]+ \|$", DOC))
+        doc = dict(re.findall(r"(?m)^\| `(D\d)` \| ([^|]+?) \| [^|]+ \|$", DOC))
         self.assertEqual(len(code), 6)
         self.assertEqual(doc, code)
 
@@ -749,7 +749,7 @@ class DocTest(unittest.TestCase):
         comment = CPP[:CPP.index("static const Color CHASE_COLOUR[6]")]
         code = re.findall(r"(D\d) (\w+)", comment[comment.rindex("in chain order:"):])
         doc = [(led, colour.lower())
-               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| [^|]+ \| (\w+) \|$", DOC)]
+               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| (\w+) \|$", DOC)]
         self.assertEqual(len(code), 6)
         self.assertEqual(doc, code)
 

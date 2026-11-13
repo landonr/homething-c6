@@ -178,10 +178,14 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 #### Schematic
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
-    <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
-  </picture>
+  <a href="docs/readme-assets/schematic.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
+      <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
+    </picture>
+  </a>
+  <br>
+  <sub>Open the <a href="docs/readme-assets/schematic.svg">full-size schematic</a> to read the part values and the net names.</sub>
 </p>
 
 ## Status ([more info](docs/timeline.md))

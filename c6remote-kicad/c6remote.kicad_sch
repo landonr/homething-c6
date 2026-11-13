@@ -5566,7 +5566,7 @@
 	)
 	(wire
 		(pts
-			(xy 204.47 68.58) (xy 204.47 60.96)
+			(xy 204.47 68.58) (xy 204.47 59.69)
 		)
 		(stroke
 			(width 0)
@@ -5898,16 +5898,16 @@
 	)
 	(global_label "usb_present_n"
 		(shape bidirectional)
-		(at 204.47 60.96 90)
+		(at 204.47 59.69 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left)
+			(justify right)
 		)
 		(uuid "3d0c8c35-f7ec-495e-b0f0-200baa2c2ec2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 204.47 60.96 0)
+			(at 204.47 59.69 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

@@ -644,11 +644,11 @@ CAVITY_FRONT, see check.py's wheel_seat_clearance), so this bore is a
 pad-side rotating clearance only, not something the shell's own wheel
 opening has to match: the board is lowered into an already-closed front
 shell, so the shell's opening only ever has to clear whatever of the wheel
-passes through it, the housing and knob above the lip, not the lip itself."""
+passes through it, the bezel and knob above the lip, not the lip itself."""
 
 WHEEL_OPENING_R = WHEEL_MAIN_OD / 2 + params.WHEEL_OPENING_CLEARANCE
 """The shell's own wheel opening, a plain bore from the ceiling underside to
-the face: the main rotating body's radius plus WHEEL_OPENING_CLEARANCE,
+the face: the fixed bezel's radius plus WHEEL_OPENING_CLEARANCE,
 its own gap rather than the pad's WHEEL_CLEARANCE, so the bore closes around
 the wheel on a line tight enough to read as one. Narrower than LIP_CLEAR_R,
 which is fine for the same reason that bore is pad-only: the lip stays below

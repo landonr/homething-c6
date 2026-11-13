@@ -561,9 +561,9 @@ this gap is buried under the pad and the face's is looked at, so one number
 could not answer to both. board.wheel_profile() measures the diameter rather
 than it being hand-entered."""
 WHEEL_OPENING_CLEARANCE = 0.2
-"""Radial gap the shell's own opening leaves around the wheel's main rotating
-body, the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
-because this one is a visible line around the knob rather than buried
+"""Radial gap the shell's own opening leaves around the wheel's fixed bezel,
+the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
+because this one is a visible line around the bezel rather than buried
 clearance, and the lip never transits the opening so nothing wider has to
 pass it."""
 WHEEL_RIM_LEDGE = 1.0

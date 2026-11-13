@@ -27,6 +27,7 @@ Options:
 
 The PNGs are rendered from a board GLB exported from the PCB on every run, with
 Blender by scripts/render-board-blender.py. BLENDER overrides the Blender binary.
+The GLB needs the KiCad 3D models. Run scripts/link-3dmodels.sh once to link them.
 If BLENDER is not set, the script uses blender on PATH, then the macOS app path.
 If magick is on PATH, the script trims each PNG.
 EOF
@@ -121,6 +122,7 @@ if [[ "${ONLY}" != "schematic" ]]; then
     echo "Blender not executable: ${BLENDER_BIN} (set BLENDER, or put blender on PATH)" >&2
     exit 1
   fi
+  "${SCRIPT_DIR}/check-3dmodels.sh" "${PCB_FILE}"
   BOARD_DIR="$(mktemp -d)"
   trap 'rm -rf "${BOARD_DIR}"' EXIT
   # The export exits non-zero when a footprint names a 3D model that is not installed

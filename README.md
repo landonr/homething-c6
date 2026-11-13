@@ -190,6 +190,44 @@ The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus 
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.
 
+## License
+
+This repository uses three licenses. A file uses the license of the row that contains its path.
+
+| Path | License |
+| --- | --- |
+| The ESPHome configs (`c6remote*.yaml`, `secrets.example.yaml`, `partitions.csv`), the root C++ headers (`*.h`), `components/`, `scripts/`, and `.github/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+| `c6remote-kicad/` (the schematic, the board, the symbol and footprint libraries, and the `export/` fabrication files), `kicad lib/`, and `case/` (the build123d model source, its checks, the board STEP and DXF files, and the meshes and STEP files that the model exports) | [CERN-OHL-S-2.0](LICENSE-CERN-OHL-S-2.0) |
+| The documentation (`README.md`, `RECEIVER.md`, `ZIGBEE.md`, `TRANSMITTING.md`, and `docs/`, with the images in `docs/readme-assets/`), and `site/` | [CC-BY-4.0](LICENSE-CC-BY-4.0) |
+| All other files, for example `AGENTS.md`, `.gitignore`, `.gitattributes`, `.mcp.json`, and `.vscode/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+
+A firmware binary that you build from these configs links the GPL-3.0 C++ core of ESPHome. As a result, a distributed binary is GPL-3.0. Its source is this repository and the dependencies below.
+
+For CERN-OHL-S-2.0, the Source Location of the hardware is <https://github.com/landonr/homething-c6>.
+
+### Third-party files
+
+These files keep their own licenses:
+
+| File | Origin | License |
+| --- | --- | --- |
+| `case/fonts/DejaVuSans.ttf` | DejaVu fonts | Bitstream Vera license, see [`case/fonts/LICENSE`](case/fonts/LICENSE) |
+| `scripts/assets/env-studio.hdr` | Poly Haven `studio_small_09` HDRI | CC0-1.0 |
+| The Wi-Fi and Bluetooth icons in `site/index.html` | Feather icons | MIT |
+| `kicad lib/Library.pretty/LED_D3.0mm_Horizontal_O1.27mm_Z2.0mm_IRBlack.kicad_mod`, and the `SW_TL3315NF160Q` and `TSOP61xx` symbols in `c6remote-kicad/Local.kicad_sym` | KiCad libraries | CC-BY-SA-4.0 with the [KiCad library exception](https://www.kicad.org/libraries/license/) |
+
+Because of the KiCad library exception, CC-BY-SA-4.0 does not apply to a design that uses these items. The schematic and the board also contain stock KiCad symbols and footprints. The same exception applies to them.
+
+These items are not in this repository:
+
+- The KiCad 3D models are in a private repository. See `scripts/link-3dmodels.sh`.
+- The build fetches these firmware dependencies:
+  - ESPHome: MIT for the Python code, and GPL-3.0 for the C++ code.
+  - ESP-IDF and `esp-zigbee-lib`: Apache-2.0.
+  - `luar123/zigbee_esphome`: no license file yet. [Issue 119](https://github.com/luar123/zigbee_esphome/issues/119) asks for one.
+
+The licenses do not give rights to trademarks, for example ESPHome, Home Assistant, Seeed Studio XIAO, Adafruit ANO, Discord, and GitHub. Some of these trademarks are in images, for example `site/assets/legacy/s3-video.jpg`.
+
 # Includes
 - <a href="https://esphome.io/">ESPHome</a>
 - <a href="https://dejavu-fonts.github.io/">DejaVu Sans Bold</a>, used for the board silkscreen brand text

@@ -565,7 +565,7 @@ def _fdm_mouth_budget():
 def wheel_opening(z0, z1, fdm=False):
     """The shell's wheel opening: one plain bore at WHEEL_OPENING_R, ceiling
     underside to the face, so below the keypad recess's wheel basin the face closes in flush
-    to the wheel's main rotating body with only WHEEL_OPENING_CLEARANCE between
+    to the wheel's fixed bezel with only WHEEL_OPENING_CLEARANCE between
     them. The top of the bore is opened out by that recess instead, a dish on
     the same axis whose floor the bore breaks through. No countersink and no
     window any more: nothing seats in it, and the LEDs show through the

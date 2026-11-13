@@ -72,6 +72,11 @@ c6remote-kicad/drc-*.json
 c6remote-kicad/_restore_backup_*/
 c6remote-kicad/*.kicad_pcb.*.bak
 
+# KiCad 3D models. They are in the private c6remote-explode repository, and
+# scripts/link-3dmodels.sh links them here. The rule has no trailing slash,
+# so it also matches the symlink.
+/c6remote-kicad/3dmodels
+
 # Files that KiCad writes on its own: the footprint cache, the autosave
 # archives, the schematic backup, and the local view settings.
 c6remote-kicad/fp-info-cache

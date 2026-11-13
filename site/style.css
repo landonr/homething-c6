@@ -930,6 +930,12 @@ figcaption {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.article .parts th,
+.article .parts td {
+  /* A phone screen would otherwise break short register names inside a word. */
+  overflow-wrap: break-word;
+}
+
 .article-links {
   color: var(--muted);
 }

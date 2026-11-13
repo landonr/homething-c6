@@ -700,7 +700,7 @@ def _inner_chamfer_is_cut(s):
 def _wheel_seat_clearance(s):
     return _report(
         wheel_seat_clearance(s.front),
-        "shell's own opening sits flush to the housing at "
+        "shell's own opening sits flush to the bezel at "
         "WHEEL_OPENING_CLEARANCE wherever it is cut through real shell, "
         "lip stays clear of the ceiling",
     )

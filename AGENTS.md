@@ -67,10 +67,9 @@ The hardware source files are in `c6remote-kicad/`:
 - `c6remote.kicad_sch` is the single-sheet schematic.
 - `c6remote.kicad_pcb` is the board layout.
 - `c6remote.kicad_pro` contains ERC settings, DRC settings, BOM settings, and project metadata.
-- `ano rotary.kicad_sym` contains only the custom `ENC1` symbol.
-- `Local.kicad_sym` contains `SW_TL3315NF160Q` and `TSOP61xx`.
+- `Local.kicad_sym` contains `ANO-Rotary-Encoder`, `SW_TL3315NF160Q`, `TSOP61xx`, and `XIAO-ESP32C6`.
 - `../kicad lib/Library.pretty/` contains the custom board footprints.
-- `3dmodels/` contains models that use `${KIPRJMOD}`.
+- `3dmodels/` is a gitignored link to the KiCad 3D models in the private `c6remote-explode` repository. See "Key repository conventions".
 - `export/` contains generated Gerber and drill files.
 
 The firmware files are in the repository root:
@@ -174,7 +173,7 @@ The script shows the fill outlines of each zone and fails if DRC with and withou
 
 Do not use the MCP `refill_zones` tool. It first saves the board that the MCP server holds in memory, and that copy can be older than the file. Its fill subprocess also does not protect the project files.
 
-`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented one-warning baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
+`scripts/check-design.py` runs both checks from the repository root. It fails on violations outside the documented baseline below. `.github/workflows/design-checks.yml` runs it on every push and pull request in the `kicad/kicad:10.0` container. Run it locally the same way as CI:
 
 ```bash
 python3 scripts/check-design.py            # both checks
@@ -216,6 +215,7 @@ When you stage the schematic or board, the hook performs these actions:
 - It runs `regen-fab.sh` and stages `export/`.
 - It runs `scripts/render-readme-assets.sh` and stages `docs/readme-assets/`. The board PNGs render with Blender from `scripts/render-board-blender.py`.
 - A staged PCB uses `--only board`. A staged schematic uses `--only schematic`. Both files use `--only all`.
+- The board renders need the linked 3D models. If a model is missing, a commit with a staged PCB fails.
 - A staged PCB runs `scripts/render-annotated-remote.py --only board`. This step updates the four annotated board SVGs from the new board PNGs.
 - A staged PCB runs `scripts/gen-ibom.sh` for `c6remote-kicad/ibom.html`.
 - After the hook regenerates a render group, it runs `scripts/render-status.py --write <group> --stage`. That step stages only the entry of that group in `docs/readme-assets/renders.stamp.json`.
@@ -230,18 +230,17 @@ The iBOM step is nonfatal because it needs KiCad Python and a first-run network 
 
 Gerber and drill headers contain timestamps. A board commit restages all files in `export/`, even without geometry changes.
 
-### Validation baseline from 2026-08-31
+### Validation baseline from 2026-11-12
 
 - `sch erc` reports 0 violations.
-- `pcb drc` reports 0 errors, 0 unconnected items, and 1 allowed warning.
-- The `lib_footprint_mismatch` warning is for `U1`.
-- `U1` is the only footprint that differs from its library footprint.
-- In the board copy of `U1`, pads 24-31 are plated holes, and pads 32 and 33 are SMD pads. The library footprint has the opposite pad types.
-- The board copy of `U1` also has F.Mask on pads 24-31, so their copper is open on the front.
+- `pcb drc` reports 0 errors, 0 unconnected items, and 0 warnings.
+- Each footprint on the board is equal to its library footprint, so DRC reports no `lib_footprint_mismatch` warning.
+- `U1` uses `Library:XIAO-ESP32-C6-SMD`, which this project drew. Pads 24-31 are plated holes, and pads 32 and 33 are SMD pads.
+- `U1` pads 24-31 also have F.Mask, so their copper is open on the front.
 - Parity reports 0 issues.
 - `TP1`-`TP6` are bare debug pads. The BOM and the position file exclude them. The board has no board-only items.
 
-Treat these counts as the baseline unless the task targets them. A second warning is a new regression.
+Treat these counts as the baseline unless the task targets them. A DRC warning is a new regression.
 
 Two choices keep the silkscreen text checks quiet. `min_text_height` is 0.8mm, because the XIAO pin labels need it.
 
@@ -257,9 +256,9 @@ Use the KiCad DRC panel or ratsnest airwire to locate an island.
 
 The project ignores `silk_over_copper` and `silk_edge_clearance`. Do not enable these rules to restore the baseline.
 
-The artwork still has 24 `silk_over_copper` and 4 `silk_edge_clearance` cases.
+The artwork still has 8 `silk_over_copper` cases, all at `D1`, and no `silk_edge_clearance` case.
 
-Five `silk_over_copper` cases are intentional ENC1 wheel-outline crossings.
+The ENC1 wheel-outline silk has a gap at each pad, so it has no `silk_over_copper` case.
 
 ## Branches and releases
 
@@ -656,26 +655,41 @@ Prefer the distributor-hosted revision. Compare each pin table with its diagram.
 
 The repository tracks both configured library tables. Do not map libraries manually.
 
-`sym-lib-table` defines symbols. `fp-lib-table` defines `Library`, `Local`, and `Seeed_Studio_XIAO_Series`.
+`sym-lib-table` defines the `dmm_4026_b_i2s_r` and `Local` symbol libraries. `fp-lib-table` defines only `Library`.
 
-`Library` points to `../kicad lib/Library.pretty`. The other names point to adjacent `.pretty` directories.
+`Library` points to `../kicad lib/Library.pretty`.
 
 These custom footprints are part of the design:
 
-- `XIAO-ESP32C6-DIP.kicad_mod`
+- `XIAO-ESP32-C6-SMD.kicad_mod`
 - `SW_TL3315NF160Q.kicad_mod`
-- `Ano Rotary.kicad_mod`
+- `ANO-Rotary-Encoder.kicad_mod`
 - `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`
-- `Vishay_PANHEAD-4Pin_SideView.kicad_mod`
 - `Vishay_PANHEAD-4Pin_TopView.kicad_mod`
 
 After a footprint edit, verify the schematic symbol properties and all PCB footprint instances.
 
-The models are in `c6remote-kicad/3dmodels/`. Record each new model citation in `c6remote-kicad/3dmodels/README.md`.
+The footprints and the board reference the custom 3D models as `${KIPRJMOD}/3dmodels/<file>`. Do not change these paths.
 
-That file also records model sources and orientation constraints.
+The models are in `3dmodels/` in the private `c6remote-explode` repository. Most are third-party files without a clear right to redistribute.
 
-`ano rotary.kicad_sym` defines `ENC1`. Its pin electrical types are not clean ERC models.
+Do not add a model to this repository. `.gitignore` excludes `c6remote-kicad/3dmodels`.
+
+Run `scripts/link-3dmodels.sh` once for each clone or worktree. It links `c6remote-kicad/3dmodels` to the models.
+
+If the `c6remote-explode` checkout is not at `~/dev/c6remote-explode`, set `EXPLODE` to its path.
+
+Without the link, the KiCad 3D view shows bare pads for the parts with custom models.
+
+Fabrication outputs, ERC, DRC, CI, and the iBOM do not use the models.
+
+`scripts/export-case-refs.sh` and the board renders in `scripts/render-readme-assets.sh` need the models.
+
+Before an export, both scripts run `scripts/check-3dmodels.sh`. If a model that the board names is missing, the check stops the script and names the file.
+
+Record each new model citation in `3dmodels/README.md` in `c6remote-explode`. That file also records model sources and orientation constraints.
+
+The `ANO-Rotary-Encoder` symbol in `Local.kicad_sym` defines `ENC1`. Its pin electrical types are not clean ERC models.
 
 If you change that symbol, expect a possible ERC baseline change.
 

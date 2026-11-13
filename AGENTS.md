@@ -407,11 +407,15 @@ Keep `secrets.example.yaml`, because `c6remote-test-mic-vu.yaml` still reads Wi-
 
 `c6remote-factory.yaml` also runs a hardware self-test. `components/self_test/` holds the logic. `docs/factory-self-test.md` is the operator procedure that goes to PCBWay with the order.
 
+The procedure is for a station operator with no schematic. Keep the engineering rationale in this file. Each step states its pass condition one time, in its `Pass` line.
+
+The procedure covers V3 only, because the station assembles V3 boards. It names no V2 branch. A bench unit runs the checks that its own hardware has.
+
 The self-test opens with the boot chase of `c6remote.yaml`. `draw_chase_()` in `self_test.cpp` is a copy of the chase, so a change to one file does not change the other.
 
 The overview follows the chase with no gap. The boot has no other animation, so do not add a colour sweep.
 
-A wake from deep sleep plays the chase again. The self-test keeps its earlier check results in RTC memory.
+A wake from deep sleep plays the chase again. A wake also starts every check again at pending.
 
 The first overview keeps the original check positions, with `D5` for the battery and `D7` for USB power on V3.
 
@@ -421,15 +425,21 @@ The second overview uses `D2` for the radio check, `D3` for sleep and wake, and 
 
 All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
 
-The procedure holds one table of the check that each LED carries, and one table of the boot chase colours. If you move a check, change the table in the same commit.
+The procedure has no table of the check that each LED carries. The step headings and the LED map diagram give that mapping.
+
+Each overview fact sits in the step that first needs it. Step 1 holds the two check LED states, step 8 holds the second overview table, and step 9 holds the cyan sleep request.
+
+The `Color reference` section at the end holds the boot chase colours, the held input pairs, and the ring patterns.
+
+Each step points at that section instead of a copy. If you move a check or change a colour, change the table in the same commit.
 
 `scripts/render-self-test-svg.py` draws the operator diagrams of the procedure: the labelled LED map and one sheet for each step. It reuses `plan_view()` of `scripts/face_plan.py`, and it reads the six LED positions from the board through `case/board.py`. `LED_CHAIN` in that script is the chain order of `self_test.cpp`, and the diagrams hold the LED positions that the tables no longer give. The `self-test-diagrams` group of `scripts/renders.json` holds its inputs and its refresh step. `scripts/tests/test_self_test_diagrams.py` checks the document, the render group, and the chain order together.
 
-While an operator holds an input, the ring shows one colour on its top half and another colour on its bottom half. `INPUT_PAIR` in `self_test.cpp` gives the pair of each expander bit. The procedure holds the same table, so change both in the same commit.
+While an operator holds an input, the ring shows one colour on its top half and another colour on its bottom half. `INPUT_PAIR` in `self_test.cpp` gives the pair of each expander bit. The `Color reference` section of the procedure holds the same table, so change both in the same commit.
 
 `BASE_COLOUR` holds five colours: red, green, blue, white, and magenta. No bit uses one colour on both halves, so a one-colour ring is never a held input. If you add a colour, keep the pairs unique and keep the two halves different.
 
-The chase gives each LED one colour, so step 1 cannot find an LED that makes one colour alone. The held inputs put four or more colours on each half, and step 1 points at step 2 for that fault.
+The chase gives each LED one colour, so step 1 cannot find an LED that makes one colour alone. The held inputs of step 2 put four or more colours on each half.
 
 The VU meter is the microphone step of the procedure. The 2 s hold of the wheel centre turns it on and off. The microphone LED passes on the level threshold alone, so the procedure has no separate clap step.
 
@@ -467,23 +477,19 @@ The `sleep_blocked_by` lambda of `c6remote-factory.yaml` returns one reason for 
 
 The operator releases all inputs at the dark blue flash, waits 5 s after the ring goes dark, then holds `SW3` until the boot animation starts.
 
-Both automatic and deliberate deep sleep keep the check results in RTC memory. The test also keeps the deliberate sleep request there.
+Deep sleep keeps one value, `s_sleep_test_armed`. It records that the operator asked for the sleep, and no check result crosses the sleep.
 
-RTC data includes partial input progress and separate wheel, USB, and radio evidence. The shutdown hook saves the data before either sleep path.
+A wake starts every other check at pending, so the component needs no RTC snapshot and no shutdown hook. Do not add either one back.
 
-Restore the data only after a deep-sleep reset with valid magic, version, checksum, and the same LED count.
+A sleep and wake pass needs the armed flag, a deep-sleep reset, an ext1 wake, and a button capture from the existing wake stub.
 
-A sleep and wake pass needs an ext1 wake and a button capture from the existing wake stub.
+The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. After the chase, the second overview opens and shows the result.
 
-The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. After the chase, the second overview shows the result.
+After the deliberate wake, `D3` is green, and every other check LED is back at dim amber.
 
-After the deliberate wake, `D2` and `D3` are green on the second overview. A 2 s hold of `SW2` shows the earlier results.
+As a result, the procedure splits the final check round the wake. The operator confirms the first overview before step 9 and the wake check after it.
 
 The operator checks both overviews in the same powered session. The procedure needs no paper or computer for the final result.
-
-A restart without deep sleep or a loss of all power clears the results. Disconnect both USB power and the battery for a fresh test.
-
-If the battery stays connected, USB removal alone does not clear the results. The self-test writes no results to flash.
 
 The self-test does not block Improv or the install. No sleep can interrupt Wi-Fi setup or the install.
 

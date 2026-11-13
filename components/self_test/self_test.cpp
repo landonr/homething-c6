@@ -53,38 +53,10 @@ static constexpr uint32_t SLEEP_ARMED_FLASH_MS = 500;
 static constexpr uint32_t SLEEP_REFUSED_MS = 1500;
 static constexpr uint32_t SCAN_DONE = 0x80000000U;
 static constexpr uint32_t SCAN_SUCCESS = 0x40000000U;
+// The one value that crosses deep sleep. Every check result starts again on a
+// wake, so the wake check needs this flag to know that the sleep was deliberate.
 static constexpr uint32_t SLEEP_TEST_MAGIC = 0x53544631U;
 static RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;
-static constexpr uint32_t RESULTS_MAGIC = 0x53545231U;
-static constexpr uint16_t RESULTS_VERSION = 1;
-static constexpr uint16_t RESULT_CW = 1U << 0;
-static constexpr uint16_t RESULT_CCW = 1U << 1;
-static constexpr uint16_t RESULT_MIC = 1U << 2;
-static constexpr uint16_t RESULT_IR_RX = 1U << 3;
-static constexpr uint16_t RESULT_TX = 1U << 4;
-static constexpr uint16_t RESULT_BATTERY = 1U << 5;
-static constexpr uint16_t RESULT_USB_PLUGGED = 1U << 6;
-static constexpr uint16_t RESULT_USB_UNPLUGGED = 1U << 7;
-static constexpr uint16_t RESULT_WIFI = 1U << 8;
-static constexpr uint16_t RESULT_BLE = 1U << 9;
-static constexpr uint16_t RESULT_SLEEP_WAKE = 1U << 10;
-static constexpr uint16_t RESULTS_FLAGS = (1U << 11) - 1;
-
-struct RtcResults {
-  uint32_t magic;
-  uint32_t checksum;
-  uint16_t version;
-  uint16_t led_count;
-  uint16_t seen_mask;
-  uint16_t flags;
-};
-
-static RTC_DATA_ATTR RtcResults s_results{};
-
-static uint32_t results_checksum(const RtcResults &results) {
-  uint32_t value = results.magic ^ (static_cast<uint32_t>(results.version) << 16 | results.led_count);
-  return value * 16777619U ^ (static_cast<uint32_t>(results.seen_mask) << 16 | results.flags);
-}
 
 // The receiver idle is 10 ms, so a frame from a remote has no longer entry.
 static constexpr size_t IR_MIN_ENTRIES = 8;
@@ -174,12 +146,11 @@ void SelfTest::setup() {
   auto *out = static_cast<light::AddressableLight *>(this->light_->get_output());
   this->led_count_ = std::max<int32_t>(out->size(), 1);
   this->v3_ = this->led_count_ >= 6;
-  const bool restored = this->load_results_();
-  const bool requested_wake = restored && s_sleep_test_armed == SLEEP_TEST_MAGIC;
+  const bool requested_wake = s_sleep_test_armed == SLEEP_TEST_MAGIC;
   s_sleep_test_armed = 0;
-  this->sleep_wake_passed_ = this->sleep_wake_passed_ ||
-                            (requested_wake && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 &&
-                             this->idle_->held_at_wake() != 0);
+  this->sleep_wake_passed_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP &&
+                             esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 &&
+                             this->idle_->held_at_wake() != 0;
   this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;
   this->radio_start_ms_ = millis();
   const esp_err_t scan_handler = esp_event_handler_instance_register(
@@ -197,67 +168,6 @@ void SelfTest::setup() {
 #ifdef USE_OTA_STATE_LISTENER
   ota::get_global_ota_callback()->add_global_state_listener(this);
 #endif
-}
-
-bool SelfTest::load_results_() {
-  this->seen_mask_ = 0;
-  this->cw_seen_ = false;
-  this->ccw_seen_ = false;
-  this->mic_passed_ = false;
-  this->ir_rx_passed_ = false;
-  this->tx_done_ = false;
-  this->battery_passed_ = false;
-  this->usb_plugged_seen_ = false;
-  this->usb_unplugged_seen_ = false;
-  this->wifi_scan_passed_ = false;
-  this->ble_advertising_passed_ = false;
-  this->sleep_wake_passed_ = false;
-  this->inputs_logged_ = false;
-
-  const RtcResults saved = s_results;
-  s_results = {};
-  if (esp_reset_reason() != ESP_RST_DEEPSLEEP || saved.magic != RESULTS_MAGIC ||
-      saved.version != RESULTS_VERSION || saved.led_count != this->led_count_ ||
-      (saved.flags & ~RESULTS_FLAGS) != 0 || saved.checksum != results_checksum(saved)) {
-    s_sleep_test_armed = 0;
-    return false;
-  }
-  this->seen_mask_ = saved.seen_mask;
-  this->cw_seen_ = (saved.flags & RESULT_CW) != 0;
-  this->ccw_seen_ = (saved.flags & RESULT_CCW) != 0;
-  this->mic_passed_ = (saved.flags & RESULT_MIC) != 0;
-  this->ir_rx_passed_ = (saved.flags & RESULT_IR_RX) != 0;
-  this->tx_done_ = (saved.flags & RESULT_TX) != 0;
-  this->battery_passed_ = (saved.flags & RESULT_BATTERY) != 0;
-  this->usb_plugged_seen_ = (saved.flags & RESULT_USB_PLUGGED) != 0;
-  this->usb_unplugged_seen_ = (saved.flags & RESULT_USB_UNPLUGGED) != 0;
-  this->wifi_scan_passed_ = (saved.flags & RESULT_WIFI) != 0;
-  this->ble_advertising_passed_ = (saved.flags & RESULT_BLE) != 0;
-  this->sleep_wake_passed_ = (saved.flags & RESULT_SLEEP_WAKE) != 0;
-  this->inputs_logged_ = this->inputs_passed_();
-  return true;
-}
-
-void SelfTest::save_results_() {
-  RtcResults saved{};
-  saved.magic = RESULTS_MAGIC;
-  saved.version = RESULTS_VERSION;
-  saved.led_count = static_cast<uint16_t>(this->led_count_);
-  saved.seen_mask = this->seen_mask_;
-  saved.flags = (this->cw_seen_ ? RESULT_CW : 0) | (this->ccw_seen_ ? RESULT_CCW : 0) |
-                (this->mic_passed_ ? RESULT_MIC : 0) | (this->ir_rx_passed_ ? RESULT_IR_RX : 0) |
-                (this->tx_done_ ? RESULT_TX : 0) | (this->battery_passed_ ? RESULT_BATTERY : 0) |
-                (this->usb_plugged_seen_ ? RESULT_USB_PLUGGED : 0) |
-                (this->usb_unplugged_seen_ ? RESULT_USB_UNPLUGGED : 0) |
-                (this->wifi_scan_passed_ ? RESULT_WIFI : 0) | (this->ble_advertising_passed_ ? RESULT_BLE : 0) |
-                (this->sleep_wake_passed_ ? RESULT_SLEEP_WAKE : 0);
-  saved.checksum = results_checksum(saved);
-  s_results = saved;
-}
-
-void SelfTest::on_shutdown() {
-  // Both idle sleep and deliberate sleep call this hook before teardown.
-  this->save_results_();
 }
 
 void SelfTest::dump_config() {

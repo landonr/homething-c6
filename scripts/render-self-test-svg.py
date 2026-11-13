@@ -295,10 +295,10 @@ def watch(ref, side, *lines, fill=None):
 LED_ROLE = {
     "D2": ("buttons and wheel",),
     "D3": ("microphone",),
-    "D6": ("IR transmit", "V3 only"),
+    "D6": ("IR transmit",),
     "D4": ("IR receive",),
     "D5": ("battery",),
-    "D7": ("USB power", "V3 only"),
+    "D7": ("USB power",),
 }
 LED_SIDE = {"D2": "left", "D3": "left", "D7": "left", "D4": "right", "D5": "right", "D6": "right"}
 
@@ -308,9 +308,9 @@ SHEETS = {
         alt=(
             "Front face of the remote with the six status LEDs named round the wheel. "
             "D3 is at the top left for the microphone, D6 at the top center for IR "
-            "transmit on V3, D4 at the top right for IR receive, D5 at the bottom "
-            "right for the battery, D7 at the bottom center for USB power on V3, and "
-            "D2 at the bottom left for the buttons and wheel."
+            "transmit, D4 at the top right for IR receive, D5 at the bottom right "
+            "for the battery, D7 at the bottom center for USB power, and D2 at the "
+            "bottom left for the buttons and wheel."
         ),
         calls=[watch(ref, LED_SIDE[ref], ref, *LED_ROLE[ref]) for ref in LED_CHAIN],
     ),
@@ -371,12 +371,12 @@ SHEETS = {
         alt=(
             "Front face of the remote with the top right button SW1 marked for a 2 s "
             "hold, and the IR LED D1 marked inside the top end. D6, at the top center "
-            "of the wheel, answers on a V3 board."
+            "of the wheel, answers."
         ),
         calls=[
             press("SW1", "right", "SW1", "hold 2 s"),
             watch("D1", "right", "D1 IR LED", "aim the phone", "camera here"),
-            watch("D6", "left", "D6", "IR transmit", "V3 only"),
+            watch("D6", "left", "D6", "IR transmit"),
         ],
     ),
     "step-6-battery": dict(
@@ -393,9 +393,9 @@ SHEETS = {
         alt=(
             "Front face of the remote for the USB power check. The sheet marks no "
             "button, because the step connects USB power again. D7, at the bottom "
-            "center of the wheel, answers on a V3 board."
+            "center of the wheel, answers."
         ),
-        calls=[watch("D7", "left", "D7", "USB power", "V3 only")],
+        calls=[watch("D7", "left", "D7", "USB power")],
     ),
     "step-8-radios": dict(
         file="self-test-step-8-radios.svg",

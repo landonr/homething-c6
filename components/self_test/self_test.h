@@ -32,7 +32,6 @@ class SelfTest : public Component
 {
  public:
   void setup() override;
-  void on_shutdown() override;
   void loop() override;
   void dump_config() override;
   // After every other setup, because the I2S queue must exist before the mic starts.
@@ -102,8 +101,6 @@ class SelfTest : public Component
   void update_sleep_();
   const char *sleep_block_();
   bool allow_sleep_();
-  bool load_results_();
-  void save_results_();
   static void wifi_scan_event_(void *arg, esp_event_base_t base, int32_t event, void *data);
   void start_transmit_(uint32_t now);
   bool transmitting_(uint32_t now) const { return this->tx_started_ && now - this->tx_start_ms_ < TX_TOTAL_MS; }

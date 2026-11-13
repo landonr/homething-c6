@@ -250,86 +250,33 @@ class RadioTest(unittest.TestCase):
 
 
 class SleepTest(unittest.TestCase):
-    RESULT_FLAGS = {
-        "cw_seen_": "RESULT_CW",
-        "ccw_seen_": "RESULT_CCW",
-        "mic_passed_": "RESULT_MIC",
-        "ir_rx_passed_": "RESULT_IR_RX",
-        "tx_done_": "RESULT_TX",
-        "battery_passed_": "RESULT_BATTERY",
-        "usb_plugged_seen_": "RESULT_USB_PLUGGED",
-        "usb_unplugged_seen_": "RESULT_USB_UNPLUGGED",
-        "wifi_scan_passed_": "RESULT_WIFI",
-        "ble_advertising_passed_": "RESULT_BLE",
-        "sleep_wake_passed_": "RESULT_SLEEP_WAKE",
-    }
+    # Every check of the two overviews. A wake must start each one at pending.
+    CHECK_RESULTS = (
+        "seen_mask_", "cw_seen_", "ccw_seen_", "mic_passed_", "ir_rx_passed_", "tx_done_",
+        "battery_passed_", "usb_plugged_seen_", "usb_unplugged_seen_", "wifi_scan_passed_",
+        "ble_advertising_passed_",
+    )
 
-    def test_the_snapshot_keeps_complete_and_partial_check_evidence(self) -> None:
-        save = function_body(CPP, "void SelfTest::save_results_()")
-        load = function_body(CPP, "bool SelfTest::load_results_()")
-        self.assertIn("RTC_DATA_ATTR RtcResults s_results{};", CPP)
-        self.assertIn("saved.seen_mask = this->seen_mask_;", save)
-        self.assertIn("this->seen_mask_ = saved.seen_mask;", load)
-        for member, flag in self.RESULT_FLAGS.items():
-            with self.subTest(result=member):
-                self.assertIn(f"this->{member} ? {flag} : 0", save)
-                self.assertIn(f"this->{member} = (saved.flags & {flag}) != 0;", load)
-        flag_bits = re.findall(r"constexpr uint16_t (RESULT_\w+) = 1U << (\d+);", CPP)
-        self.assertEqual({name for name, _ in flag_bits}, set(self.RESULT_FLAGS.values()))
-        self.assertEqual(len({bit for _, bit in flag_bits}), len(self.RESULT_FLAGS))
-        self.assertTrue(all(0 <= int(bit) < 16 for _, bit in flag_bits))
-        self.assertIn("saved.checksum = results_checksum(saved);", save)
-        self.assertIn("s_results = saved;", save)
-        self.assertLess(save.index("saved.checksum ="), save.index("s_results = saved;"))
-        checksum = function_body(CPP, "static uint32_t results_checksum(")
-        for field in ("magic", "version", "led_count", "seen_mask", "flags"):
-            self.assertIn(f"results.{field}", checksum)
-
-    def test_cold_invalid_or_other_board_snapshots_restore_no_results(self) -> None:
-        load = function_body(CPP, "bool SelfTest::load_results_()")
-        validation = load[load.index("if (esp_reset_reason()"):load.index("this->seen_mask_ = saved.seen_mask;")]
-        for gate in ("esp_reset_reason() != ESP_RST_DEEPSLEEP", "saved.magic != RESULTS_MAGIC",
-                     "saved.version != RESULTS_VERSION", "saved.led_count != this->led_count_",
-                     "(saved.flags & ~RESULTS_FLAGS) != 0", "saved.checksum != results_checksum(saved)"):
-            self.assertIn(gate, validation)
-        self.assertIn("s_sleep_test_armed = 0;", validation)
-        self.assertIn("return false;", validation)
-        self.assertIn("s_results = {};", load)
-        self.assertLess(load.index("s_results = {};"), load.index("if (esp_reset_reason()"))
-        self.assertIn("this->seen_mask_ = 0;", load)
-        for member in self.RESULT_FLAGS:
-            self.assertLess(load.index(f"this->{member} = false;"), load.index("if (esp_reset_reason()"))
-        setup = function_body(CPP, "void SelfTest::setup()")
-        self.assertLess(setup.index("this->led_count_ ="), setup.index("this->load_results_()"))
-
-    def test_only_evidence_is_retained_in_rtc_memory(self) -> None:
-        record = function_body(CPP, "struct RtcResults")
-        self.assertEqual(re.findall(r"uint(?:16|32)_t (\w+);", record),
-                         ["magic", "checksum", "version", "led_count", "seen_mask", "flags"])
-        save = function_body(CPP, "void SelfTest::save_results_()")
-        load = function_body(CPP, "bool SelfTest::load_results_()")
-        for transient in ("held_mask_", "long_fired_mask_", "pressed_at_ms_", "encoder_pos_", "encoder_ms_",
-                          "tx_started_", "tx_start_ms_", "battery_count_", "battery_first_v_", "mic_peak_",
-                          "mic_floor_", "vu_mode_", "usb_present_", "installing_", "wifi_scan_active_",
-                          "radio_next_scan_ms_", "sleep_requested_", "sleep_refused_until_ms_", "intro_started_"):
-            with self.subTest(transient=transient):
-                self.assertNotIn(f"this->{transient}", save)
-                self.assertNotIn(f"this->{transient}", load)
+    def test_no_result_snapshot_crosses_the_sleep(self) -> None:
+        """A wake starts a fresh test, so an operator cannot read the previous board."""
+        for token in ("RtcResults", "s_results", "results_checksum", "RESULTS_MAGIC", "RESULTS_VERSION",
+                      "RESULTS_FLAGS", "RESULT_", "load_results_", "save_results_", "on_shutdown"):
+            with self.subTest(token=token):
+                self.assertNotIn(token, CPP)
+                self.assertNotIn(token, HEADER)
+        # One value stays in RTC memory, and it records only the deliberate sleep request.
+        self.assertEqual(re.findall(r"RTC_DATA_ATTR (\w+) (\w+)", CPP), [("uint32_t", "s_sleep_test_armed")])
         for flash_operation in ("global_preferences", "make_preference", "nvs_set", "->save("):
-            self.assertNotIn(flash_operation, save + load)
+            self.assertNotIn(flash_operation, CPP)
 
-    def test_both_sleep_paths_save_results_before_teardown(self) -> None:
-        self.assertIn("void on_shutdown() override;", HEADER)
-        shutdown = function_body(CPP, "void SelfTest::on_shutdown()")
-        self.assertIn("this->save_results_();", shutdown)
-        self.assertNotIn("sleep_requested_", shutdown)
-        self.assertNotIn("forced_sleep_", shutdown)
-        entry = function_body(IDLE_CPP, "void IdleSleep::enter_sleep_()")
-        self.assertIn("App.run_safe_shutdown_hooks();", entry)
-        self.assertLess(entry.index("App.run_safe_shutdown_hooks();"), entry.index("esp_deep_sleep_start();"))
-        attempt = function_body(IDLE_CPP, "void IdleSleep::try_sleep_()")
-        self.assertEqual(attempt.count("this->enter_sleep_();"), 1)
-        self.assertLess(attempt.index("if (this->forced_sleep_)"), attempt.index("this->enter_sleep_();"))
+    def test_every_check_but_the_wake_starts_again_at_pending(self) -> None:
+        setup = function_body(CPP, "void SelfTest::setup()")
+        for member in self.CHECK_RESULTS:
+            with self.subTest(result=member):
+                # The member initialiser is the only starting value after a wake.
+                self.assertRegex(HEADER, rf"\b{member}\{{(?:false|0)\}};")
+                self.assertNotIn(f"this->{member}", setup)
+        self.assertIn("bool inputs_logged_{false};", HEADER)
 
     def test_deliberate_sleep_waits_for_release_and_rechecks_the_guard(self) -> None:
         update = function_body(CPP, "void SelfTest::update_sleep_()")
@@ -385,15 +332,15 @@ class SleepTest(unittest.TestCase):
     def test_only_the_requested_ext1_wake_with_a_stub_latch_passes(self) -> None:
         self.assertIn("RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;", CPP)
         setup = function_body(CPP, "void SelfTest::setup()")
-        self.assertIn("s_sleep_test_armed == SLEEP_TEST_MAGIC", setup)
+        self.assertIn("const bool requested_wake = s_sleep_test_armed == SLEEP_TEST_MAGIC;", setup)
         self.assertIn("s_sleep_test_armed = 0;", setup)
         self.assertLess(setup.index("s_sleep_test_armed = 0;"), setup.index("this->sleep_wake_passed_ ="))
-        self.assertIn("const bool restored = this->load_results_();", setup)
-        self.assertIn("requested_wake = restored && s_sleep_test_armed == SLEEP_TEST_MAGIC", setup)
-        self.assertIn("this->sleep_wake_passed_ = this->sleep_wake_passed_ ||", setup)
+        passed = setup[setup.index("this->sleep_wake_passed_ ="):setup.index("this->second_page_ =")]
         for gate in ("requested_wake", "esp_reset_reason() == ESP_RST_DEEPSLEEP",
                      "esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1", "this->idle_->held_at_wake() != 0"):
-            self.assertIn(gate, setup)
+            with self.subTest(gate=gate):
+                self.assertIn(gate, passed)
+        # A failed wake still opens the page that carries the result.
         self.assertIn("this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;", setup)
         update = function_body(CPP, "void SelfTest::update_sleep_()")
         self.assertLess(update.index("s_sleep_test_armed = SLEEP_TEST_MAGIC;"), update.index("this->idle_->arm_sleep("))
@@ -682,18 +629,21 @@ class DocTest(unittest.TestCase):
     }
     LED_OF_INDEX = {"LED_D2": "D2", "LED_D3": "D3", "d4": "D4", "d5": "D5", "LED_D6": "D6", "LED_D7": "D7"}
 
-    def test_the_ring_table_matches_the_overview(self) -> None:
+    def test_each_step_heading_names_the_led_that_the_overview_lights(self) -> None:
         overview = function_body(CPP, "void SelfTest::draw_overview_(light::AddressableLight &it) const")
         code = {}
         for index, check in re.findall(r"show\((\w+), this->(\w+?)(?:\(\))?\);", overview):
             code[self.LED_OF_INDEX[index]] = self.CHECKS[check]
-        doc = dict(re.findall(r"(?m)^\| `(D\d)` \| ([^|]+?) \| [^|]+ \|$", DOC))
         self.assertEqual(len(code), 6)
-        self.assertEqual(doc, code)
+        headings = dict(re.findall(r"(?m)^### Step \d+: (.+?) \(`(D\d)`\)$", DOC))
+        self.assertEqual({led: title for title, led in headings.items()}, code)
+        # The map diagram replaced the table, so no table repeats the mapping.
+        self.assertNotIn("| LED | Check |", DOC)
 
     def test_the_input_colour_table_matches_the_component(self) -> None:
         code = sorted(f"{name} {top} {bottom}" for name, top, bottom in input_pairs())
-        rows = re.findall(r"(?m)^\| (`SW\d+`|Wheel \w+) \| (\w+) \| (\w+) \|$", DOC)
+        held = DOC.split("### Held input colors", 1)[1]
+        rows = re.findall(r"(?m)^\| (`SW\d+`|Wheel \w+) \| (\w+) \| (\w+) \|$", held)
         doc = sorted(f"{name.strip('`')} {top} {bottom}".lower().replace("center", "centre")
                      for name, top, bottom in rows)
         self.assertEqual(len(code), 16)
@@ -735,21 +685,19 @@ class DocTest(unittest.TestCase):
         steps = dict(re.findall(r"(?m)^### Step (\d+): (.+)$", DOC))
         self.assertEqual(steps["1"], "Power on and boot animation")
         body = DOC.split("### Step 1:", 1)[1].split("### Step 2", 1)[0]
-        self.assertIn("clockwise round the ring two times", body)
-        # The chase shows that each LED lights and that the chain order is right.
-        self.assertIn("- Pass: The wave goes clockwise two times, and each LED lights with the color of its row.",
-                      body)
+        # The Pass line is the one place that states the pass condition of the step.
+        self.assertIn("- Pass: The wave goes clockwise two times, and each LED lights with its own color.", body)
         self.assertIn("- Fail: An LED stays dark in both laps.", body)
         self.assertIn("- Fail: A color is at the wrong position.", body)
-        # The chase proves nothing about a second colour, so the step says where that fault shows.
-        self.assertIn("it cannot show that an LED makes more than one color", body)
-        self.assertIn("Step 2 lights each LED in four or more colors", body)
+        self.assertNotIn("Make sure that a wave of color", body)
+        self.assertNotIn("Make sure that each LED lights", body)
 
     def test_the_first_step_table_matches_the_chase_palette(self) -> None:
         comment = CPP[:CPP.index("static const Color CHASE_COLOUR[6]")]
         code = re.findall(r"(D\d) (\w+)", comment[comment.rindex("in chain order:"):])
+        boot = DOC.split("### Boot animation colors", 1)[1].split("\n### ", 1)[0]
         doc = [(led, colour.lower())
-               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| (\w+) \|$", DOC)]
+               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| (\w+) \|$", boot)]
         self.assertEqual(len(code), 6)
         self.assertEqual(doc, code)
 
@@ -763,9 +711,9 @@ class DocTest(unittest.TestCase):
             ("2", "Buttons and wheel (`D2`)"),
             ("3", "Microphone (`D3`)"),
             ("4", "IR receive (`D4`)"),
-            ("5", "IR transmit (`D6` on V3)"),
+            ("5", "IR transmit (`D6`)"),
             ("6", "Battery (`D5`)"),
-            ("7", "USB power (`D7`, V3 only)"),
+            ("7", "USB power (`D7`)"),
             ("8", "Radios (`D2`, second overview)"),
             ("9", "Sleep and wake (`D3`, second overview)"),
         ])
@@ -773,17 +721,14 @@ class DocTest(unittest.TestCase):
         usb = DOC.split("### Step 7:", 1)[1].split("### Step 8:", 1)[0]
         self.assertIn("Disconnect USB power.", battery)
         self.assertIn("Connect USB power again.", usb)
-        self.assertIn("Skip this check on a V2 board", usb)
         sleep = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
         self.assertIn("Do this step last.", sleep)
         self.assertIn("slowest operator step", sleep)
-        self.assertIn("keeps the earlier check results in RTC memory through deep sleep", sleep)
-        self.assertIn("No earlier check needs a repeat after wake.", sleep)
+        self.assertIn('Do the first part of the section "Result" before you start.', sleep)
         self.assertIn("Hold `SW3` for 3 s, until the ring flashes dark blue.", sleep)
         self.assertIn("Release all buttons and wheel directions at the dark blue flash.", sleep)
         self.assertIn("The `SW3` hold works on both overviews and in the VU meter.", sleep)
-        self.assertIn("If the ring flashes red for 1.5 s, the board refused sleep.", sleep)
-        self.assertIn("names the condition that blocked the sleep", sleep)
+        self.assertIn("If the board refuses the sleep request, release `SW3`.", sleep)
         # The page indicator is no longer a precondition of the hold.
         self.assertNotIn("Make sure that `D5` is dim blue", sleep)
         self.assertIn("the second overview returns", sleep)
@@ -792,42 +737,121 @@ class DocTest(unittest.TestCase):
         self.assertIn("A hold of 3 s on `SW3` starts the sleep check after release.", DOC)
         self.assertNotIn("hold of 2 s on `SW3`", DOC)
 
-    def test_the_final_result_uses_both_pages_without_external_records(self) -> None:
+    def test_the_final_result_splits_round_the_wake_without_external_records(self) -> None:
         result = DOC.split("## Result", 1)[1].split("## Parts not covered", 1)[0]
-        self.assertIn("use both overviews to check the final result", result)
-        self.assertIn("Keep the board in the same powered session.", result)
-        self.assertIn("`D2` and `D3` are green and `D5` is dim blue", result)
-        self.assertIn("Hold `SW2` for 2 s, then release it, to show the first overview.", result)
+        self.assertIn("The board passes only when every check LED is green.", result)
+        self.assertIn("Do the first part before step 9:", result)
+        self.assertIn("On the second overview, make sure that `D2` is green.", result)
+        self.assertIn("Hold `SW2` to change to the first overview.", result)
         self.assertIn("all check LEDs on the first overview are green", result)
+        self.assertIn("Do the second part after the wake of step 9.", result)
+        self.assertIn("make sure that `D3` is green", result)
+        self.assertLess(result.index("first overview are green"), result.index("after the wake of step 9"))
         self.assertIn("No paper or computer is necessary for the final result.", result)
         self.assertNotRegex(DOC, r"(?i)record (?:the|your|all|each) results|use the recorded results")
+        self.assertNotRegex(DOC, r"(?i)write (?:down|the result)")
 
-    def test_the_doc_distinguishes_sleep_retention_from_a_fresh_test(self) -> None:
-        power = DOC.split("## Power and sleep", 1)[1].split("## Shipped state", 1)[0]
-        self.assertIn("Both automatic and deliberate deep sleep keep the check results in RTC memory.", power)
-        self.assertIn("Continue from the next incomplete step.", power)
-        shipped = DOC.split("## Shipped state", 1)[1].split("## V3 and V2 boards", 1)[0]
-        self.assertIn("a restart without deep sleep clears them", shipped)
-        self.assertIn("A loss of all power also clears the results.", shipped)
-        self.assertIn("Disconnect both USB power and the battery to start a fresh test.", shipped)
-        self.assertIn("The self-test writes no results to flash.", shipped)
+    def test_the_doc_promises_no_result_retention_over_a_sleep(self) -> None:
+        """A wake starts a fresh test, so no line may send an operator back to an old result."""
+        self.assertNotIn("RTC memory", DOC)
+        self.assertNotRegex(DOC, r"(?i)keeps? the (earlier )?(check )?results")
+        self.assertNotIn("Disconnect both USB power and the battery", DOC)
+        self.assertNotIn("Continue from the next incomplete step.", DOC)
+        self.assertNotIn("## Power and sleep", DOC)
+        procedure = DOC.split("## Procedure", 1)[1].split("### Step 1:", 1)[0]
+        self.assertIn("If the ring goes dark before step 9, the board went to sleep.", procedure)
+        self.assertIn("then start again at step 1", procedure)
+        result = DOC.split("## Result", 1)[1].split("## Parts not covered", 1)[0]
+        self.assertIn("The wake starts a fresh test", result)
 
     def test_the_second_overview_and_radio_evidence_are_explicit(self) -> None:
-        self.assertIn("Hold `SW2` for 2 s, then release it, to change between the first and second overviews.", DOC)
-        self.assertIn("`SW2` has no other hold function.", DOC)
-        page = DOC.split("| LED | Second overview |", 1)[1].split("Other patterns", 1)[0]
+        radio = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
+        # Step 8 is the first page change, so it owns the hold and the page table.
+        self.assertIn("Hold `SW2` for 2 s, then release it. The second overview appears.", radio)
+        self.assertIn("`SW2` has no other hold function.", radio)
+        page = radio.split("| LED | Second overview |", 1)[1].split("\n\n", 1)[0]
         for row in ("| `D2` | Radio check |", "| `D3` | Sleep and wake check |",
                     "| `D5` | Dim blue page indicator |", "| All other LEDs | Off |"):
             self.assertIn(row, page)
-        radio = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
-        self.assertIn("Wi-Fi scan with at least one access point", radio)
-        self.assertIn("successful BLE advertisement start", radio)
-        self.assertIn("needs no network connection or credentials", radio)
-        self.assertIn("does not measure radio range or antenna performance", radio)
-        self.assertIn("cannot confirm BLE reception over the air", radio)
-        self.assertIn("60 s from boot", radio)
-        self.assertIn("a 10 s timeout", radio)
-        self.assertIn("every 15 s", radio)
+        self.assertIn("It has no battery meaning on this page.", radio)
+        self.assertIn("a nearby Wi-Fi access point or phone hotspot sends a network name", radio)
+        self.assertIn("Wait up to 60 s for the result on `D2`.", radio)
+        self.assertIn("- Pass: `D2` is green.", radio)
+        # The three states of D2 on this page are its own pass and fail.
+        self.assertIn("- Fail: `D2` is red or still dim amber after the wait.", radio)
+        self.assertIn("A later scan can change red to green.", radio)
+        # The scan internals and the BLE evidence are for AGENTS.md, not for a station.
+        for rationale in ("BLE Improv", "advertisement start", "a 10 s timeout", "every 15 s",
+                          "Bluetooth controller", "antenna performance"):
+            with self.subTest(rationale=rationale):
+                self.assertNotIn(rationale, radio)
+
+    def test_the_procedure_holds_no_rationale_the_operator_cannot_act_on(self) -> None:
+        """The station has no schematic, so the procedure names no internal part or timing."""
+        for rationale in ("GPIO5", "`R9`", "ext1", "wake stub", "38 kHz", "Each burst is",
+                          "The board log names", "it cannot show that an LED makes more than one color",
+                          "1 s longer than the other holds", "the charger output can read in range"):
+            with self.subTest(rationale=rationale):
+                self.assertNotIn(rationale, DOC)
+
+    def test_each_instruction_stands_in_one_place(self) -> None:
+        self.assertEqual(DOC.count("Hold `SW2` for 2 s, then release it"), 1)
+        self.assertEqual(DOC.count("Do not give the board a Wi-Fi network"), 1)
+        self.assertNotIn("Do not give the board Wi-Fi credentials", DOC)
+        # The ring pattern table is the one place that gives each flash and its cause.
+        for pattern in ("Dark blue ring for 0.5 s", "Red ring for 1.5 s"):
+            with self.subTest(pattern=pattern):
+                self.assertEqual(DOC.count(pattern), 1)
+
+    def test_the_station_procedure_names_only_the_v3_board(self) -> None:
+        """A V2 board is a bench unit, so no step may fork on the board version."""
+        self.assertNotIn("V2", DOC)
+        self.assertNotIn("V3 only", DOC)
+        self.assertNotRegex(DOC, r"(?i)on a V3 board|both board versions")
+        self.assertIn("The board is a V3 board, which has six status LEDs.", DOC)
+        # The firmware keeps its four-LED build for the bench.
+        self.assertIn("status_led_count: ", FACTORY)
+
+    def test_the_colour_tables_sit_in_one_reference_section(self) -> None:
+        """The large tables are reference material, so the steps point at them."""
+        body, reference = DOC.split("## Color reference", 1)
+        for heading in ("### Boot animation colors", "### Held input colors", "### Ring patterns"):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, reference)
+        for row in ("| `D2` | Red |", "| `SW1` | Red | Green |", "| Green bar on dim blue | The VU meter is on |"):
+            with self.subTest(row=row):
+                self.assertEqual(DOC.count(row), 1)
+                self.assertIn(row, reference)
+        # The two check LED states stay with the overview that the operator reads first.
+        step1 = body.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
+        # The two check LED states belong to step 1, where the first overview appears.
+        self.assertIn("| Dim amber | The check did not pass yet |", step1)
+        step2 = body.split("### Step 2:", 1)[1].split("### Step 3:", 1)[0]
+        self.assertIn('The diagram above and the section "Color reference" give the color of each LED.', step1)
+        self.assertIn('The section "Color reference" gives the pair of each input.', step2)
+        self.assertIn('The section "Color reference" names each pattern and its cause.', step1)
+
+    def test_each_overview_fact_sits_in_the_step_that_first_needs_it(self) -> None:
+        """One section no longer explains the overviews before the steps repeat them."""
+        self.assertNotIn("## LED positions", DOC)
+        step1 = DOC.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
+        step8 = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
+        step9 = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
+        self.assertIn("the first overview appears", step1)
+        self.assertIn("All six check LEDs are dim amber at this point.", step1)
+        self.assertIn("While the sleep request waits for the release of all inputs, `D3` shows cyan", step9)
+        # Each fact has one home, so a later step cannot restate an earlier one.
+        for once in ("| Dim amber | The check did not pass yet |", "| LED | Second overview |",
+                     "`SW2` has no other hold function.", "no battery meaning on this page",
+                     "Hold `SW2` for 2 s, then release it"):
+            with self.subTest(fact=once):
+                self.assertEqual(DOC.count(once), 1)
+        # The step 9 prose relies on step 8 for the page. Its sheet still marks the indicator.
+        prose = "\n".join(line for line in step9.splitlines() if not line.startswith("!["))
+        for repeat in ("page indicator", "Only one overview", "| LED | Second overview |"):
+            with self.subTest(repeat=repeat):
+                self.assertNotIn(repeat, prose)
+        self.assertNotIn("| Color | Meaning |", step8)
 
     def test_uncovered_parts_need_separate_station_checks(self) -> None:
         uncovered = DOC.split("## Parts not covered", 1)[1].split("## Power and sleep", 1)[0]
@@ -846,7 +870,8 @@ class DocTest(unittest.TestCase):
         self.assertIn("The ring changes to the VU meter.", body)
         self.assertIn("The ring goes back to the overview.", body)
         self.assertEqual(body.count("Press and hold the wheel center for 2 s"), 2)
-        self.assertIn("`D3` turns green when the level crosses the threshold.", body)
+        self.assertIn("This check needs no other action from you.", body)
+        self.assertIn("- Pass: The bar moves with your voice, and `D3` is green.", body)
 
 
 if __name__ == "__main__":

@@ -85,7 +85,7 @@ class DocumentTest(unittest.TestCase):
     def test_the_map_comes_first_and_each_step_carries_its_own_sheet(self):
         self.assertEqual(self.images[0][2], "self-test-led-map.svg")
         self.assertIn("](readme-assets/self-test-led-map.svg)",
-                      DOC.split("## LED positions", 1)[1].split("###", 1)[0])
+                      DOC.split("## How to read the diagrams", 1)[1].split("## Procedure", 1)[0])
         for step in range(1, STEPS + 1):
             body = DOC.split(f"### Step {step}:", 1)[1].split("\n### ", 1)[0]
             found = [name for _, _, name in IMAGE.findall(body)]
@@ -94,9 +94,24 @@ class DocumentTest(unittest.TestCase):
                 self.assertTrue(found[0].startswith(f"self-test-step-{step}-"), found[0])
 
     def test_the_document_states_the_two_marker_kinds(self):
-        intro = DOC.split("## LED positions", 1)[1].split("![", 1)[0]
+        intro = DOC.split("## How to read the diagrams", 1)[1].split("![", 1)[0]
         self.assertIn("orange outline", intro)
         self.assertIn("blue ring", intro)
+        # The sheets replace the written orientation, so the key says which face they show.
+        self.assertIn("shows the front face", intro)
+        self.assertIn("Every position is as seen from the front.", intro)
+        self.assertNotIn("## Board orientation", DOC)
+        self.assertNotIn("## LED positions", DOC)
+
+    def test_the_transmit_step_marks_the_ir_led_it_names(self):
+        """Step 5 says `D1` on the top edge, so its sheet must mark that position."""
+        step5 = DOC.split("### Step 5:", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("Aim it at `D1` on the top edge of the board.", step5)
+        labels = [el.text for el in ET.fromstring(
+            (ASSETS / "self-test-step-5-ir-transmit.svg").read_text()).iter(f"{SVG_NS}text")]
+        self.assertIn("D1 IR LED", labels)
+        alt = next(a for a, _, name in document_images() if name == "self-test-step-5-ir-transmit.svg")
+        self.assertIn("IR LED D1 marked inside the top end", alt)
 
     def test_the_position_words_moved_out_of_the_tables(self):
         # The diagrams carry the positions now, so no table repeats them.
@@ -104,10 +119,10 @@ class DocumentTest(unittest.TestCase):
             with self.subTest(row=row):
                 self.assertNotRegex(row, r"(?i)top (left|right|cent)|bottom (left|right|cent)")
 
-    def test_the_v2_difference_names_the_two_missing_positions(self):
-        tail = DOC.split("## V3 and V2 boards", 1)[1]
-        self.assertIn("The diagrams show a V3 board.", tail)
-        self.assertIn("no `D6` and no `D7`", tail)
+    def test_no_sheet_text_forks_on_the_board_version(self):
+        # Every board at the station has six LEDs, so a version note separates nothing.
+        self.assertNotIn("V2", DOC)
+        self.assertNotIn("V3 only", SCRIPT)
 
 
 class SheetTest(unittest.TestCase):
@@ -155,11 +170,11 @@ class SheetTest(unittest.TestCase):
         pairs = dict(zip(labels[::2], labels[1::2]))
         self.assertEqual(pairs, dict(zip(constant("LED_CHAIN"), constant("CHASE_NAME"))))
 
-    def test_only_the_v3_sheets_carry_the_v3_note(self):
-        v3 = {name for name in written() if "V3 only" in self.labels(name)}
-        self.assertEqual(v3, {"self-test-led-map.svg",
-                              "self-test-step-5-ir-transmit.svg",
-                              "self-test-step-7-usb-power.svg"})
+    def test_no_sheet_carries_a_version_note(self):
+        for name in written():
+            with self.subTest(sheet=name):
+                self.assertNotIn("V3 only", self.labels(name))
+                self.assertNotIn("V2", self.text[name])
 
 
 class FirmwareTest(unittest.TestCase):

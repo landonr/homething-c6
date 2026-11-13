@@ -141,6 +141,11 @@ void IdleSleep::arm_sleep() {
   ESP_LOGI(TAG, "Sleep hold armed, sleeping on release");
 }
 
+void IdleSleep::arm_sleep(std::function<bool()> guard) {
+  this->forced_sleep_guard_ = std::move(guard);
+  this->arm_sleep();
+}
+
 void IdleSleep::setup() {
   // First: a held pad ignores every configuration written while it is held.
   for (gpio_num_t pin : HELD_FLOATING)
@@ -384,6 +389,12 @@ void IdleSleep::try_sleep_() {
     // A bit still down wakes ext1 at once on its release.
     if (this->pressed_ != 0)
       return;
+    if (this->forced_sleep_guard_ && !this->forced_sleep_guard_()) {
+      this->forced_sleep_ = false;
+      this->forced_sleep_guard_ = {};
+      ESP_LOGI(TAG, "Forced sleep cancelled by guard");
+      return;
+    }
     if (this->replay_pending_) {
       this->replay_pending_ = false;
       ESP_LOGI(TAG, "Replay dropped: forced sleep");

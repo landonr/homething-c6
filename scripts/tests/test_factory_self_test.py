@@ -1,0 +1,853 @@
+"""Static checks for the hardware self-test in the provisioning image."""
+
+from pathlib import Path
+import math
+import re
+import unittest
+
+
+ROOT = Path(__file__).parents[2]
+FACTORY = (ROOT / "c6remote-factory.yaml").read_text()
+CONFIG = (ROOT / "c6remote.yaml").read_text()
+WORKFLOW = (ROOT / ".github" / "workflows" / "firmware.yml").read_text()
+COMPONENT = ROOT / "components" / "self_test"
+CPP = (COMPONENT / "self_test.cpp").read_text()
+HEADER = (COMPONENT / "self_test.h").read_text()
+INIT = (COMPONENT / "__init__.py").read_text()
+IDLE_CPP = (ROOT / "components" / "idle_sleep" / "idle_sleep.cpp").read_text()
+IDLE_HEADER = (ROOT / "components" / "idle_sleep" / "idle_sleep.h").read_text()
+WAKE_STUB = (ROOT / "components" / "idle_sleep" / "wake_stub.h").read_text()
+DOC = (ROOT / "docs" / "factory-self-test.md").read_text()
+
+PROJECT_NAME = "landonr.homething-c6"
+# The NEC leader mark, the longest header mark of a common IR protocol.
+LONGEST_PROTOCOL_MARK_US = 9000
+
+
+def top_level_block(text: str, key: str) -> str:
+    """Returns the lines under one top-level key, up to the next top-level key."""
+    lines = text.splitlines()
+    try:
+        start = lines.index(f"{key}:")
+    except ValueError:
+        raise AssertionError(f"no top-level {key}: block") from None
+    body = []
+    for line in lines[start + 1:]:
+        if line and not line[0].isspace() and not line.startswith("#"):
+            break
+        body.append(line)
+    return "\n".join(body) + "\n"
+
+
+def without_comments(block: str) -> str:
+    return "\n".join(line for line in block.splitlines() if not line.lstrip().startswith("#")) + "\n"
+
+
+def list_entries(block: str) -> list[str]:
+    """Splits a top-level list block into its entries."""
+    entries = re.split(r"(?m)^  - ", without_comments(block))[1:]
+    if not entries:
+        raise AssertionError("the block has no list entries")
+    return ["  - " + entry for entry in entries]
+
+
+def function_body(source: str, signature: str) -> str:
+    start = source.index(signature)
+    open_brace = source.index("{", start)
+    depth = 0
+    for index in range(open_brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[open_brace + 1:index]
+    raise AssertionError(f"{signature} has no closing brace")
+
+
+def constant(source: str, name: str) -> int:
+    match = re.search(rf"\b{name} = (\d+);", source)
+    if match is None:
+        raise AssertionError(f"constant {name} not found")
+    return int(match.group(1))
+
+
+def base_colours() -> list[str]:
+    """Returns the name of each base colour, in the order of the component table."""
+    block = CPP[CPP.index("BASE_COLOUR[5] = {"):CPP.index("INPUT_PAIR[16][2]")]
+    return re.findall(r"(?m)^\s+Color\(\d+, \d+, \d+\),\s+// (\w+)$", block)
+
+
+def input_pairs() -> list[tuple[str, str, str]]:
+    """Returns the name, the top colour and the bottom colour of each expander bit."""
+    bases = base_colours()
+    table = CPP[CPP.index("INPUT_PAIR[16][2] = {"):]
+    table = table[:table.index("};")]
+    pairs = []
+    for top, bottom, comment in re.findall(r"(?m)^\s+\{(\d), (\d)\},\s+// (.+)$", table):
+        words = comment.lower().split()
+        colours = (bases[int(top)], bases[int(bottom)])
+        if tuple(words[-2:]) != colours:
+            raise AssertionError(f"comment {comment!r} disagrees with the indices {top}, {bottom}")
+        pairs.append((" ".join(words[:-2]), *colours))
+    return pairs
+
+
+def project(text: str) -> tuple[str, str]:
+    match = re.search(r"\n  project:\n    name: (\S+)\n    (?:#.*\n    )*version: (\S+)\n",
+                      top_level_block(text, "esphome"))
+    if match is None:
+        raise AssertionError("esphome: project: not found")
+    return match.group(1), match.group(2)
+
+
+class ProvisioningTest(unittest.TestCase):
+    """The self-test rides on the provisioning image, so the update path must stay intact."""
+
+    def test_the_factory_image_holds_no_wifi_credentials(self) -> None:
+        self.assertNotIn("!secret", FACTORY)
+        wifi = without_comments(top_level_block(FACTORY, "wifi"))
+        self.assertNotRegex(wifi, r"(?m)^\s+(?:-\s+)?(?:ssid|password|networks)\s*:")
+        self.assertNotRegex(wifi, r"(?m)^  ap\s*:")
+
+    def test_the_factory_image_keeps_the_partition_table_and_project_name(self) -> None:
+        self.assertEqual(project(FACTORY), (PROJECT_NAME, "factory"))
+        self.assertEqual(project(CONFIG)[0], PROJECT_NAME)
+        for name, text in (("c6remote.yaml", CONFIG), ("c6remote-factory.yaml", FACTORY)):
+            with self.subTest(config=name):
+                esp32 = top_level_block(text, "esp32")
+                self.assertIn("  board: seeed_xiao_esp32c6\n", esp32)
+                self.assertIn("  partitions: partitions.csv\n", esp32)
+
+    def test_improv_and_the_install_stay_in_the_factory_image(self) -> None:
+        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "esp32_improv"))
+        self.assertIn("  id: improv_usb\n", top_level_block(FACTORY, "improv_serial"))
+        self.assertIn("    - component.update: firmware_update\n", top_level_block(FACTORY, "wifi"))
+        update = top_level_block(FACTORY, "update")
+        self.assertIn("    on_update_available:\n      - update.perform:\n          id: firmware_update\n"
+                      "          force_update: true\n", update)
+        self.assertIn("update.is_available: firmware_update", top_level_block(FACTORY, "interval"))
+
+    def test_only_the_two_needed_local_components_load(self) -> None:
+        external = top_level_block(FACTORY, "external_components")
+        self.assertIn("      path: components\n", external)
+        self.assertIn("    components: [idle_sleep, self_test]\n", external)
+
+
+class TransmitTest(unittest.TestCase):
+    """A customer runs this image at home, so IR goes out only on an operator hold."""
+
+    def test_the_config_has_no_transmit_action(self) -> None:
+        self.assertNotRegex(without_comments(FACTORY), r"remote_transmitter\.transmit|transmit_\w+:")
+
+    def test_the_component_transmits_only_from_the_sw1_hold(self) -> None:
+        self.assertEqual(CPP.count("->transmit()"), 1)
+        self.assertIn("->transmit()", function_body(CPP, "void SelfTest::start_transmit_(uint32_t now)"))
+        calls = [m.start() for m in re.finditer(r"this->start_transmit_\(", CPP)]
+        self.assertEqual(len(calls), 1)
+        holds = function_body(CPP, "void SelfTest::update_long_presses_(uint32_t now)")
+        self.assertIn("if (bit == TRANSMIT_BIT) {\n      this->start_transmit_(now);", holds)
+        self.assertIn(
+            "if (now - this->pressed_at_ms_[bit] < (bit == SLEEP_BIT ? SLEEP_HOLD_MS : LONG_PRESS_MS))\n"
+            "      continue;", holds)
+        self.assertEqual(constant(HEADER, "TRANSMIT_BIT"), 0)
+        self.assertGreaterEqual(constant(HEADER, "LONG_PRESS_MS"), 1500)
+        for name in ("void SelfTest::input(", "void SelfTest::encoder_step(", "void SelfTest::ir_frame(",
+                     "void SelfTest::battery_sample(", "void SelfTest::setup()", "void SelfTest::render("):
+            with self.subTest(function=name):
+                body = function_body(CPP, name)
+                self.assertNotIn("start_transmit_", body)
+                self.assertNotIn("transmit()", body)
+
+    def test_the_pattern_is_visible_and_no_common_protocol_frame(self) -> None:
+        mark = constant(HEADER, "TX_MARK_US")
+        space = constant(HEADER, "TX_SPACE_US")
+        bursts = constant(HEADER, "TX_BURSTS")
+        self.assertEqual(constant(HEADER, "TX_CARRIER_HZ"), 38000)
+        self.assertGreater(mark, 2 * LONGEST_PROTOCOL_MARK_US)
+        total_ms = bursts * (mark + space) / 1000
+        self.assertGreaterEqual(total_ms, 2500)
+        self.assertLessEqual(total_ms, 3500)
+        # A 30 fps camera must see each burst and each gap.
+        self.assertGreaterEqual(mark, 34000)
+        self.assertGreaterEqual(space, 34000)
+        start = function_body(CPP, "void SelfTest::start_transmit_(uint32_t now)")
+        self.assertIn("data->set_carrier_frequency(TX_CARRIER_HZ);", start)
+        self.assertIn("data->item(TX_MARK_US, TX_SPACE_US);", start)
+
+    def test_the_receive_check_ignores_the_board_own_bursts(self) -> None:
+        body = function_body(CPP, "void SelfTest::ir_frame(const std::vector<int32_t> &raw)")
+        self.assertIn("now - this->tx_start_ms_ < TX_TOTAL_MS + IR_ECHO_MS", body)
+        self.assertIn("std::abs(value) >= IR_OWN_MARK_US", body)
+        self.assertLess(body.index("IR_ECHO_MS"), body.index("this->ir_rx_passed_ = true;"))
+        self.assertLessEqual(constant(CPP, "IR_OWN_MARK_US"), constant(HEADER, "TX_MARK_US"))
+        self.assertGreater(constant(CPP, "IR_OWN_MARK_US"), LONGEST_PROTOCOL_MARK_US)
+
+
+class RadioTest(unittest.TestCase):
+    def test_a_scan_needs_the_active_bluetooth_controller(self) -> None:
+        body = function_body(CPP, "void SelfTest::update_radios_(uint32_t now)")
+        start = body.index("esp_wifi_scan_start(&config, false)")
+        for gate in ("!ble->is_active()", "ESP_BT_CONTROLLER_STATUS_ENABLED", "!wifi->has_sta()",
+                     "!wifi->is_connected()", "!wifi->is_disabled()", "idle_improv",
+                     "server->get_client_count() == 0", "!this->installing_"):
+            with self.subTest(gate=gate):
+                self.assertLess(body.index(gate), start)
+        self.assertIn("config.scan_type = WIFI_SCAN_TYPE_PASSIVE;", body)
+        self.assertIn("esp_wifi_scan_stop();", body[:start])
+        for operation in ("start_scanning(", "set_sta(", "->enable(", "->disable("):
+            self.assertNotIn(operation, body)
+
+    def test_scan_count_and_success_are_the_wifi_evidence(self) -> None:
+        setup = function_body(CPP, "void SelfTest::setup()")
+        self.assertIn("esp_event_handler_instance_register(", setup)
+        self.assertIn("WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &SelfTest::wifi_scan_event_", setup)
+        event = function_body(CPP, "void SelfTest::wifi_scan_event_(")
+        self.assertIn("wifi_scan_active_.load(", event)
+        self.assertIn("scan->status == 0", event)
+        self.assertIn("scan->number", event)
+        self.assertIn("std::memory_order_release", event)
+        update = function_body(CPP, "void SelfTest::update_radios_(uint32_t now)")
+        self.assertIn("std::memory_order_acquire", update)
+        self.assertIn("(result & SCAN_SUCCESS) != 0 && count > 0", update)
+        self.assertIn("this->wifi_scan_passed_ = true;", update)
+        self.assertIn("RADIO_SCAN_TIMEOUT_MS", update)
+        self.assertIn("now + RADIO_RETRY_MS", update)
+        self.assertNotIn("esp_wifi_scan_get_ap_", CPP)
+
+    def test_ble_pass_needs_the_existing_improv_advertisement_success(self) -> None:
+        gap = function_body(CPP, "void SelfTest::gap_event_handler(")
+        success = gap.index("this->ble_advertising_passed_ = true;")
+        for evidence in ("ESP_GAP_BLE_ADV_START_COMPLETE_EVT", "param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS",
+                         "esp32_improv::global_improv_component->is_active()"):
+            self.assertLess(gap.index(evidence), success)
+        self.assertIn("esp32_ble.register_gap_event_handler(", INIT)
+        self.assertNotIn("esp_ble_gap_register_callback(", CPP)
+        self.assertNotIn("esp_ble_gap_start_advertising(", CPP)
+        self.assertNotIn("zigbee:", without_comments(FACTORY))
+
+    def test_the_second_page_uses_distinct_positions_on_both_boards(self) -> None:
+        page = function_body(CPP, "void SelfTest::draw_second_page_(")
+        self.assertIn("it.all() = Color::BLACK;", page)
+        self.assertIn("this->wifi_scan_passed_ && this->ble_advertising_passed_", page)
+        self.assertIn("it[LED_D2]", page)
+        self.assertIn("it[LED_D3] = this->sleep_wake_passed_ ? PASSED : PENDING;", page)
+        self.assertIn("it[d5] = SECOND_PAGE;", page)
+        self.assertIn("RADIO_FAIL_MS", page)
+        mapping = re.search(r"const int32_t d5 = it.size\(\) >= (\d+) \? (\d+) : (\d+);", page)
+        self.assertIsNotNone(mapping)
+        threshold, v3_index, v2_index = map(int, mapping.groups())
+        for count in (4, 6):
+            with self.subTest(leds=count):
+                positions = {"radio": constant(CPP, "LED_D2"), "wake": constant(CPP, "LED_D3"),
+                             "page": v3_index if count >= threshold else v2_index}
+                self.assertEqual(positions, {"radio": 0, "wake": 1, "page": 3 if count == 4 else 4})
+                self.assertEqual(len(set(positions.values())), 3)
+                self.assertTrue(all(0 <= index < count for index in positions.values()))
+        render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
+        self.assertIn("if (this->second_page_)", render)
+        self.assertIn("this->draw_second_page_(it, now);", render)
+
+
+class SleepTest(unittest.TestCase):
+    RESULT_FLAGS = {
+        "cw_seen_": "RESULT_CW",
+        "ccw_seen_": "RESULT_CCW",
+        "mic_passed_": "RESULT_MIC",
+        "ir_rx_passed_": "RESULT_IR_RX",
+        "tx_done_": "RESULT_TX",
+        "battery_passed_": "RESULT_BATTERY",
+        "usb_plugged_seen_": "RESULT_USB_PLUGGED",
+        "usb_unplugged_seen_": "RESULT_USB_UNPLUGGED",
+        "wifi_scan_passed_": "RESULT_WIFI",
+        "ble_advertising_passed_": "RESULT_BLE",
+        "sleep_wake_passed_": "RESULT_SLEEP_WAKE",
+    }
+
+    def test_the_snapshot_keeps_complete_and_partial_check_evidence(self) -> None:
+        save = function_body(CPP, "void SelfTest::save_results_()")
+        load = function_body(CPP, "bool SelfTest::load_results_()")
+        self.assertIn("RTC_DATA_ATTR RtcResults s_results{};", CPP)
+        self.assertIn("saved.seen_mask = this->seen_mask_;", save)
+        self.assertIn("this->seen_mask_ = saved.seen_mask;", load)
+        for member, flag in self.RESULT_FLAGS.items():
+            with self.subTest(result=member):
+                self.assertIn(f"this->{member} ? {flag} : 0", save)
+                self.assertIn(f"this->{member} = (saved.flags & {flag}) != 0;", load)
+        flag_bits = re.findall(r"constexpr uint16_t (RESULT_\w+) = 1U << (\d+);", CPP)
+        self.assertEqual({name for name, _ in flag_bits}, set(self.RESULT_FLAGS.values()))
+        self.assertEqual(len({bit for _, bit in flag_bits}), len(self.RESULT_FLAGS))
+        self.assertTrue(all(0 <= int(bit) < 16 for _, bit in flag_bits))
+        self.assertIn("saved.checksum = results_checksum(saved);", save)
+        self.assertIn("s_results = saved;", save)
+        self.assertLess(save.index("saved.checksum ="), save.index("s_results = saved;"))
+        checksum = function_body(CPP, "static uint32_t results_checksum(")
+        for field in ("magic", "version", "led_count", "seen_mask", "flags"):
+            self.assertIn(f"results.{field}", checksum)
+
+    def test_cold_invalid_or_other_board_snapshots_restore_no_results(self) -> None:
+        load = function_body(CPP, "bool SelfTest::load_results_()")
+        validation = load[load.index("if (esp_reset_reason()"):load.index("this->seen_mask_ = saved.seen_mask;")]
+        for gate in ("esp_reset_reason() != ESP_RST_DEEPSLEEP", "saved.magic != RESULTS_MAGIC",
+                     "saved.version != RESULTS_VERSION", "saved.led_count != this->led_count_",
+                     "(saved.flags & ~RESULTS_FLAGS) != 0", "saved.checksum != results_checksum(saved)"):
+            self.assertIn(gate, validation)
+        self.assertIn("s_sleep_test_armed = 0;", validation)
+        self.assertIn("return false;", validation)
+        self.assertIn("s_results = {};", load)
+        self.assertLess(load.index("s_results = {};"), load.index("if (esp_reset_reason()"))
+        self.assertIn("this->seen_mask_ = 0;", load)
+        for member in self.RESULT_FLAGS:
+            self.assertLess(load.index(f"this->{member} = false;"), load.index("if (esp_reset_reason()"))
+        setup = function_body(CPP, "void SelfTest::setup()")
+        self.assertLess(setup.index("this->led_count_ ="), setup.index("this->load_results_()"))
+
+    def test_only_evidence_is_retained_in_rtc_memory(self) -> None:
+        record = function_body(CPP, "struct RtcResults")
+        self.assertEqual(re.findall(r"uint(?:16|32)_t (\w+);", record),
+                         ["magic", "checksum", "version", "led_count", "seen_mask", "flags"])
+        save = function_body(CPP, "void SelfTest::save_results_()")
+        load = function_body(CPP, "bool SelfTest::load_results_()")
+        for transient in ("held_mask_", "long_fired_mask_", "pressed_at_ms_", "encoder_pos_", "encoder_ms_",
+                          "tx_started_", "tx_start_ms_", "battery_count_", "battery_first_v_", "mic_peak_",
+                          "mic_floor_", "vu_mode_", "usb_present_", "installing_", "wifi_scan_active_",
+                          "radio_next_scan_ms_", "sleep_requested_", "sleep_refused_until_ms_", "intro_started_"):
+            with self.subTest(transient=transient):
+                self.assertNotIn(f"this->{transient}", save)
+                self.assertNotIn(f"this->{transient}", load)
+        for flash_operation in ("global_preferences", "make_preference", "nvs_set", "->save("):
+            self.assertNotIn(flash_operation, save + load)
+
+    def test_both_sleep_paths_save_results_before_teardown(self) -> None:
+        self.assertIn("void on_shutdown() override;", HEADER)
+        shutdown = function_body(CPP, "void SelfTest::on_shutdown()")
+        self.assertIn("this->save_results_();", shutdown)
+        self.assertNotIn("sleep_requested_", shutdown)
+        self.assertNotIn("forced_sleep_", shutdown)
+        entry = function_body(IDLE_CPP, "void IdleSleep::enter_sleep_()")
+        self.assertIn("App.run_safe_shutdown_hooks();", entry)
+        self.assertLess(entry.index("App.run_safe_shutdown_hooks();"), entry.index("esp_deep_sleep_start();"))
+        attempt = function_body(IDLE_CPP, "void IdleSleep::try_sleep_()")
+        self.assertEqual(attempt.count("this->enter_sleep_();"), 1)
+        self.assertLess(attempt.index("if (this->forced_sleep_)"), attempt.index("this->enter_sleep_();"))
+
+    def test_deliberate_sleep_waits_for_release_and_rechecks_the_guard(self) -> None:
+        update = function_body(CPP, "void SelfTest::update_sleep_()")
+        arm = update.index("this->idle_->arm_sleep(")
+        for gate in ("!this->sleep_requested_ || this->held_mask_ != 0", "!this->allow_sleep_()"):
+            self.assertLess(update.index(gate), arm)
+        self.assertIn("[this]() { return this->allow_sleep_(); }", update)
+        allow = function_body(CPP, "bool SelfTest::allow_sleep_()")
+        self.assertIn("const char *blocked = this->sleep_block_();", allow)
+        self.assertIn("if (blocked == nullptr)\n    return true;", allow)
+        self.assertIn("this->sleep_requested_ = false;", allow)
+        self.assertIn("s_sleep_test_armed = 0;", allow)
+        self.assertIn('ESP_LOGI(TAG, "Sleep test refused: %s", blocked);', allow)
+        block = function_body(CPP, "const char *SelfTest::sleep_block_()")
+        self.assertIn("if (!this->sleep_blocked_by_)", block)
+        self.assertIn("this->installing_", block)
+        self.assertIn("this->transmitting_(millis())", block)
+        self.assertIn("return this->sleep_blocked_by_();", block)
+        # Each refusal names one condition, so the log says which one blocked it.
+        reasons = re.findall(r'return "([^"]+)";', block)
+        self.assertEqual(len(reasons), len(set(reasons)))
+        self.assertGreaterEqual(len(reasons), 3)
+        self.assertIn("void arm_sleep(std::function<bool()> guard);", IDLE_HEADER)
+        guarded_arm = function_body(IDLE_CPP, "void IdleSleep::arm_sleep(std::function<bool()> guard)")
+        self.assertIn("this->forced_sleep_guard_ = std::move(guard);", guarded_arm)
+        self.assertIn("this->arm_sleep();", guarded_arm)
+        forced = function_body(IDLE_CPP, "void IdleSleep::try_sleep_()").split("  } else {", 1)[0]
+        self.assertIn("this->pressed_ != 0", forced)
+        self.assertIn("this->forced_sleep_guard_ && !this->forced_sleep_guard_()", forced)
+        self.assertIn("this->forced_sleep_ = false;", forced)
+        self.assertIn("this->forced_sleep_guard_ = {};", forced)
+        self.assertLess(forced.index("this->pressed_ != 0"), forced.index("!this->forced_sleep_guard_()"))
+
+    def test_deliberate_sleep_preserves_provisioning_and_installation(self) -> None:
+        probe = top_level_block(FACTORY, "self_test").split("  sleep_blocked_by: !lambda |-\n", 1)[1]
+        probe = probe.split("  light_id:", 1)[0]
+        for gate in ("wifi::global_wifi_component->has_sta()", "wifi::global_wifi_component->is_connected()",
+                     "improv::STATE_PROVISIONING", "ble->get_client_count() > 0",
+                     "update::UPDATE_STATE_INSTALLING"):
+            with self.subTest(gate=gate):
+                self.assertIn(gate, probe)
+        self.assertNotIn("usb_present()", probe)
+        # One reason for each condition, and nullptr when the sleep test can run.
+        reasons = re.findall(r'return "([^"]+)";', probe)
+        self.assertEqual(len(reasons), 5)
+        self.assertEqual(len(reasons), len(set(reasons)))
+        self.assertIn("return nullptr;", probe)
+        self.assertIn("  idle_sleep_id: idle\n", top_level_block(FACTORY, "self_test"))
+        self.assertIn("var.set_idle_sleep(idle)", INIT)
+        self.assertIn("return_type=cg.const_char_ptr", INIT)
+        self.assertIn("var.set_sleep_blocked_by(blocked_by)", INIT)
+
+    def test_only_the_requested_ext1_wake_with_a_stub_latch_passes(self) -> None:
+        self.assertIn("RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;", CPP)
+        setup = function_body(CPP, "void SelfTest::setup()")
+        self.assertIn("s_sleep_test_armed == SLEEP_TEST_MAGIC", setup)
+        self.assertIn("s_sleep_test_armed = 0;", setup)
+        self.assertLess(setup.index("s_sleep_test_armed = 0;"), setup.index("this->sleep_wake_passed_ ="))
+        self.assertIn("const bool restored = this->load_results_();", setup)
+        self.assertIn("requested_wake = restored && s_sleep_test_armed == SLEEP_TEST_MAGIC", setup)
+        self.assertIn("this->sleep_wake_passed_ = this->sleep_wake_passed_ ||", setup)
+        for gate in ("requested_wake", "esp_reset_reason() == ESP_RST_DEEPSLEEP",
+                     "esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1", "this->idle_->held_at_wake() != 0"):
+            self.assertIn(gate, setup)
+        self.assertIn("this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;", setup)
+        update = function_body(CPP, "void SelfTest::update_sleep_()")
+        self.assertLess(update.index("s_sleep_test_armed = SLEEP_TEST_MAGIC;"), update.index("this->idle_->arm_sleep("))
+        idle_setup = function_body(IDLE_CPP, "void IdleSleep::setup()")
+        self.assertIn("latch.magic == IDLE_SLEEP_LATCH_MAGIC", idle_setup)
+        self.assertIn("latch.flags & IDLE_SLEEP_STUB_ACK", idle_setup)
+        self.assertIn("this->held_mask_ = rec.stub_down & first_down;", idle_setup)
+        self.assertIn("IDLE_SLEEP_STUB_ACK", WAKE_STUB)
+
+    def test_idle_sleep_runs_with_the_gpio5_wake(self) -> None:
+        sleep = top_level_block(FACTORY, "idle_sleep")
+        self.assertIn("  id: idle\n", sleep)
+        self.assertIn("  sleep_after: 5min\n", sleep)
+        self.assertIn("static constexpr gpio_num_t WAKE_PIN = GPIO_NUM_5;", IDLE_CPP)
+        self.assertIn("esp_sleep_enable_ext1_wakeup_io(BIT64(WAKE_PIN), ESP_EXT1_WAKEUP_ANY_LOW);", IDLE_CPP)
+        # The expander INT on GPIO5 is the wake source, so the config must poll the same part.
+        expander = top_level_block(FACTORY, "pcf8574")
+        self.assertIn("    address: 0x20\n", expander)
+        self.assertIn("    pcf8575: true\n", expander)
+
+    def test_usb_power_provisioning_and_the_install_block_sleep(self) -> None:
+        probe = top_level_block(FACTORY, "idle_sleep").split("  block_probe: !lambda |-\n", 1)[1]
+        self.assertIn("id(hw_test).usb_present()", probe)
+        self.assertIn("improv::STATE_PROVISIONING", probe)
+        self.assertIn("get_client_count() > 0", probe)
+        self.assertIn("id(hw_test).installing()", probe)
+        self.assertIn("update::UPDATE_STATE_INSTALLING", probe)
+        # A unit without internet access must still sleep after a failed check.
+        self.assertIn("!id(firmware_update).status_has_error()", probe)
+        # idle_sleep sees only the expander, so the wheel and IR frames report through the self-test.
+        self.assertIn("id(hw_test).recently_active(millis())", probe)
+        self.assertIn("return mask != 0 || active;", probe)
+        for name in ("void SelfTest::encoder_step(", "void SelfTest::ir_frame(", "void SelfTest::update_usb_("):
+            with self.subTest(function=name):
+                self.assertIn("this->mark_active_(", function_body(CPP, name))
+        self.assertIn("bool usb_present() const { return this->v3_ && this->usb_known_ && this->usb_present_; }",
+                      HEADER)
+
+    def test_the_rails_and_gpio17_are_safe_before_sleep(self) -> None:
+        shutdown = top_level_block(FACTORY, "esphome").split("  on_shutdown:\n", 1)[1]
+        self.assertIn("    - switch.turn_off: led_rail\n", shutdown)
+        self.assertIn("    - switch.turn_off: ir_rail\n", shutdown)
+        self.assertIn("gpio_set_pull_mode(GPIO_NUM_17, GPIO_PULLDOWN_ONLY);", shutdown)
+        self.assertIn("gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);", shutdown)
+        held = re.search(r"HELD_FLOATING\[\] = \{([^}]*)\}", IDLE_CPP).group(1)
+        for pin in ("GPIO_NUM_6", "GPIO_NUM_18"):
+            self.assertIn(pin, held)
+        self.assertIn("HELD_PULLDOWN = GPIO_NUM_17;", IDLE_CPP)
+
+    def test_the_light_owns_the_led_rail(self) -> None:
+        light = top_level_block(FACTORY, "light")
+        on = light.split("    on_turn_on:\n", 1)[1].split("    on_turn_off:\n", 1)[0]
+        self.assertIn("      - switch.turn_on: led_rail\n", on)
+        self.assertIn("            - switch.turn_off: led_rail\n", light.split("    on_turn_off:\n", 1)[1])
+        switches = list_entries(top_level_block(FACTORY, "switch"))
+        led = next(e for e in switches if "id: led_rail" in e)
+        ir = next(e for e in switches if "id: ir_rail" in e)
+        self.assertIn("number: GPIO18", led)
+        self.assertIn("restore_mode: ALWAYS_OFF", led)
+        self.assertIn("number: GPIO6", ir)
+        self.assertIn("restore_mode: ALWAYS_ON", ir)
+        for entry in (led, ir):
+            self.assertIn("inverted: true", entry)
+
+
+class MicrophoneTest(unittest.TestCase):
+    def test_the_bit_clock_is_in_the_dmm_4026_normal_range(self) -> None:
+        mic = top_level_block(FACTORY, "microphone")
+        rate = int(re.search(r"(?m)^    sample_rate: (\d+)$", mic).group(1))
+        bits = int(re.search(r"(?m)^    bits_per_sample: (\d+)bit$", mic).group(1))
+        # I2S standard mode always clocks two slots.
+        bclk = rate * 2 * bits
+        self.assertGreaterEqual(bclk, 2_048_000)
+        self.assertLessEqual(bclk, 4_096_000)
+        # The V2 ICS-43434 has no mode between its Low-Power and High-Performance bands.
+        self.assertFalse(18_750 < rate < 23_000)
+        self.assertIn("    channel: left\n", mic)
+        self.assertIn("    pdm: false\n", mic)
+        self.assertIn("    i2s_din_pin: GPIO21\n", mic)
+
+    def test_a_key_knock_alone_cannot_pass_the_check(self) -> None:
+        """A key press puts about -35 dBFS into MK1 through the board."""
+        loud = constant(CPP, "MIC_LOUD")
+        self.assertGreater(20 * math.log10(loud / 32768), -30)
+        self.assertGreaterEqual(constant(CPP, "MIC_SWING"), 10)
+        body = function_body(CPP, "void SelfTest::update_mic_(uint32_t now)")
+        self.assertIn("peak >= MIC_LOUD && this->mic_floor_ != UINT32_MAX &&", body)
+        self.assertIn("peak >= MIC_SWING * this->mic_floor_", body)
+
+    def test_the_mic_starts_after_every_setup(self) -> None:
+        self.assertIn("float get_setup_priority() const override { return setup_priority::LATE; }", HEADER)
+        self.assertIn("this->mic_->start();", function_body(CPP, "void SelfTest::setup()"))
+
+
+class BoardVariantTest(unittest.TestCase):
+    def test_the_release_builds_the_factory_image_for_v3(self) -> None:
+        self.assertIn("esphome -s status_led_count 6 compile c6remote-factory.yaml", WORKFLOW)
+        self.assertEqual(re.search(r'(?m)^  status_led_count: (.+)$', top_level_block(FACTORY, "substitutions"))
+                         .group(1), '"4"')
+        self.assertIn("    num_leds: ${status_led_count}\n", top_level_block(FACTORY, "light"))
+        self.assertIn("this->v3_ = this->led_count_ >= 6;", CPP)
+
+    def test_gpio7_is_read_only_on_v3(self) -> None:
+        setup = function_body(CPP, "void SelfTest::setup()")
+        guard = setup.index("if (this->v3_ && this->usb_pin_ != nullptr) {")
+        self.assertLess(guard, setup.index("this->usb_pin_->setup();"))
+        self.assertEqual(CPP.count("this->usb_pin_->setup();"), 1)
+        self.assertIn("if (!this->v3_ || this->usb_pin_ == nullptr)\n    return;",
+                      function_body(CPP, "void SelfTest::update_usb_(uint32_t now)"))
+        pin = top_level_block(FACTORY, "self_test").split("  usb_present_pin:\n", 1)[1]
+        self.assertIn("    number: GPIO7\n", pin)
+        self.assertIn("    inverted: true\n", pin)
+
+    def test_the_strip_order_is_the_chain_order(self) -> None:
+        """D2 D3 D4 D5 on V2, D2 D3 D6 D4 D5 D7 on V3."""
+        self.assertEqual(constant(CPP, "LED_D2"), 0)
+        self.assertEqual(constant(CPP, "LED_D3"), 1)
+        self.assertEqual(constant(CPP, "LED_D6"), 2)
+        self.assertEqual(constant(CPP, "LED_D7"), 5)
+        overview = function_body(CPP, "void SelfTest::draw_overview_(light::AddressableLight &it) const")
+        self.assertIn("const int32_t d4 = six ? 3 : 2;", overview)
+        self.assertIn("const int32_t d5 = six ? 4 : 3;", overview)
+
+
+class InputTest(unittest.TestCase):
+    def test_the_new_holds_do_not_share_existing_functions(self) -> None:
+        bits = {name: constant(HEADER, name) for name in ("TRANSMIT_BIT", "VU_BIT", "PAGE_BIT", "SLEEP_BIT")}
+        self.assertEqual(len(set(bits.values())), 4)
+        self.assertEqual(bits["PAGE_BIT"], 1)
+        self.assertEqual(bits["SLEEP_BIT"], 2)
+        self.assertEqual(constant(HEADER, "LONG_PRESS_MS"), 2000)
+        # Only the sleep hold is longer, so a button held in step 2 cannot sleep the board.
+        self.assertEqual(constant(HEADER, "SLEEP_HOLD_MS"), 3000)
+        self.assertGreater(constant(HEADER, "SLEEP_HOLD_MS"), constant(HEADER, "LONG_PRESS_MS"))
+        holds = function_body(CPP, "void SelfTest::update_long_presses_(uint32_t now)")
+        for bit in bits:
+            self.assertIn(bit, holds)
+        # The sleep hold works on both overviews and in the VU meter.
+        self.assertNotIn("bit == SLEEP_BIT &&", holds)
+        self.assertNotIn("else if (this->second_page_", holds)
+        self.assertIn("this->sleep_requested_ = this->allow_sleep_();", holds)
+        self.assertIn("this->sleep_armed_until_ms_ = now + SLEEP_ARMED_FLASH_MS;", holds)
+
+    def test_the_sleep_hold_answers_on_every_display_mode(self) -> None:
+        """A dark blue ring flash arms, and a red ring flash refuses, on either overview."""
+        self.assertIn("static const Color SLEEP_ARMED_FLASH(0, 0, 64);", CPP)
+        self.assertEqual(constant(CPP, "SLEEP_ARMED_FLASH_MS"), 500)
+        self.assertEqual(constant(CPP, "SLEEP_REFUSED_MS"), 1500)
+        render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
+        armed = render.index("it.all() = SLEEP_ARMED_FLASH;")
+        refused = render.index("it.all() = FAILED;")
+        self.assertIn("if (static_cast<int32_t>(this->sleep_armed_until_ms_ - now) > 0)", render)
+        self.assertIn("if (static_cast<int32_t>(this->sleep_refused_until_ms_ - now) > 0)", render)
+        # Last in the frame, so a page, the VU meter and a held input cannot cover it.
+        for earlier in ("this->draw_second_page_(it, now);", "this->draw_vu_(it);", "this->draw_overview_(it);",
+                        "this->draw_input_(it, this->shown_bit_);", "it.all() = TRANSMIT;"):
+            self.assertLess(render.index(earlier), armed)
+        self.assertLess(armed, refused)
+        page = function_body(CPP, "void SelfTest::draw_second_page_(")
+        self.assertNotIn("sleep_refused_until_ms_", page)
+
+    def test_every_expander_bit_feeds_the_self_test(self) -> None:
+        bits = []
+        for entry in list_entries(top_level_block(FACTORY, "binary_sensor")):
+            bit = int(re.search(r"number: (\d+)", entry).group(1))
+            bits.append(bit)
+            with self.subTest(bit=bit):
+                self.assertIn("pcf8574: button_expander" if bit == 0 else "<<: *expander_pin", entry)
+                self.assertIn(f"- lambda: id(hw_test).input({bit}, true);", entry)
+                self.assertIn(f"- lambda: id(hw_test).input({bit}, false);", entry)
+        self.assertEqual(sorted(bits), list(range(16)))
+
+    def test_the_bit_order_matches_the_production_config(self) -> None:
+        """SW9 is bit 9 and SW10 is bit 8 in c6remote.yaml."""
+        for name, bit in (("sw9", 9), ("sw10", 8), ("wheel_press", 13), ("sw1", 0)):
+            entry = next(e for e in list_entries(top_level_block(FACTORY, "binary_sensor"))
+                         if re.search(rf"(?m)^    id: {name}$", e))
+            self.assertIn(f"number: {bit}\n", entry)
+        self.assertIn("name: Button 9\n    pin:\n      <<: *button_1\n      number: 9\n", CONFIG)
+        self.assertIn("name: Button 10\n    pin:\n      <<: *button_1\n      number: 8\n", CONFIG)
+        self.assertEqual(constant(HEADER, "VU_BIT"), 13)
+
+    def test_both_encoder_directions_feed_the_self_test(self) -> None:
+        encoder = next(e for e in list_entries(top_level_block(FACTORY, "sensor")) if "rotary_encoder" in e)
+        self.assertIn("number: GPIO19", encoder)
+        self.assertIn("number: GPIO20", encoder)
+        self.assertIn("on_clockwise:\n      - lambda: id(hw_test).encoder_step(true);", encoder)
+        self.assertIn("on_anticlockwise:\n      - lambda: id(hw_test).encoder_step(false);", encoder)
+
+
+class ComponentIdTest(unittest.TestCase):
+    LIST_BLOCKS = ("pcf8574", "binary_sensor", "sensor", "light", "switch", "microphone")
+    MAP_BLOCKS = ("self_test", "idle_sleep", "i2c", "remote_receiver", "remote_transmitter", "i2s_audio")
+
+    def test_every_self_test_component_has_an_id(self) -> None:
+        for key in self.LIST_BLOCKS:
+            for entry in list_entries(top_level_block(FACTORY, key)):
+                with self.subTest(block=key, entry=entry.splitlines()[0]):
+                    self.assertRegex(entry, r"(?m)^  (?:- |  )id: \w+$")
+        for key in self.MAP_BLOCKS:
+            with self.subTest(block=key):
+                self.assertRegex(top_level_block(FACTORY, key), r"(?m)^  id: \w+$")
+
+    def test_the_component_codegen_takes_each_part_by_id(self) -> None:
+        for name in ("light_id", "microphone_id", "transmitter_id", "usb_present_pin"):
+            self.assertIn(f'"{name}"', INIT)
+        self.assertIn("ota.request_ota_state_listeners()", INIT)
+
+
+class BootAnimationTest(unittest.TestCase):
+    """The factory image opens with the production boot chase and nothing else."""
+
+    @staticmethod
+    def production_chase() -> str:
+        """Returns the boot chase block of the Status Indicators effect."""
+        block = CONFIG[CONFIG.index("// Boot chase:"):]
+        return block[:block.index("id(boot_chase_done) = true;")]
+
+    def test_the_palette_matches_the_production_config(self) -> None:
+        table = CPP[CPP.index("CHASE_COLOUR[6] = {"):]
+        table = table[:table.index("};")]
+        colours = re.findall(r"Color\((\d+), (\d+), (\d+)\)", self.production_chase())
+        self.assertEqual(len(colours), 6)
+        self.assertEqual(re.findall(r"Color\((\d+), (\d+), (\d+)\)", table), colours)
+
+    def test_the_lap_the_laps_and_the_peak_match_the_production_config(self) -> None:
+        self.assertIn("const uint32_t step = 600 / it.size();", CONFIG)
+        self.assertEqual(constant(CPP, "CHASE_LAP_MS"), 600)
+        self.assertIn("const uint32_t pulses = 2 * it.size();", self.production_chase())
+        self.assertEqual(constant(CPP, "CHASE_LAPS"), 2)
+        self.assertIn("160.0f * (0.5f - 0.5f * cosf(", self.production_chase())
+        self.assertIn("CHASE_PEAK = 160.0f;", CPP)
+
+    def test_the_pulse_shape_and_the_index_mapping_match_the_production_config(self) -> None:
+        body = function_body(CPP, "void SelfTest::draw_chase_(")
+        self.assertIn("t >= start + 3 * step", body)
+        self.assertIn("t >= start + 3 * step", self.production_chase())
+        self.assertIn("0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)", body)
+        # A four-LED chain skips magenta and cyan.
+        self.assertIn("n >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)", body)
+        self.assertIn("it.size() >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)", self.production_chase())
+        self.assertIn("it.all() = Color::BLACK;", body)
+
+    def test_the_chase_runs_for_two_laps_at_each_led_count(self) -> None:
+        self.assertIn("return (CHASE_LAPS * n + 2) * (CHASE_LAP_MS / n);", CPP)
+        laps, lap_ms = constant(CPP, "CHASE_LAPS"), constant(CPP, "CHASE_LAP_MS")
+        duration = {n: (laps * n + 2) * (lap_ms // n) for n in (4, 6)}
+        self.assertEqual(duration, {4: 1500, 6: 1400})
+
+    def test_the_overview_follows_the_chase_with_no_gap(self) -> None:
+        body = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
+        self.assertIn("const uint32_t since = now - this->intro_start_ms_;", body)
+        self.assertIn("const uint32_t chase = chase_ms(static_cast<uint32_t>(n));", body)
+        self.assertIn("if (since < chase) {\n    this->draw_chase_(it, since);\n    return;\n  }\n\n"
+                      "  if (this->vu_mode_) {", body)
+        self.assertLess(body.index("draw_chase_"), body.index("draw_overview_"))
+
+    def test_the_boot_has_no_colour_sweep(self) -> None:
+        """Bench feedback dropped the sweep, so no table, constant or branch may survive."""
+        for token in ("SWEEP", "sweep"):
+            with self.subTest(token=token):
+                self.assertNotIn(token, CPP)
+                self.assertNotIn(token, HEADER)
+
+    def test_a_wake_from_deep_sleep_plays_the_chase_again(self) -> None:
+        """A wake must keep the approved boot animation."""
+        self.assertIn("bool intro_started_{false};", HEADER)
+        render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
+        intro = render[render.index("const uint32_t since ="):render.index("if (this->vu_mode_)")]
+        self.assertNotIn("woke_from_sleep", intro)
+        self.assertNotIn("sleep_wake_passed_", intro)
+
+    def test_the_production_config_keeps_its_own_chase(self) -> None:
+        """c6remote.yaml must not lose the chase that the factory image copies."""
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", CONFIG)
+
+
+class DocTest(unittest.TestCase):
+    CHECKS = {
+        "inputs_passed_": "Buttons and wheel",
+        "mic_passed_": "Microphone",
+        "ir_rx_passed_": "IR receive",
+        "battery_passed_": "Battery",
+        "tx_done_": "IR transmit",
+        "usb_passed_": "USB power",
+    }
+    LED_OF_INDEX = {"LED_D2": "D2", "LED_D3": "D3", "d4": "D4", "d5": "D5", "LED_D6": "D6", "LED_D7": "D7"}
+
+    def test_the_ring_table_matches_the_overview(self) -> None:
+        overview = function_body(CPP, "void SelfTest::draw_overview_(light::AddressableLight &it) const")
+        code = {}
+        for index, check in re.findall(r"show\((\w+), this->(\w+?)(?:\(\))?\);", overview):
+            code[self.LED_OF_INDEX[index]] = self.CHECKS[check]
+        doc = dict(re.findall(r"(?m)^\| `(D\d)` \| [^|]+ \| ([^|]+?) \| [^|]+ \|$", DOC))
+        self.assertEqual(len(code), 6)
+        self.assertEqual(doc, code)
+
+    def test_the_input_colour_table_matches_the_component(self) -> None:
+        code = sorted(f"{name} {top} {bottom}" for name, top, bottom in input_pairs())
+        rows = re.findall(r"(?m)^\| (`SW\d+`|Wheel \w+) \| (\w+) \| (\w+) \|$", DOC)
+        doc = sorted(f"{name.strip('`')} {top} {bottom}".lower().replace("center", "centre")
+                     for name, top, bottom in rows)
+        self.assertEqual(len(code), 16)
+        self.assertEqual(doc, code)
+
+    def test_each_input_has_its_own_pair_of_colours(self) -> None:
+        pairs = [(top, bottom) for _, top, bottom in input_pairs()]
+        self.assertEqual(len(set(pairs)), 16)
+        bases = base_colours()
+        self.assertGreaterEqual(len(set(bases)), 5)
+        self.assertEqual(len(bases), len(set(bases)))
+        self.assertEqual(set(bases), {name for pair in pairs for name in pair})
+
+    def test_no_input_uses_one_colour_on_both_halves(self) -> None:
+        """A pair of the same colour lights the whole ring in one colour."""
+        for name, top, bottom in input_pairs():
+            with self.subTest(input=name):
+                self.assertNotEqual(top, bottom)
+
+    def test_a_held_input_splits_the_ring_into_two_halves(self) -> None:
+        """The chain is D2 D3 D4 D5 on V2 and D2 D3 D6 D4 D5 D7 on V3, so 1 to n / 2 is the top."""
+        body = function_body(CPP, "void SelfTest::draw_input_(light::AddressableLight &it, uint8_t bit) const")
+        self.assertIn("const bool top = i >= 1 && i <= n / 2;", body)
+        self.assertIn("it[i] = BASE_COLOUR[INPUT_PAIR[bit][top ? 0 : 1]];", body)
+        self.assertIn("this->draw_input_(it, this->shown_bit_);",
+                      function_body(CPP, "void SelfTest::render(light::AddressableLight &it)"))
+        for count, top, bottom in ((4, [1, 2], [0, 3]), (6, [1, 2, 3], [0, 4, 5])):
+            with self.subTest(leds=count):
+                self.assertEqual([i for i in range(count) if 1 <= i <= count // 2], top)
+                self.assertEqual([i for i in range(count) if not 1 <= i <= count // 2], bottom)
+
+    def test_the_doc_names_the_transmit_hold_and_has_no_em_dash(self) -> None:
+        self.assertIn("Press and hold `SW1` for 2 s.", DOC)
+        self.assertIn("Press and hold the wheel center for 2 s.", DOC)
+        self.assertNotIn("—", DOC)
+        self.assertNotIn(";", DOC.replace("&amp;", ""))
+
+    def test_the_first_step_rests_on_the_chase_alone(self) -> None:
+        steps = dict(re.findall(r"(?m)^### Step (\d+): (.+)$", DOC))
+        self.assertEqual(steps["1"], "Power on and boot animation")
+        body = DOC.split("### Step 1:", 1)[1].split("### Step 2", 1)[0]
+        self.assertIn("clockwise round the ring two times", body)
+        # The chase shows that each LED lights and that the chain order is right.
+        self.assertIn("- Pass: The wave goes clockwise two times, and each LED lights with the color of its row.",
+                      body)
+        self.assertIn("- Fail: An LED stays dark in both laps.", body)
+        self.assertIn("- Fail: A color is at the wrong position.", body)
+        # The chase proves nothing about a second colour, so the step says where that fault shows.
+        self.assertIn("it cannot show that an LED makes more than one color", body)
+        self.assertIn("Step 2 lights each LED in four or more colors", body)
+
+    def test_the_first_step_table_matches_the_chase_palette(self) -> None:
+        comment = CPP[:CPP.index("static const Color CHASE_COLOUR[6]")]
+        code = re.findall(r"(D\d) (\w+)", comment[comment.rindex("in chain order:"):])
+        doc = [(led, colour.lower())
+               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| [^|]+ \| (\w+) \|$", DOC)]
+        self.assertEqual(len(code), 6)
+        self.assertEqual(doc, code)
+
+    def test_the_doc_never_mentions_the_removed_sweep(self) -> None:
+        self.assertNotIn("sweep", DOC.lower())
+
+    def test_the_steps_keep_usb_separate_and_sleep_last(self) -> None:
+        steps = re.findall(r"(?m)^### Step (\d+): (.+)$", DOC)
+        self.assertEqual(steps, [
+            ("1", "Power on and boot animation"),
+            ("2", "Buttons and wheel (`D2`)"),
+            ("3", "Microphone (`D3`)"),
+            ("4", "IR receive (`D4`)"),
+            ("5", "IR transmit (`D6` on V3)"),
+            ("6", "Battery (`D5`)"),
+            ("7", "USB power (`D7`, V3 only)"),
+            ("8", "Radios (`D2`, second overview)"),
+            ("9", "Sleep and wake (`D3`, second overview)"),
+        ])
+        battery = DOC.split("### Step 6:", 1)[1].split("### Step 7:", 1)[0]
+        usb = DOC.split("### Step 7:", 1)[1].split("### Step 8:", 1)[0]
+        self.assertIn("Disconnect USB power.", battery)
+        self.assertIn("Connect USB power again.", usb)
+        self.assertIn("Skip this check on a V2 board", usb)
+        sleep = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
+        self.assertIn("Do this step last.", sleep)
+        self.assertIn("slowest operator step", sleep)
+        self.assertIn("keeps the earlier check results in RTC memory through deep sleep", sleep)
+        self.assertIn("No earlier check needs a repeat after wake.", sleep)
+        self.assertIn("Hold `SW3` for 3 s, until the ring flashes dark blue.", sleep)
+        self.assertIn("Release all buttons and wheel directions at the dark blue flash.", sleep)
+        self.assertIn("The `SW3` hold works on both overviews and in the VU meter.", sleep)
+        self.assertIn("If the ring flashes red for 1.5 s, the board refused sleep.", sleep)
+        self.assertIn("names the condition that blocked the sleep", sleep)
+        # The page indicator is no longer a precondition of the hold.
+        self.assertNotIn("Make sure that `D5` is dim blue", sleep)
+        self.assertIn("the second overview returns", sleep)
+        self.assertIn("| Dark blue ring for 0.5 s | The `SW3` hold armed the sleep check |", DOC)
+        self.assertIn("| Red ring for 1.5 s | The board refused the sleep request |", DOC)
+        self.assertIn("A hold of 3 s on `SW3` starts the sleep check after release.", DOC)
+        self.assertNotIn("hold of 2 s on `SW3`", DOC)
+
+    def test_the_final_result_uses_both_pages_without_external_records(self) -> None:
+        result = DOC.split("## Result", 1)[1].split("## Parts not covered", 1)[0]
+        self.assertIn("use both overviews to check the final result", result)
+        self.assertIn("Keep the board in the same powered session.", result)
+        self.assertIn("`D2` and `D3` are green and `D5` is dim blue", result)
+        self.assertIn("Hold `SW2` for 2 s, then release it, to show the first overview.", result)
+        self.assertIn("all check LEDs on the first overview are green", result)
+        self.assertIn("No paper or computer is necessary for the final result.", result)
+        self.assertNotRegex(DOC, r"(?i)record (?:the|your|all|each) results|use the recorded results")
+
+    def test_the_doc_distinguishes_sleep_retention_from_a_fresh_test(self) -> None:
+        power = DOC.split("## Power and sleep", 1)[1].split("## Shipped state", 1)[0]
+        self.assertIn("Both automatic and deliberate deep sleep keep the check results in RTC memory.", power)
+        self.assertIn("Continue from the next incomplete step.", power)
+        shipped = DOC.split("## Shipped state", 1)[1].split("## V3 and V2 boards", 1)[0]
+        self.assertIn("a restart without deep sleep clears them", shipped)
+        self.assertIn("A loss of all power also clears the results.", shipped)
+        self.assertIn("Disconnect both USB power and the battery to start a fresh test.", shipped)
+        self.assertIn("The self-test writes no results to flash.", shipped)
+
+    def test_the_second_overview_and_radio_evidence_are_explicit(self) -> None:
+        self.assertIn("Hold `SW2` for 2 s, then release it, to change between the first and second overviews.", DOC)
+        self.assertIn("`SW2` has no other hold function.", DOC)
+        page = DOC.split("| LED | Second overview |", 1)[1].split("Other patterns", 1)[0]
+        for row in ("| `D2` | Radio check |", "| `D3` | Sleep and wake check |",
+                    "| `D5` | Dim blue page indicator |", "| All other LEDs | Off |"):
+            self.assertIn(row, page)
+        radio = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
+        self.assertIn("Wi-Fi scan with at least one access point", radio)
+        self.assertIn("successful BLE advertisement start", radio)
+        self.assertIn("needs no network connection or credentials", radio)
+        self.assertIn("does not measure radio range or antenna performance", radio)
+        self.assertIn("cannot confirm BLE reception over the air", radio)
+        self.assertIn("60 s from boot", radio)
+        self.assertIn("a 10 s timeout", radio)
+        self.assertIn("every 15 s", radio)
+
+    def test_uncovered_parts_need_separate_station_checks(self) -> None:
+        uncovered = DOC.split("## Parts not covered", 1)[1].split("## Power and sleep", 1)[0]
+        self.assertIn("does not test the Qwiic connector `J2`", uncovered)
+        self.assertIn("needs a known Qwiic device at the station", uncovered)
+        self.assertIn("does not test battery charging", uncovered)
+        self.assertIn("takes too long for the station", uncovered)
+        self.assertIn("An operator cannot detect faults in `J2` or the battery charge circuit with this procedure.", uncovered)
+
+    def test_the_procedure_tests_the_microphone_one_time_with_the_vu_meter(self) -> None:
+        self.assertNotRegex(DOC, r"(?i)clap")
+        steps = re.findall(r"(?m)^### Step (\d+): (.+)$", DOC)
+        self.assertEqual([number for number, _ in steps], [str(n) for n in range(1, len(steps) + 1)])
+        self.assertEqual(dict(steps)["3"], "Microphone (`D3`)")
+        body = DOC.split("### Step 3: Microphone (`D3`)", 1)[1].split("### Step 4", 1)[0]
+        self.assertIn("The ring changes to the VU meter.", body)
+        self.assertIn("The ring goes back to the overview.", body)
+        self.assertEqual(body.count("Press and hold the wheel center for 2 s"), 2)
+        self.assertIn("`D3` turns green when the level crosses the threshold.", body)
+
+
+if __name__ == "__main__":
+    unittest.main()

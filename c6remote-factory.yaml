@@ -1,0 +1,468 @@
+# Provisioning firmware. A new unit ships with this image. After Improv gives
+# it a Wi-Fi network, it installs the full c6remote.yaml firmware from the
+# release manifest. The full firmware reads the same saved network.
+#
+# The image also runs the hardware self-test. docs/factory-self-test.md is the
+# operator procedure and holds the LED ring table.
+substitutions:
+  device_name: homething-c6
+  friendly_name: homeThing C6
+  # Status LEDs on the wheel ring: 4 on a V2 board, 6 on a V3 board. Six LEDs
+  # also select the V3 checks: `esphome -s status_led_count 6 compile c6remote-factory.yaml`.
+  status_led_count: "4"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  # Same hostname and Home Assistant name as the full firmware.
+  name_add_mac_suffix: true
+  # The name is the same as c6remote.yaml, so a separate directory keeps the
+  # build cache of each config.
+  build_path: build/${device_name}-factory
+  project:
+    name: landonr.homething-c6
+    # Never equal to a release version, so every manifest is an update.
+    version: factory
+  on_boot:
+    # After every setup. The self-test component starts the mic at the same priority.
+    priority: -100
+    then:
+      - light.turn_on:
+          id: status_light
+          brightness: 100%
+          effect: Self Test
+  on_shutdown:
+    - switch.turn_off: led_rail
+    - switch.turn_off: ir_rail
+    # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
+    # through the LED input clamp. Pull GPIO17 down: the RMT driver can leave a
+    # pull-up on it, which would sit on DIN.
+    - lambda: |-
+        gpio_set_direction(GPIO_NUM_17, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_17, GPIO_PULLDOWN_ONLY);
+        gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(GPIO_NUM_18, GPIO_FLOATING);
+
+esp32:
+  board: seeed_xiao_esp32c6
+  # An OTA cannot change the partition table, so this must be the table of the
+  # full firmware.
+  partitions: partitions.csv
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [idle_sleep, self_test]
+
+logger:
+
+# No api, so Home Assistant does not discover this short-lived image.
+
+wifi:
+  id: wifi_radio
+  # No credentials here. Improv saves the network under a key that does not
+  # change with the config, so the full firmware reads the same network.
+  on_connect:
+    - component.update: firmware_update
+
+improv_serial:
+  id: improv_usb
+
+esp32_improv:
+  id: improv_ble
+  authorizer: none
+
+http_request:
+  id: http_client
+
+ota:
+  - platform: esphome
+    id: ota_native
+  - platform: http_request
+    id: ota_http
+
+update:
+  - platform: http_request
+    id: firmware_update
+    name: Firmware
+    source: https://landonr.github.io/homething-c6/firmware/manifest.json
+    # wifi on_connect and the retry interval start every check.
+    update_interval: never
+    on_update_available:
+      - update.perform:
+          id: firmware_update
+          force_update: true
+
+interval:
+  # Retries a failed check or a failed install. A good install reboots into the
+  # full firmware, which has no such interval.
+  - id: install_retry
+    interval: 60s
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - if:
+                condition:
+                  update.is_available: firmware_update
+                then:
+                  - update.perform:
+                      id: firmware_update
+                      force_update: true
+                else:
+                  - component.update: firmware_update
+
+self_test:
+  id: hw_test
+  idle_sleep_id: idle
+  # Each line names one condition for the log. nullptr means that sleep can start.
+  sleep_blocked_by: !lambda |-
+    auto *ble = esp32_ble_server::global_ble_server;
+    if (wifi::global_wifi_component->has_sta())
+      return "a saved Wi-Fi network";
+    if (wifi::global_wifi_component->is_connected())
+      return "Wi-Fi is connected";
+    if (id(improv_ble).get_improv_state() == improv::STATE_PROVISIONING)
+      return "Wi-Fi setup is running";
+    if (ble != nullptr && ble->get_client_count() > 0)
+      return "a Bluetooth client is connected";
+    if (id(firmware_update).state == update::UPDATE_STATE_INSTALLING)
+      return "the firmware install is running";
+    return nullptr;
+  light_id: status_light
+  microphone_id: board_microphone
+  # IR transmit runs only from the SW1 hold in the component.
+  transmitter_id: ir_transmitter
+  # usb_present_n from Q4, active low. R14 is the pull-up on V3. The component
+  # reads it only on a six-LED build, because GPIO7 is open on a V2 board.
+  usb_present_pin:
+    number: GPIO7
+    inverted: true
+    mode:
+      input: true
+      pullup: true
+
+idle_sleep:
+  id: idle
+  sleep_after: 5min
+  cold_boot_grace: 60s
+  block_probe: !lambda |-
+    const bool usb = id(hw_test).usb_present();
+    auto *ble = esp32_ble_server::global_ble_server;
+    const bool improv = id(improv_ble).get_improv_state() == improv::STATE_PROVISIONING ||
+                        (ble != nullptr && ble->get_client_count() > 0);
+    // The check and the install follow the Wi-Fi connection. A failed check or
+    // install sets the error, so a unit without internet access still sleeps.
+    const bool install = id(hw_test).installing() ||
+                         id(firmware_update).state == update::UPDATE_STATE_INSTALLING ||
+                         (wifi::global_wifi_component->is_connected() &&
+                          !id(firmware_update).status_has_error() &&
+                          id(firmware_update).state != update::UPDATE_STATE_NO_UPDATE);
+    // A wheel turn or an IR frame restarts the idle window like a key press.
+    const bool active = id(hw_test).recently_active(millis());
+    const uint8_t mask = usb | improv << 1 | install << 2;
+    // 0xFF is out of range, so the first call logs the starting mask.
+    static uint8_t last_mask = 0xFF;
+    if (mask != last_mask) {
+      last_mask = mask;
+      ESP_LOGI("idle_sleep", "block=0x%X usb=%d improv=%d install=%d at %" PRIu32 " ms", mask, usb, improv,
+               install, millis());
+    }
+    return mask != 0 || active;
+
+i2c:
+  id: i2c_bus
+  sda: GPIO22
+  scl: GPIO23
+  frequency: 100kHz
+  scan: true
+
+pcf8574:
+  - id: button_expander
+    address: 0x20
+    pcf8575: true
+
+binary_sensor:
+  # The argument is the expander bit. SW9 is bit 9 and SW10 is bit 8.
+  - platform: gpio
+    id: sw1
+    pin: &expander_pin
+      pcf8574: button_expander
+      number: 0
+      mode: INPUT
+      inverted: true
+    on_press:
+      - lambda: id(hw_test).input(0, true);
+    on_release:
+      - lambda: id(hw_test).input(0, false);
+  - platform: gpio
+    id: sw2
+    pin:
+      <<: *expander_pin
+      number: 1
+    on_press:
+      - lambda: id(hw_test).input(1, true);
+    on_release:
+      - lambda: id(hw_test).input(1, false);
+  - platform: gpio
+    id: sw3
+    pin:
+      <<: *expander_pin
+      number: 2
+    on_press:
+      - lambda: id(hw_test).input(2, true);
+    on_release:
+      - lambda: id(hw_test).input(2, false);
+  - platform: gpio
+    id: sw4
+    pin:
+      <<: *expander_pin
+      number: 3
+    on_press:
+      - lambda: id(hw_test).input(3, true);
+    on_release:
+      - lambda: id(hw_test).input(3, false);
+  - platform: gpio
+    id: sw5
+    pin:
+      <<: *expander_pin
+      number: 4
+    on_press:
+      - lambda: id(hw_test).input(4, true);
+    on_release:
+      - lambda: id(hw_test).input(4, false);
+  - platform: gpio
+    id: sw6
+    pin:
+      <<: *expander_pin
+      number: 5
+    on_press:
+      - lambda: id(hw_test).input(5, true);
+    on_release:
+      - lambda: id(hw_test).input(5, false);
+  - platform: gpio
+    id: sw7
+    pin:
+      <<: *expander_pin
+      number: 6
+    on_press:
+      - lambda: id(hw_test).input(6, true);
+    on_release:
+      - lambda: id(hw_test).input(6, false);
+  - platform: gpio
+    id: sw8
+    pin:
+      <<: *expander_pin
+      number: 7
+    on_press:
+      - lambda: id(hw_test).input(7, true);
+    on_release:
+      - lambda: id(hw_test).input(7, false);
+  - platform: gpio
+    id: sw9
+    pin:
+      <<: *expander_pin
+      number: 9
+    on_press:
+      - lambda: id(hw_test).input(9, true);
+    on_release:
+      - lambda: id(hw_test).input(9, false);
+  - platform: gpio
+    id: sw10
+    pin:
+      <<: *expander_pin
+      number: 8
+    on_press:
+      - lambda: id(hw_test).input(8, true);
+    on_release:
+      - lambda: id(hw_test).input(8, false);
+  - platform: gpio
+    id: sw11
+    pin:
+      <<: *expander_pin
+      number: 10
+    on_press:
+      - lambda: id(hw_test).input(10, true);
+    on_release:
+      - lambda: id(hw_test).input(10, false);
+  - platform: gpio
+    id: wheel_right
+    pin:
+      <<: *expander_pin
+      number: 11
+    on_press:
+      - lambda: id(hw_test).input(11, true);
+    on_release:
+      - lambda: id(hw_test).input(11, false);
+  - platform: gpio
+    id: wheel_up
+    pin:
+      <<: *expander_pin
+      number: 12
+    on_press:
+      - lambda: id(hw_test).input(12, true);
+    on_release:
+      - lambda: id(hw_test).input(12, false);
+  - platform: gpio
+    id: wheel_press
+    pin:
+      <<: *expander_pin
+      number: 13
+    on_press:
+      - lambda: id(hw_test).input(13, true);
+    on_release:
+      - lambda: id(hw_test).input(13, false);
+  - platform: gpio
+    id: wheel_down
+    pin:
+      <<: *expander_pin
+      number: 14
+    on_press:
+      - lambda: id(hw_test).input(14, true);
+    on_release:
+      - lambda: id(hw_test).input(14, false);
+  - platform: gpio
+    id: wheel_left
+    pin:
+      <<: *expander_pin
+      number: 15
+    on_press:
+      - lambda: id(hw_test).input(15, true);
+    on_release:
+      - lambda: id(hw_test).input(15, false);
+
+sensor:
+  - platform: rotary_encoder
+    id: wheel
+    # A on GPIO19 makes a clockwise turn fire on_clockwise.
+    pin_a:
+      number: GPIO19
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO20
+      mode:
+        input: true
+        pullup: true
+    # One detent is one step.
+    resolution: 2
+    on_clockwise:
+      - lambda: id(hw_test).encoder_step(true);
+    on_anticlockwise:
+      - lambda: id(hw_test).encoder_step(false);
+
+  - platform: adc
+    id: battery_voltage
+    pin: GPIO4
+    # Auto attenuation cannot multisample.
+    attenuation: 12db
+    samples: 16
+    update_interval: 1s
+    accuracy_decimals: 2
+    # R7 and R8 halve the cell voltage.
+    filters:
+      - multiply: 2.0
+    on_value:
+      - lambda: id(hw_test).battery_sample(x);
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_light
+    pin: GPIO17
+    chipset: WS2812
+    rgb_order: GRB
+    num_leds: ${status_led_count}
+    # The C6 has two RMT TX channels of 48 symbols, one for the strip and one
+    # for remote_transmitter. The 96-symbol default leaves the transmitter none.
+    rmt_symbols: 48
+    restore_mode: ALWAYS_OFF
+    # The self-test colours are PWM levels.
+    gamma_correct: 1.0
+    default_transition_length: 0s
+    effects:
+      - addressable_lambda:
+          name: Self Test
+          update_interval: 50ms
+          lambda: id(hw_test).render(it);
+    # The display is the only user of led_vdd, so the light owns the rail.
+    on_turn_on:
+      - switch.turn_on: led_rail
+      # The first frame goes out before led_vdd has risen at D2, so send it
+      # again once the rail is up.
+      - delay: 20ms
+      - if:
+          condition:
+            light.is_on: status_light
+          then:
+            - light.turn_on: status_light
+    on_turn_off:
+      # Let the final black frame land while the LEDs still have power.
+      - delay: 100ms
+      - if:
+          condition:
+            light.is_off: status_light
+          then:
+            - switch.turn_off: led_rail
+
+switch:
+  # Q2 is a high-side P-FET on led_vdd: gate low powers the rail. R10 holds the
+  # gate high whenever GPIO18 floats.
+  - platform: gpio
+    id: led_rail
+    pin:
+      number: GPIO18
+      inverted: true
+    restore_mode: ALWAYS_OFF
+  # Q3 gates ir_vdd the same way, with R11 as the pull-up. remote_receiver
+  # cannot decode while U2 has no power. A V2 board has no Q3, so GPIO6 drives
+  # nothing there.
+  - platform: gpio
+    id: ir_rail
+    pin:
+      number: GPIO6
+      inverted: true
+    restore_mode: ALWAYS_ON
+
+remote_receiver:
+  id: ir_receiver
+  pin:
+    number: GPIO16
+    mode:
+      input: true
+      pullup: true
+    inverted: true
+  tolerance: 35%
+  on_raw:
+    - lambda: id(hw_test).ir_frame(x);
+
+remote_transmitter:
+  id: ir_transmitter
+  pin: GPIO1
+  carrier_duty_percent: 50%
+  non_blocking: true
+  rmt_symbols: 48
+
+# GPIO0 is WS and GPIO21 is data in, not the other way round: the two swapped
+# at the XIAO when MK1 was rerouted.
+i2s_audio:
+  id: mic_bus
+  i2s_bclk_pin: GPIO2
+  i2s_lrclk_pin: GPIO0
+
+microphone:
+  - platform: i2s_audio
+    id: board_microphone
+    i2s_audio_id: mic_bus
+    i2s_din_pin: GPIO21
+    adc_type: external
+    pdm: false
+    channel: left
+    # Two 32-bit slots at 48 kHz give a 3.072 MHz bit clock. The DMM-4026-B-I2S-R
+    # needs 2.048 to 4.096 MHz. The V2 ICS-43434 runs it in High-Performance mode.
+    sample_rate: 48000
+    bits_per_sample: 32bit

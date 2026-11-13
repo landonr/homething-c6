@@ -4,7 +4,8 @@
 # docs/readme-assets/, so the repository keeps one copy of each binary. The
 # trigger is develop, not main, because a push to main also cuts a board release.
 # The github-pages environment must list develop as a deployment branch.
-# Run it by hand with workflow_dispatch.
+# Run it by hand with workflow_dispatch. firmware.yml also starts it after each
+# firmware release, because a tag run cannot deploy to that environment.
 name: Deploy site
 
 on:
@@ -35,6 +36,46 @@ jobs:
 
       - name: Assemble the site
         run: scripts/build-site.sh _site
+
+      # The update entity reads firmware/manifest.json and resolves each path in
+      # it next to the manifest, so every path must be a bare file name. Each
+      # deploy adds the newest release again, because build-site.sh wipes _site.
+      - name: Add the newest firmware release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 \
+            --json tagName,isDraft,isPrerelease \
+            --jq '[.[] | select((.isDraft | not) and (.isPrerelease | not)
+                                and (.tagName | test("^fw-[0-9]+\\.[0-9]+\\.[0-9]+$")))]
+                  | sort_by(.tagName | ltrimstr("fw-") | split(".") | map(tonumber))
+                  | last | .tagName // empty')
+          if [[ -z "$tag" ]]; then
+            echo "::notice::No published fw- release, so the site has no firmware/ directory"
+            exit 0
+          fi
+          v="${tag#fw-}"
+          out=_site/firmware
+          mkdir -p "$out"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern "homething-c6-${v}.manifest.json" --output "${out}/manifest.json"
+          mapfile -t paths < <(jq -r '.builds[] | .ota.path, .parts[].path' "${out}/manifest.json" | sort -u)
+          if (( ${#paths[@]} == 0 )); then
+            echo "::error::the manifest of ${tag} names no files"
+            exit 1
+          fi
+          for path in "${paths[@]}"; do
+            # ESPHome treats a path that contains "http" as a full URL.
+            if [[ -z "$path" || "$path" == */* || "$path" == *http* ]]; then
+              echo "::error::manifest path '${path}' in ${tag} is not a bare file name"
+              exit 1
+            fi
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$path" --dir "$out"
+            test -s "${out}/${path}"
+          done
+          echo "Added ${tag} to firmware/:"
+          ls -l "$out"
 
       - uses: actions/configure-pages@v5
 

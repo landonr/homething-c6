@@ -76,11 +76,13 @@ The hardware source files are in `c6remote-kicad/`:
 The firmware files are in the repository root:
 
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
+- `c6remote-factory.yaml` is the provisioning firmware for new units. It also runs the factory self-test. See "Firmware releases" and "Factory self-test".
 - `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
 - `components/button_config/` is a local ESPHome component. It serves the web page at the root URL `/` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections.
 - `components/ha_action/` is a local ESPHome component. It stores one Home Assistant action for each slot and sends it over the native API. See `RECEIVER.md`.
   The Home Assistant switch turns the actions off at once. If the switch is off at boot, `on_boot` holds the API server down until the next boot.
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
+- `components/self_test/` is a local ESPHome component. It holds the factory self-test of `c6remote-factory.yaml`.
 - `zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
 - `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
@@ -127,6 +129,8 @@ scripts/build-site.sh && python3 -m http.server 8130 -d _site
 The site does not deploy from `main`, because a push to `main` also creates a board release.
 
 The `github-pages` environment accepts deploys from `develop` and `main`. If you remove `develop` from it, the deploy job fails.
+
+`pages.yml` also runs after each firmware release, and each run adds the newest firmware to `firmware/`. See "Firmware releases".
 
 ## Validation and fabrication commands
 
@@ -302,6 +306,188 @@ Use `scripts/hooks/pre-commit` to keep `export/` synchronized. Treat stale outpu
 ```
 
 Do not add this command to the hook. The release workflow publishes the fabrication archive. Never track `export.zip`.
+
+### Firmware releases
+
+Firmware releases use a separate tag track. The tag format is `fw-YYYY.M.P`, with no zero padding for the month. An example is `fw-2026.11.0`.
+
+The board release owns the `YYYY.M.P` tags, and the board silkscreen must equal the board tag. As a result, firmware tags use the `fw-` prefix.
+
+To publish a firmware release, push a tag on the commit that you want to release:
+
+```bash
+git tag fw-2026.11.0
+git push origin fw-2026.11.0
+```
+
+`.github/workflows/firmware.yml` runs on each push of a `fw-*` tag. The workflow does these steps:
+
+1. It makes sure that the tag agrees with the `fw-YYYY.M.P` format.
+2. It compiles `c6remote.yaml` with `-s fw_version <version>` and `-s status_led_count 6`. It also compiles `c6remote-factory.yaml` with `-s status_led_count 6`.
+3. It stops if the full OTA image is larger than the `app0` slot in `partitions.csv`.
+4. It writes the update manifest.
+5. It creates the `fw-<version>` release with `--latest=false`.
+6. It starts `pages.yml` on `develop`.
+
+The release has these assets:
+
+- `homething-c6-<version>.factory.bin` is the full firmware for a USB flash at offset 0.
+- `homething-c6-<version>.ota.bin` is the full firmware for an OTA update.
+- `homething-c6-<version>.manifest.json` is the update manifest.
+- `homething-c6-provisioning-<version>.factory.bin` is the provisioning firmware for a USB flash at offset 0.
+
+A firmware release is never the "latest" release. The board release from `release.yml` keeps that mark.
+
+Release builds are for V3 boards, which have six status LEDs. V2 boards are bench units. Flash them locally with the default config, which has four status LEDs.
+
+A V2 unit can install a release build to test the update path. Its ring LED positions are then wrong, because its chain has four LEDs.
+
+The workflow installs the ESPHome version in `ESPHOME_VERSION`. If you change the local ESPHome version, change this value in the same commit.
+
+A tag run cannot deploy GitHub Pages, because the `github-pages` environment accepts only `develop` and `main`. As a result, the workflow starts `pages.yml` on `develop`.
+
+Each `pages.yml` run copies the manifest and the binaries of the newest `fw-` release into `firmware/`. The update entity reads this URL:
+
+`https://landonr.github.io/homething-c6/firmware/manifest.json`
+
+The manifest gives bare file names. ESPHome resolves a bare name in the directory of the manifest, so each binary must stay next to the manifest.
+
+The update entity only compares the two version strings for equality. A local build has the version `dev`, so Home Assistant shows each release as an update.
+
+`c6remote.yaml` checks the manifest on each Wi-Fi connection and every 24 hours while Wi-Fi is connected. A connection for a Home Assistant action lease alone skips the check, so the TLS fetch does not delay the action.
+
+### Partition table
+
+`partitions.csv` gives this layout on the 4 MB flash. The build fills in each offset. An app partition starts on a 64 KB boundary, and a data partition starts on a 4 KB boundary.
+
+| partition | type | offset | size |
+| --- | --- | --- | --- |
+| `otadata` | data | `0x9000` | `0x2000` |
+| `phy_init` | data | `0xB000` | `0x1000` |
+| `zb_fct` | data | `0xC000` | `0x1000` |
+| `app0` | app | `0x10000` | `0x1F0000` |
+| `app1` | app | `0x200000` | `0x1F0000` |
+| `nvs` | data | `0x3F0000` | `0x10000` |
+
+The table ends at `0x400000`. `scripts/tests/test_partitions.py` checks this layout and the alignment rules.
+
+`c6remote.yaml` and `c6remote-factory.yaml` must use the same table. An OTA from either platform cannot change the partition table, because neither config sets `allow_partition_access`.
+
+A unit that has the old table needs one USB flash of a new factory image. This flash erases its NVS. The unit then loses its IR codes, Zigbee targets, BLE bond, and saved Wi-Fi network.
+
+On a unit with the old table, each app slot is `0x1E0000`. An OTA image that is larger than this slot cannot install on that unit.
+
+### Wi-Fi provisioning
+
+`c6remote.yaml` and `c6remote-factory.yaml` contain no Wi-Fi credentials. Do not add `ssid`, `password`, or `networks` to either file.
+
+If a config has no networks, ESPHome keeps the Improv network under a fixed key. As a result, the network stays through the change to the full firmware and through each release.
+
+To provision a unit, connect it with USB. Then send the Wi-Fi settings with Improv serial, for example from `web.esphome.io`.
+
+`c6remote.yaml` has no BLE Improv. `esp32_improv` needs Bluedroid, but `ble_hid` uses NimBLE.
+
+Improv serial does not accept Wi-Fi settings while Wi-Fi is off. If no network is saved, a cold boot opens a temporary Wi-Fi session for ten minutes.
+
+Provision the unit in this time. To open a session again, use the Wi-Fi hold.
+
+A unit that you last flashed from a build with credentials in the config has no saved network. Provision that unit one time.
+
+`c6remote-factory.yaml` has BLE Improv and Improv serial. After Wi-Fi connects, it installs the full firmware from the manifest. If the check or the install fails, it tries again each minute.
+
+A boot after a software restart also opens a ten-minute temporary Wi-Fi session. An OTA update from either platform and the install from `c6remote-factory.yaml` end with this type of restart.
+
+As a result, Home Assistant can find the unit and confirm the new version. The **Restart** button, the restart on the web page, and the Zigbee pairing restarts also open this session.
+
+A wake from deep sleep never opens a session.
+
+Keep `secrets.example.yaml`, because `c6remote-test-mic-vu.yaml` still reads Wi-Fi secrets.
+
+### Factory self-test
+
+`c6remote-factory.yaml` also runs a hardware self-test. `components/self_test/` holds the logic. `docs/factory-self-test.md` is the operator procedure that goes to PCBWay with the order.
+
+The self-test opens with the boot chase of `c6remote.yaml`. `draw_chase_()` in `self_test.cpp` is a copy of the chase, so a change to one file does not change the other.
+
+The overview follows the chase with no gap. The boot has no other animation, so do not add a colour sweep.
+
+A wake from deep sleep plays the chase again. The self-test keeps its earlier check results in RTC memory.
+
+The first overview keeps the original check positions, with `D5` for the battery and `D7` for USB power on V3.
+
+A 2 s hold of `SW2` changes between the two overviews. This input has no other hold function.
+
+The second overview uses `D2` for the radio check, `D3` for sleep and wake, and dim blue `D5` as its page indicator.
+
+All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
+
+The procedure holds the tables of LED positions. If you move a check, change the table in the same commit.
+
+While an operator holds an input, the ring shows one colour on its top half and another colour on its bottom half. `INPUT_PAIR` in `self_test.cpp` gives the pair of each expander bit. The procedure holds the same table, so change both in the same commit.
+
+`BASE_COLOUR` holds five colours: red, green, blue, white, and magenta. No bit uses one colour on both halves, so a one-colour ring is never a held input. If you add a colour, keep the pairs unique and keep the two halves different.
+
+The chase gives each LED one colour, so step 1 cannot find an LED that makes one colour alone. The held inputs put four or more colours on each half, and step 1 points at step 2 for that fault.
+
+The VU meter is the microphone step of the procedure. The 2 s hold of the wheel centre turns it on and off. The microphone LED passes on the level threshold alone, so the procedure has no separate clap step.
+
+`status_led_count` selects the board. The default of 4 builds for a V2 board. The value 6 adds the V3 checks for `D6`, `D7`, and the USB detector on `GPIO7`.
+
+The self-test transmits IR only while an operator holds `SW1` for 2 s. Customers also run this image, so do not add a transmit that starts by itself.
+
+The radio check applies to V2 and V3. It needs a Wi-Fi scan with at least one access point and a successful BLE Improv advertisement start.
+
+Use the existing BLE Improv path. The Bluetooth controller must start before the Wi-Fi scan, because the ESP32-C6 scan otherwise returns no access points.
+
+ESPHome BLE setup only requests an enable. The first BLE loop starts the controller, so setup priority alone cannot enforce this order.
+
+The radio result does not prove radio range or antenna performance. Do not add Zigbee to this image.
+
+On the second overview, `D2` stays dim amber for 60 s from boot without a radio pass, then turns red.
+
+Scans have a 10 s timeout and repeat every 15 s. A later pass can change red to green.
+
+The sleep and wake check also applies to both board versions. It stays last because the shutdown and restart delays make it the slowest operator step.
+
+A 3 s hold of `SW3` requests sleep after release. This sleep can start with V3 USB power present.
+
+The hold works on both overviews and in the VU meter, so no display mode makes it dead. `SLEEP_HOLD_MS` is 3000, and `LONG_PRESS_MS` stays 2000 for the other three holds.
+
+The longer hold replaces the former second-overview gate. It keeps an accidental sleep out of the buttons and wheel step.
+
+`render()` draws both results on the whole ring, after the page and after a held input. The dark blue `SLEEP_ARMED_FLASH` lasts 500 ms for an armed request, and the red refusal lasts 1.5 s.
+
+The whole ring keeps the two results independent of the page. On the second overview, `D3` also shows cyan while the request waits for the release.
+
+`SelfTest::sleep_block_()` names the first blocking condition, and `allow_sleep_()` logs it as `Sleep test refused: <reason>`.
+
+The `sleep_blocked_by` lambda of `c6remote-factory.yaml` returns one reason for each condition, or `nullptr` when sleep can start.
+
+The operator releases all inputs at the dark blue flash, waits 5 s after the ring goes dark, then holds `SW3` until the boot animation starts.
+
+Both automatic and deliberate deep sleep keep the check results in RTC memory. The test also keeps the deliberate sleep request there.
+
+RTC data includes partial input progress and separate wheel, USB, and radio evidence. The shutdown hook saves the data before either sleep path.
+
+Restore the data only after a deep-sleep reset with valid magic, version, checksum, and the same LED count.
+
+A sleep and wake pass needs an ext1 wake and a button capture from the existing wake stub.
+
+The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. After the chase, the second overview shows the result.
+
+After the deliberate wake, `D2` and `D3` are green on the second overview. A 2 s hold of `SW2` shows the earlier results.
+
+The operator checks both overviews in the same powered session. The procedure needs no paper or computer for the final result.
+
+A restart without deep sleep or a loss of all power clears the results. Disconnect both USB power and the battery for a fresh test.
+
+If the battery stays connected, USB removal alone does not clear the results. The self-test writes no results to flash.
+
+The self-test does not block Improv or the install. No sleep can interrupt Wi-Fi setup or the install.
+
+Automatic sleep starts after 5 minutes without input, but not while V3 USB power is present.
+
+The procedure does not test the Qwiic connector `J2` or battery charging. Operators cannot detect faults in these parts with this procedure.
 
 ## High-level architecture
 

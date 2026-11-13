@@ -847,6 +847,12 @@ void ButtonConfig::toggle_temporary_wifi() {
   }
 }
 
+void ButtonConfig::open_boot_wifi_session(const char *reason) {
+  // Always On or a Zigbee pairing session already has Wi-Fi up.
+  if (wifi::global_wifi_component->is_disabled())
+    this->open_temporary_wifi_(reason);
+}
+
 void ButtonConfig::hold_wifi_for_action() {
   this->action_wifi_ = true;
   this->action_wifi_until_ms_ = millis() + ACTION_WIFI_LEASE_MS;

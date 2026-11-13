@@ -60,7 +60,6 @@ static RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;
 
 // The receiver idle is 10 ms, so a frame from a remote has no longer entry.
 static constexpr size_t IR_MIN_ENTRIES = 8;
-static constexpr int32_t IR_OWN_MARK_US = 20000;
 static constexpr uint32_t IR_ECHO_MS = 500;
 
 // Levels are window peaks in the 16-bit domain, full scale 32768. -25 dBFS is
@@ -392,10 +391,6 @@ void SelfTest::ir_frame(const std::vector<int32_t> &raw) {
     return;
   if (raw.size() < IR_MIN_ENTRIES)
     return;
-  for (const int32_t value : raw) {
-    if (std::abs(value) >= IR_OWN_MARK_US)
-      return;
-  }
   this->ir_flash_until_ms_ = now + IR_FLASH_MS;
   this->mark_active_(now);
   if (!this->ir_rx_passed_) {

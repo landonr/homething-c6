@@ -55,7 +55,7 @@ class RenderGroupTest(unittest.TestCase):
     def test_the_group_lists_every_sheet_the_script_writes(self):
         outputs = [Path(path).name for path in GROUP["outputs"]]
         self.assertEqual(sorted(outputs), sorted(written()))
-        self.assertEqual(len(outputs), STEPS + 1)
+        self.assertEqual(len(outputs), STEPS)
         for path in GROUP["outputs"]:
             self.assertTrue(path.startswith("docs/readme-assets/"), path)
             self.assertTrue((ROOT / path).is_file(), f"{path} is not written")
@@ -82,10 +82,7 @@ class DocumentTest(unittest.TestCase):
         self.assertEqual(names, written())
         self.assertEqual(len(set(names)), len(names))
 
-    def test_the_map_comes_first_and_each_step_carries_its_own_sheet(self):
-        self.assertEqual(self.images[0][2], "self-test-led-map.svg")
-        self.assertIn("](readme-assets/self-test-led-map.svg)",
-                      DOC.split("## How to read the diagrams", 1)[1].split("## Procedure", 1)[0])
+    def test_each_step_carries_its_own_sheet(self):
         for step in range(1, STEPS + 1):
             body = DOC.split(f"### Step {step}:", 1)[1].split("\n### ", 1)[0]
             found = [name for _, _, name in IMAGE.findall(body)]
@@ -93,20 +90,11 @@ class DocumentTest(unittest.TestCase):
                 self.assertEqual(len(found), 1)
                 self.assertTrue(found[0].startswith(f"self-test-step-{step}-"), found[0])
 
-    def test_the_document_states_the_two_marker_kinds(self):
-        intro = DOC.split("## How to read the diagrams", 1)[1].split("![", 1)[0]
-        self.assertIn("orange outline", intro)
-        self.assertIn("blue ring", intro)
-        # The sheets replace the written orientation, so the key says which face they show.
-        self.assertIn("shows the front face", intro)
-        self.assertIn("Every position is as seen from the front.", intro)
-        self.assertNotIn("## Board orientation", DOC)
-        self.assertNotIn("## LED positions", DOC)
-
     def test_the_transmit_step_marks_the_ir_led_it_names(self):
         """Step 5 says `D1` on the top edge, so its sheet must mark that position."""
         step5 = DOC.split("### Step 5:", 1)[1].split("\n### ", 1)[0]
-        self.assertIn("Aim it at `D1` on the top edge of the board.", step5)
+        # The sentence can open a step or sit mid-sentence, so the case is free.
+        self.assertIn("aim it at `d1` on the top edge of the board.", step5.lower())
         labels = [el.text for el in ET.fromstring(
             (ASSETS / "self-test-step-5-ir-transmit.svg").read_text()).iter(f"{SVG_NS}text")]
         self.assertIn("D1 IR LED", labels)
@@ -158,12 +146,6 @@ class SheetTest(unittest.TestCase):
             with self.subTest(sheet=name):
                 self.assertIn("@media (prefers-color-scheme: dark)", text)
                 self.assertEqual(len(re.findall(r"self-test-.*-dark", text)), 0)
-
-    def test_the_map_names_every_led_of_the_chain(self):
-        # The sheet draws one gutter and then the other, so the set is the check.
-        labels = self.labels("self-test-led-map.svg")
-        self.assertEqual({label for label in labels if re.fullmatch(r"D\d", label)},
-                         set(constant("LED_CHAIN")))
 
     def test_the_boot_sheet_names_each_chase_colour_at_its_led(self):
         labels = self.labels("self-test-step-1-boot.svg")

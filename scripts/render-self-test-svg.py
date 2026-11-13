@@ -3,8 +3,7 @@
 
 Each sheet is the front face plan of scripts/face_plan.py with two callout
 kinds: an orange outline round the control to press, and a blue ring round the
-status LED that answers. One sheet is the labelled LED map, and the other nine
-follow the steps of the procedure.
+status LED that answers. One sheet follows each step of the procedure.
 
 Every position comes from the model at run time. The six LED positions come
 from the KiCad position file through case/board.py, so this file holds no
@@ -292,28 +291,9 @@ def watch(ref, side, *lines, fill=None):
     return dict(kind="watch", ref=ref, side=side, lines=list(lines), fill=fill)
 
 
-LED_ROLE = {
-    "D2": ("buttons and wheel",),
-    "D3": ("microphone",),
-    "D6": ("IR transmit",),
-    "D4": ("IR receive",),
-    "D5": ("battery",),
-    "D7": ("USB power",),
-}
 LED_SIDE = {"D2": "left", "D3": "left", "D7": "left", "D4": "right", "D5": "right", "D6": "right"}
 
 SHEETS = {
-    "led-map": dict(
-        file="self-test-led-map.svg",
-        alt=(
-            "Front face of the remote with the six status LEDs named round the wheel. "
-            "D3 is at the top left for the microphone, D6 at the top center for IR "
-            "transmit, D4 at the top right for IR receive, D5 at the bottom right "
-            "for the battery, D7 at the bottom center for USB power, and D2 at the "
-            "bottom left for the buttons and wheel."
-        ),
-        calls=[watch(ref, LED_SIDE[ref], ref, *LED_ROLE[ref]) for ref in LED_CHAIN],
-    ),
     "step-1-boot": dict(
         file="self-test-step-1-boot.svg",
         chain=True,

@@ -23,34 +23,22 @@ You need:
 
 Some phone main cameras block infrared light. The front camera of most phones shows it.
 
-## How to read the diagrams
-
-Each diagram shows the front face, with the wheel and the buttons `SW1` to `SW11`. Every position is as seen from the front. An orange outline marks a control to press. A blue ring marks the LED that answers.
-
-![Front face of the remote with the six status LEDs named round the wheel. D3 is at the top left for the microphone, D6 at the top center for IR transmit, D4 at the top right for IR receive, D5 at the bottom right for the battery, D7 at the bottom center for USB power, and D2 at the bottom left for the buttons and wheel.](readme-assets/self-test-led-map.svg)
-
-This map names the check that each status LED carries.
-
 ## Procedure
 
 Do the steps in this sequence. If a step fails, continue with the next step. The board fails if any check fails.
 
-If the ring goes dark before step 9, the board went to sleep. Press `SW3` to wake it, then start again at step 1.
+If the ring goes dark before step 9, the board went to sleep. Press any button to wake it, then start again at step 1.
 
 ### Step 1: Power on and boot animation
 
 ![Front face of the remote with the boot animation. Arrows run clockwise round the wheel in chain order from D2 at the bottom left, through D3 at the top left, D6 at the top center, D4 at the top right and D5 at the bottom right, to D7 at the bottom center. D2 lights red, D3 azure, D6 magenta, D4 green, D5 blue and D7 cyan.](readme-assets/self-test-step-1-boot.svg)
 
-1. Put the board front up in your hand or on a non-conductive surface.
-2. Connect the charged battery to `J1`. The board starts.
-3. Watch the boot animation.
-4. Connect USB power.
-
-The boot animation is the animation of the full firmware. It lights the LEDs in chain order, each in its own color. The diagram above and the section "Color reference" give those colors.
+1. Connect the charged battery to `J1`. The board starts.
+2. Watch the boot animation.
+3. Connect USB power.
 
 - Pass: The wave goes clockwise two times, and each LED lights with its own color.
 - Fail: An LED stays dark in both laps. That LED or its connection in the chain has a fault.
-- Fail: A color is at the wrong position. The chain order has a fault at that LED.
 
 After the boot animation, the first overview appears. Each check LED has two states:
 
@@ -63,33 +51,23 @@ All six check LEDs are dim amber at this point. Each later step turns its own LE
 
 Other patterns cover an overview for a short time. The section "Color reference" names each pattern and its cause.
 
-If the ring stays dark when you connect the battery, connect USB power. If the board then starts, the battery is flat or `J1` has a fault.
+If the ring stays dark at the battery, connect USB power instead. If the board then starts, the battery is flat or `J1` has a fault.
 
 ### Step 2: Buttons and wheel (`D2`)
 
 ![Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, the wheel direction ring and the wheel center. D2, at the bottom left of the wheel, answers.](readme-assets/self-test-step-2-inputs.svg)
 
-1. Press and hold each button, `SW1` to `SW11`, for less than 1 s. Then release it.
+1. Press each button, `SW1` to `SW11`, for less than 1 s.
 2. Press each wheel direction for less than 1 s: up, down, left, right, and the wheel center.
 3. Turn the wheel one step clockwise.
 4. Turn the wheel one step counterclockwise.
 
-While you hold an input, the top half of the ring shows one color and the bottom half shows another. The pair identifies the input.
-
-The top half is `D3`, `D6`, and `D4`. The bottom half is `D2`, `D5`, and `D7`.
-
-The two colors of an input are never the same. The section "Color reference" gives the pair of each input.
-
-If all LEDs show one color, the board is not showing a held input. All magenta is the IR transmit of step 5.
+Each press puts one color on the top half of the ring and another on the bottom half. The pair identifies the input, and the section "Color reference" gives every pair.
 
 Each wheel step moves one white LED one position round the ring, in the direction of the turn.
 
 - Pass: Each input changes the ring, and `D2` is green after the last input.
 - Fail: An input does not change the ring, or `D2` stays dim amber.
-
-A hold of 2 s on `SW1`, `SW2`, or the wheel center starts a different function.
-
-A hold of 3 s on `SW3` starts the sleep check after release.
 
 ### Step 3: Microphone (`D3`)
 
@@ -122,15 +100,25 @@ The IR receiver is on the back of the board.
 
 ![Front face of the remote with the top right button SW1 marked for a 2 s hold, and the IR LED D1 marked inside the top end. D6, at the top center of the wheel, answers.](readme-assets/self-test-step-5-ir-transmit.svg)
 
-1. Start the camera of the phone. Aim it at `D1` on the top edge of the board.
-2. Press and hold `SW1` for 2 s.
-3. When the ring flashes magenta, release `SW1`.
-4. Look at the phone screen for 3 s.
+`D6` turns green when the transmit ends, but that shows only that the firmware sent the bursts. Something must see the light from `D1`. Use a second board if the station has one, because a camera answer depends on the phone.
+
+**With a second board.** Put a second board that passed step 1 in front of the first board, with its back toward `D1` at a distance of 0.3 m to 1 m.
+
+1. Press and hold `SW1` for 2 s. Release it when the ring flashes magenta.
+2. Watch the second board for 3 s.
+
+- Pass: The ring of the second board flashes white, and its `D4` turns green.
+- Fail: The second board does not answer. Move it closer and try one more time.
+
+**With a phone.** Start the camera and aim it at `D1` on the top edge of the board.
+
+1. Press and hold `SW1` for 2 s. Release it when the ring flashes magenta.
+2. Look at the phone screen for 3 s.
 
 - Pass: On the phone screen, `D1` flashes 15 times at the same rate as the ring.
 - Fail: The phone screen shows no light from `D1`.
 
-`D6` turns green when the transmit ends, which shows only that the firmware sent the bursts. Use the camera to see the light from `D1`.
+The second board answers because it receives the bursts as an IR frame. This also passes step 4 on that board.
 
 ### Step 6: Battery (`D5`)
 

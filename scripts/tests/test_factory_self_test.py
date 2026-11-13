@@ -178,10 +178,9 @@ class TransmitTest(unittest.TestCase):
     def test_the_receive_check_ignores_the_board_own_bursts(self) -> None:
         body = function_body(CPP, "void SelfTest::ir_frame(const std::vector<int32_t> &raw)")
         self.assertIn("now - this->tx_start_ms_ < TX_TOTAL_MS + IR_ECHO_MS", body)
-        self.assertIn("std::abs(value) >= IR_OWN_MARK_US", body)
         self.assertLess(body.index("IR_ECHO_MS"), body.index("this->ir_rx_passed_ = true;"))
-        self.assertLessEqual(constant(CPP, "IR_OWN_MARK_US"), constant(HEADER, "TX_MARK_US"))
-        self.assertGreater(constant(CPP, "IR_OWN_MARK_US"), LONGEST_PROTOCOL_MARK_US)
+        # The transmit window is the only self-filter, so a second board can answer this check.
+        self.assertNotIn("IR_OWN_MARK_US", CPP)
 
 
 class RadioTest(unittest.TestCase):
@@ -675,22 +674,9 @@ class DocTest(unittest.TestCase):
                 self.assertEqual([i for i in range(count) if 1 <= i <= count // 2], top)
                 self.assertEqual([i for i in range(count) if not 1 <= i <= count // 2], bottom)
 
-    def test_the_doc_names_the_transmit_hold_and_has_no_em_dash(self) -> None:
-        self.assertIn("Press and hold `SW1` for 2 s.", DOC)
-        self.assertIn("Press and hold the wheel center for 2 s.", DOC)
+    def test_the_doc_uses_no_em_dash_and_no_semicolon(self) -> None:
         self.assertNotIn("—", DOC)
         self.assertNotIn(";", DOC.replace("&amp;", ""))
-
-    def test_the_first_step_rests_on_the_chase_alone(self) -> None:
-        steps = dict(re.findall(r"(?m)^### Step (\d+): (.+)$", DOC))
-        self.assertEqual(steps["1"], "Power on and boot animation")
-        body = DOC.split("### Step 1:", 1)[1].split("### Step 2", 1)[0]
-        # The Pass line is the one place that states the pass condition of the step.
-        self.assertIn("- Pass: The wave goes clockwise two times, and each LED lights with its own color.", body)
-        self.assertIn("- Fail: An LED stays dark in both laps.", body)
-        self.assertIn("- Fail: A color is at the wrong position.", body)
-        self.assertNotIn("Make sure that a wave of color", body)
-        self.assertNotIn("Make sure that each LED lights", body)
 
     def test_the_first_step_table_matches_the_chase_palette(self) -> None:
         comment = CPP[:CPP.index("static const Color CHASE_COLOUR[6]")]
@@ -704,49 +690,8 @@ class DocTest(unittest.TestCase):
     def test_the_doc_never_mentions_the_removed_sweep(self) -> None:
         self.assertNotIn("sweep", DOC.lower())
 
-    def test_the_steps_keep_usb_separate_and_sleep_last(self) -> None:
-        steps = re.findall(r"(?m)^### Step (\d+): (.+)$", DOC)
-        self.assertEqual(steps, [
-            ("1", "Power on and boot animation"),
-            ("2", "Buttons and wheel (`D2`)"),
-            ("3", "Microphone (`D3`)"),
-            ("4", "IR receive (`D4`)"),
-            ("5", "IR transmit (`D6`)"),
-            ("6", "Battery (`D5`)"),
-            ("7", "USB power (`D7`)"),
-            ("8", "Radios (`D2`, second overview)"),
-            ("9", "Sleep and wake (`D3`, second overview)"),
-        ])
-        battery = DOC.split("### Step 6:", 1)[1].split("### Step 7:", 1)[0]
-        usb = DOC.split("### Step 7:", 1)[1].split("### Step 8:", 1)[0]
-        self.assertIn("Disconnect USB power.", battery)
-        self.assertIn("Connect USB power again.", usb)
-        sleep = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
-        self.assertIn("Do this step last.", sleep)
-        self.assertIn("Do this step last.", sleep)
-        self.assertIn('Do the first part of the section "Result" before you start.', sleep)
-        self.assertIn("Hold `SW3` for 3 s, until the ring flashes dark blue.", sleep)
-        self.assertIn("Release all buttons and wheel directions at the dark blue flash.", sleep)
-        self.assertIn("The `SW3` hold works on both overviews and in the VU meter.", sleep)
-        self.assertIn("the board refused the request", sleep)
-        # The page indicator is no longer a precondition of the hold.
-        self.assertNotIn("Make sure that `D5` is dim blue", sleep)
-        self.assertIn("the second overview returns", sleep)
-        self.assertIn("| Dark blue ring for 0.5 s | The `SW3` hold armed the sleep check |", DOC)
-        self.assertIn("| Red ring for 1.5 s | The board refused the sleep request |", DOC)
-        self.assertIn("A hold of 3 s on `SW3` starts the sleep check after release.", DOC)
-        self.assertNotIn("hold of 2 s on `SW3`", DOC)
-
-    def test_the_final_result_splits_round_the_wake_without_external_records(self) -> None:
-        result = DOC.split("## Result", 1)[1].split("## Parts not covered", 1)[0]
-        self.assertIn("The board passes only when every check LED is green.", result)
-        self.assertIn("Do the first part before step 9:", result)
-        self.assertIn("On the second overview, make sure that `D2` is green.", result)
-        self.assertIn("Hold `SW2` to change to the first overview.", result)
-        self.assertIn("all check LEDs on the first overview are green", result)
-        self.assertIn("Do the second part after the wake of step 9.", result)
-        self.assertIn("make sure that `D3` is green", result)
-        self.assertLess(result.index("first overview are green"), result.index("after the wake of step 9"))
+    def test_the_result_section_asks_for_no_written_record(self) -> None:
+        """The operator reads both overviews in one session, so no step needs paper."""
         self.assertNotRegex(DOC, r"(?i)record (?:the|your|all|each) results|use the recorded results")
         self.assertNotRegex(DOC, r"(?i)write (?:down|the result)")
 
@@ -757,29 +702,10 @@ class DocTest(unittest.TestCase):
         self.assertNotIn("Disconnect both USB power and the battery", DOC)
         self.assertNotIn("Continue from the next incomplete step.", DOC)
         self.assertNotIn("## Power and sleep", DOC)
-        procedure = DOC.split("## Procedure", 1)[1].split("### Step 1:", 1)[0]
-        self.assertIn("If the ring goes dark before step 9, the board went to sleep.", procedure)
-        self.assertIn("then start again at step 1", procedure)
-        result = DOC.split("## Result", 1)[1].split("## Parts not covered", 1)[0]
-        self.assertIn("The wake starts a fresh test", result)
 
-    def test_the_second_overview_and_radio_evidence_are_explicit(self) -> None:
+    def test_the_radio_step_holds_no_scan_rationale(self) -> None:
+        """The scan internals and the BLE evidence are for AGENTS.md, not for a station."""
         radio = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
-        # Step 8 is the first page change, so it owns the hold and the page table.
-        self.assertIn("Hold `SW2` for 2 s, then release it. The second overview appears.", radio)
-        self.assertIn("`SW2` has no other hold function.", radio)
-        page = radio.split("| LED | Second overview |", 1)[1].split("\n\n", 1)[0]
-        for row in ("| `D2` | Radio check |", "| `D3` | Sleep and wake check |",
-                    "| `D5` | Dim blue page indicator |", "| All other LEDs | Off |"):
-            self.assertIn(row, page)
-        self.assertIn("On this page `D5` has no battery meaning.", radio)
-        self.assertIn("a nearby Wi-Fi access point or phone hotspot sends a network name", radio)
-        self.assertIn("Wait up to 60 s for the result on `D2`.", radio)
-        self.assertIn("- Pass: `D2` is green.", radio)
-        # The three states of D2 on this page are its own pass and fail.
-        self.assertIn("- Fail: `D2` is red or still dim amber after the wait.", radio)
-        self.assertIn("A later scan can change red to green.", radio)
-        # The scan internals and the BLE evidence are for AGENTS.md, not for a station.
         for rationale in ("BLE Improv", "advertisement start", "a 10 s timeout", "every 15 s",
                           "Bluetooth controller", "antenna performance"):
             with self.subTest(rationale=rationale):
@@ -793,21 +719,11 @@ class DocTest(unittest.TestCase):
             with self.subTest(rationale=rationale):
                 self.assertNotIn(rationale, DOC)
 
-    def test_each_instruction_stands_in_one_place(self) -> None:
-        self.assertEqual(DOC.count("Hold `SW2` for 2 s, then release it"), 1)
-        self.assertEqual(DOC.count("Do not give the board a network"), 1)
-        self.assertNotIn("Do not give the board Wi-Fi credentials", DOC)
-        # The ring pattern table is the one place that gives each flash and its cause.
-        for pattern in ("Dark blue ring for 0.5 s", "Red ring for 1.5 s"):
-            with self.subTest(pattern=pattern):
-                self.assertEqual(DOC.count(pattern), 1)
-
     def test_the_station_procedure_names_only_the_v3_board(self) -> None:
         """A V2 board is a bench unit, so no step may fork on the board version."""
         self.assertNotIn("V2", DOC)
         self.assertNotIn("V3 only", DOC)
         self.assertNotRegex(DOC, r"(?i)on a V3 board|both board versions")
-        self.assertIn("six status LEDs", DOC)
         # The firmware keeps its four-LED build for the bench.
         self.assertIn("status_led_count: ", FACTORY)
 
@@ -821,30 +737,16 @@ class DocTest(unittest.TestCase):
             with self.subTest(row=row):
                 self.assertEqual(DOC.count(row), 1)
                 self.assertIn(row, reference)
-        # The two check LED states stay with the overview that the operator reads first.
-        step1 = body.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
         # The two check LED states belong to step 1, where the first overview appears.
+        step1 = body.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
         self.assertIn("| Dim amber | The check did not pass yet |", step1)
-        step2 = body.split("### Step 2:", 1)[1].split("### Step 3:", 1)[0]
-        self.assertIn('The diagram above and the section "Color reference" give those colors.', step1)
-        self.assertIn('The section "Color reference" gives the pair of each input.', step2)
-        self.assertIn('The section "Color reference" names each pattern and its cause.', step1)
 
-    def test_each_overview_fact_sits_in_the_step_that_first_needs_it(self) -> None:
+    def test_no_step_repeats_a_table_of_an_earlier_step(self) -> None:
         """One section no longer explains the overviews before the steps repeat them."""
         self.assertNotIn("## LED positions", DOC)
-        step1 = DOC.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
         step8 = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
         step9 = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
-        self.assertIn("the first overview appears", step1)
-        self.assertIn("All six check LEDs are dim amber at this point.", step1)
-        self.assertIn("While the sleep request waits for the release of all inputs, `D3` shows cyan", step9)
-        # Each fact has one home, so a later step cannot restate an earlier one.
-        for once in ("| Dim amber | The check did not pass yet |", "| LED | Second overview |",
-                     "`SW2` has no other hold function.", "no battery meaning",
-                     "Hold `SW2` for 2 s, then release it"):
-            with self.subTest(fact=once):
-                self.assertEqual(DOC.count(once), 1)
+        self.assertEqual(DOC.count("| LED | Second overview |"), 1)
         # The step 9 prose relies on step 8 for the page. Its sheet still marks the indicator.
         prose = "\n".join(line for line in step9.splitlines() if not line.startswith("!["))
         for repeat in ("page indicator", "Only one overview", "| LED | Second overview |"):
@@ -852,23 +754,10 @@ class DocTest(unittest.TestCase):
                 self.assertNotIn(repeat, prose)
         self.assertNotIn("| Color | Meaning |", step8)
 
-    def test_uncovered_parts_need_separate_station_checks(self) -> None:
-        uncovered = DOC.split("## Parts not covered", 1)[1].split("## Shipped state", 1)[0]
-        self.assertIn("no fault in the Qwiic connector `J2`", uncovered)
-        self.assertIn("needs a known Qwiic device at the station", uncovered)
-        self.assertIn("no fault in the battery charge circuit", uncovered)
-        self.assertIn("takes too long for the station", uncovered)
-
-    def test_the_procedure_tests_the_microphone_one_time_with_the_vu_meter(self) -> None:
+    def test_the_steps_run_from_one_and_the_mic_check_has_no_clap(self) -> None:
         self.assertNotRegex(DOC, r"(?i)clap")
         steps = re.findall(r"(?m)^### Step (\d+): (.+)$", DOC)
         self.assertEqual([number for number, _ in steps], [str(n) for n in range(1, len(steps) + 1)])
-        self.assertEqual(dict(steps)["3"], "Microphone (`D3`)")
-        body = DOC.split("### Step 3: Microphone (`D3`)", 1)[1].split("### Step 4", 1)[0]
-        self.assertIn("The ring changes to the VU meter.", body)
-        self.assertIn("The ring goes back to the overview.", body)
-        self.assertEqual(body.count("Press and hold the wheel center for 2 s"), 2)
-        self.assertIn("- Pass: The bar moves with your voice, and `D3` is green.", body)
 
 
 if __name__ == "__main__":

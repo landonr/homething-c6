@@ -432,7 +432,7 @@ The second overview uses `D2` for the radio check, `D3` for sleep and wake, and 
 
 All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
 
-The procedure has no table of the check that each LED carries. The step headings and the LED map diagram give that mapping.
+The procedure has no table of the check that each LED carries. The step headings and the step diagrams give that mapping.
 
 Each overview fact sits in the step that first needs it. Step 1 holds the two check LED states, step 8 holds the second overview table, and step 9 holds the cyan sleep request.
 
@@ -440,7 +440,7 @@ The `Color reference` section at the end holds the boot chase colours, the held 
 
 Each step points at that section instead of a copy. If you move a check or change a colour, change the table in the same commit.
 
-`scripts/render-self-test-svg.py` draws the operator diagrams of the procedure: the labelled LED map and one sheet for each step. It reuses `plan_view()` of `scripts/face_plan.py`, and it reads the six LED positions from the board through `case/board.py`. `LED_CHAIN` in that script is the chain order of `self_test.cpp`, and the diagrams hold the LED positions that the tables no longer give. The `self-test-diagrams` group of `scripts/renders.json` holds its inputs and its refresh step. `scripts/tests/test_self_test_diagrams.py` checks the document, the render group, and the chain order together.
+`scripts/render-self-test-svg.py` draws the operator diagrams of the procedure, one sheet for each step. It reuses `plan_view()` of `scripts/face_plan.py`, and it reads the six LED positions from the board through `case/board.py`. `LED_CHAIN` in that script is the chain order of `self_test.cpp`, and the diagrams hold the LED positions that the tables no longer give. The `self-test-diagrams` group of `scripts/renders.json` holds its inputs and its refresh step. `scripts/tests/test_self_test_diagrams.py` checks the document, the render group, and the chain order together.
 
 While an operator holds an input, the ring shows one colour on its top half and another colour on its bottom half. `INPUT_PAIR` in `self_test.cpp` gives the pair of each expander bit. The `Color reference` section of the procedure holds the same table, so change both in the same commit.
 

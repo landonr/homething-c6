@@ -206,10 +206,9 @@
     ]
   },
   "self-test-diagrams": {
-    "description": "The operator diagrams of docs/factory-self-test.md: the labelled LED map and one sheet for each of the nine steps.",
+    "description": "The operator diagrams of docs/factory-self-test.md: one sheet for each of the nine steps.",
     "made_by": "repo",
     "outputs": [
-      "docs/readme-assets/self-test-led-map.svg",
       "docs/readme-assets/self-test-step-1-boot.svg",
       "docs/readme-assets/self-test-step-2-inputs.svg",
       "docs/readme-assets/self-test-step-3-microphone.svg",

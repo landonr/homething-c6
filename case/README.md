@@ -387,7 +387,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the button pad clear of the wheel and the six wheel LEDs.
 - Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
-- Keep the microphone funnel aligned with the board port.
+- Keep the microphone funnel aligned with the board port. Its mouth must meet the recess floor in one edge all the way round.
 - Keep the USB slot clear of the connector shell.
 - Keep the USB boot pocket clear, with its floor near enough to the receptacle for a standard plug to seat.
 - Keep the Qwiic plug path clear after removal of the breakaway cover.

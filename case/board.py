@@ -281,10 +281,9 @@ WheelProfile = namedtuple("WheelProfile", "top lip_od lip_z0 lip_z1 main_od")
 
 WHEEL_ENVELOPE_OFFSET = 5.0
 """How far a solid's bounding-box centre may sit from wheel_center() and still
-count toward wheel_profile(). ENC1's revolved discs land 0.16 off wheel_center(),
-the mean of the four ANO cutouts rather than the model's own axis; its leaf-spring
-pin and mounting legs sit 1.2 to 1.7 off. Both offsets are well inside 5.0, so it
-is WHEEL_SQUARENESS that actually tells the two groups apart."""
+count toward wheel_profile(). ENC1's revolved discs land on wheel_center(), the
+mean of the four ANO cutouts. Its centre pin sits 1.57 off. Both are well inside
+5.0, so WHEEL_SQUARENESS is what tells the two groups apart."""
 
 WHEEL_SQUARENESS = 0.5
 """Max difference between a candidate solid's X and Y bounding-box size, for

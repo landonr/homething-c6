@@ -30,8 +30,9 @@
 </p>
 
 <p align="center">
-  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+  <img alt="A white homeThing C6 remote with its status LEDs glowing around the dial, standing upright on an oak table, with rows of remotes in other colours blurred behind it and a bay window over the prairie under a clear evening sky" src="site/assets/c6/hero.jpg" width="720">
 </p>
+<p align="center"><sub>One button lights the fireplace, another controls the lights, and the rest control the TV. <a href="https://landonr.github.io/homething-c6/">Learn more</a></sub></p>
 
 ## What homeThing C6 does
 
@@ -60,10 +61,6 @@
 | **Case** | 3D printed, SLS or FDM |
 | **Wireless** | Wi-Fi, BLE, Zigbee |
 
-<p align="center">
-  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
-</p>
-
 ## Build one, or get one ready to go
 
 The board arrives fully assembled, so there is no soldering. The board design, the firmware, and the case files are all open source in this repository, so you can build your own from scratch.
@@ -72,6 +69,11 @@ The board arrives fully assembled, so there is no soldering. The board design, t
 - **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
 - **Firmware:** The [Make It Yours](#make-it-yours) section documents button assignment. [`c6remote.yaml`](c6remote.yaml) is the ESPHome configuration.
 - **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
+
+<p align="center">
+  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+</p>
+<p align="center"><sub>V2 board and case</sub></p>
 
 ## Your smart home, on real buttons
 
@@ -118,26 +120,26 @@ The page has no password, so use it only on a trusted network.
 
 ## Built Your Way
 
-### A custom board in an open case.
-
-- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
-- Parametric 3D printed case in SLS and FDM versions.
-- Sleeps between presses and wakes on any button.
-
 ### Case ([more info](case/README.md))
 
+- Parametric 3D printed case in SLS and FDM versions.
+- The SLS front has a shallow dish around the keys and the wheel, and the flat FDM front needs no support on its face.
+- Optional Qwiic access: a flush cover with two breakaway bridges stays in place until you need the port.
+- Assembly needs one M2 x 5 button-head screw at the grip end.
+
 <p align="center">
-  <img alt="Front of the homeThing C6 in a clear case: the microphone and power buttons, the scroll wheel with lit status LEDs, and nine buttons below it" src="docs/readme-assets/case-annotated-front.png" width="220" hspace="20">
-  <img alt="Back of the homeThing C6 in a clear purple case" src="docs/readme-assets/case-annotated-back.png" width="220" hspace="20">
+  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
 <p align="center">
-  <img alt="Isometric render of the SLS version of the front case" src="docs/readme-assets/case-front-iso-sls.png" width="380">
-  <img alt="Isometric render of the FDM version of the front case" src="docs/readme-assets/case-front-iso-fdm.png" width="380">
+  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="docs/readme-assets/case-front-face-sls.svg" width="260">
 </p>
-<p align="center"><sub>SLS front and FDM front</sub></p>
+<p align="center"><sub>SLS front face</sub></p>
 
 ### Board ([more info](c6remote-kicad/README.md))
+
+- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
+- Sleeps between presses and wakes on any button.
 
 <p align="center">
   <picture>

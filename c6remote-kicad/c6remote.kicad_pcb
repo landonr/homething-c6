@@ -13492,7 +13492,7 @@
 			)
 		)
 	)
-	(footprint "Library:XIAO-ESP32C6-SMD"
+	(footprint "Library:XIAO-ESP32-C6-SMD"
 		(layer "B.Cu")
 		(uuid "188af13e-63d0-42a2-81da-1833d7266639")
 		(at 52.85 137.12)

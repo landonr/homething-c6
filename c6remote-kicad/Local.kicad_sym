@@ -993,7 +993,7 @@
 				(justify left top)
 			)
 		)
-		(property "Footprint" "Library:XIAO-ESP32C6-SMD"
+		(property "Footprint" "Library:XIAO-ESP32-C6-SMD"
 			(at 0 -33.02 0)
 			(show_name no)
 			(do_not_autoplace no)

@@ -235,7 +235,7 @@ Gerber and drill headers contain timestamps. A board commit restages all files i
 - `sch erc` reports 0 violations.
 - `pcb drc` reports 0 errors, 0 unconnected items, and 0 warnings.
 - Each footprint on the board is equal to its library footprint, so DRC reports no `lib_footprint_mismatch` warning.
-- `U1` uses `Library:XIAO-ESP32C6-SMD`, which this project drew. Pads 24-31 are plated holes, and pads 32 and 33 are SMD pads.
+- `U1` uses `Library:XIAO-ESP32-C6-SMD`, which this project drew. Pads 24-31 are plated holes, and pads 32 and 33 are SMD pads.
 - `U1` pads 24-31 also have F.Mask, so their copper is open on the front.
 - Parity reports 0 issues.
 - `TP1`-`TP6` are bare debug pads. The BOM and the position file exclude them. The board has no board-only items.
@@ -661,7 +661,7 @@ The repository tracks both configured library tables. Do not map libraries manua
 
 These custom footprints are part of the design:
 
-- `XIAO-ESP32C6-SMD.kicad_mod`
+- `XIAO-ESP32-C6-SMD.kicad_mod`
 - `SW_TL3315NF160Q.kicad_mod`
 - `ANO-Rotary-Encoder.kicad_mod`
 - `LED_XL-2020RGBC-WS2812B_PLCC4_2.0x2.0mm.kicad_mod`

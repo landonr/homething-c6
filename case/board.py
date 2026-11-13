@@ -301,17 +301,20 @@ def wheel_profile():
     WHEEL_SQUARENESS separate the revolved discs from the pins and mounting legs.
 
     `top` is the highest point of anything in that set: the knob. `lip` is
-    the widest disc, the flange a panel would normally clamp against; the
-    case's wheel opening has to clear it for the shell to drop over the wheel
-    from the front. `main` is the widest disc entirely at or above the lip's
-    top face: the encoder's own body, the part that actually rotates and
-    that a panel-mount bushing normally passes through rather than under.
-    Five solids make up the assembly: a 32.00 barrel from z 0.545 to 3.545
-    that passes through the board, the 34.00 lip from 3.545 to 4.145, a
-    31.70 housing from 4.145 to 7.145 (this is `main`), a narrower 23.00
-    knob riding inside that same span up to the 7.345 top, and an 8.00
-    shaft or bushing alongside it; nothing above the lip is ever wider than
-    the housing, so one radius covers the whole span up to the top.
+    the widest disc, a flange under the bezel. The pad's wheel bore clears it.
+    `main` is the widest disc entirely at or above the lip's top face: the
+    fixed bezel. The shell's wheel opening clears it.
+
+    Five solids make up the assembly:
+    - a 32.00 base from z 0.545 to 3.545. It starts inside the board.
+    - the 34.00 lip from 3.545 to 4.145.
+    - the 31.70 bezel from 4.145 to 7.145. This is `main`. It does not turn.
+      Its top face has four recessed direction marks.
+    - the 23.00 knob in the bezel bore, from 4.145 to the 7.345 top. This is
+      the part that turns. Its top face has 16 grip bumps.
+    - the 8.00 centre button in the knob bore, from 4.145 to 7.145.
+    Nothing above the lip is wider than the bezel, so one radius covers the
+    full span up to the top.
     """
     wx, wy = wheel_center()
     near = []

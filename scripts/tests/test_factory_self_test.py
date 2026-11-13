@@ -723,12 +723,12 @@ class DocTest(unittest.TestCase):
         self.assertIn("Connect USB power again.", usb)
         sleep = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
         self.assertIn("Do this step last.", sleep)
-        self.assertIn("slowest operator step", sleep)
+        self.assertIn("Do this step last.", sleep)
         self.assertIn('Do the first part of the section "Result" before you start.', sleep)
         self.assertIn("Hold `SW3` for 3 s, until the ring flashes dark blue.", sleep)
         self.assertIn("Release all buttons and wheel directions at the dark blue flash.", sleep)
         self.assertIn("The `SW3` hold works on both overviews and in the VU meter.", sleep)
-        self.assertIn("If the board refuses the sleep request, release `SW3`.", sleep)
+        self.assertIn("the board refused the request", sleep)
         # The page indicator is no longer a precondition of the hold.
         self.assertNotIn("Make sure that `D5` is dim blue", sleep)
         self.assertIn("the second overview returns", sleep)
@@ -747,7 +747,6 @@ class DocTest(unittest.TestCase):
         self.assertIn("Do the second part after the wake of step 9.", result)
         self.assertIn("make sure that `D3` is green", result)
         self.assertLess(result.index("first overview are green"), result.index("after the wake of step 9"))
-        self.assertIn("No paper or computer is necessary for the final result.", result)
         self.assertNotRegex(DOC, r"(?i)record (?:the|your|all|each) results|use the recorded results")
         self.assertNotRegex(DOC, r"(?i)write (?:down|the result)")
 
@@ -773,7 +772,7 @@ class DocTest(unittest.TestCase):
         for row in ("| `D2` | Radio check |", "| `D3` | Sleep and wake check |",
                     "| `D5` | Dim blue page indicator |", "| All other LEDs | Off |"):
             self.assertIn(row, page)
-        self.assertIn("It has no battery meaning on this page.", radio)
+        self.assertIn("On this page `D5` has no battery meaning.", radio)
         self.assertIn("a nearby Wi-Fi access point or phone hotspot sends a network name", radio)
         self.assertIn("Wait up to 60 s for the result on `D2`.", radio)
         self.assertIn("- Pass: `D2` is green.", radio)
@@ -796,7 +795,7 @@ class DocTest(unittest.TestCase):
 
     def test_each_instruction_stands_in_one_place(self) -> None:
         self.assertEqual(DOC.count("Hold `SW2` for 2 s, then release it"), 1)
-        self.assertEqual(DOC.count("Do not give the board a Wi-Fi network"), 1)
+        self.assertEqual(DOC.count("Do not give the board a network"), 1)
         self.assertNotIn("Do not give the board Wi-Fi credentials", DOC)
         # The ring pattern table is the one place that gives each flash and its cause.
         for pattern in ("Dark blue ring for 0.5 s", "Red ring for 1.5 s"):
@@ -808,7 +807,7 @@ class DocTest(unittest.TestCase):
         self.assertNotIn("V2", DOC)
         self.assertNotIn("V3 only", DOC)
         self.assertNotRegex(DOC, r"(?i)on a V3 board|both board versions")
-        self.assertIn("The board is a V3 board, which has six status LEDs.", DOC)
+        self.assertIn("six status LEDs", DOC)
         # The firmware keeps its four-LED build for the bench.
         self.assertIn("status_led_count: ", FACTORY)
 
@@ -827,7 +826,7 @@ class DocTest(unittest.TestCase):
         # The two check LED states belong to step 1, where the first overview appears.
         self.assertIn("| Dim amber | The check did not pass yet |", step1)
         step2 = body.split("### Step 2:", 1)[1].split("### Step 3:", 1)[0]
-        self.assertIn('The diagram above and the section "Color reference" give the color of each LED.', step1)
+        self.assertIn('The diagram above and the section "Color reference" give those colors.', step1)
         self.assertIn('The section "Color reference" gives the pair of each input.', step2)
         self.assertIn('The section "Color reference" names each pattern and its cause.', step1)
 
@@ -842,7 +841,7 @@ class DocTest(unittest.TestCase):
         self.assertIn("While the sleep request waits for the release of all inputs, `D3` shows cyan", step9)
         # Each fact has one home, so a later step cannot restate an earlier one.
         for once in ("| Dim amber | The check did not pass yet |", "| LED | Second overview |",
-                     "`SW2` has no other hold function.", "no battery meaning on this page",
+                     "`SW2` has no other hold function.", "no battery meaning",
                      "Hold `SW2` for 2 s, then release it"):
             with self.subTest(fact=once):
                 self.assertEqual(DOC.count(once), 1)
@@ -854,12 +853,11 @@ class DocTest(unittest.TestCase):
         self.assertNotIn("| Color | Meaning |", step8)
 
     def test_uncovered_parts_need_separate_station_checks(self) -> None:
-        uncovered = DOC.split("## Parts not covered", 1)[1].split("## Power and sleep", 1)[0]
-        self.assertIn("does not test the Qwiic connector `J2`", uncovered)
+        uncovered = DOC.split("## Parts not covered", 1)[1].split("## Shipped state", 1)[0]
+        self.assertIn("no fault in the Qwiic connector `J2`", uncovered)
         self.assertIn("needs a known Qwiic device at the station", uncovered)
-        self.assertIn("does not test battery charging", uncovered)
+        self.assertIn("no fault in the battery charge circuit", uncovered)
         self.assertIn("takes too long for the station", uncovered)
-        self.assertIn("An operator cannot detect faults in `J2` or the battery charge circuit with this procedure.", uncovered)
 
     def test_the_procedure_tests_the_microphone_one_time_with_the_vu_meter(self) -> None:
         self.assertNotRegex(DOC, r"(?i)clap")
@@ -870,7 +868,6 @@ class DocTest(unittest.TestCase):
         self.assertIn("The ring changes to the VU meter.", body)
         self.assertIn("The ring goes back to the overview.", body)
         self.assertEqual(body.count("Press and hold the wheel center for 2 s"), 2)
-        self.assertIn("This check needs no other action from you.", body)
         self.assertIn("- Pass: The bar moves with your voice, and `D3` is green.", body)
 
 

@@ -1,25 +1,19 @@
 # Factory self-test
 
-This procedure tests one assembled homeThing C6 board with the factory firmware. The test needs no computer or Wi-Fi credentials.
+Test an assembled homeThing C6 board with the factory firmware. You need no computer and no Wi-Fi credentials. Each check shows its result on the six status LEDs round the wheel.
 
-Each check shows its result on the status LEDs round the wheel. The board is a V3 board, which has six status LEDs.
-
-## Firmware
-
-The factory firmware file is `homething-c6-provisioning-<version>.factory.bin`. It is an asset of each firmware release on GitHub.
-
-Write the file to the board at offset `0x0` over USB. Erase the flash first, so that the board has no saved Wi-Fi network. This example uses `esptool`:
+Download `homething-c6-provisioning-<version>.factory.bin` from any firmware release on GitHub. Erase the flash first, so that the board has no saved Wi-Fi network. Then write the file at offset `0x0` over USB:
 
 ```sh
 esptool.py --chip esp32c6 erase_flash
 esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-<version>.factory.bin
 ```
 
-The same firmware does the Wi-Fi setup for the customer. Do not give the board a Wi-Fi network during the test. If the board receives a network, it installs the full firmware. The self-test is then gone.
+This firmware also does the Wi-Fi setup for the customer. Do not give the board a network during the test. The board then installs the full firmware, and the self-test is gone.
 
 ## Equipment
 
-You need these items:
+You need:
 
 - A USB-C cable and a 5 V USB power supply.
 - A charged 1-cell Li-ion battery with a Molex PicoBlade `51021-0200` plug for `J1`.
@@ -31,11 +25,11 @@ Some phone main cameras block infrared light. The front camera of most phones sh
 
 ## How to read the diagrams
 
-Each diagram in this procedure shows the front face, the face with the wheel and the buttons `SW1` to `SW11`. Every position is as seen from the front. An orange outline marks a control to press. A blue ring marks the LED that answers.
+Each diagram shows the front face, with the wheel and the buttons `SW1` to `SW11`. Every position is as seen from the front. An orange outline marks a control to press. A blue ring marks the LED that answers.
 
 ![Front face of the remote with the six status LEDs named round the wheel. D3 is at the top left for the microphone, D6 at the top center for IR transmit, D4 at the top right for IR receive, D5 at the bottom right for the battery, D7 at the bottom center for USB power, and D2 at the bottom left for the buttons and wheel.](readme-assets/self-test-led-map.svg)
 
-This map names the check that each status LED carries. Each step heading also names its LED.
+This map names the check that each status LED carries.
 
 ## Procedure
 
@@ -48,11 +42,11 @@ If the ring goes dark before step 9, the board went to sleep. Press `SW3` to wak
 ![Front face of the remote with the boot animation. Arrows run clockwise round the wheel in chain order from D2 at the bottom left, through D3 at the top left, D6 at the top center, D4 at the top right and D5 at the bottom right, to D7 at the bottom center. D2 lights red, D3 azure, D6 magenta, D4 green, D5 blue and D7 cyan.](readme-assets/self-test-step-1-boot.svg)
 
 1. Put the board front up in your hand or on a non-conductive surface.
-2. Look at the ring and connect the charged battery to `J1`. The board starts.
+2. Connect the charged battery to `J1`. The board starts.
 3. Watch the boot animation.
 4. Connect USB power.
 
-The boot animation is the animation of the full firmware. It lights the LEDs in chain order, and it gives each LED its own color. The diagram above and the section "Color reference" give the color of each LED.
+The boot animation is the animation of the full firmware. It lights the LEDs in chain order, each in its own color. The diagram above and the section "Color reference" give those colors.
 
 - Pass: The wave goes clockwise two times, and each LED lights with its own color.
 - Fail: An LED stays dark in both laps. That LED or its connection in the chain has a fault.
@@ -80,13 +74,13 @@ If the ring stays dark when you connect the battery, connect USB power. If the b
 3. Turn the wheel one step clockwise.
 4. Turn the wheel one step counterclockwise.
 
-While you hold an input, the ring shows two colors. The top half shows one color, and the bottom half shows another color. The pair of colors identifies the input.
+While you hold an input, the top half of the ring shows one color and the bottom half shows another. The pair identifies the input.
 
 The top half is `D3`, `D6`, and `D4`. The bottom half is `D2`, `D5`, and `D7`.
 
 The two colors of an input are never the same. The section "Color reference" gives the pair of each input.
 
-A held input never shows one color on all LEDs. If all LEDs show magenta, the board transmits IR. Step 5 shows that function.
+If all LEDs show one color, the board is not showing a held input. All magenta is the IR transmit of step 5.
 
 Each wheel step moves one white LED one position round the ring, in the direction of the turn.
 
@@ -101,15 +95,13 @@ A hold of 3 s on `SW3` starts the sleep check after release.
 
 ![Front face of the remote with the wheel center marked for a 2 s hold and the microphone hole marked at the top center of the face. D3, at the top left of the wheel, answers.](readme-assets/self-test-step-3-microphone.svg)
 
-The diagram shows the microphone hole. Do not cover this hole.
+Do not cover the microphone hole, which the diagram marks.
 
 1. Press and hold the wheel center for 2 s. The ring changes to the VU meter.
 2. Speak toward the front of the board, at a distance of approximately 30 cm.
 3. Press and hold the wheel center for 2 s again. The ring goes back to the overview.
 
 In the VU meter, a green bar grows clockwise from `D2` with the sound level. The last LED of the bar is red. Unlit positions show dim blue.
-
-This check needs no other action from you.
 
 - Pass: The bar moves with your voice, and `D3` is green.
 - Fail: The bar does not move, or `D3` stays dim amber. The microphone or its sound hole has a fault.
@@ -118,7 +110,7 @@ This check needs no other action from you.
 
 ![Front face of the remote for the IR receive check. The sheet marks no button, because the receiver is on the back of the board. D4, at the top right of the wheel, answers.](readme-assets/self-test-step-4-ir-receive.svg)
 
-The IR receiver `U2` is on the back of the board, and it receives through the back face.
+The IR receiver is on the back of the board.
 
 1. Hold the board with its back toward the IR remote, at a distance of 0.3 m to 1 m.
 2. Press a button on the IR remote.
@@ -138,7 +130,7 @@ The IR receiver `U2` is on the back of the board, and it receives through the ba
 - Pass: On the phone screen, `D1` flashes 15 times at the same rate as the ring.
 - Fail: The phone screen shows no light from `D1`.
 
-`D6` turns green when the transmit ends. `D6` shows only that the firmware sent the bursts, so use the camera to see the light from `D1`.
+`D6` turns green when the transmit ends, which shows only that the firmware sent the bursts. Use the camera to see the light from `D1`.
 
 ### Step 6: Battery (`D5`)
 
@@ -181,7 +173,7 @@ The second overview shows these LEDs:
 | `D5` | Dim blue page indicator |
 | All other LEDs | Off |
 
-The dim blue `D5` identifies the second overview. It has no battery meaning on this page.
+On this page `D5` has no battery meaning.
 
 - Pass: `D2` is green.
 - Fail: `D2` is red or still dim amber after the wait.
@@ -192,7 +184,7 @@ A later scan can change red to green.
 
 ![Front face of the remote with SW3, the top left button below the wheel, marked for the 3 s hold that sleeps the board and for the press that wakes it. D5, at the bottom right of the wheel, is the dim blue page indicator, and D3, at the top left, answers the sleep and wake check.](readme-assets/self-test-step-9-sleep-wake.svg)
 
-Do this step last. The shutdown and restart make this the slowest operator step. Do the first part of the section "Result" before you start.
+Do this step last. Do the first part of the section "Result" before you start.
 
 1. Keep the battery and USB power connected.
 2. Hold `SW3` for 3 s, until the ring flashes dark blue.
@@ -201,16 +193,16 @@ Do this step last. The shutdown and restart make this the slowest operator step.
 5. Press and hold `SW3` until the boot animation starts. Then release it.
 6. Wait for the boot animation to end.
 
-The `SW3` hold works on both overviews and in the VU meter. You do not have to change the page first.
+The `SW3` hold works on both overviews and in the VU meter.
 
 While the sleep request waits for the release of all inputs, `D3` shows cyan on the second overview.
 
 - Pass: The ring went dark, the next button press started the board, and the second overview returns with `D3` green.
 - Fail: The board does not sleep, does not wake, or `D3` stays dim amber after the boot animation.
 
-The deliberate sleep can start with USB power present. It cannot interrupt Wi-Fi setup or the install of the full firmware.
+This sleep can start with USB power connected.
 
-If the board refuses the sleep request, release `SW3`. Then hold it again.
+If the ring flashes red, the board refused the request. Release `SW3`, then hold it again.
 
 ## Result
 
@@ -228,24 +220,22 @@ Do the second part after the wake of step 9. On the second overview, make sure t
 
 The wake starts a fresh test, so the other LEDs show dim amber again. Keep the board in the same powered session until you finish both parts.
 
-If a check LED stays dim amber or red, the board fails that check. No paper or computer is necessary for the final result.
+If a check LED stays dim amber or red, the board fails that check.
 
 ## Parts not covered
 
-This procedure does not test the Qwiic connector `J2`. That check needs a known Qwiic device at the station.
+This procedure finds no fault in the Qwiic connector `J2`, because that check needs a known Qwiic device at the station.
 
-This procedure does not test battery charging, because that check takes too long for the station.
-
-An operator cannot detect faults in `J2` or the battery charge circuit with this procedure.
+It finds no fault in the battery charge circuit either, because that check takes too long for the station.
 
 ## Shipped state
 
 To ship a board after the test, disconnect USB power. If the battery stays connected, the board sleeps after 5 minutes.
 
-The test does not change the flash. Wi-Fi setup stores the network in flash. If a board received a Wi-Fi network or the full firmware, do these steps:
+The test does not change the flash, but Wi-Fi setup stores the network there. If a board received a Wi-Fi network or the full firmware, do these steps:
 
 1. Erase the full flash with `esptool.py --chip esp32c6 erase_flash`.
-2. Write the factory firmware at offset `0x0`, as the section "Firmware" shows.
+2. Write the factory firmware at offset `0x0`, as the start of this procedure shows.
 
 ## Color reference
 

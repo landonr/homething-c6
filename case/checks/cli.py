@@ -126,7 +126,7 @@ from .keypad import (
     rim_chamfer_profile,
     wheel_basin_shape,
 )
-from .mic import mic_fillet
+from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
 from .shells import (
     interference,
     ir_end_lap_wall,
@@ -761,8 +761,19 @@ def _mic_fillet(s):
         mic_fillet(s.front),
         f"mic inlet is one funnel: {case.mic_throat_d():.2f} throat on the board's "
         f"own {case.mic_port_drill():.2f} port, tapering out to "
-        f"{2 * case.mic_taper_r():.2f} and then {2 * case.mic_mouth_r():.2f} at the "
-        f"recess floor on a {case.mic_fillet_r():.2f} concave fillet",
+        f"{2 * case.mic_taper_r():.2f} and then on a {case.mic_fillet_r():.2f} "
+        f"concave fillet band that rides the recess floor",
+    )
+
+
+@_check("mic")
+def _mic_mouth_edge(s):
+    return _report(
+        mic_mouth_edge(s.front),
+        f"mic mouth meets the recess floor in one edge "
+        f"{2 * case.mic_floor_edge_r():.2f} across on {MIC_EDGE_BEARINGS} "
+        f"bearings, floor intact outside it and the fillet band below the floor "
+        f"inside it",
     )
 
 

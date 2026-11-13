@@ -64,6 +64,7 @@ from .legends import _bounds, _legend_faces, legend_entry, legend_solids
 from .mic import (
     mic_duct_wall_left,
     mic_fillet_r,
+    mic_floor_edge_r,
     mic_mouth_r,
     mic_port,
     mic_port_drill,
@@ -436,7 +437,7 @@ def main():
     print(
         f"mic inlet one funnel, {mic_throat_d():.2f} throat on the board's own "
         f"{mic_port_drill():.2f} port ({params.MIC_THROAT_MARGIN / 2:.2f} of alignment "
-        f"slop per side) opening out to {2 * mic_mouth_r():.2f} at the recess's "
+        f"slop per side) opening out to {2 * mic_floor_edge_r():.2f} at the recess's "
         f"own floor, {face_depth_at(*mic_port()):.2f} under the face there, no "
         f"straight section between"
     )
@@ -447,9 +448,10 @@ def main():
         f"way up"
     )
     print(
-        f"  mouth finished by a {mic_fillet_r():.2f} concave fillet, tangent to the "
-        f"floor and continuous with the taper, sinking that same {mic_fillet_r():.2f} "
-        f"below the floor and leaving {mic_duct_wall_left():.2f} of wall in a "
+        f"  mouth finished by a {mic_fillet_r():.2f} concave fillet band that rides "
+        f"the floor, its {2 * mic_mouth_r():.2f} top ring {params.MIC_MOUTH_LIFT:.2f} "
+        f"above it, so the floor cuts it in one edge {2 * mic_floor_edge_r():.2f} "
+        f"across, leaving {mic_duct_wall_left():.2f} of wall in a "
         f"{params.MIC_DUCT_OD:.1f} duct at its widest"
     )
     x0, x1, y0, y1 = ir_window_span()

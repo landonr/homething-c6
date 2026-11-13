@@ -23,8 +23,8 @@ off well inside that, by design. A probe at one radius asks for width
 nothing built it with out there, which is what ROOF_FLAT_MIN is for instead: the
 measured width has to clear it at every angle.
 
-Wheel seat clearance: the shell's own wheel opening clears the housing
-(board.wheel_profile()'s main_od) by WHEEL_OPENING_CLEARANCE, its own gap
+Wheel seat clearance: the shell's own wheel opening clears the fixed
+bezel (board.wheel_profile()'s main_od) by WHEEL_OPENING_CLEARANCE, its own gap
 rather than the pad's WHEEL_CLEARANCE, at every height there is shell to cut
 the opening through, which is the ceiling underside up to the front face's own
 dished floor over the seat and not up to the knob's peak; above that floor
@@ -547,7 +547,7 @@ the face floor read the same empty air whatever the opening did."""
 
 
 def wheel_seat_clearance(front):
-    """The shell's own wheel opening clears the wheel's main rotating body,
+    """The shell's own wheel opening clears the wheel's fixed bezel,
     board.wheel_profile()'s main_od, by at least WHEEL_OPENING_CLEARANCE at
     every height there is shell for it to be cut through: from the cavity
     ceiling underside up to the front face's own floor over the seat. That is

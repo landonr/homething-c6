@@ -377,7 +377,7 @@
 	(embedded_fonts no)
 	(model "${KIPRJMOD}/3dmodels/5221 ANO Rotary Encoder.step"
 		(offset
-			(xyz 1 1 -0.05)
+			(xyz 1.11 1.11 -0.05)
 		)
 		(scale
 			(xyz 1 1 1)

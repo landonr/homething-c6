@@ -393,9 +393,10 @@ def plan_view(P, version="web"):
         )
 
     mx, my = micmod.mic_port()
+    mouth_r = micmod.mic_mouth_r() if version == "fdm" else micmod.mic_floor_edge_r()
     out.append(
         f'<path class="bore" d="'
-        f'{path_d([circle_pts(mx, my, micmod.mic_mouth_r())], P)}"/>'
+        f'{path_d([circle_pts(mx, my, mouth_r)], P)}"/>'
     )
     out.append("</g>")
     return "".join(out)

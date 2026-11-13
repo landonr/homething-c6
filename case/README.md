@@ -133,6 +133,10 @@ The model reads these sources:
 
 Run `scripts/export-case-refs.sh` after a relevant schematic or board change. Then build and run the full check.
 
+`scripts/export-case-refs.sh` needs the KiCad 3D models for the component bodies in `case/board/c6remote-board.step`. The models are in the private `c6remote-explode` repository.
+
+Run `scripts/link-3dmodels.sh` once for each clone or worktree to link the models. If a model is missing, `scripts/export-case-refs.sh` stops and names the file.
+
 Do not regenerate `case/board/c6remote-v2-board-only.step` or `case/board/c6remote-v2-pos.csv`. Both are static references from release `2026.8.0`, commit `d0a2c2e`.
 
 ## Coordinate frame
@@ -383,7 +387,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the button pad clear of the wheel and the six wheel LEDs.
 - Keep the pad skirt clear of board parts.
 - Keep the LED ring channel open below its translucent roof.
-- Keep the microphone funnel aligned with the board port.
+- Keep the microphone funnel aligned with the board port. Its mouth must meet the recess floor in one edge all the way round.
 - Keep the USB slot clear of the connector shell.
 - Keep the USB boot pocket clear, with its floor near enough to the receptacle for a standard plug to seat.
 - Keep the Qwiic plug path clear after removal of the breakaway cover.

@@ -5,7 +5,9 @@ kicad-cli pcb drc --refill-zones fills in memory only. This script fills a copy
 of the board with KiCad's Python in a temporary directory, because SaveBoard()
 also rewrites the .kicad_pro and writes a .kicad_prl. It checks that only
 filled_polygon blocks changed, copies the board back, and checks that DRC gives
-the same result with and without --refill-zones.
+the same result with and without --refill-zones. The first check ignores item
+order, number format, and number changes up to NOISE_MM, because a KiCad save
+makes these changes to a board that another tool wrote.
 
   scripts/refill-zones.py                  # c6remote-kicad/c6remote.kicad_pcb
   scripts/refill-zones.py --dry-run        # fill and check, write nothing
@@ -42,6 +44,13 @@ GUI = re.compile(
 )
 # import pcbnew prints these on every run.
 NOISE = re.compile(r"^(?:Fontconfig |\S+\(\d+\): assert )")
+
+TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[()]|[^\s()"]+')
+NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+# KiCad stores 1 nm integers, so a rotated footprint can re-save a coordinate 1 nm off.
+NOISE_MM = 1e-5
+
+Noise = collections.namedtuple("Noise", "numbers max_mm reordered")
 
 
 def err(msg):
@@ -147,31 +156,145 @@ def show_zones(counts):
         print(f"  {net or '(no net)':<12} {layer:<8} {old} -> {new}{mark}")
 
 
-def strip_fills(text):
-    kept, depth = [], 0
-    for n, line in enumerate(text.splitlines(keepends=True), 1):
-        if depth == 0 and not line.lstrip().startswith("(filled_polygon"):
-            kept.append((n, line))
-            continue
-        depth += line.count("(") - line.count(")")
-        if depth < 0:
-            # The block's last line also closes its parent. Keep that line.
-            kept.append((n, line))
-            depth = 0
-    return kept
+class Node(list):
+    """One parenthesised list. Its atoms are (line, text) tuples."""
+
+    def __init__(self, line):
+        super().__init__()
+        self.line = line
 
 
-def first_difference(old, new):
-    a = strip_fills(old.decode("utf-8", "surrogateescape"))
-    b = strip_fills(new.decode("utf-8", "surrogateescape"))
-    for (na, la), (nb, lb) in zip(a, b):
-        if la != lb:
-            return f"stored line {na}: {la.rstrip()}\nnew line {nb}: {lb.rstrip()}"
-    if len(a) == len(b):
+def head(item):
+    if isinstance(item, tuple):
+        return item[1]
+    return item[0][1] if item and isinstance(item[0], tuple) else ""
+
+
+def line_of(item):
+    return item.line if isinstance(item, Node) else item[0]
+
+
+def parse_tree(text):
+    # Drops every filled_polygon list, at any depth.
+    stack = [Node(0)]
+    line, pos = 1, 0
+    for m in TOKEN.finditer(text):
+        line += text.count("\n", pos, m.start())
+        pos = m.start()
+        tok = m.group()
+        if tok == "(":
+            stack.append(Node(line))
+        elif tok == ")":
+            if len(stack) < 2:
+                raise ValueError(f"unmatched ) at line {line}")
+            node = stack.pop()
+            if head(node) != "filled_polygon":
+                stack[-1].append(node)
+        else:
+            stack[-1].append((line, tok))
+    root = stack[0]
+    if len(stack) != 1 or len(root) != 1 or not isinstance(root[0], Node):
+        raise ValueError("the file is not one complete list")
+    return root[0]
+
+
+def item_uuid(item):
+    if isinstance(item, Node):
+        for child in item[1:]:
+            if (
+                isinstance(child, Node)
+                and len(child) == 2
+                and head(child) == "uuid"
+                and isinstance(child[1], tuple)
+            ):
+                return child[1][1]
+    return None
+
+
+def item_keys(items):
+    # Items without a uuid match in order among themselves.
+    keys, seen = [], collections.Counter()
+    for item in items:
+        uuid = item_uuid(item)
+        keys.append((uuid, seen[uuid]))
+        seen[uuid] += 1
+    return keys
+
+
+def describe(item):
+    uuid = item_uuid(item)
+    return f"{head(item)} {uuid}" if uuid else head(item)
+
+
+def mismatch(a, b, tally):
+    """Return the (stored line, new line) of the first difference, or None."""
+    if isinstance(a, Node) and isinstance(b, Node):
+        for x, y in zip(a, b):
+            hit = mismatch(x, y, tally)
+            if hit:
+                return hit
+        if len(a) == len(b):
+            return None
+        n = min(len(a), len(b))
+        return (
+            line_of(a[n]) if len(a) > n else a.line,
+            line_of(b[n]) if len(b) > n else b.line,
+        )
+    if isinstance(a, Node) or isinstance(b, Node):
+        return line_of(a), line_of(b)
+    if a[1] == b[1]:
         return None
-    label, extra = ("stored", a) if len(a) > len(b) else ("new", b)
-    n, line = extra[min(len(a), len(b))]
-    return f"only the {label} board has line {n}: {line.rstrip()}"
+    if NUMBER.fullmatch(a[1]) and NUMBER.fullmatch(b[1]):
+        delta = abs(float(a[1]) - float(b[1]))
+        if delta <= NOISE_MM:
+            tally[0] += 1
+            tally[1] = max(tally[1], delta)
+            return None
+    return a[0], b[0]
+
+
+def compare_boards(old, new):
+    """Compare two board files outside the filled_polygon blocks.
+
+    Return (difference, Noise). The difference is None or a message.
+    """
+    texts = [data.decode("utf-8", "surrogateescape") for data in (old, new)]
+    trees = []
+    for label, text in zip(("stored", "new"), texts):
+        try:
+            trees.append(parse_tree(text))
+        except ValueError as e:
+            return f"cannot parse the {label} board: {e}", Noise(0, 0.0, False)
+    a, b = trees
+    lines = [text.split("\n") for text in texts]
+    tally = [0, 0.0]
+
+    def report(hit):
+        na, nb = hit
+        return (
+            f"stored line {na}: {lines[0][na - 1].strip()}\n"
+            f"new line {nb}: {lines[1][nb - 1].strip()}"
+        )
+
+    if head(a) != head(b):
+        return report((a.line, b.line)), Noise(0, 0.0, False)
+    old_items, new_items = a[1:], b[1:]
+    old_keys, new_keys = item_keys(old_items), item_keys(new_items)
+    new_by_key = dict(zip(new_keys, new_items))
+    for key, item in zip(old_keys, old_items):
+        other = new_by_key.get(key)
+        if other is None:
+            msg = f"only the stored board has {describe(item)} at line {line_of(item)}"
+            return msg, Noise(*tally, False)
+        hit = mismatch(item, other, tally)
+        if hit:
+            return report(hit), Noise(*tally, False)
+    old_set = set(old_keys)
+    for key, item in zip(new_keys, new_items):
+        if key not in old_set:
+            msg = f"only the new board has {describe(item)} at line {line_of(item)}"
+            return msg, Noise(*tally, False)
+    return None, Noise(tally[0], tally[1], old_keys != new_keys)
 
 
 def snapshot(board):
@@ -341,11 +464,25 @@ def main():
         new = work_board.read_bytes()
         changed = old != new
         if changed:
-            diff = first_difference(old, new)
+            diff, noise = compare_boards(old, new)
             if diff:
                 err("Content outside filled_polygon blocks changed. Board not written.")
                 err(diff)
                 return 1
+            ignored = []
+            if noise.numbers:
+                ignored.append(
+                    f"{noise.numbers} numbers within NOISE_MM"
+                    f" (max {noise.max_mm:.6f} mm)"
+                )
+            if noise.reordered:
+                ignored.append("item order changed")
+            if ignored:
+                print(
+                    "Ignored KiCad save noise outside filled_polygon blocks: "
+                    + ", ".join(ignored)
+                    + "."
+                )
             print("Only filled_polygon blocks changed.")
         else:
             print("The stored fill is already current. Board not written.")

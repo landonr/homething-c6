@@ -30,8 +30,9 @@
 </p>
 
 <p align="center">
-  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+  <img alt="A white homeThing C6 remote with its status LEDs glowing around the dial, standing upright on an oak table, with rows of remotes in other colours blurred behind it and a bay window over the prairie under a clear evening sky" src="site/assets/c6/hero.jpg" width="720">
 </p>
+<p align="center"><sub>One button lights the fireplace, another controls the lights, and the rest control the TV. <a href="https://landonr.github.io/homething-c6/">Learn more</a></sub></p>
 
 ## What homeThing C6 does
 
@@ -60,10 +61,6 @@
 | **Case** | 3D printed, SLS or FDM |
 | **Wireless** | Wi-Fi, BLE, Zigbee |
 
-<p align="center">
-  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
-</p>
-
 ## Build one, or get one ready to go
 
 The board arrives fully assembled, so there is no soldering. The board design, the firmware, and the case files are all open source in this repository, so you can build your own from scratch.
@@ -72,6 +69,11 @@ The board arrives fully assembled, so there is no soldering. The board design, t
 - **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
 - **Firmware:** The [Make It Yours](#make-it-yours) section documents button assignment. [`c6remote.yaml`](c6remote.yaml) is the ESPHome configuration.
 - **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
+
+<p align="center">
+  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+</p>
+<p align="center"><sub>V2 board and case</sub></p>
 
 ## Your smart home, on real buttons
 
@@ -118,26 +120,26 @@ The page has no password, so use it only on a trusted network.
 
 ## Built Your Way
 
-### A custom board in an open case.
-
-- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
-- Parametric 3D printed case in SLS and FDM versions.
-- Sleeps between presses and wakes on any button.
-
 ### Case ([more info](case/README.md))
 
+- Parametric 3D printed case in SLS and FDM versions.
+- The SLS front has a shallow dish around the keys and the wheel, and the flat FDM front needs no support on its face.
+- Optional Qwiic access: a flush cover with two breakaway bridges stays in place until you need the port.
+- Assembly needs one M2 x 5 button-head screw at the grip end.
+
 <p align="center">
-  <img alt="Front of the homeThing C6 in a clear case: the microphone and power buttons, the scroll wheel with lit status LEDs, and nine buttons below it" src="docs/readme-assets/case-annotated-front.png" width="220" hspace="20">
-  <img alt="Back of the homeThing C6 in a clear purple case" src="docs/readme-assets/case-annotated-back.png" width="220" hspace="20">
+  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
 <p align="center">
-  <img alt="Isometric render of the SLS version of the front case" src="docs/readme-assets/case-front-iso-sls.png" width="380">
-  <img alt="Isometric render of the FDM version of the front case" src="docs/readme-assets/case-front-iso-fdm.png" width="380">
+  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="docs/readme-assets/case-front-face-sls.svg" width="260">
 </p>
-<p align="center"><sub>SLS front and FDM front</sub></p>
+<p align="center"><sub>SLS front face</sub></p>
 
 ### Board ([more info](c6remote-kicad/README.md))
+
+- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
+- Sleeps between presses and wakes on any button.
 
 <p align="center">
   <picture>
@@ -176,10 +178,14 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 #### Schematic
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
-    <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
-  </picture>
+  <a href="docs/readme-assets/schematic.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
+      <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
+    </picture>
+  </a>
+  <br>
+  <sub>Open the <a href="docs/readme-assets/schematic.svg">full-size schematic</a> to read the part values and the net names.</sub>
 </p>
 
 ## Status ([more info](docs/timeline.md))
@@ -189,6 +195,44 @@ The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus 
 ## Relationship to homeThing ([more info](https://github.com/landonr/homeThing))
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.
+
+## License
+
+This repository uses three licenses. A file uses the license of the row that contains its path.
+
+| Path | License |
+| --- | --- |
+| The ESPHome configs (`c6remote*.yaml`, `secrets.example.yaml`, `partitions.csv`), the root C++ headers (`*.h`), `components/`, `scripts/`, and `.github/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+| `c6remote-kicad/` (the schematic, the board, the symbol and footprint libraries, and the `export/` fabrication files), `kicad lib/`, and `case/` (the build123d model source, its checks, the board STEP and DXF files, and the meshes and STEP files that the model exports) | [CERN-OHL-S-2.0](LICENSE-CERN-OHL-S-2.0) |
+| The documentation (`README.md`, `RECEIVER.md`, `ZIGBEE.md`, `TRANSMITTING.md`, and `docs/`, with the images in `docs/readme-assets/`), and `site/` | [CC-BY-4.0](LICENSE-CC-BY-4.0) |
+| All other files, for example `AGENTS.md`, `.gitignore`, `.gitattributes`, `.mcp.json`, and `.vscode/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+
+A firmware binary that you build from these configs links the GPL-3.0 C++ core of ESPHome. As a result, a distributed binary is GPL-3.0. Its source is this repository and the dependencies below.
+
+For CERN-OHL-S-2.0, the Source Location of the hardware is <https://github.com/landonr/homething-c6>.
+
+### Third-party files
+
+These files keep their own licenses:
+
+| File | Origin | License |
+| --- | --- | --- |
+| `case/fonts/DejaVuSans.ttf` | DejaVu fonts | Bitstream Vera license, see [`case/fonts/LICENSE`](case/fonts/LICENSE) |
+| `scripts/assets/env-studio.hdr` | Poly Haven `studio_small_09` HDRI | CC0-1.0 |
+| The Wi-Fi and Bluetooth icons in `site/index.html` | Feather icons | MIT |
+| `kicad lib/Library.pretty/LED_D3.0mm_Horizontal_O1.27mm_Z2.0mm_IRBlack.kicad_mod`, and the `SW_TL3315NF160Q` and `TSOP61xx` symbols in `c6remote-kicad/Local.kicad_sym` | KiCad libraries | CC-BY-SA-4.0 with the [KiCad library exception](https://www.kicad.org/libraries/license/) |
+
+Because of the KiCad library exception, CC-BY-SA-4.0 does not apply to a design that uses these items. The schematic and the board also contain stock KiCad symbols and footprints. The same exception applies to them.
+
+These items are not in this repository:
+
+- The KiCad 3D models are in a private repository. See `scripts/link-3dmodels.sh`.
+- The build fetches these firmware dependencies:
+  - ESPHome: MIT for the Python code, and GPL-3.0 for the C++ code.
+  - ESP-IDF and `esp-zigbee-lib`: Apache-2.0.
+  - `luar123/zigbee_esphome`: no license file yet. [Issue 119](https://github.com/luar123/zigbee_esphome/issues/119) asks for one.
+
+The licenses do not give rights to trademarks, for example ESPHome, Home Assistant, Seeed Studio XIAO, Adafruit ANO, Discord, and GitHub. Some of these trademarks are in images, for example `site/assets/legacy/s3-video.jpg`.
 
 # Includes
 - <a href="https://esphome.io/">ESPHome</a>

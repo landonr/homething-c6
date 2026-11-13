@@ -561,9 +561,9 @@ this gap is buried under the pad and the face's is looked at, so one number
 could not answer to both. board.wheel_profile() measures the diameter rather
 than it being hand-entered."""
 WHEEL_OPENING_CLEARANCE = 0.2
-"""Radial gap the shell's own opening leaves around the wheel's main rotating
-body, the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
-because this one is a visible line around the knob rather than buried
+"""Radial gap the shell's own opening leaves around the wheel's fixed bezel,
+the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
+because this one is a visible line around the bezel rather than buried
 clearance, and the lip never transits the opening so nothing wider has to
 pass it."""
 WHEEL_RIM_LEDGE = 1.0
@@ -882,26 +882,39 @@ perimeter closes over it. This keeps the narrow end at several extrusion widths,
 which is the floor a small bore in a printed part has regardless of what it is
 for. The alignment margin is already above that floor."""
 MIC_MOUTH_D = 4.5
-"""How wide the inlet's mouth opens at the face it arrives in, and so the widest
-the inlet ever is: the bore is a funnel, bell at the pocket floor and throat on
-the board's own port, and this is the bell. An outright width rather than a
-multiple of the throat, which is what it used to be: the throat is the board's
-number now, and tying the bell to it would mean a different drill quietly
-resizing the one dimension the inlet exists for.
+"""How wide the inlet's mouth is at the top ring of its fillet band, and so the
+widest the inlet ever is: the bore is a funnel, bell at the pocket floor and
+throat on the board's own port, and this is the bell. An outright width rather
+than a multiple of the throat, which is what it used to be: the throat is the
+board's number now, and tying the bell to it would mean a different drill
+quietly resizing the one dimension the inlet exists for.
 
 A concave fillet rather than the countersink this was, over the last of the way
-out. A cone meets the face along a circular corner; a quarter-round tangent to
-the face has no edge there at all, which is what an inlet a finger and a stray
-draught both arrive at wants, and it is the same feature a moulded port carries.
-case.mic_fillet_r() is the radius, and it is not free either: it is this mouth
-less wherever MIC_TAPER_SHARE leaves the taper, that being the one radius
-leaving the arc tangent to the face above and continuous with the taper below.
+out. A cone meets the face along a sharp circular corner. The fillet band meets
+the recess floor in one shallow edge instead, which is what an inlet a finger
+and a stray draught both arrive at wants. On the recessed front the band rides
+the dished floor and its top ring runs MIC_MOUTH_LIFT above it, so the floor
+cuts the band just inside this width: the visible mouth, case.mic_floor_edge_r(),
+is a little narrower than this. case.mic_fillet_r() is the radius, and it is not
+free either: it is this mouth less wherever MIC_TAPER_SHARE leaves the taper,
+that being the one radius that carries the arc out from the taper's top to here.
 
 Bounded by the duct it is drilled through rather than by anything acoustic: the
 mouth is where the bore comes closest to the outside of MIC_DUCT_OD, so it is
 the one height the wall is at risk at, and check.py's mic fillet pass reports
 what is left. The 4.5 mm mouth keeps the original 0.7 mm radial duct wall by
 growing the duct alongside it."""
+MIC_MOUTH_LIFT = 0.01
+"""How far above the recess floor the top ring of the mic's fillet band runs, on
+the recessed front. It sets where the floor cuts the band, about
+sqrt(2 * r * MIC_MOUTH_LIFT) inside MIC_MOUTH_D / 2, and the crease there, about
+acos(1 - MIC_MOUTH_LIFT / r), with r = case.mic_fillet_r(). A larger lift moves
+the edge in and sharpens the crease.
+
+Not zero, because a band tangent to the floor along a whole ring is a
+coincident tangent contact that the boolean cannot resolve. It must also exceed
+how far the built floor strays from face_floor_at() round the port. Otherwise a
+sliver step comes back wherever the built floor is the higher of the two."""
 MIC_TAPER_SHARE = 0.25
 """How much of the run out from throat to mouth the taper's cone does, the
 fillet finishing the rest. So it is where the two meet, at the base of the fillet

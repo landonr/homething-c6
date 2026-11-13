@@ -9,9 +9,18 @@ because the ends of a band cannot tell an arc from a cone or from the plain bore
 either might have been built as, and the middle can.
 """
 
+import math
+
 import case
 
-from .common import OpeningNotFound, _opening_crop, _opening_radius
+from .common import (
+    CROP_MARGIN,
+    OpeningNotFound,
+    Problem,
+    _Crop,
+    _opening_crop,
+    _opening_radius,
+)
 
 MIC_DUCT_WALL_MIN = 0.5
 """Thinnest the mic duct's wall may be left where the mouth has widened the bore
@@ -78,10 +87,39 @@ MIC_MOUTH_STANDOFF = 0.05
 fraction of the fillet band, which is the point of it: a probe centred on the
 face would have half its own height standing in the open pocket above it and
 could never read half full, so the bisection would report the inlet open out to
-its search bound. That is inherent to the mouth being tangent to the floor
-rather than an edge on it, and no finite probe resolves the last sliver of it. A
-fraction was this once and stopped serving, the band having got short enough
-that the same fraction no longer clears the probe's own height."""
+its search bound. On the +x ray the floor cuts the band about level with
+mic_face(), so this keeps the whole probe, half height included, about 0.02
+below that edge and in the band's built material. A fraction was this once and
+stopped serving, the band having got short enough that the same fraction no
+longer clears the probe's own height. mic_mouth_edge reads the edge itself."""
+
+MIC_EDGE_BEARINGS = 12
+"""Bearings round the port that mic_mouth_edge reads, every 30 degrees. The
+floor's rise across the mouth is a tilt along y, so +y, where the old mouth
+left its step, and -y, where the floor cut into the old fillet, are both
+among them."""
+
+MIC_EDGE_OUTER_STANDOFF = 0.06
+"""How far outside case.mic_floor_edge_r() the floor reading sits. The edge
+moves under 0.01 with bearing, so this is clear of it everywhere. It must stay
+well inside case.mic_mouth_r(), because the old step stood at that radius and
+a reading past it sees the intact floor whatever the band does."""
+
+MIC_EDGE_INNER_STANDOFF = 0.15
+"""How far inside case.mic_floor_edge_r() the band reading sits. There the band
+is about 0.03 below the floor, three times MIC_EDGE_TOLERANCE, so a reading
+that found the floor instead of the band cannot pass as the band."""
+
+MIC_EDGE_TOLERANCE = 0.01
+"""How closely each top hit has to match the surface it should land on. The
+built floor stays within 0.001 of face_floor_at() round the port and the
+lofted band within 0.0001 of mic_band_point(). This is about a ninth of the old
+step on the +y side, so a step of that size cannot pass."""
+
+MIC_EDGE_RAY_HALF = 0.3
+"""Half height of each vertical ray, about case.mic_face(). It must clear the
+floor's rise across the mouth, under 0.1, and the band's sink below the floor
+at the inner reading."""
 
 
 def mic_fillet(front):
@@ -89,12 +127,11 @@ def mic_fillet(front):
     floor: a real cone up most of it and a real concave fillet finishing it
     there.
 
-    The floor is dished rather than flat, so the reference the whole funnel
-    hangs off is case.mic_face(), the floor directly over the port, and the
-    probes read against case.mic_profile_r() built on the same number. The
-    floor rises away from the port across the mouth's own width, by well under
-    a tenth, which the mouth's straight run past that height absorbs and which
-    the topmost probe sits below.
+    The floor is dished rather than flat, so the taper and the band's base hang
+    off case.mic_face(), the floor directly over the port. The band's upper part
+    rides the floor, so its radius at a height depends on bearing. Every probe
+    walks the +x ray, so each reads against case.mic_profile_r(z, 0.0).
+    mic_mouth_edge proves where the band meets the floor.
 
     Probed on the built shell by bisecting for the true opening radius at each
     height, the same reasoning as wheel_seat_clearance: a mouth cut on the wrong
@@ -165,7 +202,7 @@ def mic_fillet(front):
     crop = _opening_crop(front, x, y, min(zs), max(zs), MIC_SEARCH_LO, MIC_SEARCH_HI)
 
     for where, z in heights:
-        want = case.mic_profile_r(z)
+        want = case.mic_profile_r(z, 0.0)
         try:
             got = _opening_radius(
                 front, x, y, z, lo=MIC_SEARCH_LO, hi=MIC_SEARCH_HI, crop=crop
@@ -177,5 +214,79 @@ def mic_fillet(front):
             problems.append(
                 f"inlet opens {2 * got:.2f} {where} at z={z:.2f}, wants "
                 f"{2 * want:.2f}"
+            )
+    return problems
+
+
+def mic_mouth_edge(front):
+    """The mouth meets the recess floor in one edge all the way round, with no
+    step.
+
+    On each of MIC_EDGE_BEARINGS bearings a vertical ray reads the built
+    front's top surface twice. MIC_EDGE_OUTER_STANDOFF outside
+    case.mic_floor_edge_r() the top hit must be the floor, face_floor_at().
+    MIC_EDGE_INNER_STANDOFF inside it the top hit must be the fillet band,
+    case.mic_band_point() at that radius, and below the floor. A band top that
+    stands below the floor leaves a step, and the outer reading then lands on
+    the band instead of the floor. A floor that runs on in past the edge fails
+    the inner reading.
+    """
+    x0, y0 = case.mic_port()
+    edge = case.mic_floor_edge_r()
+    r, mouth = case.mic_fillet_r(), case.mic_mouth_r()
+    z_mid = case.mic_face()
+    z_hi, z_lo = z_mid + MIC_EDGE_RAY_HALF, z_mid - MIC_EDGE_RAY_HALF
+    reach = edge + MIC_EDGE_OUTER_STANDOFF
+    crop = _Crop(
+        front,
+        (x0 - reach - CROP_MARGIN, y0 - reach - CROP_MARGIN, z_lo - CROP_MARGIN),
+        (x0 + reach + CROP_MARGIN, y0 + reach + CROP_MARGIN, z_hi + CROP_MARGIN),
+    )
+    def top_hit(rho, theta):
+        x, y = x0 + rho * math.cos(theta), y0 + rho * math.sin(theta)
+        runs = crop.ray_runs((x, y, z_hi), (x, y, z_lo))
+        return x, y, (z_hi - runs[0][0] if runs else None)
+
+    problems = []
+    inner = edge - MIC_EDGE_INNER_STANDOFF
+    phi_in = math.acos((mouth - inner) / r)
+    for i in range(MIC_EDGE_BEARINGS):
+        theta = 2 * math.pi * i / MIC_EDGE_BEARINGS
+        bearing = math.degrees(theta)
+
+        rho = edge + MIC_EDGE_OUTER_STANDOFF
+        x, y, got = top_hit(rho, theta)
+        want = case.face_floor_at(x, y)
+        if got is None or abs(got - want) > MIC_EDGE_TOLERANCE:
+            seen = "no material" if got is None else f"top at z={got:.3f}"
+            problems.append(
+                Problem(
+                    f"mic mouth edge at bearing {bearing:.0f}: {seen} at rho "
+                    f"{rho:.3f} outside the edge, wants the floor at z={want:.3f}",
+                    at=(x, y, want),
+                )
+            )
+
+        _, band_z = case.mic_band_point(phi_in, theta)
+        x, y, got = top_hit(inner, theta)
+        floor = case.face_floor_at(x, y)
+        if got is None or abs(got - band_z) > MIC_EDGE_TOLERANCE:
+            seen = "no material" if got is None else f"top at z={got:.3f}"
+            problems.append(
+                Problem(
+                    f"mic mouth edge at bearing {bearing:.0f}: {seen} at rho "
+                    f"{inner:.3f} inside the edge, wants the fillet band at "
+                    f"z={band_z:.3f}",
+                    at=(x, y, band_z),
+                )
+            )
+        elif floor - got <= MIC_EDGE_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"mic mouth edge at bearing {bearing:.0f}: fillet band at "
+                    f"z={got:.3f} at rho {inner:.3f} is not below the floor at "
+                    f"z={floor:.3f}, wants it more than {MIC_EDGE_TOLERANCE:.3f} below",
+                    at=(x, y, got),
+                )
             )
     return problems

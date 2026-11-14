@@ -1,0 +1,192 @@
+# Build and publish a firmware release for each fw-YYYY.M.P tag.
+#
+# Firmware has its own tag track, because release.yml owns the plain YYYY.M.P
+# tags and the board silkscreen must equal the board tag. A firmware release is
+# never "latest", so the latest release stays the board release.
+#
+# The job compiles c6remote.yaml at the tag version and the c6remote-factory.yaml
+# provisioning image, writes the manifest that the http_request update entity
+# reads, and publishes the release. A tag run cannot deploy Pages, because the
+# github-pages environment accepts only develop and main. So the last step starts
+# pages.yml on develop, which copies the manifest and binaries into firmware/.
+#
+# Cut a release: git tag fw-2026.11.0 && git push origin fw-2026.11.0
+name: Firmware release
+
+on:
+  push:
+    tags: ['fw-*']
+
+permissions:
+  contents: write
+  actions: write
+
+# Serialize, never cancel. A release that stops halfway is worse than a late one.
+concurrency:
+  group: firmware-release
+  cancel-in-progress: false
+
+env:
+  # Keep in step with the ESPHome that validates the configs locally.
+  ESPHOME_VERSION: 2026.8.2
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # button_config counts commits from a base commit for the web page version.
+          fetch-depth: 0
+
+      - name: Check the tag
+        id: ver
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # Month 1 to 12 without zero padding, patch without leading zeros.
+          if [[ ! "$tag" =~ ^fw-[0-9]{4}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::tag '${tag}' does not match fw-YYYY.M.P with an unpadded month"
+            exit 1
+          fi
+          version="${tag#fw-}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing firmware ${version}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # With the default esp-idf toolchain, ESPHome installs ESP-IDF and its
+      # compiler cache under ~/.cache/esphome. ~/.platformio is the PlatformIO toolchain.
+      - name: Cache the ESPHome toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/esphome
+            ~/.platformio
+          key: esphome-${{ env.ESPHOME_VERSION }}-${{ runner.os }}
+
+      - name: Install ESPHome
+        run: python -m pip install "esphome==${ESPHOME_VERSION}"
+
+      # Both configs use the device name homething-c6, and the build directory
+      # layout belongs to ESPHome. So each step finds its binaries by age against
+      # a marker, and it fails unless exactly one of each name is new.
+      - name: Compile the full firmware
+        id: full
+        run: |
+          set -euo pipefail
+          marker="${RUNNER_TEMP}/full.marker"
+          touch "$marker"
+          # Releases are for V3 boards with six status LEDs. The config default
+          # of four is for the V2 bench units.
+          esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 compile c6remote.yaml
+          for name in factory ota; do
+            mapfile -t found < <(find .esphome/build -type f -name "firmware.${name}.bin" -newer "$marker")
+            if (( ${#found[@]} != 1 )); then
+              echo "::error::expected one new firmware.${name}.bin, found ${#found[@]}: ${found[*]:-none}"
+              exit 1
+            fi
+            echo "${name}=${found[0]}" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Compile the provisioning firmware
+        id: prov
+        run: |
+          set -euo pipefail
+          marker="${RUNNER_TEMP}/prov.marker"
+          touch "$marker"
+          # The provisioning image carries the factory self-test, which needs the
+          # V3 layout of six LEDs and the USB detector.
+          esphome -s status_led_count 6 compile c6remote-factory.yaml
+          mapfile -t found < <(find .esphome/build -type f -name "firmware.factory.bin" -newer "$marker")
+          if (( ${#found[@]} != 1 )); then
+            echo "::error::expected one new firmware.factory.bin, found ${#found[@]}: ${found[*]:-none}"
+            exit 1
+          fi
+          echo "factory=${found[0]}" >> "$GITHUB_OUTPUT"
+
+      # gh names an asset after the file, so each staged name carries the version.
+      # The manifest gives bare file names, which ESPHome resolves next to it.
+      - name: Stage the assets and write the manifest
+        id: stage
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          tag="${{ steps.ver.outputs.tag }}"
+          dist="${RUNNER_TEMP}/dist"
+          mkdir -p "$dist"
+          full_factory="homething-c6-${v}.factory.bin"
+          full_ota="homething-c6-${v}.ota.bin"
+          prov_factory="homething-c6-provisioning-${v}.factory.bin"
+          manifest="homething-c6-${v}.manifest.json"
+          cp "${{ steps.full.outputs.factory }}" "${dist}/${full_factory}"
+          cp "${{ steps.full.outputs.ota }}" "${dist}/${full_ota}"
+          cp "${{ steps.prov.outputs.factory }}" "${dist}/${prov_factory}"
+
+          # Both app slots in partitions.csv have this size.
+          slot=$(awk -F, '$1 ~ /^app0/ { gsub(/[[:space:]]/, "", $5); print $5 }' partitions.csv)
+          for f in "$full_ota" "$prov_factory"; do
+            size=$(stat -c %s "${dist}/${f}")
+            echo "${f}: ${size} bytes"
+          done
+          ota_size=$(stat -c %s "${dist}/${full_ota}")
+          if (( ota_size > slot )); then
+            echo "::error::${full_ota} is ${ota_size} bytes, larger than the ${slot} app slot"
+            exit 1
+          fi
+
+          md5=$(md5sum "${dist}/${full_ota}" | cut -d' ' -f1)
+          jq -n \
+            --arg version "$v" \
+            --arg factory "$full_factory" \
+            --arg ota "$full_ota" \
+            --arg md5 "$md5" \
+            --arg summary "homeThing C6 firmware ${v}" \
+            --arg release_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${tag}" \
+            '{
+              name: "homeThing C6",
+              version: $version,
+              home_assistant_domain: "esphome",
+              builds: [{
+                chipFamily: "ESP32-C6",
+                parts: [{path: $factory, offset: 0}],
+                ota: {path: $ota, md5: $md5, summary: $summary, release_url: $release_url}
+              }]
+            }' > "${dist}/${manifest}"
+          cat "${dist}/${manifest}"
+          echo "dir=${dist}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          tag="${{ steps.ver.outputs.tag }}"
+          dist="${{ steps.stage.outputs.dir }}"
+          # The notes start at the previous firmware tag, not at a board tag.
+          notes_start=()
+          prev=$(git tag --list 'fw-*' --sort=-v:refname | grep -vxF "$tag" | head -n 1 || true)
+          if [[ -n "$prev" ]]; then
+            notes_start=(--notes-start-tag "$prev")
+          fi
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Firmware ${v}" \
+            --latest=false \
+            --generate-notes \
+            "${notes_start[@]}" \
+            "${dist}/homething-c6-${v}.manifest.json#Update manifest" \
+            "${dist}/homething-c6-${v}.factory.bin#Full firmware, factory image for a USB flash at offset 0" \
+            "${dist}/homething-c6-${v}.ota.bin#Full firmware, OTA image" \
+            "${dist}/homething-c6-provisioning-${v}.factory.bin#Provisioning firmware, factory image for a USB flash at offset 0"
+
+      # GITHUB_TOKEN can start workflow_dispatch runs, unlike most other events.
+      - name: Deploy the manifest to GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref develop

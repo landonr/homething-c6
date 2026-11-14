@@ -437,9 +437,9 @@ class WifiLeaseTest(unittest.TestCase):
         probe = section(CONFIG, "  block_probe: !lambda |-\n", "  replay: !lambda")
         self.assertIn("or\n    // the lease that a Home Assistant action holds.", probe)
         self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
-        self.assertIn("wifi_session << 6 | ha_busy << 7;", probe)
-        self.assertIn("wifi=%d ha=%d at", probe)
-        self.assertIn("window, wifi_session, ha_busy, millis());", probe)
+        self.assertIn("wifi_session << 6 | ha_busy << 7 | ota_running << 8;", probe)
+        self.assertIn("wifi=%d ha=%d ota=%d at", probe)
+        self.assertIn("window, wifi_session, ha_busy, ota_running, millis());", probe)
 
 
 class HoldTapTest(unittest.TestCase):

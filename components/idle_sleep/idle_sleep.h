@@ -40,6 +40,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   bool sleep_armed() const { return this->forced_sleep_; }
   // Arms the forced sleep from outside, as a button hold does. Main loop only.
   void arm_sleep();
+  void arm_sleep(std::function<bool()> guard);
   // True until the latched wake press is sent or dropped.
   // Bits down at the stub read and at the first read. Zero without the stub latch.
   uint16_t held_at_wake() const { return this->held_mask_; }
@@ -106,6 +107,7 @@ class IdleSleep : public Component, public i2c::I2CDevice {
   bool hold_down_{false};
   uint32_t hold_since_ms_{0};
   bool forced_sleep_{false};
+  std::function<bool()> forced_sleep_guard_{};
 };
 
 }  // namespace esphome::idle_sleep

@@ -21,17 +21,22 @@ line and the banner on the web page.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from urllib.parse import quote_from_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
 CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
+# The firmware build packs the face with this module, so the preview uses it too.
+_FACE_SVG_SPEC = importlib.util.spec_from_file_location(
+    "face_svg", ROOT / "components" / "button_config" / "face_svg.py")
+face_svg = importlib.util.module_from_spec(_FACE_SVG_SPEC)
+_FACE_SVG_SPEC.loader.exec_module(face_svg)
 CONFIG = Path(__file__).resolve().parent / "preview-c6remote-config.json"
 
 STATE = {
@@ -269,7 +274,7 @@ def page_html() -> bytes:
     match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
     if match is None:
         raise SystemExit("button_config_page.h has no PAGE_HTML value")
-    svg = quote_from_bytes(CASE_FRONT_FACE.read_bytes(), safe="/,:;=(){}@.-_")
+    svg = face_svg.data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))
     return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg).encode()
 
 

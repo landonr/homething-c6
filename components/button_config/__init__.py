@@ -2,7 +2,6 @@ import gzip
 from pathlib import Path
 import re
 import subprocess
-from urllib.parse import quote_from_bytes
 
 from esphome import automation
 import esphome.codegen as cg
@@ -11,6 +10,8 @@ from esphome.components import ha_action, idle_sleep, sensor, web_server_base
 from esphome.components.web_server_base import CONF_WEB_SERVER_BASE_ID
 from esphome.const import CONF_ID, CONF_RAW_DATA_ID, CONF_TRIGGER_ID
 from esphome.core import HexInt
+
+from .face_svg import data_url_body
 
 AUTO_LOAD = ["web_server_base"]
 DEPENDENCIES = ["network"]
@@ -121,7 +122,7 @@ async def to_code(config):
     if match is None:
         raise cv.Invalid("button_config_page.h has no PAGE_HTML value")
     svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"
-    svg = quote_from_bytes(svg_path.read_bytes(), safe="/,:;=(){}@.-_")
+    svg = data_url_body(svg_path.read_text(encoding="utf-8"))
     html = match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg)
     page = gzip.compress(html.encode(), compresslevel=9, mtime=0)
     data = cg.progmem_array(config[CONF_RAW_DATA_ID], [HexInt(value) for value in page])

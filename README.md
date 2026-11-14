@@ -192,6 +192,8 @@ The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remot
 
 The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus current design comparison are in [`docs/timeline.md`](docs/timeline.md). Open work is in the [GitHub issues](https://github.com/landonr/homething-c6/issues). The power budget is in [`docs/power-budget.md`](docs/power-budget.md).
 
+The factory test procedure for an assembled board is at [homeThing C6 Factory Test](https://landonr.github.io/homething-c6/factory-self-test.html). The board runs the factory firmware, and an operator watches the status LED ring at each step. The test needs no computer, and the page prints to PDF for the bench.
+
 ## Relationship to homeThing ([more info](https://github.com/landonr/homeThing))
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.

@@ -528,8 +528,26 @@ class HomeAssistantSleepTest(unittest.TestCase):
     def test_the_block_probe_has_a_home_assistant_bit(self) -> None:
         probe = PRODUCTION.split("  block_probe: !lambda |-\n", 1)[1].split("  replay: !lambda", 1)[0]
         self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
-        self.assertIn("wifi_session << 6 | ha_busy << 7;", probe)
+        self.assertIn("wifi_session << 6 | ha_busy << 7 | ota_running << 8;", probe)
         self.assertIn("ha=%d", probe)
+
+    def test_the_block_probe_has_an_ota_bit_in_a_wide_mask(self) -> None:
+        """Nine block bits need more than a uint8_t, and the sentinel must stay out of range."""
+        probe = PRODUCTION.split("  block_probe: !lambda |-\n", 1)[1].split("  replay: !lambda", 1)[0]
+        self.assertIn("const bool ota_running = id(ota_busy);", probe)
+        self.assertIn("const uint16_t mask = ", probe)
+        self.assertIn("static uint16_t last_mask = 0xFFFF;", probe)
+        self.assertNotIn("uint8_t mask", probe)
+        self.assertIn('"block=0x%03X ', probe)
+        self.assertIn(" ha=%d ota=%d at %", probe)
+        self.assertIn("wifi_session, ha_busy, ota_running, millis());", probe)
+        # Both OTA platforms set the flag, so neither can start with the bit clear.
+        ota = PRODUCTION.split("\nota:\n", 1)[1].split("\n\n", 1)[0] + "\n"
+        guard = "      - lambda: id(ota_busy) = state == ota::OTA_STARTED || state == ota::OTA_IN_PROGRESS;\n"
+        self.assertEqual(ota.count("    on_state_change:\n" + guard), 2)
+        self.assertIn("  - platform: esphome\n", ota)
+        self.assertIn("  - platform: http_request\n", ota)
+        self.assertIn("  - id: ota_busy\n    type: bool\n    restore_value: false\n", PRODUCTION)
 
     def test_the_replay_settles_a_bit_without_the_link_only_when_it_sends(self) -> None:
         self.assertIn("this->replay_(bit, held, this->link_seen_)", CPP)

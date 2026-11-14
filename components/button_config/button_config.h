@@ -81,6 +81,14 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   bool set_boot_leds(bool enabled);
   bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
   void toggle_temporary_wifi();
+  // Main loop only. Opens a temporary Wi-Fi session, logged with this reason,
+  // if Wi-Fi is off. on_boot uses it for Improv and after a software restart.
+  void open_boot_wifi_session(const char *reason);
+  // Main loop only. True while a Home Assistant action lease alone holds Wi-Fi:
+  // no page, hold, pairing or boot session, and no Always On at boot.
+  bool wifi_for_action_only() const {
+    return this->action_wifi_ && !this->temporary_wifi_ && !this->boot_wifi_always_on_;
+  }
   // Main loop only. Enables Wi-Fi if it is off and keeps it up for
   // ACTION_WIFI_LEASE_MS from now. Call it again to extend the lease.
   void hold_wifi_for_action();

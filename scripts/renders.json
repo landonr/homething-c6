@@ -155,6 +155,7 @@
     ],
     "inputs": [
       "scripts/render-face-svg.py",
+      "scripts/face_plan.py",
       "scripts/render-case-fronts-blender.py",
       "c6remote-kicad/c6remote.kicad_pcb",
       "case/case.py",
@@ -185,6 +186,7 @@
     ],
     "inputs": [
       "scripts/render-face-svg.py",
+      "scripts/face_plan.py",
       "c6remote-kicad/c6remote.kicad_pcb",
       "case/params.py",
       "case/board.py",
@@ -201,6 +203,41 @@
       "components/button_config/__init__.py embeds the file at build time. scripts/preview-buttons-page.py reads it for each request.",
       "Keep the file small, because the firmware stores it in flash. After you refresh the file, build the firmware again.",
       "web-page-shots reads this file, so refresh that group too."
+    ]
+  },
+  "self-test-diagrams": {
+    "description": "The operator diagrams of site/factory-self-test.html: one sheet for each of the eight steps.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/self-test-step-1-boot.svg",
+      "docs/readme-assets/self-test-step-2-inputs.svg",
+      "docs/readme-assets/self-test-step-3-microphone.svg",
+      "docs/readme-assets/self-test-step-4-ir-receive.svg",
+      "docs/readme-assets/self-test-step-5-ir-transmit.svg",
+      "docs/readme-assets/self-test-step-6-battery.svg",
+      "docs/readme-assets/self-test-step-7-usb-power.svg",
+      "docs/readme-assets/self-test-step-8-sleep-wake.svg"
+    ],
+    "inputs": [
+      "scripts/render-self-test-svg.py",
+      "scripts/face_plan.py",
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "c6remote-kicad/export/c6remote-pos.csv",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "case/.venv/bin/python scripts/render-self-test-svg.py",
+      "python3 scripts/render-status.py --write self-test-diagrams"
+    ],
+    "recipe": [
+      "render-self-test-svg.py reuses plan_view() of scripts/face_plan.py, so each sheet is the same face plan as the web page.",
+      "The six LED positions come from the KiCad position file through case/board.py. The script holds no coordinate of its own.",
+      "LED_CHAIN in the script is the chain order of components/self_test/self_test.cpp. If a check moves, change the script and site/factory-self-test.html in the same commit."
     ]
   },
   "web-page-shots": {

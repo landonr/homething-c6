@@ -794,6 +794,14 @@ figcaption {
   object-fit: cover;
 }
 
+/* A drawing has no edge to crop to, so it sits whole on a tinted card. */
+.post img.diagram {
+  object-fit: contain;
+  background: var(--grey);
+  border-radius: 8px;
+  padding: 6px;
+}
+
 .post-title {
   display: inline-block;
   font-weight: 700;
@@ -968,6 +976,22 @@ figcaption {
 
 .footer p {
   margin: 0;
+}
+
+.footer-site {
+  font-weight: 600;
+}
+
+.footer-site a {
+  color: var(--ink);
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 6px 0 10px;
 }
 
 @media (max-width: 1000px) {

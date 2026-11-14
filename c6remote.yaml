@@ -4,6 +4,9 @@ substitutions:
   # Status LEDs on the wheel ring: 4 on a V2 board, 6 on a V3 board. Build for
   # V3 with `esphome -s status_led_count 6 run c6remote.yaml`.
   status_led_count: "4"
+  # The firmware release workflow sets the release version with
+  # `esphome -s fw_version 2026.11.0 compile c6remote.yaml`.
+  fw_version: dev
 
 esphome:
   name: ${device_name}
@@ -11,6 +14,11 @@ esphome:
   # Appends the last six MAC hex digits, so each remote gets its own hostname
   # and Home Assistant name.
   name_add_mac_suffix: true
+  # The update entity offers any manifest version that is not equal to this
+  # string. c6remote-factory.yaml uses the same project name.
+  project:
+    name: landonr.homething-c6
+    version: ${fw_version}
   includes:
     - ir_name.h
     - ir_learning.h
@@ -67,6 +75,27 @@ esphome:
         - script.execute: show_idle_status
         # The sensor never polls. The API sends this stored state when Home Assistant subscribes.
         - component.update: web_page_url
+    # Improv serial refuses Wi-Fi settings while Wi-Fi is off. 225 runs after
+    # ButtonConfig::setup() (WIFI - 2) and before improv_serial (AFTER_WIFI),
+    # so Improv sees Wi-Fi on and starts its network scan.
+    - priority: 225
+      then:
+        - lambda: |-
+            // A wake skips the NVS read, and a remote used without Wi-Fi does
+            // not stay awake for a session after each press.
+            if (id(idle).woke_from_sleep())
+              return;
+            // WiFiComponent::start() keeps the Improv network of a config
+            // without networks under this fixed key.
+            wifi::SavedWifiSettings saved{};
+            if (!global_preferences->make_preference<wifi::SavedWifiSettings>(88491487UL, true).load(&saved) ||
+                saved.ssid[0] == '\0') {
+              id(button_cfg).open_boot_wifi_session("for Improv provisioning, because no Wi-Fi network is saved");
+            } else if (esp_reset_reason() == ESP_RST_SW) {
+              // Both OTA platforms and the factory install end in esp_restart(),
+              // so Home Assistant can reach the unit and confirm the version.
+              id(button_cfg).open_boot_wifi_session("after a software restart");
+            }
   on_shutdown:
     - switch.turn_off: led_rail
     # Both pins to inputs so R10 holds Q2 off and DIN cannot feed the dead rail
@@ -93,6 +122,29 @@ esp32:
       CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"
       # esp_err_to_name() then returns "UNKNOWN ERROR" for every code.
       CONFIG_ESP_ERR_TO_NAME_LOOKUP: "n"
+      # The only TLS use is the http_request client to GitHub Pages. Wi-Fi
+      # selects the P-256, ECDH, ECDSA and CMAC that WPA3-SAE and PMF need.
+      CONFIG_MBEDTLS_TLS_CLIENT_ONLY: "y"
+      CONFIG_MBEDTLS_TLS_SERVER_AND_CLIENT: "n"
+      CONFIG_MBEDTLS_KEY_EXCHANGE_RSA: "n"
+      CONFIG_MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA: "n"
+      CONFIG_MBEDTLS_KEY_EXCHANGE_ECDH_RSA: "n"
+      CONFIG_MBEDTLS_ECP_DP_BP256R1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_BP384R1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_BP512R1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_CURVE25519_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_SECP192K1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_SECP192R1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_SECP224K1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_SECP224R1_ENABLED: "n"
+      CONFIG_MBEDTLS_ECP_DP_SECP256K1_ENABLED: "n"
+      CONFIG_MBEDTLS_SSL_RENEGOTIATION: "n"
+      CONFIG_MBEDTLS_X509_CSR_PARSE_C: "n"
+      CONFIG_MBEDTLS_PEM_WRITE_C: "n"
+      CONFIG_MBEDTLS_GCM_SUPPORT_NON_AES_CIPHER: "n"
+      # WPA3-SAE and H2E stay on.
+      CONFIG_ESP_WIFI_ENABLE_SAE_PK: "n"
+      CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA: "n"
 
 external_components:
   - source:
@@ -108,11 +160,36 @@ api:
   reboot_timeout: 0s
 
 ota:
+  # Both writes block the main loop, so idle_sleep cannot run during them. The
+  # flag guards a later ESPHome that writes without a block.
   - platform: esphome
+    id: ota_native
+    on_state_change:
+      - lambda: id(ota_busy) = state == ota::OTA_STARTED || state == ota::OTA_IN_PROGRESS;
+  - platform: http_request
+    id: ota_http
+    on_state_change:
+      - lambda: id(ota_busy) = state == ota::OTA_STARTED || state == ota::OTA_IN_PROGRESS;
+
+http_request:
+  id: http_client
+
+update:
+  - platform: http_request
+    id: firmware_update
+    name: Firmware
+    source: https://landonr.github.io/homething-c6/firmware/manifest.json
+    # Only a remote with Wi-Fi Always On stays connected. wifi on_connect
+    # checks on the other connections.
+    update_interval: 24h
+
+# Wi-Fi setup over USB. BLE Improv needs Bluedroid, but ble_hid uses NimBLE.
+improv_serial:
+  id: improv_usb
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # No credentials here. Improv saves the network under a key that does not
+  # change with the config, so it stays through each firmware update.
   enable_on_boot: false
   reboot_timeout: 0s
   # The Zigbee radio shares the antenna. Coexistence needs modem power save, or
@@ -120,6 +197,13 @@ wifi:
   power_save_mode: light
   on_connect:
     - script.execute: show_idle_status
+    # A Home Assistant action lease skips the check, so its TLS fetch does not
+    # take heap from the action next to Zigbee and NimBLE.
+    - if:
+        condition:
+          lambda: return !id(button_cfg).wifi_for_action_only();
+        then:
+          - component.update: firmware_update
   on_disconnect:
     - script.execute: show_idle_status
 
@@ -249,15 +333,16 @@ idle_sleep:
     // the lease that a Home Assistant action holds.
     const bool wifi_session = !wifi::global_wifi_component->is_disabled() && !id(button_cfg).wifi_always_on();
     const bool ha_busy = id(ha_actions).busy();
-    const uint8_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
-                         wifi_session << 6 | ha_busy << 7;
-    // 0xFF is out of range, so the first call logs the starting mask.
-    static uint8_t last_mask = 0xFF;
+    const bool ota_running = id(ota_busy);
+    const uint16_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
+                          wifi_session << 6 | ha_busy << 7 | ota_running << 8;
+    // 0xFFFF is out of range, so the first call logs the starting mask.
+    static uint16_t last_mask = 0xFFFF;
     if (mask != last_mask) {
       last_mask = mask;
       ESP_LOGI("idle_sleep",
-               "block=0x%02X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d ha=%d at %" PRIu32 " ms", mask,
-               ir_mode, mic_running, meter, voice, pairing, window, wifi_session, ha_busy, millis());
+               "block=0x%03X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d ha=%d ota=%d at %" PRIu32 " ms",
+               mask, ir_mode, mic_running, meter, voice, pairing, window, wifi_session, ha_busy, ota_running, millis());
     }
     return mask != 0;
   replay: !lambda |-
@@ -1200,6 +1285,11 @@ globals:
     type: uint8_t
     restore_value: false
     initial_value: "0"
+  # True from the start of an OTA write to its end. Bit 8 of block_probe.
+  - id: ota_busy
+    type: bool
+    restore_value: false
+    initial_value: "false"
 
 interval:
   - interval: 250ms

@@ -4,7 +4,7 @@
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "f1005b5f796d7814c13416caa80f83cf6fe6c12c6f8ee770cd7ba5883d689194",
+    "fingerprint": "6ec8776579a6f6a775cb553b92c8d2e5edf79f22a9ad316fc7b1bfd701a8d501",
     "source": "index"
   },
   "case-annotated": {
@@ -12,7 +12,7 @@
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "59a2641d15254054e8948b2064ff0f972e8d42a7895ce3f7416017c9fa0fa707",
+    "fingerprint": "904589b76f12a0a514b5a5888e466f1a148f26d016dd472327383b425a6f56dd",
     "source": "index"
   },
   "case-fronts": {
@@ -25,6 +25,10 @@
   },
   "schematic": {
     "fingerprint": "ba363cee7736916dac125f2c882c6d000848538775a17c233158f6454e13b52a",
+    "source": "index"
+  },
+  "self-test-diagrams": {
+    "fingerprint": "3402b19582d35180c18633fba7e5772c3bda2b1dc804f3fc2c1f19d15d54bdbf",
     "source": "index"
   },
   "site-hero": {

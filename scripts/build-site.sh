@@ -27,6 +27,14 @@ README_ASSETS=(
 	case-front-face-sls.svg
 	case-front-face-fdm.svg
 	buttons-page-assign.png
+	self-test-step-1-boot.svg
+	self-test-step-2-inputs.svg
+	self-test-step-3-microphone.svg
+	self-test-step-4-ir-receive.svg
+	self-test-step-5-ir-transmit.svg
+	self-test-step-6-battery.svg
+	self-test-step-7-usb-power.svg
+	self-test-step-8-sleep-wake.svg
 )
 
 mkdir -p "$OUT"

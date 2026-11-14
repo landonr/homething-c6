@@ -794,6 +794,14 @@ figcaption {
   object-fit: cover;
 }
 
+/* A drawing has no edge to crop to, so it sits whole on a tinted card. */
+.post img.diagram {
+  object-fit: contain;
+  background: var(--grey);
+  border-radius: 8px;
+  padding: 6px;
+}
+
 .post-title {
   display: inline-block;
   font-weight: 700;

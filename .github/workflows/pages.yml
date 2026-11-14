@@ -74,6 +74,11 @@ jobs:
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$path" --dir "$out"
             test -s "${out}/${path}"
           done
+          # The procedure links one fixed name, so a station never picks a version.
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern "homething-c6-provisioning-${v}.factory.bin" \
+            --output "${out}/homething-c6-provisioning.factory.bin"
+          test -s "${out}/homething-c6-provisioning.factory.bin"
           echo "Added ${tag} to firmware/:"
           ls -l "$out"
 

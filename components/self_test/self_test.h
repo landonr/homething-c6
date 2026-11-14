@@ -3,7 +3,6 @@
 #include "esphome/core/defines.h"
 
 #include "esphome/components/light/addressable_light.h"
-#include "esphome/components/esp32_ble/ble.h"
 #include "esphome/components/idle_sleep/idle_sleep.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/microphone/microphone.h"
@@ -19,8 +18,6 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
-
-#include "esp_event.h"
 
 namespace esphome::self_test {
 
@@ -44,7 +41,6 @@ class SelfTest : public Component
   void set_idle_sleep(idle_sleep::IdleSleep *idle) { this->idle_ = idle; }
   // The probe names the condition that blocks sleep, or returns nullptr.
   void set_sleep_blocked_by(std::function<const char *()> probe) { this->sleep_blocked_by_ = std::move(probe); }
-  void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
   // bit is the expander pin, 0 to 15.
   void input(uint8_t bit, bool pressed);
@@ -105,11 +101,9 @@ class SelfTest : public Component
   void update_mic_(uint32_t now);
   void update_usb_(uint32_t now);
   void update_long_presses_(uint32_t now);
-  void update_radios_(uint32_t now);
   void update_sleep_();
   const char *sleep_block_();
   bool allow_sleep_();
-  static void wifi_scan_event_(void *arg, esp_event_base_t base, int32_t event, void *data);
   void start_transmit_(uint32_t now);
   bool transmitting_(uint32_t now) const { return this->tx_started_ && now - this->tx_start_ms_ < TX_TOTAL_MS; }
   bool inputs_passed_() const { return this->seen_mask_ == 0xFFFF && this->cw_seen_ && this->ccw_seen_; }
@@ -117,7 +111,7 @@ class SelfTest : public Component
   void note_inputs_();
   void draw_chase_(light::AddressableLight &it, uint32_t t) const;
   void draw_overview_(light::AddressableLight &it) const;
-  void draw_second_page_(light::AddressableLight &it, uint32_t now) const;
+  void draw_second_page_(light::AddressableLight &it) const;
   void draw_input_(light::AddressableLight &it, uint8_t bit) const;
   void draw_vu_(light::AddressableLight &it) const;
   void draw_install_(float percent);
@@ -128,14 +122,6 @@ class SelfTest : public Component
   InternalGPIOPin *usb_pin_{nullptr};
   idle_sleep::IdleSleep *idle_{nullptr};
   std::function<const char *()> sleep_blocked_by_{};
-  esp_event_handler_instance_t wifi_scan_handler_{nullptr};
-  std::atomic<bool> wifi_scan_active_{false};
-  std::atomic<uint32_t> wifi_scan_result_{0};
-  uint32_t wifi_scan_start_ms_{0};
-  uint32_t radio_next_scan_ms_{0};
-  uint32_t radio_start_ms_{0};
-  bool wifi_scan_passed_{false};
-  bool ble_advertising_passed_{false};
   bool second_page_{false};
   bool sleep_requested_{false};
   bool sleep_wake_passed_{false};

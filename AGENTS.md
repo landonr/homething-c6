@@ -428,13 +428,13 @@ The first overview keeps the original check positions, with `D5` for the battery
 
 A 2 s hold of `SW2` changes between the two overviews. This input has no other hold function.
 
-The second overview uses `D2` for the radio check, `D3` for sleep and wake, and dim blue `D5` as its page indicator.
+The second overview uses `D3` for sleep and wake, and dim blue `D5` as its page indicator.
 
 All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
 
-The procedure has no table of the check that each LED carries. The step headings and the step diagrams give that mapping.
+The procedure has no table of the check that each first overview LED carries. The step headings and the step diagrams give that mapping.
 
-Each overview fact sits in the step that first needs it. Step 1 holds the two check LED states, step 8 holds the second overview table, and step 9 holds the cyan sleep request.
+Each overview fact sits in the step that first needs it. Step 1 holds the two check LED states, and step 8 holds the second overview table and the cyan sleep request.
 
 The `Color reference` section at the end holds the boot chase colours, the held input pairs, and the ring patterns.
 
@@ -456,17 +456,7 @@ The self-test transmits IR only while an operator holds `SW1` for 2 s. Customers
 
 A transmit sends 15 flashes of 50 ms. A phone camera needs a flash of that length, but the AGC of a `TSOP6136` gives up on a mark that long and holds its output high. Each flash therefore goes out as a train of 600 us bursts, the NEC zero bit, so a second board receives the flash as one frame. The burst length and the flash length are separate constants in `self_test.h`. Keep every burst shorter than the 9 ms NEC leader.
 
-The radio check applies to V2 and V3. It needs a Wi-Fi scan with at least one access point and a successful BLE Improv advertisement start.
-
-Use the existing BLE Improv path. The Bluetooth controller must start before the Wi-Fi scan, because the ESP32-C6 scan otherwise returns no access points.
-
-ESPHome BLE setup only requests an enable. The first BLE loop starts the controller, so setup priority alone cannot enforce this order.
-
-The radio result does not prove radio range or antenna performance. Do not add Zigbee to this image.
-
-On the second overview, `D2` stays dim amber for 60 s from boot without a radio pass, then turns red.
-
-Scans have a 10 s timeout and repeat every 15 s. A later pass can change red to green.
+The self-test has no radio check. The antenna belongs to the `U1` module, which Seeed tests before assembly, so a scan at the station mostly measures the module supplier. The procedure names this gap under `Parts not covered`. Do not add a radio check back, and do not add Zigbee to this image.
 
 The sleep and wake check also applies to both board versions. It stays last because the shutdown and restart delays make it the slowest operator step.
 
@@ -496,7 +486,7 @@ The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. After
 
 After the deliberate wake, `D3` is green, and every other check LED is back at dim amber.
 
-As a result, the procedure splits the final check round the wake. The operator confirms the first overview before step 9 and the wake check after it.
+As a result, the procedure splits the final check round the wake. The operator confirms the first overview before step 8 and the wake check after it.
 
 The operator checks both overviews in the same powered session. The procedure needs no paper or computer for the final result.
 

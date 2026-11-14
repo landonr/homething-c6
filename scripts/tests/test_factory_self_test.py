@@ -203,77 +203,47 @@ class TransmitTest(unittest.TestCase):
         self.assertNotIn("IR_OWN_MARK_US", CPP)
 
 
-class RadioTest(unittest.TestCase):
-    def test_a_scan_needs_the_active_bluetooth_controller(self) -> None:
-        body = function_body(CPP, "void SelfTest::update_radios_(uint32_t now)")
-        start = body.index("esp_wifi_scan_start(&config, false)")
-        for gate in ("!ble->is_active()", "ESP_BT_CONTROLLER_STATUS_ENABLED", "!wifi->has_sta()",
-                     "!wifi->is_connected()", "!wifi->is_disabled()", "idle_improv",
-                     "server->get_client_count() == 0", "!this->installing_"):
-            with self.subTest(gate=gate):
-                self.assertLess(body.index(gate), start)
-        self.assertIn("config.scan_type = WIFI_SCAN_TYPE_PASSIVE;", body)
-        self.assertIn("esp_wifi_scan_stop();", body[:start])
-        for operation in ("start_scanning(", "set_sta(", "->enable(", "->disable("):
-            self.assertNotIn(operation, body)
-
-    def test_scan_count_and_success_are_the_wifi_evidence(self) -> None:
-        setup = function_body(CPP, "void SelfTest::setup()")
-        self.assertIn("esp_event_handler_instance_register(", setup)
-        self.assertIn("WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &SelfTest::wifi_scan_event_", setup)
-        event = function_body(CPP, "void SelfTest::wifi_scan_event_(")
-        self.assertIn("wifi_scan_active_.load(", event)
-        self.assertIn("scan->status == 0", event)
-        self.assertIn("scan->number", event)
-        self.assertIn("std::memory_order_release", event)
-        update = function_body(CPP, "void SelfTest::update_radios_(uint32_t now)")
-        self.assertIn("std::memory_order_acquire", update)
-        self.assertIn("(result & SCAN_SUCCESS) != 0 && count > 0", update)
-        self.assertIn("this->wifi_scan_passed_ = true;", update)
-        self.assertIn("RADIO_SCAN_TIMEOUT_MS", update)
-        self.assertIn("now + RADIO_RETRY_MS", update)
-        self.assertNotIn("esp_wifi_scan_get_ap_", CPP)
-
-    def test_ble_pass_needs_the_existing_improv_advertisement_success(self) -> None:
-        gap = function_body(CPP, "void SelfTest::gap_event_handler(")
-        success = gap.index("this->ble_advertising_passed_ = true;")
-        for evidence in ("ESP_GAP_BLE_ADV_START_COMPLETE_EVT", "param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS",
-                         "esp32_improv::global_improv_component->is_active()"):
-            self.assertLess(gap.index(evidence), success)
-        self.assertIn("esp32_ble.register_gap_event_handler(", INIT)
-        self.assertNotIn("esp_ble_gap_register_callback(", CPP)
-        self.assertNotIn("esp_ble_gap_start_advertising(", CPP)
-        self.assertNotIn("zigbee:", without_comments(FACTORY))
+class SecondPageTest(unittest.TestCase):
+    def test_the_radio_check_is_gone(self) -> None:
+        """The U1 module carries the antenna, so the station does not test the radios."""
+        for token in ("update_radios_", "wifi_scan_event_", "wifi_scan_passed_", "ble_advertising_passed_",
+                      "gap_event_handler", "RADIO_RETRY_MS", "RADIO_SCAN_TIMEOUT_MS", "RADIO_FAIL_MS",
+                      "SCAN_DONE", "SCAN_SUCCESS", "esp_wifi_scan_start"):
+            with self.subTest(token=token):
+                self.assertNotIn(token, CPP)
+                self.assertNotIn(token, HEADER)
+        self.assertNotIn("register_gap_event_handler", INIT)
+        self.assertNotIn("esp32_ble", INIT)
+        # The component no longer reaches into those stacks, so it does not depend on them.
+        for dependency in ('"wifi"', '"esp32_improv"'):
+            with self.subTest(dependency=dependency):
+                self.assertNotIn(dependency, INIT)
 
     def test_the_second_page_uses_distinct_positions_on_both_boards(self) -> None:
         page = function_body(CPP, "void SelfTest::draw_second_page_(")
         self.assertIn("it.all() = Color::BLACK;", page)
-        self.assertIn("this->wifi_scan_passed_ && this->ble_advertising_passed_", page)
-        self.assertIn("it[LED_D2]", page)
         self.assertIn("it[LED_D3] = this->sleep_wake_passed_ ? PASSED : PENDING;", page)
         self.assertIn("it[d5] = SECOND_PAGE;", page)
-        self.assertIn("RADIO_FAIL_MS", page)
         mapping = re.search(r"const int32_t d5 = it.size\(\) >= (\d+) \? (\d+) : (\d+);", page)
         self.assertIsNotNone(mapping)
         threshold, v3_index, v2_index = map(int, mapping.groups())
         for count in (4, 6):
             with self.subTest(leds=count):
-                positions = {"radio": constant(CPP, "LED_D2"), "wake": constant(CPP, "LED_D3"),
+                positions = {"wake": constant(CPP, "LED_D3"),
                              "page": v3_index if count >= threshold else v2_index}
-                self.assertEqual(positions, {"radio": 0, "wake": 1, "page": 3 if count == 4 else 4})
-                self.assertEqual(len(set(positions.values())), 3)
+                self.assertEqual(positions, {"wake": 1, "page": 3 if count == 4 else 4})
+                self.assertEqual(len(set(positions.values())), 2)
                 self.assertTrue(all(0 <= index < count for index in positions.values()))
         render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
         self.assertIn("if (this->second_page_)", render)
-        self.assertIn("this->draw_second_page_(it, now);", render)
+        self.assertIn("this->draw_second_page_(it);", render)
 
 
 class SleepTest(unittest.TestCase):
     # Every check of the two overviews. A wake must start each one at pending.
     CHECK_RESULTS = (
         "seen_mask_", "cw_seen_", "ccw_seen_", "mic_passed_", "ir_rx_passed_", "tx_done_",
-        "battery_passed_", "usb_plugged_seen_", "usb_unplugged_seen_", "wifi_scan_passed_",
-        "ble_advertising_passed_",
+        "battery_passed_", "usb_plugged_seen_", "usb_unplugged_seen_",
     )
 
     def test_no_result_snapshot_crosses_the_sleep(self) -> None:
@@ -514,7 +484,7 @@ class InputTest(unittest.TestCase):
         self.assertIn("if (static_cast<int32_t>(this->sleep_armed_until_ms_ - now) > 0)", render)
         self.assertIn("if (static_cast<int32_t>(this->sleep_refused_until_ms_ - now) > 0)", render)
         # Last in the frame, so a page, the VU meter and a held input cannot cover it.
-        for earlier in ("this->draw_second_page_(it, now);", "this->draw_vu_(it);", "this->draw_overview_(it);",
+        for earlier in ("this->draw_second_page_(it);", "this->draw_vu_(it);", "this->draw_overview_(it);",
                         "this->draw_input_(it, this->shown_bit_);", "it.all() = TRANSMIT;"):
             self.assertLess(render.index(earlier), armed)
         self.assertLess(armed, refused)
@@ -764,14 +734,9 @@ class DocTest(unittest.TestCase):
     def test_no_step_repeats_a_table_of_an_earlier_step(self) -> None:
         """One section no longer explains the overviews before the steps repeat them."""
         self.assertNotIn("## LED positions", DOC)
-        step8 = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
-        step9 = DOC.split("### Step 9:", 1)[1].split("## Result", 1)[0]
+        step8 = DOC.split("### Step 8:", 1)[1].split("## Result", 1)[0]
         self.assertEqual(DOC.count("| LED | Second overview |"), 1)
-        # The step 9 prose relies on step 8 for the page. Its sheet still marks the indicator.
-        prose = "\n".join(line for line in step9.splitlines() if not line.startswith("!["))
-        for repeat in ("page indicator", "Only one overview", "| LED | Second overview |"):
-            with self.subTest(repeat=repeat):
-                self.assertNotIn(repeat, prose)
+        self.assertIn("| LED | Second overview |", step8)
         self.assertNotIn("| Color | Meaning |", step8)
 
     def test_the_steps_run_from_one_and_the_mic_check_has_no_clap(self) -> None:

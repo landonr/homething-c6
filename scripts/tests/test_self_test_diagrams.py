@@ -18,7 +18,7 @@ CPP = (ROOT / "components" / "self_test" / "self_test.cpp").read_text()
 SCRIPT = (ROOT / "scripts" / "render-self-test-svg.py").read_text()
 GROUP = json.loads((ROOT / "scripts" / "renders.json").read_text())["self-test-diagrams"]
 
-STEPS = 9
+STEPS = 8
 IMAGE = re.compile(r"!\[([^\]]+)\]\((readme-assets/(self-test-[a-z0-9-]+\.svg))\)")
 SVG_NS = "{http://www.w3.org/2000/svg}"
 

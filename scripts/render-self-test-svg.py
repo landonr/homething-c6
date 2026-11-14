@@ -377,35 +377,23 @@ SHEETS = {
         ),
         calls=[watch("D7", "left", "D7", "USB power")],
     ),
-    "step-8-radios": dict(
-        file="self-test-step-8-radios.svg",
+    "step-8-sleep-wake": dict(
+        file="self-test-step-8-sleep-wake.svg",
         alt=(
-            "Front face of the remote with the top left button SW2 marked for a 2 s "
-            "hold, which changes to the second overview. D5, at the bottom right of "
-            "the wheel, is then the dim blue page indicator, and D2, at the bottom "
-            "left, answers the radio check."
+            "Front face of the remote for the sleep and wake check. SW2, above the "
+            "wheel at the top left, changes to the second overview. SW3, below the "
+            "wheel at the top left, sleeps the board and wakes it. D5, at the bottom "
+            "right, is the dim blue page indicator. D3, at the top left, answers."
         ),
         calls=[
-            press("SW2", "left", "SW2", "hold 2 s for the", "second overview"),
-            watch("D5", "right", "D5", "dim blue page", "indicator"),
-            watch("D2", "left", "D2", "radio check"),
-        ],
-    ),
-    "step-9-sleep-wake": dict(
-        file="self-test-step-9-sleep-wake.svg",
-        alt=(
-            "Front face of the remote with SW3, the top left button below the wheel, "
-            "marked for the 3 s hold that sleeps the board and for the press that "
-            "wakes it. D5, at the bottom right of the wheel, is the dim blue page "
-            "indicator, and D3, at the top left, answers the sleep and wake check."
-        ),
-        calls=[
+            press("SW2", "right", "SW2", "hold 2 s for the", "second overview"),
             press("SW3", "left", "SW3", "hold 3 s to sleep,", "press to wake"),
             watch("D5", "right", "D5", "dim blue page", "indicator"),
             watch("D3", "left", "D3", "sleep and wake"),
         ],
     ),
 }
+
 
 
 def main():

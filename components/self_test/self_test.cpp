@@ -2,15 +2,10 @@
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
-#include "esphome/components/esp32_ble_server/ble_server.h"
-#include "esphome/components/esp32_improv/esp32_improv_component.h"
-#include "esphome/components/wifi/wifi_component.h"
 
 #include "esp_attr.h"
-#include "esp_bt.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
-#include "esp_wifi.h"
 
 #include <algorithm>
 #include <cmath>
@@ -46,13 +41,8 @@ static constexpr uint32_t ENCODER_SHOW_MS = 1500;
 static constexpr uint32_t IR_FLASH_MS = 300;
 static constexpr uint32_t USB_FLASH_MS = 500;
 static constexpr uint32_t USB_DEBOUNCE_MS = 50;
-static constexpr uint32_t RADIO_RETRY_MS = 15000;
-static constexpr uint32_t RADIO_SCAN_TIMEOUT_MS = 10000;
-static constexpr uint32_t RADIO_FAIL_MS = 60000;
 static constexpr uint32_t SLEEP_ARMED_FLASH_MS = 500;
 static constexpr uint32_t SLEEP_REFUSED_MS = 1500;
-static constexpr uint32_t SCAN_DONE = 0x80000000U;
-static constexpr uint32_t SCAN_SUCCESS = 0x40000000U;
 // The one value that crosses deep sleep. Every check result starts again on a
 // wake, so the wake check needs this flag to know that the sleep was deliberate.
 static constexpr uint32_t SLEEP_TEST_MAGIC = 0x53544631U;
@@ -151,11 +141,6 @@ void SelfTest::setup() {
                              esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 &&
                              this->idle_->held_at_wake() != 0;
   this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;
-  this->radio_start_ms_ = millis();
-  const esp_err_t scan_handler = esp_event_handler_instance_register(
-      WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &SelfTest::wifi_scan_event_, this, &this->wifi_scan_handler_);
-  if (scan_handler != ESP_OK)
-    ESP_LOGE(TAG, "Wi-Fi scan observer failed: %s", esp_err_to_name(scan_handler));
   // GPIO7 has no connection on a V2 board, so only V3 configures it.
   if (this->v3_ && this->usb_pin_ != nullptr) {
     this->usb_pin_->setup();
@@ -186,7 +171,6 @@ void SelfTest::loop() {
   this->update_mic_(now);
   this->update_usb_(now);
   this->update_long_presses_(now);
-  this->update_radios_(now);
   this->update_sleep_();
   if (this->tx_started_ && !this->tx_done_ && !this->transmitting_(now)) {
     this->tx_done_ = true;
@@ -265,76 +249,6 @@ void SelfTest::update_long_presses_(uint32_t now) {
   }
 }
 
-void SelfTest::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
-  if (event == ESP_GAP_BLE_ADV_START_COMPLETE_EVT && param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS &&
-      esp32_improv::global_improv_component->is_active()) {
-    if (!this->ble_advertising_passed_)
-      ESP_LOGI(TAG, "BLE check passed: Improv advertising started");
-    this->ble_advertising_passed_ = true;
-  }
-}
-
-void SelfTest::wifi_scan_event_(void *arg, esp_event_base_t base, int32_t event, void *data) {
-  auto *self = static_cast<SelfTest *>(arg);
-  if (!self->wifi_scan_active_.load(std::memory_order_relaxed))
-    return;
-  const auto *scan = static_cast<wifi_event_sta_scan_done_t *>(data);
-  self->wifi_scan_result_.store(SCAN_DONE | (scan->status == 0 ? SCAN_SUCCESS : 0) | scan->number,
-                                std::memory_order_release);
-}
-
-void SelfTest::update_radios_(uint32_t now) {
-  auto *wifi = wifi::global_wifi_component;
-  auto *ble = esp32_ble::global_ble;
-  auto *server = esp32_ble_server::global_ble_server;
-  const auto state = esp32_improv::global_improv_component->get_improv_state();
-  const bool idle_improv = state == improv::STATE_AUTHORIZED || state == improv::STATE_AWAITING_AUTHORIZATION;
-  const bool scan_allowed = !wifi->has_sta() && !wifi->is_connected() && !wifi->is_disabled() && idle_improv &&
-                            (server == nullptr || server->get_client_count() == 0) && !this->installing_ &&
-                            !this->sleep_requested_;
-  if (!scan_allowed) {
-    if (this->wifi_scan_active_.exchange(false, std::memory_order_relaxed))
-      esp_wifi_scan_stop();
-    this->wifi_scan_result_.store(0, std::memory_order_relaxed);
-    return;
-  }
-  const uint32_t result = this->wifi_scan_result_.exchange(0, std::memory_order_acquire);
-  if ((result & SCAN_DONE) != 0) {
-    this->wifi_scan_active_.store(false, std::memory_order_relaxed);
-    const uint16_t count = result & 0xFFFFU;
-    if ((result & SCAN_SUCCESS) != 0 && count > 0) {
-      this->wifi_scan_passed_ = true;
-      ESP_LOGI(TAG, "Wi-Fi check passed: %u access points", count);
-    } else {
-      ESP_LOGW(TAG, "Wi-Fi test scan found %u access points, success=%d", count, (result & SCAN_SUCCESS) != 0);
-    }
-  }
-  if (this->wifi_scan_active_.load(std::memory_order_relaxed)) {
-    if (now - this->wifi_scan_start_ms_ < RADIO_SCAN_TIMEOUT_MS)
-      return;
-    this->wifi_scan_active_.store(false, std::memory_order_relaxed);
-    esp_wifi_scan_stop();
-  }
-  // C6 scans need the Bluetooth controller, which starts in BLE loop(), after setup().
-  if (this->wifi_scan_passed_ || this->wifi_scan_handler_ == nullptr || ble == nullptr || !ble->is_active() ||
-      esp_bt_controller_get_status() != ESP_BT_CONTROLLER_STATUS_ENABLED ||
-      static_cast<int32_t>(now - this->radio_next_scan_ms_) < 0)
-    return;
-  wifi_scan_config_t config{};
-  config.show_hidden = true;
-  config.scan_type = WIFI_SCAN_TYPE_PASSIVE;
-  config.scan_time.passive = 300;
-  this->radio_next_scan_ms_ = now + RADIO_RETRY_MS;
-  this->wifi_scan_start_ms_ = now;
-  this->wifi_scan_active_.store(true, std::memory_order_relaxed);
-  // IDF connection attempts abort this scan, so Improv takes priority.
-  const esp_err_t started = esp_wifi_scan_start(&config, false);
-  if (started != ESP_OK) {
-    this->wifi_scan_active_.store(false, std::memory_order_relaxed);
-    ESP_LOGW(TAG, "Wi-Fi test scan failed: %s", esp_err_to_name(started));
-  }
-}
-
 // Names the first condition that blocks the sleep test, or returns nullptr.
 const char *SelfTest::sleep_block_() {
   if (!this->sleep_blocked_by_)
@@ -362,8 +276,6 @@ void SelfTest::update_sleep_() {
     return;
   if (!this->allow_sleep_())
     return;
-  if (this->wifi_scan_active_.exchange(false, std::memory_order_relaxed))
-    esp_wifi_scan_stop();
   s_sleep_test_armed = SLEEP_TEST_MAGIC;
   this->idle_->arm_sleep([this]() { return this->allow_sleep_(); });
 }
@@ -532,7 +444,7 @@ void SelfTest::render(light::AddressableLight &it) {
   if (this->vu_mode_) {
     this->draw_vu_(it);
   } else if (this->second_page_) {
-    this->draw_second_page_(it, now);
+    this->draw_second_page_(it);
   } else {
     this->draw_overview_(it);
   }
@@ -557,11 +469,9 @@ void SelfTest::render(light::AddressableLight &it) {
     it.all() = FAILED;
 }
 
-void SelfTest::draw_second_page_(light::AddressableLight &it, uint32_t now) const {
+void SelfTest::draw_second_page_(light::AddressableLight &it) const {
   const int32_t d5 = it.size() >= 6 ? 4 : 3;
   it.all() = Color::BLACK;
-  const bool radio_passed = this->wifi_scan_passed_ && this->ble_advertising_passed_;
-  it[LED_D2] = radio_passed ? PASSED : (now - this->radio_start_ms_ >= RADIO_FAIL_MS ? FAILED : PENDING);
   it[LED_D3] = this->sleep_wake_passed_ ? PASSED : PENDING;
   if (this->sleep_requested_)
     it[LED_D3] = SLEEP_ARMED;

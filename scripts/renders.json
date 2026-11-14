@@ -206,7 +206,7 @@
     ]
   },
   "self-test-diagrams": {
-    "description": "The operator diagrams of docs/factory-self-test.md: one sheet for each of the nine steps.",
+    "description": "The operator diagrams of docs/factory-self-test.md: one sheet for each of the eight steps.",
     "made_by": "repo",
     "outputs": [
       "docs/readme-assets/self-test-step-1-boot.svg",
@@ -216,8 +216,7 @@
       "docs/readme-assets/self-test-step-5-ir-transmit.svg",
       "docs/readme-assets/self-test-step-6-battery.svg",
       "docs/readme-assets/self-test-step-7-usb-power.svg",
-      "docs/readme-assets/self-test-step-8-radios.svg",
-      "docs/readme-assets/self-test-step-9-sleep-wake.svg"
+      "docs/readme-assets/self-test-step-8-sleep-wake.svg"
     ],
     "inputs": [
       "scripts/render-self-test-svg.py",

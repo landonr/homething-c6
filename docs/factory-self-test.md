@@ -19,7 +19,6 @@ You need:
 - A charged 1-cell Li-ion battery with a Molex PicoBlade `51021-0200` plug for `J1`.
 - An IR remote control, for example a TV remote.
 - A phone with a camera.
-- A nearby Wi-Fi access point or phone hotspot that sends a network name. The board does not join this network.
 
 Some phone main cameras block infrared light. The front camera of most phones shows it.
 
@@ -27,7 +26,7 @@ Some phone main cameras block infrared light. The front camera of most phones sh
 
 Do the steps in this sequence. If a step fails, continue with the next step. The board fails if any check fails.
 
-If the ring goes dark before step 9, the board went to sleep. Press any button to wake it, then start again at step 1.
+If the ring goes dark before step 8, the board went to sleep. Press any button to wake it, then start again at step 1.
 
 ### Step 1: Power on and boot animation
 
@@ -142,44 +141,29 @@ The battery check accepts only a reading on battery power, so USB power must sta
 - Pass: The ring flashed orange at step 6, then cyan at this step, and `D7` is green.
 - Fail: A connection or disconnection gives no flash, or `D7` stays dim amber.
 
-### Step 8: Radios (`D2`, second overview)
+### Step 8: Sleep and wake (`D3`, second overview)
 
-![Front face of the remote with the top left button SW2 marked for a 2 s hold, which changes to the second overview. D5, at the bottom right of the wheel, is then the dim blue page indicator, and D2, at the bottom left, answers the radio check.](readme-assets/self-test-step-8-radios.svg)
+![Front face of the remote for the sleep and wake check. SW2, above the wheel at the top left, changes to the second overview. SW3, below the wheel at the top left, sleeps the board and wakes it. D5, at the bottom right, is the dim blue page indicator. D3, at the top left, answers.](readme-assets/self-test-step-8-sleep-wake.svg)
 
-1. Make sure that a nearby Wi-Fi access point or phone hotspot sends a network name.
+Do this step last. Do the first part of the section "Result" before you start.
+
+1. Keep the battery and USB power connected.
 2. Hold `SW2` for 2 s, then release it. The second overview appears.
-3. Wait up to 60 s for the result on `D2`.
-
-`SW2` has no other hold function. Only one overview is visible at a time.
+3. Hold `SW3` for 3 s, until the ring flashes dark blue.
+4. Release all buttons and wheel directions after the dark blue flash.
+5. After the ring goes dark, wait 5 s for the shutdown to end.
+6. Press and hold `SW3` until the boot animation starts. Then release it.
+7. Wait for the boot animation to end.
 
 The second overview shows these LEDs:
 
 | LED | Second overview |
 | --- | --- |
-| `D2` | Radio check |
 | `D3` | Sleep and wake check |
 | `D5` | Dim blue page indicator |
 | All other LEDs | Off |
 
-On this page `D5` has no battery meaning.
-
-- Pass: `D2` is green.
-- Fail: `D2` is red or still dim amber after the wait.
-
-A later scan can change red to green.
-
-### Step 9: Sleep and wake (`D3`, second overview)
-
-![Front face of the remote with SW3, the top left button below the wheel, marked for the 3 s hold that sleeps the board and for the press that wakes it. D5, at the bottom right of the wheel, is the dim blue page indicator, and D3, at the top left, answers the sleep and wake check.](readme-assets/self-test-step-9-sleep-wake.svg)
-
-Do this step last. Do the first part of the section "Result" before you start.
-
-1. Keep the battery and USB power connected.
-2. Hold `SW3` for 3 s, until the ring flashes dark blue.
-3. Release all buttons and wheel directions at the dark blue flash.
-4. After the ring goes dark, wait 5 s for the shutdown to end.
-5. Press and hold `SW3` until the boot animation starts. Then release it.
-6. Wait for the boot animation to end.
+On this page `D5` has no battery meaning. `SW2` has no other hold function, and only one overview is visible at a time.
 
 The `SW3` hold works on both overviews and in the VU meter.
 
@@ -196,25 +180,21 @@ If the ring flashes red, the board refused the request. Release `SW3`, then hold
 
 The board passes only when every check LED is green. Make this check in two parts.
 
-Do the first part before step 9:
+Do the first part before step 8. On the first overview, these LEDs must be green at the same time: `D2`, `D3`, `D6`, `D4`, `D5`, and `D7`.
 
-1. On the second overview, make sure that `D2` is green.
-2. Hold `SW2` to change to the first overview.
-3. Make sure that all check LEDs on the first overview are green.
+Do the second part after the wake of step 8. On the second overview, make sure that `D3` is green.
 
-These first overview LEDs must be green at the same time: `D2`, `D3`, `D6`, `D4`, `D5`, and `D7`.
+The wake clears every other check, and the board shows the second overview. So the first overview cannot pass after step 8. Keep the board in the same powered session until you finish both parts.
 
-Do the second part after the wake of step 9. On the second overview, make sure that `D3` is green.
-
-The wake starts a fresh test, so the other LEDs show dim amber again. Keep the board in the same powered session until you finish both parts.
-
-If a check LED stays dim amber or red, the board fails that check.
+If a check LED stays dim amber, the board fails that check.
 
 ## Parts not covered
 
 This procedure finds no fault in the Qwiic connector `J2`, because that check needs a known Qwiic device at the station.
 
 It finds no fault in the battery charge circuit either, because that check takes too long for the station.
+
+It does not test the Wi-Fi radio or the Bluetooth radio. The antenna is part of the `U1` module, which the module supplier tests before assembly.
 
 ## Shipped state
 

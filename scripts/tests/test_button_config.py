@@ -387,14 +387,15 @@ class SleepSettingsTest(unittest.TestCase):
         """Four headings read as four settings, so one heading carries the group."""
         dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
         block = section(dev, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Status LEDs')
-        self.assertIn('<h2 class="ttl">Send on wake</h2>', block)
+        self.assertIn('<hr class="rule">\n<h2 class="ttl">Send on sleep wake</h2>\n<p class="sub" id="srh"></p>', block)
         for label, box in (("IR", "sri"), ("Home Assistant", "srha"), ("Zigbee", "srz"), ("Bluetooth", "srb")):
             self.assertIn(f'<div class="opt">{label}<label class="sw"><input type="checkbox" id="{box}"\n'
                           f'aria-label="Send {label} on wake" disabled><span></span></label></div>', block)
             # The visible label drops the verb, so the aria-label keeps it.
             self.assertNotIn(f"Send {label} on wake<", block)
-        self.assertLess(block.index("Send on wake"), block.index('id="sri"'))
-        self.assertLess(block.index('id="srb"'), block.index('id="srh"'))
+        self.assertLess(block.index("Send on sleep wake"), block.index('id="srh"'))
+        self.assertLess(block.index('id="srh"'), block.index('id="sri"'))
+        self.assertLess(block.index('id="slap"'), block.index("Send on sleep wake"))
         self.assertIn(".opt{display:flex;align-items:center;justify-content:space-between", PAGE)
 
     def test_the_preview_serves_the_sleep_block(self) -> None:

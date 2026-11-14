@@ -224,7 +224,9 @@ aria-label="Sleep" disabled><span></span></label></h2>
 <input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
 <button type="button" id="slap" disabled>Apply</button>
 </div>
-<h2 class="ttl">Send on wake</h2>
+<hr class="rule">
+<h2 class="ttl">Send on sleep wake</h2>
+<p class="sub" id="srh"></p>
 <div class="opt">IR<label class="sw"><input type="checkbox" id="sri"
 aria-label="Send IR on wake" disabled><span></span></label></div>
 <div class="opt">Home Assistant<label class="sw"><input type="checkbox" id="srha"
@@ -233,7 +235,6 @@ aria-label="Send Home Assistant on wake" disabled><span></span></label></div>
 aria-label="Send Zigbee on wake" disabled><span></span></label></div>
 <div class="opt">Bluetooth<label class="sw"><input type="checkbox" id="srb"
 aria-label="Send Bluetooth on wake" disabled><span></span></label></div>
-<p class="sub" id="srh"></p>
 </div>
 <hr class="rule">
 <h2 class="ttl">Status LEDs<select id="lgm" aria-label="Status LEDs" disabled>

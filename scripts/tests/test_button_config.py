@@ -130,7 +130,7 @@ class WifiSessionTest(unittest.TestCase):
     def test_saved_default_only_changes_wifi_at_boot(self) -> None:
         setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
         self.assertLess(setup.index("this->load_wifi_pref_();"),
-                        setup.index("wifi::global_wifi_component->enable();"))
+                        setup.index("this->enable_wifi_();"))
         self.assertIn("this->boot_wifi_always_on_ = this->wifi_always_on();", setup)
         setter = section(CPP, "bool ButtonConfig::set_wifi_always_on_(bool enabled) {", "\n}")
         self.assertIn("this->wifi_pref_.save(&next)", setter)
@@ -144,7 +144,7 @@ class WifiSessionTest(unittest.TestCase):
         opener = section(CPP, "void ButtonConfig::open_temporary_wifi_(const char *reason) {", "\n}")
         self.assertIn("this->note_activity_();", opener)
         self.assertIn("this->temporary_wifi_ = true;", opener)
-        self.assertIn("wifi::global_wifi_component->enable();", opener)
+        self.assertIn("this->enable_wifi_();", opener)
 
     def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
         self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
@@ -165,7 +165,7 @@ class WifiSessionTest(unittest.TestCase):
     def test_a_pairing_boot_opens_a_temporary_session(self) -> None:
         setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
         load = setup.index("this->load_wifi_pref_();")
-        gate = setup.index("if (this->boot_wifi_always_on_)\n    wifi::global_wifi_component->enable();")
+        gate = setup.index("if (this->boot_wifi_always_on_)\n    this->enable_wifi_();")
         pair = setup.index("if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())\n"
                            '    this->open_temporary_wifi_("for Zigbee pairing");')
         self.assertLess(load, gate)

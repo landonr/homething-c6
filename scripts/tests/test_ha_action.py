@@ -401,7 +401,7 @@ class WifiLeaseTest(unittest.TestCase):
         self.assertIn("this->action_wifi_ = true;", hold)
         self.assertIn("this->action_wifi_until_ms_ = millis() + ACTION_WIFI_LEASE_MS;", hold)
         self.assertIn("if (wifi::global_wifi_component->is_disabled()) {", hold)
-        self.assertIn("wifi::global_wifi_component->enable();", hold)
+        self.assertIn("this->enable_wifi_();", hold)
         link = section(BUTTON_CPP, "void ButtonConfig::set_ha_action(", "\n}")
         self.assertIn("action->set_wifi_hold([this]() { this->hold_wifi_for_action(); });", link)
 

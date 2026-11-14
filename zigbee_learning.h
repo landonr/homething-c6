@@ -338,6 +338,11 @@ class ZigbeeAssignmentManager {
     return result;
   }
 
+  bool has_assignment(uint8_t slot) const {
+    const std::lock_guard<std::mutex> lock(cache_mutex_);
+    return has_assignment_(slot);
+  }
+
   bool play(uint8_t slot) {
     if (!has_assignment_(slot) || !radio_enabled())
       return false;

@@ -684,6 +684,10 @@ class IrUi {
   }
 
   const std::vector<int32_t> &code() const { return code_; }
+  bool prepare_ir(uint8_t button) {
+    pending_transmit_ = ir_code_store.load(button, code_);
+    return pending_transmit_;
+  }
 
   void set_zigbee_play_callback(std::function<bool(uint8_t)> play) {
     zigbee_play_callback_ = std::move(play);
@@ -720,7 +724,7 @@ class IrUi {
       return;
     if (ha_play_callback_ && ha_play_callback_(button))
       return;
-    pending_transmit_ = ir_code_store.load(button, code_);
+    prepare_ir(button);
   }
 
   std::vector<int32_t> code_;

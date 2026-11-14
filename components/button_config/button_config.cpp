@@ -658,10 +658,15 @@ bool ButtonConfig::set_boot_leds(bool enabled) {
 
 ButtonConfig::SleepState ButtonConfig::sleep_state_() const {
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
-  if (this->idle_sleep_ != nullptr)
-    return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s(), this->idle_sleep_->wake_replay()};
+  if (this->idle_sleep_ != nullptr) {
+    using Sleep = idle_sleep::IdleSleep;
+    const uint8_t mask = this->idle_sleep_->wake_replay_mask();
+    return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s(),
+            (mask & Sleep::WAKE_IR) != 0, (mask & Sleep::WAKE_HA) != 0,
+            (mask & Sleep::WAKE_ZIGBEE) != 0, (mask & Sleep::WAKE_BLE) != 0};
+  }
 #endif
-  return {false, false, 0, false};
+  return {};
 }
 
 ButtonConfig::BatteryState ButtonConfig::battery_state_() const {
@@ -686,11 +691,12 @@ bool ButtonConfig::set_sleep_enabled_(bool enabled) {
 #endif
 }
 
-bool ButtonConfig::set_sleep_replay_(bool replay) {
+bool ButtonConfig::set_sleep_replay_(uint8_t mask, bool enabled) {
 #ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
-  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_wake_replay(replay);
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_wake_replay(mask, enabled);
 #else
-  (void) replay;
+  (void) mask;
+  (void) enabled;
   return false;
 #endif
 }
@@ -1004,7 +1010,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   stream->print(R"({"firmware":")");
   print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s,"replay_ir":%s,"replay_ha":%s,"replay_zigbee":%s,"replay_ble":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -1017,7 +1023,9 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       this->ha_api_gated() ? "true" : "false",
       ip, mac,
       sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",
-      static_cast<unsigned>(sleep.after_s), sleep.replay ? "true" : "false",
+      static_cast<unsigned>(sleep.after_s), sleep.replay_ha && sleep.replay_zigbee ? "true" : "false",
+      sleep.replay_ir ? "true" : "false", sleep.replay_ha ? "true" : "false",
+      sleep.replay_zigbee ? "true" : "false", sleep.replay_ble ? "true" : "false",
       battery.available ? "true" : "false", battery.percent, static_cast<double>(battery.volts),
       ::zigbee_assignments.radio_enabled() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
@@ -1180,12 +1188,13 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     return;
   }
 
+  const bool replay_action = action == "set_sleep_replay" || action == "set_sleep_replay_ir";
+  const bool sleep_action = action == "set_sleep_enabled" || action == "set_sleep_after" || replay_action;
   const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "set_ha" || action == "test_ha" || action == "forget_ble" || action == "set_radio" ||
                      action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
-                     action == "set_hold" || action == "set_sleep_enabled" ||
-                     action == "set_sleep_after" || action == "set_sleep_replay" || action == "pair" || action == "restart" ||
+                     action == "set_hold" || sleep_action || action == "pair" || action == "restart" ||
                      action == "set_name" || action == "set_ir_name" || action == "clear";
   if (!known) {
     request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
@@ -1258,8 +1267,6 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     boot_leds_on = enabled == "1";
   }
 
-  const bool sleep_action =
-      action == "set_sleep_enabled" || action == "set_sleep_after" || action == "set_sleep_replay";
   if (sleep_action && !this->sleep_state_().available) {
     request->send(400, "application/json", R"({"ok":false,"error":"sleep is not configured"})");
     return;
@@ -1274,7 +1281,25 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     sleep_on = enabled == "1";
   }
   bool replay_on = false;
-  if (action == "set_sleep_replay") {
+  uint8_t replay_mask = 0;
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  if (replay_action) {
+    using Sleep = idle_sleep::IdleSleep;
+    const std::string radio = request->arg("radio");
+    if (action == "set_sleep_replay_ir" || radio == "ir")
+      replay_mask = Sleep::WAKE_IR;
+    else if (radio.empty())
+      replay_mask = Sleep::WAKE_NETWORK;
+    else if (radio == "ha")
+      replay_mask = Sleep::WAKE_HA;
+    else if (radio == "zigbee")
+      replay_mask = Sleep::WAKE_ZIGBEE;
+    else if (radio == "ble")
+      replay_mask = Sleep::WAKE_BLE;
+    else {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid wake press radio"})");
+      return;
+    }
     const std::string enabled = request->arg("enabled");
     if (enabled != "0" && enabled != "1") {
       request->send(400, "application/json", R"({"ok":false,"error":"invalid wake press switch"})");
@@ -1282,6 +1307,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     }
     replay_on = enabled == "1";
   }
+#endif
   uint32_t sleep_after_s = 0;
   if (action == "set_sleep_after" && !parse_sleep_after(request->arg("seconds"), sleep_after_s)) {
     request->send(400, "application/json", R"({"ok":false,"error":"sleep after is 10 to 3600 seconds"})");
@@ -1583,9 +1609,9 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     this->defer([this, action_id, sleep_on]() {
       this->complete_action_(action_id, this->set_sleep_enabled_(sleep_on));
     });
-  } else if (action == "set_sleep_replay") {
-    this->defer([this, action_id, replay_on]() {
-      this->complete_action_(action_id, this->set_sleep_replay_(replay_on));
+  } else if (replay_action) {
+    this->defer([this, action_id, replay_mask, replay_on]() {
+      this->complete_action_(action_id, this->set_sleep_replay_(replay_mask, replay_on));
     });
   } else if (action == "set_sleep_after") {
     this->defer([this, action_id, sleep_after_s]() {

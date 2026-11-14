@@ -223,9 +223,15 @@ aria-label="Sleep" disabled><span></span></label></h2>
 <input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
 <button type="button" id="slap" disabled>Apply</button>
 </div>
-<h2 class="ttl">Send the wake press<label class="sw" id="srw"><input type="checkbox" id="srb"
-aria-label="Send the wake press" disabled><span></span></label></h2>
-<p class="sub" id="srh">When on, the button that wakes the remote also sends its Zigbee command if the link comes up within 3 seconds. When off, the first press only wakes the remote.</p>
+<h2 class="ttl">Send IR on wake<label class="sw"><input type="checkbox" id="sri"
+aria-label="Send IR on wake" disabled><span></span></label></h2>
+<h2 class="ttl">Send Home Assistant on wake<label class="sw"><input type="checkbox" id="srha"
+aria-label="Send Home Assistant on wake" disabled><span></span></label></h2>
+<h2 class="ttl">Send Zigbee on wake<label class="sw"><input type="checkbox" id="srz"
+aria-label="Send Zigbee on wake" disabled><span></span></label></h2>
+<h2 class="ttl">Send Bluetooth on wake<label class="sw"><input type="checkbox" id="srb"
+aria-label="Send Bluetooth on wake" disabled><span></span></label></h2>
+<p class="sub" id="srh"></p>
 </div>
 <hr class="rule">
 <h2 class="ttl">Status LEDs<select id="lgm" aria-label="Status LEDs" disabled>
@@ -342,7 +348,8 @@ var ZA=[
 var st=null,sel=null,mode="idle",rec=0,seen=false,timer=0,msg="",bad=false,keys={};
 var stTimer=0,stBusy=false,bleForgetBusy=false,bleError="";
 var ledBusy=false,ledWant="on",ledError="",bootBusy=false,bootWant=true,bootError="",wifiBusy=false,wifiWant=false,wifiError="",activitySent=0,activityTimer=0;
-var sleepBusy=false,sleepWant=true,replayWant=false,sleepError="";
+var sleepBusy=false,sleepWant=true,replayWant=null,sleepError="";
+var WAKE_RADIOS={ir:"sri",ha:"srha",zigbee:"srz",ble:"srb"};
 // The open card is a draft until Save. hdv is the hold picked in the card, or
 // null to show the stored one. edBase is the draft key of the stored slot, and
 // cdBase is the stored code that the code box started from. svBusy covers a
@@ -549,7 +556,8 @@ document.getElementById("wfb").onchange=setWifiAlwaysOn;
 document.getElementById("lgm").onchange=setStatusLeds;
 document.getElementById("blb").onchange=setBootLeds;
 document.getElementById("slb").onchange=setSleepEnabled;
-document.getElementById("srb").onchange=setSleepReplay;
+Object.keys(WAKE_RADIOS).forEach(function(r){
+document.getElementById(WAKE_RADIOS[r]).onchange=function(){setSleepReplay(r,this.checked)}});
 document.getElementById("slap").onclick=setSleepAfter;
 document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};
 document.getElementById("rsb").onclick=restartRemote;
@@ -978,12 +986,14 @@ if(hl)hl.textContent="Each press restarts the timer."+(hn?" Hold "+hn+
 " for two seconds to sleep at once, even when Sleep is off.":
 " No button has the sleep hold. To sleep at once, select a button on the Buttons tab and give it the sleep hold.");
 var wk=document.getElementById("srh"),an=holdName("assign");
-if(wk)wk.textContent="When on, the button that wakes the remote also sends its Zigbee command if the link "+
-"comes up within 3 seconds. When off, the first press only wakes the remote. If you keep a hold button down "+
-"after the wake, its hold starts."+(an?" The assignment mode hold on "+an+" does not start from a wake.":"");
+if(wk)wk.textContent="The first press can send its assigned action when the remote wakes. "+
+"Zigbee and Bluetooth need a connection within 3 seconds. If you keep a hold button down after wake, its hold starts."+
+(an?" The assignment mode hold on "+an+" does not start from a wake.":"");
 if(box){box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy}
-var rb=document.getElementById("srb");
-if(rb){rb.checked=sleepBusy?replayWant:z.replay===true;rb.disabled=sleepBusy}
+Object.keys(WAKE_RADIOS).forEach(function(r){
+var toggle=document.getElementById(WAKE_RADIOS[r]);
+toggle.checked=sleepBusy&&replayWant&&replayWant.radio===r?replayWant.enabled:z["replay_"+r]===true;
+toggle.disabled=sleepBusy});
 if(num){if(!sleepBusy&&document.activeElement!==num&&document.activeElement!==ap)num.value=String(Math.max(1,Math.round(z.after_s/60)));
 num.disabled=sleepBusy}
 if(ap)ap.disabled=sleepBusy
@@ -995,21 +1005,22 @@ line.innerHTML="<span class='dot "+(on?"":"off")+"'></span>Sleep is "+
 function setSleepEnabled(){
 if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
 sleepWant=document.getElementById("slb").checked;
-replayWant=st.sleep.replay===true;
+replayWant=null;
 sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0"),"The remote could not save the sleep switch.")}
 
-function setSleepReplay(){
+function setSleepReplay(radio,enabled){
 if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
 sleepWant=st.sleep.enabled===true;
-replayWant=document.getElementById("srb").checked;
-sleepSave("set_sleep_replay","&enabled="+(replayWant?"1":"0"),"The remote could not save the wake press switch.")}
+replayWant={radio:radio,enabled:enabled};
+sleepSave("set_sleep_replay","&radio="+radio+"&enabled="+(enabled?"1":"0"),
+"The remote could not save the wake press switch.")}
 
 function setSleepAfter(){
 if(sleepBusy||!st||!st.sleep||!st.sleep.available)return;
 var v=String(document.getElementById("sla").value).replace(/^\s+|\s+$/g,""),m=Number(v);
 if(!/^\d+$/.test(v)||m<1||m>60){sleepError="Enter whole minutes from 1 to 60.";sleepStatus();return}
 sleepWant=st.sleep.enabled===true;
-replayWant=st.sleep.replay===true;
+replayWant=null;
 sleepSave("set_sleep_after","&seconds="+(m*60),"The remote could not save the sleep time.")}
 
 function sleepSave(a,x,why){
@@ -1672,7 +1683,8 @@ lines.push(JSON.stringify(e))}
 // single line hides which input an entry belongs to.
 return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[\n'+lines.join(",\n")+"\n]}"}
 
-var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"];
+var CFG_WAKE_KEYS=Object.keys(WAKE_RADIOS).map(function(r){return "wake_replay_"+r});
+var CFG_BOOL=["zigbee","ble","home_assistant","wifi_always_on","boot_leds","sleep","wake_replay"].concat(CFG_WAKE_KEYS);
 // An older file names one input for each hold in these keys, or 0 for none. A
 // newer file puts a hold on each slot entry instead.
 var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];
@@ -1682,7 +1694,8 @@ var o={zigbee:radioOn("zigbee"),ble:radioOn("ble"),home_assistant:radioOn("home_
 wifi_always_on:!!(st&&st.network&&st.network.wifi_always_on)},z=st&&st.sleep;
 if(st&&st.status_leds!==undefined)o.status_leds=ledMode();
 if(st&&typeof st.boot_leds==="boolean")o.boot_leds=st.boot_leds;
-if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true}
+if(z&&z.available){o.sleep=z.enabled===true;o.sleep_after_s=z.after_s;o.wake_replay=z.replay===true;
+Object.keys(WAKE_RADIOS).forEach(function(r){o["wake_replay_"+r]=z["replay_"+r]===true})}
 return o}
 
 function cfgSetCheck(o){
@@ -1724,8 +1737,11 @@ if(st&&typeof st.boot_leds==="boolean")add("boot_leds",st.boot_leds,"set_boot_le
 if(sl){
 add("sleep",z.enabled===true,"set_sleep_enabled",en);
 add("sleep_after_s",z.after_s,"set_sleep_after",function(v){return "&seconds="+v});
-add("wake_replay",z.replay===true,"set_sleep_replay",en)}
-else{["sleep","sleep_after_s","wake_replay"].forEach(function(k){if(o[k]!==undefined)skipped++})}
+// The old combined value applies only when an individual setting is absent.
+o=Object.assign({wake_replay_ha:o.wake_replay,wake_replay_zigbee:o.wake_replay},o);
+Object.keys(WAKE_RADIOS).forEach(function(r){
+add("wake_replay_"+r,z["replay_"+r]===true,"set_sleep_replay",function(v){return "&radio="+r+en(v)})})}
+else{["sleep","sleep_after_s","wake_replay"].concat(CFG_WAKE_KEYS).forEach(function(k){if(o[k]!==undefined)skipped++})}
 return {list:list,skipped:skipped,count:count}}
 
 // One write for each hold input whose hold changes. An older hold key puts its

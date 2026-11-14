@@ -596,7 +596,8 @@ The block also holds a `settings` object with the device settings of the remote:
 
 ```json
 {"c6remote":1,"settings":{"zigbee":true,"ble":true,"home_assistant":true,"wifi_always_on":false,
-"status_leds":"on","boot_leds":true,"sleep":true,"sleep_after_s":300,"wake_replay":false},"slots":[
+"status_leds":"on","boot_leds":true,"sleep":true,"sleep_after_s":300,"wake_replay":false,
+"wake_replay_ir":false,"wake_replay_ha":false,"wake_replay_zigbee":false,"wake_replay_ble":false},"slots":[
 ```
 
 These keys are valid:
@@ -608,7 +609,8 @@ These keys are valid:
 - `hold_wifi`, `hold_status`, `hold_sleep`, and `hold_assign` come from an older page. Each one gives the slot of one button for that hold, or `0` for no button. See [Hold buttons](#hold-buttons).
 - `sleep` turns idle sleep on or off.
 - `sleep_after_s` is the idle time before sleep, from 10 to 3600 seconds.
-- `wake_replay` makes the press that wakes the remote replay its stored setting.
+- `wake_replay_ir`, `wake_replay_ha`, `wake_replay_zigbee`, and `wake_replay_ble` enable wake replay for each assignment type.
+- The older `wake_replay` key applies to Home Assistant and Zigbee. Individual keys take priority when the file includes both.
 
 Each key is optional. If a key is absent, the import leaves that setting as it is.
 A file from an older page has no `settings` object, and it still imports.
@@ -929,24 +931,17 @@ Any button pulls the expander INT line (`GPIO5`) low and wakes the chip.
 Before the firmware boots, a wake stub reads the expander. As a result, the
 firmware knows which button woke it.
 
-The wake press replay is a setting. It is off by default.
-When it is off, the press that wakes the remote only wakes it. Press the button again to send its command.
-If you still hold the button at wake, its release does not tap.
+Each wake press switch is off by default.
+If a switch is off, press the button again after wake to send an assignment of that type.
+The remote sends an IR command after setup. It needs no network link for IR.
+For Home Assistant, the remote queues the action and waits for Wi-Fi and the API.
+For Zigbee and Bluetooth, the remote waits up to 3 s after setup for the connection.
+If the connection takes longer, the remote discards the wake press.
 
-When the setting is on, the remote sends the wake press when the Zigbee link comes up.
-The wake press is the Zigbee assignment of that button.
-If no link comes within 3 s after setup, the remote drops the wake press.
-A Home Assistant assignment does not wait for the Zigbee link. The wake press queues its action at once.
-If the Home Assistant switch is off, the remote drops that wake press at once.
-[ZIGBEE.md](ZIGBEE.md) describes the send path.
-
-If you still hold a button with an active hold at wake, the remote does not replay its wake press.
-This rule also applies to a Home Assistant assignment.
-When the setting is on, the remote sends the assignment of that button when you release it before the hold time.
-
-If you still hold a button with an active hold at wake, its hold starts. This occurs when the setting is on or off.
-The assignment mode hold is the exception. It does not start from a wake.
-When the setting is on, the release of the assignment mode hold button always sends its assignment.
+If you still hold a button with an active hold at wake, its hold starts.
+If you release the button before the hold time, the wake press switches control whether the remote sends the assignment.
+The assignment mode hold does not start from wake.
+If **Send Home Assistant on wake** is on, a short release of a held button can also start its Assist assignment.
 
 After a wake, all status LEDs pulse two times in the battery colour. Each pulse
 is 800 ms. The colour shows the battery level at the first moment after the wake:
@@ -975,9 +970,12 @@ The web page has a **Sleep** block. It shows only on a build with `idle_sleep`.
 
 - The **Sleep** switch turns idle sleep on or off.
 - The **Sleep after, in minutes** box sets the idle time from 1 to 60 minutes.
-- The **Send the wake press** switch turns the wake press replay on or off. It is off by default.
+- **Send IR on wake** sends the IR command of the button that wakes the remote.
+- **Send Home Assistant on wake** sends the Home Assistant action of the button that wakes the remote.
+- **Send Zigbee on wake** sends the Zigbee command of the button that wakes the remote.
+- **Send Bluetooth on wake** sends the Bluetooth input of the button that wakes the remote.
 
-The remote stores all three settings in flash. A change restarts the idle window.
+The remote stores these settings in flash. A change restarts the idle window.
 The sleep hold works when **Sleep** is off.
 
 ### Flash over USB

@@ -387,8 +387,11 @@ class ProductionConfigTest(unittest.TestCase):
         config = CONFIG.read_text()
         for gone in ("detect_wifi_hold", "detect_peek_hold", "detect_receiver_hold", "exit_receiver_hold",
                      "sw8_hold_consumed", "sw9_hold_consumed", "status_peek", "hold_consumed", "NO_VOICE",
-                     "set_pressed(", "sleep_hold_bit", "sleep_hold_time"):
+                     "sleep_hold_bit", "sleep_hold_time"):
             self.assertNotIn(gone, config)
+        before_replay, replay_and_rest = config.split("  replay: !lambda |-\n", 1)
+        after_replay = replay_and_rest.split("\n\ni2c:", 1)[1]
+        self.assertNotIn("set_pressed(", before_replay + after_replay)
         self.assertNotIn("hold_consumed", IR_LEARNING.read_text())
 
     def test_sw9_and_sw10_follow_silkscreen_wiring(self) -> None:

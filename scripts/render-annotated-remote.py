@@ -150,9 +150,9 @@ case_canvas = (1840, 2912)
 board_text = dict(font=46, detail_font=35, detail_dy=40)
 board_canvas = (1060, 2001)
 SETS = {
-    'case_front': ('remote-controls-annotated', case_canvas, 'case-annotated-front.png', (1.35, 887, 40),
+    'case_front': ('remote-controls-annotated', case_canvas, 'case-front.png', (1.35, 887, 40),
                    dict(trim=True, **text)),
-    'case_back': ('remote-back-annotated', case_canvas, 'case-annotated-back.png', (1.28, 30, 114),
+    'case_back': ('remote-back-annotated', case_canvas, 'case-back.png', (1.28, 30, 114),
                   dict(trim=True, **text)),
     'board_front': ('board-front-annotated', board_canvas, 'board-3d-rotated-top.png', (1.0, 508, 30), board_text),
     'board_back': ('board-back-annotated', board_canvas, 'board-3d-rotated-bottom.png', (1.0, 30, 30), board_text),

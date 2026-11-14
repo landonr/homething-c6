@@ -63,8 +63,9 @@ It exports a board GLB from the PCB and renders the two `board-3d-rotated-*.png`
 The case renders use the separate `c6remote-explode` checkout. The board and schematic renders work without it.
 The case scripts need Node, `ffmpeg`, and `img2webp` (`brew install webp`) as well. They render the case geometry the viewer has, so run `../c6remote-explode/refresh-assets.sh` after a case or board change.
 The case scripts write dated files into `c6remote-explode`; copy them into `docs/readme-assets/` as `case-assembled.png`, `case-exploded.png`, and `case-explode-loop.webp`.
-The annotated case images `case-annotated-front.png` and `case-annotated-back.png` come from `../c6remote-explode/scripts/render-blender.py`.
+The case stills `case-front.png` and `case-back.png` come from `../c6remote-explode/scripts/render-blender.py`.
 Use `--preset readme-annotated-front` or `--preset readme-annotated-back` for them.
+`case-front-grey.png` and `case-back-grey.png` add `--colorway grey`, a dark grey shell with purple caps. The web page shows this pair.
 If the checkout is a git worktree, run `REPO=<checkout> ../c6remote-explode/refresh-assets.sh`. Without `REPO`, the script copies from `~/dev/homething-c6`.
 
 Run `python3 scripts/render-annotated-remote.py` to draw the labels and leader lines over the board and case images.

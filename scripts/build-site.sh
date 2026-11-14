@@ -18,8 +18,8 @@ OUT="${1:-_site}"
 README_ASSETS=(
 	homeThingLogo.svg
 	remote-build-stages.jpg
-	case-annotated-front.png
-	case-annotated-back.png
+	case-front-grey.png
+	case-back-grey.png
 	remote-controls-annotated.svg
 	case-exploded.png
 	case-front-iso-sls.png

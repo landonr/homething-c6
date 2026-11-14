@@ -454,6 +454,8 @@ The VU meter is the microphone step of the procedure. The 2 s hold of the wheel 
 
 The self-test transmits IR only while an operator holds `SW1` for 2 s. Customers also run this image, so do not add a transmit that starts by itself.
 
+A transmit sends 15 flashes of 50 ms. A phone camera needs a flash of that length, but the AGC of a `TSOP6136` gives up on a mark that long and holds its output high. Each flash therefore goes out as a train of 600 us bursts, the NEC zero bit, so a second board receives the flash as one frame. The burst length and the flash length are separate constants in `self_test.h`. Keep every burst shorter than the 9 ms NEC leader.
+
 The radio check applies to V2 and V3. It needs a Wi-Fi scan with at least one access point and a successful BLE Improv advertisement start.
 
 Use the existing BLE Improv path. The Bluetooth controller must start before the Wi-Fi scan, because the ESP32-C6 scan otherwise returns no access points.

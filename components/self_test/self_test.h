@@ -78,12 +78,20 @@ class SelfTest : public Component
   // the board in this time.
   static constexpr uint32_t SLEEP_HOLD_MS = 3000;
 
-  // Every mark is longer than the 9 ms NEC leader, the longest header mark of
-  // a common protocol, so no decoder accepts a frame start.
+  // A flash is long enough for a phone camera to show it. The AGC of U2 gives
+  // up on a mark of that length, so a flash goes out as a train of short
+  // bursts. The 600 us burst and gap are the NEC zero bit, which every
+  // receiver accepts, and the camera sees the train as one flash.
   static constexpr uint32_t TX_CARRIER_HZ = 38000;
   static constexpr uint32_t TX_MARK_US = 50000;
   static constexpr uint32_t TX_SPACE_US = 150000;
   static constexpr uint32_t TX_BURSTS = 15;
+  static constexpr uint32_t TX_CHOP_MARK_US = 600;
+  static constexpr uint32_t TX_CHOP_SPACE_US = 600;
+  static constexpr uint32_t TX_CHOP_PERIOD_US = TX_CHOP_MARK_US + TX_CHOP_SPACE_US;
+  static constexpr uint32_t TX_CHOPS = TX_MARK_US / TX_CHOP_PERIOD_US;
+  // The last gap of a flash carries the rounding, so a flash period stays exact.
+  static constexpr uint32_t TX_GAP_US = TX_MARK_US + TX_SPACE_US - (TX_CHOPS * TX_CHOP_PERIOD_US - TX_CHOP_SPACE_US);
   static constexpr uint32_t TX_PERIOD_MS = (TX_MARK_US + TX_SPACE_US) / 1000;
   static constexpr uint32_t TX_TOTAL_MS = TX_BURSTS * TX_PERIOD_MS;
   static constexpr uint32_t ACTIVE_HOLD_MS = 1000;

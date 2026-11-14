@@ -374,14 +374,17 @@ void SelfTest::start_transmit_(uint32_t now) {
   auto call = this->tx_->transmit();
   auto *data = call.get_data();
   data->set_carrier_frequency(TX_CARRIER_HZ);
-  data->reserve(2 * TX_BURSTS);
-  for (uint32_t i = 0; i < TX_BURSTS; i++)
-    data->item(TX_MARK_US, TX_SPACE_US);
+  data->reserve(2 * TX_BURSTS * TX_CHOPS);
+  for (uint32_t i = 0; i < TX_BURSTS; i++) {
+    for (uint32_t j = 0; j + 1 < TX_CHOPS; j++)
+      data->item(TX_CHOP_MARK_US, TX_CHOP_SPACE_US);
+    data->item(TX_CHOP_MARK_US, TX_GAP_US);
+  }
   call.perform();
   this->tx_started_ = true;
   this->tx_start_ms_ = now;
-  ESP_LOGI(TAG, "IR transmit: %" PRIu32 " bursts of %" PRIu32 " ms at %" PRIu32 " Hz", TX_BURSTS, TX_MARK_US / 1000,
-           TX_CARRIER_HZ);
+  ESP_LOGI(TAG, "IR transmit: %" PRIu32 " flashes of %" PRIu32 " ms at %" PRIu32 " Hz, %" PRIu32 " bursts each",
+           TX_BURSTS, TX_MARK_US / 1000, TX_CARRIER_HZ, TX_CHOPS);
 }
 
 void SelfTest::ir_frame(const std::vector<int32_t> &raw) {

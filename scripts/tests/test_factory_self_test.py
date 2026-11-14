@@ -159,21 +159,41 @@ class TransmitTest(unittest.TestCase):
                 self.assertNotIn("start_transmit_", body)
                 self.assertNotIn("transmit()", body)
 
-    def test_the_pattern_is_visible_and_no_common_protocol_frame(self) -> None:
+    def test_a_camera_sees_the_flashes(self) -> None:
         mark = constant(HEADER, "TX_MARK_US")
         space = constant(HEADER, "TX_SPACE_US")
         bursts = constant(HEADER, "TX_BURSTS")
         self.assertEqual(constant(HEADER, "TX_CARRIER_HZ"), 38000)
-        self.assertGreater(mark, 2 * LONGEST_PROTOCOL_MARK_US)
         total_ms = bursts * (mark + space) / 1000
         self.assertGreaterEqual(total_ms, 2500)
         self.assertLessEqual(total_ms, 3500)
-        # A 30 fps camera must see each burst and each gap.
+        # A 30 fps camera must see each flash and each gap.
         self.assertGreaterEqual(mark, 34000)
         self.assertGreaterEqual(space, 34000)
+
+    def test_a_flash_goes_out_as_bursts_that_a_receiver_accepts(self) -> None:
+        mark = constant(HEADER, "TX_MARK_US")
+        space = constant(HEADER, "TX_SPACE_US")
+        chop_mark = constant(HEADER, "TX_CHOP_MARK_US")
+        chop_space = constant(HEADER, "TX_CHOP_SPACE_US")
+        # The AGC of U2 gives up on a mark of protocol length or longer, so no
+        # burst can reach one. The 10-cycle floor at 38 kHz is 263 us.
+        self.assertLess(chop_mark, LONGEST_PROTOCOL_MARK_US)
+        self.assertGreater(chop_mark, 263)
+        self.assertGreater(chop_space, 263)
+        # The gap inside a flash must stay under the 10 ms receiver idle, so
+        # one flash arrives as one frame.
+        self.assertLess(chop_space, 10000)
+        chops = mark // (chop_mark + chop_space)
+        self.assertGreaterEqual(chops, 8)
+        gap = mark + space - (chops * (chop_mark + chop_space) - chop_space)
+        # The gap carries the rounding, so the flash period stays exact.
+        self.assertEqual(chops * (chop_mark + chop_space) - chop_space + gap, mark + space)
         start = function_body(CPP, "void SelfTest::start_transmit_(uint32_t now)")
         self.assertIn("data->set_carrier_frequency(TX_CARRIER_HZ);", start)
-        self.assertIn("data->item(TX_MARK_US, TX_SPACE_US);", start)
+        self.assertIn("data->item(TX_CHOP_MARK_US, TX_CHOP_SPACE_US);", start)
+        self.assertIn("data->item(TX_CHOP_MARK_US, TX_GAP_US);", start)
+        self.assertNotIn("data->item(TX_MARK_US", start)
 
     def test_the_receive_check_ignores_the_board_own_bursts(self) -> None:
         body = function_body(CPP, "void SelfTest::ir_frame(const std::vector<int32_t> &raw)")

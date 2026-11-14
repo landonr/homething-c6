@@ -27,7 +27,12 @@
     main.doc > p, main.doc > ul, main.doc > ol, main.doc > pre, main.doc > table { max-width: 42rem; }
 
     /* A step reads like a repair guide: the sheet on the left, the actions on the right. */
-    main.doc .step { margin: 0; padding: 2.25rem 0; border-top: 1px solid var(--line); }
+    /* A card keeps one step apart from the next. */
+    main.doc .step {
+      margin: 1.75rem 0; padding: 1.6rem 1.75rem 1.75rem;
+      border: 1px solid rgba(0, 0, 0, .16); border-radius: 14px; background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
+    }
     main.doc .step h3 {
       display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
       font-size: clamp(1.1rem, 1.7vw, 1.3rem); margin: 0 0 1.25rem; font-weight: 600;
@@ -36,7 +41,11 @@
       font-size: 1.15em; font-weight: 700; color: var(--ink); white-space: nowrap;
     }
     main.doc .step-title { color: var(--muted); font-weight: 400; }
-    main.doc .step-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; }
+    /* The sheet and its actions share one box inside the card. */
+    main.doc .step-body {
+      display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.75rem;
+      padding: 1.25rem; border: 1px solid var(--line); border-radius: 10px; background: var(--grey);
+    }
     main.doc .step-figure { margin: 0; }
     main.doc .step-text > :first-child { margin-top: 0; }
 
@@ -48,10 +57,10 @@
     main.doc .step-notes p { margin: 0 0 .6rem; }
     main.doc .step-actions { margin: 0 0 1rem; }
     main.doc .method { margin: 0 0 1.4rem; }
-    main.doc .method-title { font-size: 1em; margin: 0 0 .6rem; }
+    main.doc .method-title { font-size: .95em; margin: 0 0 .6rem; }
     main.doc .tablist { display: flex; gap: .4rem; margin: 0 0 1rem; }
     main.doc .tablist button {
-      font: inherit; font-size: .9em; cursor: pointer; padding: .35rem .9rem;
+      font: inherit; font-size: .85em; cursor: pointer; padding: .3rem .85rem;
       border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted);
     }
     main.doc .tablist button[aria-selected="true"] {
@@ -61,6 +70,7 @@
     main.doc .tabs-on .method-title { display: none; }
     main.doc .method > :last-child { margin-bottom: 0; }
     main.doc .step-text > :last-child { margin-bottom: 0; }
+    main.doc .step-text p, main.doc .step-text li { font-size: .92em; }
     main.doc figure { margin: 0; }
     main.doc img {
       display: block; width: 100%; height: auto; background: #fff;
@@ -86,14 +96,14 @@
     main.doc .verdict.fail strong { color: #b3261e; }
     main.doc code {
       background: var(--grey); padding: .1em .35em; border-radius: 4px;
-      font-size: .9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .86em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     main.doc pre {
       background: var(--grey); padding: 1rem 1.2rem; border-radius: 10px;
-      overflow-x: auto; font-size: .85em;
+      overflow-x: auto; font-size: .78em;
     }
     main.doc pre code { background: none; padding: 0; }
-    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .9em; }
+    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .8em; }
     main.doc th, main.doc td { border: 1px solid var(--line); padding: .45rem .65rem; text-align: left; }
     main.doc th { background: var(--grey); font-weight: 600; }
     .print-note { color: var(--muted); font-size: .8em; margin-top: 3rem; }
@@ -105,7 +115,9 @@
     @media print {
       .nav, .footer, .print-note { display: none; }
       main.doc { padding: 0; max-width: none; font-size: 10pt; }
-      main.doc .step { break-inside: avoid; padding: 8pt 0; border-top: 1px solid #999; }
+      main.doc .step { break-inside: avoid; padding: 8pt 10pt; border: 1px solid #999; border-radius: 0; }
+      /* The card already separates a step, so the inner box costs only height. */
+      main.doc .step-body { padding: 0; border: 0; background: none; }
       main.doc .step-body { gap: 10pt; }
       main.doc h2 { break-after: avoid; }
       main.doc figure, main.doc table, main.doc .verdict { break-inside: avoid; }

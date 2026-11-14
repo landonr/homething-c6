@@ -16,15 +16,17 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="style.css">
   <style>
-    main.doc { padding: 48px var(--pad-x) 96px; max-width: 64rem; margin: 0 auto; }
+    /* 1240px is the content width that .inner gives every other page. */
+    main.doc { padding: 48px var(--pad-x) 96px; max-width: 1240px; margin: 0 auto; }
     main.doc h1, main.doc h2, main.doc h3 { text-align: left; }
     main.doc h1 { font-size: clamp(2rem, 4vw, 2.7rem); line-height: 1.1; margin: 0 0 .5rem; }
-    main.doc .lede { color: var(--muted); margin: 0 0 2rem; max-width: 42rem; }
+    main.doc .lede { color: var(--muted); margin: 0 0 2rem; max-width: 52rem; }
     main.doc h2 {
       font-size: clamp(1.2rem, 2vw, 1.45rem); margin: 3rem 0 1rem;
       padding-top: 1.5rem; border-top: 1px solid var(--line);
     }
-    main.doc > p, main.doc > ul, main.doc > ol, main.doc > pre, main.doc > table { max-width: 42rem; }
+    /* Running prose keeps a readable measure. A table uses the full width. */
+    main.doc > p, main.doc > ul, main.doc > ol, main.doc > pre { max-width: 52rem; }
 
     /* A step reads like a repair guide: the sheet on the left, the actions on the right. */
     /* A card keeps one step apart from the next. */

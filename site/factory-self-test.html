@@ -16,25 +16,47 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="style.css">
   <style>
-    main.doc { padding: 56px var(--pad-x) 96px; max-width: 54rem; margin: 0 auto; }
-    main.doc h1 { font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1.1; margin: 0 0 .5rem; }
-    main.doc .lede { color: var(--muted); margin: 0 0 2.5rem; }
+    main.doc { padding: 48px var(--pad-x) 96px; max-width: 64rem; margin: 0 auto; }
     main.doc h1, main.doc h2, main.doc h3 { text-align: left; }
+    main.doc h1 { font-size: clamp(2rem, 4vw, 2.7rem); line-height: 1.1; margin: 0 0 .5rem; }
+    main.doc .lede { color: var(--muted); margin: 0 0 2rem; max-width: 42rem; }
     main.doc h2 {
-      font-size: clamp(1.3rem, 2.2vw, 1.6rem); margin: 3rem 0 1rem;
+      font-size: clamp(1.2rem, 2vw, 1.45rem); margin: 3rem 0 1rem;
       padding-top: 1.5rem; border-top: 1px solid var(--line);
     }
-    main.doc h3 { font-size: clamp(1.1rem, 1.8vw, 1.3rem); margin: 0 0 1rem; color: var(--accent); }
-    main.doc .step {
-      margin: 2.5rem 0; padding: 1.75rem; background: var(--card);
-      border: 1px solid var(--line); border-radius: 14px;
+    main.doc > p, main.doc > ul, main.doc > ol, main.doc > pre, main.doc > table { max-width: 42rem; }
+
+    /* A step reads like a repair guide: the sheet on the left, the actions on the right. */
+    main.doc .step { margin: 0; padding: 2.25rem 0; border-top: 1px solid var(--line); }
+    main.doc .step h3 {
+      display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+      font-size: clamp(1.1rem, 1.7vw, 1.3rem); margin: 0 0 1.25rem; font-weight: 600;
     }
-    main.doc .step > :last-child { margin-bottom: 0; }
-    main.doc figure { margin: 1.5rem 0; }
+    main.doc .step-number {
+      font-size: 1.15em; font-weight: 700; color: var(--ink); white-space: nowrap;
+    }
+    main.doc .step-title { color: var(--muted); font-weight: 400; }
+    main.doc .step-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; }
+    main.doc .step-figure { margin: 0; }
+    main.doc .step-text > :first-child { margin-top: 0; }
+    main.doc .step-text > :last-child { margin-bottom: 0; }
+    main.doc .step-text p, main.doc .step-text li { font-size: .92em; }
+    main.doc figure { margin: 0; }
     main.doc img {
       display: block; width: 100%; height: auto; background: #fff;
       border: 1px solid var(--line); border-radius: 10px;
     }
+    main.doc ol, main.doc ul { padding-left: 1.3rem; margin: 0 0 1rem; }
+    main.doc li { margin: .35rem 0; }
+    main.doc .verdict { list-style: none; position: relative; padding-left: .2rem; }
+    main.doc .verdict::before {
+      content: ""; position: absolute; left: -1.1rem; top: .45em;
+      width: .62rem; height: .62rem; border-radius: 50%;
+    }
+    main.doc .verdict.pass::before { background: #1a7f45; }
+    main.doc .verdict.fail::before { background: #b3261e; }
+    main.doc .verdict.pass strong { color: #1a7f45; }
+    main.doc .verdict.fail strong { color: #b3261e; }
     main.doc code {
       background: var(--grey); padding: .1em .35em; border-radius: 4px;
       font-size: .86em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -44,23 +66,23 @@
       overflow-x: auto; font-size: .78em;
     }
     main.doc pre code { background: none; padding: 0; }
-    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .82em; }
-    main.doc th, main.doc td { border: 1px solid var(--line); padding: .5rem .7rem; text-align: left; }
+    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .8em; }
+    main.doc th, main.doc td { border: 1px solid var(--line); padding: .45rem .65rem; text-align: left; }
     main.doc th { background: var(--grey); font-weight: 600; }
-    main.doc .verdict.pass strong { color: #1a7f45; }
-    main.doc .verdict.fail strong { color: #b3261e; }
     .print-note { color: var(--muted); font-size: .8em; margin-top: 3rem; }
+
+    @media (max-width: 760px) {
+      main.doc .step-body { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+    }
 
     @media print {
       .nav, .footer, .print-note { display: none; }
-      main.doc { padding: 0; max-width: none; font-size: 10.5pt; }
-      main.doc .step {
-        break-inside: avoid; background: none; border: 1px solid #999;
-        padding: 10pt; margin: 10pt 0;
-      }
+      main.doc { padding: 0; max-width: none; font-size: 10pt; }
+      main.doc .step { break-inside: avoid; padding: 8pt 0; border-top: 1px solid #999; }
+      main.doc .step-body { gap: 10pt; }
       main.doc h2 { break-after: avoid; }
       main.doc figure, main.doc table { break-inside: avoid; }
-      main.doc img { max-height: 8.5cm; width: auto; margin: 0 auto; }
+      main.doc img { max-height: 9cm; width: auto; }
       a { text-decoration: none; color: inherit; }
     }
   </style>
@@ -96,8 +118,10 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <p>Do the steps in this sequence. If a step fails, continue with the next step. The board fails if any check fails.</p>
 <p>If the ring goes dark before step 8, the board went to sleep. Press any button to wake it, then start again at step 1.</p>
 <section class="step">
-<h3>Step 1: Power on and boot animation</h3>
-<figure><img alt="Front face of the remote with the boot animation. Arrows run clockwise round the wheel in chain order from D2 at the bottom left, through D3 at the top left, D6 at the top center, D4 at the top right and D5 at the bottom right, to D7 at the bottom center. D2 lights red, D3 azure, D6 magenta, D4 green, D5 blue and D7 cyan." src="assets/self-test-step-1-boot.svg"></figure>
+<h3><span class="step-number">Step 1</span><span class="step-title">Power on and boot animation</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote with the boot animation. Arrows run clockwise round the wheel in chain order from D2 at the bottom left, through D3 at the top left, D6 at the top center, D4 at the top right and D5 at the bottom right, to D7 at the bottom center. D2 lights red, D3 azure, D6 magenta, D4 green, D5 blue and D7 cyan." src="assets/self-test-step-1-boot.svg"></figure></div>
+<div class="step-text">
 <ol>
 <li>Connect the charged battery to <code>J1</code>. The board starts.</li>
 <li>Watch the boot animation.</li>
@@ -124,10 +148,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <p>All six check LEDs are dim amber at this point. Each later step turns its own LED green.</p>
 <p>Other patterns cover an overview for a short time. The section "Color reference" names each pattern and its cause.</p>
 <p>If the ring stays dark at the battery, connect USB power instead. If the board then starts, the battery is flat or <code>J1</code> has a fault.</p>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 2: Buttons and wheel (<code>D2</code>)</h3>
-<figure><img alt="Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, the wheel direction ring and the wheel center. D2, at the bottom left of the wheel, answers." src="assets/self-test-step-2-inputs.svg"></figure>
+<h3><span class="step-number">Step 2</span><span class="step-title">Buttons and wheel (<code>D2</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, the wheel direction ring and the wheel center. D2, at the bottom left of the wheel, answers." src="assets/self-test-step-2-inputs.svg"></figure></div>
+<div class="step-text">
 <ol>
 <li>Press each button, <code>SW1</code> to <code>SW11</code>, for less than 1 s.</li>
 <li>Press each wheel direction for less than 1 s: up, down, left, right, and the wheel center.</li>
@@ -140,10 +168,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict pass"><strong>Pass:</strong> Each input changes the ring, and <code>D2</code> is green after the last input.</li>
 <li class="verdict fail"><strong>Fail:</strong> An input does not change the ring, or <code>D2</code> stays dim amber.</li>
 </ul>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 3: Microphone (<code>D3</code>)</h3>
-<figure><img alt="Front face of the remote with the wheel center marked for a 2 s hold and the microphone hole marked at the top center of the face. D3, at the top left of the wheel, answers." src="assets/self-test-step-3-microphone.svg"></figure>
+<h3><span class="step-number">Step 3</span><span class="step-title">Microphone (<code>D3</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote with the wheel center marked for a 2 s hold and the microphone hole marked at the top center of the face. D3, at the top left of the wheel, answers." src="assets/self-test-step-3-microphone.svg"></figure></div>
+<div class="step-text">
 <p>Do not cover the microphone hole, which the diagram marks.</p>
 <ol>
 <li>Press and hold the wheel center for 2 s. The ring changes to the VU meter.</li>
@@ -155,10 +187,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict pass"><strong>Pass:</strong> The bar moves with your voice, and <code>D3</code> is green.</li>
 <li class="verdict fail"><strong>Fail:</strong> The bar does not move, or <code>D3</code> stays dim amber. The microphone or its sound hole has a fault.</li>
 </ul>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 4: IR receive (<code>D4</code>)</h3>
-<figure><img alt="Front face of the remote for the IR receive check. The sheet marks no button, because the receiver is on the back of the board. D4, at the top right of the wheel, answers." src="assets/self-test-step-4-ir-receive.svg"></figure>
+<h3><span class="step-number">Step 4</span><span class="step-title">IR receive (<code>D4</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote for the IR receive check. The sheet marks no button, because the receiver is on the back of the board. D4, at the top right of the wheel, answers." src="assets/self-test-step-4-ir-receive.svg"></figure></div>
+<div class="step-text">
 <p>The IR receiver is on the back of the board.</p>
 <ol>
 <li>Hold the board with its back toward the IR remote, at a distance of 0.3 m to 1 m.</li>
@@ -168,10 +204,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict pass"><strong>Pass:</strong> The ring flashes white one time, and <code>D4</code> is green.</li>
 <li class="verdict fail"><strong>Fail:</strong> The ring does not flash after three presses, and <code>D4</code> stays dim amber.</li>
 </ul>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 5: IR transmit (<code>D6</code>)</h3>
-<figure><img alt="Front face of the remote with the top right button SW1 marked for a 2 s hold, and the IR LED D1 marked inside the top end. D6, at the top center of the wheel, answers." src="assets/self-test-step-5-ir-transmit.svg"></figure>
+<h3><span class="step-number">Step 5</span><span class="step-title">IR transmit (<code>D6</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote with the top right button SW1 marked for a 2 s hold, and the IR LED D1 marked inside the top end. D6, at the top center of the wheel, answers." src="assets/self-test-step-5-ir-transmit.svg"></figure></div>
+<div class="step-text">
 <p><code>D6</code> turns green when the transmit ends, but that shows only that the firmware sent the bursts. Something must see the light from <code>D1</code>. Use a second board if the station has one, because a camera answer depends on the phone.</p>
 <p><strong>With a second board.</strong> Put a second board that passed step 1 in front of the first board, with its back toward <code>D1</code> at a distance of 0.3 m to 1 m.</p>
 <ol>
@@ -192,10 +232,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict fail"><strong>Fail:</strong> The phone screen shows no light from <code>D1</code>.</li>
 </ul>
 <p>The second board answers because it receives the bursts as an IR frame. This also passes step 4 on that board.</p>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 6: Battery (<code>D5</code>)</h3>
-<figure><img alt="Front face of the remote for the battery check. The sheet marks no button, because the step disconnects USB power. D5, at the bottom right of the wheel, answers." src="assets/self-test-step-6-battery.svg"></figure>
+<h3><span class="step-number">Step 6</span><span class="step-title">Battery (<code>D5</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote for the battery check. The sheet marks no button, because the step disconnects USB power. D5, at the bottom right of the wheel, answers." src="assets/self-test-step-6-battery.svg"></figure></div>
+<div class="step-text">
 <ol>
 <li>Disconnect USB power. Keep the battery connected. The ring flashes orange one time.</li>
 <li>Wait 10 s.</li>
@@ -206,10 +250,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict fail"><strong>Fail:</strong> <code>D5</code> stays dim amber.</li>
 </ul>
 <p>The battery check accepts only a reading on battery power, so USB power must stay off until step 7.</p>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 7: USB power (<code>D7</code>)</h3>
-<figure><img alt="Front face of the remote for the USB power check. The sheet marks no button, because the step connects USB power again. D7, at the bottom center of the wheel, answers." src="assets/self-test-step-7-usb-power.svg"></figure>
+<h3><span class="step-number">Step 7</span><span class="step-title">USB power (<code>D7</code>)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote for the USB power check. The sheet marks no button, because the step connects USB power again. D7, at the bottom center of the wheel, answers." src="assets/self-test-step-7-usb-power.svg"></figure></div>
+<div class="step-text">
 <ol>
 <li>Connect USB power again. Keep the battery connected.</li>
 </ol>
@@ -217,10 +265,14 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 <li class="verdict pass"><strong>Pass:</strong> The ring flashed orange at step 6, then cyan at this step, and <code>D7</code> is green.</li>
 <li class="verdict fail"><strong>Fail:</strong> A connection or disconnection gives no flash, or <code>D7</code> stays dim amber.</li>
 </ul>
+</div>
+</div>
 </section>
 <section class="step">
-<h3>Step 8: Sleep and wake (<code>D3</code>, second overview)</h3>
-<figure><img alt="Front face of the remote for the sleep and wake check. SW2, above the wheel at the top left, changes to the second overview. SW3, below the wheel at the top left, sleeps the board and wakes it. D5, at the bottom right, is the dim blue page indicator. D3, at the top left, answers." src="assets/self-test-step-8-sleep-wake.svg"></figure>
+<h3><span class="step-number">Step 8</span><span class="step-title">Sleep and wake (<code>D3</code>, second overview)</span></h3>
+<div class="step-body">
+<div class="step-figure"><figure><img alt="Front face of the remote for the sleep and wake check. SW2, above the wheel at the top left, changes to the second overview. SW3, below the wheel at the top left, sleeps the board and wakes it. D5, at the bottom right, is the dim blue page indicator. D3, at the top left, answers." src="assets/self-test-step-8-sleep-wake.svg"></figure></div>
+<div class="step-text">
 <p>Do this step last. Do the first part of the section "Result" before you start.</p>
 <ol>
 <li>Keep the battery and USB power connected.</li>
@@ -258,6 +310,8 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning-&lt;version&
 </ul>
 <p>This sleep can start with USB power connected.</p>
 <p>If the ring flashes red, the board refused the request. Release <code>SW3</code>, then hold it again.</p>
+</div>
+</div>
 </section>
 <h2>Result</h2>
 <p>The board passes only when every check LED is green. Make this check in two parts.</p>

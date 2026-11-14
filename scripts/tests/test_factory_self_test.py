@@ -34,10 +34,10 @@ FLAT = re.sub(r"\s+", " ", page_text(PAGE))
 def step_leds() -> dict:
     """The LED that each step heading names, keyed by the LED."""
     found = {}
-    for title in re.findall(r"<h3>Step \d+: (.*?)</h3>", PAGE, re.S):
-        # Tag removal leaves a space where a <code> span was.
-        plain = re.sub(r"\s+", " ", page_text(title)).strip()
-        named = re.fullmatch(r"(.+?) \(\s*(D\d)\s*\)", plain)
+    for heading in re.findall(r"<h3>(.*?)</h3>", PAGE, re.S):
+        # Read the heading as text, so its markup can change freely.
+        plain = re.sub(r"\s+", " ", page_text(heading)).strip()
+        named = re.fullmatch(r"Step \d+:? (.+?) \(\s*(D\d)\s*\)", plain)
         if named:
             found[named.group(2)] = named.group(1).strip()
     return found

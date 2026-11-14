@@ -1,6 +1,5 @@
 import gzip
 from pathlib import Path
-import re
 import subprocess
 
 from esphome import automation
@@ -12,6 +11,7 @@ from esphome.const import CONF_ID, CONF_RAW_DATA_ID, CONF_TRIGGER_ID
 from esphome.core import HexInt
 
 from .face_svg import data_url_body
+from .page_build import compose
 
 AUTO_LOAD = ["web_server_base"]
 DEPENDENCIES = ["network"]
@@ -117,13 +117,14 @@ async def to_code(config):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         await automation.build_automation(trigger, [(bool, "enabled")], conf)
 
-    source = (Path(__file__).parent / "button_config_page.h").read_text()
-    match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
-    if match is None:
-        raise cv.Invalid("button_config_page.h has no PAGE_HTML value")
     svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"
     svg = data_url_body(svg_path.read_text(encoding="utf-8"))
-    html = match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg)
+    # The script is minified in the repository, because this build can run no
+    # minifier: an adopted build has no checkout and no Node.js.
+    try:
+        html = compose(svg)
+    except (OSError, ValueError) as err:
+        raise cv.Invalid(f"Cannot build the web page: {err}") from err
     page = gzip.compress(html.encode(), compresslevel=9, mtime=0)
     data = cg.progmem_array(config[CONF_RAW_DATA_ID], [HexInt(value) for value in page])
     cg.add(var.set_page(data, len(page)))

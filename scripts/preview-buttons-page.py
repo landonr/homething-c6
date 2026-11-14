@@ -30,13 +30,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
 CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 # The firmware build packs the face with this module, so the preview uses it too.
 _FACE_SVG_SPEC = importlib.util.spec_from_file_location(
     "face_svg", ROOT / "components" / "button_config" / "face_svg.py")
 face_svg = importlib.util.module_from_spec(_FACE_SVG_SPEC)
 _FACE_SVG_SPEC.loader.exec_module(face_svg)
+# The firmware build composes the page with this module, so the preview uses it too.
+_PAGE_BUILD_SPEC = importlib.util.spec_from_file_location(
+    "page_build", ROOT / "components" / "button_config" / "page_build.py")
+page_build = importlib.util.module_from_spec(_PAGE_BUILD_SPEC)
+_PAGE_BUILD_SPEC.loader.exec_module(page_build)
 CONFIG = Path(__file__).resolve().parent / "preview-c6remote-config.json"
 
 STATE = {
@@ -271,12 +275,10 @@ SLOTS.setdefault(8, {"action": "ha", "ha_kind": "light", "ha_act": "brightness_u
 
 
 def page_html() -> bytes:
-    source = PAGE.read_text()
-    match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
-    if match is None:
-        raise SystemExit("button_config_page.h has no PAGE_HTML value")
+    """Returns the page with the source script. The preview keeps the readable
+    script, so an edit to the header shows at once and no stale copy can hide it."""
     svg = face_svg.data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))
-    return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg).encode()
+    return page_build.compose(svg, minified=False).encode()
 
 
 def slot_json(slot: int) -> dict:

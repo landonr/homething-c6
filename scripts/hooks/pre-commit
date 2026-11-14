@@ -88,6 +88,17 @@ if ! $PCB_STAGED && grep -qE '^docs/readme-assets/board-3d-rotated-(top|bottom)\
 	stamp_renders board-annotated
 fi
 
+# The firmware embeds the minified page script and no build can run a minifier,
+# so a staged page header must carry its minified copy with it.
+if grep -qE '^components/button_config/button_config_page\.h$' <<<"$STAGED"; then
+	echo "[pre-commit] page header staged -> regenerating the minified script"
+	if python3 "$REPO_ROOT/scripts/minify-page.py"; then
+		git add -- "$REPO_ROOT/components/button_config/button_config_page.min.js"
+	else
+		echo "[pre-commit] WARNING: minify-page.py failed, button_config_page.min.js is stale" >&2
+	fi
+fi
+
 # Only regenerate when a design file is actually part of this commit.
 if ! $SCH_STAGED && ! $PCB_STAGED; then
 	check_renders

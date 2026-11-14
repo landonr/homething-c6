@@ -87,6 +87,9 @@ The firmware files are in the repository root:
 - `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
 - `scripts/tests/page_dom_stub.js` runs the web page script against a DOM stub. `test_page_js.py` drives it and needs `node`. Without `node` the check skips, so run it locally before you change the page.
+- `components/button_config/page_build.py` composes the page. `compose()` returns the page with the minified script, and `compose(minified=False)` returns it with the source script.
+- `components/button_config/button_config_page.min.js` is the minified script that the firmware embeds. Do not edit it. It is generated.
+- `scripts/minify-page.py` regenerates that file with esbuild. Run it after every change to `button_config_page.h`, or let the pre-commit hook run it.
 - `scripts/preview-buttons-page.py` serves the web page with a fake remote behind it. It needs no build and no hardware.
 
 Run `python3 scripts/preview-buttons-page.py [--port 8123]`. Then open `http://127.0.0.1:8123/`.
@@ -96,6 +99,26 @@ The script reads the page out of the header for each request, so the preview can
 The fake state can drift. If you change the page or `ButtonConfig::handle_state_()`, update the state in the script in the same change.
 
 A missing field makes the preview show a state that the firmware never serves.
+
+### The minified page script
+
+The web page is the largest item in the app code. The firmware embeds the script minified, which saves about 9 KB of flash after gzip.
+
+The firmware build runs no minifier. An adopted build has no checkout and no Node.js, so the minified script is a committed file.
+
+Edit `components/button_config/button_config_page.h`. Then regenerate the minified script:
+
+```bash
+python3 scripts/minify-page.py
+```
+
+`test_page_js.py` runs the DOM stub against both scripts and fails if the committed file does not match the source.
+
+Keep `ESBUILD_VERSION` in `scripts/minify-page.py` equal to the version in `.github/workflows/design-checks.yml`. Another version emits different bytes, so the check then reads the committed file as stale.
+
+Without esbuild the match check skips, so CI installs it.
+
+The preview serves the source script, so an edit to the header shows at once.
 
 If the task needs the remaining open work, read the open GitHub issues. `docs/timeline.md` records board status, fabrication history, and closed findings.
 
@@ -225,6 +248,7 @@ When you stage the schematic or board, the hook performs these actions:
 - After the hook regenerates a render group, it runs `scripts/render-status.py --write <group> --stage`. That step stages only the entry of that group in `docs/readme-assets/renders.stamp.json`.
 - Last, the hook runs `scripts/render-status.py --check --if-staged`. This check also runs without a staged schematic or board. It shows a warning for each stale group that a staged file feeds. It never blocks the commit.
 - `scripts/renders.json` lists every render group with its outputs, inputs, and refresh steps. If you add an image or a video under `docs/readme-assets/` or `site/assets/`, add it to a group.
+- A staged `components/button_config/button_config_page.h` runs `scripts/minify-page.py` and stages the minified script. This step warns and does not block, because it needs esbuild.
 
 The iBOM is a gitignored pre-fabrication pin-1 artifact. Never stage it.
 

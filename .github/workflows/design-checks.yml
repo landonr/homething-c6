@@ -24,6 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Without esbuild the minified page check skips, so a stale page could merge.
+      # Keep this version in step with ESBUILD_VERSION in scripts/minify-page.py.
+      - name: Install esbuild
+        run: npm install -g esbuild@0.28.1
+
       - name: Python regression tests
         run: python3 -m unittest discover -s scripts/tests -t .
 

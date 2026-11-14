@@ -978,6 +978,22 @@ figcaption {
   margin: 0;
 }
 
+.footer-site {
+  font-weight: 600;
+}
+
+.footer-site a {
+  color: var(--ink);
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 6px 0 10px;
+}
+
 @media (max-width: 1000px) {
   .features {
     --gap: 16px;

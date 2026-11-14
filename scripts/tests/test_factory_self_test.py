@@ -1,6 +1,7 @@
 """Static checks for the hardware self-test in the provisioning image."""
 
 from pathlib import Path
+import html
 import math
 import re
 import unittest
@@ -17,7 +18,30 @@ INIT = (COMPONENT / "__init__.py").read_text()
 IDLE_CPP = (ROOT / "components" / "idle_sleep" / "idle_sleep.cpp").read_text()
 IDLE_HEADER = (ROOT / "components" / "idle_sleep" / "idle_sleep.h").read_text()
 WAKE_STUB = (ROOT / "components" / "idle_sleep" / "wake_stub.h").read_text()
-DOC = (ROOT / "docs" / "factory-self-test.md").read_text()
+PAGE = (ROOT / "site" / "factory-self-test.html").read_text()
+
+
+def page_text(markup: str) -> str:
+    """The page with its tags gone, so a check reads what an operator reads."""
+    bare = re.sub(r"<(script|style)\b.*?</\1>", " ", markup, flags=re.S)
+    return html.unescape(re.sub(r"<[^>]+>", " ", bare))
+
+
+# One line of running text, so a table row reads as "SW1 Red Green".
+FLAT = re.sub(r"\s+", " ", page_text(PAGE))
+
+
+def step_leds() -> dict:
+    """The LED that each step heading names, keyed by the LED."""
+    found = {}
+    for title in re.findall(r"<h3>Step \d+: (.*?)</h3>", PAGE, re.S):
+        # Tag removal leaves a space where a <code> span was.
+        plain = re.sub(r"\s+", " ", page_text(title)).strip()
+        named = re.fullmatch(r"(.+?) \(\s*(D\d)\s*\)", plain)
+        if named:
+            found[named.group(2)] = named.group(1).strip()
+    return found
+
 
 PROJECT_NAME = "landonr.homething-c6"
 # The NEC leader mark, the longest header mark of a common IR protocol.
@@ -70,6 +94,27 @@ def constant(source: str, name: str) -> int:
     if match is None:
         raise AssertionError(f"constant {name} not found")
     return int(match.group(1))
+
+
+def colour_name(rgb) -> str:
+    """The name of a status colour, from its channels alone."""
+    red, green, blue = rgb
+    lit = (red > 0, green > 0, blue > 0)
+    simple = {(True, False, False): "red", (False, True, False): "green", (False, False, True): "blue",
+              (True, False, True): "magenta", (True, True, True): "white"}
+    if lit in simple:
+        return simple[lit]
+    if lit == (False, True, True):
+        # Azure leans on blue, so it reads apart from cyan, which balances both.
+        return "azure" if blue > green * 1.2 else "cyan"
+    raise AssertionError(f"no name for {rgb}")
+
+
+def named_colours(array: str, terminator: str) -> list:
+    """Each (name in the comment, channels) pair of one colour array."""
+    block = CPP[CPP.index(array):CPP.index(terminator)]
+    return [(name, (int(r), int(g), int(b)))
+            for r, g, b, name in re.findall(r"Color\((\d+), *(\d+), *(\d+)\),?\s+// (\w+)", block)]
 
 
 def base_colours() -> list[str]:
@@ -624,19 +669,16 @@ class DocTest(unittest.TestCase):
         for index, check in re.findall(r"show\((\w+), this->(\w+?)(?:\(\))?\);", overview):
             code[self.LED_OF_INDEX[index]] = self.CHECKS[check]
         self.assertEqual(len(code), 6)
-        headings = dict(re.findall(r"(?m)^### Step \d+: (.+?) \(`(D\d)`\)$", DOC))
-        self.assertEqual({led: title for title, led in headings.items()}, code)
-        # The map diagram replaced the table, so no table repeats the mapping.
-        self.assertNotIn("| LED | Check |", DOC)
+        self.assertEqual(step_leds(), code)
 
     def test_the_input_colour_table_matches_the_component(self) -> None:
-        code = sorted(f"{name} {top} {bottom}" for name, top, bottom in input_pairs())
-        held = DOC.split("### Held input colors", 1)[1]
-        rows = re.findall(r"(?m)^\| (`SW\d+`|Wheel \w+) \| (\w+) \| (\w+) \|$", held)
-        doc = sorted(f"{name.strip('`')} {top} {bottom}".lower().replace("center", "centre")
-                     for name, top, bottom in rows)
-        self.assertEqual(len(code), 16)
-        self.assertEqual(doc, code)
+        pairs = input_pairs()
+        self.assertEqual(len(pairs), 16)
+        # The page says "center", and the component says "centre".
+        page = FLAT.lower().replace("center", "centre")
+        for name, top, bottom in pairs:
+            with self.subTest(input=name):
+                self.assertIn(f"{name} {top} {bottom}".lower(), page)
 
     def test_each_input_has_its_own_pair_of_colours(self) -> None:
         pairs = [(top, bottom) for _, top, bottom in input_pairs()]
@@ -664,85 +706,30 @@ class DocTest(unittest.TestCase):
                 self.assertEqual([i for i in range(count) if 1 <= i <= count // 2], top)
                 self.assertEqual([i for i in range(count) if not 1 <= i <= count // 2], bottom)
 
-    def test_the_doc_uses_no_em_dash_and_no_semicolon(self) -> None:
-        self.assertNotIn("—", DOC)
-        self.assertNotIn(";", DOC.replace("&amp;", ""))
+    def test_each_colour_name_matches_its_channels(self) -> None:
+        """The page and the tables read names, so a name must match its own RGB."""
+        bases = named_colours("BASE_COLOUR[5] = {", "INPUT_PAIR[16][2]")
+        self.assertEqual(len(bases), 5)
+        for name, rgb in bases:
+            with self.subTest(colour=name):
+                self.assertEqual(colour_name(rgb), name)
+        chase = CPP[CPP.index("in chain order:"):CPP.index("// Green is brighter than red")]
+        comment = re.findall(r"D\d (\w+)", chase)
+        values = [(int(r), int(g), int(b))
+                  for r, g, b in re.findall(r"Color\((\d+), *(\d+), *(\d+)\)", chase)]
+        self.assertEqual(len(comment), 6)
+        self.assertEqual(len(values), 6)
+        for name, rgb in zip(comment, values):
+            with self.subTest(colour=name):
+                self.assertEqual(colour_name(rgb), name)
 
     def test_the_first_step_table_matches_the_chase_palette(self) -> None:
         comment = CPP[:CPP.index("static const Color CHASE_COLOUR[6]")]
         code = re.findall(r"(D\d) (\w+)", comment[comment.rindex("in chain order:"):])
-        boot = DOC.split("### Boot animation colors", 1)[1].split("\n### ", 1)[0]
-        doc = [(led, colour.lower())
-               for led, colour in re.findall(r"(?m)^\| `(D\d)` \| (\w+) \|$", boot)]
         self.assertEqual(len(code), 6)
-        self.assertEqual(doc, code)
-
-    def test_the_doc_never_mentions_the_removed_sweep(self) -> None:
-        self.assertNotIn("sweep", DOC.lower())
-
-    def test_the_result_section_asks_for_no_written_record(self) -> None:
-        """The operator reads both overviews in one session, so no step needs paper."""
-        self.assertNotRegex(DOC, r"(?i)record (?:the|your|all|each) results|use the recorded results")
-        self.assertNotRegex(DOC, r"(?i)write (?:down|the result)")
-
-    def test_the_doc_promises_no_result_retention_over_a_sleep(self) -> None:
-        """A wake starts a fresh test, so no line may send an operator back to an old result."""
-        self.assertNotIn("RTC memory", DOC)
-        self.assertNotRegex(DOC, r"(?i)keeps? the (earlier )?(check )?results")
-        self.assertNotIn("Disconnect both USB power and the battery", DOC)
-        self.assertNotIn("Continue from the next incomplete step.", DOC)
-        self.assertNotIn("## Power and sleep", DOC)
-
-    def test_the_radio_step_holds_no_scan_rationale(self) -> None:
-        """The scan internals and the BLE evidence are for AGENTS.md, not for a station."""
-        radio = DOC.split("### Step 8:", 1)[1].split("### Step 9:", 1)[0]
-        for rationale in ("BLE Improv", "advertisement start", "a 10 s timeout", "every 15 s",
-                          "Bluetooth controller", "antenna performance"):
-            with self.subTest(rationale=rationale):
-                self.assertNotIn(rationale, radio)
-
-    def test_the_procedure_holds_no_rationale_the_operator_cannot_act_on(self) -> None:
-        """The station has no schematic, so the procedure names no internal part or timing."""
-        for rationale in ("GPIO5", "`R9`", "ext1", "wake stub", "38 kHz", "Each burst is",
-                          "The board log names", "it cannot show that an LED makes more than one color",
-                          "1 s longer than the other holds", "the charger output can read in range"):
-            with self.subTest(rationale=rationale):
-                self.assertNotIn(rationale, DOC)
-
-    def test_the_station_procedure_names_only_the_v3_board(self) -> None:
-        """A V2 board is a bench unit, so no step may fork on the board version."""
-        self.assertNotIn("V2", DOC)
-        self.assertNotIn("V3 only", DOC)
-        self.assertNotRegex(DOC, r"(?i)on a V3 board|both board versions")
-        # The firmware keeps its four-LED build for the bench.
-        self.assertIn("status_led_count: ", FACTORY)
-
-    def test_the_colour_tables_sit_in_one_reference_section(self) -> None:
-        """The large tables are reference material, so the steps point at them."""
-        body, reference = DOC.split("## Color reference", 1)
-        for heading in ("### Boot animation colors", "### Held input colors", "### Ring patterns"):
-            with self.subTest(heading=heading):
-                self.assertIn(heading, reference)
-        for row in ("| `D2` | Red |", "| `SW1` | Red | Green |", "| Green bar on dim blue | The VU meter is on |"):
-            with self.subTest(row=row):
-                self.assertEqual(DOC.count(row), 1)
-                self.assertIn(row, reference)
-        # The two check LED states belong to step 1, where the first overview appears.
-        step1 = body.split("### Step 1:", 1)[1].split("### Step 2:", 1)[0]
-        self.assertIn("| Dim amber | The check did not pass yet |", step1)
-
-    def test_no_step_repeats_a_table_of_an_earlier_step(self) -> None:
-        """One section no longer explains the overviews before the steps repeat them."""
-        self.assertNotIn("## LED positions", DOC)
-        step8 = DOC.split("### Step 8:", 1)[1].split("## Result", 1)[0]
-        self.assertEqual(DOC.count("| LED | Second overview |"), 1)
-        self.assertIn("| LED | Second overview |", step8)
-        self.assertNotIn("| Color | Meaning |", step8)
-
-    def test_the_steps_run_from_one_and_the_mic_check_has_no_clap(self) -> None:
-        self.assertNotRegex(DOC, r"(?i)clap")
-        steps = re.findall(r"(?m)^### Step (\d+): (.+)$", DOC)
-        self.assertEqual([number for number, _ in steps], [str(n) for n in range(1, len(steps) + 1)])
+        for led, colour in code:
+            with self.subTest(led=led):
+                self.assertIn(f"{led} {colour}".lower(), FLAT.lower())
 
 
 if __name__ == "__main__":

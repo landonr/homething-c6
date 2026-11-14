@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw the operator diagrams of docs/factory-self-test.md.
+"""Draw the operator diagrams of site/factory-self-test.html.
 
 Each sheet is the front face plan of scripts/face_plan.py with two callout
 kinds: an orange outline round the control to press, and a blue ring round the

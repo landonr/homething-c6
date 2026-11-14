@@ -101,8 +101,8 @@ static const Color BASE_COLOUR[5] = {
     Color(80, 80, 80),  // white
     Color(96, 0, 96),   // magenta
 };
-// Top and bottom base of each expander bit. docs/factory-self-test.md lists the
-// same pairs. Each group of four bits shares a top colour, and the bottom runs
+// Top and bottom base of each expander bit. site/factory-self-test.html lists
+// the same pairs. Each group of four bits shares a top colour, and the bottom runs
 // through the other bases in table order. No bit uses one base on both halves.
 static const uint8_t INPUT_PAIR[16][2] = {
     {0, 1},  // SW1 red green

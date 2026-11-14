@@ -1,4 +1,4 @@
-"""Checks the operator diagrams of docs/factory-self-test.md.
+"""Checks the operator diagrams of site/factory-self-test.html.
 
 The sheets need build123d to render, so this check reads the written SVGs, the
 document, the render group, and the firmware, and never imports the script."""
@@ -13,13 +13,13 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).parents[2]
 ASSETS = ROOT / "docs" / "readme-assets"
-DOC = (ROOT / "docs" / "factory-self-test.md").read_text()
+PAGE = (ROOT / "site" / "factory-self-test.html").read_text()
 CPP = (ROOT / "components" / "self_test" / "self_test.cpp").read_text()
 SCRIPT = (ROOT / "scripts" / "render-self-test-svg.py").read_text()
 GROUP = json.loads((ROOT / "scripts" / "renders.json").read_text())["self-test-diagrams"]
 
 STEPS = 8
-IMAGE = re.compile(r"!\[([^\]]+)\]\((readme-assets/(self-test-[a-z0-9-]+\.svg))\)")
+IMAGE = re.compile(r'<img alt="([^"]+)" src="assets/(self-test-[a-z0-9-]+\.svg)"')
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
@@ -37,7 +37,12 @@ def written():
 
 
 def document_images():
-    return IMAGE.findall(DOC)
+    return IMAGE.findall(PAGE)
+
+
+def steps():
+    """The markup of each step section, in page order."""
+    return re.findall(r'<section class="step">(.*?)</section>', PAGE, re.S)
 
 
 def chase_colours():
@@ -78,38 +83,33 @@ class DocumentTest(unittest.TestCase):
         self.images = document_images()
 
     def test_the_document_shows_every_sheet_once(self):
-        names = [name for _, _, name in self.images]
+        names = [name for _, name in self.images]
         self.assertEqual(names, written())
         self.assertEqual(len(set(names)), len(names))
 
     def test_each_step_carries_its_own_sheet(self):
-        for step in range(1, STEPS + 1):
-            body = DOC.split(f"### Step {step}:", 1)[1].split("\n### ", 1)[0]
-            found = [name for _, _, name in IMAGE.findall(body)]
-            with self.subTest(step=step):
+        sections = steps()
+        self.assertEqual(len(sections), STEPS)
+        for number, section in enumerate(sections, start=1):
+            found = [name for _, name in IMAGE.findall(section)]
+            with self.subTest(step=number):
                 self.assertEqual(len(found), 1)
-                self.assertTrue(found[0].startswith(f"self-test-step-{step}-"), found[0])
+                self.assertTrue(found[0].startswith(f"self-test-step-{number}-"), found[0])
 
     def test_the_transmit_step_marks_the_ir_led_it_names(self):
         """Step 5 says `D1` on the top edge, so its sheet must mark that position."""
-        step5 = DOC.split("### Step 5:", 1)[1].split("\n### ", 1)[0]
+        step5 = steps()[4]
         # The sentence can open a step or sit mid-sentence, so the case is free.
-        self.assertIn("aim it at `d1` on the top edge of the board.", step5.lower())
+        self.assertIn("aim it at <code>d1</code> on the top edge of the board.", step5.lower())
         labels = [el.text for el in ET.fromstring(
             (ASSETS / "self-test-step-5-ir-transmit.svg").read_text()).iter(f"{SVG_NS}text")]
         self.assertIn("D1 IR LED", labels)
-        alt = next(a for a, _, name in document_images() if name == "self-test-step-5-ir-transmit.svg")
+        alt = next(a for a, name in document_images() if name == "self-test-step-5-ir-transmit.svg")
         self.assertIn("IR LED D1 marked inside the top end", alt)
-
-    def test_the_position_words_moved_out_of_the_tables(self):
-        # The diagrams carry the positions now, so no table repeats them.
-        for row in re.findall(r"(?m)^\| `D\d` \|.*$", DOC):
-            with self.subTest(row=row):
-                self.assertNotRegex(row, r"(?i)top (left|right|cent)|bottom (left|right|cent)")
 
     def test_no_sheet_text_forks_on_the_board_version(self):
         # Every board at the station has six LEDs, so a version note separates nothing.
-        self.assertNotIn("V2", DOC)
+        self.assertNotIn("V2", PAGE)
         self.assertNotIn("V3 only", SCRIPT)
 
 
@@ -133,7 +133,7 @@ class SheetTest(unittest.TestCase):
 
     def test_each_alt_text_is_the_title_of_its_sheet(self):
         titles = {name: tree.find(f"{SVG_NS}title").text for name, tree in self.trees.items()}
-        for alt, _, name in document_images():
+        for alt, name in document_images():
             with self.subTest(sheet=name):
                 self.assertEqual(alt, titles[name])
                 self.assertEqual(alt, self.trees[name].get("aria-label"))

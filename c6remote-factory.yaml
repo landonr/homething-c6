@@ -2,7 +2,7 @@
 # it a Wi-Fi network, it installs the full c6remote.yaml firmware from the
 # release manifest. The full firmware reads the same saved network.
 #
-# The image also runs the hardware self-test. docs/factory-self-test.md is the
+# The image also runs the hardware self-test. site/factory-self-test.html is the
 # operator procedure and holds the LED ring table.
 substitutions:
   device_name: homething-c6

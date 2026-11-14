@@ -412,7 +412,9 @@ Keep `secrets.example.yaml`, because `c6remote-test-mic-vu.yaml` still reads Wi-
 
 ### Factory self-test
 
-`c6remote-factory.yaml` also runs a hardware self-test. `components/self_test/` holds the logic. `docs/factory-self-test.md` is the operator procedure that goes to PCBWay with the order.
+`c6remote-factory.yaml` also runs a hardware self-test. `components/self_test/` holds the logic. `site/factory-self-test.html` is the operator procedure that goes to PCBWay with the order.
+
+That procedure is a page of the website, not a Markdown file. `scripts/build-site.sh` publishes it, and its print rules give PCBWay a PDF without a binary in the repository. Edit the HTML directly, and keep the prose in Simplified Technical English. The step diagrams come from `docs/readme-assets/`, which `README_ASSETS` in the build script copies to `assets/`.
 
 The procedure is for a station operator with no schematic. Keep the engineering rationale in this file. Each step states its pass condition one time, in its `Pass` line.
 

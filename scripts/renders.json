@@ -206,7 +206,7 @@
     ]
   },
   "self-test-diagrams": {
-    "description": "The operator diagrams of docs/factory-self-test.md: one sheet for each of the eight steps.",
+    "description": "The operator diagrams of site/factory-self-test.html: one sheet for each of the eight steps.",
     "made_by": "repo",
     "outputs": [
       "docs/readme-assets/self-test-step-1-boot.svg",
@@ -237,7 +237,7 @@
     "recipe": [
       "render-self-test-svg.py reuses plan_view() of scripts/face_plan.py, so each sheet is the same face plan as the web page.",
       "The six LED positions come from the KiCad position file through case/board.py. The script holds no coordinate of its own.",
-      "LED_CHAIN in the script is the chain order of components/self_test/self_test.cpp. If a check moves, change the script and docs/factory-self-test.md in the same commit."
+      "LED_CHAIN in the script is the chain order of components/self_test/self_test.cpp. If a check moves, change the script and site/factory-self-test.html in the same commit."
     ]
   },
   "web-page-shots": {

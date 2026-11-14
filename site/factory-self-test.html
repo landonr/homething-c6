@@ -48,10 +48,10 @@
     main.doc .step-notes p { margin: 0 0 .6rem; }
     main.doc .step-actions { margin: 0 0 1rem; }
     main.doc .method { margin: 0 0 1.4rem; }
-    main.doc .method-title { font-size: .95em; margin: 0 0 .6rem; }
+    main.doc .method-title { font-size: 1em; margin: 0 0 .6rem; }
     main.doc .tablist { display: flex; gap: .4rem; margin: 0 0 1rem; }
     main.doc .tablist button {
-      font: inherit; font-size: .85em; cursor: pointer; padding: .3rem .85rem;
+      font: inherit; font-size: .9em; cursor: pointer; padding: .35rem .9rem;
       border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted);
     }
     main.doc .tablist button[aria-selected="true"] {
@@ -61,7 +61,6 @@
     main.doc .tabs-on .method-title { display: none; }
     main.doc .method > :last-child { margin-bottom: 0; }
     main.doc .step-text > :last-child { margin-bottom: 0; }
-    main.doc .step-text p, main.doc .step-text li { font-size: .92em; }
     main.doc figure { margin: 0; }
     main.doc img {
       display: block; width: 100%; height: auto; background: #fff;
@@ -74,6 +73,8 @@
     main.doc .verdicts { list-style: none; padding: 0; margin: 1.1rem 0; display: grid; gap: .35rem; }
     /* A step verdict spans both columns, under the sheet and the actions. */
     main.doc .step > .verdicts { margin: 1.25rem 0 0; }
+    /* display: grid would otherwise beat the hidden attribute. */
+    main.doc .verdicts[hidden] { display: none; }
     main.doc .verdict {
       margin: 0; padding: .5rem .7rem .5rem .8rem;
       border-left: 3px solid; border-radius: 0 6px 6px 0;
@@ -85,14 +86,14 @@
     main.doc .verdict.fail strong { color: #b3261e; }
     main.doc code {
       background: var(--grey); padding: .1em .35em; border-radius: 4px;
-      font-size: .86em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     main.doc pre {
       background: var(--grey); padding: 1rem 1.2rem; border-radius: 10px;
-      overflow-x: auto; font-size: .78em;
+      overflow-x: auto; font-size: .85em;
     }
     main.doc pre code { background: none; padding: 0; }
-    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .8em; }
+    main.doc table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: .9em; }
     main.doc th, main.doc td { border: 1px solid var(--line); padding: .45rem .65rem; text-align: left; }
     main.doc th { background: var(--grey); font-weight: 600; }
     .print-note { color: var(--muted); font-size: .8em; margin-top: 3rem; }
@@ -114,6 +115,10 @@
       /* Both methods print, because a sheet cannot hold a hidden tab. */
       main.doc .tablist { display: none; }
       main.doc .method[hidden] { display: block; }
+      main.doc .verdicts[hidden] { display: grid; }
+      main.doc .verdicts[data-label]::before {
+        content: attr(data-label); display: block; font-weight: 600; margin-bottom: .3rem;
+      }
       main.doc .tabs-on .method-title { display: block; }
     }
   </style>
@@ -272,10 +277,6 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <li>Press and hold <code>SW1</code> for 2 s. Release it when the ring flashes magenta.</li>
 <li>Watch the second board for 3 s.</li>
 </ol>
-<ul class="verdicts">
-<li class="verdict pass"><strong>Pass:</strong> The ring of the second board flashes white, and its <code>D4</code> turns green.</li>
-<li class="verdict fail"><strong>Fail:</strong> The second board does not answer. Move it closer and try one more time.</li>
-</ul>
 </div>
 <div class="method" id="panel-phone" role="tabpanel" aria-labelledby="tab-phone">
 <h4 class="method-title">Phone</h4>
@@ -284,14 +285,18 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <li>Press and hold <code>SW1</code> for 2 s. Release it when the ring flashes magenta.</li>
 <li>Look at the phone screen for 3 s.</li>
 </ol>
-<ul class="verdicts">
+</div>
+</div>
+</div>
+</div>
+<ul class="verdicts" data-for="panel-board" data-label="Second board">
+<li class="verdict pass"><strong>Pass:</strong> The ring of the second board flashes white, and its <code>D4</code> turns green.</li>
+<li class="verdict fail"><strong>Fail:</strong> The second board does not answer. Move it closer and try one more time.</li>
+</ul>
+<ul class="verdicts" data-for="panel-phone" data-label="Phone">
 <li class="verdict pass"><strong>Pass:</strong> On the phone screen, <code>D1</code> flashes 15 times at the same rate as the ring.</li>
 <li class="verdict fail"><strong>Fail:</strong> The phone screen shows no light from <code>D1</code>.</li>
 </ul>
-</div>
-</div>
-</div>
-</div>
 </section>
 <section class="step">
 <h3><span class="step-number">Step 6</span><span class="step-title">Battery (<code>D5</code>)</span></h3>
@@ -574,9 +579,12 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
       const buttons = [...list.querySelectorAll('[role="tab"]')];
       const panels = buttons.map((b) => document.getElementById(b.getAttribute("aria-controls")));
       if (panels.some((p) => !p)) continue;
+      // A verdict sits outside the columns, so it follows its own panel.
+      const linked = panels.map((p) => [...document.querySelectorAll(`[data-for="${p.id}"]`)]);
       const show = (index) => {
         buttons.forEach((b, i) => b.setAttribute("aria-selected", String(i === index)));
         panels.forEach((p, i) => { p.hidden = i !== index; });
+        linked.forEach((group, i) => group.forEach((el) => { el.hidden = i !== index; }));
       };
       buttons.forEach((b, i) => b.addEventListener("click", () => show(i)));
       list.hidden = false;

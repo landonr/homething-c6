@@ -315,81 +315,69 @@ SHEETS = {
         alt=(
             "Front face of the remote with every input marked for a press: the two "
             "buttons above the wheel, the nine buttons below it, the wheel direction "
-            "ring and the wheel center. D2, at the bottom left of the wheel, answers."
+            "ring and the wheel center."
         ),
         calls=[
             press("SW2", "left", "SW1 to SW11", "press each button"),
             press("wheel-ring", "right", "wheel", "press up, down,", "left and right"),
             press("wheel-center", "right", "wheel center", "press it once"),
-            watch("D2", "left", "D2", "buttons and wheel"),
         ],
     ),
     "step-3-microphone": dict(
         file="self-test-step-3-microphone.svg",
         alt=(
             "Front face of the remote with the wheel center marked for a 2 s hold and "
-            "the microphone hole marked at the top center of the face. D3, at the top "
-            "left of the wheel, answers."
+            "the microphone hole marked at the top center of the face."
         ),
         calls=[
             press("wheel-center", "right", "wheel center", "hold 2 s for the", "VU meter"),
             watch("mic", "right", "microphone hole", "speak at the front"),
-            watch("D3", "left", "D3", "microphone"),
         ],
     ),
     "step-4-ir-receive": dict(
         file="self-test-step-4-ir-receive.svg",
         alt=(
             "Front face of the remote for the IR receive check. The sheet marks no "
-            "button, because the receiver is on the back of the board. D4, at the top "
-            "right of the wheel, answers."
+            "button, because the receiver is on the back of the board."
         ),
-        calls=[watch("D4", "right", "D4", "IR receive")],
+        calls=[],
     ),
     "step-5-ir-transmit": dict(
         file="self-test-step-5-ir-transmit.svg",
         alt=(
             "Front face of the remote with the top right button SW1 marked for a 2 s "
-            "hold, and the IR LED D1 marked inside the top end. D6, at the top center "
-            "of the wheel, answers."
+            "hold, and the IR LED D1 marked inside the top end."
         ),
         calls=[
             press("SW1", "right", "SW1", "hold 2 s"),
             watch("D1", "right", "D1 IR LED", "aim the phone", "camera here"),
-            watch("D6", "left", "D6", "IR transmit"),
         ],
     ),
     "step-6-battery": dict(
         file="self-test-step-6-battery.svg",
         alt=(
             "Front face of the remote for the battery check. The sheet marks no "
-            "button, because the step disconnects USB power. D5, at the bottom right "
-            "of the wheel, answers."
+            "button, because the step disconnects USB power."
         ),
-        calls=[watch("D5", "right", "D5", "battery")],
+        calls=[],
     ),
     "step-7-usb-power": dict(
         file="self-test-step-7-usb-power.svg",
         alt=(
             "Front face of the remote for the USB power check. The sheet marks no "
-            "button, because the step connects USB power again. D7, at the bottom "
-            "center of the wheel, answers."
+            "button, because the step connects USB power again."
         ),
-        calls=[watch("D7", "left", "D7", "USB power")],
+        calls=[],
     ),
     "step-8-sleep-wake": dict(
         file="self-test-step-8-sleep-wake.svg",
         alt=(
-            "Front face of the remote for the sleep and wake check. SW2, above the "
-            "wheel at the top left, changes to the second overview. SW3, below the "
-            "wheel at the top left, sleeps the board and wakes it. D5, at the bottom "
-            "right, is the dim blue page indicator. D3, at the top left, answers."
+            "Front face of the remote with SW3, below the wheel at the top left, "
+            "marked for the 3 s hold that sleeps the board and for the press that "
+            "wakes it."
         ),
         calls=[
-            press("SW2", "right", "SW2", "hold 2 s for the", "second overview"),
             press("SW3", "left", "SW3", "hold 3 s to sleep,", "press to wake"),
-            watch("D5", "right", "D5", "dim blue page", "indicator"),
-            watch("D3", "left", "D3", "sleep and wake"),
         ],
     ),
 }

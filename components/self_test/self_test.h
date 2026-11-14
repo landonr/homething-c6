@@ -66,7 +66,6 @@ class SelfTest : public Component
   static constexpr uint8_t TRANSMIT_BIT = 0;
   // ENC1 centre.
   static constexpr uint8_t VU_BIT = 13;
-  static constexpr uint8_t PAGE_BIT = 1;
   static constexpr uint8_t SLEEP_BIT = 2;
   static constexpr uint32_t LONG_PRESS_MS = 2000;
   // The sleep hold works on every display mode, so it is longer than the other
@@ -106,12 +105,12 @@ class SelfTest : public Component
   bool allow_sleep_();
   void start_transmit_(uint32_t now);
   bool transmitting_(uint32_t now) const { return this->tx_started_ && now - this->tx_start_ms_ < TX_TOTAL_MS; }
-  bool inputs_passed_() const { return this->seen_mask_ == 0xFFFF && this->cw_seen_ && this->ccw_seen_; }
-  bool usb_passed_() const { return this->usb_plugged_seen_ && this->usb_unplugged_seen_; }
+  // Both only gate a log line. The ring shows no result of its own.
+  bool inputs_seen_() const { return this->seen_mask_ == 0xFFFF && this->cw_seen_ && this->ccw_seen_; }
+  bool usb_seen_() const { return this->usb_plugged_seen_ && this->usb_unplugged_seen_; }
   void note_inputs_();
   void draw_chase_(light::AddressableLight &it, uint32_t t) const;
-  void draw_overview_(light::AddressableLight &it) const;
-  void draw_second_page_(light::AddressableLight &it) const;
+  void draw_wake_(light::AddressableLight &it, uint32_t t) const;
   void draw_input_(light::AddressableLight &it, uint8_t bit) const;
   void draw_vu_(light::AddressableLight &it) const;
   void draw_install_(float percent);
@@ -122,17 +121,17 @@ class SelfTest : public Component
   InternalGPIOPin *usb_pin_{nullptr};
   idle_sleep::IdleSleep *idle_{nullptr};
   std::function<const char *()> sleep_blocked_by_{};
-  bool second_page_{false};
   bool sleep_requested_{false};
-  bool sleep_wake_passed_{false};
   uint32_t sleep_armed_until_ms_{0};
   uint32_t sleep_refused_until_ms_{0};
 
   int32_t led_count_{4};
   bool v3_{false};
 
-  // The intro is the boot chase. A wake from deep sleep plays it again.
+  // The intro is the boot chase. A wake from deep sleep fills the ring instead,
+  // so the operator can tell a wake from a cold boot without a log.
   bool intro_started_{false};
+  bool intro_wake_{false};
   uint32_t intro_start_ms_{0};
 
   uint16_t seen_mask_{0};

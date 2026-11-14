@@ -422,21 +422,25 @@ The procedure covers V3 only, because the station assembles V3 boards. It names 
 
 The self-test opens with the boot chase of `c6remote.yaml`. `draw_chase_()` in `self_test.cpp` is a copy of the chase, so a change to one file does not change the other.
 
-The overview follows the chase with no gap. The boot has no other animation, so do not add a colour sweep.
+The resting ring follows the chase with no gap. The boot has no other animation, so do not add a colour sweep.
 
-A wake from deep sleep plays the chase again. A wake also starts every check again at pending.
+A wake from deep sleep runs `draw_wake_()` instead of the chase. `IdleSleep::woke_from_sleep()` picks the animation at the first frame.
 
-The first overview keeps the original check positions, with `D5` for the battery and `D7` for USB power on V3.
+The fill adds one LED at a time and holds the complete ring. A cold boot moves one pulse, so the two cannot look alike.
 
-A 2 s hold of `SW2` changes between the two overviews. This input has no other hold function.
+The animation is the only evidence of a wake that the operator can see, because no value crosses the sleep.
 
-The second overview uses `D3` for sleep and wake, and dim blue `D5` as its page indicator.
+The self-test keeps no result of its own. The operator writes the result of each step, so the ring reports only the response to the action in front of it.
 
-All other LEDs are off on the second overview. The two overviews and the VU meter are separate display modes.
+`SW2` has no hold function. It is an ordinary button that the buttons and wheel step presses.
 
-The procedure has no table of the check that each first overview LED carries. The step headings and the step diagrams give that mapping.
+Between actions the ring rests at a dim white, which shows that the board is awake and that every LED lights.
 
-Each overview fact sits in the step that first needs it. Step 1 holds the two check LED states, and step 8 holds the second overview table and the cyan sleep request.
+The resting ring and the VU meter are the two display modes.
+
+No step heading names an LED, because no LED carries a result.
+
+Step 1 introduces the resting ring. Every other fact about the ring sits in the step that first needs it.
 
 The `Color reference` section at the end holds the boot chase colours, the held input pairs, and the ring patterns.
 
@@ -464,33 +468,35 @@ The sleep and wake check also applies to both board versions. It stays last beca
 
 A 3 s hold of `SW3` requests sleep after release. This sleep can start with V3 USB power present.
 
-The hold works on both overviews and in the VU meter, so no display mode makes it dead. `SLEEP_HOLD_MS` is 3000, and `LONG_PRESS_MS` stays 2000 for the other three holds.
+The hold works while the ring rests and in the VU meter, so no display mode makes it dead. `SLEEP_HOLD_MS` is 3000, and `LONG_PRESS_MS` stays 2000 for the other two holds.
 
-The longer hold replaces the former second-overview gate. It keeps an accidental sleep out of the buttons and wheel step.
+The longer hold keeps an accidental sleep out of the buttons and wheel step.
 
 `render()` draws both results on the whole ring, after the page and after a held input. The dark blue `SLEEP_ARMED_FLASH` lasts 500 ms for an armed request, and the red refusal lasts 1.5 s.
 
-The whole ring keeps the two results independent of the page. On the second overview, `D3` also shows cyan while the request waits for the release.
+Both sleep answers cover the whole ring, so they read on either display mode.
 
 `SelfTest::sleep_block_()` names the first blocking condition, and `allow_sleep_()` logs it as `Sleep test refused: <reason>`.
 
 The `sleep_blocked_by` lambda of `c6remote-factory.yaml` returns one reason for each condition, or `nullptr` when sleep can start.
 
-The operator releases all inputs at the dark blue flash, waits 5 s after the ring goes dark, then holds `SW3` until the boot animation starts.
+The operator releases all inputs at the dark blue flash. After the ring goes dark, the operator waits 5 s.
 
-Deep sleep keeps one value, `s_sleep_test_armed`. It records that the operator asked for the sleep, and no check result crosses the sleep.
+Then the operator holds any button until the boot animation starts.
 
-A wake starts every other check at pending, so the component needs no RTC snapshot and no shutdown hook. Do not add either one back.
+No value crosses the sleep, so the component needs no RTC snapshot and no shutdown hook. Do not add either one back.
 
-A sleep and wake pass needs the armed flag, a deep-sleep reset, an ext1 wake, and a button capture from the existing wake stub.
+The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. All 16 expander inputs share that line, so any input wakes the board.
 
-The wake path uses the expander interrupt on `GPIO5` and its `R9` pull-up. After the chase, the second overview opens and shows the result.
+Steps 1 to 7 read the inputs over I2C only, so a broken interrupt line passes them. Step 8 is the only check of that line.
 
-After the deliberate wake, `D3` is green, and every other check LED is back at dim amber.
+A ring that fills is the evidence that the board woke. A travelling pulse shows a reset.
 
-As a result, the procedure splits the final check round the wake. The operator confirms the first overview before step 8 and the wake check after it.
+No value crosses the sleep. The board wakes with no memory of the test.
 
-The operator checks both overviews in the same powered session. The procedure needs no paper or computer for the final result.
+As a result, the sleep step comes last, because the restart ends the session.
+
+The operator keeps the record. The procedure needs no computer, but it does need the operator to write each result down.
 
 The self-test does not block Improv or the install. No sleep can interrupt Wi-Fi setup or the install.
 

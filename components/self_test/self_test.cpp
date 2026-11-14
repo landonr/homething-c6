@@ -36,6 +36,11 @@ static constexpr uint32_t CHASE_LAPS = 2;
 // The strip is linear at full brightness here, so this peak reads brighter than
 // it does in the production firmware.
 static constexpr float CHASE_PEAK = 160.0f;
+// The wake fill adds one LED at a time and keeps it lit, so it cannot look like
+// the travelling pulse of a cold boot.
+static constexpr uint32_t WAKE_STEP_MS = 160;
+static constexpr uint32_t WAKE_HOLD_MS = 900;
+static constexpr uint8_t WAKE_LEVEL = 140;
 
 static constexpr uint32_t ENCODER_SHOW_MS = 1500;
 static constexpr uint32_t IR_FLASH_MS = 300;
@@ -43,10 +48,6 @@ static constexpr uint32_t USB_FLASH_MS = 500;
 static constexpr uint32_t USB_DEBOUNCE_MS = 50;
 static constexpr uint32_t SLEEP_ARMED_FLASH_MS = 500;
 static constexpr uint32_t SLEEP_REFUSED_MS = 1500;
-// The one value that crosses deep sleep. Every check result starts again on a
-// wake, so the wake check needs this flag to know that the sleep was deliberate.
-static constexpr uint32_t SLEEP_TEST_MAGIC = 0x53544631U;
-static RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;
 
 // The receiver idle is 10 ms, so a frame from a remote has no longer entry.
 static constexpr size_t IR_MIN_ENTRIES = 8;
@@ -71,14 +72,15 @@ static constexpr uint8_t BATTERY_SAMPLES = 3;
 // D2 red, D3 azure, D6 magenta, D4 green, D5 blue, D7 cyan.
 static const Color CHASE_COLOUR[6] = {Color(255, 0, 0), Color(0, 112, 255), Color(170, 0, 171),
                                       Color(0, 255, 0), Color(0, 0, 255),   Color(0, 171, 170)};
-// Green is brighter than red on these LEDs, so amber needs about 6:1.
-static const Color PENDING(24, 4, 0);
-static const Color PASSED(0, 40, 0);
+// The ring rests here, so it stays dim enough to read a flash over it.
+static const Color IDLE(10, 10, 10);
 static const Color ENCODER_DOT(96, 96, 96);
 static const Color IR_FLASH(96, 96, 96);
 static const Color USB_PLUG(0, 64, 64);
 static const Color USB_UNPLUG(96, 16, 0);
-static const Color TRANSMIT(96, 0, 96);
+// A phone camera checks this step, so the ring must not flash or wash out D1.
+// One dim LED holds steady instead, which lets the exposure settle on the emitter.
+static const Color TRANSMIT(24, 0, 24);
 static const Color VU_BAR(0, 48, 0);
 static const Color VU_TOP(96, 0, 0);
 static const Color VU_EMPTY(0, 0, 6);
@@ -86,10 +88,8 @@ static const Color INSTALL_DONE(0, 0, 64);
 static const Color INSTALL_LEFT(0, 0, 6);
 static const Color INSTALL_HEAD(64, 64, 96);
 static const Color FAILED(64, 0, 0);
-static const Color SECOND_PAGE(0, 0, 12);
-static const Color SLEEP_ARMED(0, 32, 32);
-// Both sleep results cover the whole ring, so each one reads on either overview
-// and in the VU meter. Dark blue stays apart from the dim blue page indicator.
+// Both sleep results cover the whole ring, so each one reads over the VU meter
+// and over the resting glow. Dark blue stays apart from the dim VU blue.
 static const Color SLEEP_ARMED_FLASH(0, 0, 64);
 // Five bases that stay apart at this brightness. A held input shows one on the
 // top half of the ring and another on the bottom half, so the pair names the bit.
@@ -126,6 +126,15 @@ static const uint8_t INPUT_PAIR[16][2] = {
 // Two laps of pulses, and two more steps for the tail of the last pulse.
 static uint32_t chase_ms(uint32_t n) { return (CHASE_LAPS * n + 2) * (CHASE_LAP_MS / n); }
 
+// The fill takes one step for each LED, then holds the full ring.
+static uint32_t wake_ms(uint32_t n) { return n * WAKE_STEP_MS + WAKE_HOLD_MS; }
+
+// D6 and D7 sit at the ends of the chain, so a six-LED ring skips the swap that
+// a four-LED ring needs.
+static Color chase_colour(uint32_t n, uint32_t led) {
+  return CHASE_COLOUR[n >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)];
+}
+
 static Color scaled(const Color &c, float f) {
   f = std::min(std::max(f, 0.0f), 1.0f);
   return c * static_cast<uint8_t>(f * 255.0f);
@@ -135,12 +144,6 @@ void SelfTest::setup() {
   auto *out = static_cast<light::AddressableLight *>(this->light_->get_output());
   this->led_count_ = std::max<int32_t>(out->size(), 1);
   this->v3_ = this->led_count_ >= 6;
-  const bool requested_wake = s_sleep_test_armed == SLEEP_TEST_MAGIC;
-  s_sleep_test_armed = 0;
-  this->sleep_wake_passed_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP &&
-                             esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 &&
-                             this->idle_->held_at_wake() != 0;
-  this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;
   // GPIO7 has no connection on a V2 board, so only V3 configures it.
   if (this->v3_ && this->usb_pin_ != nullptr) {
     this->usb_pin_->setup();
@@ -214,14 +217,14 @@ void SelfTest::encoder_step(bool clockwise) {
 }
 
 void SelfTest::note_inputs_() {
-  if (this->inputs_logged_ || !this->inputs_passed_())
+  if (this->inputs_logged_ || !this->inputs_seen_())
     return;
   this->inputs_logged_ = true;
-  ESP_LOGI(TAG, "Inputs check passed");
+  ESP_LOGI(TAG, "Every input seen");
 }
 
 void SelfTest::update_long_presses_(uint32_t now) {
-  for (const uint8_t bit : {TRANSMIT_BIT, VU_BIT, PAGE_BIT, SLEEP_BIT}) {
+  for (const uint8_t bit : {TRANSMIT_BIT, VU_BIT, SLEEP_BIT}) {
     const uint16_t mask = 1u << bit;
     if ((this->held_mask_ & mask) == 0 || (this->long_fired_mask_ & mask) != 0)
       continue;
@@ -233,13 +236,9 @@ void SelfTest::update_long_presses_(uint32_t now) {
     } else if (bit == VU_BIT) {
       this->vu_mode_ = !this->vu_mode_;
       ESP_LOGI(TAG, "VU meter %s", this->vu_mode_ ? "on" : "off");
-    } else if (bit == PAGE_BIT) {
-      this->second_page_ = !this->second_page_;
-      this->vu_mode_ = false;
-      ESP_LOGI(TAG, "Overview page %u", this->second_page_ ? 2 : 1);
     } else {
-      // The hold works on both overviews and in the VU meter, so no display mode
-      // makes it dead. allow_sleep_() logs and shows a refusal.
+      // The hold works in the VU meter too, so no display mode makes it dead.
+      // allow_sleep_() logs and shows a refusal.
       this->sleep_requested_ = this->allow_sleep_();
       if (this->sleep_requested_) {
         this->sleep_armed_until_ms_ = now + SLEEP_ARMED_FLASH_MS;
@@ -265,7 +264,6 @@ bool SelfTest::allow_sleep_() {
   if (blocked == nullptr)
     return true;
   this->sleep_requested_ = false;
-  s_sleep_test_armed = 0;
   this->sleep_refused_until_ms_ = millis() + SLEEP_REFUSED_MS;
   ESP_LOGI(TAG, "Sleep test refused: %s", blocked);
   return false;
@@ -276,7 +274,6 @@ void SelfTest::update_sleep_() {
     return;
   if (!this->allow_sleep_())
     return;
-  s_sleep_test_armed = SLEEP_TEST_MAGIC;
   this->idle_->arm_sleep([this]() { return this->allow_sleep_(); });
 }
 
@@ -419,8 +416,8 @@ void SelfTest::update_usb_(uint32_t now) {
   if (!first) {
     this->usb_flash_plug_ = raw;
     this->usb_flash_until_ms_ = now + USB_FLASH_MS;
-    if (this->usb_passed_())
-      ESP_LOGI(TAG, "USB check passed");
+    if (this->usb_seen_())
+      ESP_LOGI(TAG, "USB seen present and absent");
   }
 }
 
@@ -432,21 +429,25 @@ void SelfTest::render(light::AddressableLight &it) {
   const uint32_t now = millis();
   if (!this->intro_started_) {
     this->intro_started_ = true;
+    this->intro_wake_ = this->idle_ != nullptr && this->idle_->woke_from_sleep();
     this->intro_start_ms_ = now;
   }
   const uint32_t since = now - this->intro_start_ms_;
-  const uint32_t chase = chase_ms(static_cast<uint32_t>(n));
-  if (since < chase) {
-    this->draw_chase_(it, since);
+  const auto un = static_cast<uint32_t>(n);
+  if (since < (this->intro_wake_ ? wake_ms(un) : chase_ms(un))) {
+    if (this->intro_wake_)
+      this->draw_wake_(it, since);
+    else
+      this->draw_chase_(it, since);
     return;
   }
 
+  // The operator keeps the record, so the ring reports no result of its own.
+  // A dim ring only shows that the board is awake and that every LED lights.
   if (this->vu_mode_) {
     this->draw_vu_(it);
-  } else if (this->second_page_) {
-    this->draw_second_page_(it);
   } else {
-    this->draw_overview_(it);
+    it.all() = IDLE;
   }
 
   if (now < this->usb_flash_until_ms_)
@@ -457,25 +458,18 @@ void SelfTest::render(light::AddressableLight &it) {
     it.all() = Color::BLACK;
     it[this->encoder_pos_ % n] = ENCODER_DOT;
   }
-  // After a hold fires, the ring shows its result instead of the key colour.
+  // After a hold fires, that action owns the ring instead of the key colour.
   if (this->shown_bit_ != NO_BIT && (this->long_fired_mask_ & (1u << this->shown_bit_)) == 0)
     this->draw_input_(it, this->shown_bit_);
-  if (this->transmitting_(now) && (now - this->tx_start_ms_) % TX_PERIOD_MS < TX_MARK_US / 1000)
-    it.all() = TRANSMIT;
+  if (this->transmitting_(now)) {
+    it.all() = Color::BLACK;
+    it[LED_D6] = TRANSMIT;
+  }
   // Last, so the sleep hold answers on every display mode and over a held input.
   if (static_cast<int32_t>(this->sleep_armed_until_ms_ - now) > 0)
     it.all() = SLEEP_ARMED_FLASH;
   if (static_cast<int32_t>(this->sleep_refused_until_ms_ - now) > 0)
     it.all() = FAILED;
-}
-
-void SelfTest::draw_second_page_(light::AddressableLight &it) const {
-  const int32_t d5 = it.size() >= 6 ? 4 : 3;
-  it.all() = Color::BLACK;
-  it[LED_D3] = this->sleep_wake_passed_ ? PASSED : PENDING;
-  if (this->sleep_requested_)
-    it[LED_D3] = SLEEP_ARMED;
-  it[d5] = SECOND_PAGE;
 }
 
 // Two clockwise laps. Each pulse lasts three steps and the next starts one step
@@ -494,28 +488,18 @@ void SelfTest::draw_chase_(light::AddressableLight &it, uint32_t t) const {
     const auto level = static_cast<uint8_t>(CHASE_PEAK *
                                             (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)));
     const uint32_t led = i % n;
-    it[static_cast<int32_t>(led)] = CHASE_COLOUR[n >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)] * level;
+    it[static_cast<int32_t>(led)] = chase_colour(n, led) * level;
   }
 }
 
-void SelfTest::draw_overview_(light::AddressableLight &it) const {
-  const int32_t n = it.size();
-  const bool six = n >= 6;
-  const int32_t d4 = six ? 3 : 2;
-  const int32_t d5 = six ? 4 : 3;
+// A wake fills the ring one LED at a time and holds it. The operator sees a
+// complete ring, not a moving pulse, so a reset cannot pass for a wake.
+void SelfTest::draw_wake_(light::AddressableLight &it, uint32_t t) const {
+  const auto n = static_cast<uint32_t>(it.size());
+  const uint32_t lit = std::min(t / WAKE_STEP_MS + 1, n);
   it.all() = Color::BLACK;
-  auto show = [&it, n](int32_t index, bool passed) {
-    if (index < n)
-      it[index] = passed ? PASSED : PENDING;
-  };
-  show(LED_D2, this->inputs_passed_());
-  show(LED_D3, this->mic_passed_);
-  show(d4, this->ir_rx_passed_);
-  show(d5, this->battery_passed_);
-  if (six) {
-    show(LED_D6, this->tx_done_);
-    show(LED_D7, this->usb_passed_());
-  }
+  for (uint32_t led = 0; led < lit; led++)
+    it[static_cast<int32_t>(led)] = chase_colour(n, led) * WAKE_LEVEL;
 }
 
 // The chain runs clockwise from D2 at the bottom left, so indices 1 to n / 2

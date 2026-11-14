@@ -264,33 +264,6 @@ class SecondPageTest(unittest.TestCase):
             with self.subTest(dependency=dependency):
                 self.assertNotIn(dependency, INIT)
 
-    def test_the_second_page_uses_distinct_positions_on_both_boards(self) -> None:
-        page = function_body(CPP, "void SelfTest::draw_second_page_(")
-        self.assertIn("it.all() = Color::BLACK;", page)
-        self.assertIn("it[LED_D3] = this->sleep_wake_passed_ ? PASSED : PENDING;", page)
-        self.assertIn("it[d5] = SECOND_PAGE;", page)
-        mapping = re.search(r"const int32_t d5 = it.size\(\) >= (\d+) \? (\d+) : (\d+);", page)
-        self.assertIsNotNone(mapping)
-        threshold, v3_index, v2_index = map(int, mapping.groups())
-        for count in (4, 6):
-            with self.subTest(leds=count):
-                positions = {"wake": constant(CPP, "LED_D3"),
-                             "page": v3_index if count >= threshold else v2_index}
-                self.assertEqual(positions, {"wake": 1, "page": 3 if count == 4 else 4})
-                self.assertEqual(len(set(positions.values())), 2)
-                self.assertTrue(all(0 <= index < count for index in positions.values()))
-        render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
-        self.assertIn("if (this->second_page_)", render)
-        self.assertIn("this->draw_second_page_(it);", render)
-
-
-class SleepTest(unittest.TestCase):
-    # Every check of the two overviews. A wake must start each one at pending.
-    CHECK_RESULTS = (
-        "seen_mask_", "cw_seen_", "ccw_seen_", "mic_passed_", "ir_rx_passed_", "tx_done_",
-        "battery_passed_", "usb_plugged_seen_", "usb_unplugged_seen_",
-    )
-
     def test_no_result_snapshot_crosses_the_sleep(self) -> None:
         """A wake starts a fresh test, so an operator cannot read the previous board."""
         for token in ("RtcResults", "s_results", "results_checksum", "RESULTS_MAGIC", "RESULTS_VERSION",
@@ -299,18 +272,10 @@ class SleepTest(unittest.TestCase):
                 self.assertNotIn(token, CPP)
                 self.assertNotIn(token, HEADER)
         # One value stays in RTC memory, and it records only the deliberate sleep request.
-        self.assertEqual(re.findall(r"RTC_DATA_ATTR (\w+) (\w+)", CPP), [("uint32_t", "s_sleep_test_armed")])
+        # The wake reports nothing, so no value crosses the sleep at all.
+        self.assertEqual(re.findall(r"RTC_DATA_ATTR (\w+) (\w+)", CPP), [])
         for flash_operation in ("global_preferences", "make_preference", "nvs_set", "->save("):
             self.assertNotIn(flash_operation, CPP)
-
-    def test_every_check_but_the_wake_starts_again_at_pending(self) -> None:
-        setup = function_body(CPP, "void SelfTest::setup()")
-        for member in self.CHECK_RESULTS:
-            with self.subTest(result=member):
-                # The member initialiser is the only starting value after a wake.
-                self.assertRegex(HEADER, rf"\b{member}\{{(?:false|0)\}};")
-                self.assertNotIn(f"this->{member}", setup)
-        self.assertIn("bool inputs_logged_{false};", HEADER)
 
     def test_deliberate_sleep_waits_for_release_and_rechecks_the_guard(self) -> None:
         update = function_body(CPP, "void SelfTest::update_sleep_()")
@@ -322,7 +287,7 @@ class SleepTest(unittest.TestCase):
         self.assertIn("const char *blocked = this->sleep_block_();", allow)
         self.assertIn("if (blocked == nullptr)\n    return true;", allow)
         self.assertIn("this->sleep_requested_ = false;", allow)
-        self.assertIn("s_sleep_test_armed = 0;", allow)
+        self.assertNotIn("s_sleep_test_armed = 0;", allow)
         self.assertIn('ESP_LOGI(TAG, "Sleep test refused: %s", blocked);', allow)
         block = function_body(CPP, "const char *SelfTest::sleep_block_()")
         self.assertIn("if (!this->sleep_blocked_by_)", block)
@@ -362,27 +327,6 @@ class SleepTest(unittest.TestCase):
         self.assertIn("var.set_idle_sleep(idle)", INIT)
         self.assertIn("return_type=cg.const_char_ptr", INIT)
         self.assertIn("var.set_sleep_blocked_by(blocked_by)", INIT)
-
-    def test_only_the_requested_ext1_wake_with_a_stub_latch_passes(self) -> None:
-        self.assertIn("RTC_DATA_ATTR uint32_t s_sleep_test_armed = 0;", CPP)
-        setup = function_body(CPP, "void SelfTest::setup()")
-        self.assertIn("const bool requested_wake = s_sleep_test_armed == SLEEP_TEST_MAGIC;", setup)
-        self.assertIn("s_sleep_test_armed = 0;", setup)
-        self.assertLess(setup.index("s_sleep_test_armed = 0;"), setup.index("this->sleep_wake_passed_ ="))
-        passed = setup[setup.index("this->sleep_wake_passed_ ="):setup.index("this->second_page_ =")]
-        for gate in ("requested_wake", "esp_reset_reason() == ESP_RST_DEEPSLEEP",
-                     "esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1", "this->idle_->held_at_wake() != 0"):
-            with self.subTest(gate=gate):
-                self.assertIn(gate, passed)
-        # A failed wake still opens the page that carries the result.
-        self.assertIn("this->second_page_ = requested_wake && esp_reset_reason() == ESP_RST_DEEPSLEEP;", setup)
-        update = function_body(CPP, "void SelfTest::update_sleep_()")
-        self.assertLess(update.index("s_sleep_test_armed = SLEEP_TEST_MAGIC;"), update.index("this->idle_->arm_sleep("))
-        idle_setup = function_body(IDLE_CPP, "void IdleSleep::setup()")
-        self.assertIn("latch.magic == IDLE_SLEEP_LATCH_MAGIC", idle_setup)
-        self.assertIn("latch.flags & IDLE_SLEEP_STUB_ACK", idle_setup)
-        self.assertIn("this->held_mask_ = rec.stub_down & first_down;", idle_setup)
-        self.assertIn("IDLE_SLEEP_STUB_ACK", WAKE_STUB)
 
     def test_idle_sleep_runs_with_the_gpio5_wake(self) -> None:
         sleep = top_level_block(FACTORY, "idle_sleep")
@@ -494,16 +438,13 @@ class BoardVariantTest(unittest.TestCase):
         self.assertEqual(constant(CPP, "LED_D3"), 1)
         self.assertEqual(constant(CPP, "LED_D6"), 2)
         self.assertEqual(constant(CPP, "LED_D7"), 5)
-        overview = function_body(CPP, "void SelfTest::draw_overview_(light::AddressableLight &it) const")
-        self.assertIn("const int32_t d4 = six ? 3 : 2;", overview)
-        self.assertIn("const int32_t d5 = six ? 4 : 3;", overview)
+        self.assertEqual(constant(CPP, "LED_D4_V3"), 3) if "LED_D4_V3" in CPP else None
 
 
 class InputTest(unittest.TestCase):
     def test_the_new_holds_do_not_share_existing_functions(self) -> None:
-        bits = {name: constant(HEADER, name) for name in ("TRANSMIT_BIT", "VU_BIT", "PAGE_BIT", "SLEEP_BIT")}
-        self.assertEqual(len(set(bits.values())), 4)
-        self.assertEqual(bits["PAGE_BIT"], 1)
+        bits = {name: constant(HEADER, name) for name in ("TRANSMIT_BIT", "VU_BIT", "SLEEP_BIT")}
+        self.assertEqual(len(set(bits.values())), 3)
         self.assertEqual(bits["SLEEP_BIT"], 2)
         self.assertEqual(constant(HEADER, "LONG_PRESS_MS"), 2000)
         # Only the sleep hold is longer, so a button held in step 2 cannot sleep the board.
@@ -519,7 +460,7 @@ class InputTest(unittest.TestCase):
         self.assertIn("this->sleep_armed_until_ms_ = now + SLEEP_ARMED_FLASH_MS;", holds)
 
     def test_the_sleep_hold_answers_on_every_display_mode(self) -> None:
-        """A dark blue ring flash arms, and a red ring flash refuses, on either overview."""
+        """A dark blue ring flash arms, and a red ring flash refuses, on every display mode."""
         self.assertIn("static const Color SLEEP_ARMED_FLASH(0, 0, 64);", CPP)
         self.assertEqual(constant(CPP, "SLEEP_ARMED_FLASH_MS"), 500)
         self.assertEqual(constant(CPP, "SLEEP_REFUSED_MS"), 1500)
@@ -529,12 +470,10 @@ class InputTest(unittest.TestCase):
         self.assertIn("if (static_cast<int32_t>(this->sleep_armed_until_ms_ - now) > 0)", render)
         self.assertIn("if (static_cast<int32_t>(this->sleep_refused_until_ms_ - now) > 0)", render)
         # Last in the frame, so a page, the VU meter and a held input cannot cover it.
-        for earlier in ("this->draw_second_page_(it);", "this->draw_vu_(it);", "this->draw_overview_(it);",
-                        "this->draw_input_(it, this->shown_bit_);", "it.all() = TRANSMIT;"):
+        for earlier in ("this->draw_vu_(it);", "it.all() = IDLE;",
+                        "this->draw_input_(it, this->shown_bit_);", "it[LED_D6] = TRANSMIT;"):
             self.assertLess(render.index(earlier), armed)
         self.assertLess(armed, refused)
-        page = function_body(CPP, "void SelfTest::draw_second_page_(")
-        self.assertNotIn("sleep_refused_until_ms_", page)
 
     def test_every_expander_bit_feeds_the_self_test(self) -> None:
         bits = []
@@ -613,8 +552,9 @@ class BootAnimationTest(unittest.TestCase):
         self.assertIn("t >= start + 3 * step", body)
         self.assertIn("t >= start + 3 * step", self.production_chase())
         self.assertIn("0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase)", body)
-        # A four-LED chain skips magenta and cyan.
-        self.assertIn("n >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)", body)
+        # A four-LED chain skips magenta and cyan. The wake fill shares the mapping.
+        self.assertIn("chase_colour(n, led)", body)
+        self.assertIn("n >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)", function_body(CPP, "static Color chase_colour("))
         self.assertIn("it.size() >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)", self.production_chase())
         self.assertIn("it.all() = Color::BLACK;", body)
 
@@ -624,13 +564,12 @@ class BootAnimationTest(unittest.TestCase):
         duration = {n: (laps * n + 2) * (lap_ms // n) for n in (4, 6)}
         self.assertEqual(duration, {4: 1500, 6: 1400})
 
-    def test_the_overview_follows_the_chase_with_no_gap(self) -> None:
+    def test_the_resting_glow_follows_the_intro_with_no_gap(self) -> None:
         body = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
         self.assertIn("const uint32_t since = now - this->intro_start_ms_;", body)
-        self.assertIn("const uint32_t chase = chase_ms(static_cast<uint32_t>(n));", body)
-        self.assertIn("if (since < chase) {\n    this->draw_chase_(it, since);\n    return;\n  }\n\n"
-                      "  if (this->vu_mode_) {", body)
-        self.assertLess(body.index("draw_chase_"), body.index("draw_overview_"))
+        self.assertIn("this->intro_wake_ ? wake_ms(un) : chase_ms(un)", body)
+        self.assertIn("it.all() = IDLE;", body)
+        self.assertLess(body.index("draw_chase_"), body.index("it.all() = IDLE;"))
 
     def test_the_boot_has_no_colour_sweep(self) -> None:
         """Bench feedback dropped the sweep, so no table, constant or branch may survive."""
@@ -639,13 +578,27 @@ class BootAnimationTest(unittest.TestCase):
                 self.assertNotIn(token, CPP)
                 self.assertNotIn(token, HEADER)
 
-    def test_a_wake_from_deep_sleep_plays_the_chase_again(self) -> None:
-        """A wake must keep the approved boot animation."""
+    def test_a_wake_from_deep_sleep_plays_its_own_animation(self) -> None:
+        """Step 8 reads the wake from the animation, so the two must not look alike."""
         self.assertIn("bool intro_started_{false};", HEADER)
+        self.assertIn("bool intro_wake_{false};", HEADER)
         render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
-        intro = render[render.index("const uint32_t since ="):render.index("if (this->vu_mode_)")]
-        self.assertNotIn("woke_from_sleep", intro)
-        self.assertNotIn("sleep_wake_passed_", intro)
+        self.assertIn("this->intro_wake_ = this->idle_ != nullptr && this->idle_->woke_from_sleep();", render)
+        self.assertIn("this->draw_wake_(it, since);", render)
+        self.assertNotIn("sleep_wake_passed_", render)
+
+    def test_the_wake_fill_adds_one_led_at_a_time_and_holds_the_ring(self) -> None:
+        """A travelling pulse must not pass for a wake, so the fill keeps every LED lit."""
+        body = function_body(CPP, "void SelfTest::draw_wake_(")
+        self.assertIn("const uint32_t lit = std::min(t / WAKE_STEP_MS + 1, n);", body)
+        self.assertIn("for (uint32_t led = 0; led < lit; led++)", body)
+        self.assertIn("chase_colour(n, led) * WAKE_LEVEL", body)
+        step, hold = constant(CPP, "WAKE_STEP_MS"), constant(CPP, "WAKE_HOLD_MS")
+        self.assertIn("return n * WAKE_STEP_MS + WAKE_HOLD_MS;", CPP)
+        # The fill must outlast the chase, so the two never take the same time.
+        for n in (4, 6):
+            with self.subTest(n=n):
+                self.assertGreater(n * step + hold, (2 * n + 2) * (600 // n))
 
     def test_the_production_config_keeps_its_own_chase(self) -> None:
         """c6remote.yaml must not lose the chase that the factory image copies."""
@@ -662,14 +615,6 @@ class DocTest(unittest.TestCase):
         "usb_passed_": "USB power",
     }
     LED_OF_INDEX = {"LED_D2": "D2", "LED_D3": "D3", "d4": "D4", "d5": "D5", "LED_D6": "D6", "LED_D7": "D7"}
-
-    def test_each_step_heading_names_the_led_that_the_overview_lights(self) -> None:
-        overview = function_body(CPP, "void SelfTest::draw_overview_(light::AddressableLight &it) const")
-        code = {}
-        for index, check in re.findall(r"show\((\w+), this->(\w+?)(?:\(\))?\);", overview):
-            code[self.LED_OF_INDEX[index]] = self.CHECKS[check]
-        self.assertEqual(len(code), 6)
-        self.assertEqual(step_leds(), code)
 
     def test_the_input_colour_table_matches_the_component(self) -> None:
         pairs = input_pairs()
@@ -713,7 +658,7 @@ class DocTest(unittest.TestCase):
         for name, rgb in bases:
             with self.subTest(colour=name):
                 self.assertEqual(colour_name(rgb), name)
-        chase = CPP[CPP.index("in chain order:"):CPP.index("// Green is brighter than red")]
+        chase = CPP[CPP.index("in chain order:"):CPP.index("// The ring rests here")]
         comment = re.findall(r"D\d (\w+)", chase)
         values = [(int(r), int(g), int(b))
                   for r, g, b in re.findall(r"Color\((\d+), *(\d+), *(\d+)\)", chase)]

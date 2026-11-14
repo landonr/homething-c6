@@ -135,11 +135,11 @@ static void a_replay_wake_mark_taps_on_release() {
   H h;
   // Released during setup, before the first wake tick.
   h.wake_held(SLOT_WIFI, false);
-  EXPECT(h.release(SLOT_WIFI) == H::TAP_AND_RELEASE);
+  EXPECT(h.release(SLOT_WIFI) == H::WAKE_TAP_AND_RELEASE);
   h.wake_held(SLOT_WIFI, false);
   h.wake_start(SLOT_WIFI, 0);
   EXPECT(h.tick(1999) == 0);
-  EXPECT(h.release(SLOT_WIFI) == H::TAP_AND_RELEASE);
+  EXPECT(h.release(SLOT_WIFI) == H::WAKE_TAP_AND_RELEASE);
   // An input without a hold already sent its wake press through the replay.
   h.wake_held(PLAIN, false);
   h.wake_start(PLAIN, 0);
@@ -151,7 +151,7 @@ static void wake_start_skips_the_assignment_hold() {
   h.wake_held(SLOT_ASSIGN, false);
   h.wake_start(SLOT_ASSIGN, 0);
   EXPECT(h.tick(60000) == 0);
-  EXPECT(h.release(SLOT_ASSIGN) == H::TAP_AND_RELEASE);
+  EXPECT(h.release(SLOT_ASSIGN) == H::WAKE_TAP_AND_RELEASE);
   // A normal press of the same input still opens assignment mode.
   EXPECT(!h.press(SLOT_ASSIGN, 70000));
   EXPECT(h.tick(72000) == bit(H::ASSIGN));

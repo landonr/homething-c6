@@ -13,7 +13,7 @@ class HoldActions {
   static constexpr uint8_t NONE = COUNT;
   // RELEASE_ONLY: the press tapped, so end push-to-talk. TAP_AND_RELEASE: a
   // deferred press sends its assignment now. SILENT: the hold fired.
-  enum Release : uint8_t { RELEASE_ONLY = 0, TAP_AND_RELEASE = 1, SILENT = 2 };
+  enum Release : uint8_t { RELEASE_ONLY = 0, TAP_AND_RELEASE = 1, SILENT = 2, WAKE_TAP_AND_RELEASE = 3 };
 
   static constexpr uint32_t HOLD_MS[COUNT] = {2000, 1000, 2000, 2000};
   static constexpr uint8_t DEFAULT_SLOT[COUNT] = {5, 7, 20, 9};
@@ -89,7 +89,7 @@ class HoldActions {
       entry.down = false;
       return true;
     }
-    entry = Press{true, true, false, false, action, now};
+    entry = Press{true, true, false, false, false, action, now};
     return false;
   }
 
@@ -102,12 +102,14 @@ class HoldActions {
     if (!entry.down) {
       // Held through the boot and released before the first wake tick. The
       // replay hook skipped a deferring input, so it taps here.
-      return wake == WAKE_TAP && defers(slot) ? TAP_AND_RELEASE : RELEASE_ONLY;
+      return wake == WAKE_TAP && defers(slot) ? WAKE_TAP_AND_RELEASE : RELEASE_ONLY;
     }
     entry.down = false;
     entry.timing = false;
     entry.fired = false;
-    return entry.silent ? SILENT : TAP_AND_RELEASE;
+    if (entry.silent)
+      return SILENT;
+    return entry.wake ? WAKE_TAP_AND_RELEASE : TAP_AND_RELEASE;
   }
 
   // From on_boot, before any loop. A button held through the boot fires no
@@ -125,9 +127,9 @@ class HoldActions {
     const uint8_t action = active_action_(slot);
     if (action == NONE)
       return;
-    const bool silent = wake_[slot] == WAKE_SILENT;
+    const uint8_t wake = wake_[slot];
     wake_[slot] = WAKE_NONE;
-    presses_[slot] = Press{true, action != ASSIGN, silent, false, action, now};
+    presses_[slot] = Press{true, action != ASSIGN, wake == WAKE_SILENT, false, wake == WAKE_TAP, action, now};
   }
 
   // Bit n set: action n fired on this call. Each press fires once, and two
@@ -165,6 +167,7 @@ class HoldActions {
     bool timing;
     bool silent;
     bool fired;
+    bool wake;
     uint8_t action;
     uint32_t since;
   };

@@ -109,6 +109,6 @@ async def to_code(config):
         replay = await cg.process_lambda(
             config[CONF_REPLAY],
             [(cg.uint8, "bit"), (cg.bool_, "held"), (cg.bool_, "link")],
-            return_type=cg.bool_,
+            return_type=cg.uint8,
         )
         cg.add(var.set_replay(replay))

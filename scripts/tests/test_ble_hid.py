@@ -153,8 +153,20 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("id: release_assignment", release)
         plain = CONFIG.split("  - id: release_assignment\n", 1)[1].split("\n  - id:", 1)[0]
         self.assertIn("lambda: return ir_ui.release(static_cast<uint8_t>(slot));", plain)
-        # SW1 no longer drives HID from its raw edges.
-        self.assertNotIn("set_pressed(", CONFIG)
+        # No physical button drives HID from its raw edges.
+        sensors = CONFIG.split("\nbinary_sensor:\n", 1)[1].split("\nsensor:\n", 1)[0]
+        self.assertNotIn("set_pressed(", sensors)
+
+    def test_wake_tap_waits_for_a_bluetooth_connection_and_releases(self) -> None:
+        replay = CONFIG.split("  replay: !lambda |-\n", 1)[1].split("\n\ni2c:", 1)[0]
+        ble = replay.split("if (id(ble_hid_remote).assignment(slot).assigned) {", 1)[1].split("\n    }", 1)[0]
+        gate = ble.index("if (!(replay & Sleep::WAKE_BLE) || !id(ble_hid_remote).radio_enabled())")
+        wait = ble.index("if (!id(ble_hid_remote).connected())\n        return Sleep::REPLAY_WAIT_LINK;")
+        press = ble.index("id(ble_hid_remote).set_pressed(slot, true)")
+        release = ble.index("id(ble_hid_remote).set_pressed(slot, false)")
+        self.assertLess(gate, wait)
+        self.assertLess(wait, press)
+        self.assertLess(press, release)
 
     @staticmethod
     def body(start: str) -> str:

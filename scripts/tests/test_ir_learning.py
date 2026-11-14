@@ -118,7 +118,7 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn("ir_code_store.save(target, raw)", HEADER)
         self.assertIn("pending_transmit_ = ir_code_store.load(button, code_);", HEADER)
         # The anticlockwise detent, the press path and the release path.
-        self.assertEqual(3, CONFIG.count("- if: *send_learned_code"))
+        self.assertEqual(4, CONFIG.count("- if: *send_learned_code"))
         self.assertLess(CONFIG.index("- if: &send_learned_code"), CONFIG.index("\nscript:\n"))
         self.assertIn("FIRST_BUTTON = 3", HEADER)
         self.assertNotIn("remote_transmitter.transmit_samsung:", CONFIG)
@@ -234,7 +234,7 @@ class AssignmentOwnershipTest(unittest.TestCase):
     def test_a_press_tries_voice_hid_zigbee_home_assistant_then_ir(self) -> None:
         play = section(HEADER, "void play_(uint8_t button) {", "\n  }")
         order = ["is_voice(button)", "hid_play_callback_(button, true)", "zigbee_play_callback_(button)",
-                 "ha_play_callback_(button)", "ir_code_store.load(button, code_)"]
+                 "ha_play_callback_(button)", "prepare_ir(button)"]
         positions = [play.index(item) for item in order]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("void set_ha_play_callback(std::function<bool(uint8_t)> play) {", HEADER)

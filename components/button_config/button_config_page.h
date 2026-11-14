@@ -50,6 +50,7 @@ h1{font-size:20px;margin:0 0 4px}
 h2{font-size:16px;margin:0 0 8px}
 h2.ttl{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h2.ttl select{width:auto;margin:0;font-size:14px;font-weight:400}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:14px}
 .sw{position:relative;display:inline-block;width:38px;height:22px;flex:none}
 .sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
 .sw input[disabled]{cursor:not-allowed}
@@ -223,14 +224,15 @@ aria-label="Sleep" disabled><span></span></label></h2>
 <input type="number" id="sla" min="1" max="60" step="1" inputmode="numeric" disabled>
 <button type="button" id="slap" disabled>Apply</button>
 </div>
-<h2 class="ttl">Send IR on wake<label class="sw"><input type="checkbox" id="sri"
-aria-label="Send IR on wake" disabled><span></span></label></h2>
-<h2 class="ttl">Send Home Assistant on wake<label class="sw"><input type="checkbox" id="srha"
-aria-label="Send Home Assistant on wake" disabled><span></span></label></h2>
-<h2 class="ttl">Send Zigbee on wake<label class="sw"><input type="checkbox" id="srz"
-aria-label="Send Zigbee on wake" disabled><span></span></label></h2>
-<h2 class="ttl">Send Bluetooth on wake<label class="sw"><input type="checkbox" id="srb"
-aria-label="Send Bluetooth on wake" disabled><span></span></label></h2>
+<h2 class="ttl">Send on wake</h2>
+<div class="opt">IR<label class="sw"><input type="checkbox" id="sri"
+aria-label="Send IR on wake" disabled><span></span></label></div>
+<div class="opt">Home Assistant<label class="sw"><input type="checkbox" id="srha"
+aria-label="Send Home Assistant on wake" disabled><span></span></label></div>
+<div class="opt">Zigbee<label class="sw"><input type="checkbox" id="srz"
+aria-label="Send Zigbee on wake" disabled><span></span></label></div>
+<div class="opt">Bluetooth<label class="sw"><input type="checkbox" id="srb"
+aria-label="Send Bluetooth on wake" disabled><span></span></label></div>
 <p class="sub" id="srh"></p>
 </div>
 <hr class="rule">

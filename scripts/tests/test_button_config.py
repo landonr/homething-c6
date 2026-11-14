@@ -383,6 +383,20 @@ class SleepSettingsTest(unittest.TestCase):
         self.assertIn('document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};', PAGE)
         self.assertNotIn('document.getElementById("sla").onchange', PAGE)
 
+    def test_the_wake_radios_share_one_heading(self) -> None:
+        """Four headings read as four settings, so one heading carries the group."""
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        block = section(dev, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Status LEDs')
+        self.assertIn('<h2 class="ttl">Send on wake</h2>', block)
+        for label, box in (("IR", "sri"), ("Home Assistant", "srha"), ("Zigbee", "srz"), ("Bluetooth", "srb")):
+            self.assertIn(f'<div class="opt">{label}<label class="sw"><input type="checkbox" id="{box}"\n'
+                          f'aria-label="Send {label} on wake" disabled><span></span></label></div>', block)
+            # The visible label drops the verb, so the aria-label keeps it.
+            self.assertNotIn(f"Send {label} on wake<", block)
+        self.assertLess(block.index("Send on wake"), block.index('id="sri"'))
+        self.assertLess(block.index('id="srb"'), block.index('id="srh"'))
+        self.assertIn(".opt{display:flex;align-items:center;justify-content:space-between", PAGE)
+
     def test_the_preview_serves_the_sleep_block(self) -> None:
         preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
         self.assertIn('"sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False,', preview)

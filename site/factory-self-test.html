@@ -366,9 +366,6 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 </div>
 </div>
 </section>
-<h2>Result</h2>
-<p>The board passes only when every step passes. Write the result of each step as you go.</p>
-<p>If a step fails, continue with the next step. A board that fails one step still gives useful information about the others.</p>
 <h2>Parts not covered</h2>
 <p>This procedure finds no fault in these parts:</p>
 <ul>
@@ -376,13 +373,6 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <li>The battery charge circuit, because that check takes too long for the station.</li>
 <li>The Wi-Fi radio and the Bluetooth radio. The antenna is part of the <code>U1</code> module, which the module supplier tests before assembly.</li>
 </ul>
-<h2>Shipped state</h2>
-<p>To ship a board after the test, disconnect USB power. If the battery stays connected, the board sleeps after 5 minutes.</p>
-<p>The test does not change the flash, but Wi-Fi setup stores the network there. If a board received a Wi-Fi network or the full firmware, do these steps:</p>
-<ol>
-<li>Erase the full flash with <code>esptool.py --chip esp32c6 erase_flash</code>.</li>
-<li>Write the factory firmware at offset <code>0x0</code>, as the start of this procedure shows.</li>
-</ol>
 <h2>Color reference</h2>
 <p>These tables hold the colors that the steps use.</p>
 <h3>Boot animation colors</h3>

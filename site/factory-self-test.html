@@ -344,7 +344,6 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <p>A wake fills the ring one LED at a time, in the boot animation colors, then holds the complete ring.</p>
 <p>A cold boot moves one pulse round the ring instead. That pulse at this step means that the board reset.</p>
 <p>Every button and wheel direction shares one wake line, so any of them wakes the board.</p>
-<p>If the ring flashes red, the board refused the request. Release <code>SW3</code>, then hold it again.</p>
 <p>This sleep can start with USB power connected.</p>
 </div>
 <div class="step-body">
@@ -360,6 +359,7 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 </ol>
 <ul class="verdicts">
 <li class="verdict pass"><strong>Pass:</strong> The ring went dark, and the button press filled the ring one LED at a time.</li>
+<li class="verdict fail"><strong>Fail:</strong> The ring flashes red. The board refused the sleep, so release <code>SW3</code> and hold it again.</li>
 <li class="verdict fail"><strong>Fail:</strong> The board does not sleep, or it does not wake on a button press.</li>
 <li class="verdict fail"><strong>Fail:</strong> One pulse travels round the ring. The board reset instead of waking.</li>
 </ul>

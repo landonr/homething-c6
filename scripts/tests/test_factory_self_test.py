@@ -6,6 +6,8 @@ import math
 import re
 import unittest
 
+from scripts.tests.yaml_blocks import list_entries, top_level_block, without_comments
+
 
 ROOT = Path(__file__).parents[2]
 FACTORY = (ROOT / "c6remote-factory.yaml").read_text()
@@ -46,33 +48,6 @@ def step_leds() -> dict:
 PROJECT_NAME = "landonr.homething-c6"
 # The NEC leader mark, the longest header mark of a common IR protocol.
 LONGEST_PROTOCOL_MARK_US = 9000
-
-
-def top_level_block(text: str, key: str) -> str:
-    """Returns the lines under one top-level key, up to the next top-level key."""
-    lines = text.splitlines()
-    try:
-        start = lines.index(f"{key}:")
-    except ValueError:
-        raise AssertionError(f"no top-level {key}: block") from None
-    body = []
-    for line in lines[start + 1:]:
-        if line and not line[0].isspace() and not line.startswith("#"):
-            break
-        body.append(line)
-    return "\n".join(body) + "\n"
-
-
-def without_comments(block: str) -> str:
-    return "\n".join(line for line in block.splitlines() if not line.lstrip().startswith("#")) + "\n"
-
-
-def list_entries(block: str) -> list[str]:
-    """Splits a top-level list block into its entries."""
-    entries = re.split(r"(?m)^  - ", without_comments(block))[1:]
-    if not entries:
-        raise AssertionError("the block has no list entries")
-    return ["  - " + entry for entry in entries]
 
 
 def function_body(source: str, signature: str) -> str:

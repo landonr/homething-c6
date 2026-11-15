@@ -4,6 +4,8 @@ from pathlib import Path
 import re
 import unittest
 
+from scripts.tests.yaml_blocks import list_entries, top_level_block
+
 
 CONFIG = Path(__file__).parents[2] / "c6remote.yaml"
 IR_LEARNING = Path(__file__).parents[2] / "ir_learning.h"
@@ -1008,6 +1010,32 @@ class ProductionConfigTest(unittest.TestCase):
             joined,
         )
 
+
+
+class ComponentIdTest(unittest.TestCase):
+    """Made for ESPHome needs an id on every entity and component, so a user who
+    adopts the config can extend or remove any part of it."""
+
+    LIST_BLOCKS = ("ota", "update", "text_sensor", "pcf8574", "binary_sensor", "sensor",
+                   "output", "light", "switch", "button")
+    MAP_BLOCKS = ("i2c", "http_request", "improv_serial", "ble_hid", "ha_action", "zigbee",
+                  "button_config", "idle_sleep", "remote_receiver", "remote_transmitter")
+    # The entry marker carries the id, or the entry does, or the one entity of a
+    # platform that can carry several, as wifi_info does.
+    ID_LINE = r"(?m)^(?:  - |    |      )id: \w+$"
+
+    def test_every_entity_has_an_id(self) -> None:
+        config = CONFIG.read_text()
+        for key in self.LIST_BLOCKS:
+            for entry in list_entries(top_level_block(config, key)):
+                with self.subTest(block=key, entry=entry.splitlines()[0]):
+                    self.assertRegex(entry, self.ID_LINE)
+
+    def test_every_bus_and_radio_has_an_id(self) -> None:
+        config = CONFIG.read_text()
+        for key in self.MAP_BLOCKS:
+            with self.subTest(block=key):
+                self.assertRegex(top_level_block(config, key), r"(?m)^  id: \w+$")
 
 
 class HomeAssistantActionConfigTest(unittest.TestCase):

@@ -16,15 +16,15 @@ CASE_CACHE_KEEP=<n> ...                       # how many solid cache keys to kee
 
 ### Validation delegation
 
-For case or enclosure edits, delegate every validation command to a subagent with the explicit model `gpt-5.6-luna`.
+For case or enclosure edits, delegate every validation command to a subagent that runs on Haiku.
 
-Select `gpt-5.6-luna` explicitly. Do not inherit the primary model.
+Select Haiku explicitly. Do not inherit the primary model.
 
 Delegate case builds, scoped and full checks, hardware quick and verify loops, tests, lint, renders, and documentation checks.
 
 The main orchestrator chooses the scope and sends exact commands and known baselines.
 
-The Luna subagent runs commands and reports routine results.
+The subagent runs the commands and reports routine results.
 
 The main orchestrator synthesizes failures and incomplete checks.
 

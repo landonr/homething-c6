@@ -751,12 +751,18 @@ instead."""
 # open to the cavity below (the pad's wheel cut already uncovers the LEDs) and
 # roofed by translucent shell, which is the diffuser. On the recessed front the
 # roof is LED_RING_FACE_ROOF under the face all the way round.
-LED_RING_WALL = 1.0
+LED_RING_WALL = 1.25
 """Web between the wheel opening's bore and the channel's inner wall. It is what
 keeps the opening a closed cylinder the wheel seats against, and it is the
 ring's inner light barrier, so it is not free to thin toward zero. The inner
 wall stands at this radius below its top chamfer and widens the web above it.
-The check still probes it on the built shell rather than trusting the sum."""
+The check still probes it on the built shell rather than trusting the sum.
+
+It was 1.0, which read 0.84 on the built shell, because LED_RING_INNER_CHAMFER
+bevels the top of this wall and the ray crosses the bevel. This web, not the
+roof, is the thinnest part of the ring channel: the roof runs 1.50 to 1.68
+because the arch sits below the face less LED_RING_FACE_ROOF all the way
+round."""
 LED_RING_INNER_CHAMFER = 0.53
 """45 degree bevel at the inner wall's top edge on both LED channels. It steps
 0.53 mm out from the inner wall and 0.53 mm down from the channel ceiling at the
@@ -1040,11 +1046,14 @@ QWIIC_CORNER_CHAMFER = 0.3
 """The small corner trim stays within the connector clearance at each corner."""
 QWIIC_SKIRT_CLEARANCE = 0.2
 """The hidden front skirt clears the port roof and joins the adjacent support reliefs."""
-QWIIC_KNOCKOUT_T = 1.0
-"""The flush cover at the PA12 minimum that PCBWay publishes for SLS. It was
-0.8, two 0.4 mm extrusion widths. A thicker cover is harder to break out, and
-PA12 bends where resin snaps, so the knockout needs a cut test on the first
-print."""
+QWIIC_KNOCKOUT_T = 1.05
+"""The flush cover, just over the PA12 minimum that PCBWay publishes for SLS.
+It was 0.8, two 0.4 mm extrusion widths. The cover follows the curved back
+form, so a flat 1.0 read 0.99 normal to that surface, the same way the IR
+window rebate did. The extra 0.05 carries it clear.
+
+A thicker cover is harder to break out, and PA12 bends where resin snaps, so
+the knockout needs a cut test on the first print."""
 QWIIC_KNOCKOUT_GAP = 0.3
 """The border separates the cover from the wall except at two side bridges."""
 QWIIC_KNOCKOUT_TAB_W = 0.8

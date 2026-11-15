@@ -354,10 +354,11 @@ stop between the two shells and the whole case bows out at that end, which is
 what a printed one did. The gap is 0.2 more than SKIRT_FIT. A smaller gap
 brings the pilot closer to where the ramp starts, and this lets the screw sit
 higher."""
-END_SCREW_BLOCK_D = 3.7
+END_SCREW_BLOCK_D = 4.2
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
-0.5, so the pilot ends inside it and the thread is never drilled out the back
-of its own boss.
+1.0, so the pilot ends inside it and the thread is never drilled out the back
+of its own boss. The plus was 0.5, which left a cap under the PA12 minimum that
+PCBWay publishes for SLS.
 
 The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
@@ -830,15 +831,19 @@ degree line up from the mouth also meets the higher arch nearer the wheel. The
 outer rake ends at that radius, so the roof flat gets narrower. The FDM front's
 channel depth is a fraction of the arch's depth on the crown line, so a change
 here also changes the FDM front."""
-LED_RING_FACE_ROOF = 0.8
+LED_RING_FACE_ROOF = 1.0
 """Vertical roof that the recessed front's LED ring channel keeps under the
 built face. The ceiling is at the face less this value all the way round,
 because LED_RING_SAG keeps the arch below it. As a result, the six LEDs glow
 through an even roof, and light gets through a near-opaque white material.
 
-This value is the minimum wall that PCBWay publishes for SLA resin.
-ROOF_LEFT_MIN in checks/wheel_ring.py holds the thinnest roof just under it.
-A smaller value lets more light through but is under that minimum. A larger
+This value is the minimum wall that PCBWay publishes for PA12 printed by SLS.
+It was 0.8, the SLA resin minimum, while the shells were ordered in resin. The
+roof is measured vertically and the face slopes, so the wall normal to the face
+reads a little under this value. ROOF_LEFT_MIN in checks/wheel_ring.py holds
+the thinnest roof just under it.
+
+A smaller value lets more light through but is under the minimum. A larger
 value makes the channel shallower, most at the east and west sides of the knob,
 where the face is lowest. The FDM front does not use this value."""
 LED_RING_SAG = 1.1
@@ -979,8 +984,13 @@ face, and this governs only the inward side, the reach back into the cavity
 that connects the opening to it. U2's bottom aperture does not use this."""
 
 # IR window: stepped inside-fit insert closing U2's -Z aperture in the back.
-IR_WINDOW_T = 1.0
-"""Optical pane thickness from conformal exterior face to interior shoulder."""
+IR_WINDOW_T = 1.15
+"""Optical pane thickness from conformal exterior face to interior shoulder.
+
+It is also the shell left over the rebate, because the rebate stops one pane
+thickness above the exterior. The back form is curved, so a 1.0 pane left the
+shell reading 0.97 normal to that surface, under the PA12 minimum. This value
+carries the reading clear of it."""
 IR_WINDOW_FLANGE = 0.8
 """Interior flange reach past aperture per side: outward retention and adhesive land."""
 IR_WINDOW_FIT = 0.1
@@ -1018,8 +1028,10 @@ BACK_STL_ANGULAR_TOLERANCE = 0.06
 """Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
-RESET_GUIDE_WALL = 0.8
-"""Guide wall thickness for two 0.4 mm extrusion widths."""
+RESET_GUIDE_WALL = 1.0
+"""Guide wall thickness at the PA12 minimum that PCBWay publishes for SLS. It
+was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no longer
+applies to a printed shell."""
 RESET_GUIDE_GAP = 0.6
 """Minimum gap between the guide tip and the RESET contact face."""
 QWIIC_CLEARANCE = 0.5
@@ -1028,14 +1040,19 @@ QWIIC_CORNER_CHAMFER = 0.3
 """The small corner trim stays within the connector clearance at each corner."""
 QWIIC_SKIRT_CLEARANCE = 0.2
 """The hidden front skirt clears the port roof and joins the adjacent support reliefs."""
-QWIIC_KNOCKOUT_T = 0.8
-"""The flush cover uses two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_T = 1.0
+"""The flush cover at the PA12 minimum that PCBWay publishes for SLS. It was
+0.8, two 0.4 mm extrusion widths. A thicker cover is harder to break out, and
+PA12 bends where resin snaps, so the knockout needs a cut test on the first
+print."""
 QWIIC_KNOCKOUT_GAP = 0.3
 """The border separates the cover from the wall except at two side bridges."""
 QWIIC_KNOCKOUT_TAB_W = 0.8
 """Each side bridge spans four 0.2 mm layers from the panel's lower edge."""
-QWIIC_KNOCKOUT_TAB_T = 0.8
-"""The two bridges use two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_TAB_T = 1.0
+"""The two bridges at the PA12 minimum that PCBWay publishes for SLS. It was
+0.8, two 0.4 mm extrusion widths. The bridges are what the operator breaks, so
+they share the cut test of QWIIC_KNOCKOUT_T."""
 QWIIC_KNOCKOUT_ANCHOR = 0.4
 """Each bridge overlaps the panel and wall to keep the back shell one solid."""
 BATTERY_PLUG_REACH = 7.0
@@ -1657,12 +1674,12 @@ the arrows' ink.
 check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""
 
-FAB_PROCESS = "SLA"
+FAB_PROCESS = "SLS"
 """The PCBWay process that the front and back shells are ordered in. check.py
 measures the walls of the exported c6remote-case-front.stl and
-c6remote-case-back.stl against FAB_MIN_WALL[FAB_PROCESS]. SLA is the process
-that LED_RING_FACE_ROOF was set for. Set "SLS" to see the features that an SLS
-PA12 order puts on hold.
+c6remote-case-back.stl against FAB_MIN_WALL[FAB_PROCESS]. SLS is the PA12
+process the shells are going to, and its 1.0 mm minimum is the stricter of the
+two, so a part that passes here also passes an SLA order.
 
 If a wall is thinner than the minimum, PCBWay holds the order. You then accept
 the risk or make the wall thicker. Source, read on 2026-11-11:

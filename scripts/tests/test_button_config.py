@@ -19,7 +19,7 @@ ROOT = Path(__file__).parents[2]
 COMPONENT = ROOT / "components" / "button_config"
 CPP = (COMPONENT / "button_config.cpp").read_text()
 HEADER = (COMPONENT / "button_config.h").read_text()
-PAGE = (COMPONENT / "button_config_page.h").read_text()
+PAGE = (COMPONENT / "button_config_page.html").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
@@ -60,7 +60,7 @@ def cpp_slots() -> list:
 
 
 def page_slots() -> list:
-    """Parse the S array out of button_config_page.h as one dict per input."""
+    """Parse the S array out of button_config_page.html as one dict per input."""
     array = section(PAGE, "var S=[", "];")
     rows = re.findall(
         r'\{s:(\d+),l:"([^"]+)",v:([01]),x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
@@ -2443,7 +2443,8 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn("gzip.compress", INIT)
         self.assertIn("cg.progmem_array", INIT)
         self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
-        self.assertNotIn('#include "button_config_page.h"', CPP)
+        # The page is data that the build reads, never a compiled header.
+        self.assertNotIn("button_config_page", CPP)
 
     def test_the_schema_reserves_lwip_sockets_for_the_page(self) -> None:
         """Production has no web_server, so nothing else sizes CONFIG_LWIP_MAX_SOCKETS

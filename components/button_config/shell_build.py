@@ -24,7 +24,6 @@ import base64
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
 
 try:  # ESPHome imports this file as part of the component package.
@@ -34,7 +33,7 @@ except ImportError:  # The scripts and the tests load it by path.
 
 ROOT = Path(__file__).resolve().parents[2]
 CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
-PAGE_HEADER = Path(__file__).resolve().parent / "button_config_page.h"
+PAGE_FILE = Path(__file__).resolve().parent / "button_config_page.html"
 SCRIPT_OPEN = "<script>\n"
 SCRIPT_CLOSE = "\n</script>"
 BUNDLE_DIR = ROOT / "site" / "app"
@@ -99,11 +98,8 @@ def script_bounds(html: str) -> tuple[int, int]:
 
 def page() -> str:
     """Returns the composed page, the document that `page: embedded` holds."""
-    match = re.search(r'R"=====\((.*)\)=====";', PAGE_HEADER.read_text(), re.DOTALL)
-    if match is None:
-        raise ValueError("button_config_page.h has no PAGE_HTML value")
     svg = data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))
-    return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg)
+    return PAGE_FILE.read_text().replace("__CASE_FRONT_FACE_SVG__", svg)
 
 
 def bundle_js() -> str:

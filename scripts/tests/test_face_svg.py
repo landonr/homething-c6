@@ -14,7 +14,7 @@ COMPONENT = ROOT / "components" / "button_config"
 FACE_SVG = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 INIT = (COMPONENT / "__init__.py").read_text()
 SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
-PAGE = (COMPONENT / "button_config_page.h").read_text()
+PAGE = (COMPONENT / "button_config_page.html").read_text()
 PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
 
 _SPEC = importlib.util.spec_from_file_location("face_svg", COMPONENT / "face_svg.py")

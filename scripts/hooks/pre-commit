@@ -90,7 +90,7 @@ fi
 
 # The loader checks the signature of the bundle, so a page change needs a new
 # bundle and a new signature. The ESPHome build fails when either is missing.
-if grep -qE '^components/button_config/(button_config_page\.h|shell_build\.py|face_svg\.py)$' <<<"$STAGED"; then
+if grep -qE '^components/button_config/(button_config_page\.html|shell_build\.py|face_svg\.py)$' <<<"$STAGED"; then
 	echo "[pre-commit] page source staged -> writing and signing the website bundle"
 	if python3 "$REPO_ROOT/scripts/build-shell-bundle.py"; then
 		git add -- "$REPO_ROOT/site/app/app.js" "$REPO_ROOT/site/app/app.js.sig"

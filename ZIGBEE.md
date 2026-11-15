@@ -362,7 +362,7 @@ A callback must not block on flash or on the record mutex. It parks the slot in
 ### Where the numbers come from
 
 The `Action` enum in `zigbee_learning.h` and the `ZA` table in
-`components/button_config/button_config_page.h` hold the same numbers. A new
+`components/button_config/button_config_page.html` hold the same numbers. A new
 action needs a row in both, or the page names a command the remote does not
 know.
 

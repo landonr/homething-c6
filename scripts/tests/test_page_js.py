@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).parents[2]
-PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
+PAGE = ROOT / "components" / "button_config" / "button_config_page.html"
 STUB = Path(__file__).parent / "page_dom_stub.js"
 
 

@@ -492,8 +492,8 @@ class InputTest(unittest.TestCase):
             entry = next(e for e in list_entries(top_level_block(FACTORY, "binary_sensor"))
                          if re.search(rf"(?m)^    id: {name}$", e))
             self.assertIn(f"number: {bit}\n", entry)
-        self.assertIn("name: Button 9\n    pin:\n      <<: *button_1\n      number: 9\n", CONFIG)
-        self.assertIn("name: Button 10\n    pin:\n      <<: *button_1\n      number: 8\n", CONFIG)
+        self.assertIn("name: Button 9\n    id: button_9\n    pin:\n      <<: *button_1\n      number: 9\n", CONFIG)
+        self.assertIn("name: Button 10\n    id: button_10\n    pin:\n      <<: *button_1\n      number: 8\n", CONFIG)
         self.assertEqual(constant(HEADER, "VU_BIT"), 13)
 
     def test_both_encoder_directions_feed_the_self_test(self) -> None:

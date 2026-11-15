@@ -18,7 +18,7 @@ INPUT_SLOTS.update({"Button 1": 20, "Button 2": 19, "Wheel Right": 12, "Wheel Up
 
 def button_pin(config: str, button: int) -> int:
     match = re.search(
-        rf"name: Button {button}\n    pin:\n      <<: \*button_1\n      number: (\d+)",
+        rf"name: Button {button}\n    id: button_{button}\n    pin:\n      <<: \*button_1\n      number: (\d+)",
         config,
     )
     if match is None:
@@ -239,7 +239,7 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertNotRegex(config, r"(?m)^web_server:")
         sensors = config.split("\ntext_sensor:\n", 1)[1].split("\n\n", 1)[0]
         self.assertIn("  - platform: wifi_info\n    ip_address:\n      name: IP Address\n"
-                      "      entity_category: diagnostic\n", sensors)
+                      "      id: ip_address\n      entity_category: diagnostic\n", sensors)
         page = sensors.split("\n  - platform: template\n", 1)[1].split("\n  - platform:", 1)[0]
         for text in ("    id: web_page_url\n", "    name: Web Page\n", "    entity_category: diagnostic\n",
                      "    icon: mdi:web\n", "    update_interval: never\n",

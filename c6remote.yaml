@@ -219,6 +219,7 @@ text_sensor:
   - platform: wifi_info
     ip_address:
       name: IP Address
+      id: ip_address
       entity_category: diagnostic
   # No web_server, so no Visit link. The hostname survives a DHCP change and
   # already carries the MAC suffix.
@@ -382,6 +383,7 @@ idle_sleep:
     return Sleep::REPLAY_SENT;
 
 i2c:
+  id: i2c_bus
   sda: GPIO22
   scl: GPIO23
   frequency: 100kHz
@@ -399,6 +401,7 @@ binary_sensor:
   # carries an active hold sends its assignment on release instead.
   - platform: gpio
     name: Button 1
+    id: button_1
     pin: &button_1
       pcf8574: button_expander
       number: 0
@@ -420,6 +423,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 19}
   - platform: gpio
     name: Button 3
+    id: button_3
     pin:
       <<: *button_1
       number: 2
@@ -429,6 +433,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 3}
   - platform: gpio
     name: Button 4
+    id: button_4
     pin:
       <<: *button_1
       number: 3
@@ -438,6 +443,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 4}
   - platform: gpio
     name: Button 5
+    id: button_5
     pin:
       <<: *button_1
       number: 4
@@ -447,6 +453,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 5}
   - platform: gpio
     name: Button 6
+    id: button_6
     pin:
       <<: *button_1
       number: 5
@@ -456,6 +463,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 6}
   - platform: gpio
     name: Button 7
+    id: button_7
     pin:
       <<: *button_1
       number: 6
@@ -465,6 +473,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 7}
   - platform: gpio
     name: Button 8
+    id: button_8
     pin:
       <<: *button_1
       number: 7
@@ -474,6 +483,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 8}
   - platform: gpio
     name: Button 9
+    id: button_9
     pin:
       <<: *button_1
       number: 9
@@ -483,6 +493,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 9}
   - platform: gpio
     name: Button 10
+    id: button_10
     pin:
       <<: *button_1
       number: 8
@@ -492,6 +503,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 10}
   - platform: gpio
     name: Button 11
+    id: button_11
     pin:
       <<: *button_1
       number: 10
@@ -504,6 +516,7 @@ binary_sensor:
   # the part is mounted as drawn and there is no rotation to compensate for.
   - platform: gpio
     name: Wheel Right
+    id: wheel_right
     pin:
       <<: *button_1
       number: 11
@@ -513,6 +526,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 12}
   - platform: gpio
     name: Wheel Up
+    id: wheel_up
     pin:
       <<: *button_1
       number: 12
@@ -522,6 +536,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 13}
   - platform: gpio
     name: Wheel Press
+    id: wheel_press
     pin:
       <<: *button_1
       number: 13
@@ -531,6 +546,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 14}
   - platform: gpio
     name: Wheel Down
+    id: wheel_down
     pin:
       <<: *button_1
       number: 14
@@ -540,6 +556,7 @@ binary_sensor:
       - script.execute: {id: button_release, slot: 15}
   - platform: gpio
     name: Wheel Left
+    id: wheel_left
     pin:
       <<: *button_1
       number: 15
@@ -551,6 +568,7 @@ binary_sensor:
 sensor:
   - platform: rotary_encoder
     name: Wheel
+    id: wheel_encoder
     # A on GPIO19 makes a clockwise turn fire on_clockwise.
     pin_a:
       number: GPIO19
@@ -1033,6 +1051,7 @@ switch:
       - lambda: id(button_cfg).set_ha_api_expected(false);
 
 remote_receiver:
+  id: ir_receiver
   pin:
     number: GPIO16
     mode:
@@ -1046,6 +1065,7 @@ remote_receiver:
         ir_ui.captured(x);
 
 remote_transmitter:
+  id: ir_transmitter
   pin: GPIO1
   carrier_duty_percent: 50%
   non_blocking: true
@@ -1320,3 +1340,4 @@ button:
   # this. Nothing else on the device offers a restart.
   - platform: restart
     name: Restart
+    id: restart_button

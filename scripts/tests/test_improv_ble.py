@@ -70,6 +70,13 @@ class ServiceTest(unittest.TestCase):
             with self.subTest(uuid=uuid):
                 self.assertIn(f".flags = {flags},", entry)
 
+    def test_a_service_that_never_registered_says_so(self) -> None:
+        """NimBLE fills the handles as it registers, so a zero handle is the one
+        sign that the service never reached the database."""
+        dump = CPP.split("void ImprovBle::dump_config() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn("state_handle == 0", dump)
+        self.assertIn("ESP_LOGW(", dump)
+
     def test_only_the_notifying_characteristics_keep_a_handle(self) -> None:
         for uuid in ("STATE", "ERROR", "RPC_RESULT"):
             entry = CPP.split(f"&{uuid}_UUID.u,", 1)[1].split("},", 1)[0]

@@ -380,6 +380,13 @@ void ImprovBle::loop() {
 void ImprovBle::dump_config() {
   ESP_LOGCONFIG(TAG, "Improv BLE:");
   ESP_LOGCONFIG(TAG, "  Transport: the NimBLE server of ble_hid");
+  // NimBLE fills the handles while it registers the service, so a handle of
+  // zero is the one sign that the service never reached the database.
+  if (state_handle == 0 || error_handle == 0 || result_handle == 0) {
+    ESP_LOGW(TAG, "The Improv service is not in the GATT database, so no installer can reach it");
+  } else {
+    ESP_LOGCONFIG(TAG, "  Handles: state %u, error %u, result %u", state_handle, error_handle, result_handle);
+  }
 #ifdef USE_BINARY_SENSOR
   ESP_LOGCONFIG(TAG, "  Authorizer: %s", this->authorizer_ == nullptr ? "none" : "a binary sensor");
 #endif

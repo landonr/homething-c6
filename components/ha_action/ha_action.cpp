@@ -378,15 +378,15 @@ bool HaAction::send_(Pending &entry) {
   const bool untracked = this->stale_callbacks_ >= STALE_MAX;
   const uint32_t call_id = untracked ? 0 : this->next_call_id_;
   api::HomeassistantActionRequest request;
-  request.service = StringRef(service);
+  request.service = ProgmemStringRef(StringRef(service));
   request.data.init(step ? 2 : 1);
   auto &target = request.data.emplace_back();
-  target.key = StringRef::from_lit("entity_id");
-  target.value = StringRef(entry.entity);
+  target.key = ProgmemStringRef::from_lit("entity_id");
+  target.value = ProgmemStringRef(StringRef(entry.entity));
   if (step) {
     auto &brightness = request.data.emplace_back();
-    brightness.key = StringRef::from_lit("brightness_step_pct");
-    brightness.value = StringRef(amount);
+    brightness.key = ProgmemStringRef::from_lit("brightness_step_pct");
+    brightness.value = ProgmemStringRef(StringRef(amount));
   }
   request.call_id = call_id;
 

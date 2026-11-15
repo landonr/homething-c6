@@ -282,8 +282,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
                       'compile c6remote.yaml', FIRMWARE_WORKFLOW)
         self.assertEqual(substitution(CONFIG, "status_led_count"), '"4"')
         self.assertIn("esphome -s status_led_count 6 compile c6remote-factory.yaml", FIRMWARE_WORKFLOW)
-        self.assertIn('pip install "esphome==${ESPHOME_VERSION}"', FIRMWARE_WORKFLOW)
-        self.assertRegex(FIRMWARE_WORKFLOW, r"\n  ESPHOME_VERSION: \d+\.\d+\.\d+\n")
+        # The remote tracks the ESPHome development branch, so the workflow
+        # installs a commit. A branch name would let two runs of one tag build
+        # different firmware, so the value must stay a full commit.
+        self.assertIn('pip install "esphome @ git+https://github.com/esphome/esphome@${ESPHOME_COMMIT}"',
+                      FIRMWARE_WORKFLOW)
+        self.assertRegex(FIRMWARE_WORKFLOW, r"\n  ESPHOME_COMMIT: [0-9a-f]{40}\n")
 
     def test_the_manifest_matches_the_http_request_update_parser(self) -> None:
         for text in ('name: "homeThing C6"', "version: $version", 'chipFamily: "ESP32-C6"',

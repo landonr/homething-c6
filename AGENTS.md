@@ -407,11 +407,23 @@ Release builds are for V3 boards, which have six status LEDs. V2 boards are benc
 
 A V2 unit can install a release build to test the update path. Its ring LED positions are then wrong, because its chain has four LEDs.
 
-The workflow installs the ESPHome version in `ESPHOME_VERSION`. If you change the local ESPHome version, change this value in the same commit.
+The remote tracks the ESPHome development branch, not a release. The workflow installs the commit in `ESPHOME_COMMIT`. If you change the local ESPHome, change this value in the same commit.
+
+Keep that value a full commit. A branch name would let two runs of one tag build different firmware.
+
+To move it, pick a commit on `dev`, install it locally, then build both configs before you change the workflow:
+
+```bash
+pipx install --force "esphome @ git+https://github.com/esphome/esphome@<commit>"
+```
+
+A development branch breaks a local component without warning. The two that broke on the way to 2026.12 are below.
 
 From 2026.10.0, ESPHome leaves some ESP-IDF components out of the build. `ble_hid` asks for `esp_hid` back, because it needs the HID device API. A build that loses that call stops at a missing `esp_hidd.h`.
 
 ESPHome renamed `esp32_improv` to `improv_ble` in 2026.10.0. The old key works until 2027.4.0. `c6remote-factory.yaml` uses the new name, and it limits its external components to `idle_sleep` and `self_test`, so the local `improv_ble` component cannot take the key there.
+
+The Home Assistant action message takes `ProgmemStringRef` from 2026.11.0. On this chip that type only holds a pointer, so a runtime string still works, but it needs the explicit constructor. `ha_action` wraps each name and value.
 
 A tag run cannot deploy GitHub Pages, because the `github-pages` environment accepts only `develop` and `main`. As a result, the workflow starts `pages.yml` on `develop`.
 

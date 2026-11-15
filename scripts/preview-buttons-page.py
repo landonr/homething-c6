@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Serves the web page from the source header with a fake remote behind it.
 
-The page is a raw string in components/button_config/button_config_page.h, so a
+The page is components/button_config/button_config_page.htmltml, so a
 browser can run it without an ESPHome build and without hardware. This server
 answers the page endpoints from a small in-memory state, so the layout,
 the radio switches, and the assignment tiles can be checked in a browser.
@@ -30,7 +30,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / "components" / "button_config" / "button_config_page.h"
+PAGE = ROOT / "components" / "button_config" / "button_config_page.html"
 CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 # The firmware build packs the face with this module, so the preview uses it too.
 _FACE_SVG_SPEC = importlib.util.spec_from_file_location(
@@ -271,12 +271,8 @@ SLOTS.setdefault(8, {"action": "ha", "ha_kind": "light", "ha_act": "brightness_u
 
 
 def page_html() -> bytes:
-    source = PAGE.read_text()
-    match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
-    if match is None:
-        raise SystemExit("button_config_page.h has no PAGE_HTML value")
     svg = face_svg.data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))
-    return match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg).encode()
+    return PAGE.read_text().replace("__CASE_FRONT_FACE_SVG__", svg).encode()
 
 
 def slot_json(slot: int) -> dict:

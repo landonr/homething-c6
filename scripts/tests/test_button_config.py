@@ -19,8 +19,9 @@ ROOT = Path(__file__).parents[2]
 COMPONENT = ROOT / "components" / "button_config"
 CPP = (COMPONENT / "button_config.cpp").read_text()
 HEADER = (COMPONENT / "button_config.h").read_text()
-PAGE = (COMPONENT / "button_config_page.h").read_text()
+PAGE = (COMPONENT / "button_config_page.html").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
+SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
 HOLDS = (ROOT / "hold_actions.h").read_text()
@@ -59,7 +60,7 @@ def cpp_slots() -> list:
 
 
 def page_slots() -> list:
-    """Parse the S array out of button_config_page.h as one dict per input."""
+    """Parse the S array out of button_config_page.html as one dict per input."""
     array = section(PAGE, "var S=[", "];")
     rows = re.findall(
         r'\{s:(\d+),l:"([^"]+)",v:([01]),x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
@@ -1005,7 +1006,7 @@ class FaceGeometryTest(unittest.TestCase):
         self.assertLessEqual(abs(got - want), FACE_TOLERANCE, f"{what}: page {got}, face {want:.2f}")
 
     def test_the_page_and_the_preview_embed_this_face(self) -> None:
-        self.assertIn('svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"', INIT)
+        self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', SHELL_BUILD)
         self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', PREVIEW)
         # Only absolute moves and lines, so the point pairs above are the outline.
         letters = set(re.findall(r"[A-Za-z]", "".join(re.findall(r'\sd="([^"]*)"', FACE_SVG.read_text()))))
@@ -1147,7 +1148,7 @@ class PlacementTest(unittest.TestCase):
     def test_the_page_renders_the_full_front_face_selector(self) -> None:
         self.assertIn('<div class="remote" id="remote">', PAGE)
         self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
-        self.assertIn('"case-front-face.svg"', INIT)
+        self.assertIn('"case-front-face.svg"', SHELL_BUILD)
 
     def test_the_front_face_image_is_not_draggable(self) -> None:
         self.assertIn('alt="Front face of the homeThing c6 remote" draggable="false">', PAGE)
@@ -2442,7 +2443,8 @@ class ComponentSchemaTest(unittest.TestCase):
         self.assertIn("gzip.compress", INIT)
         self.assertIn("cg.progmem_array", INIT)
         self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
-        self.assertNotIn('#include "button_config_page.h"', CPP)
+        # The page is data that the build reads, never a compiled header.
+        self.assertNotIn("button_config_page", CPP)
 
     def test_the_schema_reserves_lwip_sockets_for_the_page(self) -> None:
         """Production has no web_server, so nothing else sizes CONFIG_LWIP_MAX_SOCKETS

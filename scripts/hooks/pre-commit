@@ -88,6 +88,30 @@ if ! $PCB_STAGED && grep -qE '^docs/readme-assets/board-3d-rotated-(top|bottom)\
 	stamp_renders board-annotated
 fi
 
+# The loader checks the signature of the bundle, so a page change needs a new
+# bundle and a new signature. The ESPHome build fails when either is missing.
+if grep -qE '^components/button_config/(button_config_page\.html|shell_build\.py|face_svg\.py)$' <<<"$STAGED"; then
+	echo "[pre-commit] page source staged -> writing and signing the website bundle"
+	if python3 "$REPO_ROOT/scripts/build-shell-bundle.py"; then
+		git add -- "$REPO_ROOT/site/app/app.js" "$REPO_ROOT/site/app/app.js.sig"
+	else
+		echo "[pre-commit] build-shell-bundle.py failed, so the firmware cannot build" >&2
+		exit 1
+	fi
+fi
+
+# The shell pins the loader by its hash, so a loader change needs a firmware
+# build. Rebuild it here, because esbuild runs in no firmware build.
+if grep -qE '^(site/app/loader\.src\.js|third_party/noble/|site/app/ui-signing-key\.pub)' <<<"$STAGED"; then
+	echo "[pre-commit] loader source staged -> bundling the loader"
+	if python3 "$REPO_ROOT/scripts/build-ui-loader.py"; then
+		git add -- "$REPO_ROOT/site/app"
+	else
+		echo "[pre-commit] build-ui-loader.py failed, so the firmware cannot build" >&2
+		exit 1
+	fi
+fi
+
 # Only regenerate when a design file is actually part of this commit.
 if ! $SCH_STAGED && ! $PCB_STAGED; then
 	check_renders

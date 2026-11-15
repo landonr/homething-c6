@@ -255,7 +255,7 @@
       "docs/readme-assets/buttons-page-config.png"
     ],
     "inputs": [
-      "components/button_config/button_config_page.h",
+      "components/button_config/button_config_page.html",
       "docs/readme-assets/case-front-face.svg",
       "scripts/preview-buttons-page.py",
       "scripts/preview-c6remote-config.json"

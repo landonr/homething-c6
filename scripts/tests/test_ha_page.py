@@ -9,7 +9,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).parents[2]
-PAGE = (ROOT / "components" / "button_config" / "button_config_page.h").read_text()
+PAGE = (ROOT / "components" / "button_config" / "button_config_page.html").read_text()
 PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
 
 ERRORS = (

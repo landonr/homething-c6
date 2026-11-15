@@ -118,3 +118,7 @@ scripts/annotation-editor.py
 
 # Website build output from scripts/build-site.sh.
 _site/
+
+
+# The UI signing secret key never belongs in the repository.
+*.pem

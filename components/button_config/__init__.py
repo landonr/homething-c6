@@ -1,6 +1,5 @@
 import gzip
 from pathlib import Path
-import re
 import subprocess
 
 from esphome import automation
@@ -11,7 +10,8 @@ from esphome.components.web_server_base import CONF_WEB_SERVER_BASE_ID
 from esphome.const import CONF_ID, CONF_RAW_DATA_ID, CONF_TRIGGER_ID
 from esphome.core import HexInt
 
-from .face_svg import data_url_body
+from .shell_build import (APP, BUNDLE_DIR, CURRENT_LOADER, SIGNATURE, loader_name, page,
+                          shell_html)
 
 AUTO_LOAD = ["web_server_base"]
 DEPENDENCIES = ["network"]
@@ -21,6 +21,12 @@ CONF_HA_ACTION_ID = "ha_action_id"
 CONF_BATTERY_LEVEL_ID = "battery_level_id"
 CONF_BATTERY_VOLTAGE_ID = "battery_voltage_id"
 CONF_ON_STATUS_LEDS = "on_status_leds"
+CONF_PAGE = "page"
+# "hosted" keeps the interface on the website, which saves about 35 KB of
+# flash. "embedded" keeps it in flash, so a fork needs no website and no
+# signing key. See "The device shell and the website bundle" in AGENTS.md.
+PAGE_HOSTED = "hosted"
+PAGE_EMBEDDED = "embedded"
 
 button_config_ns = cg.esphome_ns.namespace("button_config")
 ButtonConfig = button_config_ns.class_("ButtonConfig", cg.Component)
@@ -48,6 +54,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_HA_ACTION_ID): cv.use_id(ha_action.HaAction),
             cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor),
             cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor),
+            cv.Optional(CONF_PAGE, default=PAGE_HOSTED): cv.one_of(
+                PAGE_HOSTED, PAGE_EMBEDDED, lower=True),
             cv.Optional(CONF_ON_STATUS_LEDS): automation.validate_automation(
                 {cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(StatusLedsTrigger)}
             ),
@@ -117,13 +125,27 @@ async def to_code(config):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         await automation.build_automation(trigger, [(bool, "enabled")], conf)
 
-    source = (Path(__file__).parent / "button_config_page.h").read_text()
-    match = re.search(r'R"=====\((.*)\)=====";', source, re.DOTALL)
-    if match is None:
-        raise cv.Invalid("button_config_page.h has no PAGE_HTML value")
-    svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"
-    svg = data_url_body(svg_path.read_text(encoding="utf-8"))
-    html = match.group(1).replace("__CASE_FRONT_FACE_SVG__", svg)
-    page = gzip.compress(html.encode(), compresslevel=9, mtime=0)
-    data = cg.progmem_array(config[CONF_RAW_DATA_ID], [HexInt(value) for value in page])
-    cg.add(var.set_page(data, len(page)))
+    # "hosted" embeds only the shell, which pins the loader that checks the
+    # signature of the interface bundle. "embedded" puts the whole interface
+    # in flash, which costs about 35 KB and needs no website and no key.
+    hosted = config[CONF_PAGE] == PAGE_HOSTED
+    # Check the files before reading any of them, so a clone with no site/app
+    # gets this message instead of the error from the first missing read.
+    if hosted:
+        missing = [path.name for path in (CURRENT_LOADER, APP, SIGNATURE)
+                   if not path.exists()]
+        if not missing and not (BUNDLE_DIR / loader_name()).exists():
+            missing = [loader_name()]
+        if missing:
+            raise cv.Invalid(
+                f"The website is missing {', '.join(missing)}. Run "
+                "scripts/build-ui-loader.py and scripts/build-shell-bundle.py, "
+                f"then commit the result. A fork can set `page: {PAGE_EMBEDDED}` instead."
+            )
+    try:
+        html = shell_html() if hosted else page()
+    except (OSError, ValueError) as err:
+        raise cv.Invalid(f"Cannot build the web page: {err}") from err
+    blob = gzip.compress(html.encode(), compresslevel=9, mtime=0)
+    data = cg.progmem_array(config[CONF_RAW_DATA_ID], [HexInt(value) for value in blob])
+    cg.add(var.set_page(data, len(blob)))

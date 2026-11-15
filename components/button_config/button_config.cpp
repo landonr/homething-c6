@@ -978,6 +978,9 @@ void ButtonConfig::handle_page_(AsyncWebServerRequest *request) {
   AsyncWebServerResponse *response =
       request->beginResponse(200, "text/html; charset=utf-8", this->page_, this->page_size_);
   response->addHeader("Content-Encoding", "gzip");
+  // The shell pins the loader, so a stale copy would point at the loader of an
+  // older firmware. It is under 1 KB, so revalidate it on every visit.
+  response->addHeader("Cache-Control", "no-cache");
   request->send(response);
 }
 

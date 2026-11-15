@@ -189,6 +189,18 @@ the `web_server_base` server on port 80. The production config has no ESPHome `w
 Home Assistant shows the web page address as the diagnostic **Web Page** entity.
 The address uses the hostname, so a new IP address does not change it.
 
+The device serves the page frame only. The browser loads the interface from
+`landonr.github.io` and keeps a copy, so the first visit from a browser needs
+the internet. Each remote keeps its own copy, because each one is a different
+address, so a second remote needs the internet one time as well. Later visits
+from the same browser work without it. The device itself needs no internet, and
+your settings never leave your network.
+If the browser cannot reach the website on a first visit, the page says so.
+
+A build with `page: embedded` keeps the interface in flash instead. It needs no
+internet at any point and costs about 35 KB. Use it if you build the firmware
+yourself, for example with the ESPHome device builder.
+
 The page title shows the friendly name of the remote, for example `homeThing C6 xxxxxx`.
 To change the name, select **Rename** beside the title. Type the name, then select **Save** or press Enter.
 To close the box without a change, press Escape or select **Cancel**.

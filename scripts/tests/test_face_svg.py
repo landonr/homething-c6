@@ -13,7 +13,8 @@ ROOT = Path(__file__).parents[2]
 COMPONENT = ROOT / "components" / "button_config"
 FACE_SVG = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
 INIT = (COMPONENT / "__init__.py").read_text()
-PAGE = (COMPONENT / "button_config_page.h").read_text()
+SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
+PAGE = (COMPONENT / "button_config_page.html").read_text()
 PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
 
 _SPEC = importlib.util.spec_from_file_location("face_svg", COMPONENT / "face_svg.py")
@@ -100,11 +101,11 @@ class FaceSvgEmbedTest(unittest.TestCase):
 
     def test_the_page_and_the_preview_share_the_encoder(self) -> None:
         self.assertIn('<img src="data:image/svg+xml,__CASE_FRONT_FACE_SVG__"', PAGE)
-        self.assertIn("from .face_svg import data_url_body", INIT)
-        self.assertIn('svg = data_url_body(svg_path.read_text(encoding="utf-8"))', INIT)
+        self.assertIn("from .face_svg import data_url_body", SHELL_BUILD)
+        self.assertIn('data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))', SHELL_BUILD)
         self.assertIn('ROOT / "components" / "button_config" / "face_svg.py"', PREVIEW)
         self.assertIn('svg = face_svg.data_url_body(CASE_FRONT_FACE.read_text(encoding="utf-8"))', PREVIEW)
-        for text in (INIT, PREVIEW):
+        for text in (SHELL_BUILD, PREVIEW):
             self.assertNotIn("quote_from_bytes", text)
         # The module must load without esphome, or the preview cannot use it.
         self.assertNotIn("esphome", (COMPONENT / "face_svg.py").read_text().split('"""', 2)[2])

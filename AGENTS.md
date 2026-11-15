@@ -77,7 +77,8 @@ The firmware files are in the repository root:
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
 - `c6remote-factory.yaml` is the provisioning firmware for new units. It also runs the factory self-test. See "Firmware releases" and "Factory self-test".
 - `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
-- `components/button_config/` is a local ESPHome component. It serves the web page at the root URL `/` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections.
+- `components/button_config/` is a local ESPHome component. It serves the web page at the root URL `/` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections. The firmware serves only the shell. See "The device shell and the website bundle".
+- `components/button_config/shell_build.py` builds the shell and the bundle. `scripts/build-shell-bundle.py` writes the bundle into `site/app/`.
 - `components/ha_action/` is a local ESPHome component. It stores one Home Assistant action for each slot and sends it over the native API. See `RECEIVER.md`.
   The Home Assistant switch turns the actions off at once. If the switch is off at boot, `on_boot` holds the API server down until the next boot.
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
@@ -97,11 +98,67 @@ The fake state can drift. If you change the page or `ButtonConfig::handle_state_
 
 A missing field makes the preview show a state that the firmware never serves.
 
+### The device shell and the website bundle
+
+`button_config` takes a `page` option with two values.
+
+`page: hosted` is the default and the one that releases use. The firmware does not carry the interface. It serves a shell, a document of about 1 KB with no style, no markup, and no page script in it. The shell loads the bundle from the project website over HTTPS. The bundle holds the style, the markup, and the script.
+
+A browser permits a secure subresource on an insecure page, so the device keeps plain HTTP and its `.local` name. The reverse does not work. A page on the website cannot call the device, because the browser blocks a request from HTTPS to HTTP. For this reason the configurator cannot live on the website alone.
+
+The bundle calls `/buttons/api/*` on the device, which is its own origin, so these requests need no CORS.
+
+The shell does not load the bundle directly. It loads a loader, and the loader loads the bundle. This keeps the flash cost at about 1 KB and still lets the interface change with no firmware build.
+
+The shell pins the loader with its sha384 hash in a `fetch` integrity option. GitHub Pages sends `access-control-allow-origin: *`, which the integrity check needs.
+
+The loader holds the project public key. It checks the Ed25519 signature of the bundle before it runs the bundle. So the website can serve a new interface at any time, and only a bundle that the project key signed can run.
+
+A browser gives the page no `crypto.subtle`, because the device serves the page over plain HTTP. For this reason the loader carries its own SHA-512. `third_party/noble/` holds the vendored verifier, and `scripts/build-ui-loader.py` bundles it with `site/app/loader.src.js` into `site/app/loader-<hash>.js`.
+
+The first line of the bundle is `//v=<n>`, from `site/app/ui.version`. The loader refuses a bundle with a version lower than the one that it holds, so a stolen website cannot replay an old signed bundle. `scripts/build-shell-bundle.py` raises the number only when the bundle body changes, so an unrelated commit leaves the bundle and its signature alone.
+
+Never lower the number in `site/app/ui.version`. A browser that cached a higher version refuses every lower one, so the interface freezes at the copy that it holds. The cure is a version above the highest one that ever shipped, or the user clears the site data of that remote. The file starts at 500, because an earlier build took the version from the commit count and reached 494.
+
+The shell saves the verified loader in `localStorage`, and the loader saves the verified bundle. So a later visit works without the internet. The shell cache key carries the pin, so a firmware with a new pin ignores the copy of the old one.
+
+A pin cannot change without a firmware build. So each loader carries its hash in its file name and stays in `site/app/`. A unit on an old release still finds the loader that its own shell pins. `site/app/loader.current` names the newest one, and `site/app/loaders.kept` lists every loader that was published. `scripts/build-ui-loader.py` adds each new name to that list, and a test fails if a listed file is missing, so a loader cannot be deleted by accident.
+
+The shell and the loader both write the reason for a failure to the browser console, with the prefix `homeThing c6`. A page that falls back to the copy saved in the browser still says why, so a website that is down, a wrong pin, and a bundle that the project did not sign do not look alike.
+
+The secret key is never in the repository. It defaults to `~/.config/homething-c6/ui-signing-key.pem`. Run `node scripts/ui-signing.mjs keygen` one time, then keep a backup. The public key is `site/app/ui-signing-key.pub`. A new key changes the loader, so it also needs a firmware build and a flash of every unit.
+
+`scripts/build-shell-bundle.py` writes the bundle for the current page source and signs it. The ESPHome build fails when `site/app/` has no loader, bundle, or signature. The pre-commit hook runs the script when a page source file is staged, and runs `build-ui-loader.py` when the loader source or the vendored verifier is staged.
+
+`scripts/preview-shell-page.py` serves the shell and the bundle from two ports, which are two origins, as the real split is. Add `--tamper-app`, `--tamper-loader`, or `--downgrade` to prove that a changed bundle, a changed loader, or an older bundle is refused.
+
+### A fork builds with `page: embedded`
+
+`page: embedded` puts the whole interface in flash, as the firmware did before the split. It costs about 35 KB and leaves about 192 KB free in `app0`, so it needs no change to the partition table and no loss of OTA.
+
+An embedded build needs no website, no signing key, and no internet at any point. A fork that changes the page therefore only sets this option, and the change takes effect in its own firmware.
+
+A fork that wants the hosted path instead needs three things of its own: a signing key from `node scripts/ui-signing.mjs keygen`, its public key in `site/app/ui-signing-key.pub`, and `HOMETHING_UI_BASE` set to where it serves `site/app/`. Then run `scripts/build-ui-loader.py` and `scripts/build-shell-bundle.py`.
+
+A clone with no secret key cannot sign, so `scripts/build-shell-bundle.py` leaves `site/app/` alone and says so. It does not rewrite the bundle, because a bundle that disagrees with its signature is one that every loader refuses.
+
+To test on hardware before the website carries the files, set `HOMETHING_UI_BASE` to a server on your machine. The shell and the loader then both point at it.
+
+```bash
+export HOMETHING_UI_BASE="http://<your-ip>:8131/app/"
+python3 scripts/build-ui-loader.py
+esphome run c6remote.yaml --device /dev/cu.usbmodem<n>
+```
+
+Serve `site/` on that port with an `Access-Control-Allow-Origin: *` header, because the integrity check needs CORS. After the test, delete the bench loader and restore `site/app/loader.current`. Never commit a loader that a bench base built.
+
 If the task needs the remaining open work, read the open GitHub issues. `docs/timeline.md` records board status, fabrication history, and closed findings.
 
 ### Website
 
 The project website is in `site/`. It contains `index.html`, `s3.html`, `original.html`, and the shared `style.css`.
+
+`site/app/` holds the configurator bundles. `scripts/build-site.sh` copies all of `site/`, so a new bundle needs no change to that script. See "The device shell and the website bundle".
 
 `site/assets/legacy/` holds the images from the old Cargo site. No other copy of these images exists.
 

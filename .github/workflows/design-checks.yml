@@ -24,6 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # scripts/build-ui-loader.py bundles the verifier into the loader, and the
+      # test that compares the committed loader skips without esbuild.
+      # Keep this version in step with ESBUILD_VERSION in scripts/build-ui-loader.py.
+      - name: Install esbuild
+        run: npm install -g esbuild@0.28.1
+
       - name: Python regression tests
         run: python3 -m unittest discover -s scripts/tests -t .
 

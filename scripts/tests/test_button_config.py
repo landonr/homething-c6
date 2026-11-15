@@ -21,6 +21,7 @@ CPP = (COMPONENT / "button_config.cpp").read_text()
 HEADER = (COMPONENT / "button_config.h").read_text()
 PAGE = (COMPONENT / "button_config_page.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
+SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 STORE = (ROOT / "ir_learning.h").read_text()
 HOLDS = (ROOT / "hold_actions.h").read_text()
@@ -1005,7 +1006,7 @@ class FaceGeometryTest(unittest.TestCase):
         self.assertLessEqual(abs(got - want), FACE_TOLERANCE, f"{what}: page {got}, face {want:.2f}")
 
     def test_the_page_and_the_preview_embed_this_face(self) -> None:
-        self.assertIn('svg_path = Path(__file__).parents[2] / "docs" / "readme-assets" / "case-front-face.svg"', INIT)
+        self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', SHELL_BUILD)
         self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', PREVIEW)
         # Only absolute moves and lines, so the point pairs above are the outline.
         letters = set(re.findall(r"[A-Za-z]", "".join(re.findall(r'\sd="([^"]*)"', FACE_SVG.read_text()))))
@@ -1147,7 +1148,7 @@ class PlacementTest(unittest.TestCase):
     def test_the_page_renders_the_full_front_face_selector(self) -> None:
         self.assertIn('<div class="remote" id="remote">', PAGE)
         self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
-        self.assertIn('"case-front-face.svg"', INIT)
+        self.assertIn('"case-front-face.svg"', SHELL_BUILD)
 
     def test_the_front_face_image_is_not_draggable(self) -> None:
         self.assertIn('alt="Front face of the homeThing c6 remote" draggable="false">', PAGE)

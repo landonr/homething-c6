@@ -517,7 +517,7 @@ class WebContractTest(unittest.TestCase):
         state = section(BUTTON_CPP, "void ButtonConfig::handle_state_", "\n}")
         self.assertIn('"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"', state)
         self.assertRegex(state, r'ha\.assigned\s+\? "ha"')
-        self.assertIn('R"("},"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")"', state)
+        self.assertIn('R"(,"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")"', state)
         self.assertIn("print_json_text(stream, ha_error.c_str());", state)
         self.assertIn("print_json_text(stream, ha.entity.c_str());", state)
         # The unlinked defaults print the empty tokens, zero, and "none".

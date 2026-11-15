@@ -78,7 +78,7 @@ STATE = {
         "pair_failed": False,
         "reach": "ok",
     },
-    "ble": {"connected": True, "bonded": True, "pairing": False, "host": "bench-mac"},
+    "ble": {"connected": True, "bonded": True, "pairing": False},
     "name": "homeThing C6 13f498",
     "default_name": "homeThing C6 13f498",
     "ha": {"pending": 0, "last_slot": 0, "last": "none", "error": ""},
@@ -505,7 +505,6 @@ class Handler(BaseHTTPRequestHandler):
             del SLOTS[slot]
         elif action == "forget_ble":
             STATE["ble"]["bonded"] = False
-            STATE["ble"]["host"] = ""
         elif action == "restart":
             RESTART["until"] = time.monotonic() + RESTART_SECONDS
         self.send_json({"ok": True, "id": STATE["action_id"]})

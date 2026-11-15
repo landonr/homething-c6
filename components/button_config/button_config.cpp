@@ -1013,7 +1013,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
   stream->print(R"({"firmware":")");
   print_json_text(stream, this->firmware_version_);
   stream->printf(
-      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s,"replay_ir":%s,"replay_ha":%s,"replay_zigbee":%s,"replay_ble":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s,"host":")",
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s,"replay_ir":%s,"replay_ha":%s,"replay_zigbee":%s,"replay_ble":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s})",
       busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
       static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
       static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
@@ -1044,7 +1044,6 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
       esphome::ble_hid::BleHid::instance()->connected() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->bonded() ? "true" : "false",
       esphome::ble_hid::BleHid::instance()->pairing() ? "true" : "false");
-  print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name().c_str());
   size_t ha_pending = 0;
   uint8_t ha_last_slot = 0;
   uint8_t ha_last = 0;
@@ -1057,7 +1056,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
     this->ha_action_->last_error(ha_error);
   }
 #endif
-  stream->printf(R"("},"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")", static_cast<unsigned>(ha_pending),
+  stream->printf(R"(,"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")", static_cast<unsigned>(ha_pending),
                  static_cast<unsigned>(ha_last_slot), ha_result_name(ha_last));
   print_json_text(stream, ha_error.c_str());
   stream->print(R"("},"slots":[)");

@@ -94,7 +94,7 @@ on this board is only the Zigbee network:
 - **Erased:** the network key, the PAN ID, the extended PAN ID, the channel, the
   short address and the binding table.
 - **Kept:** all 18 button assignments, both radio switches, the stored IR codes,
-  the Bluetooth bond and host name, and the Wi-Fi credentials.
+  the Bluetooth bond, and the Wi-Fi credentials.
 
 The Zigbee stack keeps its data in the `zigbee` NVS namespace and clears that
 namespace alone. ESPHome keeps its preferences in the `esphome` namespace, so no

@@ -7,6 +7,9 @@ substitutions:
   # The firmware release workflow sets the release version with
   # `esphome -s fw_version 2026.11.0 compile c6remote.yaml`.
   fw_version: dev
+  # Every info and debug string below this level is compiled out, which the app
+  # slot needs. Raise it on the bench with `-s log_level DEBUG`.
+  log_level: WARN
 
 esphome:
   name: ${device_name}
@@ -153,7 +156,7 @@ external_components:
     components: [zigbee]
 
 logger:
-  level: INFO
+  level: ${log_level}
 
 api:
   reboot_timeout: 0s

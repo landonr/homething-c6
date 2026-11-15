@@ -798,10 +798,8 @@ radioBusy[kind]=false;
 radioError[kind]=e&&e.message?e.message:"The remote did not answer.";radioStatus();networkStatus()})}
 
 // One line carries the radio and the host, so an off radio can never read as
-// connected. The bond lives in flash, so its name survives the link and a
-// reboot, and Forget drops it with the radio off as well.
-function bleHost(){return st.ble.host?esc(st.ble.host):"a saved host"}
-
+// connected. The bond lives in flash, so it survives the link and a reboot, and
+// Forget drops it with the radio off as well.
 function bleStatus(){
 var be=document.getElementById("bst"),bh=document.getElementById("bhs"),
 bf=document.getElementById("bfr");
@@ -814,8 +812,8 @@ be.innerHTML="<span class='dot "+(off?"bad":"")+"'></span>BLE HID: radio "+
 if(bh){bh.className="sub st";
 bh.innerHTML="<span class='dot "+(live?"":"off")+"'></span>"+
 (!st.ble.bonded?("No host bond."+(off?"":st.ble.pairing?" Pairing.":" Ready to pair.")):
-live?"Connected to "+bleHost()+".":
-"Bonded to "+bleHost()+"."+(off?"":" Waiting for the host."))}
+live?"Connected to the saved host.":
+"Bonded to a saved host."+(off?"":" Waiting for the host."))}
 if(bf){bf.disabled=bleForgetBusy||!st.ble.bonded;
 bf.textContent=bleForgetBusy?"Forgetting Bluetooth host...":"Forget Bluetooth host"}}
 
@@ -1122,7 +1120,7 @@ activityTimer=setTimeout(sendActivity,500)}
 
 function forgetBle(){
 if(bleForgetBusy)return;
-if(!confirm("Forget "+(st.ble.host||"a saved host")+"? The host must pair with this remote again. Remove this remote from the Bluetooth settings of the host first."))return;
+if(!confirm("Forget the saved Bluetooth host? The host must pair with this remote again. Remove this remote from the Bluetooth settings of the host first."))return;
 bleForgetBusy=true;bleError="";bleStatus();
 post("forget_ble").then(function(r){
 if(r.code!==200)throw new Error(fail(r));

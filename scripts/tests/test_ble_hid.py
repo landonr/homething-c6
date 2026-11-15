@@ -247,6 +247,11 @@ class BleHidTest(unittest.TestCase):
         cut = self.body("static size_t utf8_prefix_length(const char *text, size_t length, size_t limit) {")
         self.assertIn("while (cut > 0 && (static_cast<uint8_t>(text[cut]) & 0xC0) == 0x80)\n    cut--;", cut)
 
+    def test_the_build_keeps_the_idf_hid_component(self) -> None:
+        """ESPHome drops esp_hid from the build from 2026.10.0, because it has no
+        HID of its own. Without this the build stops at a missing esp_hidd.h."""
+        self.assertIn('include_builtin_idf_component("esp_hid")', INIT)
+
     def test_the_gap_name_limit_holds_a_whole_friendly_name(self) -> None:
         """ESP-IDF defaults the GAP name limit to 31 bytes, and a rename can take 40."""
         self.assertIn('CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN", 40', INIT)

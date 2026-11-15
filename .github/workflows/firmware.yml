@@ -28,7 +28,7 @@ concurrency:
 
 env:
   # Keep in step with the ESPHome that validates the configs locally.
-  ESPHOME_VERSION: 2026.8.2
+  ESPHOME_VERSION: 2026.10.2
 
 jobs:
   release:

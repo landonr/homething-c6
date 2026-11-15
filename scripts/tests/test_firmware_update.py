@@ -71,15 +71,17 @@ class WifiCredentialTest(unittest.TestCase):
 
 
 class ImprovTest(unittest.TestCase):
-    def test_production_provisions_over_usb_only(self) -> None:
-        """esp32_improv needs Bluedroid, but ble_hid forces NimBLE."""
-        self.assertNotRegex(CONFIG, r"(?m)^esp32_improv:")
+    def test_production_provisions_over_usb_and_ble(self) -> None:
+        """The ESPHome component needs Bluedroid and ble_hid needs NimBLE, so the
+        BLE path comes from the local component of the same name."""
+        self.assertRegex(CONFIG, r"(?m)^improv_ble:")
         self.assertRegex(CONFIG, r"(?m)^ble_hid:")
         self.assertIn("  id: improv_usb\n", top_level_block(CONFIG, "improv_serial"))
+        self.assertTrue((ROOT / "components" / "improv_ble" / "__init__.py").is_file())
 
     def test_the_factory_image_has_both_improv_paths_and_no_nimble(self) -> None:
         self.assertNotRegex(FACTORY, r"(?m)^ble_hid:")
-        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "esp32_improv"))
+        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "improv_ble"))
         self.assertIn("  id: improv_usb\n", top_level_block(FACTORY, "improv_serial"))
         # improv_serial needs the logger UART, so the logger must not set baud_rate 0.
         self.assertRegex(FACTORY, r"(?m)^logger:")

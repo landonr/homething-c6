@@ -71,8 +71,8 @@ wifi:
 improv_serial:
   id: improv_usb
 
-esp32_improv:
-  id: improv_ble
+improv_ble:
+  id: improv_bt
   authorizer: none
 
 http_request:
@@ -126,7 +126,7 @@ self_test:
       return "a saved Wi-Fi network";
     if (wifi::global_wifi_component->is_connected())
       return "Wi-Fi is connected";
-    if (id(improv_ble).get_improv_state() == improv::STATE_PROVISIONING)
+    if (id(improv_bt).get_improv_state() == improv::STATE_PROVISIONING)
       return "Wi-Fi setup is running";
     if (ble != nullptr && ble->get_client_count() > 0)
       return "a Bluetooth client is connected";
@@ -153,7 +153,7 @@ idle_sleep:
   block_probe: !lambda |-
     const bool usb = id(hw_test).usb_present();
     auto *ble = esp32_ble_server::global_ble_server;
-    const bool improv = id(improv_ble).get_improv_state() == improv::STATE_PROVISIONING ||
+    const bool improv = id(improv_bt).get_improv_state() == improv::STATE_PROVISIONING ||
                         (ble != nullptr && ble->get_client_count() > 0);
     // The check and the install follow the Wi-Fi connection. A failed check or
     // install sets the error, so a unit without internet access still sleeps.

@@ -409,6 +409,10 @@ A V2 unit can install a release build to test the update path. Its ring LED posi
 
 The workflow installs the ESPHome version in `ESPHOME_VERSION`. If you change the local ESPHome version, change this value in the same commit.
 
+From 2026.10.0, ESPHome leaves some ESP-IDF components out of the build. `ble_hid` asks for `esp_hid` back, because it needs the HID device API. A build that loses that call stops at a missing `esp_hidd.h`.
+
+ESPHome renamed `esp32_improv` to `improv_ble` in 2026.10.0. The old key works until 2027.4.0. `c6remote-factory.yaml` uses the new name, and it limits its external components to `idle_sleep` and `self_test`, so the local `improv_ble` component cannot take the key there.
+
 A tag run cannot deploy GitHub Pages, because the `github-pages` environment accepts only `develop` and `main`. As a result, the workflow starts `pages.yml` on `develop`.
 
 Each `pages.yml` run copies the manifest and the binaries of the newest `fw-` release into `firmware/`. The update entity reads this URL:

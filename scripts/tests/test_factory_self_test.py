@@ -140,7 +140,7 @@ class ProvisioningTest(unittest.TestCase):
                 self.assertIn("  partitions: partitions.csv\n", esp32)
 
     def test_improv_and_the_install_stay_in_the_factory_image(self) -> None:
-        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "esp32_improv"))
+        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "improv_ble"))
         self.assertIn("  id: improv_usb\n", top_level_block(FACTORY, "improv_serial"))
         self.assertIn("    - component.update: firmware_update\n", top_level_block(FACTORY, "wifi"))
         update = top_level_block(FACTORY, "update")
@@ -235,7 +235,7 @@ class SecondPageTest(unittest.TestCase):
         self.assertNotIn("register_gap_event_handler", INIT)
         self.assertNotIn("esp32_ble", INIT)
         # The component no longer reaches into those stacks, so it does not depend on them.
-        for dependency in ('"wifi"', '"esp32_improv"'):
+        for dependency in ('"wifi"', '"improv_ble"'):
             with self.subTest(dependency=dependency):
                 self.assertNotIn(dependency, INIT)
 

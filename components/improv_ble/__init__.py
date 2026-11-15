@@ -51,4 +51,4 @@ async def to_code(config):
     cg.add(var.set_authorized_duration(config[CONF_AUTHORIZED_DURATION]))
     cg.add(var.set_wifi_timeout(config[CONF_WIFI_TIMEOUT]))
 
-    await improv_base.setup_improv_core(var, config, "improv_ble")
+    await improv_base.setup_improv_core(var, config)

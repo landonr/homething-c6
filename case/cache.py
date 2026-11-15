@@ -11,6 +11,13 @@ is expensive enough to be worth tracking which module feeds which shape, and a
 graph that is subtly wrong caches a stale solid, which makes every check that
 probes it vacuous.
 
+A key directory outlives the run that wrote it. The key is a content hash of
+every input, so an old directory cannot hold a stale solid: the bytes that built
+it are the bytes that name it. Keeping a few therefore costs disk and nothing
+else, and it buys back the loop this model is actually edited in. A parameter
+that is tried and then reverted used to cost two full rebuilds, because the run
+that tried it deleted the directory the revert needed.
+
 STL bytes are cached beside the BREPs because a BREP round trip does not
 reproduce them: the geometry is identical to the last digit but the tessellation
 is not, so a warm run copies the STL it wrote cold rather than re-meshing.
@@ -39,6 +46,21 @@ STL_ANGULAR_TOLERANCE = 0.05
 """Mesh settings for every exported STL. The build123d default linear tolerance
 of 0.001 scatters points across the long ruled faces of the back's loft. Their
 normals then tilt enough to show as a row of bright facets."""
+
+CACHE_KEEP = 4
+"""How many key directories to keep, the live one included.
+
+A key holds every solid for one state of the model, so the budget is disk, not
+risk. CASE_CACHE_KEEP overrides it. Set it to 1 to keep only the live key.
+"""
+
+USED = "last-used"
+"""Marker whose mtime is when a run last opened this key directory.
+
+Recency must follow reads and not only writes. The directory a revert wants is
+one that nothing has written to for a while, so a ranking by write time would
+evict the very key the next revert asks for.
+"""
 
 
 def enabled():
@@ -104,17 +126,64 @@ def key():
     return digest.hexdigest()[:16]
 
 
+def _keep():
+    raw = os.environ.get("CASE_CACHE_KEEP")
+    if raw is None:
+        return CACHE_KEEP
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return CACHE_KEEP
+
+
+def _touch(target):
+    """Stamp a key directory as used by this run.
+
+    Best effort: a cache that cannot record its recency must still serve blobs.
+    """
+    try:
+        (target / USED).touch()
+    except OSError:
+        pass
+
+
+def _last_used(directory):
+    marker = directory / USED
+    try:
+        return (marker if marker.exists() else directory).stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _evict(target):
+    """Remove all but the _keep() most recently used directories.
+
+    `target` is always kept and always counts, so the budget is the number of
+    directories on disk and not the number of spare ones.
+    """
+    others = sorted(
+        (d for d in CACHE.iterdir() if d.is_dir() and d != target),
+        key=_last_used,
+        reverse=True,
+    )
+    for stale in others[_keep() - 1:]:
+        shutil.rmtree(stale, ignore_errors=True)
+
+
 @functools.cache
 def _dir():
-    return CACHE / key()
+    target = CACHE / key()
+    if target.is_dir():
+        _touch(target)
+    return target
 
 
 @functools.cache
 def _open_for_write():
     """The blob directory, created, with its manifest written.
 
-    Serial callers remove stale keys. Concurrent workers preserve them because
-    another process can still read or write one.
+    Serial callers evict down to the budget. Concurrent workers evict nothing,
+    because another process can still read or write a directory they would take.
     """
     target = _dir()
     target.mkdir(parents=True, exist_ok=True)
@@ -122,10 +191,9 @@ def _open_for_write():
         target / "manifest.json",
         (json.dumps({"key": key(), "files": manifest()}, indent=2, sort_keys=True) + "\n").encode(),
     )
+    _touch(target)
     if not _parallel():
-        for stale in CACHE.iterdir():
-            if stale.is_dir() and stale != target:
-                shutil.rmtree(stale, ignore_errors=True)
+        _evict(target)
     return target
 
 

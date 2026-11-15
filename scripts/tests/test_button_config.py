@@ -16,6 +16,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
 COMPONENT = ROOT / "components" / "button_config"
 CPP = (COMPONENT / "button_config.cpp").read_text()
 HEADER = (COMPONENT / "button_config.h").read_text()
@@ -23,10 +24,10 @@ PAGE = (COMPONENT / "button_config_page.html").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
-STORE = (ROOT / "ir_learning.h").read_text()
-HOLDS = (ROOT / "hold_actions.h").read_text()
+STORE = (SLOTS / "ir_learning.h").read_text()
+HOLDS = (SLOTS / "hold_actions.h").read_text()
 PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
-ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
+ZIGBEE = (SLOTS / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
 
@@ -566,9 +567,9 @@ class IrNameTest(unittest.TestCase):
     ACTION = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
 
     def test_the_header_is_shared_by_the_store_and_the_build(self) -> None:
-        includes = CONFIG.split("  includes:\n", 1)[1].split("  on_boot:", 1)[0]
-        self.assertLess(includes.index("    - ir_name.h\n"), includes.index("    - ir_learning.h\n"))
-        rule = (ROOT / "ir_name.h").read_text()
+        headers = (SLOTS / "__init__.py").read_text()
+        self.assertLess(headers.index('"ir_name.h"'), headers.index('"ir_learning.h"'))
+        rule = (SLOTS / "ir_name.h").read_text()
         self.assertNotIn("esphome", rule)
         self.assertIn("static constexpr size_t MAX = 23;", rule)
 
@@ -2407,7 +2408,7 @@ class IrUiStateTest(unittest.TestCase):
 
 class ComponentSchemaTest(unittest.TestCase):
     def test_the_component_binds_to_the_existing_web_server(self) -> None:
-        self.assertIn('AUTO_LOAD = ["web_server_base"]', INIT)
+        self.assertIn('AUTO_LOAD = ["web_server_base", "button_slots"]', INIT)
         self.assertIn("CONF_WEB_SERVER_BASE_ID", INIT)
         self.assertIn("cv.use_id(web_server_base.WebServerBase)", INIT)
 

@@ -16,8 +16,8 @@
 #include "host/ble_store.h"
 #include "services/gap/ble_svc_gap.h"
 
-#include "ir_learning.h"
-#include "zigbee_learning.h"
+#include "esphome/components/button_slots/ir_learning.h"
+#include "esphome/components/button_slots/zigbee_learning.h"
 
 #include <algorithm>
 #include <cstring>

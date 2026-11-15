@@ -7,13 +7,14 @@ import unittest
 
 
 ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
 COMPONENT = ROOT / "components" / "ha_action"
 CPP = (COMPONENT / "ha_action.cpp").read_text()
 HEADER = (COMPONENT / "ha_action.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 CONFIG = (ROOT / "c6remote.yaml").read_text()
-STORE = (ROOT / "ir_learning.h").read_text()
-ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
+STORE = (SLOTS / "ir_learning.h").read_text()
+ZIGBEE = (SLOTS / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 BUTTON_CPP = (ROOT / "components" / "button_config" / "button_config.cpp").read_text()
 BUTTON_HEADER = (ROOT / "components" / "button_config" / "button_config.h").read_text()

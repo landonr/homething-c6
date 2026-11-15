@@ -22,11 +22,6 @@ esphome:
   project:
     name: landonr.homething-c6
     version: ${fw_version}
-  includes:
-    - ir_name.h
-    - ir_learning.h
-    - zigbee_learning.h
-    - hold_actions.h
   on_boot:
     # Ahead of every component, so the Zigbee component and the API server can
     # be held down before their own setup runs. A failed component never starts,

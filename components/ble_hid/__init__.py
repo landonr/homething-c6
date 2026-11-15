@@ -8,6 +8,7 @@ from esphome.components.esp32 import (
 )
 from esphome.const import CONF_ID
 
+AUTO_LOAD = ["button_slots"]
 DEPENDENCIES = ["esp32"]
 
 ble_hid_ns = cg.esphome_ns.namespace("ble_hid")

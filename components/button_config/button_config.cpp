@@ -3,9 +3,9 @@
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
-#include "hold_actions.h"
-#include "ir_learning.h"
-#include "zigbee_learning.h"
+#include "esphome/components/button_slots/hold_actions.h"
+#include "esphome/components/button_slots/ir_learning.h"
+#include "esphome/components/button_slots/zigbee_learning.h"
 #include "esphome/components/api/api_server.h"
 #include "esphome/components/ble_hid/ble_hid.h"
 #include "esphome/components/wifi/wifi_component.h"

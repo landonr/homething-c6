@@ -7,10 +7,13 @@ import unittest
 from scripts.tests.yaml_blocks import list_entries, top_level_block
 
 
-CONFIG = Path(__file__).parents[2] / "c6remote.yaml"
-IR_LEARNING = Path(__file__).parents[2] / "ir_learning.h"
-ZIGBEE_LEARNING = Path(__file__).parents[2] / "zigbee_learning.h"
-HOLD_ACTIONS = Path(__file__).parents[2] / "hold_actions.h"
+ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
+
+CONFIG = ROOT / "c6remote.yaml"
+IR_LEARNING = SLOTS / "ir_learning.h"
+ZIGBEE_LEARNING = SLOTS / "zigbee_learning.h"
+HOLD_ACTIONS = SLOTS / "hold_actions.h"
 
 # Expander input name to its assignment slot.
 INPUT_SLOTS = {f"Button {number}": number for number in range(3, 12)}
@@ -253,9 +256,7 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertEqual(config.count("component.update: web_page_url"), 1)
 
     def test_the_firmware_includes_the_hold_actions_header(self) -> None:
-        config = CONFIG.read_text()
-        includes = config.split("  includes:\n", 1)[1].split("  on_boot:", 1)[0]
-        self.assertIn("    - hold_actions.h\n", includes)
+        self.assertIn('"hold_actions.h",', (SLOTS / "__init__.py").read_text())
         # The header stays free of ESPHome, so a host compiler can test it.
         header = HOLD_ACTIONS.read_text()
         self.assertNotIn("esphome", header)
@@ -1036,6 +1037,31 @@ class ComponentIdTest(unittest.TestCase):
         for key in self.MAP_BLOCKS:
             with self.subTest(block=key):
                 self.assertRegex(top_level_block(config, key), r"(?m)^  id: \w+$")
+
+
+class AdoptionTest(unittest.TestCase):
+    """A user who adopts the config builds it in a Device Builder that has no
+    checkout of this repository. ESPHome resolves an include against the config
+    directory of the user, so a header must travel inside a component."""
+
+    USERS = ("button_config", "ha_action", "ble_hid")
+
+    def test_the_production_config_includes_no_local_header(self) -> None:
+        self.assertNotIn("\n  includes:\n", CONFIG.read_text())
+
+    def test_the_component_carries_every_header_that_it_names(self) -> None:
+        init = (SLOTS / "__init__.py").read_text()
+        named = re.findall(r'^    "(\w+\.h)",$', init, re.M)
+        self.assertEqual(sorted(named), sorted(path.name for path in SLOTS.glob("*.h")))
+        # The build reaches a header through the component directory, never
+        # through the config directory of the user.
+        self.assertIn('#include "esphome/components/button_slots/{header}"', init)
+
+    def test_each_component_that_includes_a_header_loads_the_component(self) -> None:
+        for name in self.USERS:
+            with self.subTest(component=name):
+                init = (ROOT / "components" / name / "__init__.py").read_text()
+                self.assertRegex(init, r"(?m)^AUTO_LOAD = \[[^\]]*\"button_slots\"")
 
 
 class HomeAssistantActionConfigTest(unittest.TestCase):

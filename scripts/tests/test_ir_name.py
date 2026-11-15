@@ -13,6 +13,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
 COMPILER = shutil.which("c++")
 
 DRIVER = r"""
@@ -107,7 +108,7 @@ class IrNameTest(unittest.TestCase):
         source.write_text(DRIVER)
         cls.binary = Path(cls.work.name) / "driver"
         result = subprocess.run(
-            [COMPILER, "-std=c++17", "-Wall", "-Wextra", "-I", str(ROOT), str(source), "-o", str(cls.binary)],
+            [COMPILER, "-std=c++17", "-Wall", "-Wextra", "-I", str(SLOTS), str(source), "-o", str(cls.binary)],
             capture_output=True, text=True, timeout=120,
         )
         cls.build_error = None if result.returncode == 0 else result.stdout + result.stderr

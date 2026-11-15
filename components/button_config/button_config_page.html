@@ -85,7 +85,6 @@ box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--acc)}
 .set-ble{--set-bg:#2f80ed}
 .set-zigbee{--set-bg:#38a169}
 .set-ir{--set-bg:#e5b700}
-.set-voice{--set-bg:#8b5cf6}
 .set-ha{--set-bg:#0ea5b7}
 /* Off by default in CSS. body.set-colors turns the tints on, and the switch
    stores that choice in this browser only. */
@@ -302,17 +301,17 @@ aria-label="Bluetooth radio"><span></span></label></h2>
 // dial and the black wheel edge, less a small inset so the round corners stay on
 // the wheel. test_button_config checks every value against the SVG.
 var S=[
-{s:19,l:"Button 2",v:1,x:21.9,y:11.7},{s:20,l:"Button 1",v:1,x:78.1,y:11.7},
+{s:19,l:"Button 2",x:21.9,y:11.7},{s:20,l:"Button 1",x:78.1,y:11.7},
 // Rotation flanks Up on the top row: anticlockwise (18) left, clockwise (17) right.
-{s:18,l:"Wheel Anticlockwise",v:0,x:50,y:31.4,c:"rot left"},{s:13,l:"Wheel Up",v:1,x:50,y:21.49,c:"dir"},
-{s:17,l:"Wheel Clockwise",v:0,x:50,y:31.4,c:"rot right"},
-{s:16,l:"Wheel Left",v:1,x:19.18,y:31.4,c:"dir"},{s:14,l:"Wheel Press",v:1,x:50,y:31.4,c:"press"},
-{s:12,l:"Wheel Right",v:1,x:80.82,y:31.4,c:"dir"},{s:15,l:"Wheel Down",v:1,x:50,y:41.37,c:"dir"},
+{s:18,l:"Wheel Anticlockwise",x:50,y:31.4,c:"rot left"},{s:13,l:"Wheel Up",x:50,y:21.49,c:"dir"},
+{s:17,l:"Wheel Clockwise",x:50,y:31.4,c:"rot right"},
+{s:16,l:"Wheel Left",x:19.18,y:31.4,c:"dir"},{s:14,l:"Wheel Press",x:50,y:31.4,c:"press"},
+{s:12,l:"Wheel Right",x:80.82,y:31.4,c:"dir"},{s:15,l:"Wheel Down",x:50,y:41.37,c:"dir"},
 // Keypad fills column by column on the board, so the rows read 3 6 11, 4 7 10,
 // 5 8 9. The array order is the render order, not the slot order.
-{s:3,l:"Button 3",v:1,x:21.9,y:51.1},{s:6,l:"Button 6",v:1,x:50,y:51.1},{s:11,l:"Button 11",v:1,x:78.1,y:51.1},
-{s:4,l:"Button 4",v:1,x:21.9,y:60.2},{s:7,l:"Button 7",v:1,x:50,y:60.2},{s:10,l:"Button 10",v:1,x:78.1,y:60.2},
-{s:5,l:"Button 5",v:1,x:21.9,y:69.2},{s:8,l:"Button 8",v:1,x:50,y:69.2},{s:9,l:"Button 9",v:1,x:78.1,y:69.2}];
+{s:3,l:"Button 3",x:21.9,y:51.1},{s:6,l:"Button 6",x:50,y:51.1},{s:11,l:"Button 11",x:78.1,y:51.1},
+{s:4,l:"Button 4",x:21.9,y:60.2},{s:7,l:"Button 7",x:50,y:60.2},{s:10,l:"Button 10",x:78.1,y:60.2},
+{s:5,l:"Button 5",x:21.9,y:69.2},{s:8,l:"Button 8",x:50,y:69.2},{s:9,l:"Button 9",x:78.1,y:69.2}];
 // One row per hold, in HoldActions order. d matches HOLD_MS in
 // hold_actions.h, and t completes "Hold for d to ...".
 var HOLDS=[
@@ -403,27 +402,25 @@ var hek="",hkd="light",hac="toggle",hvl="10",haMsg="",haBad=false,haBusy=false,h
 var cfgIn="",cfgBusy=false,cfgMsg="",cfgBad=false,cfgAll={},cfgDirty=false,cfgReady=false,cfgTask=null;
 // Closed on arrival, because most visits change one input instead.
 // clip holds one selected IR or Zigbee assignment in this browser only. It
-// cannot include Voice or Clear, because those are actions and not configs.
+// cannot include Clear, because that is an action and not a config.
 var clip=null,clipBusy=false;
 
 function info(s){for(var i=0;i<S.length;i++)if(S[i].s===s)return S[i];return null}
 // An old remote sends no radio block, so an unknown switch reads as on.
 function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}
-// These actions need their Config switch. Voice runs over the Home Assistant
-// API, so it needs the Home Assistant switch. IR needs none.
+// These actions need their Config switch. IR needs none.
 function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":r.action==="hid"?"ble":
-(r.action==="ha"||r.action==="voice")?"home_assistant":""}
+r.action==="ha"?"home_assistant":""}
 function slotRadioOff(s){var k=slotRadio(row(s));return !!k&&!radioOn(k)}
 // Each of these actions needs its Config switch, so the Action list grays it out
 // while the switch is off. The second name is the switch title on the Config tab.
-var actRadio={zb:["zigbee","Zigbee"],hid:["ble","Bluetooth"],ha:["home_assistant","Home Assistant"],
-va:["home_assistant","Home Assistant"]};
+var actRadio={zb:["zigbee","Zigbee"],hid:["ble","Bluetooth"],ha:["home_assistant","Home Assistant"]};
 function actOff(a){var k=actRadio[a];return !!k&&!radioOn(k[0])}
 // paint() records the switches it drew, so a poll repaints only on a change.
 var radioSeen="";
 function radioKey(){return [radioOn("zigbee"),radioOn("ble"),radioOn("home_assistant")].join()}
 function setClass(r){var a=r&&r.action;return a==="hid"?"set-ble":a==="ha"?"set-ha":
-(a==="zigbee"||a==="ir"||a==="voice")?"set-"+a:""}
+(a==="zigbee"||a==="ir")?"set-"+a:""}
 // The colour overlay is a browser preference. Default on, and the remote never
 // sees it.
 var setColors=true;
@@ -444,7 +441,6 @@ function words(s){var r=row(s);if(!r)return "Unknown";
 if(r.action==="zigbee"){var A=za(r.act);
 return "Zigbee "+(A?A.n:"action "+r.act)+": "+
 (r.name?r.name:(r.ieee?r.ieee:"group "+r.group))}
-if(r.action==="voice")return "Voice assistant";
 if(r.action==="hid")return "BLE HID: "+hidWords(r.hid_kind,r.hid_usage,r.hid_mod);
 if(r.action==="ha")return "HA: "+haWords(r.ha_kind,r.ha_act,r.ha_val,r.ha_entity);
 if(r.action==="ir")return r.name?"IR: "+r.name:"IR code";return "Clear"}
@@ -837,7 +833,7 @@ wifi?"on and connected.":"on but disconnected.")}
 // does not follow yet.
 if(ha){ha.className="sub st"+(err||(expect&&!api)?" bad":"");
 ha.innerHTML="<span class='dot "+(!expect?(gated?"off":"warn"):api?"":(wifi||gated)?"bad":"off")+"'></span>"+
-(!expect?"Home Assistant is off. Home Assistant and voice buttons are disabled."+(gated?"":" The API stops at the next restart."):
+(!expect?"Home Assistant is off. Home Assistant buttons are disabled."+(gated?"":" The API stops at the next restart."):
 gated?"Home Assistant is on. The API is off. Restart the remote to start it.":
 "Home Assistant API is "+
 (api?"connected.":wifi?"not connected.":"not connected because Wi-Fi is down."))+
@@ -1306,11 +1302,6 @@ return "<label class=hd2 for=inm>Code name</label>"+
 "placeholder='No name' value='"+att(inv)+"'"+dis+"></div>"+
 "<p class=sub id=inc>"+esc(nameCount(inv))+"</p>"}
 
-function vaPanel(){
-var h=holdOf(sel);
-return "<p class=sub>"+(h?"This input has the "+esc(h.n)+" hold, so the release starts Assist "+
-"and Home Assistant ends it when your speech stops.":"The press starts Assist and the release ends it.")+"</p>"}
-
 function hidPanel(lock){
 var dis=lock?" disabled":"";
 var names=["Up","Up-right","Right","Down-right","Down","Down-left","Left","Up-left"];
@@ -1668,7 +1659,6 @@ else{e.kind="group";e.group=r.group}
 e.act=r.act||0;
 if(r.val)e.val=r.val;
 if(r.name)e.name=r.name}
-else if(r&&r.action==="voice")e.action="voice";
 else if(r&&r.action==="hid"){e.action="hid";e.kind=r.hid_kind;
 e.usage=r.hid_usage;e.mod=r.hid_mod||0}
 else if(r&&r.action==="ha"){e.action="ha";e.kind=r.ha_kind;e.act=r.ha_act;
@@ -1794,7 +1784,6 @@ function cfgCheck(e){
 if(!e||typeof e.slot!=="number"||!info(e.slot))
 return "A slot number is missing or unknown.";
 var a=e.action,ep,g,u,m;
-if(a==="voice"&&!info(e.slot).v)return "Slot "+e.slot+" has no voice action.";
 if(a==="ir"&&(typeof e.code!=="string"||!e.code.replace(/\s+/g,"")))
 return "Slot "+e.slot+" carries no IR code.";
 if(a==="zigbee"&&e.kind==="device"){
@@ -1821,7 +1810,7 @@ else if(a==="ha"){
 m=String(e.entity).toLowerCase();u=e.val===undefined?(haStep(e.act)?10:0):parseInt(e.val,10);
 g=haCheck(m,e.kind,e.act,u);
 if(g)return "Slot "+e.slot+" has an invalid Home Assistant action: "+g+"."}
-else if(a!=="ir"&&a!=="voice"&&a!=="none")
+else if(a!=="ir"&&a!=="none")
 return "Slot "+e.slot+" carries the unknown action "+a+".";
 if(e.hold!==undefined&&e.hold!=="none"){
 if(!holdInfo(e.hold))return "Slot "+e.slot+" carries the unknown hold "+e.hold+".";
@@ -1865,7 +1854,6 @@ function cfgCode(text){return String(text).split("\n").filter(function(l){
 var m=/^\s*name\s*:\s*(.*?)\s*$/i.exec(l);return !(m&&IR_SLOT_NAME.test(m[1]))}).join("\n")}
 
 function cfgSend(e){
-if(e.action==="voice")return post("set_voice",e.slot);
 if(e.action==="ir")return post("set_ir_code",e.slot,cfgCode(e.code));
 if(e.action==="hid")return post("set_hid",e.slot,null,undefined,
 "&kind="+encodeURIComponent(e.kind)+"&usage="+encodeURIComponent(e.usage)+
@@ -2025,9 +2013,7 @@ else if(st&&st.busy)h+="<div class=note>Another assignment is already running.</
 // everything that action needs, so nothing from another action is on screen.
 var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];
 opts.push(["ha","Home Assistant"]);
-if(d.v)opts.push(["va","Voice assistant"]);
 opts.push(["cl","Clear"]);
-if(!d.v&&act==="va")act="ir";
 // An action with its Config switch off cannot be assigned, so the panel opens on
 // IR. A draft that still matched the stored slot stays clean.
 if(actOff(act)){var was=edKey()===edBase;act="ir";if(was)edBase=edKey()}
@@ -2041,7 +2027,7 @@ h+="<button type=button role=radio id=as-"+opts[i][0]+" data-act="+opts[i][0]+
 if(on)title=opts[i][1]}
 h+="</div>"+holdSection(lock)+edBar(lock);
 var panel="<h2>"+esc(title)+"</h2>"+(act==="zb"?zbForm((st&&st.busy)||svBusy):
-act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):act==="va"?vaPanel():
+act==="hid"?hidPanel(lock):act==="ha"?haPanel(lock):
 act==="cl"?clearPanel():irPanel(lock));
 e.innerHTML=h;
 p.innerHTML=panel;
@@ -2102,7 +2088,6 @@ if(!r||r.action==="none")return "ir";
 if(r.action==="zigbee")return "zb";
 if(r.action==="hid")return "hid";
 if(r.action==="ha")return "ha";
-if(r.action==="voice")return "va";
 return "ir"}
 
 // The card and the panel from the stored slot, for pick, Discard, and a save.
@@ -2166,9 +2151,8 @@ function codeDirty(){return act==="ir"&&cdSlot===sel&&(hasCode(cd)?cd!==cdBase:h
 function nameDirty(){var r=row(sel);
 return !!(r&&r.action==="ir"&&inDirty&&inSlot===sel&&String(inv).replace(/^ +| +$/g,"")!==(r.name||""))}
 function holdDirty(){return hdv!==null&&hdv!==holdAt(sel)}
-// Voice and Clear carry no fields. Clear on an empty input changes nothing.
+// Clear carries no fields. Clear on an empty input changes nothing.
 function actDirty(){var r=row(sel),k=r?r.action:"none";
-if(act==="va")return k!=="voice";
 if(act==="cl")return k!=="none";
 return codeDirty()||(act==="ir"&&nameDirty())||edKey()!==edBase}
 function edDirty(){return sel!==null&&!!st&&(holdDirty()||actDirty())}
@@ -2192,8 +2176,7 @@ if(b)b.disabled=off;if(d)d.disabled=off;if(m)m.textContent=svLine(dirty)}
 function savePlan(s){
 var r=row(s),k=r?r.action:"none",steps=[],e,v,why,plan;
 if(actDirty()){
-if(act==="va")steps.push({a:"set_voice",s:s,why:FLASH_WHY});
-else if(act==="cl")steps.push({a:"clear",s:s,why:FLASH_WHY});
+if(act==="cl")steps.push({a:"clear",s:s,why:FLASH_WHY});
 else if(act==="zb"||act==="hid"||act==="ha"){
 e=act==="zb"?zbWrite(s):act==="hid"?hidWrite(s):haWrite(s);
 if(e.error)return e;steps.push(e)}

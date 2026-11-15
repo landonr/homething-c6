@@ -78,7 +78,6 @@ const STATE = {
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 6, action: "ir", pulses: 68, us: 61780, code: "0xE0E09E61", fields: "07 79", group: 0, name: "Home"},
-    {slot: 4, action: "voice", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
     {slot: 5, action: "zigbee", pulses: 0, us: 0, code: "", fields: "", group: 0, ieee: "0x94deb8fffe9db81e", ep: 1, act: 3, val: 32, name: "", hold: "wifi"},
     {slot: 7, action: "hid", pulses: 0, us: 0, code: "", fields: "", group: 0, hid_kind: "keyboard", hid_usage: 4, hid_mod: 2, name: "", hold: "status"},
     {slot: 8, action: "ha", pulses: 0, us: 0, code: "", fields: "", group: 0, ha_kind: "light", ha_act: "brightness_up", ha_val: 10, ha_entity: "light.kitchen", name: ""},
@@ -610,19 +609,13 @@ setTimeout(() => {
     global.tg = g; global.td = d;
     if (!h) throw new Error("empty form");
   });
-  step("every action panel paints on a voice capable slot", () => {
+  step("every action panel paints", () => {
     global.sel = 19;
-    for (const a of ["ir", "zb", "va", "cl"]) {
+    for (const a of ["ir", "zb", "cl"]) {
       global.act = a;
       paint();
       if (!document.getElementById("as")) throw new Error(a + " painted no selector");
     }
-  });
-  step("the voice panel is not offered on a slot without it", () => {
-    global.sel = 17;  // A wheel detent has no release edge, so it has no voice action.
-    global.act = "va";
-    paint();
-    if (act === "va") throw new Error("voice stayed selected on a slot without it");
   });
   step("switching the selector repaints", () => {
     global.sel = 19;
@@ -919,7 +912,6 @@ setTimeout(() => {
     const by = {};
     for (const e of blob.slots) by[e.slot] = e;
     if (by[3].action !== "none") throw new Error("an empty input is not none: " + by[3].action);
-    if (by[4].action !== "voice") throw new Error("a voice input is not voice: " + by[4].action);
     if (by[6].action !== "ir" || by[6].code !== CODE.text)
       throw new Error("an IR input lost its code: " + JSON.stringify(by[6]));
     if (by[5].kind !== "device" || by[5].ieee !== "0x94deb8fffe9db81e" || by[5].ep !== 1)
@@ -946,10 +938,10 @@ setTimeout(() => {
     global.st = prevSt;
   });
   step("an import ignores the firmware key", () => {
-    const text = JSON.stringify({c6remote: 1, firmware: "2026.10.1-dirty", slots: [{slot: 4, action: "voice"}]});
+    const text = JSON.stringify({c6remote: 1, firmware: "2026.10.1-dirty", slots: [{slot: 4, action: "none"}]});
     const r = cfgParse(text);
     if (r.error) throw new Error("a file with firmware was refused: " + r.error);
-    const plain = cfgParse(JSON.stringify({c6remote: 1, slots: [{slot: 4, action: "voice"}]}));
+    const plain = cfgParse(JSON.stringify({c6remote: 1, slots: [{slot: 4, action: "none"}]}));
     if (plain.error) throw new Error("a file without firmware was refused: " + plain.error);
   });
   step("an export reads back in without a change", () => {
@@ -961,8 +953,6 @@ setTimeout(() => {
   });
   step("a bad entry is refused before any write", () => {
     if (!cfgCheck({slot: 99, action: "none"})) throw new Error("an unknown slot passed");
-    if (cfgCheck({slot: 4, action: "voice"})) throw new Error("voice was refused on slot 4");
-    if (!cfgCheck({slot: 17, action: "voice"})) throw new Error("voice passed on slot 17");
     if (!cfgCheck({slot: 6, action: "ir", code: "  "})) throw new Error("an empty code passed");
     if (!cfgCheck({slot: 6, action: "zigbee", kind: "device", ieee: "0x94deb8"}))
       throw new Error("a short address passed");
@@ -981,7 +971,6 @@ setTimeout(() => {
     global.cfgIn = JSON.stringify({c6remote: 1, slots: [
       {slot: 3, action: "none"},
       {slot: 6, action: "ir", code: CODE.text},
-      {slot: 4, action: "voice"},
       {slot: 5, action: "zigbee", kind: "device", ieee: "94DEB8FFFE9DB81E", ep: 2, name: "Lamp"},
       {slot: 20, action: "zigbee", kind: "group", group: 4609, name: "Office Lamp"},
     ]});
@@ -1059,15 +1048,14 @@ setTimeout(() => {
   step("an off Config switch grays out only its own actions and names the switch", () => {
     const saved = global.st.radios;
     global.zbusy = false; global.clipBusy = false; global.svBusy = false;
-    // Voice runs over the Home Assistant API, so that switch grays out two actions.
     for (const [radio, ids, tip] of [["zigbee", ["zb"], "Turn on Zigbee in Config"],
                                      ["ble", ["hid"], "Turn on Bluetooth in Config"],
-                                     ["home_assistant", ["ha", "va"], "Turn on Home Assistant in Config"]]) {
+                                     ["home_assistant", ["ha"], "Turn on Home Assistant in Config"]]) {
       global.st.radios = {zigbee: true, ble: true, home_assistant: true};
       global.st.radios[radio] = false;
       global.sel = 19; global.act = "ir";
       paint();
-      for (const other of ["ir", "zb", "hid", "ha", "va", "cl"]) {
+      for (const other of ["ir", "zb", "hid", "ha", "cl"]) {
         const off = ids.includes(other), tag = actionTag(other);
         if (document.getElementById("as-" + other).disabled !== off)
           throw new Error(radio + " off left " + other + (off ? " enabled" : " disabled"));
@@ -1084,8 +1072,7 @@ setTimeout(() => {
   step("an input whose action needs an off switch opens on IR and recovers when it is on", () => {
     const saved = global.st.radios;
     global.zbusy = false; global.clipBusy = false; global.svBusy = false;
-    for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"],
-                                     ["home_assistant", 4, "va"]]) {
+    for (const [radio, slot, id] of [["zigbee", 5, "zb"], ["ble", 7, "hid"], ["home_assistant", 8, "ha"]]) {
       global.st.radios = {zigbee: true, ble: true, home_assistant: true};
       pick(slot);
       if (act !== id) throw new Error("slot " + slot + " opened " + act + " with every switch on");
@@ -1191,33 +1178,6 @@ setTimeout(() => {
     if (document.getElementById("ed").innerHTML.indexOf(
         "Home Assistant is off, so this input is disabled. The assignment is kept.") < 0)
       throw new Error("the editor gives no reason for a held Home Assistant input");
-    global.st.radios = prevRadios;
-    global.sel = null;
-    paint();
-  });
-  step("an off Home Assistant switch holds a voice input and grays out Voice assistant", () => {
-    const prevRadios = global.st.radios;
-    global.zbusy = false; global.clipBusy = false; global.svBusy = false;
-    global.st.radios = {zigbee: true, ble: true, home_assistant: false};
-    global.sel = null;
-    paint();
-    // Slot 4 holds the voice assistant, and slot 6 an IR code.
-    if (keys[4].className.indexOf("rf") < 0) throw new Error("a held voice input is not marked");
-    if (keys[4].lastChild.textContent !== "Voice assistant")
-      throw new Error("a held voice input lost its assignment text: " + keys[4].lastChild.textContent);
-    if (keys[6].className.indexOf("rf") >= 0) throw new Error("an IR input was marked");
-    pick(4);
-    if (act !== "ir") throw new Error("a held voice input opened on " + act);
-    if (document.getElementById("ed").innerHTML.indexOf(
-        "Home Assistant is off, so this input is disabled. The assignment is kept.") < 0)
-      throw new Error("the editor gives no reason for a held voice input");
-    if (!document.getElementById("as-va").disabled ||
-        actionTag("va").indexOf(" title='Turn on Home Assistant in Config'") < 0)
-      throw new Error("Voice assistant is live with Home Assistant off: " + actionTag("va"));
-    global.st.radios = {zigbee: true, ble: true, home_assistant: true};
-    paint();
-    if (keys[4].className.indexOf("rf") >= 0) throw new Error("a live voice input stayed marked");
-    if (document.getElementById("as-va").disabled) throw new Error("Voice assistant stayed grayed out");
     global.st.radios = prevRadios;
     global.sel = null;
     paint();
@@ -1393,7 +1353,6 @@ setTimeout(() => {
       throw new Error("the title reads " + document.getElementById("ed").innerHTML);
     if (keys[6].attrs.title !== "Button 6: IR: Home" || keys[6].attrs["aria-label"] !== "Button 6: IR: Home")
       throw new Error("the key reads " + keys[6].attrs.title + " / " + keys[6].attrs["aria-label"]);
-    if (keys[4].attrs.title !== "Button 4: Voice assistant") throw new Error("a voice key reads " + keys[4].attrs.title);
     const r6 = STATE.slots.find(r => r.slot === 6), prev = r6.name;
     // A capture stores the code with no name.
     r6.name = "";
@@ -1512,17 +1471,14 @@ setTimeout(() => {
     const he = document.getElementById("he");
     he.value = "light.kitchen";
     he.oninput.call(he);
-    document.getElementById("as-va").onclick();
     document.getElementById("as-cl").onclick();
     // Clear on an input that holds nothing changes nothing.
     if (!saveButton().disabled) throw new Error("Clear on an empty input counts as a change");
     global.fetch = realFetch;
     if (bodies.length) throw new Error("an edit posted " + JSON.stringify(bodies));
-    cardOn(4);
-    document.getElementById("as-va").onclick();
-    if (!saveButton().disabled) throw new Error("Voice on a voice input counts as a change");
+    cardOn(6);
     document.getElementById("as-cl").onclick();
-    if (saveButton().disabled) throw new Error("Clear on a voice input is not a change");
+    if (saveButton().disabled) throw new Error("Clear on an IR input is not a change");
     cardOn(3);
   });
   step("Discard puts the card and the panel back to the stored slot", () => {
@@ -1604,30 +1560,15 @@ setTimeout(() => {
     slotRow(5).hold = "wifi"; slotRow(20).hold = "sleep"; slotRow(8).hold = "none"; slotRow(9).hold = "assign";
     networkStatus(); sleepStatus();
   });
-  step("the voice and Home Assistant panels name a hold that moves the press to the release", () => {
+  step("the Home Assistant panel names a hold that moves the press to the release", () => {
     global.st = STATE;
     const prevSel = global.sel, prevAct = global.act, prevRadios = STATE.radios;
     STATE.radios = {zigbee: true, ble: true, home_assistant: true};
-    global.act = "va"; global.sel = 20;
-    paint();
-    if (document.getElementById("edpanel").innerHTML.indexOf("This input has the Sleep hold") < 0)
-      throw new Error("the panel reads " + document.getElementById("edpanel").innerHTML);
-    global.act = "ha";
+    global.act = "ha"; global.sel = 20;
     paint();
     if (document.getElementById("edpanel").innerHTML.indexOf(
         "This input has the Sleep hold, so the action runs when you release a short press.") < 0)
       throw new Error("the Home Assistant panel reads " + document.getElementById("edpanel").innerHTML);
-    global.act = "va";
-    // The status hold counts only in Hold mode.
-    global.sel = 7;
-    paint();
-    if (document.getElementById("edpanel").innerHTML.indexOf("The press starts Assist and the release ends it.") < 0)
-      throw new Error("an inactive status hold changed the panel");
-    STATE.status_leds = "hold";
-    paint();
-    if (document.getElementById("edpanel").innerHTML.indexOf("This input has the Status LEDs hold") < 0)
-      throw new Error("an active status hold did not change the panel");
-    STATE.status_leds = "on";
     STATE.radios = prevRadios;
     global.sel = prevSel; global.act = prevAct;
     paint();
@@ -2261,7 +2202,7 @@ setTimeout(() => {
     const bodies = [];
     global.fetch = (u, o) => { if (o && o.body) bodies.push(o.body); return realFetch(u, o); };
     global.cfgBusy = false;
-    global.cfgIn = JSON.stringify({c6remote: 1, slots: [{slot: 3, action: "voice"}, {slot: 18, action: "none", hold: "sleep"}]});
+    global.cfgIn = JSON.stringify({c6remote: 1, slots: [{slot: 3, action: "none"}, {slot: 18, action: "none", hold: "sleep"}]});
     cfgApply();
     global.fetch = realFetch;
     if (bodies.length || !cfgBad || cfgMsg.indexOf("wheel rotation") < 0)
@@ -2350,7 +2291,7 @@ setTimeout(() => {
       throw new Error("a repaint dropped a typed address");
   });
 
-  step("the Bluetooth line reports the link and the bond", () => {
+  step("the Bluetooth line names the host and falls back without one", () => {
     global.st = STATE;
     STATE.radios = {zigbee: true, ble: true};
     STATE.ble.connected = true;
@@ -2384,7 +2325,7 @@ setTimeout(() => {
       // Writes of earlier steps are still in flight, so only the card writes and
       // their own action ids are answered here. Everything else goes to the base stubs.
       const baseFetch = global.fetch, baseWait = global.waitAction, SAVE_ID = 9100;
-      const card = /^action=(set_ir_code|set_ir_name|set_zigbee|set_zigbee_device|set_hid|set_ha|set_voice|clear|set_hold)&/;
+      const card = /^action=(set_ir_code|set_ir_name|set_zigbee|set_zigbee_device|set_hid|set_ha|clear|set_hold)&/;
       const bodies = [];
       let ids = SAVE_ID, refuse = "";
       global.fetch = (u, o) => {
@@ -2421,8 +2362,7 @@ setTimeout(() => {
         const hp = document.getElementById("hp"); hp.value = "0x04"; hp.onchange.call(hp);
         const ctrl = document.getElementById("hmc"); ctrl.value = "1"; ctrl.checked = true; ctrl.onchange(); });
       results.ha = await save(3, () => { document.getElementById("as-ha").onclick(); type("he", "light.kitchen"); });
-      results.voice = await save(19, () => { document.getElementById("as-va").onclick(); pickHold("status"); });
-      results.clear = await save(4, () => { document.getElementById("as-cl").onclick(); });
+      results.clear = await save(8, () => { document.getElementById("as-cl").onclick(); });
       step("Save posts the action and then the hold, one write at a time, with the exact bodies", () => {
         const want = {
           ir: ["action=set_ir_code&slot=6&code=" + encodeURIComponent(code), "action=set_ir_name&slot=6&name=TV%20Power",
@@ -2430,8 +2370,7 @@ setTimeout(() => {
           zigbee: ["action=set_zigbee&slot=3&group=4609&name=Office%20Lamp&act=0&val=0", "action=set_hold&slot=3&hold=wifi"],
           hid: ["action=set_hid&slot=3&kind=keyboard&usage=4&mod=1"],
           ha: ["action=set_ha&slot=3&kind=light&act=toggle&val=0&entity=light.kitchen"],
-          voice: ["action=set_voice&slot=19", "action=set_hold&slot=19&hold=status"],
-          clear: ["action=clear&slot=4"],
+          clear: ["action=clear&slot=8"],
         };
         for (const k of Object.keys(want)) {
           const r = results[k];

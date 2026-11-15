@@ -34,24 +34,21 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn('set_effect("Status Indicators")', opened)
         self.assertNotIn("IR Receiver", CONFIG)
 
-    def test_voice_starts_in_one_shared_step_and_stops_on_a_plain_release(self) -> None:
-        """Every expander input reaches Assist through the shared paths, so no
-        input carries voice actions of its own."""
-        inputs = CONFIG[CONFIG.index("\nbinary_sensor:\n"):CONFIG.index("\nsensor:\n")]
-        self.assertNotIn("voice_assistant", inputs)
-        self.assertEqual(CONFIG.count("voice_assistant.start:"), 1)
-        press = CONFIG.split("  - id: button_press\n", 1)[1].split("\n  - id:", 1)[0]
-        self.assertIn("voice_assistant.start:", press)
-        release = CONFIG.split("  - id: release_assignment\n", 1)[1].split("\n  - id:", 1)[0]
-        self.assertIn("voice_assistant.stop:", release)
+    def test_the_firmware_carries_no_voice_assistant(self) -> None:
+        """The app slot needs the flash, so Assist, the microphone and the I2S
+        bus are all out of the production config."""
+        for gone in ("voice_assistant", "microphone:", "i2s_audio:", "mic_meter_active", "voice_led_state"):
+            self.assertNotIn(gone, CONFIG)
+        for gone in ("is_voice", "set_voice", "voice_mask_", "IrUi::VOICE"):
+            self.assertNotIn(gone, HEADER)
 
     def test_receiver_states_drive_only_d3_and_d4(self) -> None:
-        for state in ("READY", "READING", "SAVED", "ERROR", "VOICE", "CLEARED"):
+        for state in ("READY", "READING", "SAVED", "ERROR", "CLEARED"):
             self.assertIn(f"ir_ui.state == IrUi::{state}", CONFIG)
         # D2 is Wi-Fi and D5 is Zigbee. Assignment mode must not hide either, so
         # its branch writes no it[0], no it[d5], and no whole-strip colour.
         mode = CONFIG.split("if (ir_ui.state != IrUi::OFF) {", 1)[1]
-        mode = mode.split("} else if (id(voice_led_state) == 1)", 1)[0]
+        mode = mode.split("\n            } else {", 1)[0]
         for forbidden in ("it[0]", "it[d5]", "it.all()"):
             self.assertNotIn(forbidden, mode)
         self.assertIn("it[1]", mode)
@@ -88,7 +85,7 @@ class IrLearningTest(unittest.TestCase):
             self.assertIn(f"(millis() % {period}) / {period}.0f", d5)
 
     def test_successful_save_returns_to_ready_until_the_assignment_hold(self) -> None:
-        self.assertIn("const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000", HEADER)
+        self.assertIn("const uint32_t hold = state == READING ? 10000 : 1000", HEADER)
         self.assertIn("state = READY", HEADER)
         self.assertIn("elapsed < 5000", HEADER)
         tick = HEADER.split("bool tick() {", 1)[1].split("\n  }", 1)[0]
@@ -109,7 +106,7 @@ class IrLearningTest(unittest.TestCase):
             self.assertEqual(1, CONFIG.count(f"{{id: button_press, slot: {button}}}"), button)
             self.assertEqual(1, CONFIG.count(f"{{id: button_release, slot: {button}}}"), button)
         # 17 and 18 are the rotation detents, which have no release edge and so
-        # never reach the voice stage.
+        # never reach the clear stage.
         for button in (17, 18):
             self.assertIn(f"ir_ui.tap({button}, IrUi::Tap::ARM_ONLY)", CONFIG)
         send = CONFIG.split("- if: &send_learned_code", 1)[1].split("- if:", 1)[0]
@@ -170,7 +167,7 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn('#include "ir_name.h"', HEADER)
         self.assertIn("static_assert(ir_name::MAX + 1 == NAME_LEN,", HEADER)
         # A cleared slot must not keep the name of the code it held.
-        self.assertEqual(HEADER.count('erase_code_(button) && write_name_(button, "")'), 2)
+        self.assertEqual(HEADER.count('erase_code_(button) && write_name_(button, "")'), 1)
         # Nor may a slot keep the old name after a capture writes a new code.
         save = section(HEADER, "bool save(uint8_t button, const std::vector<int32_t> &raw) {", "\n  }")
         self.assertIn("if (names_.names[slot][0] != '\\0')\n      write_name_(button, \"\");", save)
@@ -180,7 +177,7 @@ class IrLearningTest(unittest.TestCase):
         rename = section(HEADER, "bool rename(uint8_t button, const char *text) {", "\n  }")
         self.assertLess(rename.index("if (!has_code(button))\n      return false;"),
                         rename.index("set_name(button, text)"))
-        for gone in ("prefs_[", "records_[", "erase_code_(", "voice_pref_"):
+        for gone in ("prefs_[", "records_[", "erase_code_("):
             self.assertNotIn(gone, rename)
 
     def test_playback_logs_actual_output_pulses(self) -> None:
@@ -194,7 +191,7 @@ class IrLearningTest(unittest.TestCase):
         self.assertIn('log_pulses_("ir_rx", "Raw frame", raw)', HEADER)
 
     def test_transmitter_reserves_shared_rmt_memory(self) -> None:
-        transmitter = CONFIG.split("remote_transmitter:", 1)[1].split("i2s_audio:", 1)[0]
+        transmitter = CONFIG.split("remote_transmitter:", 1)[1].split("\nscript:\n", 1)[0]
         self.assertIn("rmt_symbols: 48", transmitter)
         # Both TX channels are 48 symbols. A strip at the 96 default starves the
         # IR transmitter of a channel and it fails silently at boot.
@@ -228,13 +225,13 @@ class AssignmentOwnershipTest(unittest.TestCase):
         self.assertIn("assignment_clear_callbacks_.push_back(std::move(callback));", HEADER)
         self.assertNotIn("set_assignment_clear_callback", HEADER)
 
-    def test_capture_voice_and_clear_all_release_the_other_kinds(self) -> None:
-        self.assertEqual(HEADER.count("release_others(button, OWNER_IR);"), 2)
+    def test_capture_and_clear_both_release_the_other_kinds(self) -> None:
+        self.assertEqual(HEADER.count("release_others(button, OWNER_IR);"), 1)
         self.assertEqual(HEADER.count("release_others(button, OWNER_NONE);"), 1)
 
-    def test_a_press_tries_voice_hid_zigbee_home_assistant_then_ir(self) -> None:
+    def test_a_press_tries_hid_zigbee_home_assistant_then_ir(self) -> None:
         play = section(HEADER, "void play_(uint8_t button) {", "\n  }")
-        order = ["is_voice(button)", "hid_play_callback_(button, true)", "zigbee_play_callback_(button)",
+        order = ["hid_play_callback_(button, true)", "zigbee_play_callback_(button)",
                  "ha_play_callback_(button)", "prepare_ir(button)"]
         positions = [play.index(item) for item in order]
         self.assertEqual(positions, sorted(positions))

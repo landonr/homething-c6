@@ -144,7 +144,7 @@ class BleHidTest(unittest.TestCase):
         self.assertLess(tap, release.index("- lambda: ir_ui.release(static_cast<uint8_t>(slot));"))
         self.assertIn("id: release_assignment", release)
         plain = CONFIG.split("  - id: release_assignment\n", 1)[1].split("\n  - id:", 1)[0]
-        self.assertIn("lambda: return ir_ui.release(static_cast<uint8_t>(slot));", plain)
+        self.assertIn("- lambda: ir_ui.release(static_cast<uint8_t>(slot));", plain)
         # No physical button drives HID from its raw edges.
         sensors = CONFIG.split("\nbinary_sensor:\n", 1)[1].split("\nsensor:\n", 1)[0]
         self.assertNotIn("set_pressed(", sensors)
@@ -256,7 +256,7 @@ class AssignmentListenerTest(unittest.TestCase):
         self.assertNotIn("set_assignment_store_callback", CPP)
         self.assertNotIn("ha_action", CPP)
 
-    def test_a_hid_assignment_releases_the_others_after_it_clears_ir_and_voice(self) -> None:
+    def test_a_hid_assignment_releases_the_others_after_it_clears_ir(self) -> None:
         assign = CPP.split("bool BleHid::assign(", 1)[1].split("\n}\n", 1)[0]
         self.assertLess(assign.index("::ir_code_store.clear_for_zigbee(slot)"),
                         assign.index("::ir_code_store.release_others(slot, IrCodeStore::OWNER_BLE);"))

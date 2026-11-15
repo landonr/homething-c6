@@ -23,14 +23,13 @@ class IrCodeStore {
   // FIRST_BUTTON would shift every existing key by one slot and hand each
   // button its neighbour's code.
   static constexpr uint8_t LAST_BUTTON = 20;
-  static constexpr uint8_t VOICE_BUTTON = 19;
   static constexpr size_t SLOT_COUNT = LAST_BUTTON - FIRST_BUTTON + 1;
   static constexpr size_t MAX_PULSES = 512;
   // Flipper .ir names are short words such as Power or Vol_up.
   static constexpr size_t NAME_LEN = 24;
   static_assert(ir_name::MAX + 1 == NAME_LEN, "the page limit must match the stored name");
 
-  // OWNER_IR covers both a stored code and the voice assistant.
+  // OWNER_IR covers a stored code.
   enum Owner : uint8_t { OWNER_NONE = 0, OWNER_IR, OWNER_ZIGBEE, OWNER_BLE, OWNER_HA };
 
   void setup() {
@@ -54,25 +53,8 @@ class IrCodeStore {
         book.checksum == checksum_of_(&book, sizeof(book) - sizeof(book.checksum)))
       names_ = book;
 
-    voice_pref_ = esphome::global_preferences->make_preference<uint32_t>(VOICE_KEY, true);
-    uint32_t mask = 0;
-    if (voice_pref_.load(&mask)) {
-      voice_mask_ = mask;
-    } else {
-      // First boot after this feature. Seed SW2 so the board still has an Assist
-      // button before anyone opens receiver mode. A clear writes the mask, so a
-      // cleared SW2 stays cleared.
-      voice_mask_ = slot_bit_(VOICE_BUTTON);
-      voice_pref_.save(&voice_mask_);
-    }
-
-    ESP_LOGI("ir_learn", "IR store ready: %u/%u codes, voice mask 0x%05X",
-             static_cast<unsigned>(loaded_count), static_cast<unsigned>(SLOT_COUNT),
-             static_cast<unsigned>(voice_mask_));
-  }
-
-  bool is_voice(uint8_t button) const {
-    return button_valid_(button) && (voice_mask_ & slot_bit_(button)) != 0;
+    ESP_LOGI("ir_learn", "IR store ready: %u/%u codes", static_cast<unsigned>(loaded_count),
+             static_cast<unsigned>(SLOT_COUNT));
   }
 
   bool has_code(uint8_t button) const {
@@ -197,33 +179,13 @@ class IrCodeStore {
   // alone that a new code landed.
   uint32_t saves() const { return saves_; }
 
-  // The voice assignment replaces whatever the button held, so drop the code.
-  bool set_voice(uint8_t button) {
-    if (!button_valid_(button))
-      return false;
-    const bool erased = erase_code_(button) && write_name_(button, "");
-    const uint32_t next_mask = voice_mask_ | slot_bit_(button);
-    const bool written = voice_pref_.save(&next_mask);
-    if (written)
-      voice_mask_ = next_mask;
-    release_others(button, OWNER_IR);
-    ESP_LOGI("ir_learn", "Button %u assigned to the voice assistant%s", button,
-             erased && written ? "" : " (flash write failed)");
-    return erased && written;
-  }
-
   bool clear(uint8_t button) {
     if (!button_valid_(button))
       return false;
     const bool erased = erase_code_(button) && write_name_(button, "");
-    const uint32_t next_mask = voice_mask_ & ~slot_bit_(button);
-    const bool written = voice_pref_.save(&next_mask);
-    if (written)
-      voice_mask_ = next_mask;
     release_others(button, OWNER_NONE);
-    ESP_LOGI("ir_learn", "Button %u cleared%s", button,
-             erased && written ? "" : " (flash write failed)");
-    return erased && written;
+    ESP_LOGI("ir_learn", "Button %u cleared%s", button, erased ? "" : " (flash write failed)");
+    return erased;
   }
 
   bool save(uint8_t button, const std::vector<int32_t> &raw) {
@@ -277,14 +239,6 @@ class IrCodeStore {
       ESP_LOGE("ir_learn", "Flash write failed for button %u", button);
       return false;
     }
-    if ((voice_mask_ & slot_bit_(button)) != 0) {
-      const uint32_t next_mask = voice_mask_ & ~slot_bit_(button);
-      if (!voice_pref_.save(&next_mask)) {
-        ESP_LOGE("ir_learn", "Flash write failed while removing voice from button %u", button);
-        return false;
-      }
-      voice_mask_ = next_mask;
-    }
     records_[slot] = next;
     saves_++;
     // A capture replaces the code, so the name of the old code no longer fits.
@@ -331,9 +285,7 @@ class IrCodeStore {
     erase_code_(button);
     // The name belongs to the erased code. Leaving it orphans a label on a slot
     // that the Zigbee record later stops describing.
-    write_name_(button, "");
-    voice_mask_ &= ~slot_bit_(button);
-    return voice_pref_.save(&voice_mask_);
+    return write_name_(button, "");
   }
 
   void log_received(const std::vector<int32_t> &raw) const {
@@ -373,7 +325,6 @@ class IrCodeStore {
 
  private:
   static constexpr uint32_t MAGIC = 0x49524336U;
-  static constexpr uint32_t VOICE_KEY = 0x49524356U;
   static constexpr uint32_t NAME_KEY = 0x4952434EU;
   static constexpr uint32_t NAME_MAGIC = 0x4952434FU;
   static constexpr uint16_t VERSION = 1;
@@ -526,8 +477,6 @@ class IrCodeStore {
   std::array<esphome::ESPPreferenceObject, SLOT_COUNT> prefs_{};
   NameBook names_{};
   esphome::ESPPreferenceObject name_pref_{};
-  esphome::ESPPreferenceObject voice_pref_{};
-  uint32_t voice_mask_ = 0;
   uint32_t saves_ = 0;
   std::vector<std::function<void(uint8_t, Owner)>> assignment_clear_callbacks_{};
 };
@@ -544,11 +493,10 @@ class IrUi {
     READING = 2,
     SAVED = 3,
     ERROR = 4,
-    VOICE = 5,
-    CLEARED = 6,
+    CLEARED = 5,
   };
 
-  // FULL cycles IR, voice, clear. ARM_ONLY always arms IR capture for wheel
+  // FULL cycles IR, then clear. ARM_ONLY always arms IR capture for wheel
   // rotation, which has no release edge.
   enum class Tap : uint8_t { FULL, ARM_ONLY };
 
@@ -607,13 +555,6 @@ class IrUi {
       arm_(button);
       return;
     }
-    if (stage == 1 && mode == Tap::FULL) {
-      ir_code_store.set_voice(button);
-      stage = 2;
-      state = VOICE;
-      mark_();
-      return;
-    }
     ir_code_store.clear(button);
     target = 0;
     stage = 0;
@@ -652,7 +593,7 @@ class IrUi {
       closed_ = false;
       return true;
     }
-    const uint32_t hold = (state == READING || state == VOICE) ? 10000 : 1000;
+    const uint32_t hold = state == READING ? 10000 : 1000;
     if (elapsed >= hold) {
       // Keep target and stage so the next tap on the same button still advances.
       state = READY;
@@ -667,20 +608,9 @@ class IrUi {
     return pending;
   }
 
-  bool take_voice_start() {
-    const bool pending = pending_voice_;
-    pending_voice_ = false;
-    return pending;
-  }
-
-  // Stop Assist only when the released input started it.
-  bool release(uint8_t button) {
+  void release(uint8_t button) {
     if (hid_play_callback_)
       hid_play_callback_(button, false);
-    if (voice_active_ != button)
-      return false;
-    voice_active_ = 0;
-    return true;
   }
 
   const std::vector<int32_t> &code() const { return code_; }
@@ -712,12 +642,6 @@ class IrUi {
 
   void play_(uint8_t button) {
     pending_transmit_ = false;
-    pending_voice_ = false;
-    if (ir_code_store.is_voice(button)) {
-      pending_voice_ = true;
-      voice_active_ = button;
-      return;
-    }
     if (hid_play_callback_ && hid_play_callback_(button, true))
       return;
     if (zigbee_play_callback_ && zigbee_play_callback_(button))
@@ -730,13 +654,11 @@ class IrUi {
   std::vector<int32_t> code_;
   uint32_t since_ = 0;
   bool pending_transmit_ = false;
-  bool pending_voice_ = false;
   bool web_owner_ = false;
   uint8_t web_result_ = OFF;
   uint8_t web_result_slot_ = 0;
   bool open_requested_ = false;
   bool closed_ = false;
-  uint8_t voice_active_ = 0;
   std::function<bool(uint8_t)> zigbee_play_callback_{};
   std::function<bool(uint8_t, bool)> hid_play_callback_{};
   std::function<bool(uint8_t)> ha_play_callback_{};

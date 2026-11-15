@@ -303,7 +303,7 @@ class StaleCallbackTest(unittest.TestCase):
 
 
 class ExclusivityTest(unittest.TestCase):
-    """A slot holds one of IR code, voice, Zigbee, BLE HID or Home Assistant."""
+    """A slot holds one of IR code, Zigbee, BLE HID or Home Assistant."""
 
     def test_the_store_keeps_a_listener_list_and_names_the_owner(self) -> None:
         self.assertIn("enum Owner : uint8_t { OWNER_NONE = 0, OWNER_IR, OWNER_ZIGBEE, OWNER_BLE, OWNER_HA };", STORE)
@@ -312,9 +312,7 @@ class ExclusivityTest(unittest.TestCase):
         release = section(STORE, "void release_others(uint8_t button, Owner keep) const {", "\n  }")
         self.assertIn("callback(button, keep);", release)
 
-    def test_ir_voice_and_clear_release_every_other_kind(self) -> None:
-        voice = section(STORE, "bool set_voice(uint8_t button) {", "\n  }")
-        self.assertIn("release_others(button, OWNER_IR);", voice)
+    def test_ir_and_clear_release_every_other_kind(self) -> None:
         clear = section(STORE, "bool clear(uint8_t button) {", "\n  }")
         self.assertIn("release_others(button, OWNER_NONE);", clear)
         save = section(STORE, "bool save(uint8_t button, const std::vector<int32_t> &raw) {", "\n  }")
@@ -339,7 +337,7 @@ class ExclusivityTest(unittest.TestCase):
         self.assertIn("::ir_code_store.clear_for_zigbee(slot)", assign)
         self.assertIn("::ir_code_store.release_others(slot, IrCodeStore::OWNER_BLE);", assign)
 
-    def test_ha_assign_clears_ir_and_voice_then_releases_the_others(self) -> None:
+    def test_ha_assign_clears_ir_then_releases_the_others(self) -> None:
         assign = section(CPP, "bool HaAction::assign(", "\n}")
         self.assertIn("::ir_code_store.clear_for_zigbee(slot)", assign)
         self.assertIn("::ir_code_store.release_others(slot, IrCodeStore::OWNER_HA);", assign)
@@ -437,7 +435,7 @@ class WifiLeaseTest(unittest.TestCase):
         probe = section(CONFIG, "  block_probe: !lambda |-\n", "  replay: !lambda")
         self.assertIn("or\n    // the lease that a Home Assistant action holds.", probe)
         self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
-        self.assertIn("wifi_session << 6 | ha_busy << 7 | ota_running << 8;", probe)
+        self.assertIn("wifi_session << 3 | ha_busy << 4 |\n                          ota_running << 5;", probe)
         self.assertIn("wifi=%d ha=%d ota=%d at", probe)
         self.assertIn("window, wifi_session, ha_busy, ota_running, millis());", probe)
 

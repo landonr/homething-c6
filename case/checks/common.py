@@ -1,6 +1,11 @@
 """Tolerances and probe helpers every check module shares."""
 
-from build123d import Box, Compound, Cylinder, Edge, Pos, Vector
+import collections
+
+from build123d import Box, Compound, Cylinder, Pos, Vector
+from OCP.IntCurveSurface import IntCurveSurface_TransitionOnCurve
+from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
 
 TOLERANCE = 0.05
 PROBE_D = 0.5
@@ -83,6 +88,53 @@ def _fill_fraction(shape, probe):
     return _volume(shape.intersect(probe)) / probe_volume
 
 
+RAY_LOAD_TOL = 1e-7
+"""Face tolerance the ray intersector loads a shape at. Tight on purpose: it is
+the intersector's working tolerance against the real surfaces, not a reading
+allowance. RUN_MIN is what discards a graze."""
+
+RAY_CACHE = 8
+"""How many loaded shapes to keep. The solids a worker probes are a handful and
+live for the whole run, so they are worth keeping. A crop is made, read many
+times and dropped, so it is worth evicting. A small window serves both: every
+reading inside one pass still hits, and nothing accumulates across a suite."""
+
+_LOADED = collections.OrderedDict()
+"""Loaded shapes by identity, least recently used first.
+
+Each entry holds the shape itself beside its intersector and its reach. Keeping
+the shape is not an optimisation: without it CPython is free to collect a shape
+and hand its id to the next one, and a pass would then read its rays against
+whatever surfaces the old shape had. This was not hypothetical, it happened
+while the reading below was being checked. The shapes worth caching are the ones
+Solids already holds for the life of the worker, so the reference costs nothing.
+"""
+
+
+def _loaded(shape):
+    """The ray intersector for `shape`, and how far outside it a ray can start.
+
+    Loading builds a bounding-box tree over the faces. That is the whole point:
+    it is paid once per shape, and every ray after it descends the tree instead
+    of touching the other ten thousand faces, which is what a boolean does.
+    """
+    entry = _LOADED.get(id(shape))
+    if entry is None:
+        inter = IntCurvesFace_ShapeIntersector()
+        inter.Load(shape.wrapped, RAY_LOAD_TOL)
+        box = shape.bounding_box()
+        reach = Vector(
+            box.max.X - box.min.X, box.max.Y - box.min.Y, box.max.Z - box.min.Z
+        ).length + 1.0
+        entry = (shape, inter, reach)
+        _LOADED[id(shape)] = entry
+        while len(_LOADED) > RAY_CACHE:
+            _LOADED.popitem(last=False)
+    else:
+        _LOADED.move_to_end(id(shape))
+    return entry[1], entry[2]
+
+
 def _ray_runs(shape, start, end):
     """Where `shape` is material along the segment from `start` to `end`, as
     (from, to) distances off `start`, in order.
@@ -92,16 +144,77 @@ def _ray_runs(shape, start, end):
     surfaces needs: the gaps between the runs are the voids the built solid
     actually has along that line, so one reading covers every surface that can
     close in on the void rather than one radius chosen in advance.
+
+    The reading intersects the line with the real faces rather than booleaning
+    the segment against the solid. That is faster, because it descends the
+    loaded tree instead of paying for the shell's whole face count, and it is
+    also the more trustworthy of the two. The boolean this replaced read the TPU
+    pad's lobes 0.26 mm short at each end, against both this and the pad's own
+    tessellation, and a volume probe walked along the same line alternated solid
+    and empty every 0.1 mm, which no pad does. Where the two disagree, the
+    surfaces are what the case is, so this is what the passes now read.
+
+    Runs are rebuilt by counting depth rather than by assuming crossings
+    alternate, so a shape whose solids overlap closes a run only when the last
+    of them is left. A ray that set off in air meets its first surface from
+    outside; anything else means it began inside material, and how deep is only
+    legible from clear of the shape, so that one is read again from there and
+    clipped back. A segment lying wholly inside a wall has no crossing of its
+    own, and without the second reading it would come back open, which is the
+    one answer a check must never invent. Most probes start in air, so the
+    second reading is rare and the shell's long rays stay cheap.
     """
-    line = Edge.make_line(start, end)
-    hit = shape.intersect(line)
+    origin = Vector(start)
+    span = Vector(end) - origin
+    length = span.length
+    if length <= 0:
+        return []
+    inter, reach = _loaded(shape)
+    line = gp_Lin(gp_Pnt(*start), gp_Dir(*(span / length)))
+
+    def cast(first):
+        inter.Perform(line, first, length)
+        if not inter.IsDone():
+            return []
+        found = []
+        for index in range(1, inter.NbPnt() + 1):
+            transition = inter.Transition(index)
+            # A tangent crossing grazes a surface without changing which side of
+            # it the ray is on, so counting it opens or closes a run that is not
+            # there.
+            if transition == IntCurveSurface_TransitionOnCurve.IntCurveSurface_Tangent:
+                continue
+            entering = (
+                transition == IntCurveSurface_TransitionOnCurve.IntCurveSurface_In
+            )
+            found.append((inter.WParameter(index), entering))
+        found.sort()
+        return found
+
+    crossings = cast(0.0)
+    if not crossings or not crossings[0][1]:
+        crossings = cast(-reach)
     runs = []
-    for piece in hit.edges() if hit else []:
-        origin = Vector(start)
-        a = ((piece @ 0) - origin).length
-        b = ((piece @ 1) - origin).length
-        runs.append((min(a, b), max(a, b)))
-    return sorted(run for run in runs if run[1] - run[0] > RUN_MIN)
+    depth = 0
+    opened = None
+    for distance, entering in crossings:
+        if entering:
+            if depth == 0:
+                opened = distance
+            depth += 1
+            continue
+        depth = max(depth - 1, 0)
+        if depth == 0 and opened is not None:
+            runs.append((opened, distance))
+            opened = None
+    if depth > 0 and opened is not None:
+        runs.append((opened, length))
+    clipped = []
+    for first, last in runs:
+        first, last = max(first, 0.0), min(last, length)
+        if last - first > RUN_MIN:
+            clipped.append((first, last))
+    return sorted(clipped)
 
 
 CROP_MARGIN = 0.5

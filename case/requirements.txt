@@ -5,3 +5,7 @@ build123d==0.11.1
 fonttools
 # scripts/render-face-svg.py encodes the SLS face plan's shading with it.
 pillow
+# checks/fab.py uses it to load and ray-cast the exported shell STLs.
+trimesh
+# checks/fab.py uses it as trimesh's triangle index for the rays.
+rtree

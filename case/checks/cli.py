@@ -22,6 +22,13 @@ moment it does. The report proper is replayed afterwards in registry order, so
 what a run prints as its verdict never depends on how the work happened to land
 across the pool; only the progress lines are in completion order, and nothing
 reads those back.
+
+What a pass decided is kept, so a run that changed neither the geometry nor the
+checks replays the last answer rather than spending the CPU again. verdicts.py
+holds the key and says what it does and does not cover. The replay happens here
+before anything is built, so a fully stored run prewarms nothing and starts no
+pool: only the passes still missing reach a worker. `--recheck` runs them all
+again and keeps the solids warm.
 """
 
 import argparse
@@ -40,6 +47,7 @@ import cache
 import case
 import params
 
+from . import verdicts
 from .apertures import probe_apertures
 from .common import Problem
 from .caps import (
@@ -1363,6 +1371,12 @@ def _selection(argv):
         action="store_true",
         help="show per-pass elapsed times after the report",
     )
+    parser.add_argument(
+        "--recheck",
+        action="store_true",
+        help="run every pass again rather than replaying stored verdicts, "
+        "keeping the solids warm",
+    )
     args = parser.parse_args(argv)
     if args.jobs < 1:
         parser.error("--jobs must be at least 1")
@@ -1383,6 +1397,7 @@ def _run_pass(feature, run, solids):
     output = io.StringIO()
     _PENDING.clear()
     started = time.perf_counter()
+    crashed = False
     try:
         previous = sys.stdout
         sys.stdout = output
@@ -1392,18 +1407,24 @@ def _run_pass(feature, run, solids):
             sys.stdout = previous
     except Exception:
         passed = False
+        crashed = True
         output.write(traceback.format_exc())
-    return {
+    record = {
         "feature": feature,
         "name": run.__name__.lstrip("_"),
         "passed": passed,
         "output": output.getvalue(),
         "elapsed": time.perf_counter() - started,
+        "crashed": crashed,
         "problems": [
             p.as_dict() if isinstance(p, Problem) else {"text": str(p)}
             for p in _PENDING
         ],
     }
+    # Stored here rather than in the parent so that a run which dies partway
+    # keeps what its workers had already decided.
+    verdicts.store(record)
+    return record
 
 
 _WORKER_SOLIDS = None
@@ -1623,6 +1644,11 @@ def _prewarm(features):
             call()
 
 
+def _cost(record):
+    """What the pass cost, and whether this run paid it or replayed it."""
+    return f"{record['elapsed']:.2f}s{' cached' if record.get('cached') else ''}"
+
+
 def _progress(record, suite_started, done, total, quiet):
     """Say that a pass finished, the moment it finishes.
 
@@ -1645,7 +1671,7 @@ def _progress(record, suite_started, done, total, quiet):
         f"[{time.perf_counter() - suite_started:8.2f}s] "
         f"{'ok  ' if record['passed'] else 'FAIL'} "
         f"{record['feature']}.{record['name']} "
-        f"({record['elapsed']:.2f}s) [{done}/{total}]",
+        f"({_cost(record)}) [{done}/{total}]",
         flush=True,
     )
 
@@ -1661,7 +1687,7 @@ def _report_record(record, suite_started, quiet):
         print(
             f"[{time.perf_counter() - suite_started:8.2f}s] "
             f"done  {record['feature']}.{record['name']} "
-            f"({record['elapsed']:.2f}s)",
+            f"({_cost(record)})",
             flush=True,
         )
 
@@ -1688,6 +1714,7 @@ def _write_report(path, records, features, scoped):
                 "name": record["name"],
                 "passed": record["passed"],
                 "elapsed": round(record["elapsed"], 3),
+                "cached": bool(record.get("cached")),
                 "problems": record.get("problems", []),
                 **({} if record["passed"] else {"output": record["output"].strip()}),
             }
@@ -1703,11 +1730,13 @@ def _write_report(path, records, features, scoped):
 def _timing_report(records):
     print("timings:")
     for record in records:
-        print(f"  {record['feature']}.{record['name']}: {record['elapsed']:.2f}s")
+        print(f"  {record['feature']}.{record['name']}: {_cost(record)}")
 
 
 def main(argv=None):
     selected, args = _selection(sys.argv[1:] if argv is None else argv)
+    if args.recheck:
+        verdicts.force()
     print(cache.provenance())
     suite_started = time.perf_counter()
     selected_indices = [
@@ -1717,40 +1746,55 @@ def main(argv=None):
     ]
     selected_checks = [CHECKS[index] for index in selected_indices]
     selected_features = list(dict.fromkeys(feature for feature, _ in selected_checks))
-    if args.jobs == 1 or len(selected_checks) < 2:
+    total = len(selected_indices)
+    # Replayed before a single solid is asked for, so a run that moves neither
+    # key never builds one either: the prewarm and the pool below are both handed
+    # an empty list and the whole suite comes back off the disk.
+    by_index = {}
+    for index in selected_indices:
+        feature, run = CHECKS[index]
+        stored = verdicts.load(feature, run.__name__.lstrip("_"))
+        if stored is not None:
+            by_index[index] = stored
+    print(verdicts.provenance(len(by_index), total))
+    pending = [index for index in selected_indices if index not in by_index]
+    if args.jobs == 1 or len(pending) < 2:
         solids = Solids()
-        records = []
-        for feature, run in selected_checks:
-            if not args.quiet:
-                print(
-                    f"[{time.perf_counter() - suite_started:8.2f}s] "
-                    f"start {feature}.{run.__name__.lstrip('_')}",
-                    flush=True,
-                )
-            record = _run_pass(feature, run, solids)
-            records.append(record)
-            _report_record(record, suite_started, args.quiet)
+        for index in selected_indices:
+            feature, run = CHECKS[index]
+            if index not in by_index:
+                if not args.quiet:
+                    print(
+                        f"[{time.perf_counter() - suite_started:8.2f}s] "
+                        f"start {feature}.{run.__name__.lstrip('_')}",
+                        flush=True,
+                    )
+                by_index[index] = _run_pass(feature, run, solids)
+            _report_record(by_index[index], suite_started, args.quiet)
     else:
+        pending_features = list(dict.fromkeys(CHECKS[index][0] for index in pending))
         # Nothing to prewarm into when the cache is off: the workers would
         # rebuild regardless, so the parent's build would be pure added time.
         if cache.enabled():
-            _prewarm(selected_features)
-        total = len(selected_indices)
-        workers = min(args.jobs, total)
+            _prewarm(pending_features)
+        workers = min(args.jobs, len(pending))
         if not args.quiet:
             print(
-                f"running {len(selected_checks)} checks with {workers} workers",
+                f"running {len(pending)} checks with {workers} workers",
                 flush=True,
             )
-        by_index = {}
+        done = 0
+        for index in selected_indices:
+            if index in by_index:
+                done += 1
+                _progress(by_index[index], suite_started, done, total, args.quiet)
         with ProcessPoolExecutor(
             max_workers=workers,
             initializer=_parallel_initializer,
             mp_context=multiprocessing.get_context("spawn"),
         ) as executor:
             futures = {
-                executor.submit(_run_indexed, index): index
-                for index in selected_indices
+                executor.submit(_run_indexed, index): index for index in pending
             }
             for future in as_completed(futures):
                 index = futures[future]
@@ -1773,13 +1817,14 @@ def main(argv=None):
                         "problems": [],
                     }
                 by_index[index] = record
-                _progress(record, suite_started, len(by_index), total, args.quiet)
+                done += 1
+                _progress(record, suite_started, done, total, args.quiet)
         # Back into registry order for the report. The printed body and
         # _write_report both read this list, and both have to see the same order
         # whatever order the pool happened to finish in.
-        records = [by_index[index] for index in selected_indices]
-        for record in records:
-            _report_record(record, suite_started, args.quiet)
+        for index in selected_indices:
+            _report_record(by_index[index], suite_started, args.quiet)
+    records = [by_index[index] for index in selected_indices]
     passed = all(record["passed"] for record in records)
     _write_report(args.json, records, selected_features, selected is not None)
     print(f"checks: {sum(record['passed'] for record in records)}/{len(records)} passed")

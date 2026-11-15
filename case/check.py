@@ -9,6 +9,8 @@ handling.
     python check.py                 every pass
     python check.py --only ir       one feature's passes, building only the
                                     solids those passes probe
+    python check.py --recheck       run every pass again rather than replaying
+                                    the verdicts kept from the last run
 
 Every run also writes export/c6remote-checks.json, the same report in machine
 form, carrying each failure's own point or box in the case frame wherever the

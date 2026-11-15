@@ -1018,8 +1018,8 @@ class ComponentIdTest(unittest.TestCase):
 
     LIST_BLOCKS = ("ota", "update", "text_sensor", "pcf8574", "binary_sensor", "sensor",
                    "output", "light", "switch", "button")
-    MAP_BLOCKS = ("i2c", "http_request", "improv_serial", "ble_hid", "ha_action", "zigbee",
-                  "button_config", "idle_sleep", "remote_receiver", "remote_transmitter")
+    MAP_BLOCKS = ("i2c", "http_request", "improv_serial", "improv_ble", "ble_hid", "ha_action",
+                  "zigbee", "button_config", "idle_sleep", "remote_receiver", "remote_transmitter")
     # The entry marker carries the id, or the entry does, or the one entity of a
     # platform that can carry several, as wifi_info does.
     ID_LINE = r"(?m)^(?:  - |    |      )id: \w+$"

@@ -5,6 +5,9 @@
 #include "esphome/core/preferences.h"
 
 #include "esp_hidd.h"
+// ble_uuid128_t is a typedef of an anonymous struct, so it cannot be declared
+// ahead of use the way the other NimBLE types below can.
+#include "host/ble_uuid.h"
 
 #include <array>
 #include <atomic>
@@ -12,6 +15,7 @@
 #include <mutex>
 
 struct ble_gap_event;
+struct ble_gatt_svc_def;
 
 namespace esphome::ble_hid {
 
@@ -69,6 +73,18 @@ class BleHid final : public Component {
   void set_device_name(const char *name);
 
   static BleHid *instance() { return global_instance_; }
+
+  // Another component can put its own services on this server. NimBLE takes the
+  // whole database before the host task starts, so a caller has to register
+  // from its constructor, ahead of every setup().
+  static bool add_gatt_services(const ble_gatt_svc_def *services);
+  // While this is set, the scan response carries the UUID and the name takes
+  // the space that is left. The pointer has to outlive the component.
+  void set_extra_service_uuid(const ble_uuid128_t *uuid);
+  // Puts the current advertising data back on air. Main loop only.
+  void refresh_advertising() { this->name_update_pending_.store(true, std::memory_order_release); }
+  // BleHid::NO_CONNECTION when no host is connected.
+  uint16_t connection_handle() const { return connection_.load(std::memory_order_acquire); }
 
  protected:
   struct Entry {
@@ -140,6 +156,11 @@ class BleHid final : public Component {
   uint32_t device_name_generation_{0};
   std::atomic<bool> name_update_pending_{false};
   std::atomic<uint16_t> connection_{NO_CONNECTION};
+  std::atomic<const ble_uuid128_t *> extra_uuid_{nullptr};
+
+  static constexpr size_t MAX_EXTRA_SERVICES = 2;
+  static const ble_gatt_svc_def *extra_services_[MAX_EXTRA_SERVICES];
+  static size_t extra_service_count_;
 
   static BleHid *global_instance_;
 };

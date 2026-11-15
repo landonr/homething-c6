@@ -126,9 +126,12 @@ class BleHidTest(unittest.TestCase):
         # role. The remote starts no connection and reads no host name.
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", False', INIT)
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_OBSERVER", False', INIT)
-        for gone in ("ble_gattc", "host/ble_gatt.h", "DEVICE_NAME_UUID", "host_name"):
+        # `ble_gattc` is the client. The server header stays, because another
+        # component puts its own services on this server.
+        for gone in ("ble_gattc", "DEVICE_NAME_UUID", "host_name"):
             self.assertNotIn(gone, CPP)
             self.assertNotIn(gone, HEADER)
+        self.assertIn("ble_gatts_add_svcs(extra_services_[index])", CPP)
 
     def test_wheels_tap_and_buttons_release_by_slot(self) -> None:
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
@@ -233,7 +236,11 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("BLE_HS_ADV_MAX_FIELD_SZ - used", start)
         self.assertIn("fields.name_is_complete = advert_length == name_length ? 1 : 0;", start)
         self.assertLess(start.index("fields.name = name_bytes;"), start.index("ble_gap_adv_set_fields(&fields);"))
-        self.assertIn("utf8_prefix_length(name.data(), name_length, BLE_HS_ADV_MAX_FIELD_SZ)", start)
+        # The scan response starts from the whole field and gives the name what
+        # the Improv UUID leaves, which is everything when no UUID is set.
+        self.assertIn("size_t response_room = BLE_HS_ADV_MAX_FIELD_SZ;", start)
+        self.assertIn("response_room - UUID128_FIELD_SZ", start)
+        self.assertIn("utf8_prefix_length(name.data(), name_length, response_room)", start)
         self.assertIn("response.name_is_complete = response_length == name_length ? 1 : 0;", start)
         self.assertLess(start.index("ble_gap_adv_rsp_set_fields(&response);"), start.index("ble_gap_adv_start("))
         self.assertNotIn("name_is_complete = 1;", CPP)

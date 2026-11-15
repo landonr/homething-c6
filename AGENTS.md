@@ -81,6 +81,7 @@ The firmware files are in the repository root:
 - `components/button_config/shell_build.py` builds the shell and the bundle. `scripts/build-shell-bundle.py` writes the bundle into `site/app/`.
 - `components/ha_action/` is a local ESPHome component. It stores one Home Assistant action for each slot and sends it over the native API. See `RECEIVER.md`.
   The Home Assistant switch turns the actions off at once. If the switch is off at boot, `on_boot` holds the API server down until the next boot.
+- `components/improv_ble/` is a local ESPHome component. It serves Improv over BLE from the NimBLE server of `ble_hid` and takes the same key as the ESPHome component. See "Wi-Fi provisioning".
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
 - `components/self_test/` is a local ESPHome component. It holds the factory self-test of `c6remote-factory.yaml`.
 - `zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
@@ -449,7 +450,11 @@ If a config has no networks, ESPHome keeps the Improv network under a fixed key.
 
 To provision a unit, connect it with USB. Then send the Wi-Fi settings with Improv serial, for example from `web.esphome.io`.
 
-`c6remote.yaml` has no BLE Improv. `esp32_improv` needs Bluedroid, but `ble_hid` uses NimBLE.
+`c6remote.yaml` has BLE Improv from the local `improv_ble` component, not from ESPHome. The ESPHome component of that name needs Bluedroid, and `ble_hid` needs NimBLE, and only one host can run at a time. The local component puts the Improv service on the NimBLE server that `ble_hid` already runs.
+
+Provisioning is open while Wi-Fi is on and the remote has no network, so the scan response carries the Improv UUID only in that window. The name takes the space that the UUID leaves.
+
+`ble_hid` keeps one connection and one bond. A connected keyboard host stops the advert, so BLE Improv cannot start while a host is connected.
 
 Improv serial does not accept Wi-Fi settings while Wi-Fi is off. If no network is saved, a cold boot opens a temporary Wi-Fi session for ten minutes.
 

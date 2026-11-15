@@ -191,9 +191,15 @@ update:
     # checks on the other connections.
     update_interval: 24h
 
-# Wi-Fi setup over USB. BLE Improv needs Bluedroid, but ble_hid uses NimBLE.
+# Wi-Fi setup over USB.
 improv_serial:
   id: improv_usb
+
+# Wi-Fi setup over BLE. The local component serves the Improv service from the
+# NimBLE server of ble_hid, because the ESPHome one needs Bluedroid and only one
+# host can run at a time.
+improv_ble:
+  id: improv_bt
 
 wifi:
   # No credentials here. Improv saves the network under a key that does not

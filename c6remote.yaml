@@ -161,6 +161,12 @@ logger:
 api:
   reboot_timeout: 0s
 
+# The mDNS record carries this URL, so a user can adopt the unit in their own
+# Device Builder. The ref is develop, because main holds board-release
+# snapshots and its firmware config lags by months.
+dashboard_import:
+  package_import_url: github://landonr/homething-c6/c6remote.yaml@develop
+
 ota:
   # Both writes block the main loop, so idle_sleep cannot run during them. The
   # flag guards a later ESPHome that writes without a block.

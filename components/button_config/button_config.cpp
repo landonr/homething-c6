@@ -541,7 +541,7 @@ void ButtonConfig::setup() {
   ::hold_actions.set_status_active(this->status_mode() == STATUS_HOLD);
   this->boot_wifi_always_on_ = this->wifi_always_on();
   if (this->boot_wifi_always_on_)
-    wifi::global_wifi_component->enable();
+    this->enable_wifi_();
   // Each pairing restart drops the page. ZigbeeAssignmentManager::setup() runs
   // first, from on_boot at priority 600, so pairing() already reads this boot.
   if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())
@@ -828,10 +828,20 @@ void ButtonConfig::note_activity_() {
   this->last_activity_ms_.store(millis(), std::memory_order_release);
 }
 
+void ButtonConfig::enable_wifi_() {
+  // WiFiComponent::start() keys the saved network on the config version as soon
+  // as the component holds a network, and that key changes with every build. A
+  // clear leaves every session of a boot on the fixed key, so a network that
+  // Improv saves in a later session stays through the next update. start()
+  // loads the saved network again straight after this.
+  wifi::global_wifi_component->clear_sta();
+  wifi::global_wifi_component->enable();
+}
+
 void ButtonConfig::open_temporary_wifi_(const char *reason) {
   this->note_activity_();
   this->temporary_wifi_ = true;
-  wifi::global_wifi_component->enable();
+  this->enable_wifi_();
   ESP_LOGI(TAG, "Temporary Wi-Fi session opened %s", reason);
 }
 
@@ -863,7 +873,7 @@ void ButtonConfig::hold_wifi_for_action() {
   this->action_wifi_ = true;
   this->action_wifi_until_ms_ = millis() + ACTION_WIFI_LEASE_MS;
   if (wifi::global_wifi_component->is_disabled()) {
-    wifi::global_wifi_component->enable();
+    this->enable_wifi_();
     ESP_LOGI(TAG, "Wi-Fi enabled for a Home Assistant action");
   }
 }

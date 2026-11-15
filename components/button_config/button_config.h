@@ -118,6 +118,8 @@ class ButtonConfig final : public AsyncWebHandler, public Component {
   void load_wifi_pref_();
   bool set_wifi_always_on_(bool enabled);
   void note_activity_();
+  // Clears the saved network first, so start() keys it on the fixed key.
+  void enable_wifi_();
   void open_temporary_wifi_(const char *reason);
   // Zeros and available=false when the build has no idle_sleep_id.
   struct SleepState {

@@ -142,6 +142,17 @@ class ImprovTest(unittest.TestCase):
         self.assertIn("this->open_temporary_wifi_(reason);", body)
         self.assertNotIn("->enable()", body)
 
+    def test_every_wifi_session_keys_the_saved_network_the_same_way(self) -> None:
+        """WiFiComponent::start() keys the network on the config version as soon as
+        the component holds one. That key changes with each build, so a session
+        that saved under it would lose the network on the next update."""
+        start = BUTTON_CPP.index("void ButtonConfig::enable_wifi_() {")
+        body = BUTTON_CPP[start:BUTTON_CPP.index("\n}", start)]
+        self.assertLess(body.index("->clear_sta();"), body.index("->enable();"))
+        self.assertIn("  void enable_wifi_();\n", BUTTON_HEADER)
+        # Every session must come through the helper, or it keeps the moving key.
+        self.assertEqual(BUTTON_CPP.count("global_wifi_component->enable();"), 1)
+
 
 class UpdateEntityTest(unittest.TestCase):
     def test_both_configs_share_the_project_and_the_partition_table(self) -> None:
@@ -201,7 +212,7 @@ class UpdateEntityTest(unittest.TestCase):
                       "  }", BUTTON_HEADER)
         # Wi-Fi turns on only in setup() for Always On, in open_temporary_wifi_()
         # and in hold_wifi_for_action(), so the three terms cover every enable.
-        self.assertEqual(BUTTON_CPP.count("wifi::global_wifi_component->enable();"), 3)
+        self.assertEqual(BUTTON_CPP.count("this->enable_wifi_();"), 3)
         self.assertNotIn("global_wifi_component->enable()", CONFIG)
 
     def test_production_never_installs_on_its_own(self) -> None:

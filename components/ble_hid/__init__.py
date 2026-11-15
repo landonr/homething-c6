@@ -33,9 +33,10 @@ async def to_code(config):
     # The bond has to survive a reboot, and NimBLE keeps no key without this.
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_NVS_PERSIST", True)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_MAX_BONDS", 1)
-    # The central role carries the GATT client that reads the host device name.
-    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_CENTRAL", True)
-    # Nothing scans. The GATT client depends on the central role only, not on the observer.
+    # The remote is a HID peripheral. It starts no connection and reads nothing
+    # from the host, so the central role takes the GATT client out with it.
+    esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_CENTRAL", False)
+    # Nothing scans either.
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ROLE_OBSERVER", False)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_LOG_LEVEL_NONE", True)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT", False)

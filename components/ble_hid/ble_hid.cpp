@@ -11,7 +11,6 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_gap.h"
-#include "host/ble_gatt.h"
 #include "host/ble_hs.h"
 #include "host/ble_store.h"
 #include "services/gap/ble_svc_gap.h"
@@ -31,12 +30,7 @@ static const char *const TAG = "ble_hid";
 static constexpr uint16_t HID_SERVICE_UUID = 0x1812;
 static_assert(BleHid::DEVICE_NAME_MAX <= CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN,
               "ble_svc_gap_device_name_set() refuses a name longer than the GAP limit");
-// The host carries its own name in the GAP service, 0x1800, as characteristic
-// 0x2A00. That characteristic exists nowhere else, so one read by UUID over the
-// whole handle range finds it without a service discovery first.
-static constexpr uint16_t DEVICE_NAME_UUID = 0x2A00;
 static constexpr uint32_t STORE_KEY = 0x424C4831U;
-static constexpr uint32_t HOST_STORE_KEY = 0x424C4832U;
 static constexpr uint32_t STORE_MAGIC = 0x424C4844U;
 static constexpr uint8_t STORE_VERSION = 1;
 
@@ -161,9 +155,6 @@ void BleHid::loop() {
     this->release_all_();
   if (this->report_sync_pending_.exchange(false, std::memory_order_acq_rel))
     this->send_reports_();
-  // The GATT read lands on the NimBLE task, so the flash write waits for here.
-  if (this->host_save_pending_.exchange(false, std::memory_order_acq_rel))
-    this->save_host_name_();
   if (this->name_update_pending_.exchange(false, std::memory_order_acq_rel))
     this->apply_device_name_();
   if (this->pair_failed_pending_.exchange(false, std::memory_order_acq_rel)) {
@@ -172,38 +163,14 @@ void BleHid::loop() {
   }
 }
 
-void BleHid::save_host_name_() {
-  std::array<char, HOST_NAME_SIZE> host{};
-  {
-    const std::lock_guard<std::mutex> lock(this->host_name_mutex_);
-    host = this->host_name_;
-  }
-  if (!this->host_pref_.save(&host))
-    ESP_LOGW(TAG, "Could not save the Bluetooth host name");
-}
-
 void BleHid::dump_config() {
-  const std::string host = this->host_name();
   DeviceName name{};
   this->copy_device_name_(name);
   ESP_LOGCONFIG(TAG, "BLE HID:");
   ESP_LOGCONFIG(TAG, "  Name: %s", name.data());
   ESP_LOGCONFIG(TAG, "  Radio: %s", ONOFF(this->radio_enabled()));
   ESP_LOGCONFIG(TAG, "  Connected: %s", YESNO(this->connected()));
-  ESP_LOGCONFIG(TAG, "  Connected to: %s", host.empty() ? "unknown" : host.c_str());
   ESP_LOGCONFIG(TAG, "  Bonded: %s", YESNO(this->bonded()));
-}
-
-std::string BleHid::host_name() const {
-  const std::lock_guard<std::mutex> lock(this->host_name_mutex_);
-  return std::string(this->host_name_.data());
-}
-
-void BleHid::set_host_name_(const char *name) {
-  const std::lock_guard<std::mutex> lock(this->host_name_mutex_);
-  this->host_name_.fill('\0');
-  if (name != nullptr)
-    std::strncpy(this->host_name_.data(), name, this->host_name_.size() - 1);
 }
 
 // With the stack down, the name waits for init_stack_().
@@ -270,14 +237,6 @@ void BleHid::setup_assignments() {
   }
   this->assignments_ready_ = true;
   this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
-
-  this->host_pref_ =
-      esphome::global_preferences->make_preference<std::array<char, HOST_NAME_SIZE>>(HOST_STORE_KEY, true);
-  std::array<char, HOST_NAME_SIZE> host{};
-  if (this->host_pref_.load(&host)) {
-    host[host.size() - 1] = '\0';
-    this->set_host_name_(host.data());
-  }
 
   ::ir_code_store.add_assignment_clear_callback([](uint8_t slot, IrCodeStore::Owner keep) {
     if (keep != IrCodeStore::OWNER_BLE && BleHid::instance() != nullptr)
@@ -451,8 +410,6 @@ bool BleHid::forget_bond() {
       return false;
     }
     this->bonded_.store(false, std::memory_order_release);
-    this->set_host_name_(nullptr);
-    this->save_host_name_();
     ESP_LOGI(TAG, "Stored Bluetooth host bond removed with the radio off");
     return true;
   }
@@ -460,8 +417,6 @@ bool BleHid::forget_bond() {
   if (!bonded_peer(&peer)) {
     this->bonded_.store(false, std::memory_order_release);
     this->pairing_.store(false, std::memory_order_release);
-    this->set_host_name_(nullptr);
-    this->save_host_name_();
     this->start_advertising_();
     return true;
   }
@@ -475,8 +430,6 @@ bool BleHid::forget_bond() {
   }
   this->bonded_.store(bond_count() > 0, std::memory_order_release);
   this->pairing_.store(false, std::memory_order_release);
-  this->set_host_name_(nullptr);
-  this->save_host_name_();
   ESP_LOGI(TAG, "Bluetooth host bond removed");
   this->start_advertising_();
   return true;
@@ -692,34 +645,6 @@ void BleHid::start_advertising_() {
     ESP_LOGI(TAG, "Advertising as %s", name.data());
 }
 
-void BleHid::read_host_name_() {
-  const uint16_t connection = this->connection_.load(std::memory_order_acquire);
-  if (connection == NO_CONNECTION)
-    return;
-  const ble_uuid16_t name_uuid = BLE_UUID16_INIT(DEVICE_NAME_UUID);
-  const int result =
-      ble_gattc_read_by_uuid(connection, 1, 0xFFFF, &name_uuid.u, &BleHid::host_name_read_, this);
-  if (result != 0)
-    ESP_LOGD(TAG, "Host name read could not start: %d", result);
-}
-
-int BleHid::host_name_read_(uint16_t, const ble_gatt_error *error, ble_gatt_attr *attr, void *arg) {
-  auto *self = static_cast<BleHid *>(arg);
-  // The last callback of the procedure carries no attribute, so it ends here.
-  if (self == nullptr || error == nullptr || error->status != 0 || attr == nullptr ||
-      attr->om == nullptr)
-    return 0;
-  char name[HOST_NAME_SIZE]{};
-  uint16_t length = 0;
-  if (ble_hs_mbuf_to_flat(attr->om, name, sizeof(name) - 1, &length) != 0)
-    return 0;
-  name[length] = '\0';
-  self->set_host_name_(name);
-  self->host_save_pending_.store(true, std::memory_order_release);
-  ESP_LOGI(TAG, "Connected to %s", name);
-  return 0;
-}
-
 void BleHid::hidd_event_handler_(void *, esp_event_base_t, int32_t id, void *data) {
   BleHid *self = instance();
   if (self == nullptr)
@@ -783,7 +708,6 @@ int BleHid::handle_gap_event_(ble_gap_event *event) {
       this->connected_.store(ok, std::memory_order_release);
       if (ok) {
         this->report_sync_pending_.store(true, std::memory_order_release);
-        this->read_host_name_();
       } else {
         this->pair_failed_pending_.store(true, std::memory_order_release);
         ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_REM_USER_CONN_TERM);

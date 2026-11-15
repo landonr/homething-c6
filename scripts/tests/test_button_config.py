@@ -1928,10 +1928,11 @@ class PageTest(unittest.TestCase):
         self.assertLess(forget.index("if(bleForgetBusy)return;"), forget.index("if(!confirm("))
         self.assertLess(forget.index("if(!confirm("), forget.index("bleForgetBusy=true;"))
         self.assertLess(forget.index("if(!confirm("), forget.index('post("forget_ble")'))
-        # The host name is free text from the peer, so it is escaped both ways.
-        self.assertIn('"pairing":%s,"host":"', CPP)
-        self.assertIn("print_json_text(stream, esphome::ble_hid::BleHid::instance()->host_name()", CPP)
-        self.assertIn('function bleHost(){return st.ble.host?esc(st.ble.host):"a saved host"}', PAGE)
+        # The remote reads no name from the host, so the state carries none and
+        # the page names no host of its own.
+        self.assertNotIn('"host":"', CPP)
+        self.assertNotIn("host_name()", CPP)
+        self.assertNotIn("st.ble.host", PAGE)
         # One line under the inputs reports the link, so no second line can
         # disagree with it.
         status = section(PAGE, "function z2mLine(){", "\n\n// The pairing control")
@@ -2358,8 +2359,8 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('(off?"off. BLE buttons are disabled.":"on.")', ble)
         self.assertIn('(!st.ble.bonded?("No host bond."+(off?"":st.ble.pairing?" Pairing.":'
                       '" Ready to pair.")):', ble)
-        self.assertIn('live?"Connected to "+bleHost()+".":', ble)
-        self.assertIn('"Bonded to "+bleHost()+"."+(off?"":" Waiting for the host."))', ble)
+        self.assertIn('live?"Connected to the saved host.":', ble)
+        self.assertIn('"Bonded to a saved host."+(off?"":" Waiting for the host."))', ble)
 
     def test_a_forget_works_while_the_bluetooth_radio_is_off(self) -> None:
         """The NimBLE keys are their own NVS namespace, so the stack is not

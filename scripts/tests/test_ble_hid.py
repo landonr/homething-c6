@@ -121,22 +121,14 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC", CPP)
         self.assertIn('ESP_LOGI(TAG, "Advertising as %s", name.data())', CPP)
 
-    def test_the_connected_host_name_comes_from_the_gap_service(self) -> None:
-        self.assertIn("DEVICE_NAME_UUID = 0x2A00", CPP)
-        self.assertIn("ble_gattc_read_by_uuid(connection, 1, 0xFFFF, &name_uuid.u", CPP)
-        self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", True', INIT)
-        self.assertNotIn('CONFIG_BT_NIMBLE_GATT_CLIENT", False', INIT)
-        self.assertIn("std::string host_name() const;", HEADER)
-        self.assertIn('ESP_LOGI(TAG, "Connected to %s", name)', CPP)
-        # The name belongs to the bond, so it survives a dropped link and a
-        # reboot. The page reads connected() to say which of the two it shows.
-        disconnect = CPP[CPP.index("case BLE_GAP_EVENT_DISCONNECT:") :]
-        self.assertNotIn("this->set_host_name_(nullptr);", disconnect)
-        self.assertIn("self->host_save_pending_.store(true, std::memory_order_release);", CPP)
-        self.assertIn("make_preference<std::array<char, HOST_NAME_SIZE>>(HOST_STORE_KEY, true)", CPP)
-        # Only a forget drops the stored name, with the radio on or off.
-        forget = CPP[CPP.index("bool BleHid::forget_bond() {") :]
-        self.assertIn("this->set_host_name_(nullptr);", forget)
+    def test_the_remote_reads_nothing_from_the_host(self) -> None:
+        # The app slot needs the flash, so the GATT client goes with the central
+        # role. The remote starts no connection and reads no host name.
+        self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", False', INIT)
+        self.assertIn('CONFIG_BT_NIMBLE_ROLE_OBSERVER", False', INIT)
+        for gone in ("ble_gattc", "host/ble_gatt.h", "DEVICE_NAME_UUID", "host_name"):
+            self.assertNotIn(gone, CPP)
+            self.assertNotIn(gone, HEADER)
 
     def test_wheels_tap_and_buttons_release_by_slot(self) -> None:
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)

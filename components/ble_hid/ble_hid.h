@@ -10,11 +10,8 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <string>
 
 struct ble_gap_event;
-struct ble_gatt_attr;
-struct ble_gatt_error;
 
 namespace esphome::ble_hid {
 
@@ -68,7 +65,6 @@ class BleHid final : public Component {
   bool pair_failed_recently() const {
     return this->pair_failed_seen_ && millis() - this->pair_failed_at_ < PAIR_FAILED_SHOW_MS;
   }
-  std::string host_name() const;
   // Main loop only. A running advert restarts from loop() with the new name.
   void set_device_name(const char *name);
 
@@ -94,7 +90,6 @@ class BleHid final : public Component {
     uint32_t checksum;
   };
 
-  static constexpr size_t HOST_NAME_SIZE = 32;
   static constexpr uint16_t NO_CONNECTION = 0xFFFF;
   using DeviceName = std::array<char, DEVICE_NAME_MAX + 1>;
 
@@ -108,26 +103,16 @@ class BleHid final : public Component {
   void send_reports_();
   void release_all_();
   void start_advertising_();
-  void read_host_name_();
-  void set_host_name_(const char *name);
-  void save_host_name_();
   void store_device_name_(const char *name, size_t length);
   uint32_t copy_device_name_(DeviceName &name) const;
   bool device_name_current_(uint32_t generation) const;
   void apply_device_name_();
   int handle_gap_event_(ble_gap_event *event);
   static int gap_event_(ble_gap_event *event, void *arg);
-  static int host_name_read_(uint16_t connection, const ble_gatt_error *error, ble_gatt_attr *attr,
-                             void *arg);
   static void hidd_event_handler_(void *args, esp_event_base_t base, int32_t id, void *data);
 
   esp_hidd_dev_t *device_{nullptr};
   esphome::ESPPreferenceObject pref_{};
-  // The host name is read from the host over GATT, so it survives the link and
-  // a reboot only in its own record. The page names the bonded host with it
-  // while the radio is off.
-  esphome::ESPPreferenceObject host_pref_{};
-  std::atomic<bool> host_save_pending_{false};
   Record record_{};
   std::array<bool, SLOT_COUNT> active_{};
   std::atomic<bool> connected_{false};
@@ -147,8 +132,6 @@ class BleHid final : public Component {
   bool stack_ready_{false};
   std::atomic<bool> hid_started_{false};
   mutable std::mutex record_mutex_;
-  mutable std::mutex host_name_mutex_;
-  std::array<char, HOST_NAME_SIZE> host_name_{};
   // The main loop writes the name, and the NimBLE and HID event tasks read it
   // to advertise. Each write bumps the generation, so an advert that copied an
   // older name can tell. Generation 0 means that nothing set a name yet.

@@ -208,11 +208,12 @@ class IrLearningTest(unittest.TestCase):
 
     def test_production_receiver_links_no_protocol_dumpers(self) -> None:
         """Learning and playback use raw timings only, and the dumpers cost flash.
-        The raw frame log is INFO, so it survives the production logger level."""
+        The raw frame log is INFO, so a release compiles it out and a bench build
+        with `-s log_level DEBUG` shows it."""
         receiver = section(CONFIG, "\nremote_receiver:\n", "\nremote_transmitter:")
         self.assertNotIn("dump:", receiver)
         self.assertIn("on_raw:", receiver)
-        self.assertIn("\nlogger:\n  level: INFO\n", CONFIG)
+        self.assertIn("\nlogger:\n  level: ${log_level}\n", CONFIG)
         received = HEADER.split("void log_received(", 1)[1].split("\n  }\n", 1)[0]
         self.assertIn('ESP_LOGI("ir_rx",\n             "Raw frame: pulses=%u', received)
         pulses = HEADER.split("static void log_pulses_(", 1)[1].split("\n  }\n", 1)[0]

@@ -331,11 +331,8 @@ A gamepad button still takes a number. A D-pad still takes a direction.
 
 The remote supports one bonded host. Pairing uses encrypted Secure Connections with Just Works authentication.
 
-The firmware uses the NimBLE host. After the link is encrypted, the remote reads
-the host device name from the GAP service, `0x1800`, characteristic `0x2A00`.
-
-The page then names the host. A host that hides that characteristic keeps the
-plain connected state.
+The firmware uses the NimBLE host. The remote reads nothing from the host, so it
+needs no GATT client and names no host. The page reports the link alone.
 
 Flash the first BLE HID build through USB because this build changes the partition table. Later builds can use OTA.
 
@@ -497,10 +494,10 @@ A join needs both sides. Open the coordinator in Zigbee2MQTT and the remote with
 this button. See `ZIGBEE.md` for what a pairing press erases.
 
 The **Bluetooth** block holds two lines. The first names the radio and starts
-with **BLE HID: radio on.** or **BLE HID: radio off.** The second names the host
-and sits above the Forget text.
+with **BLE HID: radio on.** or **BLE HID: radio off.** The second reports the
+bond and sits above the Forget text.
 
-An off radio can never read as connected, because the host line drops the link
+An off radio can never read as connected, because the bond line drops the link
 state with the radio.
 
 The block holds the **Forget Bluetooth host** button. The button is always on the
@@ -522,9 +519,9 @@ the remote is not on a network. A red circle means that the radio is off.
 The Bluetooth radio line reads **BLE HID: radio on.** or **BLE HID: radio off.
 BLE buttons are disabled.**
 
-The host line below it reads **Connected to bench-mac.**, **Bonded to bench-mac.
-Waiting for the host.**, **Bonded to bench-mac.** with the radio off, or **No host
-bond.** with **Ready to pair.** while the radio is on.
+The bond line below it reads **Connected to the saved host.**, **Bonded to a
+saved host. Waiting for the host.**, **Bonded to a saved host.** with the radio
+off, or **No host bond.** with **Ready to pair.** while the radio is on.
 
 The remote holds the state, so a reload and a second browser both show what the
 remote runs with. The switch is disabled until the remote answers with the state.
@@ -540,13 +537,13 @@ Assistant or voice input with the Home Assistant switch off shows the same marks
 If the Bluetooth switch is off, the remote does not start the NimBLE stack at
 boot, and the first turn-on starts it.
 
-The remote stores the host name that it reads from the host, so the line names
-the bonded host with the radio off and after a reboot. If the remote never read
-the name, the line reads **a saved host**.
+The bond lives in flash, so the line reads **Bonded to a saved host.** with the
+radio off and after a reboot. The remote reads no name from the host, so the line
+names no host.
 
 **Forget Bluetooth host** works with the radio off. The keys live in flash, in
-the `nimble_bond` NVS namespace, so the remote erases them without the stack. A
-forget also drops the stored host name. The host must then pair again.
+the `nimble_bond` NVS namespace, so the remote erases them without the stack. The
+host must then pair again.
 
 If the Zigbee switch is off, the remote sends no commands. The stack itself keeps
 its place on the network only until the next reboot. Read `ZIGBEE.md` for the

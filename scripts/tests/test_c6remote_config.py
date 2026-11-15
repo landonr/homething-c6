@@ -206,10 +206,13 @@ class ProductionConfigTest(unittest.TestCase):
             r"(?:  #.*\n)*  name_add_mac_suffix: true\n",
         )
 
-    def test_production_logs_at_info_and_the_sleep_bench_at_debug(self) -> None:
-        """DEBUG and CONFIG log text costs app partition flash. The bench that
-        includes production puts both back."""
-        self.assertIn("\nlogger:\n  level: INFO\n", CONFIG.read_text())
+    def test_production_logs_at_warning_and_the_sleep_bench_at_debug(self) -> None:
+        """Every string below the level costs app partition flash, so a release
+        keeps the warnings and errors alone. The bench puts the rest back, and
+        `-s log_level DEBUG` does the same for a one-off build."""
+        config = CONFIG.read_text()
+        self.assertIn("\n  log_level: WARN\n", config)
+        self.assertIn("\nlogger:\n  level: ${log_level}\n", config)
         bench = (CONFIG.parent / "c6remote-test-sleep.yaml").read_text()
         self.assertRegex(bench, r"packages:\n  base: !include c6remote\.yaml\n")
         self.assertRegex(bench, r"\nlogger:\n  level: DEBUG\n")

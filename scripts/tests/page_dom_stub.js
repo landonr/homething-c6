@@ -73,7 +73,7 @@ const STATE = {
   radios: {zigbee: true, ble: true, home_assistant: true},
   zigbee: {started: true, paired: true, "new": false, gated: false,
            pairing: false, pair_left: 0, pair_failed: false, reach: "ok"},
-  ble: {connected: true, bonded: true, pairing: false, host: "Landon's Mac"},
+  ble: {connected: true, bonded: true, pairing: false},
   name: "homeThing C6 13f498", default_name: "homeThing C6 13f498",
   slots: [
     {slot: 3, action: "none", pulses: 0, us: 0, code: "", fields: "", group: 0, name: ""},
@@ -1823,7 +1823,7 @@ setTimeout(() => {
     global.fetch = realFetch;
     confirmAnswer = true;
     if (confirmAsked !== 1) throw new Error("Forget did not ask");
-    if (confirmText.indexOf("Forget ") !== 0 || confirmText.indexOf("Landon's Mac") < 0)
+    if (confirmText.indexOf("Forget the saved Bluetooth host?") !== 0)
       throw new Error("the Forget question reads " + confirmText);
     if (body !== null) throw new Error("a refused Forget still posted: " + body);
     if (document.getElementById("bfr").disabled) throw new Error("a refused Forget locked the button");
@@ -1852,9 +1852,9 @@ setTimeout(() => {
     const host = document.getElementById("bhs").innerHTML;
     if (line.indexOf("radio off.") < 0 || line.indexOf("BLE buttons are disabled.") < 0)
       throw new Error("the off radio does not report itself: " + line);
-    // The host has its own line, above the Forget text.
-    if (host.indexOf("Bonded to Landon") < 0)
-      throw new Error("the host line does not name the bond: " + host);
+    // The bond has its own line, above the Forget text.
+    if (host.indexOf("Bonded to a saved host.") < 0)
+      throw new Error("the bond line does not report the bond: " + host);
     // The stack is down, so a stale connected flag must not reach either line.
     if (line.indexOf("Connected to") >= 0 || host.indexOf("Connected to") >= 0)
       throw new Error("an off radio still read as connected: " + line + host);
@@ -2350,24 +2350,23 @@ setTimeout(() => {
       throw new Error("a repaint dropped a typed address");
   });
 
-  step("the Bluetooth line names the host and falls back without one", () => {
+  step("the Bluetooth line reports the link and the bond", () => {
     global.st = STATE;
     STATE.radios = {zigbee: true, ble: true};
     STATE.ble.connected = true;
     bleStatus();
     STATE.ble.connected = true;
     const named = document.getElementById("bhs").innerHTML;
-    if (named.indexOf("Connected to Landon&#39;s Mac") < 0 &&
-        named.indexOf("Connected to Landon's Mac") < 0)
-      throw new Error("the host name is missing: " + named);
+    if (named.indexOf("Connected to the saved host.") < 0)
+      throw new Error("the link line is wrong: " + named);
     if (document.getElementById("bst").innerHTML.indexOf("BLE HID: radio on.") < 0)
       throw new Error("the radio line lost its own state");
-    STATE.ble.host = "";
+    STATE.ble.connected = false;
     bleStatus();
-    const plain = document.getElementById("bhs").innerHTML;
-    if (plain.indexOf("Connected to a saved host.") < 0)
-      throw new Error("an unread host name broke the line: " + plain);
-    STATE.ble.host = "Landon's Mac";
+    const waiting = document.getElementById("bhs").innerHTML;
+    if (waiting.indexOf("Bonded to a saved host.") < 0)
+      throw new Error("the bond line is wrong: " + waiting);
+    STATE.ble.connected = true;
   });
 
   (async () => {

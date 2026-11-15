@@ -3,7 +3,8 @@
 ## Goal
 
 Assignment mode gives each supported input one active action. An action can be
-an IR code, a Zigbee command, a BLE HID control, a Home Assistant action, the voice assistant, or no action.
+an IR code, a Zigbee command, a BLE HID control, a Home Assistant action, or no
+action.
 
 Store assignments in flash. Outside assignment mode, an input replays its active
 action.
@@ -26,8 +27,7 @@ For `SW1` to `SW11` and the five wheel directions, tap the same input in this
 order:
 
 1. First tap: train an IR code.
-2. Second tap: assign the voice assistant.
-3. Third tap: clear the input.
+2. Second tap: clear the input.
 
 A button with an active hold taps when you release it, not when you press it.
 See [Hold buttons](#hold-buttons).
@@ -36,7 +36,7 @@ The cycle has no Zigbee stage. A Zigbee target comes from Zigbee2MQTT, which
 the remote cannot read, so only the web page assigns one.
 
 Clockwise and anticlockwise wheel rotation are IR-only. Each detent starts IR
-training. Rotation has no voice or clear stage because it has no release edge.
+training. Rotation has no clear stage because it has no release edge.
 
 A tap on a different supported input always starts at the IR stage for that
 input.
@@ -69,12 +69,11 @@ Turn on **Allow the device to perform Home Assistant actions**. If this option i
 
 ### The Home Assistant switch
 
-The **Home Assistant** switch on the Config tab controls the Home Assistant actions, the voice assistant, and the API server.
+The **Home Assistant** switch on the Config tab controls the Home Assistant actions and the API server.
 
 If you turn the switch off, the Home Assistant buttons stop at once.
 A press sends nothing, does not turn on Wi-Fi, and does not blink `D2`. The log shows one line for each press.
 The remote also drops the actions in the queue and ends the [Wi-Fi lease](#wi-fi-lease).
-The remote also refuses a voice press at once. See [The voice assistant](#the-voice-assistant).
 
 The API server starts only at boot and has no stop. As a result, it runs until the next restart.
 After that restart, the API server does not start, and Home Assistant cannot connect to the remote.
@@ -91,10 +90,10 @@ The Home Assistant line on the Config tab tells you when the switch and the API 
 
 | Line | Cause |
 | --- | --- |
-| **Home Assistant is off. Home Assistant and voice buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
+| **Home Assistant is off. Home Assistant buttons are disabled. The API stops at the next restart.** | The switch is off, but the API server runs until the next restart. |
 | **Home Assistant is on. The API is off. Restart the remote to start it.** | The switch is on, but it was off at boot. |
 
-An input that holds a Home Assistant action or the voice assistant keeps it while the switch is off.
+An input that holds a Home Assistant action keeps it while the switch is off.
 The tile shows the assignment in grey with a red circle, and the editor gives the reason.
 
 ### Kinds and actions
@@ -173,7 +172,7 @@ It also has a top-level `ha` object with `pending`, `last_slot`, `last`, and `er
 
 ## Clear and replace an assignment
 
-An IR, Zigbee, BLE HID, Home Assistant, or voice assignment replaces the previous action for that input.
+An IR, Zigbee, BLE HID, or Home Assistant assignment replaces the previous action for that input.
 The remote never keeps two active actions on one input.
 
 The clear tap removes the local assignment. Group membership stays in
@@ -223,11 +222,10 @@ keypad buttons.
 Select an input. The page shows the current assignment, then an **Action**
 selector with the actions that the input accepts.
 
-The selector holds IR code, Zigbee target, BLE HID, Home Assistant, Voice assistant, and Clear. It opens
-on the action that the input already holds.
+The selector holds IR code, Zigbee target, BLE HID, Home Assistant, and Clear. It
+opens on the action that the input already holds.
 
 If the **Zigbee**, **Bluetooth**, or **Home Assistant** switch on the Config tab is off, the selector grays out the related action.
-If the **Home Assistant** switch is off, the selector also grays out **Voice assistant**, because the voice assistant uses the API.
 To assign that action, turn on its switch first. Until then, the selector opens on IR code for an input that holds that action.
 
 The right side of the selected-input title has **Copy** and **Paste** buttons.
@@ -346,26 +344,18 @@ Each wheel detent sends one short HID press and release.
 
 ### Capability matrix
 
-| Input | Slots | Record IR | Zigbee target | BLE HID | Home Assistant | Voice assistant | Clear |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `SW1` | 20 | Yes | Page only | Page only | Page only | Yes | Yes |
-| `SW2` | 19 | Yes | Page only | Page only | Page only | Yes | Yes |
-| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Page only | Yes | Yes |
-| Wheel directions | 12 to 16 | Yes | Page only | Page only | Page only | Yes | Yes |
-| Wheel rotation | 17 and 18 | Yes | Page only | Page only | Page only | No | Yes |
+| Input | Slots | Record IR | Zigbee target | BLE HID | Home Assistant | Clear |
+| --- | --- | --- | --- | --- | --- | --- |
+| `SW1` | 20 | Yes | Page only | Page only | Page only | Yes |
+| `SW2` | 19 | Yes | Page only | Page only | Page only | Yes |
+| `SW3` to `SW11` | 3 to 11 | Yes | Page only | Page only | Page only | Yes |
+| Wheel directions | 12 to 16 | Yes | Page only | Page only | Page only | Yes |
+| Wheel rotation | 17 and 18 | Yes | Page only | Page only | Page only | Yes |
 
 Every slot accepts a Zigbee target from the page. Zigbee playback uses the same
 press handler as IR playback, so a wheel detent can send it. A command that only
 makes sense as a pair, such as brighter and dimmer, costs two slots, and the
 wheel directions are the natural home for one.
-
-Wheel rotation has no voice action because a detent has no release edge to end
-push-to-talk.
-
-The page hides the voice button on those two slots. The firmware checks the
-same rule again on each request.
-
-A voice request for slot 17 or 18 gets HTTP 400 and changes nothing.
 
 ### One operation at a time
 
@@ -532,7 +522,7 @@ Radio**. It also holds the **Home Assistant API** switch. See
 An input that is assigned to a radio that is off keeps its assignment. The tile
 shows the assignment in grey with a red circle after the label, and the editor
 gives the reason. The input sends again when the switch goes back on. A Home
-Assistant or voice input with the Home Assistant switch off shows the same marks.
+Assistant input with the Home Assistant switch off shows the same marks.
 
 If the Bluetooth switch is off, the remote does not start the NimBLE stack at
 boot, and the first turn-on starts it.
@@ -714,11 +704,10 @@ The Home Assistant switch also stops the Home Assistant actions at once and the 
 If the switch is on but was off at boot, the API server is off, so `D2` pulses orange until a restart.
 See [The Home Assistant switch](#the-home-assistant-switch).
 
-Wi-Fi serves the web page and carries Home Assistant actions and the voice assistant.
+Wi-Fi serves the web page and carries Home Assistant actions.
 A dark `D2` does not stop an IR or Zigbee button, because IR and Zigbee playback need neither Wi-Fi nor the API.
 If the Home Assistant switch is on, a Home Assistant action turns Wi-Fi on when you press its button.
 See [Home Assistant actions](#home-assistant-actions).
-A voice press does not turn on Wi-Fi, so the remote refuses it while Wi-Fi is off.
 
 | State | `D3` and `D4` indication | Next action |
 | --- | --- | --- |
@@ -726,16 +715,13 @@ A voice press does not turn on Wi-Fi, so the remote refuses it while Wi-Fi is of
 | IR training | Blue chase | Send one IR frame. |
 | Saved | Solid green for one second | Continue or leave. |
 | Error | Red flashes | Retry or leave. |
-| Voice | Blue pulse | Tap again to clear. |
 | Cleared | Amber for one second | Select an input. |
 
-`D3` and `D4` show voice-assistant state when assignment mode is closed. After
-a deep-sleep wake, all status LEDs pulse in the battery colour (see
-[Deep sleep](#deep-sleep)). A refused voice press shows solid red for 2 seconds.
-See [The voice assistant](#the-voice-assistant).
+After a deep-sleep wake, all status LEDs pulse in the battery colour (see
+[Deep sleep](#deep-sleep)).
 
-`D4` shows the Bluetooth state when assignment mode and voice state are both
-idle. `D3` stays dark then.
+`D4` shows the Bluetooth state when assignment mode is closed. `D3` stays dark
+then.
 
 | `D4` | Meaning |
 | --- | --- |
@@ -755,7 +741,7 @@ Two settings in the **Config** tab control the LEDs. The remote stores each one 
 
 The **Status LEDs** setting has three modes: **Off**, **Hold button**, and **Always on**. The default is **Always on**.
 The setting covers all status light. This includes all status LEDs in normal use,
-assignment mode, voice, and pairing feedback. It also covers the amber XIAO user LED.
+assignment mode, and pairing feedback. It also covers the amber XIAO user LED.
 
 | Mode | Result |
 | --- | --- |
@@ -807,7 +793,7 @@ The two settings work together in this way:
 | Off or Hold button | off | The LEDs stay dark except for a radio switch pulse, a status peek, a sleep lap, or assignment mode. |
 
 A status peek occurs only in the **Hold button** mode.
-In the **Off** and **Hold button** modes, the LEDs do not show voice state. They show assignment mode state while the mode is open.
+In the **Off** and **Hold button** modes, the LEDs show assignment mode state while the mode is open.
 The `led_vdd` rail is on only during an animation, a radio switch pulse, a status peek, a sleep lap, or assignment mode.
 A change applies at once. If you set **Status LEDs** to **Always on**, the LEDs show the current state again.
 If you set **Off** or **Hold button** during an animation, the animation finishes and then the LEDs go dark.
@@ -819,30 +805,11 @@ The XIAO charge LED is hardware driven. These settings cannot turn it off.
 
 Outside assignment mode, an input uses its one active assignment in this order:
 
-1. Voice assistant, if assigned.
-2. BLE HID, if assigned.
-3. The Zigbee command, if assigned.
-4. IR playback, if assigned.
+1. BLE HID, if assigned.
+2. The Zigbee command, if assigned.
+3. IR playback, if assigned.
 
 An input without an assignment does not transmit a command.
-
-### The voice assistant
-
-A voice press starts the Home Assistant Assist pipeline over the native API.
-The remote starts it only when these conditions are true:
-
-- The **Home Assistant** switch on the Config tab is on.
-- Home Assistant is connected to the API and subscribed to voice.
-
-If a condition is false, the remote refuses the press. The log shows one line with the reason.
-`D3` and `D4` then show solid red for 2 seconds, the same as a voice-assistant error.
-
-The switch rule applies at once. If you turn the switch off, the API server runs until the next restart.
-The remote still refuses the press.
-
-A voice press does not turn on Wi-Fi. If Wi-Fi is off, the API is not connected, so the remote refuses the press.
-
-A refused press does not make the mic meter active, so it does not block idle sleep.
 
 ## Hold buttons
 
@@ -882,7 +849,6 @@ If the hold time passes, the hold runs and the release sends nothing.
 A button without an active hold sends its assignment when you press it.
 The remote decides at the press if the button has an active hold. A settings change during the hold does not change that press.
 
-A voice assignment on a button with an active hold starts Assist at the release. Home Assistant ends it when your speech stops.
 A BLE HID assignment on a button with an active hold sends the key press and the key release together at the release.
 A Home Assistant action on a button with an active hold runs at the release. It asks for Wi-Fi at that moment.
 
@@ -923,11 +889,9 @@ time. A cold boot is a power-on, a flash, or a reset. A deep-sleep wake is not a
 Idle sleep does not start while one of these is true:
 
 - Assignment mode is open.
-- The microphone runs, or the mic meter is active.
-- The voice assistant runs.
 - A Zigbee pairing request is active, or the pairing window is open.
 - Wi-Fi is on and Wi-Fi Always On is off, as in a session from the Wi-Fi hold or the page. The Home Assistant Wi-Fi lease also blocks sleep.
-- A Home Assistant action waits to send or to get a reply. The log shows this as `ha=` (bit 7 of `block_probe`).
+- A Home Assistant action waits to send or to get a reply. The log shows this as `ha=` (bit 4 of `block_probe`).
 
 A blocked remote counts as active. When the block ends, the full idle time starts again.
 
@@ -950,7 +914,7 @@ If the connection takes longer, the remote discards the wake press.
 If you still hold a button with an active hold at wake, its hold starts.
 If you release the button before the hold time, the wake press switches control whether the remote sends the assignment.
 The assignment mode hold does not start from wake.
-If **Send Home Assistant on wake** is on, a short release of a held button can also start its Assist assignment.
+If **Send Home Assistant on wake** is on, a short release of a held button can also send its Home Assistant action.
 
 After a wake, all status LEDs pulse two times in the battery colour. Each pulse
 is 800 ms. The colour shows the battery level at the first moment after the wake:
@@ -963,14 +927,14 @@ is 800 ms. The colour shows the battery level at the first moment after the wake
 | No reading | White |
 
 The pulse covers all status LEDs for 1.6 seconds.
-The status colours return when the pulse ends. Assignment mode and voice states
-have priority on `D3` and `D4`, so they stay visible during the pulse.
+The status colours return when the pulse ends. Assignment mode has priority on
+`D3` and `D4`, so it stays visible during the pulse.
 
 While the remote sleeps, these conditions apply:
 
 - The `led_vdd` and `ir_vdd` rails are off, because `GPIO18` and `GPIO6` float and `R10` and `R11` pull the gates up.
 - `GPIO16` floats and `GPIO17` has a pull-down.
-- `GPIO0` and `GPIO2` stay low, so `MK1` sees no clock.
+- `GPIO0` and `GPIO2` float, because the firmware no longer drives the I2S bus.
 - `GPIO15` floats, so the XIAO user LED is dark.
 
 ### Sleep settings on the page

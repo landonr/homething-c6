@@ -1,5 +1,4 @@
 {"c6remote":1,"slots":[
-{"slot":19,"label":"Button 2","action":"voice"},
 {"slot":20,"label":"Button 1","action":"ir","code":"name: Power\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 02 00 00 00"},
 {"slot":18,"label":"Wheel Anticlockwise","action":"ir","code":"name: VolDown\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 07 00 00 00"},
 {"slot":13,"label":"Wheel Up","action":"ir","code":"name: Up\ntype: parsed\nprotocol: Samsung32\naddress: 07 00 00 00\ncommand: 60 00 00 00"},

@@ -56,7 +56,6 @@
 | **Charging** | USB-C |
 | **Processor** | Seeed Studio XIAO ESP32-C6 |
 | **Infrared** | Transmits, receives, and learns codes |
-| **Voice** | Microphone for the Home Assistant voice assistant |
 | **Status** | 6 RGB LEDs |
 | **Case** | 3D printed, SLS or FDM |
 | **Wireless** | Wi-Fi, BLE, Zigbee |
@@ -85,12 +84,11 @@ Pick it up, press a button, and the lights change. No phone to unlock, no app to
 - **Music:** Controls Sonos over Wi-Fi, or pairs with a phone, tablet, or computer over BLE for media keys.
 - **Lights:** Talks straight to Zigbee lights and groups.
 - **Home Assistant:** Puts any action or script on a button.
-- **Voice:** Talks to your Home Assistant voice assistant through the built-in mic.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-controls-annotated-dark.svg">
-    <img alt="Front of the assembled c6remote with labels for the voice assistant microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
+    <img alt="Front of the assembled c6remote with labels for the microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
@@ -102,7 +100,7 @@ Pick it up, press a button, and the lights change. No phone to unlock, no app to
 
 ### Every button is yours to set.
 
-Open the remote's own web page from any browser on your network. Pick a button, then pick what it does: an IR code, a Zigbee light or group, a BLE media key, a Home Assistant action, or voice. You can also assign buttons on the remote itself. No app, no cloud.
+Open the remote's own web page from any browser on your network. Pick a button, then pick what it does: an IR code, a Zigbee light or group, a BLE media key, or a Home Assistant action. You can also assign buttons on the remote itself. No app, no cloud.
 
 #### Button assignment ([more info](RECEIVER.md))
 

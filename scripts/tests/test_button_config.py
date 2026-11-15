@@ -30,9 +30,6 @@ ZIGBEE = (ROOT / "zigbee_learning.h").read_text()
 BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
 
-# Slots that cannot start the voice assistant. 17 and 18 are the wheel detents,
-# which have no release edge to end push-to-talk with.
-NO_VOICE = {17, 18}
 ALL_SLOTS = list(range(3, 21))
 # The inputs that can carry a hold: every expander input, no wheel rotation.
 HOLD_SLOTS = set(range(3, 17)) | {19, 20}
@@ -51,27 +48,26 @@ def section(text: str, start: str, end: str) -> str:
 
 
 def cpp_slots() -> list:
-    """Parse the SLOTS table out of button_config.cpp as (slot, voice) pairs."""
+    """Parse the SLOTS table out of button_config.cpp as slot numbers."""
     table = section(CPP, "static const SlotInfo SLOTS[] = {", "};")
-    rows = re.findall(r"\{\s*(\d+)\s*,\s*(true|false)\s*\}", table)
+    rows = re.findall(r"\{\s*(\d+)\s*\}", table)
     if not rows:
         raise AssertionError("SLOTS table has no rows")
-    return [(int(slot), voice == "true") for slot, voice in rows]
+    return [int(slot) for slot in rows]
 
 
 def page_slots() -> list:
     """Parse the S array out of button_config_page.html as one dict per input."""
     array = section(PAGE, "var S=[", "];")
     rows = re.findall(
-        r'\{s:(\d+),l:"([^"]+)",v:([01]),x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
+        r'\{s:(\d+),l:"([^"]+)",x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
         array,
     )
     if not rows:
         raise AssertionError("page S array has no rows")
     return [
-        {"slot": int(slot), "label": label, "voice": voice == "1", "x": float(x),
-         "y": float(y), "class": css_class}
-        for slot, label, voice, x, y, css_class in rows
+        {"slot": int(slot), "label": label, "x": float(x), "y": float(y), "class": css_class}
+        for slot, label, x, y, css_class in rows
     ]
 
 
@@ -598,7 +594,7 @@ class IrNameTest(unittest.TestCase):
     def test_only_a_slot_that_sends_its_code_takes_a_name(self) -> None:
         """The same order as the state report, so the page and the check agree."""
         body = section(CPP, "bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {", "\n}")
-        for text in ("::ir_code_store.has_code(slot)", "::ir_code_store.is_voice(slot)",
+        for text in ("::ir_code_store.has_code(slot)",
                      "BleHid::instance()->assignment(slot).assigned",
                      "::zigbee_assignments.assignment(slot).assigned",
                      "this->ha_action_->has_assignment(slot)"):
@@ -940,7 +936,7 @@ class FriendlyNameTest(unittest.TestCase):
 
 class SlotTableTest(unittest.TestCase):
     def test_the_cpp_table_holds_slots_3_to_20_once_each(self) -> None:
-        slots = [slot for slot, _ in cpp_slots()]
+        slots = cpp_slots()
         self.assertEqual(sorted(slots), ALL_SLOTS)
         self.assertEqual(len(slots), len(set(slots)))
 
@@ -949,17 +945,9 @@ class SlotTableTest(unittest.TestCase):
         self.assertEqual(sorted(slots), ALL_SLOTS)
         self.assertEqual(len(slots), len(set(slots)))
 
-    def test_the_cpp_table_and_the_page_array_agree_on_voice(self) -> None:
-        """Catches a capability that moves in one table and not the other."""
-        firmware = {slot: voice for slot, voice in cpp_slots()}
-        page = {row["slot"]: row["voice"] for row in page_slots()}
-        self.assertEqual(firmware, page)
-
-    def test_only_the_wheel_rotation_slots_have_no_voice_action(self) -> None:
-        """17 and 18 are wheel detents with no release edge to end push-to-talk.
-        SW1 lost its fixed hold, so slot 20 takes a voice action too."""
-        firmware = {slot for slot, voice in cpp_slots() if not voice}
-        self.assertEqual(firmware, NO_VOICE)
+    def test_the_cpp_table_and_the_page_array_hold_the_same_slots(self) -> None:
+        """Catches an input that moves in one table and not the other."""
+        self.assertEqual(sorted(cpp_slots()), sorted(row["slot"] for row in page_slots()))
 
 
 FACE_SVG = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
@@ -1156,12 +1144,6 @@ class PlacementTest(unittest.TestCase):
 
 
 class EnforcementTest(unittest.TestCase):
-    def test_the_firmware_rejects_voice_on_a_slot_without_it(self) -> None:
-        """Catches a page-only capability check that a direct POST would pass."""
-        self.assertIn('if (action == "set_voice" && !info->voice) {', CPP)
-        self.assertIn('"error":"slot has no voice action"', CPP)
-        self.assertIn("bool voice;", HEADER)
-
     def test_the_firmware_accepts_a_zigbee_target_on_every_slot(self) -> None:
         """Zigbee playback rides the IR path, so the wheel detents accept it too."""
         self.assertIn('action == "set_zigbee"', CPP)
@@ -1172,7 +1154,6 @@ class EnforcementTest(unittest.TestCase):
     def test_every_store_and_state_mutation_runs_on_a_defer(self) -> None:
         """HTTP handlers run on the httpd task. An NVS write from there races."""
         for call in (
-            "ir_code_store.set_voice(",
             "ir_code_store.clear(",
             "ir_ui.open_from_web(",
             "zigbee_assignments.assign_from_web(",
@@ -1190,7 +1171,6 @@ class EnforcementTest(unittest.TestCase):
     def test_the_state_endpoint_only_reads(self) -> None:
         state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
         for call in (
-            "set_voice(",
             ".clear(",
             "open_from_web(",
             ".save(",
@@ -1217,7 +1197,7 @@ class EnforcementTest(unittest.TestCase):
         self.assertRegex(
             state,
             r'hid\.assigned\s+\? "hid"[\s\S]*?zigbee\.assigned\s+\? "zigbee"'
-            r'[\s\S]*?is_voice\(info\.slot\)\s+\? "voice"[\s\S]*?has_code\(info\.slot\) \? "ir"',
+            r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
         )
         self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"', state)
         self.assertIn(
@@ -1234,7 +1214,6 @@ class EnforcementTest(unittest.TestCase):
         self.assertIn("action_pending_.store(false", CPP)
 
     def test_preference_results_complete_the_deferred_action(self) -> None:
-        self.assertIn("complete_action_(action_id, ::ir_code_store.set_voice(button))", CPP)
         self.assertIn("complete_action_(action_id, ::ir_code_store.clear(button))", CPP)
         self.assertIn("complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond())", CPP)
         self.assertIn('"Flash write failed. The assignment was not saved."', PAGE)
@@ -1247,7 +1226,6 @@ class StorageTest(unittest.TestCase):
         self.assertIn("FIRST_BUTTON = 3;", STORE)
         self.assertIn("LAST_BUTTON = 20;", STORE)
         self.assertIn("make_preference<Record>(0x49524330U + i, true)", STORE)
-        self.assertIn("VOICE_KEY = 0x49524356U;", STORE)
 
     def test_the_save_counter_stays_in_memory(self) -> None:
         """The diagnostic capture counter must not cause another flash write."""
@@ -1257,12 +1235,12 @@ class StorageTest(unittest.TestCase):
         for line in STORE.splitlines():
             if "make_preference" in line:
                 self.assertNotIn("saves", line)
-        self.assertEqual(STORE.count("make_preference"), 3)
+        self.assertEqual(STORE.count("make_preference"), 2)
 
-    def test_assignment_writes_report_code_and_voice_failures(self) -> None:
+    def test_assignment_writes_report_code_failures(self) -> None:
         self.assertIn("bool erase_code_(uint8_t button)", STORE)
-        self.assertIn("return erased && written;", STORE)
-        self.assertIn("if (!voice_pref_.save(&next_mask))", STORE)
+        self.assertIn('ESP_LOGI("ir_learn", "Button %u cleared%s", button, erased ? "" : " (flash write failed)");',
+                      STORE)
 
 
 class ZigbeeTargetTest(unittest.TestCase):
@@ -1479,12 +1457,8 @@ class PageTest(unittest.TestCase):
         the IR code box cannot sit under a Zigbee assignment."""
         editor = section(PAGE, "function editor(){", "\nfunction actFor(")
         self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];', editor)
-        self.assertIn('if(d.v)opts.push(["va","Voice assistant"]);', editor)
         self.assertIn('opts.push(["cl","Clear"]);', editor)
-        # Zigbee is offered everywhere, so it must sit outside the d.v branch.
-        self.assertLess(editor.index('"Zigbee target"'), editor.index("if(d.v)opts.push"))
-        # A slot that lost its voice action must not stay on a voice panel.
-        self.assertIn('if(!d.v&&act==="va")act="ir";', editor)
+        self.assertLess(editor.index('"Zigbee target"'), editor.index('opts.push(["cl"'))
         # The action list stays open, and the panel beside it repeats the selected
         # action as a heading so the fields under it are never read out of context.
         self.assertIn('class=aslist role=radiogroup', editor)
@@ -1536,7 +1510,6 @@ class PageTest(unittest.TestCase):
         """Opening a slot on its own action saves a hunt through the selector."""
         body = section(PAGE, "function actFor(s){", "\n\n// The card and the panel from the stored slot")
         self.assertIn('if(r.action==="zigbee")return "zb";', body)
-        self.assertIn('if(r.action==="voice")return "va";', body)
         self.assertIn('if(!r||r.action==="none")return "ir";', body)
         self.assertIn("act=actFor(s);", PAGE)
 
@@ -1811,6 +1784,7 @@ class PageTest(unittest.TestCase):
         self.assertIn('if(r.action!=="zigbee")return null;', clip)
         copy = section(PAGE, "function copyAssignment(){", "\n\nfunction pasteAssignment(")
         self.assertIn('if(cfgAll[source]!==undefined){c.code=cfgAll[source]', copy)
+        # The shared reader rejects a failed response, so a 500 cannot reach JSON.parse.
         self.assertIn('fetch("/buttons/api/code?slot="+source', copy)
         self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
         self.assertIn('clip=c;', copy)
@@ -2054,7 +2028,6 @@ class PageTest(unittest.TestCase):
         config, so every entry is checked before any of them is sent."""
         check = section(PAGE, "function cfgCheck(e){", '\nreturn ""}')
         self.assertIn('return "A slot number is missing or unknown."', check)
-        self.assertIn('if(a==="voice"&&!info(e.slot).v)', check)
         self.assertIn('/^[0-9a-fA-F]{16}$/.test(cfgHex(e.ieee))', check)
         self.assertIn("if(!(ep>=1&&ep<=240))", check)
         self.assertIn("if(!(g>=1&&g<=65527))", check)
@@ -2092,7 +2065,6 @@ class PageTest(unittest.TestCase):
         """The remote reserves one action at a time, so a burst would take the
         409. Nothing new is added to the firmware for an import."""
         send = section(PAGE, "function cfgSend(e){", '\nreturn post("clear",e.slot)}')
-        self.assertIn('return post("set_voice",e.slot)', send)
         self.assertIn('return post("set_ir_code",e.slot,cfgCode(e.code))', send)
         self.assertIn('return post("set_zigbee_device",e.slot,null,e.name||""', send)
         self.assertIn('return post("set_zigbee",e.slot,String(parseInt(e.group,10))', send)
@@ -2233,9 +2205,9 @@ class RadioSwitchTest(unittest.TestCase):
 
     def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
         self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
-        # A Home Assistant or voice press skips while its switch is off, so it is held like a radio.
+        # A Home Assistant press skips while its switch is off, so it is held like a radio.
         self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
-                      'r.action==="hid"?"ble":\n(r.action==="ha"||r.action==="voice")?"home_assistant":""}', PAGE)
+                      'r.action==="hid"?"ble":\nr.action==="ha"?"home_assistant":""}', PAGE)
         self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
         # The label stays, so the tile still says what the input is assigned to.
         self.assertIn(".k.rf span{opacity:.55}", PAGE)
@@ -2249,7 +2221,7 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
         self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
         self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
-        self.assertIn('"Home Assistant is off. Home Assistant and voice buttons are disabled."', PAGE)
+        self.assertIn('"Home Assistant is off. Home Assistant buttons are disabled."', PAGE)
         self.assertNotIn("Home Assistant is not required.", PAGE)
 
     def test_the_home_assistant_line_names_a_switch_this_boot_does_not_follow(self) -> None:
@@ -2293,10 +2265,9 @@ class RadioSwitchTest(unittest.TestCase):
         self.assertIn('.set-ble{--set-bg:#2f80ed}', PAGE)
         self.assertIn('.set-zigbee{--set-bg:#38a169}', PAGE)
         self.assertIn('.set-ir{--set-bg:#e5b700}', PAGE)
-        self.assertIn('.set-voice{--set-bg:#8b5cf6}', PAGE)
         self.assertIn('function setClass(r){var a=r&&r.action;', PAGE)
         self.assertIn('a==="hid"?"set-ble"', PAGE)
-        self.assertIn('a==="zigbee"||a==="ir"||a==="voice"', PAGE)
+        self.assertIn('a==="zigbee"||a==="ir"', PAGE)
         self.assertIn('body.set-colors .remote .k[class*=set-]', PAGE)
         self.assertNotIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
         self.assertIn('localStorage.getItem("c6.set-colors")', PAGE)

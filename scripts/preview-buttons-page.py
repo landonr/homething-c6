@@ -228,9 +228,7 @@ def load_config(path: Path) -> tuple[dict, dict, dict]:
         if entry.get("hold") in HOLD_NAMES and slot in HOLD_SLOTS:
             holds[slot] = entry["hold"]
         action = entry.get("action", "none")
-        if action == "voice":
-            slots[slot] = {"action": "voice"}
-        elif action == "hid":
+        if action == "hid":
             slots[slot] = {
                 "action": "hid",
                 "hid_kind": entry.get("kind", "keyboard"),

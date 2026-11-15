@@ -326,9 +326,6 @@ idle_sleep:
   link_probe: !lambda return id(zigbee_radio).is_connected();
   block_probe: !lambda |-
     const bool ir_mode = ir_ui.state != IrUi::OFF;
-    const bool mic_running = id(board_microphone).is_running();
-    const bool meter = id(mic_meter_active);
-    const bool voice = voice_assistant::global_voice_assistant->is_running();
     const bool pairing = zigbee_assignments.pairing();
     const bool window = zigbee_assignments.pairing_window_open();
     // Without Always On, an enabled Wi-Fi is the Wi-Fi hold or page session, or
@@ -336,15 +333,15 @@ idle_sleep:
     const bool wifi_session = !wifi::global_wifi_component->is_disabled() && !id(button_cfg).wifi_always_on();
     const bool ha_busy = id(ha_actions).busy();
     const bool ota_running = id(ota_busy);
-    const uint16_t mask = ir_mode | mic_running << 1 | meter << 2 | voice << 3 | pairing << 4 | window << 5 |
-                          wifi_session << 6 | ha_busy << 7 | ota_running << 8;
+    const uint16_t mask = ir_mode | pairing << 1 | window << 2 | wifi_session << 3 | ha_busy << 4 |
+                          ota_running << 5;
     // 0xFFFF is out of range, so the first call logs the starting mask.
     static uint16_t last_mask = 0xFFFF;
     if (mask != last_mask) {
       last_mask = mask;
       ESP_LOGI("idle_sleep",
-               "block=0x%03X ir=%d mic=%d meter=%d voice=%d pair=%d window=%d wifi=%d ha=%d ota=%d at %" PRIu32 " ms",
-               mask, ir_mode, mic_running, meter, voice, pairing, window, wifi_session, ha_busy, ota_running, millis());
+               "block=0x%03X ir=%d pair=%d window=%d wifi=%d ha=%d ota=%d at %" PRIu32 " ms",
+               mask, ir_mode, pairing, window, wifi_session, ha_busy, ota_running, millis());
     }
     return mask != 0;
   replay: !lambda |-
@@ -352,9 +349,6 @@ idle_sleep:
     const uint8_t slot = HoldActions::SLOT_OF_BIT[bit];
     if (held && hold_actions.defers(slot))
       return Sleep::REPLAY_SKIP;
-    if (ir_code_store.is_voice(slot))
-      return Sleep::REPLAY_SKIP;
-
     const uint8_t replay = id(idle).wake_replay_mask();
     if (id(ble_hid_remote).assignment(slot).assigned) {
       if (!(replay & Sleep::WAKE_BLE) || !id(ble_hid_remote).radio_enabled())
@@ -393,7 +387,7 @@ pcf8574:
     pcf8575: true
 
 binary_sensor:
-  # Every input below is assignable. The cycle is IR, Zigbee, voice, then clear.
+  # Every input below is assignable. The cycle is IR, Zigbee, then clear.
   # Outside receiver mode the input replays its one active assignment. All
   # sixteen inputs share one press path and one release path. An input that
   # carries an active hold sends its assignment on release instead.
@@ -566,7 +560,7 @@ sensor:
     # Wheel rotation takes two more learn slots, so a volume pair can live on the
     # wheel instead of two of SW3..SW11. One detent is one send at resolution 2.
     # A detent has no release edge, so rotation stays out of the assignment cycle:
-    # it always arms a capture and never reaches the voice or clear stages.
+    # it always arms a capture and never reaches the clear stage.
     # The shared button scripts reuse this transmit step.
     on_clockwise:
       - lambda: ir_ui.tap(17, IrUi::Tap::ARM_ONLY);
@@ -706,9 +700,8 @@ light:
             // connects and orange on Wi-Fi alone when Home Assistant is expected.
             // Turning the HA switch off keeps solid orange while Wi-Fi is up.
             // Green is brighter than red on these 2020 parts at 3.3V, so orange
-            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). A dark D2 stops
-            // only a voice press: a Home Assistant press turns Wi-Fi on itself
-            // while the Home Assistant switch is on.
+            // uses R:G = 2:1 (1:1 reads green, 3:1 reads red). A Home Assistant
+            // press turns Wi-Fi on itself while the Home Assistant switch is on.
             const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();
             const bool wifi_connected = wifi::global_wifi_component->is_connected();
             const bool api_connected = api::global_api_server->is_connected();
@@ -736,9 +729,9 @@ light:
             if (id(ha_actions).failed_recently())
               it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;
 
-            // D3 and D4 show assignment mode when it is open, otherwise
-            // voice-assistant state. When both are idle, D4 shows Bluetooth
-            // and D3 stays dark. The wake battery overlay below can cover them.
+            // D3 and D4 show assignment mode when it is open. When it is
+            // closed, D4 shows Bluetooth and D3 stays dark. The wake battery
+            // overlay below can cover them.
             // Assignment mode never writes D2 or D5, so a Wi-Fi or Zigbee fault
             // stays visible while an input is trained.
             if (ir_ui.state != IrUi::OFF) {
@@ -746,9 +739,6 @@ light:
                 // Two LEDs at 300 ms keep the former four-LED 600 ms chase.
                 it[((millis() / 300) % 2) ? d4 : 1] = Color(0, 0, 200);
               } else {
-                const float mode_phase = (millis() % 1200) / 1200.0f;
-                const uint8_t mode_level = 40 + static_cast<uint8_t>(
-                    160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * mode_phase)));
                 Color mode = Color::BLACK;
                 if (ir_ui.state == IrUi::READY) {
                   mode = Color(0, 0, 160);
@@ -756,26 +746,12 @@ light:
                   mode = Color(0, 180, 0);
                 } else if (ir_ui.state == IrUi::ERROR && ((millis() / 150) % 2) == 0) {
                   mode = Color(200, 0, 0);
-                } else if (ir_ui.state == IrUi::VOICE) {
-                  mode = Color(0, 0, mode_level);
                 } else if (ir_ui.state == IrUi::CLEARED) {
                   mode = Color(160, 80, 0);
                 }
                 it[1] = mode;
                 it[d4] = mode;
               }
-            } else if (id(voice_led_state) == 1) {
-              it[1] = Color(192, 48, 0);
-              it[d4] = Color(192, 48, 0);
-            } else if (id(voice_led_state) == 2) {
-              it[1] = Color(0, 48, 255);
-              it[d4] = Color(0, 48, 255);
-            } else if (id(voice_led_state) == 3) {
-              it[1] = Color(96, 0, 96);
-              it[d4] = Color(96, 0, 96);
-            } else if (id(voice_led_state) == 4) {
-              it[1] = Color(255, 0, 0);
-              it[d4] = Color(255, 0, 0);
             } else {
               auto *ble = id(ble_hid_remote);
               if (!ble->radio_enabled()) {
@@ -835,8 +811,8 @@ light:
             }
 
             // Deep-sleep wake: two pulses in the battery colour cover the whole
-            // ring. Assignment mode and voice feedback keep D3 and D4, because
-            // they answer a user action. The countdown phase starts and stops dim.
+            // ring. Assignment mode keeps D3 and D4, because it answers a user
+            // action. The countdown phase starts and stops dim.
             if (!status_on)
               it.all() = Color::BLACK;
             if (millis() < id(wake_pulse_until_ms)) {
@@ -870,7 +846,7 @@ light:
                 if (i != 1 && i != d4)
                   it[i] = pulse;
               }
-              if (!status_on || (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0)) {
+              if (!status_on || ir_ui.state == IrUi::OFF) {
                 it[1] = pulse;
                 it[d4] = pulse;
               }
@@ -1070,25 +1046,6 @@ remote_transmitter:
   # Share ESP32-C6 TX RMT memory with the status LED strip.
   rmt_symbols: 48
 
-# MK1 I2S. GPIO0 is WS and GPIO21 is data in, not the other way round: the two
-# swapped at the XIAO when MK1 was rerouted. Getting them backwards drives
-# LRCLK onto the mic's SD output and makes two drivers fight.
-i2s_audio:
-  id: mic_bus
-  i2s_bclk_pin: GPIO2
-  i2s_lrclk_pin: GPIO0
-
-microphone:
-  - platform: i2s_audio
-    id: board_microphone
-    i2s_audio_id: mic_bus
-    i2s_din_pin: GPIO21
-    adc_type: external
-    pdm: false
-    channel: left
-    sample_rate: 16000
-    bits_per_sample: 32bit
-
 script:
   - id: send_wake_ir
     then:
@@ -1106,34 +1063,8 @@ script:
           then:
             - lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);
             - if: *send_learned_code
-            - if: &start_learned_voice
-                condition:
-                  lambda: return ir_ui.take_voice_start();
-                then:
-                  # Without a subscribed client, voice_assistant.start only logs and fires
-                  # no trigger, so the meter would stay set and block sleep. An off switch
-                  # refuses at once, although the API server runs until the next boot.
-                  - if:
-                      condition:
-                        and:
-                          - lambda: return id(button_cfg).ha_api_expected();
-                          - voice_assistant.connected:
-                      then:
-                        # A refusal window still open would clear the meter of this start.
-                        - script.stop: refuse_voice_start
-                        - lambda: |-
-                            id(voice_led_state) = 1;
-                            id(mic_meter_active) = true;
-                        - light.turn_on:
-                            id: status_light
-                            effect: Status Indicators
-                            brightness: 40%
-                        # Home Assistant VAD ends the stream, so there is no stop on a timer.
-                        - voice_assistant.start:
-                      else:
-                        - script.execute: refuse_voice_start
-  # Shared release path. A deferred press taps here, and Home Assistant VAD ends
-  # a voice tap. A release after the hold fired sends nothing.
+  # Shared release path. A deferred press taps here. A release after the hold
+  # fired sends nothing.
   - id: button_release
     mode: parallel
     parameters:
@@ -1142,10 +1073,6 @@ script:
       - lambda: id(hold_release) = hold_actions.release(static_cast<uint8_t>(slot));
       - lambda: |-
           if (id(hold_release) == HoldActions::WAKE_TAP_AND_RELEASE) {
-            if ((id(idle).wake_replay_mask() & idle_sleep::IdleSleep::WAKE_HA) && ir_code_store.is_voice(slot)) {
-              id(hold_release) = HoldActions::TAP_AND_RELEASE;
-              return;
-            }
             for (uint8_t bit = 0; bit < 16; bit++) {
               if (HoldActions::SLOT_OF_BIT[bit] == slot) {
                 id(idle).replay_on_release(bit);
@@ -1159,7 +1086,6 @@ script:
           then:
             - lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);
             - if: *send_learned_code
-            - if: *start_learned_voice
             - lambda: ir_ui.release(static_cast<uint8_t>(slot));
       - if:
           condition:
@@ -1173,118 +1099,18 @@ script:
     parameters:
       slot: int
     then:
-      - if:
-          condition:
-            lambda: return ir_ui.release(static_cast<uint8_t>(slot));
-          then:
-            - voice_assistant.stop:
+      - lambda: ir_ui.release(static_cast<uint8_t>(slot));
   - id: show_idle_status
     then:
-      - if:
-          condition:
-            lambda: return !id(mic_meter_active);
-          then:
-            - lambda: |-
-                id(voice_led_state) = 0;
-                ESP_LOGD("main", "VA LED: 0 (idle)");
-            - light.turn_on:
-                id: status_light
-                effect: Status Indicators
-                brightness: 40%
-  - id: stop_voice_listening
-    then:
-      - lambda: id(mic_meter_active) = false;
-      - script.execute: show_idle_status
-  # The on_error LED state, without the meter, so a refused press cannot block
-  # sleep. restart keeps one 2 s window when presses repeat.
-  - id: refuse_voice_start
-    mode: restart
-    then:
-      - lambda: |-
-          if (!id(button_cfg).ha_api_expected())
-            ESP_LOGW("voice_assistant", "Voice start refused: the Home Assistant switch is off");
-          else if (id(button_cfg).ha_api_gated())
-            ESP_LOGW("voice_assistant", "Voice start refused: the API server is off until the next restart");
-          else
-            ESP_LOGW("voice_assistant", "Voice start refused: no Home Assistant client is subscribed to voice");
-          id(voice_led_state) = 4;
       - light.turn_on:
           id: status_light
           effect: Status Indicators
           brightness: 40%
-      - delay: 2s
-      - script.execute: stop_voice_listening
-
-voice_assistant:
-  # gain_factor is applied in the Q31 domain before the 32-to-16 bit truncation,
-  # so it recovers the mic's low bits rather than amplifying quantization noise.
-  # The ICS-43434 is -26 dBFS at 94 dB SPL, which puts speech near -54 dBFS raw.
-  microphone:
-    - microphone: board_microphone
-      gain_factor: 32
-  # noise_suppression_level, auto_gain and volume_multiplier are applied by HA's
-  # server-side enhancer, not on the device. Left at defaults: with them set to
-  # 2 / 31dBFS / 2.0 HA aborted the stream 7.6s in with stt-stream-failed.
-  # gain_factor above is device-side and unaffected.
-  on_start:
-    - logger.log: "VA: pipeline start requested"
-  on_listening:
-    # The LEDs are the cue to start talking, so they light here rather than on
-    # the button press: HA's reply can lag the request by seconds, and audio
-    # captured before streaming opens is discarded.
-    - logger.log: "VA: listening"
-    - lambda: |-
-        id(voice_led_state) = 2;
-        ESP_LOGD("main", "VA LED: 2 (listening)");
-    - light.turn_on:
-        id: status_light
-        effect: Status Indicators
-        brightness: 40%
-  on_stt_vad_start:
-    - logger.log: "VA: speech detected"
-  on_stt_vad_end:
-    - logger.log: "VA: speech ended"
-    - lambda: id(mic_meter_active) = false;
-    - lambda: |-
-        id(voice_led_state) = 3;
-        ESP_LOGD("main", "VA LED: 3 (speech ended)");
-    - light.turn_on:
-        id: status_light
-        effect: Status Indicators
-        brightness: 40%
-  on_stt_end:
-    - lambda: |-
-        ESP_LOGI("voice_assistant", "STT result: '%s'", x.c_str());
-  on_end:
-    - script.execute: stop_voice_listening
-  on_error:
-    - lambda: |-
-        ESP_LOGE("voice_assistant", "Error %s / %s", code.c_str(), message.c_str());
-    - lambda: id(mic_meter_active) = false;
-    - lambda: |-
-        id(voice_led_state) = 4;
-        ESP_LOGD("main", "VA LED: 4 (voice-assistant error)");
-    - light.turn_on:
-        id: status_light
-        effect: Status Indicators
-        brightness: 40%
-    - delay: 2s
-    - script.execute: stop_voice_listening
-  on_client_disconnected:
-    - script.execute: stop_voice_listening
 
 globals:
   # HoldActions::release() of the running release path. Nothing between the write
   # and the two reads can run another release.
   - id: hold_release
-    type: uint8_t
-    restore_value: false
-    initial_value: "0"
-  - id: mic_meter_active
-    type: bool
-    restore_value: false
-    initial_value: "false"
-  - id: voice_led_state
     type: uint8_t
     restore_value: false
     initial_value: "0"

@@ -388,13 +388,13 @@ class ProductionSleepConfigTest(unittest.TestCase):
             self.assertIn(text, overlay)
         # Every LED but D3 and D4 always takes the pulse. D3 and D4 only when no user
         # action owns them or status LEDs are off. d4 is D4 at either LED count.
-        always = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF", 1)[0]
+        always = overlay.split("if (!status_on || ir_ui.state == IrUi::OFF) {", 1)[0]
         self.assertIn("for (int32_t i = 0; i < it.size(); i++) {\n"
                       "                if (i != 1 && i != d4)\n"
                       "                  it[i] = pulse;", always)
         self.assertNotIn("it[1]", always)
         self.assertNotIn("it[d4]", always)
-        guarded = overlay.split("if (!status_on || (ir_ui.state == IrUi::OFF && id(voice_led_state) == 0)) {", 1)[1]
+        guarded = overlay.split("if (!status_on || ir_ui.state == IrUi::OFF) {", 1)[1]
         self.assertIn("it[1] = pulse;", guarded)
         self.assertIn("it[d4] = pulse;", guarded)
         for index in ("0", "i", "d5"):
@@ -533,11 +533,11 @@ class HomeAssistantSleepTest(unittest.TestCase):
     def test_the_block_probe_has_a_home_assistant_bit(self) -> None:
         probe = PRODUCTION.split("  block_probe: !lambda |-\n", 1)[1].split("  replay: !lambda", 1)[0]
         self.assertIn("const bool ha_busy = id(ha_actions).busy();", probe)
-        self.assertIn("wifi_session << 6 | ha_busy << 7 | ota_running << 8;", probe)
+        self.assertIn("wifi_session << 3 | ha_busy << 4 |\n                          ota_running << 5;", probe)
         self.assertIn("ha=%d", probe)
 
     def test_the_block_probe_has_an_ota_bit_in_a_wide_mask(self) -> None:
-        """Nine block bits need more than a uint8_t, and the sentinel must stay out of range."""
+        """The 0xFFFF first-call sentinel needs more than a uint8_t, so it stays out of range."""
         probe = PRODUCTION.split("  block_probe: !lambda |-\n", 1)[1].split("  replay: !lambda", 1)[0]
         self.assertIn("const bool ota_running = id(ota_busy);", probe)
         self.assertIn("const uint16_t mask = ", probe)

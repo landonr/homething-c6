@@ -86,7 +86,7 @@ class ProductionConfigTest(unittest.TestCase):
         gate = turn_on[:turn_on.index("switch.turn_on: led_rail")]
         self.assertIn("id(button_cfg).boot_leds()", gate)
         self.assertIn("millis() < id(wake_pulse_until_ms)", gate)
-        self.assertIn("if (!status_on || (ir_ui.state == IrUi::OFF", entry)
+        self.assertIn("if (!status_on || ir_ui.state == IrUi::OFF)", entry)
         tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
         self.assertIn("!id(button_cfg).status_leds() && id(status_light).remote_values.is_on()", tick)
         self.assertIn("id(status_light).turn_off().set_transition_length(0).perform();", tick)
@@ -274,7 +274,7 @@ class ProductionConfigTest(unittest.TestCase):
             self.assertEqual(press, release, name)
             found[name] = int(press[0])
         self.assertEqual(found, INPUT_SLOTS)
-        for gone in ("ir_ui.tap(", "voice_assistant", "set_pressed(", "release_assignment", "hold_consumed"):
+        for gone in ("ir_ui.tap(", "set_pressed(", "release_assignment", "hold_consumed"):
             self.assertNotIn(gone, section)
 
     def test_the_press_path_taps_only_when_hold_actions_allows_it(self) -> None:
@@ -288,7 +288,6 @@ class ProductionConfigTest(unittest.TestCase):
         tap = press.index("- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);")
         self.assertLess(decide, tap)
         self.assertLess(tap, press.index("- if: *send_learned_code"))
-        self.assertLess(press.index("- if: *send_learned_code"), press.index("- if: &start_learned_voice"))
         self.assertEqual(config.count("hold_actions.press("), 1)
 
     def test_the_release_path_taps_a_deferred_press_and_releases_the_rest(self) -> None:
@@ -303,11 +302,9 @@ class ProductionConfigTest(unittest.TestCase):
         tap_branch = tap_branch.split("\n      - if:\n", 1)[0]
         self.assertLess(call, release.index("HoldActions::TAP_AND_RELEASE"))
         order = ["- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);", "- if: *send_learned_code",
-                 "- if: *start_learned_voice", "- lambda: ir_ui.release(static_cast<uint8_t>(slot));"]
+                 "- lambda: ir_ui.release(static_cast<uint8_t>(slot));"]
         positions = [tap_branch.index(item) for item in order]
         self.assertEqual(positions, sorted(positions))
-        # Home Assistant VAD ends a voice tap, so this branch stops no stream.
-        self.assertNotIn("voice_assistant.stop:", tap_branch)
         release_only = release.split("lambda: return id(hold_release) == HoldActions::RELEASE_ONLY;", 1)[1]
         self.assertIn("            - script.execute:\n                id: release_assignment\n"
                       "                slot: !lambda return slot;", release_only)
@@ -389,7 +386,7 @@ class ProductionConfigTest(unittest.TestCase):
     def test_the_fixed_hold_paths_are_gone(self) -> None:
         config = CONFIG.read_text()
         for gone in ("detect_wifi_hold", "detect_peek_hold", "detect_receiver_hold", "exit_receiver_hold",
-                     "sw8_hold_consumed", "sw9_hold_consumed", "status_peek", "hold_consumed", "NO_VOICE",
+                     "sw8_hold_consumed", "sw9_hold_consumed", "status_peek", "hold_consumed",
                      "sleep_hold_bit", "sleep_hold_time"):
             self.assertNotIn(gone, config)
         before_replay, replay_and_rest = config.split("  replay: !lambda |-\n", 1)
@@ -410,11 +407,10 @@ class ProductionConfigTest(unittest.TestCase):
             entry = button_entry(config, int(name.split()[1])) if name.startswith("Button") else \
                 config.split(f"    name: {name}\n", 1)[1].split("\n  - platform:", 1)[0]
             self.assertIn(f"{{id: button_press, slot: {slot}}}", entry, name)
-        # Both shared paths run the full cycle, so every expander input has voice.
+        # Both shared paths run the full cycle, so every expander input can clear.
         self.assertEqual(config.count("ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);"), 2)
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", config)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", config)
-        self.assertNotIn("NO_VOICE", config)
 
     def test_status_light_drives_the_cascaded_leds_of_the_board(self) -> None:
         """V2 boards have four LEDs and V3 boards six. The default must stay safe for V2."""
@@ -441,136 +437,9 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertEqual(600 // 4, 150)
         self.assertEqual(600 // 6, 100)
 
-    def test_a_voice_assignment_is_push_to_talk_for_home_assistant_assist(self) -> None:
-        """An input without an active hold starts Assist on press and ends it on release."""
-        config = CONFIG.read_text()
-        # Zigbee and Wi-Fi share the C6 radio. Coexistence needs modem power
-        # save, or the STA misses beacons and the association flaps.
-        self.assertRegex(config, r"wifi:[\s\S]*?\n  power_save_mode: light")
-        self.assertRegex(
-            config,
-            # on_boot is a list of triggers now, so the action sits deeper.
-            r"esphome:[\s\S]*?\n  on_boot:[\s\S]*?\n +- script.execute: show_idle_status"
-            r"[\s\S]*?wifi:[\s\S]*?\n  on_connect:\n    - script.execute: show_idle_status"
-            r"[\s\S]*?\n  on_disconnect:\n    - script.execute: show_idle_status",
-        )
-        self.assertRegex(
-            config,
-            r"voice_assistant:",
-        )
-        self.assertRegex(
-            config,
-            r"id: board_microphone[\s\S]*?sample_rate: 16000",
-        )
-        # The voice stage is a shared anchor, so it is defined in the press path.
-        self.assertIn("- if: &start_learned_voice", script_entry(config, "button_press"))
-        self.assertEqual(config.count("voice_assistant.start:"), 1)
-        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("\n  - id: button_release", 1)[0]
-        self.assertRegex(
-            start_voice,
-            r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
-            r"id\(voice_led_state\) = 1;[\s\S]*?"
-            r"id\(mic_meter_active\) = true;[\s\S]*?"
-            r"effect: Status Indicators[\s\S]*?"
-            r"voice_assistant\.start:",
-        )
-        release = script_entry(config, "release_assignment")
-        self.assertRegex(
-            release,
-            r"lambda: return ir_ui\.release\(static_cast<uint8_t>\(slot\)\);[\s\S]*?voice_assistant\.stop:",
-        )
-
-    def test_voice_state_reaches_the_top_leds_and_cleans_up(self) -> None:
-        """Catches missing PTT feedback or LEDs left powered after Assist ends."""
-        config = CONFIG.read_text()
-        # D3 and D4 are the top pair. D2 and D5 keep Wi-Fi and API state, so the
-        # voice stages cannot take the whole strip.
-        effect = status_light_entry(config).split("name: Status Indicators", 1)[1]
-        effect = effect.split("- addressable_lambda:", 1)[0]
-        for value in (1, 2, 3, 4):
-            self.assertIn(f"id(voice_led_state) == {value}", effect)
-        self.assertIn("it[1] =", effect)
-        self.assertIn("it[d4] =", effect)
-        self.assertIn("const bool wifi_enabled = !wifi::global_wifi_component->is_disabled();", effect)
-        self.assertIn("wifi::global_wifi_component->is_connected()", effect)
-        self.assertIn("api::global_api_server->is_connected()", effect)
-        self.assertIn("if (wifi_enabled && api_connected)", effect)
-        self.assertIn("else if (wifi_enabled && !wifi_connected)", effect)
-        self.assertIn("else if (wifi_enabled && ha_expected)", effect)
-        self.assertIn("else if (wifi_enabled)", effect)
-        for value, color in ((1, "Color(192, 48, 0)"), (2, "Color(0, 48, 255)"),
-                             (3, "Color(96, 0, 96)"), (4, "Color(255, 0, 0)")):
-            state = effect.split(f"id(voice_led_state) == {value}", 1)[1]
-            self.assertIn(color, state)
-        # The stages are set by the pipeline callbacks, not by the button.
-        for trigger, value in (("on_listening", 2), ("on_stt_vad_end", 3), ("on_error", 4)):
-            block = config.split(f"  {trigger}:", 1)[1].split("\n  on_", 1)[0]
-            self.assertIn(f"id(voice_led_state) = {value};", block)
-        self.assertRegex(
-            config,
-            r"voice_assistant:[\s\S]*?\n  on_end:\n    - script.execute: stop_voice_listening",
-        )
-        self.assertRegex(
-            config,
-            r"voice_assistant:[\s\S]*?\n  on_error:[\s\S]*?"
-            r"\n    - script.execute: stop_voice_listening",
-        )
-        self.assertRegex(
-            config,
-            r"voice_assistant:[\s\S]*?\n  on_client_disconnected:[\s\S]*?"
-            r"\n    - script.execute: stop_voice_listening",
-        )
-        self.assertRegex(
-            config,
-            r"id: stop_voice_listening[\s\S]*?"
-            r"lambda: id\(mic_meter_active\) = false;[\s\S]*?"
-            r"script.execute: show_idle_status",
-        )
-
-    def test_a_voice_press_starts_assist_only_with_the_switch_on_and_a_client_subscribed(self) -> None:
-        """Without a subscribed client, voice_assistant.start only logs and fires
-        no trigger, so a meter set first stays set and blocks sleep forever."""
-        config = CONFIG.read_text()
-        # The anchor lives in the shared press path, so the release path reuses it.
-        start_voice = config.split("- if: &start_learned_voice", 1)[1].split("\n  - id: button_release", 1)[0]
-        self.assertRegex(
-            start_voice,
-            r"lambda: return ir_ui\.take_voice_start\(\);[\s\S]*?"
-            r"\n +- if:\n +condition:\n +and:\n"
-            r" +- lambda: return id\(button_cfg\)\.ha_api_expected\(\);\n"
-            r" +- voice_assistant\.connected:\n +then:\n",
-        )
-        accepted, refused = start_voice.split("\n                      else:\n", 1)
-        meter = accepted.index("id(mic_meter_active) = true;")
-        for guard in ("return id(button_cfg).ha_api_expected();", "- voice_assistant.connected:"):
-            self.assertLess(accepted.index(guard), meter)
-            self.assertLess(accepted.index(guard), accepted.index("voice_assistant.start:"))
-        self.assertLess(accepted.index("script.stop: refuse_voice_start"), meter)
-        refused = "\n".join(line for line in refused.splitlines() if not line.strip().startswith("#"))
-        self.assertEqual(refused.strip(), "- script.execute: refuse_voice_start")
-        # Every input reuses the anchor, so no start can skip the guard.
-        self.assertEqual(config.count("voice_assistant.start:"), 1)
-        self.assertEqual(config.count("id(mic_meter_active) = true;"), 1)
-
-    def test_a_refused_voice_press_shows_the_error_state_without_the_meter(self) -> None:
-        config = CONFIG.read_text()
-        refuse = config.split("  - id: refuse_voice_start\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("    mode: restart\n", refuse)
-        self.assertNotIn("mic_meter_active", refuse)
-        self.assertNotIn("voice_assistant.start", refuse)
-        for reason in ("the Home Assistant switch is off",
-                       "the API server is off until the next restart",
-                       "no Home Assistant client is subscribed to voice"):
-            self.assertIn(f'ESP_LOGW("voice_assistant", "Voice start refused: {reason}");', refuse)
-        # The on_error sequence: state 4, the light, 2 s, then idle.
-        order = ["id(voice_led_state) = 4;", "effect: Status Indicators", "brightness: 40%",
-                 "- delay: 2s", "- script.execute: stop_voice_listening"]
-        positions = [refuse.index(step) for step in order]
-        self.assertEqual(positions, sorted(positions))
-
     def test_production_carries_no_bench_diagnostics(self) -> None:
-        """The microphone runs from Assist, and the IR burst duplicated a learned
-        slot. The mic and expander diagnostics live in the bench configs."""
+        """The production firmware carries no microphone, and the IR burst
+        duplicated a learned slot. Both diagnostics live in the bench configs."""
         config = CONFIG.read_text()
         for name in ("Start Microphone Test", "Stop Microphone Test", "Send Short IR Test Burst",
                      "Mic SD Pulldown", "Expander INT"):
@@ -580,43 +449,14 @@ class ProductionConfigTest(unittest.TestCase):
         self.assertNotIn("GPIO_NUM_21", config)
         # The mic level only fed the removed 1 s log.
         self.assertNotIn("mic_level", config)
-        microphone = config.split("\nmicrophone:\n", 1)[1].split("\n\n", 1)[0]
-        self.assertIn("id: board_microphone", microphone)
-        self.assertNotIn("on_data:", microphone)
+        # Assist went with the app slot, so the microphone and its bus are out too.
+        for gone in ("\nmicrophone:\n", "\ni2s_audio:\n", "board_microphone", "voice_assistant"):
+            self.assertNotIn(gone, config)
         mic_vu = (CONFIG.parent / "c6remote-test-mic-vu.yaml").read_text()
         self.assertIn("name: Mic SD Pulldown", mic_vu)
         self.assertIn("gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);", mic_vu)
         common = (CONFIG.parent / "c6remote-test-common.yaml").read_text()
         self.assertIn("name: Expander INT", common)
-
-    def test_idle_status_defers_to_the_microphone_meter(self) -> None:
-        """A meter run must survive a Wi-Fi event, which also calls this script."""
-        config = CONFIG.read_text()
-        idle = config.split("- id: show_idle_status", 1)[1].split("\n  - id: ", 1)[0]
-        self.assertIn("lambda: return !id(mic_meter_active);", idle)
-        self.assertIn("id(voice_led_state) = 0;", idle)
-        self.assertIn("effect: Status Indicators", idle)
-        self.assertIn("brightness: 40%", idle)
-        # One effect now carries the Wi-Fi state, so there is no second effect to
-        # switch to and no colour choice left in the script.
-        self.assertNotIn("effect: WiFi Connecting", config)
-        self.assertNotIn("name: WiFi Connecting", config)
-        self.assertRegex(
-            config,
-            r"id: stop_voice_listening[\s\S]*?"
-            r"lambda: id\(mic_meter_active\) = false;[\s\S]*?"
-            r"script.execute: show_idle_status",
-        )
-
-    def test_microphone_drops_the_debug_counters(self) -> None:
-        """The level, bytes and peak values fed only the 1 s log, which the mic
-        bench configs carry."""
-        config = CONFIG.read_text()
-        self.assertNotIn("const float level =", config)
-        self.assertNotIn("mic_bytes", config)
-        self.assertNotIn("mic_peak", config)
-        self.assertNotIn("Captured %u bytes/s", config)
-        self.assertNotIn("  - interval: 1s\n", config)
 
     def test_zigbee_dependency_and_client_endpoint_are_pinned(self) -> None:
         config = CONFIG.read_text()
@@ -634,13 +474,9 @@ class ProductionConfigTest(unittest.TestCase):
 
     def test_the_device_cycle_has_no_zigbee_stage(self) -> None:
         """A Zigbee target is resolved against Zigbee2MQTT by the browser, so the
-        remote has nothing to train and the cycle skips straight to voice."""
+        remote has nothing to train and the cycle skips straight to clear."""
         header = IR_LEARNING.read_text()
-        self.assertIn("FULL cycles IR, voice, clear", header)
-        self.assertRegex(
-            header,
-            r"if \(stage == 1 && mode == Tap::FULL\)[\s\S]*?ir_code_store\.set_voice",
-        )
+        self.assertIn("FULL cycles IR, then clear", header)
         for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_", "NO_VOICE"):
             self.assertNotIn(gone, header)
         self.assertIn("enum class Tap : uint8_t { FULL, ARM_ONLY };", header)
@@ -1052,14 +888,13 @@ class ProductionConfigTest(unittest.TestCase):
                         d5.index("ZigbeeAssignmentManager::REACH_FAILED"))
 
     def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
-        # Assignment mode and voice keep D3 and D4, so the
-        # Bluetooth branch is the last else of that chain and never touches D5.
+        # Assignment mode keeps D3 and D4, so the Bluetooth branch is the last
+        # else of that chain and never touches D5.
         entry = status_light_entry(CONFIG.read_text())
         before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
-        # The wake pulse is an overlay after D5, so Bluetooth follows voice state 4.
+        # The wake pulse is an overlay after D5, so Bluetooth follows assignment mode.
         self.assertNotIn("wake_pulse_until_ms", before_d5)
-        self.assertIn("it[d4] = Color(255, 0, 0);\n            } else {\n              auto *ble = id(ble_hid_remote);",
-                      before_d5)
+        self.assertIn("            } else {\n              auto *ble = id(ble_hid_remote);", before_d5)
         ble = before_d5[before_d5.index("auto *ble = id(ble_hid_remote);"):]
         self.assertIn("it[d4] =", ble)
         self.assertNotIn("it[d5]", ble)

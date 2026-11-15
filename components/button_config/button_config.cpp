@@ -42,11 +42,10 @@ static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sl
 static const char *hold_name(uint8_t hold) { return hold < HoldActions::COUNT ? HOLD_NAMES[hold] : "none"; }
 
 static const SlotInfo SLOTS[] = {
-    {3, true},   {4, true},   {5, true},  {6, true},  {7, true},  {8, true},
-    {9, true},   {10, true},  {11, true}, {12, true}, {13, true}, {14, true},
-    {15, true},  {16, true},  {17, false},  // wheel clockwise
-    {18, false},                            // wheel anticlockwise
-    {19, true},  {20, true},
+    {3},  {4},  {5},  {6},  {7},  {8},  {9},  {10}, {11}, {12},
+    {13}, {14}, {15}, {16}, {17},  // wheel clockwise
+    {18},                          // wheel anticlockwise
+    {19}, {20},
 };
 
 static const SlotInfo *find_slot(long slot) {
@@ -488,8 +487,6 @@ static const char *state_name(uint8_t state) {
       return "saved";
     case IrUi::ERROR:
       return "error";
-    case IrUi::VOICE:
-      return "voice";
     case IrUi::CLEARED:
       return "cleared";
     default:
@@ -1069,12 +1066,11 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
     if (this->ha_action_ != nullptr)
       ha = this->ha_action_->assignment(info.slot);
 #endif
-    const char *action = hid.assigned                           ? "hid"
-                         : zigbee.assigned                      ? "zigbee"
-                         : ha.assigned                          ? "ha"
-                         : ::ir_code_store.is_voice(info.slot)  ? "voice"
+    const char *action = hid.assigned                          ? "hid"
+                         : zigbee.assigned                     ? "zigbee"
+                         : ha.assigned                         ? "ha"
                          : ::ir_code_store.has_code(info.slot) ? "ir"
-                                                               : "none";
+                                                              : "none";
     // Hex only, so it needs no JSON escape. A Zigbee slot shows its target name,
     // and an IR slot shows the code name that set_name() cleaned.
     char code[12] = "";
@@ -1120,7 +1116,7 @@ void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
 }
 
 bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {
-  if (!::ir_code_store.has_code(slot) || ::ir_code_store.is_voice(slot))
+  if (!::ir_code_store.has_code(slot))
     return false;
   if (esphome::ble_hid::BleHid::instance()->assignment(slot).assigned || ::zigbee_assignments.assignment(slot).assigned)
     return false;
@@ -1192,7 +1188,7 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
 
   const bool replay_action = action == "set_sleep_replay" || action == "set_sleep_replay_ir";
   const bool sleep_action = action == "set_sleep_enabled" || action == "set_sleep_after" || replay_action;
-  const bool known = action == "record_ir" || action == "set_voice" || action == "set_ir_code" ||
+  const bool known = action == "record_ir" || action == "set_ir_code" ||
                      action == "set_zigbee" || action == "set_zigbee_device" ||
                      action == "set_hid" || action == "set_ha" || action == "test_ha" || action == "forget_ble" || action == "set_radio" ||
                      action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
@@ -1343,10 +1339,6 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
   const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
   if (needs_slot && info == nullptr) {
     request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
-    return;
-  }
-  if (action == "set_voice" && !info->voice) {
-    request->send(400, "application/json", R"({"ok":false,"error":"slot has no voice action"})");
     return;
   }
 
@@ -1514,10 +1506,6 @@ void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
     this->defer([this, button, action_id]() {
       ::ir_ui.open_from_web(button);
       this->complete_action_(action_id, true);
-    });
-  } else if (action == "set_voice") {
-    this->defer([this, button, action_id]() {
-      this->complete_action_(action_id, ::ir_code_store.set_voice(button));
     });
   } else if (action == "set_ir_code") {
     this->defer([this, button, action_id, timings, name]() {

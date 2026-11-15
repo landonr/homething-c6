@@ -197,7 +197,7 @@ up the network address later, on the first press.
 Use a mains device for a device target. A battery device keeps its radio off, so
 the unicast waits at its parent until the device polls.
 
-The assignment replaces any IR code or voice action on that input.
+The assignment replaces any IR code or Home Assistant action on that input.
 
 ## How the remote finds a device
 

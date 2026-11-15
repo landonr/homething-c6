@@ -1,6 +1,6 @@
 {
   "case_front": [
-    {"name": "mic", "points": [[1335, 205], [740, 205]], "label": ["Microphone", "for voice assistant"], "tx": 727, "ty": 236, "anchor": "end"},
+    {"name": "mic", "points": [[1335, 205], [740, 205]], "label": "Microphone", "tx": 727, "ty": 236, "anchor": "end"},
     {"name": "wheel", "points": [[1162, 821], [740, 821]], "label": ["Scroll wheel", "+ 5-way control"], "tx": 727, "ty": 852, "anchor": "end"},
     {"name": "leds", "points": [[1060, 1184], [740, 1184]], "label": "RGB status LEDs", "tx": 727, "ty": 1215, "anchor": "end"},
     {"name": "keypad", "points": [[1138, 1685], [740, 1685]], "label": "11 assignable\nbuttons", "tx": 727, "ty": 1716, "anchor": "end"},

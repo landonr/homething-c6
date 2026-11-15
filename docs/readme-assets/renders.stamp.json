@@ -4,11 +4,11 @@
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "329307633df99f765c33b54f0eb5449c89cb53c3e9ee758558fa81555aef5884",
+    "fingerprint": "a276c2869d1bd243b7c2f1b228d86e6122ad6a3d8d456b06daa4f9ad535386be",
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "467eb5a6949703aa5884990faa13a8732b8fde9274d19658c23dd9cfb8f4e963",
+    "fingerprint": "72a2baf50b16da092bd90540dfda91b2768489ccc4d1aa5ed48751663604edd4",
     "source": "index"
   },
   "case-front-face": {
@@ -36,7 +36,7 @@
     "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "site-media": {
-    "fingerprint": "3bb8b077c9ce727cd1a8e863ea22342da97f2571f69de85aa0e514fb71649881",
+    "fingerprint": "815cfe2362441d811a9ce3b8ed346eca7bf12bf1fd3cfc1dab40b0ffe44b8411",
     "source": "index"
   },
   "site-voice": {
@@ -44,11 +44,11 @@
     "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
   },
   "web-page-framed": {
-    "fingerprint": "7ab5c2813c769c5f8e4aa956efba116a3d3a978e59a425aa928a7d37c80126a8",
+    "fingerprint": "d14662d53ca29fad041c5398bad246511b328815bdf1f6829870e67bbc2d1542",
     "source": "index"
   },
   "web-page-shots": {
-    "fingerprint": "e3c5c4a095143b97d16fb59c969a72f37a4616cc5ba2bae52c5b1afa1601e4cd",
+    "fingerprint": "3fdee91aeea8fa96bebabce384823e637a50378f30e5fd963b92335f269b9b84",
     "source": "index"
   }
 }

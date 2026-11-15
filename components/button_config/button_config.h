@@ -29,7 +29,6 @@ namespace esphome::button_config {
 // ir_learning.h, so the table is ordered by slot and not by physical position.
 struct SlotInfo {
   uint8_t slot;
-  bool voice;  // false where push-to-talk has no usable release edge
 };
 
 class ButtonConfig final : public AsyncWebHandler, public Component {

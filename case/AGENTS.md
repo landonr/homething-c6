@@ -16,9 +16,9 @@ CASE_CACHE_KEEP=<n> ...                       # how many solid cache keys to kee
 
 ### Validation delegation
 
-For case or enclosure edits, delegate every validation command to a subagent that runs on Haiku.
+For case or enclosure edits, delegate every validation command to a subagent. Do not inherit the primary model.
 
-Select Haiku explicitly. Do not inherit the primary model.
+Select the subagent model for your client. Codex uses `gpt-6-luna`. Claude Code uses Haiku.
 
 Delegate case builds, scoped and full checks, hardware quick and verify loops, tests, lint, renders, and documentation checks.
 

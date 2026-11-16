@@ -100,12 +100,19 @@ ACCEPTED = {
     ),
     (FRONT, "led_ring_channel"): (
         0.85, 177.6,
-        "the channel's thin side, not its roof. The roof runs 1.50 to 1.68, "
-        "because the arch sits below the face less LED_RING_FACE_ROOF all the "
-        "way round. Raising LED_RING_WALL to 1.25 thickened the inner web and "
-        "took a quarter off this area, and the thinnest reading then moved out "
-        "to the east and west chords, where the channel runs flush into the "
-        "cavity wall and neither param reaches it"
+        "the roof between the channel ceiling and the keypad dish over it, "
+        "read from the channel side. keypad_recess and wheel_opening read the "
+        "same wall from the dish side, so the three are one annular band round "
+        "the ring and not three faults. Measured on the exported STL, every "
+        "one of the 200 thinnest samples crosses the thickness rather than "
+        "running sideways. An earlier note called this the channel's side at "
+        "the east and west chords, which the measurement disproves. "
+        "LED_RING_FACE_ROOF does not govern it either. "
+        "led_ring_ceiling_under() takes the higher of the arch and the face "
+        "cap, and the arch is higher wherever this reads thin, so "
+        "LED_RING_ROOF and LED_RING_SAG set it. Lowering the arch thickens the "
+        "roof and shortens the channel, which wheel_lip_relief() already left "
+        "too short for a full inner bevel at the east and west sides"
     ),
     (FRONT, "wheel_opening"): (0.96, 65.3, "dish face over the LED ring roof"),
     (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),

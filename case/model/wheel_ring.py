@@ -202,7 +202,9 @@ def led_ring_top(fdm=False):
     """Height of the channel's arch, or its flat ceiling, on the crown line.
 
     On the recessed front this is the arch's crown, and the outer rake is this
-    high above CAVITY_FRONT on the crown line. The ceiling rises above the arch
+    high above CAVITY_FRONT on the crown line. The FDM front measures its own
+    depth from CAVITY_FRONT too, because its mouth still opens there. Only its
+    inner wall stands on LED_RING_FOOT. The ceiling rises above the arch
     under the face, see led_ring_ceiling_under(), and the rake starts that much
     higher at the mouth. The FDM front shortens the
     wall from the cavity side and keeps this height as its flat ceiling, so

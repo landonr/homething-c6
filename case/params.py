@@ -1484,17 +1484,28 @@ so a small change on either side puts this groove over a roof that has to carry
 the light, and what would be left there is LED_RING_ROOF less this.
 checks/fdm.py holds the floor under it for that case rather than for the
 clearance the present layout happens to have."""
-FDM_LED_RING_DEPTH_RATIO = 0.5
+FDM_LED_RING_DEPTH_RATIO = 0.8
 """LED ring channel depth on the FDM front, as a fraction of the recessed
 front's arch depth on the crown line, from CAVITY_FRONT up to LED_RING_TOP.
 
 The flat FDM face does not need the full-height light-spreading void used below
-the dished face. Half depth keeps the channel open over the LEDs and gives a
+the dished face. A shorter channel keeps it open over the LEDs and gives a
 thicker printable roof. This changes only the FDM front. On the recessed front
 the ceiling rises above the arch under the face. The outer rake starts that much
 higher at the mouth and keeps the arch depth as its height. checks/fdm.py
 measures both built shells and holds this ratio. On the recessed front it reads
-the height of the outer rake on the crown line."""
+the height of the outer rake on the crown line.
+
+It was 0.5. wheel_lip_relief() raised the channel's inner floor to
+LED_RING_FOOT, and the FDM channel was then too short to hold its inner
+chamfer. The chamfer is LED_RING_INNER_CHAMFER and it hangs from the ceiling,
+so the ceiling must stand that far above LED_RING_FOOT, plus
+LED_RING_INNER_FOOT_MIN. This value leaves a foot of about 0.16.
+
+The cost is the roof under the flat face, which falls from about 1.61 to about
+1.12. The mouth still opens at CAVITY_FRONT, so this fraction keeps its old
+meaning and checks/fdm.py needs no change.
+"""
 FDM_WHEEL_OPENING_CLEARANCE = 0.2
 """Extra radius the FDM front's own wheel opening carries, over and above
 WHEEL_OPENING_CLEARANCE, so the printed bore clears the wheel's main rotating

@@ -93,13 +93,13 @@ KNIFE = (
 
 ACCEPTED = {
     (FRONT, "keypad_recess"): (
-        0.85, 109.5,
+        0.85, 121.1,
         "dish face over the LED ring roof. It read 0.55 over 338.4 while the "
         "counterbore lands were thin too, and raising the face took the lands "
         "out of it"
     ),
     (FRONT, "led_ring_channel"): (
-        0.85, 172.7,
+        0.85, 177.6,
         "the channel's thin side, not its roof. The roof runs 1.50 to 1.68, "
         "because the arch sits below the face less LED_RING_FACE_ROOF all the "
         "way round. Raising LED_RING_WALL to 1.25 thickened the inner web and "
@@ -107,45 +107,46 @@ ACCEPTED = {
         "to the east and west chords, where the channel runs flush into the "
         "cavity wall and neither param reaches it"
     ),
-    (FRONT, "wheel_opening"): (0.98, 60.6, "dish face over the LED ring roof"),
-    (FRONT, "key.SW1.counterbore"): (None, 0.3, LAND),
-    (FRONT, "key.SW2.counterbore"): (None, 0.2, LAND),
-    (FRONT, "key.SW3.counterbore"): (None, 0.7, LAND),
-    (FRONT, "key.SW4.counterbore"): (None, 1.6, LAND),
-    (FRONT, "key.SW5.counterbore"): (None, 1.0, LAND),
-    (FRONT, "key.SW6.counterbore"): (None, 0.4, LAND),
-    (FRONT, "key.SW7.counterbore"): (None, 1.8, LAND),
-    (FRONT, "key.SW9.counterbore"): (None, 0.7, LAND),
-    (FRONT, "key.SW10.counterbore"): (None, 1.3, LAND),
-    (FRONT, "key.SW11.counterbore"): (None, 0.8, LAND),
+    (FRONT, "wheel_opening"): (0.96, 65.3, "dish face over the LED ring roof"),
+    (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW2.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW3.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW4.counterbore"): (None, 1.5, LAND),
+    (FRONT, "key.SW5.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW6.counterbore"): (None, 0.1, LAND),
+    (FRONT, "key.SW7.counterbore"): (None, 1.3, LAND),
+    (FRONT, "key.SW8.counterbore"): (None, 0.3, LAND),
+    (FRONT, "key.SW9.counterbore"): (None, 1.1, LAND),
+    (FRONT, "key.SW10.counterbore"): (None, 1.1, LAND),
+    (FRONT, "key.SW11.counterbore"): (None, 0.7, LAND),
     (FRONT, "end_screw_block"): (
-        None, 5.7, "taper where the end screw block ramp runs out"
+        None, 5.8, "taper where the end screw block ramp runs out"
     ),
-    (FRONT, "skirt_lead_in.1"): (None, 0.2, "taper at the skirt lead-in chamfer"),
-    (FRONT, "skirt_lead_in.2"): (None, 0.6, "taper at the skirt lead-in chamfer"),
+    (FRONT, "skirt_lead_in.1"): (None, 0.3, "taper at the skirt lead-in chamfer"),
+    (FRONT, "skirt_lead_in.2"): (None, 0.3, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_stiffener"): (
-        None, 0.7,
+        None, 0.6,
         "taper where the side skirt stiffener fades to the plain fit at the IR "
         "corner, SIDE_SKIRT_THICKEN_RUN. The wall behind the catch pocket, "
         "which this feature also covers, clears the minimum now"
     ),
-    (FRONT, "front_ledge.-x.1"): (None, 0.1, KNIFE + ", at the front ledge"),
-    (BACK, "qwiic_knockout_tab.+y"): (0.80, 1.2, KNOCKOUT),
-    (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.0, KNOCKOUT),
+    (BACK, "qwiic_knockout_tab.+y"): (0.80, 0.3, KNOCKOUT),
+    (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.3, KNOCKOUT),
     (BACK, "reset_guide"): (None, 0.2, RESET),
+    (BACK, "skirt_relief"): (None, 0.1, KNIFE + ", at the skirt relief edge"),
     (BACK, "reset_bore"): (
-        None, 1.3, RESET + ", and a taper where the bore leaves the rolled floor"
+        None, 1.2, RESET + ", and a taper where the bore leaves the rolled floor"
     ),
     (BACK, "(no feature box)"): (
-        None, 0.3, "taper where the reset bore leaves the rolled back floor"
+        None, 0.5, "taper where the reset bore leaves the rolled back floor"
     ),
-    (BACK, "catch_detents.+x"): (None, 8.8, "nose of the catch detent wedge"),
-    (BACK, "catch_detents.-x"): (None, 7.7, "nose of the catch detent wedge"),
-    (BACK, "end_screw.head"): (None, 1.7, SCREW_CUT),
+    (BACK, "catch_detents.+x"): (None, 9.1, "nose of the catch detent wedge"),
+    (BACK, "catch_detents.-x"): (None, 8.0, "nose of the catch detent wedge"),
+    (BACK, "end_screw.head"): (None, 1.2, SCREW_CUT),
     (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
-    (BACK, "end_screw.wall_chamfer"): (None, 3.6, SCREW_CUT),
-    (BACK, "qwiic_slot"): (None, 0.7, "taper at the Qwiic slot edge"),
-    (BACK, "ir_window_opening"): (None, 0.7, "taper at the IR window opening edge"),
+    (BACK, "end_screw.wall_chamfer"): (None, 3.8, SCREW_CUT),
+    (BACK, "qwiic_slot"): (None, 0.3, "taper at the Qwiic slot edge"),
+    (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
     (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
 }
 

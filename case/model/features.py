@@ -342,6 +342,12 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
         # The recessed channel's sections take their ceiling from helpers, so
         # those helpers' parameters move its box too.
         _entry(
+            "wheel_lip_relief",
+            "wheel_ring.wheel_lip_relief",
+            "cut",
+            wheel_ring.wheel_lip_relief(),
+        ),
+        _entry(
             "led_ring_channel",
             "wheel_ring.led_ring_channel",
             "cut",

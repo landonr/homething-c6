@@ -63,6 +63,18 @@ The arch sets where the outer rake ends, see led_ring_flat_outer_r(). The
 ceiling rises off the arch under the face: led_ring_ceiling_under() gives it.
 The FDM channel depth comes from this value."""
 
+LED_RING_FOOT = CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+"""The plane the channel's inner wall stands on.
+
+wheel_lip_relief() lifts the ceiling off the ENC1 lip out to
+led_ring_inner_r(), so the inner wall's foot is this high rather than
+CAVITY_FRONT. The mouth, the rake and the outer wall still start at
+CAVITY_FRONT, because the relief does not reach them.
+
+Where the channel is shallow, at the east and west sides, this leaves less
+height for the inner bevel. led_ring_bevel() shortens the leg there, the same
+way it already did against CAVITY_FRONT."""
+
 
 def led_ring_ceiling_at(x):
     """The recessed channel's arch at x: LED_RING_TOP on the crown line, on a
@@ -152,7 +164,7 @@ def led_ring_bevel(angle):
     def spare(leg):
         r = inner + leg
         top = led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)
-        return top - CAVITY_FRONT - params.LED_RING_INNER_FOOT_MIN - leg
+        return top - LED_RING_FOOT - params.LED_RING_INNER_FOOT_MIN - leg
 
     full = params.LED_RING_INNER_CHAMFER
     if spare(full) >= 0:
@@ -376,11 +388,11 @@ def _ring_angles():
 
 def led_ring_inner_foot():
     """Least upright inner wall that the recessed channel keeps above
-    CAVITY_FRONT, below the foot of its inner bevel, over all stations. The
+    LED_RING_FOOT, below the foot of its inner bevel, over all stations. The
     bevel hangs from the local ceiling and shortens where the channel is
     shallow, so this is LED_RING_INNER_FOOT_MIN at the east and west sides."""
     foot = min(led_ring_bevel_top(a) - led_ring_bevel(a) for a in _ring_angles())
-    return foot - CAVITY_FRONT
+    return foot - LED_RING_FOOT
 
 
 def _ring_section(angle):
@@ -451,6 +463,26 @@ def _recessed_ring_channel():
     # The clip's slab reaches past the loft at both ends, so no face of the one
     # lies on a face of the other.
     return _isect(channel, _slab(_channel_clip(), CAVITY_FRONT - 2, top + 1))
+
+
+def wheel_lip_relief():
+    """The ceiling lifted clear of the ENC1 lip, out to the ring channel's
+    inner wall.
+
+    A plain annular lift rather than a step in _ring_section(), because the
+    channel's inner wall is only LED_RING_INNER_FOOT_MIN tall at the east and
+    west sides. A section step there would invert. As a cut of its own it
+    merges with the channel wherever the two meet, and takes the whole wall
+    where the wall is shorter than the lift.
+
+    It reaches MERGE below CAVITY_FRONT so it breaks through the ceiling
+    rather than ending on it. The annulus holds nothing: the pad's bore is at
+    LIP_CLEAR_R, further out, and the lip is the only part under it.
+    """
+    x, y = board.wheel_center()
+    top = CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+    tool = _hole(x, y, 2 * led_ring_inner_r(), CAVITY_FRONT - MERGE, top)
+    return _isect(tool, _slab(_channel_clip(), CAVITY_FRONT - MERGE - 1, top + 1))
 
 
 def led_ring_channel(fdm=False):

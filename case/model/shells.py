@@ -66,7 +66,7 @@ from .stack import (
     face_body,
 )
 from .usb import round_usb_boot_rim, usb_boot_pocket, usb_slot
-from .wheel_ring import led_ring_channel, wheel_opening
+from .wheel_ring import led_ring_channel, wheel_lip_relief, wheel_opening
 
 
 def front_edge_round(fdm=False):
@@ -725,6 +725,7 @@ def front_shell(fdm=False):
         *side_catch_pockets(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(fdm),
+        wheel_lip_relief(),
         mic_bore(fdm),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess_cut(),

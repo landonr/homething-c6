@@ -253,10 +253,10 @@ def _ring_stack_sane():
     non-positive heights or standing in material and the pass dies in build123d
     instead of reporting what went wrong."""
     problems = []
-    if case.LED_RING_TOP <= case.CAVITY_FRONT + 0.1:
+    if case.LED_RING_TOP <= case.LED_RING_FOOT + 0.1:
         problems.append(
             f"LED_RING_ROOF leaves no channel: ceiling {case.LED_RING_TOP:.2f} "
-            f"against the cavity underside at {case.CAVITY_FRONT:.2f}"
+            f"against the channel floor at {case.LED_RING_FOOT:.2f}"
         )
     if case.ring_roof_left() <= ROOF_LEFT_MIN:
         problems.append(
@@ -375,7 +375,7 @@ def led_ring(front):
     wx, wy = board.wheel_center()
     r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
     r_out = case.led_ring_mouth_outer_r()
-    z0 = case.CAVITY_FRONT + 0.05
+    z0 = case.LED_RING_FOOT + 0.05
     per_sector = math.ceil(LED_RING_SAMPLES / RING_CROP_SECTORS)
     problems = []
     for first in range(0, LED_RING_SAMPLES, per_sector):
@@ -480,7 +480,7 @@ def inner_chamfer_is_cut(front, front_fdm):
     bearing's own bevel, measured up from its foot under led_ring_bevel_top().
 
     On the recessed front one more reading stands just under the top of the
-    upright foot, LED_RING_INNER_FOOT_MIN above CAVITY_FRONT. There the inner
+    upright foot, LED_RING_INNER_FOOT_MIN above LED_RING_FOOT. There the inner
     wall must still be at led_ring_inner_r(). A bevel that reaches lower than
     the model says moves the wall out at that height, and the reading catches
     it. The east and west bearings are where the foot is shortest.
@@ -518,7 +518,7 @@ def inner_chamfer_is_cut(front, front_fdm):
                     )
             if fdm:
                 continue
-            z = case.CAVITY_FRONT + params.LED_RING_INNER_FOOT_MIN - FOOT_PROBE_DROP
+            z = case.LED_RING_FOOT + params.LED_RING_INNER_FOOT_MIN - FOOT_PROBE_DROP
             width = _channel_width(crop, angle, z)
             if width is None:
                 problems.append(
@@ -604,11 +604,16 @@ def wheel_seat_clearance(front):
     problems = []
     profile = board.wheel_profile()
 
-    if profile.lip_z1 + params.WHEEL_CLEARANCE > case.CAVITY_FRONT:
+    # wheel_lip_relief() lifts the ceiling off the lip, so this reads the
+    # relief floor rather than CAVITY_FRONT. The pad web no longer sets the
+    # clearance over the lip, which is the whole point of the relief: see
+    # WHEEL_LIP_RELIEF and PAD_WEB_T.
+    lip_ceiling = case.CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+    if profile.lip_z1 + params.WHEEL_CLEARANCE > lip_ceiling:
         problems.append(
             f"lip top {profile.lip_z1:.3f} plus WHEEL_CLEARANCE reaches the "
-            f"ceiling underside at {case.CAVITY_FRONT:.2f}: the lip is not "
-            "clear of it, so the shell's opening has to answer for it too"
+            f"relieved ceiling at {lip_ceiling:.2f}: the lip is not clear of "
+            "it, so the shell's opening has to answer for it too"
         )
         return problems
 
@@ -618,13 +623,13 @@ def wheel_seat_clearance(front):
     # own boundary plane by the probe's own height so that no sample straddles
     # one. See the docstring: a straddling probe is half air at every radius and
     # the bisection it feeds cannot find anything.
-    z0 = case.CAVITY_FRONT + OPENING_PROBE_H
+    z0 = case.LED_RING_FOOT + OPENING_PROBE_H
     z1 = case.face_floor_at(wx + needed, wy) - OPENING_PROBE_H
     if z1 <= z0:
         problems.append(
             f"no shell left to seat the wheel against: the face floor over the "
             f"opening is at {case.face_floor_at(wx + needed, wy):.2f}, against a "
-            f"cavity ceiling underside at {case.CAVITY_FRONT:.2f}"
+            f"relieved ceiling at {case.LED_RING_FOOT:.2f}"
         )
         return problems
     # Bounded inside the ring channel's inner wall: past it the material is
@@ -719,13 +724,13 @@ def fdm_wheel_seat(front, fdm_front):
         case.FDM_FACE - params.FDM_WHEEL_OPENING_CHAMFER,
         case.face_floor_at(wx + fdm_r, wy),
     )
-    z0 = case.CAVITY_FRONT + OPENING_PROBE_H
+    z0 = case.LED_RING_FOOT + OPENING_PROBE_H
     z1 = ceiling - OPENING_PROBE_H
     if z1 <= z0:
         return [
             f"no bore left to measure: the FDM mouth chamfer and the recessed "
             f"front's own floor leave a ceiling at {ceiling:.2f}, against a "
-            f"cavity underside at {case.CAVITY_FRONT:.2f}"
+            f"relieved ceiling at {case.LED_RING_FOOT:.2f}"
         ]
     # The same bound wheel_seat_clearance() uses, for the same reason: past the
     # channel's inner wall the material stops being monotonic along the radius
@@ -755,7 +760,7 @@ def fdm_wheel_seat(front, fdm_front):
                 )
 
     r_web = (fdm_r + case.led_ring_inner_r()) / 2
-    z_lo, z_hi = case.CAVITY_FRONT + 0.05, case.LED_RING_TOP - 0.05
+    z_lo, z_hi = case.LED_RING_FOOT + 0.05, case.LED_RING_TOP - 0.05
     for i in range(FDM_WEB_SAMPLES):
         a = 2 * math.pi * i / FDM_WEB_SAMPLES
         web = Pos(

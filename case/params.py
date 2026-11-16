@@ -583,6 +583,33 @@ the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
 because this one is a visible line around the bezel rather than buried
 clearance, and the lip never transits the opening so nothing wider has to
 pass it."""
+
+WHEEL_LIP_RELIEF = 0.6
+"""How far the ceiling lifts clear of the ENC1 lip, measured off CAVITY_FRONT.
+
+The lip is the widest disc of the wheel, a static flange under the fixed
+bezel. It is wider than the wheel opening, so it can never pass up through the
+face, and the ceiling has to stay off it.
+
+Without this relief the ceiling sits flat at CAVITY_FRONT right across the
+lip, with 0.555 of air. CAVITY_FRONT is PAD_WEB_TOP, so that gap is the one
+thing that pins the pad web, and through it the counterbore lands. See
+PAD_WEB_T.
+
+The relief is a plain annular lift out to led_ring_inner_r(), so it merges
+into the LED ring channel's inner wall. Nothing seats in that annulus. The
+pad's own bore is at LIP_CLEAR_R, further out, and the only part under it is
+the lip.
+
+The size is what the roof above it can pay. A ray cast over the band finds the
+roof 1.781 at its thinnest, on the -X side at the ring arch's sag, so a lift
+of 0.781 would put it on the PA12 minimum. This value keeps 1.181 there and
+still funds the 0.506 that the lands want.
+
+The cost is light. The ring channel now opens into the wheel bore, so the ring
+glows into the WHEEL_OPENING_CLEARANCE gap round the bezel. Where the channel
+is shallow, at the east and west sides, the lift takes the whole inner wall.
+"""
 WHEEL_RIM_LEDGE = 1.0
 """Least seat the recess must leave around the wheel opening's bore, measured in
 plan from the bore wall out to the rim.
@@ -677,16 +704,21 @@ effect.
 The lift follows the face drop at x over the face drop at this distance, so
 it follows the superellipse and not x itself. A smaller value moves the crest
 toward the centreline and makes the climb to it steeper."""
-FACE_CROWN_OVER_WHEEL = 0.641
+FACE_CROWN_OVER_WHEEL = 0.241
 """How far the crown of the recessed front's face stands above the knob's
 measured top, WHEEL_TOP.
 
 It was 0.135. The counterbore lands then ran 0.54 to 0.75, well under the PA12
-minimum that PCBWay publishes for SLS, and no other lever reached them:
+minimum that PCBWay publishes for SLS. They needed 0.506 between them.
+
 COUNTERBORE_TOP is built off the cap flange, so lowering it thins the caps
-instead. This value carries all eleven lands over the minimum, at the cost of
-0.506 on the height of the whole front. The knob still stands 0.217 proud of
-the face at the wheel opening rim, where it stood 0.723 before.
+instead. A thinner PAD_WEB_T lowers COUNTERBORE_TOP by the same amount. The
+ENC1 lip used to pin the pad web. wheel_lip_relief() lifts the ceiling off the
+lip, so the web is free to come down. PAD_WEB_T pays 0.4 of the 0.506, and
+this value pays the remaining 0.106.
+
+So the whole front is 0.106 taller than it was, not 0.506. The knob stands
+0.617 proud of the face at the wheel opening rim, where it stood 0.723 before.
 
 SHELL_FRONT is WHEEL_TOP plus this value, so a wheel change still moves the
 face. The crown runs along the centreline over the knob, but the wheel dish
@@ -1113,7 +1145,31 @@ BATTERY_PLUG_CLEARANCE = 0.5
 # Button pad: one soft moulding, flat web with raised keys. The moulded pad has a
 # skirt on each lobe's outer edge. Held up against the ceiling by its own
 # plungers resting on the switches.
-PAD_WEB_T = 1.2
+PAD_WEB_T = 0.8
+"""Thickness of the pad's flat web, and so the height of the front cavity.
+
+CAVITY_FRONT is PAD_WEB_TOP. This value therefore sets the front shell's inner
+ceiling for the whole cavity, not for the keypad alone.
+
+It was 1.2, and the ENC1 lip held it there. The lip is a static flange under
+the fixed bezel, wider than the wheel opening. The flat ceiling over it left
+only 0.555 of air, which is less than two SLS tolerance bands.
+
+wheel_lip_relief() lifts the ceiling off the lip. That raises the gap to 1.155
+and frees this value. See WHEEL_LIP_RELIEF.
+
+Each 0.1 off this value adds 0.1 to every counterbore land, because
+COUNTERBORE_TOP is built off CAVITY_FRONT. At 0.8 the lands take 0.4 of the
+0.506 that they needed. FACE_CROWN_OVER_WHEEL carries the remaining 0.106, so
+the front is 0.4 shorter than the face alone would have made it.
+
+U3 holds it here. The expander is the tallest part that no pad lobe covers, so
+the ceiling must clear it directly. It keeps 0.605 of air at this value, about
+twice the tolerance that PCBWay publishes for SLS. The lip keeps 0.755.
+
+The value is four 0.2 mm layers. FDM_PAD_GROOVE_DEPTH is two, so the printed
+pad keeps its 0.4 hinge on whole layers.
+"""
 PAD_SKIRT_T = 1.0
 """Width of the moulded pad's skirt wall, measured inward from the lobe outer edge.
 
@@ -1132,7 +1188,7 @@ FDM_PAD_GROOVE_W = 1.2
 Wide so each printed key can flex with less
 drag from the neighbouring web while still clearing stems and cap seats.
 """
-FDM_PAD_GROOVE_DEPTH = 0.8
+FDM_PAD_GROOVE_DEPTH = 0.4
 """Depth cut from the keytop face only of the FDM pad web at an isolation relief.
 
 The plunger face stays flat, so the pad prints keytops up with clean supports

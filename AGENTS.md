@@ -76,8 +76,7 @@ The firmware files are in the repository root:
 
 - `c6remote.yaml` is the production ESPHome config. The `c6remote-test-*.yaml` files are bench configs.
 - `c6remote-factory.yaml` is the provisioning firmware for new units. It also runs the factory self-test. See "Firmware releases" and "Factory self-test".
-- `components/button_slots/` is a local ESPHome component. It carries the four headers that the assignment slots share, and it adds each one to `main.cpp` so the config lambdas can call them. It takes no options of its own. `button_config`, `ha_action`, and `ble_hid` auto-load it. See "Headers travel in a component".
-- `components/button_slots/ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
+- `ir_learning.h` holds the `IrCodeStore` and `IrUi` singletons for IR capture, playback, and receiver mode.
 - `components/button_config/` is a local ESPHome component. It serves the web page at the root URL `/` from `web_server_base`. The production config has no `web_server` entity page, so the component reserves lwIP sockets for page connections. The firmware serves only the shell. See "The device shell and the website bundle".
 - `components/button_config/shell_build.py` builds the shell and the bundle. `scripts/build-shell-bundle.py` writes the bundle into `site/app/`.
 - `components/ha_action/` is a local ESPHome component. It stores one Home Assistant action for each slot and sends it over the native API. See `RECEIVER.md`.
@@ -85,7 +84,7 @@ The firmware files are in the repository root:
 - `components/improv_ble/` is a local ESPHome component. It serves Improv over BLE from the NimBLE server of `ble_hid` and takes the same key as the ESPHome component. See "Wi-Fi provisioning".
 - `components/idle_sleep/` is a local ESPHome component for idle and hold deep sleep. It uses a `GPIO5` ext1 wake and a wake stub that latches the waking button.
 - `components/self_test/` is a local ESPHome component. It holds the factory self-test of `c6remote-factory.yaml`.
-- `components/button_slots/zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
+- `zigbee_learning.h` holds the `ZigbeeAssignmentManager` singleton for target storage, address resolve, and command send.
 - `RECEIVER.md` documents receiver mode, the assignment slots, and the web configurator.
 - `ZIGBEE.md` documents Zigbee pairing, the target kinds, and the send path. Read it before you change Zigbee behavior.
 - `scripts/tests/` holds `unittest` regression checks. Run `python3 -m unittest discover -s scripts/tests -t .` from the repository root.
@@ -99,38 +98,6 @@ The script reads the page out of the header for each request, so the preview can
 The fake state can drift. If you change the page or `ButtonConfig::handle_state_()`, update the state in the script in the same change.
 
 A missing field makes the preview show a state that the firmware never serves.
-
-### Headers travel in a component
-
-A user adopts the remote in their own ESPHome Device Builder, which holds no checkout of this repository. "Made for ESPHome" needs that build to work with no changes.
-
-ESPHome resolves an `includes:` path against the config directory of the user. As a result, a header in the repository root cannot reach an adopted build. A component directory does reach it, because ESPHome copies the full directory with the component.
-
-So `components/button_slots/` holds `ir_name.h`, `ir_learning.h`, `zigbee_learning.h`, and `hold_actions.h`. Do not add an `includes:` key to `c6remote.yaml`. Put a new shared header in this component.
-
-`HEADERS` in `components/button_slots/__init__.py` lists each header in include order. `to_code()` adds each one to `main.cpp`, so a config lambda can call the singletons.
-
-A component that includes one of these headers must give the full path, as in `#include "esphome/components/button_slots/ir_learning.h"`. That component must also auto-load `button_slots`, or the header is not in the build.
-
-`c6remote-factory.yaml` limits its external components to `idle_sleep` and `self_test`. Neither one includes these headers, so that config does not load `button_slots`.
-
-### The components come from GitHub
-
-`c6remote.yaml` takes its local components from `${components_source}`, which defaults to `github://landonr/homething-c6@develop`. ESPHome resolves a local component path against the config directory of the user, as it resolves an `includes:` path, so a `type: local` source cannot reach an adopted build.
-
-The ref must agree with the ref in `dashboard_import`. An adopted build takes the config from one and the components from the other, so a difference gives the user a mismatched pair.
-
-A build from a checkout takes the working tree instead:
-
-```bash
-esphome -s components_source components run c6remote.yaml
-```
-
-Use that override for every bench build. Without it, ESPHome clones the GitHub ref and builds those components, not the ones you just edited. `.github/workflows/firmware.yml` passes the same override, so a release holds the components of the commit that it tags.
-
-The git source also gives the build the full repository, so `scripts/build-shell-bundle.py` and `components/button_config/shell_build.py` find `site/app/` in the clone. `ROOT` in that script is two levels above the component directory, which is the clone root for an adopted build.
-
-`c6remote-factory.yaml` keeps a local source. An operator flashes that image over USB from a checkout, and no one adopts it.
 
 ### The device shell and the website bundle
 
@@ -421,7 +388,7 @@ git push origin fw-2026.11.0
 `.github/workflows/firmware.yml` runs on each push of a `fw-*` tag. The workflow does these steps:
 
 1. It makes sure that the tag agrees with the `fw-YYYY.M.P` format.
-2. It compiles `c6remote.yaml` with `-s fw_version <version>`, `-s status_led_count 6`, and `-s components_source components`. It also compiles `c6remote-factory.yaml` with `-s status_led_count 6`.
+2. It compiles `c6remote.yaml` with `-s fw_version <version>` and `-s status_led_count 6`. It also compiles `c6remote-factory.yaml` with `-s status_led_count 6`.
 3. It stops if the full OTA image is larger than the `app0` slot in `partitions.csv`.
 4. It writes the update manifest.
 5. It creates the `fw-<version>` release with `--latest=false`.

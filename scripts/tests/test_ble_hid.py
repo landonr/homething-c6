@@ -5,7 +5,6 @@ import unittest
 
 
 ROOT = Path(__file__).parents[2]
-SLOTS = ROOT / "components" / "button_slots"
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 CPP = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
@@ -137,7 +136,7 @@ class BleHidTest(unittest.TestCase):
     def test_wheels_tap_and_buttons_release_by_slot(self) -> None:
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG)
-        self.assertIn("hid_play_callback_(button, false)", (SLOTS / "ir_learning.h").read_text())
+        self.assertIn("hid_play_callback_(button, false)", (ROOT / "ir_learning.h").read_text())
         for slot in list(range(3, 17)) + [19, 20]:
             self.assertIn(f"{{id: button_release, slot: {slot}}}", CONFIG)
         # A press with an active hold taps on release, so the HID press and

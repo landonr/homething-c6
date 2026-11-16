@@ -13,7 +13,7 @@ from esphome.core import HexInt
 from .shell_build import (APP, BUNDLE_DIR, CURRENT_LOADER, SIGNATURE, loader_name, page,
                           shell_html)
 
-AUTO_LOAD = ["web_server_base", "button_slots"]
+AUTO_LOAD = ["web_server_base"]
 DEPENDENCIES = ["network"]
 
 CONF_IDLE_SLEEP_ID = "idle_sleep_id"

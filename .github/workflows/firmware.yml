@@ -84,10 +84,8 @@ jobs:
           marker="${RUNNER_TEMP}/full.marker"
           touch "$marker"
           # Releases are for V3 boards with six status LEDs. The config default
-          # of four is for the V2 bench units. The components come from the
-          # checkout at this tag, not from the GitHub ref that an adopted build
-          # uses, so the release holds the components of the commit it names.
-          esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 -s components_source components compile c6remote.yaml
+          # of four is for the V2 bench units.
+          esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 compile c6remote.yaml
           for name in factory ota; do
             mapfile -t found < <(find .esphome/build -type f -name "firmware.${name}.bin" -newer "$marker")
             if (( ${#found[@]} != 1 )); then

@@ -5,9 +5,8 @@ import unittest
 
 
 ROOT = Path(__file__).parents[2]
-SLOTS = ROOT / "components" / "button_slots"
 CONFIG = (ROOT / "c6remote.yaml").read_text()
-HEADER = (SLOTS / "ir_learning.h").read_text()
+HEADER = (ROOT / "ir_learning.h").read_text()
 
 
 def hold_tick_step() -> str:
@@ -162,7 +161,7 @@ class IrLearningTest(unittest.TestCase):
         clean = section(HEADER, "bool set_name(uint8_t button, const char *text) {", "\n  }")
         # One rule for the store, the page check, and the set_ir_name check.
         self.assertIn("if (!ir_name::keeps(value))\n        continue;", clean)
-        rule = (SLOTS / "ir_name.h").read_text()
+        rule = (ROOT / "ir_name.h").read_text()
         self.assertIn("inline bool keeps(char value) { return value >= 0x20 && value <= 0x7E && value != '\"' "
                       "&& value != '\\\\'; }", rule)
         self.assertIn('#include "ir_name.h"', HEADER)

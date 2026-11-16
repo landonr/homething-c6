@@ -10,11 +10,6 @@ substitutions:
   # Every info and debug string below this level is compiled out, which the app
   # slot needs. Raise it on the bench with `-s log_level DEBUG`.
   log_level: WARN
-  # A Device Builder that adopts this config holds no checkout of this
-  # repository, so the local components come from GitHub at the ref that
-  # dashboard_import names. A build from a checkout takes the working tree
-  # instead with `esphome -s components_source components run c6remote.yaml`.
-  components_source: github://landonr/homething-c6@develop
 
 esphome:
   name: ${device_name}
@@ -27,6 +22,11 @@ esphome:
   project:
     name: landonr.homething-c6
     version: ${fw_version}
+  includes:
+    - ir_name.h
+    - ir_learning.h
+    - zigbee_learning.h
+    - hold_actions.h
   on_boot:
     # Ahead of every component, so the Zigbee component and the API server can
     # be held down before their own setup runs. A failed component never starts,
@@ -149,7 +149,9 @@ esp32:
       CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA: "n"
 
 external_components:
-  - source: ${components_source}
+  - source:
+      type: local
+      path: components
   - source: github://luar123/zigbee_esphome@6cb5480cd2499faf9afb825754fa46b084296cb8
     components: [zigbee]
 

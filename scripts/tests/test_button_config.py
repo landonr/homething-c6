@@ -1987,7 +1987,11 @@ class PageTest(unittest.TestCase):
         self.assertIn('"--is-ancestor"', INIT)
         self.assertIn("%cI", INIT)
         self.assertIn('"--untracked-files=no"', INIT)
-        self.assertIn('return "unknown"', INIT)
+        # A shallow clone has no history to count, so an adopted build reports
+        # the ref that its external source pinned instead of "unknown".
+        self.assertIn("return source_ref()", INIT)
+        self.assertIn("from esphome.components.external_components import get_sources", INIT)
+        self.assertIn("here.is_relative_to(Path(source.components_dir).resolve())", INIT)
         self.assertIn("void set_firmware_version(const char *version)", HEADER)
         self.assertIn('R"({"firmware":")"', section(CPP, "void ButtonConfig::handle_state_", "\n}\n"))
         self.assertIn('"  Firmware: %s"', section(CPP, "void ButtonConfig::dump_config()", "\n}\n"))
@@ -2469,9 +2473,27 @@ class FirmwareVersionTests(unittest.TestCase):
         self.repo = Path(tmp.name)
         self.git("init", "-q")
         self.n = 0
+        self.sources: list[types.SimpleNamespace] = []
         tree = ast.parse(INIT)
-        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "firmware_version")
-        self.code = compile(ast.Module(body=[func], type_ignores=[]), "firmware_version", "exec")
+        wanted = ["source_ref", "firmware_version"]
+        funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+        self.assertEqual([f.name for f in funcs], wanted)
+        self.code = compile(ast.Module(body=funcs, type_ignores=[]), "firmware_version", "exec")
+
+    def source(self, components_dir: Path, ref: str | None) -> types.SimpleNamespace:
+        return types.SimpleNamespace(components_dir=components_dir, ref=ref)
+
+    def external_components(self) -> dict[str, types.ModuleType]:
+        """Stub the ESPHome module that names the source of each component."""
+        module = types.ModuleType("esphome.components.external_components")
+        module.get_sources = lambda: self.sources
+        components = types.ModuleType("esphome.components")
+        components.external_components = module
+        return {
+            "esphome": types.ModuleType("esphome"),
+            "esphome.components": components,
+            "esphome.components.external_components": module,
+        }
 
     def git(self, *args: str, date: str | None = None) -> str:
         env = dict(os.environ)
@@ -2497,7 +2519,8 @@ class FirmwareVersionTests(unittest.TestCase):
             "VERSION_BASE": base,
         }
         exec(self.code, ns)
-        return ns["firmware_version"]()
+        with mock.patch.dict(sys.modules, self.external_components()):
+            return ns["firmware_version"]()
 
     def test_root_commit_base_is_patch_zero(self) -> None:
         base = self.commit("2026-10-01T10:00:00-07:00")
@@ -2551,6 +2574,38 @@ class FirmwareVersionTests(unittest.TestCase):
     def test_non_git_directory_is_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as plain:
             self.assertEqual(self.version("0" * 40, Path(plain)), "unknown")
+
+    def test_a_clone_with_no_history_reports_the_pinned_ref(self) -> None:
+        """ESPHome clones an external source with --depth=1, so an adopted build
+        holds one commit and the base is not in it. The ref that the config
+        pinned is then the only name the build has for its own code."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "develop")]
+        self.assertEqual(self.version("0" * 40), "develop")
+
+    def test_a_pinned_release_tag_is_the_reported_version(self) -> None:
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "fw-2026.11.0")]
+        self.assertEqual(self.version("0" * 40), "fw-2026.11.0")
+
+    def test_a_checkout_counts_the_patch_although_a_ref_is_pinned(self) -> None:
+        """The git count wins, so a build from a checkout keeps its own version."""
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "develop")]
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_a_source_with_no_ref_is_unknown(self) -> None:
+        """A local source names a path, not a ref."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", None)]
+        self.assertEqual(self.version("0" * 40), "unknown")
+
+    def test_the_ref_of_another_source_is_not_this_version(self) -> None:
+        """The config also pins the zigbee source, so the match is on the
+        directory that holds this file."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "zigbee" / "components", "6cb5480")]
+        self.assertEqual(self.version("0" * 40), "unknown")
 
 
 if __name__ == "__main__":

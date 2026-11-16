@@ -69,8 +69,29 @@ CONFIG_SCHEMA = cv.All(
 VERSION_BASE = "dc560eec464c05707991582992bff0d27b0d960b"
 
 
+def source_ref():
+    """Return the ref that an adopted build took this component from.
+
+    ESPHome clones an external source with `--depth=1`, so the clone holds one
+    commit and no history to count a patch in. The ref that the config pinned
+    is the only name such a build has for its own code.
+    """
+    try:
+        from esphome.components.external_components import get_sources
+    except ImportError:
+        return "unknown"
+    here = Path(__file__).resolve()
+    for source in get_sources():
+        if source.ref and here.is_relative_to(Path(source.components_dir).resolve()):
+            return source.ref
+    return "unknown"
+
+
 def firmware_version():
-    """Return YYYY.M.PATCH, plus -dirty for uncommitted tracked changes."""
+    """Return YYYY.M.PATCH, plus -dirty for uncommitted tracked changes.
+
+    A build that has no history to count falls back to the source ref.
+    """
     root = Path(__file__).parents[2]
     base = VERSION_BASE
 
@@ -88,10 +109,10 @@ def firmware_version():
         dirty = git("status", "--porcelain", "--untracked-files=no")
         year, month = (int(part) for part in head[:7].split("-"))
     except (OSError, ValueError, subprocess.SubprocessError):
-        return "unknown"
+        return source_ref()
     patch = sum(1 for date in dates if date[:7] == head[:7]) - 1
     if patch < 0:
-        return "unknown"
+        return source_ref()
     return f"{year}.{month}.{patch}" + ("-dirty" if dirty else "")
 
 

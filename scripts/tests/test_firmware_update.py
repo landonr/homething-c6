@@ -279,7 +279,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn(r"^fw-[0-9]{4}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$", FIRMWARE_WORKFLOW)
         # Releases are for V3 boards, which have six status LEDs. The bench default stays at four.
         self.assertIn('esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 '
-                      'compile c6remote.yaml', FIRMWARE_WORKFLOW)
+                      '-s components_source components compile c6remote.yaml', FIRMWARE_WORKFLOW)
         self.assertEqual(substitution(CONFIG, "status_led_count"), '"4"')
         self.assertIn("esphome -s status_led_count 6 compile c6remote-factory.yaml", FIRMWARE_WORKFLOW)
         # The remote tracks the ESPHome development branch, so the workflow

@@ -7,7 +7,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/string_ref.h"
 
-#include "ir_learning.h"
+#include "esphome/components/button_slots/ir_learning.h"
 
 #include <algorithm>
 #include <cstdio>

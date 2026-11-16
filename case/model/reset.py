@@ -15,7 +15,10 @@ def reset_guide():
     x, y, z = board.reset_actuator()
     diameter = params.RESET_BORE_D + 2 * params.RESET_GUIDE_WALL
     start = SHELL_BACK
-    stop = min(z - params.RESET_GUIDE_GAP, SKIRT_BOTTOM - params.SKIRT_FIT)
+    stop = min(
+        z - params.RESET_GUIDE_GAP,
+        SKIRT_BOTTOM - params.SKIRT_FIT - params.RESET_GUIDE_TOP_DROP,
+    )
     wall_y = board.board_profile().bounding_box().min.Y - params.BOARD_FIT - MERGE
     web = Pos(x, (wall_y + y) / 2, (start + stop) / 2) * Box(
         diameter, y - wall_y, stop - start

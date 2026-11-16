@@ -142,10 +142,16 @@ usual M2 insert OD."""
 SKIRT_H = 4.0
 """How far the skirt drops below the board top. Raising the seam grows the
 skirt upward without moving its lower edge into the support ledges or screw."""
-SHELL_SEAM_RISE = 1.5
+SHELL_SEAM_RISE = 1.65
 """Lift the back lap and visible seam above the board top. The blind catch
-pocket keeps about 1.15 of skirt above it and continuous wall behind it. The
-support ledges and board mounting heights do not change."""
+pocket keeps about 1.05 of skirt above it and continuous wall behind it. The
+support ledges and board mounting heights do not change.
+
+The band this opens, from the support relief top to the seam, carries the
+lower land, the pocket and the upper land. Both lands must clear the fab
+minimum and the detent sets a floor under the pocket, so at 1.5 the band held
+all three only with a lower land of 0.6. This value buys the lower land its
+own 1.05 and still leaves the detent room above its tip."""
 SKIRT_T = 1.5
 """The back's lap over the skirt. Whatever is left of WALL after this and the fit
 is the skirt, so this one number splits the wall between the two shells."""
@@ -169,12 +175,13 @@ SEAM_SHADOW_H = 0.6
 """How far the seam shadow groove runs down the outer wall from the seam. A
 taller groove gives a wider shadow line. The groove must stay above every
 opening and detent in the back wall, or it cuts into them."""
-SIDE_SKIRT_THICKEN = 0.20
+SIDE_SKIRT_THICKEN = 0.25
 """Extra inward wall on the front skirt, round the grip end and its two corners
-and up both long runs. The nominal 0.5 board fit still leaves 0.3 at the board
-edge. This stiffens the printed seam without a change to either shell's
-visible outer wall or to the back lap. It runs up to the cavity ceiling, so the
-front's inner wall has no step at the seam.
+and up both long runs. The nominal 0.5 board fit still leaves 0.25 at the board
+edge. It also sets the wall behind the side catch pocket, which is this skirt
+less SIDE_CATCH_POCKET_DEPTH. This stiffens the printed seam without a change
+to either shell's visible outer wall or to the back lap. It runs up to the
+cavity ceiling, so the front's inner wall has no step at the seam.
 
 The IR end keeps the plain fit for two reasons. The catch windows' reach is
 sized off BOARD_FIT, so it passes a thicker skirt's inner face by only 0.1.
@@ -193,14 +200,22 @@ pocket under it without recording an absolute board coordinate."""
 SIDE_CATCH_W = 8.0
 """Length of each hidden side catch along the seam. A short land limits the
 amount of PLA that must flex during the final fold closed."""
-SIDE_CATCH_H = 1.2
+SIDE_CATCH_H = 1.0
 """Pocket height in the clear band above the front skirt's support relief and
-below the raised seam. The pocket does not cut the full-length support runs."""
-SIDE_CATCH_LOWER_LAND = 0.6
+below the raised seam. The pocket does not cut the full-length support runs.
+
+The detent sets the floor. Its upper flank meets the skirt face a fixed
+distance above the pocket bottom, and SIDE_CATCH_FIT must fit above that, so
+this value cannot go under about 0.85. The rest of the band goes to the two
+lands, which both have to clear the fab minimum."""
+SIDE_CATCH_LOWER_LAND = 1.05
 """Height of skirt between the top of the built support relief and the pocket
 bottom. The detent release flank bears on this lower lip. The pocket does not
-need to be central in the band. It is as low as a printable lip below it
-allows, so the upper land stays long."""
+need to be central in the band.
+
+A ray cast down from the pocket floor crosses this lip to the support relief
+below, so the fab pass reads it as a wall and it must clear the process
+minimum. It was 0.6 while the band had no room for more."""
 SIDE_CATCH_R = 0.45
 """Round the pocket corners to avoid sharp stress risers in the printed skirt."""
 SIDE_CATCH_POCKET_DEPTH = 0.40
@@ -216,7 +231,7 @@ SIDE_CATCH_WALL_MIN = 1.0
 of replacing the through-window: a shallow detent must not sever the skirt."""
 SIDE_CATCH_UPPER_LAND_MIN = 1.0
 """Minimum height of intact skirt above the pocket, checked on the built
-shell. SIDE_CATCH_LOWER_LAND leaves about 1.15 nominally above its top edge.
+shell. SIDE_CATCH_LOWER_LAND leaves about 1.05 nominally above its top edge.
 If the pocket leaves less, side_catch_bottom() fails."""
 SIDE_CATCH_D = 0.65
 """How far each back-lap detent projects inward. It crosses the 0.30 shell fit
@@ -354,11 +369,12 @@ stop between the two shells and the whole case bows out at that end, which is
 what a printed one did. The gap is 0.2 more than SKIRT_FIT. A smaller gap
 brings the pilot closer to where the ramp starts, and this lets the screw sit
 higher."""
-END_SCREW_BLOCK_D = 4.2
+END_SCREW_BLOCK_D = 4.3
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
-1.0, so the pilot ends inside it and the thread is never drilled out the back
+1.1, so the pilot ends inside it and the thread is never drilled out the back
 of its own boss. The plus was 0.5, which left a cap under the PA12 minimum that
-PCBWay publishes for SLS.
+PCBWay publishes for SLS. At 1.0 the cap measured exactly the minimum, which
+the fab pass reads as a hair under, so the plus carries its own margin.
 
 The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
@@ -661,9 +677,16 @@ effect.
 The lift follows the face drop at x over the face drop at this distance, so
 it follows the superellipse and not x itself. A smaller value moves the crest
 toward the centreline and makes the climb to it steeper."""
-FACE_CROWN_OVER_WHEEL = 0.135
+FACE_CROWN_OVER_WHEEL = 0.641
 """How far the crown of the recessed front's face stands above the knob's
 measured top, WHEEL_TOP.
+
+It was 0.135. The counterbore lands then ran 0.54 to 0.75, well under the PA12
+minimum that PCBWay publishes for SLS, and no other lever reached them:
+COUNTERBORE_TOP is built off the cap flange, so lowering it thins the caps
+instead. This value carries all eleven lands over the minimum, at the cost of
+0.506 on the height of the whole front. The knob still stands 0.217 proud of
+the face at the wheel opening rim, where it stood 0.723 before.
 
 SHELL_FRONT is WHEEL_TOP plus this value, so a wheel change still moves the
 face. The crown runs along the centreline over the knob, but the wheel dish
@@ -1034,12 +1057,29 @@ BACK_STL_ANGULAR_TOLERANCE = 0.06
 """Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
-RESET_GUIDE_WALL = 1.0
-"""Guide wall thickness at the PA12 minimum that PCBWay publishes for SLS. It
-was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no longer
-applies to a printed shell."""
+RESET_GUIDE_WALL = 1.05
+"""Guide wall thickness, just over the PA12 minimum that PCBWay publishes for
+SLS. It was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no
+longer applies to a printed shell. At exactly 1.0 the whole tube measured the
+minimum, which the fab pass reads as a hair under."""
 RESET_GUIDE_GAP = 0.6
 """Minimum gap between the guide tip and the RESET contact face."""
+RESET_GUIDE_TOP_DROP = 1.8
+"""How far the guide stops below the front skirt, on top of SKIRT_FIT.
+
+The guide tube sits about 2 mm off the case centreline, so near its top the
+rolled back form shaves the outboard side alone. At the full height the
+inboard wall measured RESET_GUIDE_WALL and the outboard wall fell to 0.605
+over the last 1.5 mm. A fatter tube does not help, because the form cuts at a
+fixed place whatever the tube's diameter. This value ends the tube below that
+band, so every remaining wall is the full thickness.
+
+The cost is guide length. The clip leaves the bore about 2.6 mm under the
+RESET contact rather than 1.1 mm. The bore holds the clip's angle over roughly
+9 mm before that, so the tip lands within about 0.2 mm of where it would have.
+
+The value is measured off the built form, not derived from it. If the back
+contour moves, the fab pass flags the guide again."""
 QWIIC_CLEARANCE = 0.5
 """Clearance around the Qwiic housing for a plug approach from the left side."""
 QWIIC_CORNER_CHAMFER = 0.3

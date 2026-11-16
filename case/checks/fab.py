@@ -68,21 +68,21 @@ AREA_SLACK = 1.0
 FRONT, BACK = PARTS
 
 LAND = (
-    "counterbore land under the dish, LAND_FLOOR_MIN in checks/keypad.py. The face hole "
-    "lead-in tapers to the hole wall"
+    "taper where the face hole lead-in runs out into the counterbore land. The "
+    "land itself clears the minimum now: FACE_CROWN_OVER_WHEEL carries all "
+    "eleven over it, the thinnest being SW4 at 1.05"
 )
-FACE_HOLE = "the counterbore land, read from the face hole"
-POCKET_LIP = "lip under the side catch pocket, SIDE_CATCH_LOWER_LAND"
-PILOT = "cap over the end screw pilot tip, END_SCREW_BLOCK_D less END_SCREW_PILOT_DEPTH"
 KNOCKOUT = (
     "Qwiic breakaway cover. QWIIC_KNOCKOUT_T carries the panel over the PA12 "
     "minimum, but each bridge is only QWIIC_KNOCKOUT_TAB_W wide, and widening "
     "it is what stops the cover breaking out at all"
 )
 RESET = (
-    "reset guide tube. RESET_GUIDE_WALL sets its wall and raising it did not "
-    "move this reading, so the thinnest point is elsewhere, most likely where "
-    "the blank meets the rolled back form"
+    "taper at the reset guide. The tube measures RESET_GUIDE_WALL on both "
+    "sides now. The thin reading was never the wall: the rolled back form "
+    "shaved the outboard side over the top 1.5 mm, because the tube stands "
+    "about 2 mm off the case centreline. RESET_GUIDE_TOP_DROP ends the tube "
+    "below that band"
 )
 SCREW_CUT = "taper where the end screw cuts meet"
 KNIFE = (
@@ -93,10 +93,13 @@ KNIFE = (
 
 ACCEPTED = {
     (FRONT, "keypad_recess"): (
-        0.55, 338.4, "dish face over the LED ring roof and the counterbore lands"
+        0.85, 109.5,
+        "dish face over the LED ring roof. It read 0.55 over 338.4 while the "
+        "counterbore lands were thin too, and raising the face took the lands "
+        "out of it"
     ),
     (FRONT, "led_ring_channel"): (
-        0.85, 224.7,
+        0.85, 172.7,
         "the channel's thin side, not its roof. The roof runs 1.50 to 1.68, "
         "because the arch sits below the face less LED_RING_FACE_ROOF all the "
         "way round. Raising LED_RING_WALL to 1.25 thickened the inner web and "
@@ -104,65 +107,46 @@ ACCEPTED = {
         "to the east and west chords, where the channel runs flush into the "
         "cavity wall and neither param reaches it"
     ),
-    (FRONT, "wheel_opening"): (0.94, 88.7, "dish face over the LED ring roof"),
-    (FRONT, "key.SW1.counterbore"): (0.60, 28.4, LAND),
-    (FRONT, "key.SW2.counterbore"): (0.60, 28.7, LAND),
-    (FRONT, "key.SW3.counterbore"): (0.58, 28.5, LAND),
-    (FRONT, "key.SW4.counterbore"): (0.54, 28.0, LAND),
-    (FRONT, "key.SW5.counterbore"): (0.58, 26.1, LAND),
-    (FRONT, "key.SW6.counterbore"): (0.76, 27.1, LAND),
-    (FRONT, "key.SW7.counterbore"): (0.72, 25.4, LAND),
-    (FRONT, "key.SW8.counterbore"): (0.76, 22.2, LAND),
-    (FRONT, "key.SW9.counterbore"): (0.58, 25.7, LAND),
-    (FRONT, "key.SW10.counterbore"): (0.55, 24.9, LAND),
-    (FRONT, "key.SW11.counterbore"): (0.59, 26.7, LAND),
-    (FRONT, "key.SW1.face_hole"): (0.72, 7.2, FACE_HOLE),
-    (FRONT, "key.SW2.face_hole"): (0.71, 7.9, FACE_HOLE),
-    (FRONT, "key.SW3.face_hole"): (0.68, 8.4, FACE_HOLE),
-    (FRONT, "key.SW4.face_hole"): (0.66, 10.3, FACE_HOLE),
-    (FRONT, "key.SW5.face_hole"): (0.67, 9.8, FACE_HOLE),
-    (FRONT, "key.SW6.face_hole"): (0.76, 9.3, FACE_HOLE),
-    (FRONT, "key.SW7.face_hole"): (0.72, 11.4, FACE_HOLE),
-    (FRONT, "key.SW8.face_hole"): (0.76, 4.7, FACE_HOLE),
-    (FRONT, "key.SW9.face_hole"): (0.67, 7.7, FACE_HOLE),
-    (FRONT, "key.SW10.face_hole"): (0.67, 10.2, FACE_HOLE),
-    (FRONT, "key.SW11.face_hole"): (0.67, 8.2, FACE_HOLE),
-    (FRONT, "support_runs.+x.1"): (0.61, 3.3, POCKET_LIP),
-    (FRONT, "support_runs.-x.1"): (0.61, 3.8, POCKET_LIP),
-    (FRONT, "side_catch_pockets.+x"): (0.65, 9.9, POCKET_LIP),
-    (FRONT, "side_catch_pockets.-x"): (0.66, 9.7, POCKET_LIP),
-    (FRONT, "end_screw_pilot"): (1.00, 2.5, PILOT),
+    (FRONT, "wheel_opening"): (0.98, 60.6, "dish face over the LED ring roof"),
+    (FRONT, "key.SW1.counterbore"): (None, 0.3, LAND),
+    (FRONT, "key.SW2.counterbore"): (None, 0.2, LAND),
+    (FRONT, "key.SW3.counterbore"): (None, 0.7, LAND),
+    (FRONT, "key.SW4.counterbore"): (None, 1.6, LAND),
+    (FRONT, "key.SW5.counterbore"): (None, 1.0, LAND),
+    (FRONT, "key.SW6.counterbore"): (None, 0.4, LAND),
+    (FRONT, "key.SW7.counterbore"): (None, 1.8, LAND),
+    (FRONT, "key.SW9.counterbore"): (None, 0.7, LAND),
+    (FRONT, "key.SW10.counterbore"): (None, 1.3, LAND),
+    (FRONT, "key.SW11.counterbore"): (None, 0.8, LAND),
     (FRONT, "end_screw_block"): (
-        1.00, 7.8, PILOT + ", and a taper where the block ramp runs out"
+        None, 5.7, "taper where the end screw block ramp runs out"
     ),
-    (FRONT, "skirt_lead_in.1"): (None, 0.4, "taper at the skirt lead-in chamfer"),
-    (FRONT, "skirt_lead_in.2"): (None, 0.2, "taper at the skirt lead-in chamfer"),
+    (FRONT, "skirt_lead_in.1"): (None, 0.2, "taper at the skirt lead-in chamfer"),
+    (FRONT, "skirt_lead_in.2"): (None, 0.6, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_stiffener"): (
-        1.00, 14.2,
-        "wall behind the side catch pocket, the thickened skirt less "
-        "SIDE_CATCH_POCKET_DEPTH. SIDE_CATCH_WALL_MIN holds it at exactly 1.00, "
-        "so it reads just under the PA12 minimum"
+        None, 0.7,
+        "taper where the side skirt stiffener fades to the plain fit at the IR "
+        "corner, SIDE_SKIRT_THICKEN_RUN. The wall behind the catch pocket, "
+        "which this feature also covers, clears the minimum now"
     ),
-    (BACK, "qwiic_knockout_tab.+y"): (0.80, 1.4, KNOCKOUT),
-    (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.7, KNOCKOUT),
-    (BACK, "reset_guide"): (0.61, 51.7, RESET),
+    (FRONT, "front_ledge.-x.1"): (None, 0.1, KNIFE + ", at the front ledge"),
+    (BACK, "qwiic_knockout_tab.+y"): (0.80, 1.2, KNOCKOUT),
+    (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.0, KNOCKOUT),
+    (BACK, "reset_guide"): (None, 0.2, RESET),
     (BACK, "reset_bore"): (
-        0.62, 22.8, RESET + ", and a taper where the bore leaves the rolled floor"
+        None, 1.3, RESET + ", and a taper where the bore leaves the rolled floor"
     ),
     (BACK, "(no feature box)"): (
-        None, 0.7, "taper where the reset bore leaves the rolled back floor"
+        None, 0.3, "taper where the reset bore leaves the rolled back floor"
     ),
-    (BACK, "catch_detents.+x"): (None, 8.1, "nose of the catch detent wedge"),
-    (BACK, "catch_detents.-x"): (None, 7.9, "nose of the catch detent wedge"),
-    (BACK, "end_screw.head"): (None, 1.5, SCREW_CUT),
-    (BACK, "end_screw.clearance"): (None, 0.8, SCREW_CUT),
-    (BACK, "end_screw.wall_chamfer"): (None, 4.0, SCREW_CUT),
-    (BACK, "qwiic_slot"): (None, 0.6, "taper at the Qwiic slot edge"),
-    (BACK, "ir_window_opening"): (None, 0.6, "taper at the IR window opening edge"),
-    (BACK, "emitter_bore"): (None, 1.8, KNIFE + ", at the emitter bore edge"),
-    (BACK, "skirt_relief"): (None, 0.4, KNIFE + ", at the skirt relief edge"),
-    (BACK, "side_catch_detents.+x"): (None, 0.4, KNIFE + ", at the side catch detent"),
-    (BACK, "usb_boot_pocket"): (None, 0.4, KNIFE + ", at the USB boot pocket mouth"),
+    (BACK, "catch_detents.+x"): (None, 8.8, "nose of the catch detent wedge"),
+    (BACK, "catch_detents.-x"): (None, 7.7, "nose of the catch detent wedge"),
+    (BACK, "end_screw.head"): (None, 1.7, SCREW_CUT),
+    (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
+    (BACK, "end_screw.wall_chamfer"): (None, 3.6, SCREW_CUT),
+    (BACK, "qwiic_slot"): (None, 0.7, "taper at the Qwiic slot edge"),
+    (BACK, "ir_window_opening"): (None, 0.7, "taper at the IR window opening edge"),
+    (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
 }
 
 FIRST_REACH = 4.0

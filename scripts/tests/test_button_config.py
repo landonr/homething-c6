@@ -2357,8 +2357,9 @@ class WiringTest(unittest.TestCase):
     def test_the_config_loads_the_local_component(self) -> None:
         """The web page owns the root URL, so the stock entity page must stay out."""
         block = section(CONFIG, "external_components:", "\nlogger:")
-        self.assertIn("type: local", block)
-        self.assertIn("path: components", block)
+        # A Device Builder that adopts this config has no components directory,
+        # so the source is a substitution that defaults to GitHub.
+        self.assertIn("- source: ${components_source}", block)
         self.assertRegex(CONFIG, r"\nbutton_config:")
         self.assertNotRegex(CONFIG, r"(?m)^web_server:")
 

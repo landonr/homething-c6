@@ -114,6 +114,24 @@ A component that includes one of these headers must give the full path, as in `#
 
 `c6remote-factory.yaml` limits its external components to `idle_sleep` and `self_test`. Neither one includes these headers, so that config does not load `button_slots`.
 
+### The components come from GitHub
+
+`c6remote.yaml` takes its local components from `${components_source}`, which defaults to `github://landonr/homething-c6@develop`. ESPHome resolves a local component path against the config directory of the user, as it resolves an `includes:` path, so a `type: local` source cannot reach an adopted build.
+
+The ref must agree with the ref in `dashboard_import`. An adopted build takes the config from one and the components from the other, so a difference gives the user a mismatched pair.
+
+A build from a checkout takes the working tree instead:
+
+```bash
+esphome -s components_source components run c6remote.yaml
+```
+
+Use that override for every bench build. Without it, ESPHome clones the GitHub ref and builds those components, not the ones you just edited. `.github/workflows/firmware.yml` passes the same override, so a release holds the components of the commit that it tags.
+
+The git source also gives the build the full repository, so `scripts/build-shell-bundle.py` and `components/button_config/shell_build.py` find `site/app/` in the clone. `ROOT` in that script is two levels above the component directory, which is the clone root for an adopted build.
+
+`c6remote-factory.yaml` keeps a local source. An operator flashes that image over USB from a checkout, and no one adopts it.
+
 ### The device shell and the website bundle
 
 `button_config` takes a `page` option with two values.
@@ -403,7 +421,7 @@ git push origin fw-2026.11.0
 `.github/workflows/firmware.yml` runs on each push of a `fw-*` tag. The workflow does these steps:
 
 1. It makes sure that the tag agrees with the `fw-YYYY.M.P` format.
-2. It compiles `c6remote.yaml` with `-s fw_version <version>` and `-s status_led_count 6`. It also compiles `c6remote-factory.yaml` with `-s status_led_count 6`.
+2. It compiles `c6remote.yaml` with `-s fw_version <version>`, `-s status_led_count 6`, and `-s components_source components`. It also compiles `c6remote-factory.yaml` with `-s status_led_count 6`.
 3. It stops if the full OTA image is larger than the `app0` slot in `partitions.csv`.
 4. It writes the update manifest.
 5. It creates the `fw-<version>` release with `--latest=false`.

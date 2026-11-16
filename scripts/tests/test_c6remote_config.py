@@ -1063,6 +1063,40 @@ class AdoptionTest(unittest.TestCase):
                 init = (ROOT / "components" / name / "__init__.py").read_text()
                 self.assertRegex(init, r"(?m)^AUTO_LOAD = \[[^\]]*\"button_slots\"")
 
+    def test_the_local_components_come_from_github_by_default(self) -> None:
+        config = CONFIG.read_text()
+        source = re.search(
+            r"(?m)^  components_source: (\S+)$", config
+        )
+        self.assertIsNotNone(source, "c6remote.yaml declares no components_source")
+        self.assertRegex(source.group(1), r"^github://landonr/homething-c6@")
+        # ESPHome resolves a local path against the config directory of the
+        # user, which holds no components directory in a Device Builder.
+        block = top_level_block(config, "external_components")
+        self.assertNotIn("type: local", block)
+        self.assertIn("- source: ${components_source}", block)
+
+    def test_the_component_ref_agrees_with_the_package_ref(self) -> None:
+        config = CONFIG.read_text()
+        components = re.search(r"(?m)^  components_source: \S+@(\S+)$", config)
+        package = re.search(r"(?m)^  package_import_url: \S+@(\S+)$", config)
+        self.assertIsNotNone(package, "c6remote.yaml declares no package_import_url")
+        # An adopted build takes the config from one ref and the components from
+        # the other, so a difference gives the user a mismatched pair.
+        self.assertEqual(components.group(1), package.group(1))
+
+    def test_the_release_build_takes_the_components_of_its_own_commit(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "firmware.yml").read_text()
+        for line in workflow.splitlines():
+            if "compile c6remote.yaml" not in line:
+                continue
+            # Without the override the release would hold the components of the
+            # GitHub ref, not the components of the tagged commit.
+            self.assertIn("-s components_source components", line)
+            break
+        else:
+            self.fail("firmware.yml compiles no c6remote.yaml")
+
 
 class HomeAssistantActionConfigTest(unittest.TestCase):
     def test_production_declares_the_component_and_keeps_wifi_off_by_default(self) -> None:

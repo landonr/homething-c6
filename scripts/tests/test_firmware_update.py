@@ -71,15 +71,17 @@ class WifiCredentialTest(unittest.TestCase):
 
 
 class ImprovTest(unittest.TestCase):
-    def test_production_provisions_over_usb_only(self) -> None:
-        """esp32_improv needs Bluedroid, but ble_hid forces NimBLE."""
-        self.assertNotRegex(CONFIG, r"(?m)^esp32_improv:")
+    def test_production_provisions_over_usb_and_ble(self) -> None:
+        """The ESPHome component needs Bluedroid and ble_hid needs NimBLE, so the
+        BLE path comes from the local component of the same name."""
+        self.assertRegex(CONFIG, r"(?m)^improv_ble:")
         self.assertRegex(CONFIG, r"(?m)^ble_hid:")
         self.assertIn("  id: improv_usb\n", top_level_block(CONFIG, "improv_serial"))
+        self.assertTrue((ROOT / "components" / "improv_ble" / "__init__.py").is_file())
 
     def test_the_factory_image_has_both_improv_paths_and_no_nimble(self) -> None:
         self.assertNotRegex(FACTORY, r"(?m)^ble_hid:")
-        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "esp32_improv"))
+        self.assertIn("  authorizer: none\n", top_level_block(FACTORY, "improv_ble"))
         self.assertIn("  id: improv_usb\n", top_level_block(FACTORY, "improv_serial"))
         # improv_serial needs the logger UART, so the logger must not set baud_rate 0.
         self.assertRegex(FACTORY, r"(?m)^logger:")
@@ -277,11 +279,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn(r"^fw-[0-9]{4}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$", FIRMWARE_WORKFLOW)
         # Releases are for V3 boards, which have six status LEDs. The bench default stays at four.
         self.assertIn('esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 '
-                      'compile c6remote.yaml', FIRMWARE_WORKFLOW)
+                      '-s components_source components compile c6remote.yaml', FIRMWARE_WORKFLOW)
         self.assertEqual(substitution(CONFIG, "status_led_count"), '"4"')
         self.assertIn("esphome -s status_led_count 6 compile c6remote-factory.yaml", FIRMWARE_WORKFLOW)
-        self.assertIn('pip install "esphome==${ESPHOME_VERSION}"', FIRMWARE_WORKFLOW)
-        self.assertRegex(FIRMWARE_WORKFLOW, r"\n  ESPHOME_VERSION: \d+\.\d+\.\d+\n")
+        # The remote tracks the ESPHome development branch, so the workflow
+        # installs a commit. A branch name would let two runs of one tag build
+        # different firmware, so the value must stay a full commit.
+        self.assertIn('pip install "esphome @ git+https://github.com/esphome/esphome@${ESPHOME_COMMIT}"',
+                      FIRMWARE_WORKFLOW)
+        self.assertRegex(FIRMWARE_WORKFLOW, r"\n  ESPHOME_COMMIT: [0-9a-f]{40}\n")
 
     def test_the_manifest_matches_the_http_request_update_parser(self) -> None:
         for text in ('name: "homeThing C6"', "version: $version", 'chipFamily: "ESP32-C6"',

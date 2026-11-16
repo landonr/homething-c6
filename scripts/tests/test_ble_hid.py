@@ -5,6 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
 CONFIG = (ROOT / "c6remote.yaml").read_text()
 CPP = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
 HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
@@ -126,14 +127,17 @@ class BleHidTest(unittest.TestCase):
         # role. The remote starts no connection and reads no host name.
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_CENTRAL", False', INIT)
         self.assertIn('CONFIG_BT_NIMBLE_ROLE_OBSERVER", False', INIT)
-        for gone in ("ble_gattc", "host/ble_gatt.h", "DEVICE_NAME_UUID", "host_name"):
+        # `ble_gattc` is the client. The server header stays, because another
+        # component puts its own services on this server.
+        for gone in ("ble_gattc", "DEVICE_NAME_UUID", "host_name"):
             self.assertNotIn(gone, CPP)
             self.assertNotIn(gone, HEADER)
+        self.assertIn("ble_gatts_add_svcs(extra_services_[index])", CPP)
 
     def test_wheels_tap_and_buttons_release_by_slot(self) -> None:
         self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG)
         self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG)
-        self.assertIn("hid_play_callback_(button, false)", (ROOT / "ir_learning.h").read_text())
+        self.assertIn("hid_play_callback_(button, false)", (SLOTS / "ir_learning.h").read_text())
         for slot in list(range(3, 17)) + [19, 20]:
             self.assertIn(f"{{id: button_release, slot: {slot}}}", CONFIG)
         # A press with an active hold taps on release, so the HID press and
@@ -233,12 +237,21 @@ class BleHidTest(unittest.TestCase):
         self.assertIn("BLE_HS_ADV_MAX_FIELD_SZ - used", start)
         self.assertIn("fields.name_is_complete = advert_length == name_length ? 1 : 0;", start)
         self.assertLess(start.index("fields.name = name_bytes;"), start.index("ble_gap_adv_set_fields(&fields);"))
-        self.assertIn("utf8_prefix_length(name.data(), name_length, BLE_HS_ADV_MAX_FIELD_SZ)", start)
+        # The scan response starts from the whole field and gives the name what
+        # the Improv UUID leaves, which is everything when no UUID is set.
+        self.assertIn("size_t response_room = BLE_HS_ADV_MAX_FIELD_SZ;", start)
+        self.assertIn("response_room - UUID128_FIELD_SZ", start)
+        self.assertIn("utf8_prefix_length(name.data(), name_length, response_room)", start)
         self.assertIn("response.name_is_complete = response_length == name_length ? 1 : 0;", start)
         self.assertLess(start.index("ble_gap_adv_rsp_set_fields(&response);"), start.index("ble_gap_adv_start("))
         self.assertNotIn("name_is_complete = 1;", CPP)
         cut = self.body("static size_t utf8_prefix_length(const char *text, size_t length, size_t limit) {")
         self.assertIn("while (cut > 0 && (static_cast<uint8_t>(text[cut]) & 0xC0) == 0x80)\n    cut--;", cut)
+
+    def test_the_build_keeps_the_idf_hid_component(self) -> None:
+        """ESPHome drops esp_hid from the build from 2026.10.0, because it has no
+        HID of its own. Without this the build stops at a missing esp_hidd.h."""
+        self.assertIn('include_builtin_idf_component("esp_hid")', INIT)
 
     def test_the_gap_name_limit_holds_a_whole_friendly_name(self) -> None:
         """ESP-IDF defaults the GAP name limit to 31 bytes, and a rename can take 40."""

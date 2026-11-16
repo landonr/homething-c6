@@ -11,12 +11,13 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_gap.h"
+#include "host/ble_gatt.h"
 #include "host/ble_hs.h"
 #include "host/ble_store.h"
 #include "services/gap/ble_svc_gap.h"
 
-#include "ir_learning.h"
-#include "zigbee_learning.h"
+#include "esphome/components/button_slots/ir_learning.h"
+#include "esphome/components/button_slots/zigbee_learning.h"
 
 #include <algorithm>
 #include <cstring>
@@ -73,6 +74,19 @@ static esp_hid_device_config_t DEVICE_CONFIG = {
 };
 
 BleHid *BleHid::global_instance_ = nullptr;
+const ble_gatt_svc_def *BleHid::extra_services_[BleHid::MAX_EXTRA_SERVICES] = {};
+size_t BleHid::extra_service_count_ = 0;
+
+bool BleHid::add_gatt_services(const ble_gatt_svc_def *services) {
+  if (services == nullptr || extra_service_count_ >= MAX_EXTRA_SERVICES)
+    return false;
+  extra_services_[extra_service_count_++] = services;
+  return true;
+}
+
+void BleHid::set_extra_service_uuid(const ble_uuid128_t *uuid) {
+  this->extra_uuid_.store(uuid, std::memory_order_release);
+}
 
 static int bond_count() {
   int count = 0;
@@ -483,6 +497,14 @@ bool BleHid::init_stack_() {
   this->init_hid_();
   if (this->is_failed())
     return false;
+  // Another component's services go in next, while the database is still open.
+  for (size_t index = 0; index < extra_service_count_; index++) {
+    int added = ble_gatts_count_cfg(extra_services_[index]);
+    if (added == 0)
+      added = ble_gatts_add_svcs(extra_services_[index]);
+    if (added != 0)
+      ESP_LOGE(TAG, "Could not add the GATT services of another component: %d", added);
+  }
   const int named = ble_svc_gap_device_name_set(name.data());
   if (named != 0)
     ESP_LOGW(TAG, "Could not set the GAP device name: %d", named);
@@ -610,13 +632,25 @@ void BleHid::start_advertising_() {
     return;
   }
 
-  // The scan response carries the name alone, so a host that scans gets up to
-  // BLE_HS_ADV_MAX_FIELD_SZ bytes of it.
+  // The scan response carries the name, and the Improv UUID when provisioning
+  // is open. A 128-bit UUID field costs its 16 bytes plus two header bytes, and
+  // the name takes what is left.
   ble_hs_adv_fields response{};
-  const size_t response_length = utf8_prefix_length(name.data(), name_length, BLE_HS_ADV_MAX_FIELD_SZ);
-  response.name = name_bytes;
-  response.name_len = static_cast<uint8_t>(response_length);
-  response.name_is_complete = response_length == name_length ? 1 : 0;
+  size_t response_room = BLE_HS_ADV_MAX_FIELD_SZ;
+  const ble_uuid128_t *extra = this->extra_uuid_.load(std::memory_order_acquire);
+  if (extra != nullptr) {
+    response.uuids128 = extra;
+    response.num_uuids128 = 1;
+    response.uuids128_is_complete = 1;
+    constexpr size_t UUID128_FIELD_SZ = 18;
+    response_room = response_room > UUID128_FIELD_SZ ? response_room - UUID128_FIELD_SZ : 0;
+  }
+  const size_t response_length = utf8_prefix_length(name.data(), name_length, response_room);
+  if (response_length > 0) {
+    response.name = name_bytes;
+    response.name_len = static_cast<uint8_t>(response_length);
+    response.name_is_complete = response_length == name_length ? 1 : 0;
+  }
   result = ble_gap_adv_rsp_set_fields(&response);
   if (result != 0) {
     this->advertising_.store(false, std::memory_order_release);

@@ -27,8 +27,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Keep in step with the ESPHome that validates the configs locally.
-  ESPHOME_VERSION: 2026.8.2
+  # Keep in step with the ESPHome that validates the configs locally. The remote
+  # tracks the ESPHome development branch, so this is a commit on it and not a
+  # released version. A branch name would make two runs of the same tag build
+  # different firmware, so the value has to stay a commit.
+  ESPHOME_COMMIT: 2f900f23d76ba466ced2bfd974aa96b31f2f20c8
 
 jobs:
   release:
@@ -66,10 +69,10 @@ jobs:
           path: |
             ~/.cache/esphome
             ~/.platformio
-          key: esphome-${{ env.ESPHOME_VERSION }}-${{ runner.os }}
+          key: esphome-${{ env.ESPHOME_COMMIT }}-${{ runner.os }}
 
       - name: Install ESPHome
-        run: python -m pip install "esphome==${ESPHOME_VERSION}"
+        run: python -m pip install "esphome @ git+https://github.com/esphome/esphome@${ESPHOME_COMMIT}"
 
       # Both configs use the device name homething-c6, and the build directory
       # layout belongs to ESPHome. So each step finds its binaries by age against
@@ -81,8 +84,10 @@ jobs:
           marker="${RUNNER_TEMP}/full.marker"
           touch "$marker"
           # Releases are for V3 boards with six status LEDs. The config default
-          # of four is for the V2 bench units.
-          esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 compile c6remote.yaml
+          # of four is for the V2 bench units. The components come from the
+          # checkout at this tag, not from the GitHub ref that an adopted build
+          # uses, so the release holds the components of the commit it names.
+          esphome -s fw_version "${{ steps.ver.outputs.version }}" -s status_led_count 6 -s components_source components compile c6remote.yaml
           for name in factory ota; do
             mapfile -t found < <(find .esphome/build -type f -name "firmware.${name}.bin" -newer "$marker")
             if (( ${#found[@]} != 1 )); then

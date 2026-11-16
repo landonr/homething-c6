@@ -1,9 +1,14 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import esp32
-from esphome.components.esp32 import request_bluetooth, request_software_coexistence
+from esphome.components.esp32 import (
+    include_builtin_idf_component,
+    request_bluetooth,
+    request_software_coexistence,
+)
 from esphome.const import CONF_ID
 
+AUTO_LOAD = ["button_slots"]
 DEPENDENCIES = ["esp32"]
 
 ble_hid_ns = cg.esphome_ns.namespace("ble_hid")
@@ -22,6 +27,9 @@ async def to_code(config):
 
     request_bluetooth()
     request_software_coexistence()
+    # ESPHome leaves esp_hid out of the build from 2026.10.0, because it
+    # implements no HID of its own. This component is the HID.
+    include_builtin_idf_component("esp_hid")
     esp32.add_idf_sdkconfig_option("CONFIG_BT_BLUEDROID_ENABLED", False)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_ENABLED", True)
     esp32.add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_HID_SERVICE", True)

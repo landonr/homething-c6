@@ -6,6 +6,7 @@ import unittest
 
 
 ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
 COMPONENT = ROOT / "components" / "idle_sleep"
 STUB = (COMPONENT / "wake_stub.c").read_text()
 CPP = (COMPONENT / "idle_sleep.cpp").read_text()
@@ -13,7 +14,7 @@ HEADER = (COMPONENT / "idle_sleep.h").read_text()
 INIT = (COMPONENT / "__init__.py").read_text()
 BENCH = (ROOT / "c6remote-test-sleep.yaml").read_text()
 PRODUCTION = (ROOT / "c6remote.yaml").read_text()
-HOLD_ACTIONS = (ROOT / "hold_actions.h").read_text()
+HOLD_ACTIONS = (SLOTS / "hold_actions.h").read_text()
 
 
 def function_body(source: str, signature: str) -> str:

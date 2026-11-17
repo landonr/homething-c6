@@ -238,7 +238,7 @@ PCBWay does not publish a minimum hole size or a minimum embossed or engraved de
 
 `LED_RING_FACE_ROOF` is equal to the SLA minimum. `ROOF_LEFT_MIN` in `case/checks/wheel_ring.py` holds the thinnest roof to a floor just under this value. The table in [SLS and FDM versions](#sls-and-fdm-versions) calls the recessed front "SLS". If you order the recessed front in SLS PA12, the roof is thinner than the 1 mm minimum.
 
-The `fab` pass of `check.py` measures the walls of the exported `c6remote-case-front.stl` and `c6remote-case-back.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
+The `fab` pass of `check.py` measures the walls of each part that PCBWay prints: `c6remote-case-front.stl`, `c6remote-case-back.stl`, and `c6remote-ring-insert.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
 
 The pass sorts each thin reading by the angle at the far face. A wall reading has two faces that are almost parallel. A taper reading is near an edge where two faces meet at a sharp angle. The material is thin only in a narrow band along that edge. A square corner is not thin, so the pass ignores it.
 

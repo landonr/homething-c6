@@ -1003,6 +1003,32 @@ the insert may need easing on the first print. The dovetail holds it whichever
 way the tolerance falls, because the mouth is 1.61 wider than the roof flat at
 the crown.
 """
+RING_INSERT_TIP = 1.0
+"""Least thickness at the outer bottom tip of the ring insert.
+
+The channel's outer corner is a 45 degree rake over a short plumb wall. A solid
+that fills that corner ends in a wedge. The wedge ran out to the height of the
+plumb wall, which is 0.12 at the east and west sides. The fab pass read 142.8
+mm2 of the part under the SLS minimum, and all of it was that one edge.
+
+So the underside now stops short of the mouth. It ends at the radius where the
+rake is already this thick, so the tip is a plumb face with a square corner.
+
+No light entry is lost over an LED. All six sit 1.48 in from the mouth, and the
+deepest trim is 0.88.
+
+This value is the PCBWay SLS minimum. It is written out and not read from
+FAB_MIN_WALL, because the insert is an SLS part whatever FAB_PROCESS says."""
+RING_INSERT_TIP_RUN = 0.05
+"""Least rake the ring insert keeps outside led_ring_flat_outer_r().
+
+At the east and west sides the channel is too shallow for a RING_INSERT_TIP
+tip. The rake meets the ceiling before it is that thick. There the trim stops
+this far out from the flat, and the tip keeps about 0.66.
+
+The stop exists because a section cannot repeat a point. A trim to the flat
+itself would put two section points in the same place. A loft through a
+repeated point fails in OCCT and does not report itself."""
 LED_RING_SAG = 1.1
 """How far the LED ring channel's arch falls from LED_RING_TOP on the crown
 line to each exterior side wall. The arch is a circular arc with its axis along

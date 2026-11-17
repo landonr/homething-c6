@@ -566,12 +566,21 @@ def _insert_section(angle, fit):
         for i in range(count)
     ]
     top = [(r, dish(r)) for r in radii]
+    # The channel's outer corner is a 45 degree rake standing on a plumb wall
+    # only rake_foot - CAVITY_FRONT tall, so a fill of it runs out to that
+    # height. The underside stops at the radius where the rake is already
+    # RING_INSERT_TIP thick, which leaves a plumb tip and a square corner.
+    rake_foot = led_ring_rake_foot(angle) + fit
+    tip = max(
+        flat_out + params.RING_INSERT_TIP_RUN,
+        mouth - max(0.0, params.RING_INSERT_TIP - (rake_foot - CAVITY_FRONT)),
+    )
     return [
         (WHEEL_OPENING_R, LED_RING_FOOT),
         (inner, LED_RING_FOOT),
         (inner, CAVITY_FRONT),
-        (mouth, CAVITY_FRONT),
-        (mouth, led_ring_rake_foot(angle) + fit),
+        (tip, CAVITY_FRONT),
+        (tip, rake_foot + (mouth - tip)),
         (flat_out, led_ring_ceiling_under(wx + flat_out * cos_a, wy + flat_out * sin_a)),
         *top,
     ]

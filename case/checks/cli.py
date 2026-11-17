@@ -1330,7 +1330,7 @@ def _interference(s):
 
 @_check("fab")
 def _fab_walls(s):
-    lines, problems, accepted = fab_walls(s.front, s.back)
+    lines, problems, accepted = fab_walls(s.front, s.back, s.ring_insert)
     for line in lines:
         print(line)
     process = params.FAB_PROCESS
@@ -1343,7 +1343,7 @@ def _fab_walls(s):
     )
     return _report(
         problems,
-        f"front and back walls meet the {process} {minimum:.2f} mm minimum "
+        f"every printed part meets the {process} {minimum:.2f} mm minimum "
         f"{exceptions}",
     )
 
@@ -1488,7 +1488,7 @@ _FEATURE_SOLIDS = {
         "caps_plain", "led_ring_insert",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
-    "fab": ("front", "back"),
+    "fab": ("front", "back", "led_ring_insert"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),

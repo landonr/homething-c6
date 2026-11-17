@@ -1,4 +1,4 @@
-"""Fab walls: the front and back shells keep the PCBWay minimum wall for
+"""Fab walls: every part PCBWay prints keeps the PCBWay minimum wall for
 FAB_PROCESS. PCBWay holds an order with a thinner wall until the customer
 accepts the risk. Other passes hold a few named walls, such as the LED ring
 roof and the counterbore lands. No other pass measures every wall the way
@@ -25,9 +25,15 @@ from model.features import write_features
 
 from .common import Problem
 
-PARTS = ("c6remote-case-front.stl", "c6remote-case-back.stl")
-"""The PCBWay SLA or SLS parts, by export name. The FDM front, the pads, the
-caps and the IR window are printed elsewhere."""
+PARTS = (
+    "c6remote-case-front.stl",
+    "c6remote-case-back.stl",
+    "c6remote-ring-insert.stl",
+)
+"""The PCBWay SLA or SLS parts, by export name. The insert goes on the same
+order as the shells, in natural PA12 where they take the dye, so it holds the
+same minimum. The FDM front, the pads, the caps and the IR window are printed
+elsewhere."""
 
 SAMPLES_PER_MM2 = 10
 SEED = 1
@@ -65,7 +71,7 @@ AREA_SLACK = 1.0
 # edge. The mesh decides where the samples fall, so a change elsewhere in the
 # part moves all of them, and such a row can appear or go with no change to its
 # own geometry. Read the wall column to tell a thin sheet from an edge.
-FRONT, BACK = PARTS
+FRONT, BACK, INSERT = PARTS
 
 LAND = (
     "taper where the face hole lead-in runs out into the counterbore land. The "
@@ -146,6 +152,16 @@ ACCEPTED = {
     (BACK, "qwiic_slot"): (None, 0.3, "taper at the Qwiic slot edge"),
     (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
     (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
+    (INSERT, "ring_insert"): (
+        None, 0.5,
+        KNIFE + ", on the corner the trimmed outer tip leaves. A fill of the "
+        "channel's 45 degree outer corner used to run out to the height of "
+        "the plumb wall at the mouth, 0.12, and read 142.8 mm2 over the whole "
+        "circumference. RING_INSERT_TIP stops the underside where the rake is "
+        "already thick enough. At the east and west sides the channel is too "
+        "shallow for that tip at any radius, and RING_INSERT_TIP_RUN ends the "
+        "trim there with about 0.66"
+    ),
 }
 
 FIRST_REACH = 4.0
@@ -399,8 +415,8 @@ def _judge(name, row, process, minimum):
     return ", ".join(flags) or "accepted", warn, problems
 
 
-def fab_walls(front, back):
-    """Measure both shells against FAB_MIN_WALL[FAB_PROCESS].
+def fab_walls(front, back, insert):
+    """Measure each printed part against FAB_MIN_WALL[FAB_PROCESS].
 
     Returns the lines to print, the failures, and how many accepted features
     are under the minimum.
@@ -411,7 +427,7 @@ def fab_walls(front, back):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         named = write_features(tmp / "c6remote-features.json")["parts"]
-        for name, shape in zip(PARTS, (front, back)):
+        for name, shape in zip(PARTS, (front, back, insert)):
             # The real export name, because the cached STL blob and the back's
             # angular tolerance are keyed on it.
             cache.export_stl_cached(shape, tmp / name)

@@ -69,16 +69,46 @@ CONFIG_SCHEMA = cv.All(
 VERSION_BASE = "dc560eec464c05707991582992bff0d27b0d960b"
 
 
+def _git(root, *args):
+    out = subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, timeout=10, check=True
+    )
+    return out.stdout.strip()
+
+
+def source_ref():
+    """Return the ref and the commit that an adopted build was built from.
+
+    ESPHome clones an external source with `--depth=1`, so the clone holds one
+    commit and no history to count a patch in. The ref alone is the same string
+    on every unit, so the short commit of the clone goes with it.
+    """
+    try:
+        from esphome.components.external_components import get_sources
+    except ImportError:
+        return "unknown"
+    here = Path(__file__).resolve()
+    for source in get_sources():
+        if not source.ref or not here.is_relative_to(Path(source.components_dir).resolve()):
+            continue
+        try:
+            short = _git(Path(__file__).parents[2], "rev-parse", "--short", "HEAD")
+        except (OSError, subprocess.SubprocessError):
+            return source.ref
+        return f"{source.ref}@{short}" if short else source.ref
+    return "unknown"
+
+
 def firmware_version():
-    """Return YYYY.M.PATCH, plus -dirty for uncommitted tracked changes."""
+    """Return YYYY.M.PATCH, plus -dirty for uncommitted tracked changes.
+
+    A build that has no history to count falls back to the source ref.
+    """
     root = Path(__file__).parents[2]
     base = VERSION_BASE
 
     def git(*args):
-        out = subprocess.run(
-            ["git", *args], cwd=root, capture_output=True, text=True, timeout=10, check=True
-        )
-        return out.stdout.strip()
+        return _git(root, *args)
 
     try:
         git("merge-base", "--is-ancestor", base, "HEAD")
@@ -88,10 +118,10 @@ def firmware_version():
         dirty = git("status", "--porcelain", "--untracked-files=no")
         year, month = (int(part) for part in head[:7].split("-"))
     except (OSError, ValueError, subprocess.SubprocessError):
-        return "unknown"
+        return source_ref()
     patch = sum(1 for date in dates if date[:7] == head[:7]) - 1
     if patch < 0:
-        return "unknown"
+        return source_ref()
     return f"{year}.{month}.{patch}" + ("-dirty" if dirty else "")
 
 

@@ -922,11 +922,22 @@ They stand on the wheel's own clearance radius, LIP_CLEAR_R, so this is also
 how far out they reach. It clears the SLS minimum wall, which a foot has to do
 in its narrow direction like any other feature.
 
-The two wide gaps between the LEDs, east and west, cannot hold a foot at all.
-The board ends level with the ring there, so the annulus between LIP_CLEAR_R
-and the board edge is exactly the minimum wall with nothing left over for a
-board that sits BOARD_FIT off centre. The four short gaps have board under
-them well past the ring, which is why the feet go there instead."""
+A foot is cut short of this where the cavity wall comes in first, which is the
+two on the X axis. See RING_FOOT_WALL_CLEAR."""
+RING_FOOT_WALL_CLEAR = 0.15
+"""How far each foot under the ring insert stops short of the cavity wall.
+
+Live on the X axis only, where the wall chords the ring. The feet there are
+the two that carry least. The board ends level with the ring on that axis, so
+a foot sized to stay inside the board edge would be under the minimum wall,
+and one sized flush to that edge would lose bearing the moment the board sat
+BOARD_FIT off centre. Reaching past the edge instead, into the gap the board
+fit leaves, keeps the foot over the minimum and keeps a full millimetre of it
+over board whichever way the board floats. The overhanging part carries
+nothing, which is the point: it is there so the rest of the foot can exist.
+
+The four feet between the LEDs have board well past them and never reach this
+far, so this value does nothing to them."""
 RING_FOOT_W = 4.0
 """Width of each foot under the ring insert, across its own bearing.
 

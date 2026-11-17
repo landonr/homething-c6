@@ -661,10 +661,14 @@ def led_ring_foot_angles():
     """Bearings of the insert's feet, midway between neighbouring LEDs.
 
     Derived off the placements rather than named, so moving an LED moves the
-    feet with it. Only the short gaps count. The six LEDs leave four of those
-    and two wide ones on the X axis, and the wide pair is exactly where the
-    board stops level with the ring, so a foot there would have no board under
-    its outer half. See RING_FOOT_T.
+    feet with it. The six LEDs leave six gaps: four short ones and two wide
+    ones on the X axis, and every gap gets a foot at its middle, which is as
+    far from the light as that gap allows.
+
+    The two on the X axis are the weaker pair. The board ends level with the
+    ring there, so they overhang its edge and bear on less of it than the other
+    four. They are redundancy rather than the main support. See
+    RING_FOOT_WALL_CLEAR.
     """
     wx, wy = board.wheel_center()
     parts = board.components()
@@ -672,12 +676,11 @@ def led_ring_foot_angles():
         math.atan2(parts[ref][1] - wy, parts[ref][0] - wx) % (2 * math.pi)
         for ref in board.refs("D")[1:]
     )
-    out = []
-    for i, first in enumerate(bearings):
-        span = (bearings[(i + 1) % len(bearings)] - first) % (2 * math.pi)
-        if span < math.pi / 3:
-            out.append((first + span / 2) % (2 * math.pi))
-    return tuple(out)
+    return tuple(
+        (first + ((bearings[(i + 1) % len(bearings)] - first) % (2 * math.pi)) / 2)
+        % (2 * math.pi)
+        for i, first in enumerate(bearings)
+    )
 
 
 def led_ring_feet():
@@ -694,19 +697,30 @@ def led_ring_feet():
     would stand the ring proud of the face.
 
     Each stands on LIP_CLEAR_R, so the wheel keeps its own clearance, and
-    reaches RING_FOOT_T outward, which stays inside the board at every bearing
-    led_ring_foot_angles() picks. They break through the insert's underside by
-    MERGE rather than landing on it, so the fuse has volume to work with
+    reaches RING_FOOT_T outward, or RING_FOOT_WALL_CLEAR short of the cavity
+    wall where that comes in first. They break through the insert's underside
+    by MERGE rather than landing on it, so the fuse has volume to work with
     instead of two faces lying on each other.
     """
     wx, wy = board.wheel_center()
     inner = LIP_CLEAR_R
-    outer = inner + params.RING_FOOT_T
-    mid = (inner + outer) / 2
     low = BOARD_TOP + params.RING_FOOT_GAP
     high = CAVITY_FRONT + MERGE
+    least = params.FAB_MIN_WALL[params.FAB_PROCESS]
     feet = []
     for angle in led_ring_foot_angles():
+        outer = min(
+            inner + params.RING_FOOT_T,
+            led_ring_clip_reach(angle) - params.RING_FOOT_WALL_CLEAR,
+        )
+        if outer - inner < least:
+            raise ValueError(
+                f"the ring insert's foot at {math.degrees(angle):.0f} degrees is "
+                f"only {outer - inner:.2f} wide, under the {least:.2f} minimum "
+                f"wall: the cavity wall reaches {led_ring_clip_reach(angle):.2f} "
+                f"there, against an inner face on LIP_CLEAR_R {inner:.2f}"
+            )
+        mid = (inner + outer) / 2
         cos_a, sin_a = math.cos(angle), math.sin(angle)
         feet.append(
             Pos(wx + mid * cos_a, wy + mid * sin_a, (low + high) / 2)

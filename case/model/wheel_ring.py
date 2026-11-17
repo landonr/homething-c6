@@ -548,11 +548,18 @@ def _insert_section(angle, fit):
     cos_a, sin_a = math.cos(angle), math.sin(angle)
     inner = led_ring_inner_r()
     mouth = led_ring_mouth_outer_r() - fit
-    flat_out = led_ring_flat_outer_r(angle) - fit
+    # The side from the ceiling up to the dish is the one that shows at the
+    # front, so it takes RING_INSERT_FACE_FIT and not the wedging fit. The
+    # rake runs to the same radius rather than to a fitted one, because a step
+    # between the two would leave a lip of that difference hanging over the
+    # rake, around the whole ring and under the minimum wall. With no step the
+    # rake simply leaves the ceiling corner steeper than the shell's own and
+    # falls away inside it, so the clearance opens up going down.
 
     def dish(r):
         return face_floor_at(wx + r * cos_a, wy + r * sin_a)
 
+    flat_out = led_ring_flat_outer_r(angle) - params.RING_INSERT_FACE_FIT
     count = RING_INSERT_TOP_POINTS
     radii = [
         flat_out - (flat_out - WHEEL_OPENING_R) * i / (count - 1)
@@ -759,9 +766,10 @@ def led_ring_insert():
     body = _ring_loft(
         lambda angle: _insert_section(angle, params.RING_INSERT_FIT),
         CAVITY_FRONT - 2,
-        # _offset_face() grows with its argument, so the fit comes off it to
-        # pull the insert's chord in off the cavity wall rather than past it.
-        _offset_face(STIFFENED_WALL - params.RING_INSERT_FIT),
+        # _offset_face() grows with its argument, so the clearance comes off
+        # it to keep the insert's chord inside the cavity wall rather than
+        # past it. That chord runs to the face, so it takes the face fit.
+        _offset_face(STIFFENED_WALL - params.RING_INSERT_FACE_FIT),
     )
     return _fuse(body, *led_ring_feet())
 

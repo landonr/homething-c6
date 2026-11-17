@@ -957,11 +957,32 @@ So the gap is deliberate: at rest nothing touches, and the feet come into play
 only if the bond lets go. Then the ring drops this far and stops, instead of
 dropping onto the ENC1 flange. The board reads a little lower than BOARD_TOP in
 the STEP assembly, so the built gap is a little larger than this."""
+RING_INSERT_FACE_FIT = 0.0
+"""Clearance per side on the ring insert's sides that run to the front face.
+
+Two of them: the band between the channel ceiling and the dish, which stands
+against the window's own wall, and the chord where the cavity wall cuts the
+ring off near the X axis. Both reach the face, so whatever gap they carry is a
+line on the front of the remote. At RING_INSERT_FIT that line read as a
+hairline the whole way round, because the window governs 286 degrees of it and
+the cavity wall the rest, and both took the same clearance.
+
+Zero rather than a press. The IR window presses its pane into the aperture by
+IR_WINDOW_PRESS, which suits a pane that size. This joint is 119 mm of
+circumference, and an interference that long on an SLS part is as likely to
+stop the insert seating as to close the gap, which on the cosmetic face is the
+worse failure. Both of these faces are vertical and parallel to the way the
+part goes in, so zero is a touch and not a press.
+
+The faces that wedge are a different question and keep RING_INSERT_FIT. Raise
+this a few hundredths if a print comes back tight at the face."""
 RING_INSERT_FIT = 0.12
 """Clearance per side between the ring insert and the channel it fills.
 
-The insert drops in from inside the shell, so the faces it passes need room:
-the plumb outer wall and the 45 degree rake.
+The insert drops in from inside the shell, so the faces that wedge against it
+need room: the plumb outer wall at the mouth and the 45 degree rake. The two
+sides that run to the front face take RING_INSERT_FACE_FIT instead, because a
+gap there shows.
 
 Two faces take none. The top lands flush with the dish. The bore faces the
 knob, where the shell's own seat used to stand, so it keeps that radius and

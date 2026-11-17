@@ -347,6 +347,25 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.wheel_lip_relief(),
         ),
+        # The recessed front's alone, as shells.py cuts it. The FDM front keeps
+        # its own roof and web, so nothing takes them out there.
+        *(
+            []
+            if fdm
+            else [
+                _entry(
+                    "led_ring_window",
+                    "wheel_ring.led_ring_window",
+                    "cut",
+                    wheel_ring.led_ring_window(),
+                    sorted(set(
+                        _reads("wheel_ring.led_ring_window")
+                        + _reads("wheel_ring._window_section")
+                        + _reads("wheel_ring.led_ring_ceiling_under")
+                    )),
+                )
+            ]
+        ),
         _entry(
             "led_ring_channel",
             "wheel_ring.led_ring_channel",
@@ -635,6 +654,28 @@ def _v2_top(skirt=False, fdm=True):
     return out + _keytops(refs)
 
 
+def _ring_insert():
+    """The LED ring insert: one part, one feature.
+
+    It is lofted as a whole rather than fused out of handles, so there is
+    nothing finer to name. The entry exists so a click on the lit band in the
+    viewer resolves to the part that makes it.
+    """
+    return [
+        _entry(
+            "ring_insert",
+            "wheel_ring.led_ring_insert",
+            "add",
+            wheel_ring.led_ring_insert(),
+            sorted(set(
+                _reads("wheel_ring.led_ring_insert")
+                + _reads("wheel_ring._insert_section")
+                + _reads("wheel_ring.led_ring_ceiling_under")
+            )),
+        )
+    ]
+
+
 def _window():
     """The IR window insert: the pane in the beam and the flange behind it.
 
@@ -713,6 +754,7 @@ def features():
         "c6remote-case-pad-tpu-v2-top.stl": _v2_top(skirt=True),
         "c6remote-case-pad-v2-top.stl": _v2_top(skirt=True, fdm=False),
         "c6remote-ir-window.stl": _window(),
+        "c6remote-ring-insert.stl": _ring_insert(),
         "c6remote-case-screw.stl": _screw(),
     }
     # An id is what a viewer hands back to be acted on, so two features holding

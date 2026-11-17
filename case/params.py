@@ -818,11 +818,18 @@ bevels the top of this wall and the ray crosses the bevel. This web, not the
 roof, is the thinnest part of the ring channel: the roof runs 1.50 to 1.68
 because the arch sits below the face less LED_RING_FACE_ROOF all the way
 round."""
-LED_RING_INNER_CHAMFER = 0.53
+LED_RING_INNER_CHAMFER = 0.40
 """45 degree bevel at the inner wall's top edge on both LED channels. It steps
-0.53 mm out from the inner wall and 0.53 mm down from the channel ceiling at the
-top of the bevel. The inner wall stays upright below the bevel. On the FDM front
-the bevel uses nearly all of the wall.
+this far out from the inner wall and this far down from the channel ceiling at
+the top of the bevel. The inner wall stays upright below the bevel. On the FDM
+front the bevel uses nearly all of the wall.
+
+It was 0.53. The bevel eats the roof flat from the inside, and the roof flat is
+what the ring insert's neck is as wide as. At 0.53 the neck measured 0.914 with
+RING_INSERT_FIT taken off both sides, under the PA12 minimum that PCBWay
+publishes for SLS. This value widens the flat at the crown and carries the neck
+over the minimum. It changes nothing at the east and west sides, where
+led_ring_bevel() already shortens the leg below this value on its own.
 
 On the recessed front the ceiling changes around the ring, and the bevel hangs
 from the local ceiling. At the east and west sides the channel is too shallow
@@ -907,6 +914,31 @@ the thinnest roof just under it.
 A smaller value lets more light through but is under the minimum. A larger
 value makes the channel shallower, most at the east and west sides of the knob,
 where the face is lowest. The FDM front does not use this value."""
+RING_INSERT_FIT = 0.12
+"""Clearance per side between the ring insert and the channel it fills.
+
+The insert drops in from inside the shell, so the faces it passes need room:
+the plumb outer wall and the 45 degree rake.
+
+Two faces take none. The top lands flush with the dish. The bore faces the
+knob, where the shell's own seat used to stand, so it keeps that radius and
+WHEEL_OPENING_CLEARANCE with it.
+
+Nothing under the insert holds it up. led_ring_window() and wheel_lip_relief()
+between them leave the shell empty from the cavity ceiling to the face inside
+the roof flat, so there is open cavity under every part of the underside. The
+part is captive outward, where the mouth stands wider than the face opening,
+and free inward: it drops until it lands on the ENC1 flange. So it needs
+adhesive, the way the IR window does. A tighter fit is not the answer, because
+the rake is a taper and tightening it stands the insert proud of the face
+rather than holding it down.
+
+PCBWay publishes a tolerance of 0.3 on an SLS part of this length, and both
+parts carry it. This value is a nominal fit rather than a guaranteed one, so
+the insert may need easing on the first print. The dovetail holds it whichever
+way the tolerance falls, because the mouth is 1.61 wider than the roof flat at
+the crown.
+"""
 LED_RING_SAG = 1.1
 """How far the LED ring channel's arch falls from LED_RING_TOP on the crown
 line to each exterior side wall. The arch is a circular arc with its axis along

@@ -66,7 +66,12 @@ from .stack import (
     face_body,
 )
 from .usb import round_usb_boot_rim, usb_boot_pocket, usb_slot
-from .wheel_ring import led_ring_channel, wheel_lip_relief, wheel_opening
+from .wheel_ring import (
+    led_ring_channel,
+    led_ring_window,
+    wheel_lip_relief,
+    wheel_opening,
+)
 
 
 def front_edge_round(fdm=False):
@@ -726,6 +731,9 @@ def front_shell(fdm=False):
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         led_ring_channel(fdm),
         wheel_lip_relief(),
+        # The recessed front's alone. The FDM front's channel stops lower, so
+        # its roof and its web are thick enough to keep, and it has no insert.
+        *([] if fdm else [led_ring_window()]),
         mic_bore(fdm),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess_cut(),

@@ -1167,11 +1167,55 @@ def _sites_box(points):
     )
 
 
+RING_SEAM_STEP = params.RING_INSERT_FIT + 0.03
+"""How far either side of a dry chamfer reading the ring seam is looked for.
+
+RING_INSERT_FIT wide plus room for the reading. A hole the rim chamfer meets
+that is narrower than this, inside the ring's own radii, is the clearance
+between the two parts of the face. A wider one is something missing."""
+
+
+def _is_ring_seam(shell, x, y, lo, hi):
+    """True when the hole under (x, y) is only the ring insert's clearance.
+
+    led_ring_window() takes the roof and the web out of the front shell and
+    led_ring_insert() fills them, so the face around the wheel is two parts
+    with RING_INSERT_FIT between them. The recess rim passes close enough to
+    the ring at the east and west sides that the rim chamfer crosses that seam,
+    and a ray down the chamfer can fall into the gap and read no material
+    although nothing is missing.
+
+    Measured rather than assumed, and bounded twice. The same ray is fired one
+    RING_SEAM_STEP either side, radially off the wheel, which is across the
+    seam rather than along it, and both have to land on material: a hole wider
+    than the step is not the seam. And the reading has to sit between the
+    ring's own inner and outer radii, so this cannot excuse a hole anywhere
+    else on the face.
+    """
+    wx, wy = board.wheel_center()
+    r = math.hypot(x - wx, y - wy)
+    if not case.WHEEL_OPENING_R <= r <= case.led_ring_mouth_outer_r():
+        return False
+    ux, uy = (x - wx) / r, (y - wy) / r
+    for step in (-RING_SEAM_STEP, RING_SEAM_STEP):
+        px, py = x + ux * step, y + uy * step
+        if not _ray_runs(shell, (px, py, hi[2] - 0.01), (px, py, lo[2] + 0.01)):
+            return False
+    return True
+
+
 def rim_chamfer_profile(front):
     """The recessed front has a rim chamfer RECESS_CHAMFER_W wide all the way
     round the merged recess, with a round at its top edge, a round into the
     dish at its inner edge, and a straight section between them where they
-    leave room, read on the built shell.
+    leave room, read on the built face.
+
+    `front` is the shell and the ring insert together, because the face is two
+    parts now: led_ring_window() takes the channel roof and the web out of the
+    shell and led_ring_insert() fills them. At the east and west sides the
+    recess rim passes close enough to the ring that the chamfer crosses the
+    seam between them, and _is_ring_seam() is what tells that clearance apart
+    from something missing.
 
     At each station rays down read the built surface along the outline's
     inward normal, three or four times on each part. Each reading must lie on
@@ -1230,6 +1274,8 @@ def rim_chamfer_profile(front):
                 runs = crop.ray_runs(*ray) or _ray_runs(front, *ray)
                 where = f"{abs(d):.2f} {'outside' if d < 0 else 'inside'} the outline"
                 if not runs:
+                    if _is_ring_seam(front, x, y, lo, hi):
+                        continue
                     problems.append(
                         Problem(
                             f"no material under {label} at {where}: wants the "

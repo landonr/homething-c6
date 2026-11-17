@@ -17,7 +17,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
   <img alt="The c6remote case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together" src="../docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
-The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
+The model exports a front shell, back shell, soft button pad, IR window insert, LED ring insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports a second front shell for a filament printer. Read [SLS and FDM versions](#sls-and-fdm-versions).
 It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
@@ -45,7 +45,7 @@ Both versions use the same back shell, IR window, interior, and board position. 
 | Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
 | Face height | Base level | `FDM_FACE_DROP` lower |
 | Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
-| LED ring channel | Full depth, with an even roof under the face | Half the arch depth, for a thicker roof |
+| LED ring channel | Full depth. A separate insert fills it and closes the face. | Half the arch depth, under a roof of its own |
 | Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
 | Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
 | Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
@@ -157,16 +157,18 @@ The model derives geometry from the board where possible. Manual values include 
 
 ## Materials
 
-Print the shells with a tinted translucent filament. The STL files contain no color or material data.
+Print the shells in any colour. The STL files contain no color or material data.
 
-A white filament also works. The roof over the LED ring channel is `LED_RING_FACE_ROOF` thick under the face, so the status LEDs glow through a white front.
+The status LEDs do not shine through the front shell. They shine into `c6remote-ring-insert.stl`, which fills the LED ring channel and closes the window in the face. Print that part in natural undyed PA12. A dyed part does not pass enough light. The IR window is the other part that the dye must miss.
+
+The insert goes in from inside the shell before the board. The channel is wider at its mouth than at the face, so the part cannot pass outward through the face. Nothing holds it the other way, so bond it to the raked channel wall while the front shell lies face down. Use the same adhesive as the IR window.
 
 <p align="center">
   <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan through the white shell around the scroll wheel" src="../docs/readme-assets/case-front-white.png" width="260">
 </p>
 <p align="center"><sub>White front with the status LEDs on</sub></p>
 
-A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through.
+Sintered nylon scatters light inside the plastic, so the insert reads as a lit band and not as six points.
 
 The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
 
@@ -241,7 +243,6 @@ Other features are also thinner than the minimum. `ACCEPTED` in `case/checks/fab
 These features are under the SLA minimum on the current shells:
 
 - The counterbore lands under the key dishes are real thin walls. `LAND_FLOOR_MIN` in `case/checks/keypad.py` holds them, but it is below the PCBWay minimum. The lead-in chamfer of each face hole makes a taper at the hole wall.
-- The LED ring roof is `LED_RING_FACE_ROOF` thick in the vertical direction. The face slopes, so the wall normal to the face is a little thinner than the minimum.
 - The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
 - On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`. Parts of the reset guide tube are thinner than `RESET_GUIDE_WALL`.
 - The catch detent noses, the end screw cuts and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
@@ -273,7 +274,7 @@ Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall w
 
 Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
 
-The LED ring channel ceiling keeps a vertical roof of `LED_RING_FACE_ROOF` under the built face all the way round, so the six LEDs glow through an even roof. `LED_RING_FACE_ROOF` is the minimum wall that PCBWay publishes for SLA resin. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. `LED_RING_SAG` keeps the arch below the ceiling at the east and west sides of the knob, where the face is lowest. As a result, the channel is shallowest there. The ring roof check holds the roof above its floor.
+The LED ring channel ceiling keeps a vertical height of `LED_RING_FACE_ROOF` under the built face all the way round. On the recessed front that run is not shell. A roof of this thickness is under the minimum wall that PCBWay publishes for SLS nylon, and no parameter reaches it, so `led_ring_window()` cuts the roof away, together with the web between the channel and the wheel bore. `c6remote-ring-insert.stl` fills both. As a result, the front shell has no thin sheet, the lit band runs in to the knob, and the web no longer needs the roof to hold it. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. `LED_RING_SAG` keeps the arch below the ceiling at the east and west sides of the knob, where the face is lowest. As a result, the channel is shallowest there. The ring roof check holds the roof above its floor.
 
 The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling. Where the channel is too shallow for the full bevel, at the east and west sides, the bevel shortens and keeps `LED_RING_INNER_FOOT_MIN` of upright inner wall above `LED_RING_FOOT`. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
 
@@ -443,7 +444,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the button caps captive behind the front-shell ceiling.
 - Keep the button pad clear of the wheel and the six wheel LEDs.
 - Keep the pad skirt clear of board parts.
-- Keep the LED ring channel open below its translucent roof.
+- Keep the LED ring channel open, and keep the ring insert solid from the wheel bore out to the face.
 - Keep the microphone funnel aligned with the board port. Its mouth must meet the recess floor in one edge all the way round.
 - Keep the USB slot clear of the connector shell.
 - Keep the USB boot pocket clear, with its floor near enough to the receptacle for a standard plug to seat.

@@ -98,23 +98,14 @@ ACCEPTED = {
         "counterbore lands were thin too, and raising the face took the lands "
         "out of it"
     ),
-    (FRONT, "led_ring_channel"): (
-        0.85, 177.6,
-        "the roof between the channel ceiling and the keypad dish over it, "
-        "read from the channel side. keypad_recess and wheel_opening read the "
-        "same wall from the dish side, so the three are one annular band round "
-        "the ring and not three faults. Measured on the exported STL, every "
-        "one of the 200 thinnest samples crosses the thickness rather than "
-        "running sideways. An earlier note called this the channel's side at "
-        "the east and west chords, which the measurement disproves. "
-        "LED_RING_FACE_ROOF does not govern it either. "
-        "led_ring_ceiling_under() takes the higher of the arch and the face "
-        "cap, and the arch is higher wherever this reads thin, so "
-        "LED_RING_ROOF and LED_RING_SAG set it. Lowering the arch thickens the "
-        "roof and shortens the channel, which wheel_lip_relief() already left "
-        "too short for a full inner bevel at the east and west sides"
+    (FRONT, "led_ring_window"): (
+        None, 1.3,
+        "the window's own edge where its outer wall meets the dish face, which "
+        "is a knife edge and not a sheet: every one of its thin samples reads "
+        "as taper. The roof this cut removes is what used to be thin here, and "
+        "led_ring_insert() carries it now, so the entries for "
+        "led_ring_channel and wheel_opening came out of this table with it"
     ),
-    (FRONT, "wheel_opening"): (0.96, 65.3, "dish face over the LED ring roof"),
     (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),
     (FRONT, "key.SW2.counterbore"): (None, 0.6, LAND),
     (FRONT, "key.SW3.counterbore"): (None, 0.6, LAND),

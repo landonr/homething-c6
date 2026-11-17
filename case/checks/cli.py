@@ -228,6 +228,21 @@ class Solids:
         return case.legacy_top_pad(fdm=False, skirt=True)
 
     @functools.cached_property
+    def ring_insert(self):
+        return case.led_ring_insert()
+
+    @functools.cached_property
+    def front_with_ring(self):
+        """The recessed front and the part that fills its ring, as one shape.
+
+        led_ring_window() takes the roof and the web out of the shell, so a
+        pass that reads the built front face has to read both or it finds a
+        hole where the lit band is. The two do not touch, by RING_INSERT_FIT,
+        so this stays a compound and the readers walk both.
+        """
+        return self.front + self.ring_insert
+
+    @functools.cached_property
     def window(self):
         return case.ir_window()
 
@@ -585,7 +600,7 @@ def _wheel_mouth_is_chamfered(s):
 @_check("fdm")
 def _recessed_mouth_is_plain(s):
     return _report(
-        recessed_mouth_is_plain(s.front),
+        recessed_mouth_is_plain(s.front_with_ring),
         f"the recessed front carries none of that mouth: it dishes across the "
         f"same band rather than chamfering, so WHEEL_OPENING_R and every LED "
         f"ring radius derived off it are untouched",
@@ -679,38 +694,36 @@ def _seam_shadow_line(s):
 @_check("wheel_ring")
 def _light_path(s):
     return _report(
-        light_path(s.shells, s.pad),
-        "every LED has an open pad below it, open channel above it and a solid "
-        "roof over that",
+        light_path(s.shells, s.pad, s.ring_insert),
+        "every LED has an open pad below it, open channel above it and solid "
+        "insert over that, with no shell roof left in between",
     )
 
 
 @_check("wheel_ring")
 def _led_ring(s):
     return _report(
-        led_ring(s.front),
-        "ring channel is void all the way around, webbed off the wheel opening, "
-        "roofed all the way to the dished face above it",
+        led_ring(s.front, s.ring_insert),
+        "ring insert is solid all the way around, out from the wheel bore to "
+        "the face, where the shell keeps no roof of its own",
     )
 
 
 @_check("wheel_ring")
 def _inner_chamfer_is_cut(s):
     return _report(
-        inner_chamfer_is_cut(s.front, s.front_fdm),
-        f"both LED channels have a {params.LED_RING_INNER_CHAMFER:.2f} mm "
-        "chamfer at the inner roof edge, shorter on the recessed front where "
-        f"its channel is shallow, over {params.LED_RING_INNER_FOOT_MIN:.2f} mm "
-        "of upright inner wall",
+        inner_chamfer_is_cut(s.front_fdm),
+        f"the FDM LED channel has a {params.LED_RING_INNER_CHAMFER:.2f} mm "
+        "chamfer at the inner roof edge",
     )
 
 
 @_check("wheel_ring")
 def _wheel_seat_clearance(s):
     return _report(
-        wheel_seat_clearance(s.front),
-        "shell's own opening sits flush to the bezel at "
-        "WHEEL_OPENING_CLEARANCE wherever it is cut through real shell, "
+        wheel_seat_clearance(s.ring_insert),
+        "the ring insert's bore sits flush to the bezel at "
+        "WHEEL_OPENING_CLEARANCE wherever it is cut through real material, "
         "lip stays clear of the ceiling",
     )
 
@@ -718,10 +731,10 @@ def _wheel_seat_clearance(s):
 @_check("wheel_ring")
 def _fdm_wheel_seat(s):
     return _report(
-        fdm_wheel_seat(s.front, s.front_fdm),
+        fdm_wheel_seat(s.ring_insert, s.front_fdm),
         f"the FDM front's bore measures "
-        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the recessed "
-        f"front's, which stays at WHEEL_OPENING_R, and the web to the ring "
+        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the ring "
+        f"insert's, which stays at WHEEL_OPENING_R, and the web to the ring "
         f"channel survives on it",
     )
 
@@ -729,7 +742,7 @@ def _fdm_wheel_seat(s):
 @_check("wheel_ring")
 def _rotation_clearance(s):
     return _report(
-        rotation_clearance(s.front, s.pad),
+        rotation_clearance(s.front, s.pad, s.ring_insert),
         "nothing intrudes inside the wheel's rotation clearance",
     )
 
@@ -746,7 +759,7 @@ def _recess_solid_sane(s):
 @_check("keypad")
 def _recesses_open(s):
     return _report(
-        recesses_open(s.front),
+        recesses_open(s.front_with_ring),
         "the face is dished to its predicted depth beside every key, beside the "
         "mic, on the wheel seat on four bearings and at each join's narrowest "
         "open point",
@@ -756,7 +769,7 @@ def _recesses_open(s):
 @_check("keypad")
 def _rim_chamfer_profile(s):
     return _report(
-        rim_chamfer_profile(s.front),
+        rim_chamfer_profile(s.front_with_ring),
         f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
         f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
         f"a {params.RECESS_CHAMFER_INNER_ROUND_W:.2f} round into the dish floor, "
@@ -1304,7 +1317,7 @@ def _parts_are_sound(s):
 
 @_check("assembly")
 def _interference(s):
-    hits = interference([s.back, s.front, s.window, s.screw])
+    hits = interference([s.back, s.front, s.window, s.screw, s.ring_insert])
     if not hits:
         print("no interference")
         return True
@@ -1472,7 +1485,7 @@ _FEATURE_SOLIDS = {
     "assembly": (
         "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "pad_tpu_v2_top",
         "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top", "window", "caps",
-        "caps_plain",
+        "caps_plain", "led_ring_insert",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
     "fab": ("front", "back"),
@@ -1496,7 +1509,7 @@ _FEATURE_SOLIDS = {
     "support": ("back",),
     "usb": ("front", "front_fdm", "back"),
     "qwiic": ("front", "front_fdm", "back"),
-    "wheel_ring": ("front", "front_fdm", "back", "pad"),
+    "wheel_ring": ("front", "front_fdm", "back", "pad", "led_ring_insert"),
 }
 """Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
 
@@ -1533,6 +1546,7 @@ _CACHED_SOLIDS = {
     "front": lambda: [functools.partial(case.front_shell)],
     "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
     "back": lambda: [functools.partial(case.back_shell)],
+    "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
     "pad_tpu": lambda: [

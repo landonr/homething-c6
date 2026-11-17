@@ -777,13 +777,20 @@ def _rake_height(shell, angle):
     zp = case.CAVITY_FRONT + plumb / 2
     ra, rb, rp = wall(za), wall(zb), wall(zp)
 
-    rc = flat_out - CEILING_PROBE_INSET
+    # Just outside the roof flat rather than just inside it. The roof the old
+    # probe landed on is gone: led_ring_window() cuts it away and the insert
+    # carries it, so a ray inside flat_out would meet the insert's whole depth
+    # and read its floor as the ceiling. Outside it the shell still runs from
+    # the dish down to the rake, and the rake there is the ceiling less the
+    # inset, which the rake's own measured slope corrects for.
+    rc = flat_out + CEILING_PROBE_INSET
     xc, yc = wx + rc * cos_a, wy + rc * sin_a
     start = case.SHELL_FRONT + CROP_MARGIN
     runs = _ray_runs(shell, (xc, yc, start), (xc, yc, case.CAVITY_FRONT - CROP_MARGIN))
     if None in (ra, rb, rp) or rb == ra or not runs:
         return None
-    top = start - runs[0][1]
+    slope = (zb - za) / (ra - rb)
+    top = start - runs[0][1] + CEILING_PROBE_INSET * slope
     bottom = za + (rp - ra) * (zb - za) / (rb - ra)
     return top - bottom
 

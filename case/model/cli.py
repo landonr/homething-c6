@@ -76,6 +76,7 @@ from .mic import (
 from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
+    led_ring_insert,
     LED_RING_STATIONS,
     LED_RING_TOP,
     led_ring_bevel,
@@ -144,6 +145,7 @@ def main():
         "c6remote-case-back": back_shell(),
         "c6remote-case-pad": button_pad(),
         "c6remote-ir-window": ir_window(),
+        "c6remote-ring-insert": led_ring_insert(),
         "c6remote-case-screw": end_screw(),
     }
     caps = {f"c6remote-cap-{ref.lower()}": keycap(ref) for ref in cap_refs()}
@@ -309,9 +311,10 @@ def main():
     }
     print(
         f"  ceiling raised off the arch to keep {params.LED_RING_FACE_ROOF:.2f} "
-        f"of translucent roof under the built face wherever that is higher, "
-        f"so the roof is {ring_roof_left():.2f} at its thinnest; at the inner "
-        f"bevel's top it stands "
+        f"under the built face wherever that is higher, so that run is "
+        f"{ring_roof_left():.2f} at its thinnest; it is the insert's and not "
+        f"the shell's, since led_ring_window() takes the roof out. At the "
+        f"inner bevel's top the ceiling stands "
         + ", ".join(f"{side} {z:.2f}" for side, z in bevel.items())
     )
     legs = [
@@ -323,8 +326,9 @@ def main():
         f"  the {params.LED_RING_INNER_CHAMFER:.2f} inner chamfer hangs from the "
         f"local ceiling, shortened to {min(legs):.2f} on {len(short)} of "
         f"{len(legs)} stations where the channel is shallow, and leaves at least "
-        f"{led_ring_inner_foot():.2f} of upright inner wall over the cavity "
-        f"ceiling"
+        f"{led_ring_inner_foot():.2f} of upright inner wall. On the recessed "
+        f"front that wall and its bevel are the insert's: the window steps down "
+        f"at the bevel's own top edge, so the shell keeps neither"
     )
     print(
         f"  inner wall plumb at {led_ring_inner_r():.2f} below the bevel, outer "
@@ -334,8 +338,9 @@ def main():
         f"degrees over {led_ring_wall_height():.2f} at the crown to meet the "
         f"ceiling at {led_ring_roof_outer_r():.2f} on the crown line and "
         f"{led_ring_flat_outer_r(math.pi / 4):.2f} on the diagonals, so at least "
-        f"{led_ring_roof_flat():.2f} of flat glows and "
-        f"{led_ring_web_left():.2f} of web is left to the bore at every height"
+        f"{led_ring_roof_flat():.2f} of flat glows, and the insert carries the "
+        f"{led_ring_web_left():.2f} of band in to the bore that used to be "
+        f"shell web"
     )
     print(
         f"  chorded flush against the cavity wall at "
@@ -537,8 +542,9 @@ def main():
     )
     print(
         f"  every counterbore inside the rim, thinnest land {lands[0][0]:.2f} at "
-        f"{lands[0][1]}; ring roof down to {ring_roof_left():.2f} at its "
-        f"thinnest, against LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}"
+        f"{lands[0][1]}; the ring insert's top run is {ring_roof_left():.2f} at "
+        f"its thinnest, against LED_RING_FACE_ROOF "
+        f"{params.LED_RING_FACE_ROOF:.2f}, and the shell has no roof there"
     )
     print(
         f"pad two lobes, {params.PAD_MARGIN:.1f} of web past each island's own "

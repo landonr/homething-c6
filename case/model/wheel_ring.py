@@ -21,6 +21,14 @@ ceiling. Where the ceiling is above the arch, the rake starts that much higher,
 so the roof flat keeps its width. The light enters across the flare of the
 rake. The six LEDs fire up into the channel, and the channel carries their
 light around the wheel, so the face shows a ring and not six dots.
+
+That roof came out at 0.86 at the east and west sides, under the minimum wall
+PCBWay publishes for SLS, and nothing in the stack reached it. So on the
+recessed front the roof is not shell at all. led_ring_window() cuts it away,
+and with it the web in to the bore, and led_ring_insert() is the part that
+fills both. The shell then keeps one opening from the bore out to the roof
+flat, with no thin sheet anywhere, and the lit band runs to the knob. The FDM
+front keeps its own roof and web, which are thick enough.
 """
 
 import functools
@@ -42,6 +50,7 @@ from build123d import (
 )
 
 import board
+import cache
 import params
 
 from .shape import _face_reach, _fuse, _hole, _isect, _offset_face, _slab
@@ -348,8 +357,12 @@ def led_ring_roof_flat(fdm=False):
 
 
 def led_ring_web_left():
-    """Minimum web between bore and channel, below the inner top chamfer.
-    The bevel widens it toward the roof; led_ring probes the built shell."""
+    """Width of the band between the bore and the channel's inner wall.
+
+    It is the FDM front's web, shell on that front from the ceiling to the
+    face. On the recessed front led_ring_window() takes it out and the insert
+    carries it instead, so there the band is the insert's innermost run and the
+    light reaches the knob across it."""
     return led_ring_inner_r() - WHEEL_OPENING_R
 
 
@@ -485,6 +498,195 @@ def wheel_lip_relief():
     top = CAVITY_FRONT + params.WHEEL_LIP_RELIEF
     tool = _hole(x, y, 2 * led_ring_inner_r(), CAVITY_FRONT - MERGE, top)
     return _isect(tool, _slab(_channel_clip(), CAVITY_FRONT - MERGE - 1, top + 1))
+
+
+RING_INSERT_TOP_POINTS = 16
+"""Points along the ring insert's top face, at equal intervals from the roof
+flat's outer end in to the wheel bore.
+
+The top is the dish, and the dish is a bowl, so a chord between two points on
+it stands proud of it. The insert's top is the one face that has to land flush
+with the shell's own, which is why this is denser than
+LED_RING_CEILING_POINTS: the top spans from the bore now rather than from the
+inner bevel, about twice the reach, and the sag goes as the square of the
+spacing."""
+
+
+def _insert_section(angle, fit):
+    """[(r, z)] of the ring insert on the bearing `angle`, inset by `fit`.
+
+    The insert fills the channel, the roof the window takes out, and the web
+    between the channel and the wheel bore. So its inner face is the bore
+    itself, its top is the dish, and below the old ceiling it holds the
+    channel's own plumb wall and rake, each pulled in by `fit`.
+
+    Two faces take no fit. The top lands flush with the shell's own. The bore
+    faces the knob, where the shell's seat used to stand, so it keeps that
+    radius.
+
+    The underside holds nothing up. Inside led_ring_inner_r() it stands at
+    LED_RING_FOOT, which is where wheel_lip_relief() put the ceiling, but that
+    shell is gone too: this cut takes everything above the relief and the
+    relief takes everything below it. So the underside faces open cavity all
+    the way round, and adhesive is what keeps the part up.
+
+    Outside led_ring_inner_r() the underside drops to CAVITY_FRONT, where the
+    channel's mouth opens into the cavity. That step is free on both sides, so
+    it takes no fit either. Giving the mouth one would also land it on
+    led_ring_rake_foot() where the rake starts at CAVITY_FRONT, and a loft
+    through a repeated point fails in OCCT rather than reporting itself.
+
+    Every station returns the same number of points, which the ruled loft
+    needs.
+    """
+    from .keypad import face_floor_at
+
+    wx, wy = board.wheel_center()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    inner = led_ring_inner_r()
+    mouth = led_ring_mouth_outer_r() - fit
+    flat_out = led_ring_flat_outer_r(angle) - fit
+
+    def dish(r):
+        return face_floor_at(wx + r * cos_a, wy + r * sin_a)
+
+    count = RING_INSERT_TOP_POINTS
+    radii = [
+        flat_out - (flat_out - WHEEL_OPENING_R) * i / (count - 1)
+        for i in range(count)
+    ]
+    top = [(r, dish(r)) for r in radii]
+    return [
+        (WHEEL_OPENING_R, LED_RING_FOOT),
+        (inner, LED_RING_FOOT),
+        (inner, CAVITY_FRONT),
+        (mouth, CAVITY_FRONT),
+        (mouth, led_ring_rake_foot(angle) + fit),
+        (flat_out, led_ring_ceiling_under(wx + flat_out * cos_a, wy + flat_out * sin_a)),
+        *top,
+    ]
+
+
+def _window_section(angle):
+    """[(r, z)] of the cut that takes the channel roof and the inner web out.
+
+    It stands on the ceiling the channel already has, runs past the face, and
+    carries on inward over the web at LED_RING_FOOT. So the shell keeps one
+    opening from the wheel bore out to the roof flat, and the insert fills all
+    of it.
+
+    The web is why the cut reaches that far. It was LED_RING_WALL of shell
+    between the bore and the channel's inner wall, and the roof was the only
+    thing holding it: taking the roof alone left it floating, and ribs across
+    the channel were what tied it back down. Giving it to the insert removes
+    the island instead, and the lit band runs to the knob.
+
+    The inner wall and its bevel go with the web, because there is no web left
+    for them to stand on. led_ring_bevel() still shapes the channel below
+    LED_RING_FOOT, where this cut does not reach.
+    """
+    wx, wy = board.wheel_center()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    bevel_edge = led_ring_bevel_edge_r(angle)
+    outer = led_ring_flat_outer_r(angle)
+    count = LED_RING_CEILING_POINTS
+    ceiling = []
+    for i in range(count):
+        r = outer - (outer - bevel_edge) * i / (count - 1)
+        ceiling.append((r, led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)))
+    high = SHELL_FRONT + 1
+    return [
+        *ceiling,
+        (bevel_edge, LED_RING_FOOT),
+        (WHEEL_OPENING_R, LED_RING_FOOT),
+        (WHEEL_OPENING_R, high),
+        (outer, high),
+    ]
+
+
+def _ring_loft(section, clip_low, clip=None):
+    """Close a ruled loft through `section` at every station and clip it.
+
+    `clip` defaults to _channel_clip(), the cavity wall the channel chords
+    against near the X axis. The insert passes its own, pulled in by the fit:
+    that wall is a face it has to slide up past, and the channel's own clip
+    would land it on the wall with nothing between them."""
+    wx, wy = board.wheel_center()
+    faces, top = [], -math.inf
+    for angle in _ring_angles():
+        points = section(angle)
+        for i, ((r0, z0), (r1, z1)) in enumerate(zip(points, points[1:] + points[:1])):
+            if math.hypot(r1 - r0, z1 - z0) < 1e-6:
+                raise ValueError(
+                    f"the LED ring section repeats point {i} at "
+                    f"{math.degrees(angle):.0f} degrees, r {r0:.3f} z {z0:.3f}"
+                )
+        top = max(top, *(z for _, z in points))
+        faces.append(
+            Face(
+                Wire.make_polygon(
+                    [
+                        (wx + r * math.cos(angle), wy + r * math.sin(angle), z)
+                        for r, z in points
+                    ],
+                    close=True,
+                )
+            )
+        )
+    solid = loft([*faces, faces[0]], ruled=True)
+    if len(solid.solids()) != 1 or not solid.is_valid:
+        raise ValueError("the LED ring loft did not close into one solid")
+    return _isect(solid, _slab(clip or _channel_clip(), clip_low, top + 1))
+
+
+def led_ring_window():
+    """The cut that removes the channel roof and the web inside it, so the ring
+    insert can replace both.
+
+    The roof was the thin wall the ring glowed through. It read 0.86 at the
+    east and west sides, under the PA12 minimum that PCBWay publishes for SLS,
+    and no lever reached it: see LED_RING_FACE_ROOF. Taking it out and filling
+    the void with a part of its own leaves the shell with no thin sheet at all.
+
+    The cut carries on inward over the web rather than stopping at the channel,
+    because the roof was all that held the web. See _window_section().
+    """
+    return _ring_loft(_window_section, CAVITY_FRONT - 2)
+
+
+@cache.solid
+def led_ring_insert():
+    """The translucent ring that fills the channel and closes its window.
+
+    It is a light guide rather than a window. The six LEDs shine into its
+    underside, and it carries light round to the east and west, where no LED
+    sits and the face would otherwise read as six dots.
+
+    It needs no flange and no shoulder to stay in. The channel's mouth stands
+    further out than the roof flat above it, so the void is a dovetail on that
+    side and the insert cannot pass outward through the face. It goes in from
+    inside the shell, and the bore face needs no retention of its own because
+    it faces the knob.
+
+    It does need adhesive, because nothing holds it the other way. The shell is
+    empty under the whole underside, so the part is free to drop back into the
+    cavity until it lands on the ENC1 flange. Glue it to the rake while the
+    front shell lies face down, before the board goes in.
+
+    It also carries the web the shell used to hold between the channel and the
+    bore. That web is what floats once led_ring_window() takes the roof, so the
+    insert takes it instead of ribs tying it down.
+
+    Print it in natural PA12 while the shell takes the dye. The IR window
+    already needs one undyed part, so this adds no process.
+    """
+    return _ring_loft(
+        lambda angle: _insert_section(angle, params.RING_INSERT_FIT),
+        CAVITY_FRONT - 2,
+        # _offset_face() grows with its argument, so the fit comes off it to
+        # pull the insert's chord in off the cavity wall rather than past it.
+        _offset_face(STIFFENED_WALL - params.RING_INSERT_FIT),
+    )
 
 
 def led_ring_channel(fdm=False):

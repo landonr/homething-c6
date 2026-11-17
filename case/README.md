@@ -83,11 +83,14 @@ case/.venv/bin/python case/check.py --only support,shells
 
 Run the full check before you accept a case change. A scoped check does not validate the full model.
 
-Run independent feature groups in parallel when two or more groups are selected:
+A run spreads its passes across `--jobs` processes, which defaults to 10. The
+suite is CPU-bound, so a serial run leaves a workstation idle. One pass,
+`assembly.parts_are_sound`, takes about 10 minutes on its own and sets the
+floor that no value gets under.
 
 ```bash
-case/.venv/bin/python case/check.py --jobs 4
-case/.venv/bin/python case/check.py --only ir,support --jobs 2
+case/.venv/bin/python case/check.py --jobs 1   # serial
+case/.venv/bin/python case/check.py --only ir,support
 ```
 
 Use `--quiet` for failures, provenance, counts, and the scoped-run warning. Use `--timings` to print pass durations.

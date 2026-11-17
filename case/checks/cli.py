@@ -11,7 +11,10 @@ whole assembly rather than one feature is tagged `assembly` instead, so scoping
 one side of it never runs it half blind.
 
 `--jobs N` spreads the passes themselves across N processes rather than the
-features. The features are wildly uneven, one of them being better than a third
+features. It defaults to 10, because the suite is CPU-bound and a serial run
+leaves a workstation idle: a full run took 73 minutes serial and is bounded
+below by one pass, assembly.parts_are_sound, at about 10 minutes. Pass 1 to
+make a run serial again. The features are wildly uneven, one of them being better than a third
 of the suite on its own, so feature-sized units of work leave most of the pool
 idle within seconds and put a floor under the wall clock at whatever the slowest
 single feature costs. Pass-sized units have no such floor, which also means a
@@ -1364,9 +1367,9 @@ def _selection(argv):
     parser.add_argument(
         "--jobs",
         type=int,
-        default=1,
+        default=10,
         metavar="N",
-        help="run passes in N independent processes (default: 1)",
+        help="run passes in N independent processes (default: 10)",
     )
     parser.add_argument(
         "--quiet",

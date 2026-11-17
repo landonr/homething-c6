@@ -12,6 +12,7 @@ import unittest
 ROOT = Path(__file__).parents[2]
 PARTITIONS = ROOT / "partitions.csv"
 FIRMWARE_WORKFLOW = ROOT / ".github" / "workflows" / "firmware.yml"
+CONFIGS = ("c6remote.yaml", "c6remote-factory.yaml")
 
 # CONFIG_PARTITION_TABLE_OFFSET is 0x8000, and the table takes one 0x1000 sector.
 FIRST_OFFSET = 0x8000 + 0x1000
@@ -97,3 +98,25 @@ class PartitionTableTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PartitionSourceTest(unittest.TestCase):
+    """ESPHome also builds a table from a `partitions:` list, but that form only
+    appends to a table of its own, with `nvs` fixed at 0x70000 and each custom
+    partition after it. That gives app slots of 0x1B0000 and wastes 0x1F000.
+    The file keeps `zb_fct` in the alignment gap before `app0` instead."""
+
+    def test_both_configs_name_the_same_file(self) -> None:
+        for name in CONFIGS:
+            with self.subTest(config=name):
+                # A plain file name also reaches an adopted build, because
+                # ESPHome looks beside the document that declares the value.
+                self.assertIn(
+                    "\n  partitions: partitions.csv\n", (ROOT / name).read_text()
+                )
+
+    def test_the_table_is_a_file_and_not_a_list(self) -> None:
+        self.assertTrue(PARTITIONS.is_file())
+        for name in CONFIGS:
+            with self.subTest(config=name):
+                self.assertNotRegex((ROOT / name).read_text(), r"(?m)^  partitions:\s*$")

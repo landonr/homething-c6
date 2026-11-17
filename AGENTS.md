@@ -487,6 +487,10 @@ The table ends at `0x400000`. `scripts/tests/test_partitions.py` checks this lay
 
 `c6remote.yaml` and `c6remote-factory.yaml` must use the same table. An OTA from either platform cannot change the partition table, because neither config sets `allow_partition_access`.
 
+Keep `partitions: partitions.csv`. The file reaches an adopted build, because ESPHome looks beside the document that declares the value when the config directory of the user holds no such file. The package cache is a full clone, so the file sits next to `c6remote.yaml` there.
+
+Do not move the table into the `partitions:` list form. That form only appends to a table that ESPHome builds, and ESPHome fixes `nvs` at `0x70000` and puts each custom partition after it. The result gives app slots of `0x1B0000` and wastes `0x1F000` at the end of the flash. The table above instead holds `zb_fct` in the alignment gap before `app0`, which costs nothing and keeps the app slots at `0x1F0000`. A change of the table also needs one USB flash of every unit, which erases its NVS.
+
 A unit that has the old table needs one USB flash of a new factory image. This flash erases its NVS. The unit then loses its IR codes, Zigbee targets, BLE bond, and saved Wi-Fi network.
 
 On a unit with the old table, each app slot is `0x1E0000`. An OTA image that is larger than this slot cannot install on that unit.

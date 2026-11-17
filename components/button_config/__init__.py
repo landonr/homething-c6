@@ -69,12 +69,19 @@ CONFIG_SCHEMA = cv.All(
 VERSION_BASE = "dc560eec464c05707991582992bff0d27b0d960b"
 
 
+def _git(root, *args):
+    out = subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, timeout=10, check=True
+    )
+    return out.stdout.strip()
+
+
 def source_ref():
-    """Return the ref that an adopted build took this component from.
+    """Return the ref and the commit that an adopted build was built from.
 
     ESPHome clones an external source with `--depth=1`, so the clone holds one
-    commit and no history to count a patch in. The ref that the config pinned
-    is the only name such a build has for its own code.
+    commit and no history to count a patch in. The ref alone is the same string
+    on every unit, so the short commit of the clone goes with it.
     """
     try:
         from esphome.components.external_components import get_sources
@@ -82,8 +89,13 @@ def source_ref():
         return "unknown"
     here = Path(__file__).resolve()
     for source in get_sources():
-        if source.ref and here.is_relative_to(Path(source.components_dir).resolve()):
+        if not source.ref or not here.is_relative_to(Path(source.components_dir).resolve()):
+            continue
+        try:
+            short = _git(Path(__file__).parents[2], "rev-parse", "--short", "HEAD")
+        except (OSError, subprocess.SubprocessError):
             return source.ref
+        return f"{source.ref}@{short}" if short else source.ref
     return "unknown"
 
 
@@ -96,10 +108,7 @@ def firmware_version():
     base = VERSION_BASE
 
     def git(*args):
-        out = subprocess.run(
-            ["git", *args], cwd=root, capture_output=True, text=True, timeout=10, check=True
-        )
-        return out.stdout.strip()
+        return _git(root, *args)
 
     try:
         git("merge-base", "--is-ancestor", base, "HEAD")

@@ -132,7 +132,7 @@ The git source also gives the build the full repository, so `scripts/build-shell
 
 ESPHome clones that source with `--depth=1`. The clone holds one commit, so `firmware_version()` in `components/button_config/__init__.py` cannot count the patch.
 
-As a result, an adopted build reports the ref of its own source, for example `develop`. A build from a checkout counts the commits and reports `YYYY.M.PATCH`.
+As a result, an adopted build reports the ref of its own source and the short commit of the clone, for example `develop@6e46288`. A build from a checkout counts the commits and reports `YYYY.M.PATCH`.
 
 `c6remote-factory.yaml` keeps a local source. An operator flashes that image over USB from a checkout, and no one adopts it.
 

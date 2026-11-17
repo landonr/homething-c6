@@ -1988,10 +1988,12 @@ class PageTest(unittest.TestCase):
         self.assertIn("%cI", INIT)
         self.assertIn('"--untracked-files=no"', INIT)
         # A shallow clone has no history to count, so an adopted build reports
-        # the ref that its external source pinned instead of "unknown".
+        # the pinned ref and the commit of the clone instead of "unknown".
         self.assertIn("return source_ref()", INIT)
         self.assertIn("from esphome.components.external_components import get_sources", INIT)
         self.assertIn("here.is_relative_to(Path(source.components_dir).resolve())", INIT)
+        self.assertIn('"rev-parse", "--short", "HEAD"', INIT)
+        self.assertIn('f"{source.ref}@{short}"', INIT)
         self.assertIn("void set_firmware_version(const char *version)", HEADER)
         self.assertIn('R"({"firmware":")"', section(CPP, "void ButtonConfig::handle_state_", "\n}\n"))
         self.assertIn('"  Firmware: %s"', section(CPP, "void ButtonConfig::dump_config()", "\n}\n"))
@@ -2475,7 +2477,7 @@ class FirmwareVersionTests(unittest.TestCase):
         self.n = 0
         self.sources: list[types.SimpleNamespace] = []
         tree = ast.parse(INIT)
-        wanted = ["source_ref", "firmware_version"]
+        wanted = ["_git", "source_ref", "firmware_version"]
         funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
         self.assertEqual([f.name for f in funcs], wanted)
         self.code = compile(ast.Module(body=funcs, type_ignores=[]), "firmware_version", "exec")
@@ -2509,6 +2511,9 @@ class FirmwareVersionTests(unittest.TestCase):
         self.git("add", "f.txt")
         self.git("commit", "-q", "-m", f"c{self.n}", date=date)
         return self.git("rev-parse", "HEAD")
+
+    def short(self) -> str:
+        return self.git("rev-parse", "--short", "HEAD")
 
     def version(self, base: str, root: Path | None = None) -> str:
         root = root or self.repo
@@ -2577,16 +2582,23 @@ class FirmwareVersionTests(unittest.TestCase):
 
     def test_a_clone_with_no_history_reports_the_pinned_ref(self) -> None:
         """ESPHome clones an external source with --depth=1, so an adopted build
-        holds one commit and the base is not in it. The ref that the config
-        pinned is then the only name the build has for its own code."""
+        holds one commit and the base is not in it. The pinned ref is the same
+        string on every unit, so the commit of the clone goes with it."""
         self.commit("2026-10-01T10:00:00-07:00")
         self.sources = [self.source(self.repo / "components", "develop")]
-        self.assertEqual(self.version("0" * 40), "develop")
+        self.assertEqual(self.version("0" * 40), f"develop@{self.short()}")
 
     def test_a_pinned_release_tag_is_the_reported_version(self) -> None:
+        """One code path, so a tag carries the commit as a branch does."""
         self.commit("2026-10-01T10:00:00-07:00")
         self.sources = [self.source(self.repo / "components", "fw-2026.11.0")]
-        self.assertEqual(self.version("0" * 40), "fw-2026.11.0")
+        self.assertEqual(self.version("0" * 40), f"fw-2026.11.0@{self.short()}")
+
+    def test_a_ref_with_no_commit_to_resolve_is_the_bare_ref(self) -> None:
+        """A directory with no git repository still has the pinned ref."""
+        with tempfile.TemporaryDirectory() as plain:
+            self.sources = [self.source(Path(plain) / "components", "develop")]
+            self.assertEqual(self.version("0" * 40, Path(plain)), "develop")
 
     def test_a_checkout_counts_the_patch_although_a_ref_is_pinned(self) -> None:
         """The git count wins, so a build from a checkout keeps its own version."""

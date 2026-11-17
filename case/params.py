@@ -914,6 +914,38 @@ the thinnest roof just under it.
 A smaller value lets more light through but is under the minimum. A larger
 value makes the channel shallower, most at the east and west sides of the knob,
 where the face is lowest. The FDM front does not use this value."""
+RING_FOOT_T = 1.2
+"""Radial thickness of each foot under the ring insert.
+
+The feet are what stop the insert dropping into the cavity if its bond fails.
+They stand on the wheel's own clearance radius, LIP_CLEAR_R, so this is also
+how far out they reach. It clears the SLS minimum wall, which a foot has to do
+in its narrow direction like any other feature.
+
+The two wide gaps between the LEDs, east and west, cannot hold a foot at all.
+The board ends level with the ring there, so the annulus between LIP_CLEAR_R
+and the board edge is exactly the minimum wall with nothing left over for a
+board that sits BOARD_FIT off centre. The four short gaps have board under
+them well past the ring, which is why the feet go there instead."""
+RING_FOOT_W = 4.0
+"""Width of each foot under the ring insert, across its own bearing.
+
+Wide enough to carry the part without being a pin, and narrow enough to stay
+clear of the LEDs either side of it. Each foot sits midway between two of
+them, so half this plus the LED body has to fit in half the gap."""
+RING_FOOT_GAP = 0.3
+"""How far the ring insert's feet stop above the board.
+
+They are a limit on how far the part can drop, not a seat it rests on. A foot
+cut to land on the board would have to answer for the board's own float on its
+ledges and for the SLS tolerance on both parts, and the way that stack falls is
+what decides whether the ring sits flush or stands proud of the face. Adhesive
+is what holds it flush, the way it holds the IR window. These only catch it.
+
+So the gap is deliberate: at rest nothing touches, and the feet come into play
+only if the bond lets go. Then the ring drops this far and stops, instead of
+dropping onto the ENC1 flange. The board reads a little lower than BOARD_TOP in
+the STEP assembly, so the built gap is a little larger than this."""
 RING_INSERT_FIT = 0.12
 """Clearance per side between the ring insert and the channel it fills.
 

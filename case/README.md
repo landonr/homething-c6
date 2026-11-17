@@ -163,6 +163,8 @@ The status LEDs do not shine through the front shell. They shine into `c6remote-
 
 The insert goes in from inside the shell before the board. The channel is wider at its mouth than at the face, so the part cannot pass outward through the face. Nothing holds it the other way, so bond it to the raked channel wall while the front shell lies face down. Use the same adhesive as the IR window.
 
+The insert has four feet on its underside. They are a limit and not a seat. At rest they touch nothing. If the bond fails, they land on the board and stop the part, so it cannot reach the ENC1 flange. Do not cut them back to make the insert sit lower.
+
 <p align="center">
   <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan through the white shell around the scroll wheel" src="../docs/readme-assets/case-front-white.png" width="260">
 </p>

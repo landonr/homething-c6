@@ -36,6 +36,7 @@ import math
 
 from build123d import (
     Axis,
+    Box,
     BuildLine,
     BuildSketch,
     Face,
@@ -43,6 +44,7 @@ from build123d import (
     Plane,
     Polyline,
     Pos,
+    Rot,
     Wire,
     loft,
     make_face,
@@ -55,6 +57,7 @@ import params
 
 from .shape import _face_reach, _fuse, _hole, _isect, _offset_face, _slab
 from .stack import (
+    BOARD_TOP,
     CAVITY_FRONT,
     FDM_FACE,
     LIP_CLEAR_R,
@@ -654,6 +657,65 @@ def led_ring_window():
     return _ring_loft(_window_section, CAVITY_FRONT - 2)
 
 
+def led_ring_foot_angles():
+    """Bearings of the insert's feet, midway between neighbouring LEDs.
+
+    Derived off the placements rather than named, so moving an LED moves the
+    feet with it. Only the short gaps count. The six LEDs leave four of those
+    and two wide ones on the X axis, and the wide pair is exactly where the
+    board stops level with the ring, so a foot there would have no board under
+    its outer half. See RING_FOOT_T.
+    """
+    wx, wy = board.wheel_center()
+    parts = board.components()
+    bearings = sorted(
+        math.atan2(parts[ref][1] - wy, parts[ref][0] - wx) % (2 * math.pi)
+        for ref in board.refs("D")[1:]
+    )
+    out = []
+    for i, first in enumerate(bearings):
+        span = (bearings[(i + 1) % len(bearings)] - first) % (2 * math.pi)
+        if span < math.pi / 3:
+            out.append((first + span / 2) % (2 * math.pi))
+    return tuple(out)
+
+
+def led_ring_feet():
+    """Blocks under the insert that catch it if its bond lets go.
+
+    The insert is captive outward, where the channel's mouth is wider than the
+    face opening, and free inward: nothing stands under it, so it would drop
+    until it landed on the ENC1 flange. Adhesive is what holds it flush, and
+    these are what stop it going anywhere if that fails.
+
+    They hang clear of the board by RING_FOOT_GAP rather than resting on it,
+    because a foot that bottomed out would have to answer for the board's float
+    and the SLS tolerance on both parts, and losing that stack the wrong way
+    would stand the ring proud of the face.
+
+    Each stands on LIP_CLEAR_R, so the wheel keeps its own clearance, and
+    reaches RING_FOOT_T outward, which stays inside the board at every bearing
+    led_ring_foot_angles() picks. They break through the insert's underside by
+    MERGE rather than landing on it, so the fuse has volume to work with
+    instead of two faces lying on each other.
+    """
+    wx, wy = board.wheel_center()
+    inner = LIP_CLEAR_R
+    outer = inner + params.RING_FOOT_T
+    mid = (inner + outer) / 2
+    low = BOARD_TOP + params.RING_FOOT_GAP
+    high = CAVITY_FRONT + MERGE
+    feet = []
+    for angle in led_ring_foot_angles():
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        feet.append(
+            Pos(wx + mid * cos_a, wy + mid * sin_a, (low + high) / 2)
+            * Rot(0, 0, math.degrees(angle))
+            * Box(outer - inner, params.RING_FOOT_W, high - low)
+        )
+    return feet
+
+
 @cache.solid
 def led_ring_insert():
     """The translucent ring that fills the channel and closes its window.
@@ -680,13 +742,14 @@ def led_ring_insert():
     Print it in natural PA12 while the shell takes the dye. The IR window
     already needs one undyed part, so this adds no process.
     """
-    return _ring_loft(
+    body = _ring_loft(
         lambda angle: _insert_section(angle, params.RING_INSERT_FIT),
         CAVITY_FRONT - 2,
         # _offset_face() grows with its argument, so the fit comes off it to
         # pull the insert's chord in off the cavity wall rather than past it.
         _offset_face(STIFFENED_WALL - params.RING_INSERT_FIT),
     )
+    return _fuse(body, *led_ring_feet())
 
 
 def led_ring_channel(fdm=False):

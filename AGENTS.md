@@ -448,6 +448,10 @@ The remote tracks the ESPHome development branch, not a release. The workflow in
 
 Keep that value a full commit. A branch name would let two runs of one tag build different firmware.
 
+`c6remote.yaml` also sets `min_version`, which is the oldest ESPHome that can build it. The two values answer different questions. `ESPHOME_COMMIT` is what a release build uses, and `min_version` is what any other build must have at least. The Made for ESPHome review installs the newest stable release, then upgrades it to `min_version`, so this value is what lets the review build the config at all.
+
+Raise `min_version` when a local component starts to need a newer ESPHome. The value is `2026.11.0`, because `ha_action` sends each action field as `ProgmemStringRef`.
+
 To move it, pick a commit on `dev`, install it locally, then build both configs before you change the workflow:
 
 ```bash

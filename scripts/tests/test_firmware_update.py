@@ -289,6 +289,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
                       FIRMWARE_WORKFLOW)
         self.assertRegex(FIRMWARE_WORKFLOW, r"\n  ESPHOME_COMMIT: [0-9a-f]{40}\n")
 
+    def test_the_config_names_the_oldest_esphome_that_builds_it(self) -> None:
+        # The Made for ESPHome review installs the newest stable release, which
+        # can be older than the pinned commit. `ha_action` sends each action
+        # field as ProgmemStringRef, which 2026.11.0 added, so an older ESPHome
+        # must stop at the version check and not in the compiler.
+        self.assertRegex(CONFIG, r"(?m)^  min_version: 2026\.11\.0$")
+
     def test_the_manifest_matches_the_http_request_update_parser(self) -> None:
         for text in ('name: "homeThing C6"', "version: $version", 'chipFamily: "ESP32-C6"',
                      "parts: [{path: $factory, offset: 0}]",

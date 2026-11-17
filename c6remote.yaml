@@ -22,6 +22,11 @@ esphome:
   # Appends the last six MAC hex digits, so each remote gets its own hostname
   # and Home Assistant name.
   name_add_mac_suffix: true
+  # ha_action sends each action field as ProgmemStringRef, which ESPHome added
+  # in 2026.11.0. An older ESPHome fails in the compiler, so refuse it here and
+  # name the version instead. The Made for ESPHome review installs the newest
+  # stable release, then upgrades it to this value.
+  min_version: 2026.11.0
   # The update entity offers any manifest version that is not equal to this
   # string. c6remote-factory.yaml uses the same project name.
   project:

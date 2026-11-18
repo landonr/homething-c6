@@ -4,23 +4,23 @@
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "a276c2869d1bd243b7c2f1b228d86e6122ad6a3d8d456b06daa4f9ad535386be",
+    "fingerprint": "645c57443423658711875824eb3081db8df3ce8af9d1109d683ba448a574c670",
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "72a2baf50b16da092bd90540dfda91b2768489ccc4d1aa5ed48751663604edd4",
+    "fingerprint": "cd49a9b4b27e5811661a4098d16deecc297a2797d2db162905275bf087c75654",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "904589b76f12a0a514b5a5888e466f1a148f26d016dd472327383b425a6f56dd",
+    "fingerprint": "39b668bcb10d94215dca3d71422716fc392a3eb059d29cb789f5d5285e35e1b8",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "1af5cb66a12284ffd81f507fa26aa432ba60cdeb606abaf0c44789e540d82b6d",
+    "fingerprint": "6aaaa4c40f79803ad7bff3bfbe1349e4cebbebf0cfec9cec3e0749c7f9b3244c",
     "source": "index"
   },
   "case-stills": {
-    "fingerprint": "66d8e5800beb1641949d3aa116cb345cf6f8a7b5ee93a81e2084b17a1e5f858a",
+    "fingerprint": "f48b1691f5106344aa820afa226da4e9fad571ccd325bbaf3b51050975a8db61",
     "source": "index"
   },
   "schematic": {
@@ -28,20 +28,20 @@
     "source": "index"
   },
   "self-test-diagrams": {
-    "fingerprint": "3402b19582d35180c18633fba7e5772c3bda2b1dc804f3fc2c1f19d15d54bdbf",
+    "fingerprint": "9ec3a9900a70145780bcc115a5e4e4d5354cc90f7895857e4c09c3ffb899728f",
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "022ac5155046b8fa6fd5c9adba3d58aade678c8d811e31b1f5927da36c85f764",
-    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
+    "fingerprint": "f48b1691f5106344aa820afa226da4e9fad571ccd325bbaf3b51050975a8db61",
+    "source": "index"
   },
   "site-media": {
-    "fingerprint": "815cfe2362441d811a9ce3b8ed346eca7bf12bf1fd3cfc1dab40b0ffe44b8411",
+    "fingerprint": "bd69efb21e76c669e37cf274ed7f2354e8edc678601d68f9db27a9574412dd4a",
     "source": "index"
   },
   "site-voice": {
-    "fingerprint": "67b71813b1a95b344ff20d9bdf2f57b1595af252a7167560841df2e20656e6d7",
-    "source": "141debbb2a21cbe5ec1274904ccb6014c3b751d6"
+    "fingerprint": "09ffc56989a7ee12de5a806544773f3e8aaf294377d69f418928909cc5607d18",
+    "source": "index"
   },
   "web-page-framed": {
     "fingerprint": "d14662d53ca29fad041c5398bad246511b328815bdf1f6829870e67bbc2d1542",

@@ -267,12 +267,16 @@ def legacy_skirt_nibs():
     return [legacy[ref][:2] for ref in case.island_refs("second")]
 
 
-def legacy_skirt_depth(pad, reference, fdm=True):
-    """(problems, lines): the V2 pad's skirt walks the second lobe down to the
-    `reference` V1 pad's built plunger bottoms, the plane the V1 skirt ends on,
-    flush with the web and PAD_SKIRT_T thick, and is open only where a moved V2
-    part stands up to it. `fdm` false reads a moulded pad,
-    whose web has no groove chamfer."""
+def legacy_skirt_depth(pad, fdm=True):
+    """(problems, lines): the V2 pad's skirt walks its own lobe outline down to
+    PAD_SKIRT_BOTTOM, the plane the V3 skirt ends on, flush with the web and
+    PAD_SKIRT_T thick, and is open only where a moved V2 part stands up to it.
+    The V2 SW1 and SW2 bodies are such parts, under the lobe's wheel-side edge.
+    `fdm` false reads a moulded pad, whose web has no groove chamfer.
+
+    Both pads end on one plane, so neither needs the other's built plungers as
+    a reference any more. This one still takes zones, because its own board
+    puts parts under the wall that the V3 board does not."""
     solids = [solid for _, solid in case.legacy_skirt_obstacles()]
     return pad_skirt_depth(
         pad,
@@ -280,21 +284,21 @@ def legacy_skirt_depth(pad, reference, fdm=True):
         False,
         lobes=("second",),
         zones=_skirt_zones(solids, case.PAD_SKIRT_BOTTOM),
-        reference=reference,
+        v2=True,
     )
 
 
 def legacy_skirt_clears_board(pad):
     """(problems, line): the built V2 TPU pad keeps PAD_SKIRT_CLEARANCE off the
-    moved V2 parts, with columns cut round the V2 and V3
-    switch centres, which are the nibs and the kept plungers."""
+    moved V2 parts and the V2 switch bodies, with columns cut round the V2 and
+    V3 switch centres, which are the nibs and the kept plungers."""
     parts = board.components()
     columns = legacy_skirt_nibs() + [parts[ref][:2] for ref in case.island_refs("second")]
     return pad_clears_board(
         pad,
         obstacles=case.legacy_skirt_obstacles(),
         columns=columns,
-        floor=case.PAD_SKIRT_BOTTOM - 1.0,
+        floor=case.SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION - 1.0,
     )
 
 

@@ -152,13 +152,15 @@
     ]
   },
   "case-fronts": {
-    "description": "The SLS and FDM front face plans and the isometric clay renders of the two front shells, for case/README.md.",
+    "description": "The FDM, SLA and SLA one-piece front face plans and the isometric clay renders of the FDM, SLA and SLA one-piece front shells, for case/README.md. The SLA files keep the old sls name, because the site links to them.",
     "made_by": "repo",
     "outputs": [
       "docs/readme-assets/case-front-face-sls.svg",
       "docs/readme-assets/case-front-face-fdm.svg",
+      "docs/readme-assets/case-front-face-one-piece.svg",
       "docs/readme-assets/case-front-iso-sls.png",
-      "docs/readme-assets/case-front-iso-fdm.png"
+      "docs/readme-assets/case-front-iso-fdm.png",
+      "docs/readme-assets/case-front-iso-one-piece.png"
     ],
     "inputs": [
       "scripts/render-face-svg.py",
@@ -176,13 +178,14 @@
     "refresh": [
       "case/.venv/bin/python scripts/render-face-svg.py --version sls",
       "case/.venv/bin/python scripts/render-face-svg.py --version fdm",
+      "case/.venv/bin/python scripts/render-face-svg.py --version one-piece",
       "case/.venv/bin/python case/case.py",
       "python3 scripts/render-case-fronts-blender.py",
       "python3 scripts/render-status.py --write case-fronts"
     ],
     "recipe": [
       "render-face-svg.py reads the case model directly. render-case-fronts-blender.py reads the STLs that case.py writes into case/export/.",
-      "The Blender script uses its defaults: 1200 px wide at 512 samples, with one camera for the two shells."
+      "The Blender script uses its defaults: 1200 px wide at 512 samples, with one camera for the three shells."
     ]
   },
   "case-front-face": {

@@ -17,41 +17,51 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
   <img alt="The c6remote case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together" src="../docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
-The model exports a front shell, back shell, soft button pad, IR window insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
+The model exports the SLA front shell, back shell, soft button pad, IR window insert, LED ring insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
-It also exports a second front shell for a filament printer. Read [SLS and FDM versions](#sls-and-fdm-versions).
+It also exports an FDM front shell for a filament printer. Read [Front versions](#front-versions).
+It also exports an SLA one-piece front for a clear print, with the LED ring insert fused in. Read [SLA one-piece front](#sla-one-piece-front).
 It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
 It also exports the end-wall screw, `c6remote-case-screw.stl`, in its installed position. Buy this screw. Do not print it. Read [Parts](#parts).
 
-## SLS and FDM versions
+## Front versions
+
+The case has three front versions:
+
+- The FDM front prints on a filament printer. Its face is flat, with a groove on the dish outline.
+- The SLA front is a Somos Taurus shell and a separate ring insert in UTR-8100. Its face has a shallow dish around the keys and the wheel.
+- The SLA one-piece front is the SLA front with the ring insert fused in. It prints as one part in clear resin, so the whole front glows.
 
 <p align="center">
-  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="../docs/readme-assets/case-front-face-sls.svg" width="260">
-  <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="260">
+  <img alt="Plan of the FDM front face. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-face-fdm.svg" width="220">
+  <img alt="Plan of the SLA front face. The shading is darker where the face or the dish is steeper. A circle around the wheel is the joint line of the ring insert." src="../docs/readme-assets/case-front-face-sls.svg" width="220">
+  <img alt="Plan of the SLA one-piece front face. The shading is the same as on the SLA front, but no joint line goes around the wheel." src="../docs/readme-assets/case-front-face-one-piece.svg" width="220">
 </p>
-<p align="center"><sub>On the SLS face (left), the shading is darker where the face or the dish is steeper. The arched face and the basins show without contour lines. The FDM face (right) is flat, with an outline groove and a chamfered edge.</sub></p>
+<p align="center"><sub>FDM front (left), SLA front (middle), and SLA one-piece front (right), in plan. The FDM face is flat, with an outline groove and a chamfered edge. On the two SLA faces, the shading is darker where the face or the dish is steeper. The SLA face shows the joint line of the ring insert. The one-piece face has no joint line.</sub></p>
 
 <p align="center">
-  <img alt="Isometric view of the SLS front shell alone. A low light shades the dish around the keys and the wheel, and the face rolls down into every wall." src="../docs/readme-assets/case-front-iso-sls.png" width="400">
-  <img alt="Isometric view of the FDM front shell alone. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-iso-fdm.png" width="400">
+  <img alt="Isometric view of the FDM front shell alone. The face is flat. A groove follows the dish outline, and the top edge has a chamfer." src="../docs/readme-assets/case-front-iso-fdm.png" width="270">
+  <img alt="Isometric view of the SLA front shell alone. A low light shades the dish around the keys and the wheel, and the face rolls down into every wall. The LED ring is an open bore, because the ring insert is a separate part." src="../docs/readme-assets/case-front-iso-sls.png" width="270">
+  <img alt="Isometric view of the SLA one-piece front alone. The ring insert is part of the shell, so the only opening is the wheel bore, with a round on its edge." src="../docs/readme-assets/case-front-iso-one-piece.png" width="270">
 </p>
-<p align="center"><sub>SLS front (left) and FDM front (right), isometric</sub></p>
+<p align="center"><sub>FDM front (left), SLA front (middle), and SLA one-piece front (right), isometric</sub></p>
 
-Both versions use the same back shell, IR window, interior, and board position. Only the front face and the button pad change.
+All three versions use the same back shell, IR window, interior, and board position. Only the face, the LED ring, and the button pad change.
 
-| | SLS | FDM |
-| --- | --- | --- |
-| Front shell | `c6remote-case-front.stl` | `c6remote-case-front-fdm.stl` |
-| Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
-| Face height | Base level | `FDM_FACE_DROP` lower |
-| Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
-| LED ring channel | Full depth, with an even roof under the face | Half the arch depth, for a thicker roof |
-| Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
-| Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
-| Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
-| Assembly | Install the caps before the pad. The one-piece TPU pad has no caps. | Install the pad from inside, before the board |
+| | FDM | SLA | SLA one-piece |
+| --- | --- | --- | --- |
+| Front shell | `c6remote-case-front-fdm.stl` | `c6remote-case-front.stl` and `c6remote-ring-insert.stl` | `c6remote-case-front-one-piece.stl` |
+| Print | Filament, face down. The face needs no support. | SLA. A filament printer must support the dish floor, and the support marks the face. | SLA, as one part |
+| Material | Filament | Somos Taurus for the shell. UTR-8100 in the translucent finish for the insert. | Clear resin. In UTR-8100, the translucent finish. |
+| Face | One flat plane. The dish outline is a shallow groove. | A shallow dish around the keys and the wheel | The same as the SLA front |
+| Face height | `FDM_FACE_DROP` lower | Base level | Base level |
+| Top edge | 45 degree chamfer, `EDGE_R_FRONT_FDM` | None. The face rolls down into every wall. | None, as on the SLA front |
+| LED ring | A channel at a fraction of the reference depth, under a roof of its own | One circle bored clear through the face. A separate insert fills it. | The insert is fused into the shell. The face over the ring has no joint line, and the whole front glows. |
+| Button pad | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | The same as the SLA front |
+| Pad web | Isolation grooves, `FDM_PAD_GROOVE_W` wide | Plain | Plain |
+| Assembly | Install the pad from inside, before the board | Bond the insert. Install the caps before the pad. The one-piece TPU pad has no caps. | The same as the SLA front, but with no insert to bond |
 
-Read [FDM front](#fdm-front) for the FDM face details.
+Read [FDM front](#fdm-front) for the face details of the FDM and SLA fronts. Read [SLA one-piece front](#sla-one-piece-front) for the fused ring.
 
 ## Setup
 
@@ -83,11 +93,14 @@ case/.venv/bin/python case/check.py --only support,shells
 
 Run the full check before you accept a case change. A scoped check does not validate the full model.
 
-Run independent feature groups in parallel when two or more groups are selected:
+A run spreads its passes across `--jobs` processes, which defaults to 10. The
+suite is CPU-bound, so a serial run leaves a workstation idle. One pass,
+`assembly.parts_are_sound`, takes about 10 minutes on its own and sets the
+floor that no value gets under.
 
 ```bash
-case/.venv/bin/python case/check.py --jobs 4
-case/.venv/bin/python case/check.py --only ir,support --jobs 2
+case/.venv/bin/python case/check.py --jobs 1   # serial
+case/.venv/bin/python case/check.py --only ir,support
 ```
 
 Use `--quiet` for failures, provenance, counts, and the scoped-run warning. Use `--timings` to print pass durations.
@@ -157,27 +170,52 @@ The model derives geometry from the board where possible. Manual values include 
 
 ## Materials
 
-Print the shells with a tinted translucent filament. The STL files contain no color or material data.
+Print the shells in Somos Taurus by SLA. Taurus is an opaque, charcoal grey resin, so no light goes through the shell at any thickness. The STL files contain no color or material data.
 
-A white filament also works. The roof over the LED ring channel is `LED_RING_FACE_ROOF` thick under the face, so the status LEDs glow through a white front.
+The status LEDs do not shine through the front shell. They shine into `c6remote-ring-insert.stl`, which fills the LED ring. It is the only part that the light of the LEDs goes through.
+
+Print the insert in UTR-8100 by SLA, in the translucent finish and not the transparent finish with spray varnish. Clear resin does not scatter light, so a polished insert shows six bright points and no band. The translucent surface scatters the light into a band. PA12 scatters light by itself, but the shell is no longer PA12.
+
+The IR window cannot be shell material either. Print it as a clear part or as an IR-pass part.
+
+The one-piece front has no separate insert, so it cannot be Taurus. Print the whole front in clear resin. Read [SLA one-piece front](#sla-one-piece-front).
+
+The insert goes in from inside the shell before the board. It rises straight up, and nothing on it is wider than the cavity wall it passes. Six lobes reach down over the six LEDs, and each lobe tucks under a land of shell. As a result, the part cannot pass outward through the face.
+
+Nothing holds it the other way, so bond it while the front shell lies face down. Use the same adhesive as the IR window.
+
+The insert has six feet on its underside, one in each gap between the LEDs. Each is a sector of the band it hangs off. Outward, its face is an arc on the ring's outline, so no corner stands past the round outer face. Do not make the feet boxes, because the corners of a flat face break that line. Inward, each stops on `LIP_CLEAR_R`, which is the wheel's own rotating clearance rather than the band's inner edge. The band's underside steps down on the same radius, so each foot is flush with it. They are a limit and not a seat. At rest they touch nothing. If the bond fails, they land on the board and stop the part, so it cannot reach the ENC1 flange. Do not cut them back to make the insert sit lower.
+
+`RING_BORE_ROUND` rounds the ring's inner edge, where the dish meets the wheel bore. The round drops the edge next to the knob, so the knob stands higher over the ring. It is softer than the 45 degree mouth of the FDM front. The one-piece front carries the same round.
+
+The two feet on the long-side axis carry less than the other four. The board ends level with the ring there, so each one overhangs the board edge and bears only on the part of its face that is still over the board. They are redundancy. The four between them are the support.
 
 <p align="center">
-  <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan through the white shell around the scroll wheel" src="../docs/readme-assets/case-front-white.png" width="260">
+  <img alt="Front of the c6remote in a white case. The six status LEDs glow red, blue, green, pink and cyan in the ring insert around the scroll wheel" src="../docs/readme-assets/case-front-white.png" width="260">
 </p>
 <p align="center"><sub>White front with the status LEDs on</sub></p>
 
-A white shell scatters the light inside the plastic, so the roof thickness sets how much LED light gets through.
+The IR window material must transmit 940 nm infrared light. Test the selected material with a physical remote.
 
-The IR window material must transmit 940 nm infrared light. Test the selected filament with a physical remote.
-
-If the shell filament blocks too much infrared light, make the same insert from IR-pass acrylic.
+If the selected material blocks too much infrared light, make the same insert from IR-pass acrylic.
 
 Prototype the button pad in TPU. Use translucent silicone for a molded part.
-The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide and its bottom is level with the plunger contacts, so the pad stands level on the plungers and the skirt.
-The skirt has a break over each board part that it would otherwise touch. `PAD_SKIRT_CLEARANCE` sets the gap.
+The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide. Its outer face is flush with the web edge, so the pad keeps its plan outline.
+
+Each lobe is the box of its own switch centres, grown by `pad_reach()`. That is half the keytop of the TPU and FDM pads, plus `PAD_MARGIN`. The keytop is the widest part that every pad variant carries on its web.
+
+The rigid cap's flange is wider than the keytop. On the outer side of each outer key, the flange overhangs the web and its counterbore is open to the cavity. The press goes through the stem, so the flange needs no web under it.
+
+`PAD_MARGIN` must stay in a narrow window. If it goes below zero, a keytop overhangs the web. If it goes too high, the skirt comes within `PAD_SKIRT_CLEARANCE` of C1, and C1 breaks the wall.
+
+`PAD_SKIRT_DEPTH` sets how far the wall drops below the web. The wall has a break over each board part still in its way. `PAD_SKIRT_CLEARANCE` sets the gap that decides which parts those are. The switch bodies count. The STEP has no switch model, so `switch_bodies()` adds a `SWITCH_BODY` box for each switch. On the current board, no part breaks the wall.
+
+The pad stops short of the ring insert in plan. `pad_clear_y()` includes the reach of the insert's lobes plus `PAD_SKIRT_CLEARANCE`. A skirt cannot pass over a lobe that keeps `RING_LOBE_WALL`, so the outline must stay outside the lobes.
+
+The lobes stop short of the side walls. So each lobe has a locating tab on each long side, at its mid-length, and each tab runs out to the `PAD_FIT` line. As a result, the pad cannot shift in x by more than `SOCKET_LEAD`, and the stems still find the cap lead-ins during blind assembly. `PAD_TAB_W` sets the tab length along the side, and `PAD_TAB_RADIUS` rounds its outer corners. Each tab is web only, with no skirt under it. Every pad variant has the tabs, the V2 top pads included.
 The molded pad and the one-piece TPU pad have a plain web without isolation grooves. Only the FDM pad has grooves.
 
-`c6remote-case-pad-tpu.stl` goes with the recessed front `c6remote-case-front.stl`. Print it in TPU as one piece in place of the TPU pad and the PETG caps. Do not install separate caps with it.
+`c6remote-case-pad-tpu.stl` goes with the SLA front `c6remote-case-front.stl`. Print it in TPU as one piece in place of the TPU pad and the PETG caps. Do not install separate caps with it.
 
 For keytops with no legend, print `c6remote-case-pad-tpu-blank.stl` in place of `c6remote-case-pad-tpu.stl`.
 It is the FDM pad with the same skirt as the molded pad. It has no edge chamfer, because TPU flexes on its own. Its grid web is a plain slab with square edges.
@@ -200,7 +238,7 @@ Keytops up puts the pad on the keytop stems. The pad then stands on 26 mm2. Use 
 
 The FDM pad cuts its isolation grooves from the keytop side only. As a result, the web underside is flat, and the supports for a keytops-up print come off easily.
 
-The chamfer on both lips of each groove and on the grid lobe outer top edge runs down to the groove floor, set by `FDM_PAD_GRID_CHAMFER`.
+The chamfer on both lips of each groove runs down to the groove floor, set by `FDM_PAD_GRID_CHAMFER`. The grid lobe's outer top edge takes the smaller `FDM_PAD_EDGE_CHAMFER`. It must not exceed `PAD_MARGIN`, so it stops short of the outer keytops.
 
 If you print keytops down, the grooves face the support. Then the supports fill the grooves and are hard to remove.
 
@@ -210,7 +248,7 @@ PCBWay prints the front and back shells, and it publishes these limits for each 
 
 | Process | Materials | Minimum wall | Tolerance | Maximum size | Source |
 | --- | --- | --- | --- | --- | --- |
-| SLA | UTR 8360 (white), Somos Ledo (white), UTR-8100 (clear) | 0.8 mm | ±0.2 mm under 100 mm, ±0.2% of the length over 100 mm | 2100 x 800 x 700 mm | [SLA](https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLA.html) |
+| SLA | UTR 8360 (white), Somos Ledo (white), Somos Taurus, UTR-8100 (clear) | 0.8 mm | ±0.2 mm under 100 mm, ±0.2% of the length over 100 mm | 2100 x 800 x 700 mm | [SLA](https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLA.html) |
 | SLS | PA12 | 1 mm | ±0.25 mm under 100 mm, ±0.3 mm from 100 to 200 mm | 400 x 390 x 390 mm | [SLS](https://www.pcbway.com/rapid-prototyping/3d-printing/3d-printing-SLS.html) |
 
 The values in this section are from the vendor pages on 2026-11-11. The vendor can change these values, so read the pages again before an order.
@@ -230,9 +268,9 @@ If a wall is thinner than the minimum, PCBWay suspends the order. It sends photo
 
 PCBWay does not publish a minimum hole size or a minimum embossed or engraved detail. It also does not publish a clearance between parts or rules for drain holes and overhangs.
 
-`LED_RING_FACE_ROOF` is equal to the SLA minimum. `ROOF_LEFT_MIN` in `case/checks/wheel_ring.py` holds the thinnest roof to a floor just under this value. The table in [SLS and FDM versions](#sls-and-fdm-versions) calls the recessed front "SLS". If you order the recessed front in SLS PA12, the roof is thinner than the 1 mm minimum.
+`LED_RING_FACE_ROOF` is equal to the SLS minimum in the first table, so it keeps a margin over the SLA minimum. It sets the land of shell over each lobe pocket, which is the only shell the SLA front keeps over the LED ring. `RING_LAND_MIN` in `case/checks/wheel_ring.py` holds that land to a floor just under this value. `ROOF_LEFT_MIN` holds the FDM front's own channel roof.
 
-The `fab` pass of `check.py` measures the walls of the exported `c6remote-case-front.stl` and `c6remote-case-back.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
+The `fab` pass of `check.py` measures the walls of each part that PCBWay prints: `c6remote-case-front.stl`, `c6remote-case-back.stl`, `c6remote-ring-insert.stl`, and `c6remote-case-front-one-piece.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
 
 The pass sorts each thin reading by the angle at the far face. A wall reading has two faces that are almost parallel. A taper reading is near an edge where two faces meet at a sharp angle. The material is thin only in a narrow band along that edge. A square corner is not thin, so the pass ignores it.
 
@@ -241,7 +279,6 @@ Other features are also thinner than the minimum. `ACCEPTED` in `case/checks/fab
 These features are under the SLA minimum on the current shells:
 
 - The counterbore lands under the key dishes are real thin walls. `LAND_FLOOR_MIN` in `case/checks/keypad.py` holds them, but it is below the PCBWay minimum. The lead-in chamfer of each face hole makes a taper at the hole wall.
-- The LED ring roof is `LED_RING_FACE_ROOF` thick in the vertical direction. The face slopes, so the wall normal to the face is a little thinner than the minimum.
 - The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
 - On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`. Parts of the reset guide tube are thinner than `RESET_GUIDE_WALL`.
 - The catch detent noses, the end screw cuts and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
@@ -261,11 +298,11 @@ Check these fits on the first print.
 
 ## FDM front
 
-The export contains two front shells. Both shells have the same interior, so the caps, the pad, and the back shell fit either one.
+The export contains three front shells. All three have the same interior, so the caps, the pad, and the back shell fit each one.
 
-`c6remote-case-front.stl` is the recessed front. Its face carries a shallow dish around the keys and around the wheel.
+`c6remote-case-front.stl` is the SLA front. Its face carries a shallow dish around the keys and around the wheel.
 
-The recessed front's face is one superellipse across its width, from side wall to side wall. `FACE_POWER` is its exponent. The crown runs along the centreline, `FACE_CROWN_OVER_WHEEL` above the knob's measured top. The face falls `FACE_SIDE_DROP` from the crown to each side wall and meets the wall vertically. No edge shows where a flat panel turns into a round.
+The SLA front's face is one superellipse across its width, from side wall to side wall. `FACE_POWER` is its exponent. The crown runs along the centreline, `FACE_CROWN_OVER_WHEEL` above the knob's measured top. The face falls `FACE_SIDE_DROP` from the crown to each side wall and meets the wall vertically. No edge shows where a flat panel turns into a round.
 
 Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall with the same exponent. Around the plan corners, the section follows the corner arc. As a result, the face meets every wall vertically at one height, `FACE_WALL_TOP`.
 
@@ -273,13 +310,29 @@ Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall w
 
 Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
 
-The LED ring channel ceiling keeps a vertical roof of `LED_RING_FACE_ROOF` under the built face all the way round, so the six LEDs glow through an even roof. `LED_RING_FACE_ROOF` is the minimum wall that PCBWay publishes for SLA resin. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. `LED_RING_SAG` keeps the arch below the ceiling at the east and west sides of the knob, where the face is lowest. As a result, the channel is shallowest there. The ring roof check holds the roof above its floor.
+The SLA front keeps no shell over the LED ring. The Taurus shell passes no light at any thickness, so a roof of shell would make the ring dark. In a material that passes light, a roof thin enough to light up is also under the PCBWay minimum wall. So `led_ring_channel()` bores one circle from the cavity ceiling clear through the face, and `c6remote-ring-insert.stl` fills it. As a result, the front shell has no thin sheet, and the lit band runs in to the knob.
 
-The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling. Where the channel is too shallow for the full bevel, at the east and west sides, the bevel shortens and keeps `LED_RING_INNER_FOOT_MIN` of upright inner wall. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
+`led_ring_face_r()` is that circle. It stands `RING_LIFT_CLEAR` inside the cavity wall where the wall comes closest to the wheel, and it is the same on every bearing. As a result, the opening in the face is round, and the insert clears the wall as it rises.
+
+The ring stops short of the LEDs, so each LED gets a lobe on the insert. A lobe is a dome over its LED, a wall outside the dome's rim, and a 45 degree flare back up into the shell. The flare carries that LED's light into the band. It also holds the insert in: the shell opens a pocket for each flare and keeps `LED_RING_FACE_ROOF` of land over it.
+
+The rim of each dome sits `RING_LOBE_WRAP` under its LED's top face, so the dome wraps the package instead of covering it. `led_ring_lobe_rim_r()` solves for the rim radius that leaves `RING_LOBE_GAP` of air over the LED's outer corner.
+
+`RING_LOBE_STRAIGHT` sets how straight each dome runs. The flare over the dome is a plane at 45 degrees, so the material between them is the vertical gap times the cosine of 45, not the vertical gap. A dome that meets the band's underside flat climbs hardest in the middle, which is where the flare sits over it, and the wall there came back under the minimum. A straighter dome spends that climb earlier. It costs reach, because the rim must still clear the LED's outer corner.
+
+Each dome is open on its inner side. A wall there would have to stand between the LED and the ENC1 lip, and `LIP_CLEAR_R` leaves no room for one. The band itself sits over that half of the package and takes its light.
+
+The lobes are local to the six LEDs. A flare all the way round would reach past the cavity wall near the long sides, and the insert could not lift past it.
+
+Each lobe has a 45 degree chamfer on its top outer corner, set by `RING_LOBE_SHOULDER`. The flange of SW6 stands over the D7 lobe, and without the chamfer a full press brings it onto that corner. The corner carries no retention. `led_ring_lobe_roof()` measures the dome wall to the chamfer, and `pressed_caps_clear_lobes()` in `case/checks/wheel_ring.py` measures the gap to a pressed flange.
+
+The FDM front keeps a channel of its own, because its face sits lower and its roof is thick enough to print. Its depth is `FDM_LED_RING_DEPTH_RATIO` of the depth `LED_RING_ROOF` leaves over the cavity ceiling, so `LED_RING_FACE_ROOF` does not change that front.
+
+`wheel_lip_relief()` lifts the ceiling off the ENC1 lip. The lip is a static flange under the fixed bezel, wider than the wheel opening, so it can never pass up through the face. Without the relief the ceiling sat flat at `CAVITY_FRONT` over the lip. That gap pinned `PAD_WEB_T`, because `CAVITY_FRONT` is `PAD_WEB_TOP`, and through it the counterbore lands. The relief is an annular lift of `WHEEL_LIP_RELIEF` out to `led_ring_inner_r()`. `LED_RING_FOOT` is the plane it leaves, and the insert's underside steps up to that plane over the bore. As a result, the ring glows into the gap round the bezel.
 
 A chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the face and the dish. In each section across the rim, a round leaves the face `RECESS_CHAMFER_ROUND_OUT` outside the rim with the face's own slope and runs `RECESS_CHAMFER_ROUND_W` inside it. Its start outside the rim gives it room to turn gently, and the face is cut there. A second round, `RECESS_CHAMFER_INNER_ROUND_W` wide, meets the dish floor with the floor's own slope. If the two rounds leave room, the section is straight between them. The two rounds fill the chamfer, so the section is one S-curve from the face to the dish. The chamfer replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
-The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring channel north and south of the knob, so the ring roof check limits how deep they can go.
+The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring north and south of the knob, where two of the lobes are, so the ring land check limits how deep they can go.
 
 Each dish depth is measured down from the face, so the dish rim keeps its designed outline. The face falls toward the side walls, so it lowers the dish floor under the outer edge of each outer-column key. In the key dishes, `KEYPAD_LIP_LIFT` gives part of that drop back, so the floor rises to a crest before the rim. The counterbore lands there are the thinnest. The counterbore lands limit how deep `KEYPAD_DISH_DEPTH` and `KEYPAD_DISH_DEPTH_2` can go.
 
@@ -299,19 +352,42 @@ Support under the face marks the one cosmetic surface on the case. The other ori
 
 The groove is narrow, so the layer above it bridges the gap in one span. The FDM front needs no support on its face.
 
-The FDM front's face sits `FDM_FACE_DROP` below the recessed front's crown, so the part is slimmer than a flat face at the raised level.
+The FDM front's face sits `FDM_FACE_DROP` below the SLA front's crown, so the part is slimmer than a flat face at the raised level.
 
-On the FDM front, the caps and the wheel stand that much higher above the face than on the recessed front. The recessed front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth. The recessed front's crown stands `FACE_CROWN_OVER_WHEEL` above the knob top.
+On the FDM front, the caps and the wheel stand that much higher above the face than on the SLA front. The SLA front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth. The SLA front's crown stands `FACE_CROWN_OVER_WHEEL` above the knob top.
 
 The drop thins the ceilings that the dish never reaches. Run `check.py --only fdm` to check their thickness.
 
 The groove follows the dish rim exactly. The outline on the two fronts is the same line.
 
-The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed front's face rolls into the walls instead.
+The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The SLA front's face rolls into the walls instead.
 
-On the recessed front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
+On the SLA front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
 
-`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the recessed front's arch depth, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
+`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the depth `LED_RING_ROOF` leaves over the cavity ceiling, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
+
+## SLA one-piece front
+
+`c6remote-case-front-one-piece.stl` is the SLA front with the LED ring insert fused into it. Print it as one part in clear resin by SLA.
+
+Use this front only for a clear or translucent print. The light of the LEDs reaches the face only through the material of the part, so an opaque print of it lights nothing. For a Taurus or other opaque shell, use `c6remote-case-front.stl` with `c6remote-ring-insert.stl`. In UTR-8100, ask for the translucent finish, for the reason in [Materials](#materials).
+
+On a clear print, the whole front glows, not only the ring. The light enters through the lobes and spreads through all of the shell.
+
+The two-part build has a fit at each place where the insert meets the shell. On this front, each of those fits closes, so no slit or void stays between the two parts:
+
+- The band of the insert fills the ring bore with `RING_INSERT_FACE_FIT` at its face. With that fit closed, the band and the bore cancel, so this front keeps the ring as shell. The face over the ring is the dish itself, with no joint line.
+- The ring's inner edge takes the same `RING_BORE_ROUND` as the insert. A cut of the same arc makes it, so the two builds show the same edge.
+- Each lobe pocket keeps `RING_LOBE_FIT` round the flare of its lobe. The pockets and the flares cancel in the same way.
+- Each lobe stops `RING_LOBE_FIT` under the cavity ceiling. `led_ring_lobe_fills()` closes that gap. Each fill continues the `RING_LOBE_SHOULDER` chamfer up to the ceiling, so a pressed SW6 flange meets the same surface as on the two-part build.
+
+The fills go in before the key cuts, so a counterbore over a lobe stays open. The six lobes go in after all the cuts, so no cut changes them, and their domes hang over the LEDs as on the insert.
+
+This front has no feet and needs no adhesive, because a fused ring cannot come loose.
+
+Everything else is the SLA front: the face outside the ring, the bore round the knob, and all of the interior. So the caps and pads of the SLA front, the back shell, and the board fit it with no change. Assemble it as the SLA front, but omit the insert.
+
+The `shells` pass of `check.py` makes sure that this front is one solid with one shell, so no void stays inside it. The same pass makes sure that this front holds all the material of the SLA front and of the insert without its feet. The `fab` pass measures its walls.
 
 ## Parts
 
@@ -345,7 +421,7 @@ Each pocket sits a short lower lip above the front skirt's support relief, so a 
 The support relief stands `SUPPORT_SKIRT_FIT` above the ledge tops, so the front skirt never lands on a ledge. The seam shoulder is the only vertical stop.
 A rectangular groove runs without a break round the outer top edge of the back lap. It makes the seam a deliberate shadow line, so a small step or gap between the shells does not show.
 `SEAM_SHADOW_DEPTH` sets how far the groove cuts into the lap. `SEAM_SHADOW_H` sets how far it runs down from the seam.
-Both fronts pair with the same back, so the groove is the same on both versions. The front shoulder bears on the lap top that remains and closes over the groove.
+All three fronts pair with the same back, so the groove is the same on all of them. The front shoulder bears on the lap top that remains and closes over the groove.
 The lap behind the groove must keep `LAP_MIN_WALL`.
 The back detents ramp on both sides so the shells can be opened for service.
 Each back detent sits lower than its pocket and bears on the lower lip with a light preload.
@@ -414,13 +490,15 @@ The SW1 and SW2 keytops of the V2 top pad stand level with the other keys.
 
 Use the V2 top pad only with a V2 board. On a V3 board, the nibs land on the V3 switch bodies.
 
-For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl`. On a V2 board, it replaces the SW1 and SW2 lobe of `c6remote-case-pad-tpu.stl`. Use it with the recessed front `c6remote-case-front.stl`.
+For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl`. On a V2 board, it replaces the SW1 and SW2 lobe of `c6remote-case-pad-tpu.stl`. Use it with the SLA front `c6remote-case-front.stl`.
 
-`c6remote-case-pad-tpu-v2-blank.stl` is a complete V2 pad with blank keytops in one STL. Print it alone, with the recessed front `c6remote-case-front.stl`.
+`c6remote-case-pad-tpu-v2-blank.stl` is a complete V2 pad with blank keytops in one STL. Print it alone, with the SLA front `c6remote-case-front.stl`.
 
-Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements.
+Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements, and from the V2 switch bodies.
 
-For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the recessed front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
+The V2 top pad has its own outline, `pad_lobe_box(v2=True)`. It reaches the nib over each V2 switch and stops short of the ring insert, so it has no notch. The V2 SW1 and SW2 bodies stand under its edge nearest the wheel, so its skirt opens over each of them.
+
+For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the SLA front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
 
 Print the FDM V2 top pad with the keytops down. The nibs extend below the plungers, so the part cannot stand level on its plungers.
 
@@ -441,7 +519,7 @@ The IR window insert enters this opening from inside. Its exterior pane must be 
 - Keep the button caps captive behind the front-shell ceiling.
 - Keep the button pad clear of the wheel and the six wheel LEDs.
 - Keep the pad skirt clear of board parts.
-- Keep the LED ring channel open below its translucent roof.
+- Keep the LED ring channel open, and keep the ring insert solid from the wheel bore out to the face.
 - Keep the microphone funnel aligned with the board port. Its mouth must meet the recess floor in one edge all the way round.
 - Keep the USB slot clear of the connector shell.
 - Keep the USB boot pocket clear, with its floor near enough to the receptacle for a standard plug to seat.
@@ -473,7 +551,8 @@ After a loft or sweep change, inspect the exported STL. A valid BREP can still p
 - Shell mating, the seam shadow groove, and component interference
 - FDM front face flatness, height, top edge round, and outline groove
 - Solid validity and closed STL meshes
-- Wall thickness of the front and back shells against the PCBWay minimum
+- The one-piece front: one solid with one shell, which holds all the material of the two-part build
+- Wall thickness of the front and back shells, the ring insert, and the one-piece front against the PCBWay minimum
 
 Run the full validation before export:
 

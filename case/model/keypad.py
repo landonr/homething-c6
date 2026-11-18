@@ -43,6 +43,7 @@ from .legends import legend_solids
 from .mic import mic_duct_or, mic_port
 from .shape import (
     _cut,
+    _face_reach,
     _fuse,
     _hole,
     _isect,
@@ -54,6 +55,7 @@ from .shape import (
 )
 from .stack import (
     CAP_BOTTOM,
+    CAVITY_FRONT,
     EXTERIOR,
     FDM_FACE,
     LEGACY_SWITCH_TOP,
@@ -70,10 +72,11 @@ from .stack import (
     stem_top,
 )
 from .wheel_ring import (
-    led_ring_bevel_edge_r,
-    led_ring_ceiling_under,
-    led_ring_clip_reach,
-    led_ring_flat_outer_r,
+    led_ring_face_r,
+    led_ring_lobe_bearing,
+    led_ring_lobe_half,
+    led_ring_lobe_land_z,
+    led_ring_lobe_refs,
     pad_clear_y,
 )
 
@@ -880,44 +883,47 @@ def face_plan_margin(x, y, half, samples=None):
     return min(recess_spine(py).width - abs(px - cx) for px, py in outline)
 
 
-RING_ROOF_ANGLES = 180
-RING_ROOF_RADII = 21
-"""How the ring roof's own annulus is walked. Both axes, not just the inner
-radius: the rotary dish is concentric with the channel and so is deepest over
-it at that inner edge, but the grid's and the second island's rims cross the
-same annulus from outside and get deeper the further out they reach, so a
-single radius answers for one of the three and not the others."""
+RING_LAND_ANGLES = 25
+RING_LAND_RADII = 17
+"""How each lobe pocket's land is walked, across its own arc and out along the
+radius. Both axes, not one: the face falls along the arc as well as across it,
+and the pocket's own top rises outward at 45 degrees, so neither axis alone
+finds the thinnest point."""
 
 
-def ring_roof_left():
-    """Thinnest translucent roof left over the LED ring channel, face side.
+def ring_land_left():
+    """Thinnest shell left over a lobe pocket, face side.
 
-    The roof is the built surface less led_ring_ceiling_under(). That ceiling
-    is the arch, or LED_RING_FACE_ROOF under the built face where that is
-    higher. As a result, the roof is LED_RING_FACE_ROOF wherever the ceiling
-    follows the face, and LED_RING_SAG keeps the arch low enough that it does
-    all the way round. The roof is thinner only where the face falls to the
-    arch. That can happen at the east and west sides of the knob, where the
-    face is lowest. Three things dish the face over the channel: the wheel
-    basin past its own half axis on the diagonals, and both necks on their way
-    to the dishes either side. The ceiling goes down with them until the arch
-    stops it, and what they sink past that comes out of this value.
+    This is the one wall the recessed front still keeps over the LED ring, and
+    it is the insert's whole retention as well: each lobe's 45 degree flare
+    tucks under it, so the part cannot pass outward through the face.
 
-    The walk covers the roof flat on each bearing, from the top of that
-    bearing's inner bevel, led_ring_bevel_edge_r(), out to
-    led_ring_flat_outer_r(). Near the X axis the cavity wall cuts the channel
-    off inside that radius, so there the walk stops at led_ring_clip_reach().
+    The pocket's top is a 45 degree cone standing on led_ring_face_r() at
+    led_ring_lobe_land_z(), which is set LED_RING_FACE_ROOF under the lowest
+    the built face gets across that lobe's arc. So the land is
+    LED_RING_FACE_ROOF where the 45 starts at the lobe's worst bearing, and
+    thicker everywhere else: outward, because the face falls more slowly than
+    one in one, and along the arc, because the face rises off its own worst
+    point. What dishes the face over the ring is the wheel basin past its own
+    half axis on the diagonals, and both necks on their way to the dishes
+    either side.
+
+    The walk covers each pocket from the ring's circle out to where its 45
+    crosses the cavity ceiling, which is as far as the shell gives anything up.
     """
     wx, wy = board.wheel_center()
+    r0 = led_ring_face_r()
     thinnest = math.inf
-    for i in range(RING_ROOF_ANGLES):
-        a = 2 * math.pi * i / RING_ROOF_ANGLES
-        lo = led_ring_bevel_edge_r(a)
-        hi = min(led_ring_flat_outer_r(a), led_ring_clip_reach(a))
-        for j in range(RING_ROOF_RADII):
-            r = lo + (hi - lo) * j / (RING_ROOF_RADII - 1)
-            x, y = wx + r * math.cos(a), wy + r * math.sin(a)
-            thinnest = min(thinnest, face_floor_at(x, y) - led_ring_ceiling_under(x, y))
+    for ref in led_ring_lobe_refs():
+        bearing, half = led_ring_lobe_bearing(ref), led_ring_lobe_half(ref)
+        top = led_ring_lobe_land_z(ref)
+        reach = r0 + top - CAVITY_FRONT
+        for i in range(RING_LAND_ANGLES):
+            a = bearing - half + 2 * half * i / (RING_LAND_ANGLES - 1)
+            for j in range(RING_LAND_RADII):
+                r = r0 + (reach - r0) * j / (RING_LAND_RADII - 1)
+                x, y = wx + r * math.cos(a), wy + r * math.sin(a)
+                thinnest = min(thinnest, face_floor_at(x, y) - (top - (r - r0)))
     return thinnest
 
 
@@ -1817,52 +1823,78 @@ def centerline_keys_span():
     return grid + key_size() / 2, second - key_size() / 2
 
 
+def pad_reach(ref):
+    """How far the pad's web reaches past the centre of switch `ref`: half the
+    fused TPU and FDM keytop, fdm_cap_body(), plus PAD_MARGIN.
+
+    The keytop is the widest part that every pad variant carries on its web.
+    The stems, plungers and switch bodies are all narrower. The rigid cap's
+    flange is wider, but the press goes through the stem, so the flange needs
+    no web under it. See PAD_MARGIN for the window this value has to sit in."""
+    return fdm_cap_body(ref) / 2 + params.PAD_MARGIN
+
+
+def pad_lobe_box(name, v2=False):
+    """(x0, y0, x1, y1) of one lobe: the box of its own switch centres, each
+    grown by pad_reach().
+
+    `v2` gives the V2 top pad's lobe. It keeps the V3 stems and keytops, so it
+    keeps the V3 box. It also has to carry a nib over each V2 switch, which sits
+    nearer the wheel. Each nib only needs PLUNGER_D wide plus PAD_MARGIN, so the
+    lobe grows that far past each V2 centre and no further. A wider edge would
+    run into the D6 lobe of the ring insert. The V2 switch bodies stand past
+    that edge, under the web, and the skirt breaks over them."""
+    parts = board.components()
+    sites = [(*parts[ref][:2], pad_reach(ref)) for ref in island_refs(name)]
+    if v2:
+        legacy = board.legacy_components()
+        nib = params.PLUNGER_D / 2 + params.PAD_MARGIN
+        sites += [(*legacy[ref][:2], nib) for ref in island_refs(name)]
+    return (
+        min(x - h for x, _, h in sites),
+        min(y - h for _, y, h in sites),
+        max(x + h for x, _, h in sites),
+        max(y + h for _, y, h in sites),
+    )
+
+
 def pad_lobes():
-    """[(name, x0, y0, x1, y1)] one rectangle per keypad island: that island's
-    own keys, padded PAD_MARGIN on every side.
+    """[(name, x0, y0, x1, y1)] one rectangle per keypad island, from
+    pad_lobe_box().
 
-    The keys alone. The mic is not in it, unlike the recess above: the pad is
-    there to carry stems and plungers, and the inlet's duct comes down outside
-    it.
+    The switches alone. The mic is not in it, unlike the recess above: the pad
+    is there to carry stems, keytops and plungers, and the inlet's duct comes
+    down outside it.
+
+    The lobes used to grow off the cap footprint by a millimetre. That left
+    about four millimetres of web round each stem, and the edge nearest the
+    wheel stood inside the D6 and D7 lobes of the ring insert.
     """
-    out = []
-    for name in ("grid", "second"):
-        xs, ys = _key_bounds(island_refs(name))
-        out.append(
-            (
-                name,
-                min(xs) - params.PAD_MARGIN,
-                min(ys) - params.PAD_MARGIN,
-                max(xs) + params.PAD_MARGIN,
-                max(ys) + params.PAD_MARGIN,
-            )
-        )
-    return out
+    return [(name, *pad_lobe_box(name)) for name in ("grid", "second")]
 
 
-def pad_wheel_gap():
+def pad_wheel_gap(v2=False):
     """Closest either lobe comes to the pad's own wheel clearance band,
-    pad_clear_y() either side of the wheel centre.
+    pad_clear_y() either side of the wheel centre. `v2` reads the V2 top pad's
+    lobe in place of the V3 second lobe.
 
     The band used to be a cut: the pad was one full-width slab and the bore
-    severed it. The lobes are tight rectangles now and stop short of the band
-    on their own, so there is nothing left to cut and this is the number that
-    says so. It is what keeps the lip's rotating clearance and the LEDs' own
-    sight line free of silicone, which is what the band was for.
+    severed it. The lobes stop short of the band on their own now, so this is
+    the number that says so. The band keeps the lip's rotating clearance, the
+    LEDs' sight line and the ring insert's lobes free of silicone.
     """
     _, wy = board.wheel_center()
     half = pad_clear_y()
-    return min(
-        min(abs(y0 - wy), abs(y1 - wy)) - half for _, _, y0, _, y1 in pad_lobes()
-    )
+    boxes = [pad_lobe_box("grid"), pad_lobe_box("second", v2=v2)]
+    return min(min(abs(y0 - wy), abs(y1 - wy)) - half for _, y0, _, y1 in boxes)
 
 
 def _pad_limit():
     """The stiffened wall, inset by PAD_FIT: what each lobe is clipped inside.
 
-    Active on both lobes, whose key rectangles reach past it at the long
-    sides. Taken off STIFFENED_WALL everywhere, so the plain IR end keeps a
-    wider gap than PAD_FIT."""
+    Idle at the present outline, because both lobes stop short of it. It stays
+    as a limit, so a wider lobe cannot reach the wall. Taken off STIFFENED_WALL
+    everywhere, so the plain IR end keeps a wider gap than PAD_FIT."""
     wall = _offset_face(STIFFENED_WALL)
     return Face(wall.outer_wire().offset_2d(-params.PAD_FIT, kind=Kind.INTERSECTION))
 
@@ -1873,17 +1905,63 @@ def _mic_clearance_radius():
     return mic_duct_or() + params.STANDOFF_CHAMFER + params.PAD_MIC_CLEARANCE
 
 
-def pad_lobe_face(name):
-    """The lobe's rounded rectangle, clipped inside the stiffened wall.
+def pad_mic_notch(name, v2=False):
+    """True if the mic clearance circle reaches into this lobe's box, so the lobe
+    has to give up a notch for the duct.
 
-    The mic lobe also loses the mic clearance circle, and the two corners
-    where that circle meets the top edge take PAD_JOIN_RADIUS."""
-    x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
+    Derived, not set. The lobes used to reach past the mic duct and always took
+    the notch. At the present outline the second lobe stops short of the circle,
+    on both V3 and V2, so no lobe takes it."""
+    if name != "second":
+        return False
+    x0, y0, x1, y1 = pad_lobe_box(name, v2)
+    mx, my = mic_port()
+    dx = max(x0 - mx, 0.0, mx - x1)
+    dy = max(y0 - my, 0.0, my - y1)
+    return math.hypot(dx, dy) < _mic_clearance_radius()
+
+
+def pad_tabs(name, v2=False):
+    """[(x0, y0, x1, y1)] the two locating tabs of one lobe, one on each long
+    side, as plan boxes. `v2` gives the V2 top pad's lobe.
+
+    The lobes stop well short of the side walls, so without the tabs the pad
+    could sit about 1.5 off centre in x, more than SOCKET_LEAD catches. Each tab
+    runs out to the PAD_FIT line of _pad_limit(), so the pad floats no more than
+    PAD_FIT each way. Each sits at its lobe's mid-length, where the wall is
+    straight and the front has no ledge, catch or post at web height. Each box
+    reaches PAD_TAB_RADIUS and MERGE into the lobe, so its inner round corners
+    are buried in the web."""
+    x0, y0, x1, y1 = pad_lobe_box(name, v2)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    half = params.PAD_TAB_W / 2
+    limit = _pad_limit()
+    buried = params.PAD_TAB_RADIUS + MERGE
+    out = []
+    for side, edge in ((-1, x0), (1, x1)):
+        outer = cx + side * _face_reach(limit, cx, cy, 0.0 if side > 0 else math.pi)
+        inner = edge - side * buried
+        out.append((min(inner, outer), cy - half, max(inner, outer), cy + half))
+    return out
+
+
+def pad_lobe_face(name, v2=False, tabs=True):
+    """The lobe's rounded rectangle, clipped inside the stiffened wall, with its
+    locating tabs. `v2` gives the V2 top pad's lobe, see pad_lobe_box().
+    `tabs` False leaves the tabs off, which is the outline the skirt follows.
+
+    Where pad_mic_notch() says the mic clearance circle reaches the lobe, the
+    lobe loses that circle, and the two corners where it meets the top edge
+    take PAD_JOIN_RADIUS.
+
+    The tabs go on after the clip. Each ends on the PAD_FIT line itself, and a
+    clip edge that lies on a face edge leaves a sliver."""
+    x0, y0, x1, y1 = pad_lobe_box(name, v2)
     with BuildSketch() as sketch:
         with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
             RectangleRounded(x1 - x0, y1 - y0, params.PAD_RADIUS)
     contour = sketch.sketch.faces()[0]
-    if name == "second":
+    if pad_mic_notch(name, v2):
         mx, my = mic_port()
         radius = _mic_clearance_radius()
         with BuildSketch() as notch:
@@ -1898,6 +1976,14 @@ def pad_lobe_face(name):
     clipped = extrude(contour, amount=1, dir=(0, 0, 1)) & extrude(
         _pad_limit(), amount=1, dir=(0, 0, 1)
     )
+    if tabs:
+        prisms = []
+        for tx0, ty0, tx1, ty1 in pad_tabs(name, v2):
+            with BuildSketch() as tab:
+                with Locations(((tx0 + tx1) / 2, (ty0 + ty1) / 2)):
+                    RectangleRounded(tx1 - tx0, ty1 - ty0, params.PAD_TAB_RADIUS)
+            prisms.append(extrude(tab.sketch.faces()[0], amount=1, dir=(0, 0, 1)))
+        clipped = _fuse(clipped.solids()[0], *prisms)
     return clipped.faces().sort_by()[0]
 
 
@@ -2044,7 +2130,9 @@ def fdm_keycap(ref, legend=True):
 def _mic_clearance():
     """Open-edge clearance around the mic duct's widest ceiling chamfer."""
     x, y = mic_port()
-    return _hole(x, y, 2 * _mic_clearance_radius(), PAD_SKIRT_BOTTOM - 1, PAD_WEB_TOP + 1)
+    return _hole(
+        x, y, 2 * _mic_clearance_radius(), PAD_SKIRT_BOTTOM - 1, PAD_WEB_TOP + 1
+    )
 
 
 def plunger(x, y, contact=SWITCH_TOP, extension=params.PLUNGER_SWITCH_EXTENSION):
@@ -2070,9 +2158,11 @@ def plunger(x, y, contact=SWITCH_TOP, extension=params.PLUNGER_SWITCH_EXTENSION)
 
 
 @functools.cache
-def _skirt_ring(name, bottom=PAD_SKIRT_BOTTOM):
-    """The moulded skirt before any break: lobe outline less its PAD_SKIRT_T inset."""
-    face = pad_lobe_face(name)
+def _skirt_ring(name, bottom, v2=False):
+    """The moulded skirt before any break: lobe outline less its PAD_SKIRT_T
+    inset. `v2` gives the V2 top pad's lobe. The skirt follows the lobe outline
+    without its tabs, so each tab is web only."""
+    face = pad_lobe_face(name, v2, tabs=False)
     inner = Face(face.outer_wire().offset_2d(-params.PAD_SKIRT_T, kind=Kind.ARC))
     return _cut(
         _slab(face, bottom, PAD_WEB_BOTTOM + MERGE),
@@ -2081,20 +2171,41 @@ def _skirt_ring(name, bottom=PAD_SKIRT_BOTTOM):
 
 
 @functools.cache
+def switch_bodies(v2=False):
+    """[(ref, solid)] a SWITCH_BODY square box for each switch, from the board
+    face up to the switch top. `v2` places them for a V2 board: at the V2
+    placements, on a board SUPPORT_GAP lower.
+
+    The STEP assembly has no switch bodies, because the footprint's model is
+    VRML and the export drops it. Without these boxes the skirt rule could not
+    see the switches. The box reaches the actuator top over its whole plan, so
+    it is an envelope and not the part."""
+    placements = board.legacy_components() if v2 else board.components()
+    top = LEGACY_SWITCH_TOP if v2 else SWITCH_TOP
+    base = top - params.SWITCH_HEIGHT
+    side = params.SWITCH_BODY
+    return [
+        (ref, Pos(*placements[ref][:2], (base + top) / 2) * Box(side, side, top - base))
+        for ref in board.refs("SW")
+    ]
+
+
+@functools.cache
 def _v3_skirt_obstacles():
-    """[(ref, solid)] every V3 assembly solid under its STEP component reference."""
+    """[(ref, solid)] every V3 assembly solid under its STEP component
+    reference, and a box for each switch body, see switch_bodies()."""
     return [
         (ref, solid)
         for ref, solids in sorted(board.placement_groups().items())
         for solid in solids
-    ]
+    ] + switch_bodies()
 
 
-def _skirt_breaks(name, obstacles, bottom):
+def _skirt_breaks(name, obstacles, bottom, v2=False):
     """[(ref, box)] cuts that open a skirt of the given `bottom` over each of
-    `obstacles`, a list of (ref, solid)."""
+    `obstacles`, a list of (ref, solid). `v2` reads the V2 top pad's lobe."""
     clear = params.PAD_SKIRT_CLEARANCE
-    ring = _skirt_ring(name, bottom)
+    ring = _skirt_ring(name, bottom, v2)
     ring_box = ring.bounding_box()
     groups = {}
     for ref, solid in obstacles:
@@ -2131,7 +2242,13 @@ def pad_skirt_breaks(name):
 
     A part counts if its top is above PAD_SKIRT_BOTTOM less PAD_SKIRT_CLEARANCE
     and its plan box, grown by PAD_SKIRT_CLEARANCE, reaches the skirt. One box
-    per nearest placement, over all of that part's solids.
+    per nearest placement, over all of that part's solids. The switch bodies
+    count, see switch_bodies().
+
+    On the V3 board this is empty. PAD_SKIRT_DEPTH puts the wall bottom over
+    C3, R1, R12, R4 and R5, and PAD_MARGIN keeps the outline clear of C1 and of
+    the switch bodies in plan. The rule stays, so a moved part opens the wall
+    and does not land on it.
     """
     return _skirt_breaks(name, _v3_skirt_obstacles(), PAD_SKIRT_BOTTOM)
 
@@ -2139,18 +2256,22 @@ def pad_skirt_breaks(name):
 def pad_skirt(name):
     """The moulded lobe's skirt: a PAD_SKIRT_T wall flush with the lobe outline.
 
-    It drops from the web to PAD_SKIRT_BOTTOM, level with the plungers, and is
-    cut open over each board part before it fuses to the web. The moulded and
-    TPU pads share it.
+    It drops PAD_SKIRT_DEPTH from the web and is cut open over any board part
+    still in its way. On the V3 board no part is, so the wall runs unbroken.
+    The moulded and TPU pads share it.
     """
-    return _cut(_skirt_ring(name), *(box for _, box in pad_skirt_breaks(name)))
+    return _cut(
+        _skirt_ring(name, PAD_SKIRT_BOTTOM),
+        *(box for _, box in pad_skirt_breaks(name)),
+    )
 
 
 @functools.cache
 def legacy_skirt_obstacles():
     """[(ref, solid)] what the V2 top pad's skirt must clear, in the case frame
     with the V2 board in place: the V3 body of each V2 top-side part moved to
-    its V2 placement and dropped SUPPORT_GAP.
+    its V2 placement and dropped SUPPORT_GAP, and a box for each V2 switch
+    body, see switch_bodies().
 
     Every V2 part on the top side that has a V3 body is moved. The break rule
     then keeps only those that reach the second lobe's skirt.
@@ -2162,30 +2283,38 @@ def legacy_skirt_obstacles():
             continue
         for solid in board.legacy_part_solids(ref):
             out.append((ref, Pos(0, 0, -params.SUPPORT_GAP) * solid))
-    return out
+    return out + switch_bodies(v2=True)
 
 
 def legacy_pad_skirt():
-    """The second lobe's skirt for the V2 top pad: bottom level with the V3
-    pad's skirt (PAD_SKIRT_BOTTOM), broken over the V2 obstacles."""
+    """The V2 top pad's skirt, on that pad's own outline: bottom level with the
+    V3 pad's skirt (PAD_SKIRT_BOTTOM), broken over the V2 obstacles.
+
+    The V3 pad needs no breaks, because its own wall clears every V3 part. This
+    one still does: it pairs with a V2 board, whose parts this wall knows
+    nothing about until legacy_skirt_obstacles() moves them. The V2 SW1 and SW2
+    bodies stand under the lobe's wheel-side edge, so the wall opens over each.
+    An edge past them would run into the D6 lobe of the ring insert."""
     return _cut(
-        _skirt_ring("second", PAD_SKIRT_BOTTOM),
+        _skirt_ring("second", PAD_SKIRT_BOTTOM, True),
         *(box for _, box in legacy_skirt_breaks()),
     )
 
 
 def legacy_skirt_breaks():
     """[(name, box)] the V2 top pad's skirt breaks, by the same rule as
-    pad_skirt_breaks over legacy_skirt_obstacles()."""
-    return _skirt_breaks("second", legacy_skirt_obstacles(), PAD_SKIRT_BOTTOM)
+    pad_skirt_breaks() over legacy_skirt_obstacles()."""
+    return _skirt_breaks(
+        "second", legacy_skirt_obstacles(), PAD_SKIRT_BOTTOM, v2=True
+    )
 
 
 @cache.solid
 def button_pad(fdm=False, skirt=None, grooves=True, legend=True, v2=False):
     """Build two pad lobes supported by their switch plungers.
 
-    The mic lobe is a full rounded rectangle with the mic clearance circle cut from its top edge.
-    Both lobes stop outside the wheel clearance band. With fdm=True, the
+    Each lobe is a rounded rectangle round its own switches, see
+    pad_lobe_box(). Both lobes stop outside the wheel clearance band. With fdm=True, the
     printed keytops and legends are fused to their lobe webs in this export.
     `skirt` adds the perimeter skirt and defaults to the moulded pad only.
     `grooves` applies only when `fdm` is true; False gives the FDM pad a plain grid web with no grooves and no edge chamfer.
@@ -2210,21 +2339,27 @@ def _pad_lobe(
     grooves=True,
     skirt_part=None,
     legend=True,
+    v2=False,
 ):
     """Build one pad lobe. Each (x, y) in `nibs` adds a plunger to a V2 switch.
 
     `skirt` None means a skirt only when `fdm` is false. `skirt_part` replaces
     the lobe's own skirt solid. `plunger_extension` is how far each of the lobe's own
     plungers reaches below SWITCH_TOP. `grooves` applies only when `fdm` is true.
-    `legend` False leaves the printed keytops blank.
+    `legend` False leaves the printed keytops blank. `v2` builds the lobe on the
+    V2 top pad's outline, see pad_lobe_box().
     """
     parts = board.components()
-    x0, y0, x1, y1 = next(box[1:] for box in pad_lobes() if box[0] == name)
-    body = _slab(pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP)
+    face = pad_lobe_face(name, v2)
+    body = _slab(face, PAD_WEB_BOTTOM, PAD_WEB_TOP)
     skirt = not fdm if skirt is None else skirt
-    if fdm and grooves and name == "grid":
-        c = params.FDM_PAD_GRID_CHAMFER
-        face = pad_lobe_face(name)
+    c = params.FDM_PAD_EDGE_CHAMFER
+    if c > params.PAD_MARGIN + 1e-9:
+        raise ValueError(
+            f"FDM_PAD_EDGE_CHAMFER {c:.2f} is wider than PAD_MARGIN "
+            f"{params.PAD_MARGIN:.2f}, so it cuts under the outer keytops"
+        )
+    if fdm and grooves and name == "grid" and c > 0:
         body = _fuse(
             _slab(face, PAD_WEB_BOTTOM, PAD_WEB_TOP - c),
             # The lobe face points -Z, so the taper needs an explicit +Z.
@@ -2244,9 +2379,9 @@ def _pad_lobe(
         for x, y in nibs
     )
     cuts = []
-    if name == "second":
+    if pad_mic_notch(name, v2):
         cuts.append(_mic_clearance())
-    elif fdm and grooves:
+    elif fdm and grooves and name == "grid":
         cuts.extend(_pad_grooves())
     return _cut(_fuse(body, *raised), *cuts)
 
@@ -2259,6 +2394,8 @@ def legacy_top_pad(skirt=False, fdm=True, legend=True):
     further -Y and lower, on the back ledges. Nibs and kept plungers both
     extend LEGACY_NIB_EXTENSION below their own switch top, so the plungers
     stay SUPPORT_GAP above the nibs.
+    The lobe has its own outline, pad_lobe_box(v2=True), which reaches the nibs
+    and stops short of the ring insert's D6 lobe.
     `skirt` adds the one-piece TPU pad's skirt, ending level with the V3 pad's
     skirt (PAD_SKIRT_BOTTOM) and broken over the V2 parts. With `fdm` false the lobe is the
     moulded pad's: plain web, stems for the separate caps, no fused keytops.
@@ -2274,4 +2411,5 @@ def legacy_top_pad(skirt=False, fdm=True, legend=True):
         skirt=skirt,
         skirt_part=legacy_pad_skirt() if skirt else None,
         legend=legend,
+        v2=True,
     )

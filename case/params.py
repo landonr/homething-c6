@@ -29,6 +29,13 @@ SWITCH_TRAVEL = 0.25
 datasheet and unconfirmable from the design files, the same epistemic class as
 SWITCH_HEIGHT. A press must move the pad web this far to make the switch. The
 web flex gives this travel, and the switch is the bottom stop."""
+SWITCH_BODY = 4.5
+"""Side of the TL3315 body, square in plan, from the footprint description.
+
+The STEP assembly has no switch body, because the footprint's model is VRML and
+the export drops it. So the skirt obstacles add a box of this side for each
+switch, from the board face up to SWITCH_TOP. The real body is lower than the
+actuator top, so the box is a safe envelope."""
 
 # Shell
 WALL = 3.0
@@ -142,10 +149,16 @@ usual M2 insert OD."""
 SKIRT_H = 4.0
 """How far the skirt drops below the board top. Raising the seam grows the
 skirt upward without moving its lower edge into the support ledges or screw."""
-SHELL_SEAM_RISE = 1.5
+SHELL_SEAM_RISE = 1.65
 """Lift the back lap and visible seam above the board top. The blind catch
-pocket keeps about 1.15 of skirt above it and continuous wall behind it. The
-support ledges and board mounting heights do not change."""
+pocket keeps about 1.05 of skirt above it and continuous wall behind it. The
+support ledges and board mounting heights do not change.
+
+The band this opens, from the support relief top to the seam, carries the
+lower land, the pocket and the upper land. Both lands must clear the fab
+minimum and the detent sets a floor under the pocket, so at 1.5 the band held
+all three only with a lower land of 0.6. This value buys the lower land its
+own 1.05 and still leaves the detent room above its tip."""
 SKIRT_T = 1.5
 """The back's lap over the skirt. Whatever is left of WALL after this and the fit
 is the skirt, so this one number splits the wall between the two shells."""
@@ -169,12 +182,13 @@ SEAM_SHADOW_H = 0.6
 """How far the seam shadow groove runs down the outer wall from the seam. A
 taller groove gives a wider shadow line. The groove must stay above every
 opening and detent in the back wall, or it cuts into them."""
-SIDE_SKIRT_THICKEN = 0.20
+SIDE_SKIRT_THICKEN = 0.25
 """Extra inward wall on the front skirt, round the grip end and its two corners
-and up both long runs. The nominal 0.5 board fit still leaves 0.3 at the board
-edge. This stiffens the printed seam without a change to either shell's
-visible outer wall or to the back lap. It runs up to the cavity ceiling, so the
-front's inner wall has no step at the seam.
+and up both long runs. The nominal 0.5 board fit still leaves 0.25 at the board
+edge. It also sets the wall behind the side catch pocket, which is this skirt
+less SIDE_CATCH_POCKET_DEPTH. This stiffens the printed seam without a change
+to either shell's visible outer wall or to the back lap. It runs up to the
+cavity ceiling, so the front's inner wall has no step at the seam.
 
 The IR end keeps the plain fit for two reasons. The catch windows' reach is
 sized off BOARD_FIT, so it passes a thicker skirt's inner face by only 0.1.
@@ -193,14 +207,22 @@ pocket under it without recording an absolute board coordinate."""
 SIDE_CATCH_W = 8.0
 """Length of each hidden side catch along the seam. A short land limits the
 amount of PLA that must flex during the final fold closed."""
-SIDE_CATCH_H = 1.2
+SIDE_CATCH_H = 1.0
 """Pocket height in the clear band above the front skirt's support relief and
-below the raised seam. The pocket does not cut the full-length support runs."""
-SIDE_CATCH_LOWER_LAND = 0.6
+below the raised seam. The pocket does not cut the full-length support runs.
+
+The detent sets the floor. Its upper flank meets the skirt face a fixed
+distance above the pocket bottom, and SIDE_CATCH_FIT must fit above that, so
+this value cannot go under about 0.85. The rest of the band goes to the two
+lands, which both have to clear the fab minimum."""
+SIDE_CATCH_LOWER_LAND = 1.05
 """Height of skirt between the top of the built support relief and the pocket
 bottom. The detent release flank bears on this lower lip. The pocket does not
-need to be central in the band. It is as low as a printable lip below it
-allows, so the upper land stays long."""
+need to be central in the band.
+
+A ray cast down from the pocket floor crosses this lip to the support relief
+below, so the fab pass reads it as a wall and it must clear the process
+minimum. It was 0.6 while the band had no room for more."""
 SIDE_CATCH_R = 0.45
 """Round the pocket corners to avoid sharp stress risers in the printed skirt."""
 SIDE_CATCH_POCKET_DEPTH = 0.40
@@ -216,7 +238,7 @@ SIDE_CATCH_WALL_MIN = 1.0
 of replacing the through-window: a shallow detent must not sever the skirt."""
 SIDE_CATCH_UPPER_LAND_MIN = 1.0
 """Minimum height of intact skirt above the pocket, checked on the built
-shell. SIDE_CATCH_LOWER_LAND leaves about 1.15 nominally above its top edge.
+shell. SIDE_CATCH_LOWER_LAND leaves about 1.05 nominally above its top edge.
 If the pocket leaves less, side_catch_bottom() fails."""
 SIDE_CATCH_D = 0.65
 """How far each back-lap detent projects inward. It crosses the 0.30 shell fit
@@ -354,10 +376,12 @@ stop between the two shells and the whole case bows out at that end, which is
 what a printed one did. The gap is 0.2 more than SKIRT_FIT. A smaller gap
 brings the pilot closer to where the ramp starts, and this lets the screw sit
 higher."""
-END_SCREW_BLOCK_D = 3.7
+END_SCREW_BLOCK_D = 4.3
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
-0.5, so the pilot ends inside it and the thread is never drilled out the back
-of its own boss.
+1.1, so the pilot ends inside it and the thread is never drilled out the back
+of its own boss. The plus was 0.5, which left a cap under the PA12 minimum that
+PCBWay publishes for SLS. At 1.0 the cap measured exactly the minimum, which
+the fab pass reads as a hair under, so the plus carries its own margin.
 
 The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
@@ -566,6 +590,33 @@ the part that does reach the ceiling. Tighter than WHEEL_CLEARANCE
 because this one is a visible line around the bezel rather than buried
 clearance, and the lip never transits the opening so nothing wider has to
 pass it."""
+
+WHEEL_LIP_RELIEF = 0.6
+"""How far the ceiling lifts clear of the ENC1 lip, measured off CAVITY_FRONT.
+
+The lip is the widest disc of the wheel, a static flange under the fixed
+bezel. It is wider than the wheel opening, so it can never pass up through the
+face, and the ceiling has to stay off it.
+
+Without this relief the ceiling sits flat at CAVITY_FRONT right across the
+lip, with 0.555 of air. CAVITY_FRONT is PAD_WEB_TOP, so that gap is the one
+thing that pins the pad web, and through it the counterbore lands. See
+PAD_WEB_T.
+
+The relief is a plain annular lift out to led_ring_inner_r(), so it merges
+into the LED ring channel's inner wall. Nothing seats in that annulus. The
+pad's own bore is at LIP_CLEAR_R, further out, and the only part under it is
+the lip.
+
+The size is what the roof above it can pay. A ray cast over the band finds the
+roof 1.781 at its thinnest, on the -X side at the ring arch's sag, so a lift
+of 0.781 would put it on the PA12 minimum. This value keeps 1.181 there and
+still funds the 0.506 that the lands want.
+
+The cost is light. The ring channel now opens into the wheel bore, so the ring
+glows into the WHEEL_OPENING_CLEARANCE gap round the bezel. Where the channel
+is shallow, at the east and west sides, the lift takes the whole inner wall.
+"""
 WHEEL_RIM_LEDGE = 1.0
 """Least seat the recess must leave around the wheel opening's bore, measured in
 plan from the bore wall out to the rim.
@@ -660,9 +711,21 @@ effect.
 The lift follows the face drop at x over the face drop at this distance, so
 it follows the superellipse and not x itself. A smaller value moves the crest
 toward the centreline and makes the climb to it steeper."""
-FACE_CROWN_OVER_WHEEL = 0.135
+FACE_CROWN_OVER_WHEEL = 0.241
 """How far the crown of the recessed front's face stands above the knob's
 measured top, WHEEL_TOP.
+
+It was 0.135. The counterbore lands then ran 0.54 to 0.75, well under the PA12
+minimum that PCBWay publishes for SLS. They needed 0.506 between them.
+
+COUNTERBORE_TOP is built off the cap flange, so lowering it thins the caps
+instead. A thinner PAD_WEB_T lowers COUNTERBORE_TOP by the same amount. The
+ENC1 lip used to pin the pad web. wheel_lip_relief() lifts the ceiling off the
+lip, so the web is free to come down. PAD_WEB_T pays 0.4 of the 0.506, and
+this value pays the remaining 0.106.
+
+So the whole front is 0.106 taller than it was, not 0.506. The knob stands
+0.617 proud of the face at the wheel opening rim, where it stood 0.723 before.
 
 SHELL_FRONT is WHEEL_TOP plus this value, so a wheel change still moves the
 face. The crown runs along the centreline over the knob, but the wheel dish
@@ -730,11 +793,11 @@ LED_BODY = 2.0
 """XL-2020RGBC body side, square in plan. Hand-entered for the same reason as
 LED_HEIGHT."""
 PAD_LED_CLEARANCE = 0.6
-"""How far past an LED's own body edge the pad's wheel cut has to reach, so
-the web's edge stands clear of the package rather than grazing it. One term
-of pad_clear_y(), off the LED placements plus LED_BODY, so moving an LED
-moves it. The lip's own rotating clearance is the other term. This term
-governs at the present layout, because D6 and D7 sit on the wheel's y axis."""
+"""How far past an LED's own body edge the pad has to stop, so the web's edge
+stands clear of the package and does not graze it. One term of pad_clear_y(),
+off the LED placements plus LED_BODY, so a moved LED moves it. The other terms
+are the lip's own rotating clearance and the reach of the ring insert's lobes.
+The lobe term governs, because each lobe reaches past its LED."""
 WHEEL_OPENING_EDGE = 0.65
 """Minimum ceiling between the shell's wheel opening and the side wall. The
 opening is clipped to a chord near the X axis if it would come closer than
@@ -750,17 +813,30 @@ instead."""
 # open to the cavity below (the pad's wheel cut already uncovers the LEDs) and
 # roofed by translucent shell, which is the diffuser. On the recessed front the
 # roof is LED_RING_FACE_ROOF under the face all the way round.
-LED_RING_WALL = 1.0
+LED_RING_WALL = 1.25
 """Web between the wheel opening's bore and the channel's inner wall. It is what
 keeps the opening a closed cylinder the wheel seats against, and it is the
 ring's inner light barrier, so it is not free to thin toward zero. The inner
 wall stands at this radius below its top chamfer and widens the web above it.
-The check still probes it on the built shell rather than trusting the sum."""
-LED_RING_INNER_CHAMFER = 0.53
+The check still probes it on the built shell rather than trusting the sum.
+
+It was 1.0, which read 0.84 on the built shell, because LED_RING_INNER_CHAMFER
+bevels the top of this wall and the ray crosses the bevel. This web, not the
+roof, is the thinnest part of the ring channel: the roof runs 1.50 to 1.68
+because the arch sits below the face less LED_RING_FACE_ROOF all the way
+round."""
+LED_RING_INNER_CHAMFER = 0.40
 """45 degree bevel at the inner wall's top edge on both LED channels. It steps
-0.53 mm out from the inner wall and 0.53 mm down from the channel ceiling at the
-top of the bevel. The inner wall stays upright below the bevel. On the FDM front
-the bevel uses nearly all of the wall.
+this far out from the inner wall and this far down from the channel ceiling at
+the top of the bevel. The inner wall stays upright below the bevel. On the FDM
+front the bevel uses nearly all of the wall.
+
+It was 0.53. The bevel eats the roof flat from the inside, and the roof flat is
+what the ring insert's neck is as wide as. At 0.53 the neck measured 0.914 with
+RING_INSERT_FIT taken off both sides, under the PA12 minimum that PCBWay
+publishes for SLS. This value widens the flat at the crown and carries the neck
+over the minimum. It changes nothing at the east and west sides, where
+led_ring_bevel() already shortens the leg below this value on its own.
 
 On the recessed front the ceiling changes around the ring, and the bevel hangs
 from the local ceiling. At the east and west sides the channel is too shallow
@@ -775,92 +851,198 @@ the full LED_RING_INNER_CHAMFER, the bevel shortens to keep this much wall. The
 channel is shallowest at the east and west sides of the knob. The FDM front
 does not use this value."""
 LED_RING_CHAMFER = 0.0
-"""How much wider than its nominal radius the channel's outer wall opens at the
-mouth. That wall rakes at 45 degrees, so this is also how far above the foot of
-the rake it crosses led_ring_outer_r(), and the roof end is then wherever 45
-degrees over the channel's own height leaves it rather than anything set here. The inner
-wall has a separate top bevel and this does not reach it.
+"""How much wider than its nominal radius the FDM channel's outer wall opens at
+the mouth. That wall rakes at 45 degrees, so this is also how far above the
+mouth it crosses led_ring_outer_r(). The inner wall has a separate top bevel
+and this does not reach it.
 
 The mouth is the flared end because that is where the light enters, off LEDs
 firing up out of the cavity: a wall raked away from them puts more of the roof
-in view of each, and the light lands on the middle of the rake, which is the
-aim wanted rather than an accident of the layout. See LED_RING_OVER. A 45 degree
-rake is also what a printer can close a ceiling over without support.
+in view of each. A 45 degree rake is also what a printer can close a ceiling
+over without support.
 
-The web to the bore used to bound this and no longer does, because the inner
-wall stopped raking. The cavity wall bounds it now: a wider mouth runs further
-past the wall near the X axis, so the ring narrows against a longer chord there.
-What it buys is roof, since the flat the ring glows through is the mouth's outer
-radius less the channel's own height less the inner wall. Zero keeps the mouth
-flush with the pad's grid-lobe boundary on both front variants; the wall still
-rakes inward at 45 degrees over the channel height above the foot of the rake.
-On the recessed front the outer wall is plumb at the mouth below that foot
-where the ceiling is above the arch."""
+The recessed front has no such channel any more, so this value reaches the FDM
+front alone. Zero keeps the mouth flush with the pad's grid-lobe boundary."""
 LED_RING_OVER = 0.6
-"""How far past an LED's own body edge the channel's outer wall reaches. Same
-job as PAD_LED_CLEARANCE one layer down: derived off the LED placements plus
-LED_BODY, so moving an LED moves the channel with it.
+"""How far past an LED's own body edge the FDM channel's outer wall reaches.
+Same job as PAD_LED_CLEARANCE one layer down: derived off the LED placements
+plus LED_BODY, so moving an LED moves the channel with it.
 
 It does not stand the package clear of the raked wall, and it must not be
 trimmed to. Each LED fires at the middle of that rake on purpose: the rake is
 the ring's reflector, and a source aimed at the middle of it throws light
-furthest around the channel, which is the best effect this feature has. The
-light_path check asks a different question, that the column straight above each
-package is void up to the roof, so it catches a package firing into material
-without asking it to fire past the reflector."""
+furthest around the channel.
+
+The recessed front reaches the same LEDs a different way, with a dome over each
+one on the insert rather than a channel in the shell, so it does not read this
+value. See RING_LOBE_SIDE."""
 LED_RING_ROOF = 1.675
-"""Distance from SHELL_FRONT down to the crown of the LED ring channel's arch.
-On the crown line this is the roof that the undished face would have over the
-arch. LED_RING_TOP, the arch's crown, is SHELL_FRONT less this value.
+"""Distance from SHELL_FRONT down to LED_RING_TOP, the depth the FDM front's
+own channel is a fraction of.
 
-The arch is the lowest that the channel ceiling can be. The ceiling rises off
-the arch to keep LED_RING_FACE_ROOF of roof under the built face. As a result,
-the roof is LED_RING_FACE_ROOF, not this value.
+The recessed front has no channel ceiling left to set. Its ring is one circle
+cut from the cavity ceiling clear through the face, and led_ring_insert()
+fills it, so no shell sheet covers the light on that front at all. See
+led_ring_face_r().
 
-The arch stays below the face less LED_RING_FACE_ROOF everywhere on the roof
-flat, so the ceiling follows the face all the way round. The keypad recess
-sinks the face where the wheel basin's diagonals and both necks cross the
-channel, and the ceiling goes down with the face there. check.py's ring stack
-guard walks the whole annulus and holds a floor under the thinnest roof.
+The FDM front keeps a real channel under a real roof, and its depth is
+FDM_LED_RING_DEPTH_RATIO of this depth over CAVITY_FRONT. So a change here
+moves the FDM front alone."""
+LED_RING_FACE_ROOF = 1.0
+"""The one wall thickness the LED ring is built to, on both parts.
 
-A smaller value raises the arch. If the arch rises above the face less
-LED_RING_FACE_ROOF at the east and west sides, the arch holds the ceiling up
-there and the roof gets thinner, so LED_RING_SAG must grow to keep it. The 45
-degree line up from the mouth also meets the higher arch nearer the wheel. The
-outer rake ends at that radius, so the roof flat gets narrower. The FDM front's
-channel depth is a fraction of the arch's depth on the crown line, so a change
-here also changes the FDM front."""
-LED_RING_FACE_ROOF = 0.8
-"""Vertical roof that the recessed front's LED ring channel keeps under the
-built face. The ceiling is at the face less this value all the way round,
-because LED_RING_SAG keeps the arch below it. As a result, the six LEDs glow
-through an even roof, and light gets through a near-opaque white material.
+It is the land of shell over each lobe: the lobes are what hold the insert in,
+and each tucks under this much shell before the pocket's 45 degree lead-in
+starts. It is also the roof the insert keeps between a dome and its own top,
+and the roof the FDM front keeps over its channel.
 
-This value is the minimum wall that PCBWay publishes for SLA resin.
-ROOF_LEFT_MIN in checks/wheel_ring.py holds the thinnest roof just under it.
-A smaller value lets more light through but is under that minimum. A larger
-value makes the channel shallower, most at the east and west sides of the knob,
-where the face is lowest. The FDM front does not use this value."""
-LED_RING_SAG = 1.1
-"""How far the LED ring channel's arch falls from LED_RING_TOP on the crown
-line to each exterior side wall. The arch is a circular arc with its axis along
-y.
+This value is the minimum wall that PCBWay publishes for PA12 printed by SLS.
+The shells are now Somos Taurus by SLA, where the minimum is 0.8, so this value
+keeps a margin over that order and still passes an SLS order. The
+land is measured vertically and the face slopes, so the wall normal to the face
+reads a little under this value.
 
-The ceiling is the arch, or LED_RING_FACE_ROOF under the built face where that
-is higher. At the east and west sides of the knob the face falls faster than
-the arch. This value lowers the arch there, below the face less
-LED_RING_FACE_ROOF. As a result, the ceiling follows the face all the way round
-and the roof is LED_RING_FACE_ROOF everywhere. A smaller value lets the arch
-hold the ceiling up at the east and west sides, and the roof there gets thinner.
-The ring roof floor in checks/wheel_ring.py catches that.
+A smaller value is under the minimum. A larger one pushes each pocket's 45
+further down, which costs the lobe depth rather than light, because the light
+reaches the face through the insert now and not through shell."""
+RING_FOOT_W = 4.0
+"""Width of each foot under the ring insert, across its own bearing, at the
+foot's mid radius. Each foot is a sector of the band, so its sides are radial.
 
-A lower arch also meets the 45 degree line up from the mouth further out, so the
-roof flat gets wider near the side walls. The outer rake then starts higher at
-the mouth, so the plumb part of the outer wall below the rake gets taller. The
-inner bevel hangs from the ceiling, and the ceiling at the east and west sides
-is the face less LED_RING_FACE_ROOF. There the channel is too shallow for the
-full LED_RING_INNER_CHAMFER, so the bevel shortens to keep
-LED_RING_INNER_FOOT_MIN of upright inner wall."""
+Wide enough to carry the part without being a pin, and narrow enough to stay
+clear of the LEDs either side of it. Each foot sits midway between two of
+them, so half this plus the LED body has to fit in half the gap."""
+RING_FOOT_GAP = 0.3
+"""How far the ring insert's feet stop above the board.
+
+They are a limit on how far the part can drop, not a seat it rests on. A foot
+cut to land on the board would have to answer for the board's own float on its
+ledges and for the SLS tolerance on both parts, and the way that stack falls is
+what decides whether the ring sits flush or stands proud of the face. Adhesive
+is what holds it flush, the way it holds the IR window. These only catch it.
+
+So the gap is deliberate: at rest nothing touches, and the feet come into play
+only if the bond lets go. Then the ring drops this far and stops, instead of
+dropping onto the ENC1 flange. The board reads a little lower than BOARD_TOP in
+the STEP assembly, so the built gap is a little larger than this."""
+RING_INSERT_FACE_FIT = 0.0
+"""Clearance on the ring insert's one face that runs to the front face.
+
+The insert is a plain circle at led_ring_face_r() now, so that face is the
+whole of the joint line on the front of the remote and nothing else of the part
+reaches the face at all.
+
+Zero rather than a press. The IR window presses its pane into the aperture by
+IR_WINDOW_PRESS, which suits a pane that size. This joint is 117 mm of
+circumference, and an interference that long on an SLS part is as likely to
+stop the insert seating as to close the gap, which on the cosmetic face is the
+worse failure. The face is vertical and parallel to the way the part goes in,
+so zero is a touch and not a press.
+
+Raise this a few hundredths if a print comes back tight at the face."""
+RING_BORE_ROUND = 0.6
+"""Radius of the round on the ring's inner edge, where the dish meets the
+wheel bore.
+
+The ring insert and the one-piece front both carry it. It drops the edge
+next to the knob, so the knob stands this much higher over the ring's edge.
+
+It is half of FDM_WHEEL_OPENING_CHAMFER, so it reads as a soft edge and not
+as a lead-in. On the X axis the ring is only 1.24 thick at the bore, and this
+round leaves 0.64 of plumb bore wall there. A 0.8 round would leave 0.44."""
+RING_LIFT_CLEAR = 0.15
+"""How far inside the cavity wall the ring's circle stands.
+
+The insert goes in from inside the shell and rises straight up. Near the X axis
+the cavity wall comes in nearer the wheel centre than anywhere else, and the
+part has to pass it. So the circle stands this far inside the wall at its
+closest, and the same circle holds on every bearing. That is what makes the
+opening in the face round.
+
+It is a sliding clearance on a face 2.2 deep, not a fit, because nothing
+locates on it. PCBWay publishes a tolerance of 0.3 on an SLS part of this size,
+so a part that comes back wide still passes a wall that comes back proud."""
+RING_LOBE_SIDE = 0.5
+"""Clearance each dome keeps beside its LED on the inner side.
+
+It sets where the dome blends back into the ring's own underside. The outer rim
+is not set here. RING_LOBE_GAP sets that, because the rim has to dip below the
+LED's top face and the dome then has to climb over the LED's outer corner on
+its way back in.
+
+The dome is open on the inner side, which is not a choice. A wall there would
+have to stand between the LED's inner edge and the ENC1 lip, and LIP_CLEAR_R
+leaves 0.20 of room for it. The inner side loses nothing, because the ring
+itself sits directly over the LED's inner half and takes that light."""
+RING_LOBE_WRAP = 0.4
+"""How far each dome's outer rim dips below its LED's top face.
+
+The ring stops short of the LEDs, so each dome reaches out over one and the
+rim is what stops that LED's light escaping past the ring. A rim level with the
+LED top would catch none of what leaves the package sideways. This value is
+what makes the lobe a wrap rather than a lid."""
+RING_LOBE_GAP = 0.3
+"""Air each dome keeps over its LED.
+
+The rim sits RING_LOBE_WRAP below the LED's top, so the dome has to climb over
+the LED's outer corner on its way back in. led_ring_lobe_rim_r() solves for the
+rim radius that leaves exactly this much there, rather than taking the rim off
+a radial clearance and reading what that happens to give. So this value is the
+built clearance and not a floor under it.
+
+It is RING_FOOT_GAP, the same air the feet keep over the board. Both answer for
+the same stack: the board's own float on its ledges, and the SLS tolerance on
+the insert."""
+RING_LOBE_STRAIGHT = 0.75
+"""How straight each dome runs, from a curve that meets the band's underside
+flat (zero) to a plain cone (one).
+
+The flare over the dome is a 45 degree plane, so the material between them is
+the vertical gap times cos(45), not the vertical gap. A dome that leaves the
+band's underside flat has to climb hard in the middle to get there, and the
+middle is exactly where the flare sits over it. At zero the wall between the
+two came back at 0.88 over 19 mm2, under the SLS minimum, which is the reading
+this whole feature exists to remove.
+
+Straightening the dome spends that climb earlier instead. It costs reach: the
+rim moves out from 20.49 to 20.86 and the lobe with it, because
+led_ring_lobe_rim_r() still has to clear the LED's outer corner by
+RING_LOBE_GAP, and a straighter dome is lower at that corner.
+
+It also puts a slight angle where the dome meets the band's underside rather
+than running in flat. That corner has the whole band over it, so it is a
+change of slope and not a feather.
+
+led_ring_lobe_roof() is what holds the result, and it measures normal to the
+flare rather than vertically."""
+RING_LOBE_WALL = 1.0
+"""Thickness of the wall outside each dome's rim.
+
+The rim is the lowest point of the insert's underside, and the dome is open
+inward, so this is the one real wall a lobe has.
+
+This value is the PCBWay SLS minimum. It is written out and not read from
+FAB_MIN_WALL, because the insert is an SLS part whatever FAB_PROCESS says."""
+RING_LOBE_FIT = 0.15
+"""Clearance between a lobe and the pocket the shell opens for it.
+
+Each lobe tucks under a land of shell, and that land is the whole of the
+insert's retention. The lobe's own 45 runs this far below the pocket's, and its
+flat top this far below the cavity ceiling, so the part seats on its face
+circle and never on a lobe."""
+RING_LOBE_SHOULDER = 0.75
+"""Leg of the 45 degree chamfer on the top outer corner of each lobe.
+
+The flat top of a lobe ends in a vertical outer face. On the D7 bearing that
+corner stood under the flange of SW6, 0.15 below it. A full press of
+SWITCH_TRAVEL took the flange 0.10 into the lobe. This chamfer keeps the
+pressed flange about 0.43 clear, and checks/wheel_ring.py measures it.
+
+The corner carries no retention, because the flare ends at its knee before the
+flat starts. The dome wall to the chamfer stays at RING_LOBE_WALL or more up
+to a leg of about 1.74. led_ring_lobe_roof() measures that wall, and
+led_ring_lobes() refuses a lobe that it thins. All six lobes take the same
+chamfer."""
 # Apertures in the back shell
 MIC_THROAT_MARGIN = 2 * BOARD_FIT
 """How much wider than the board's own acoustic port the inlet's throat is,
@@ -979,8 +1161,13 @@ face, and this governs only the inward side, the reach back into the cavity
 that connects the opening to it. U2's bottom aperture does not use this."""
 
 # IR window: stepped inside-fit insert closing U2's -Z aperture in the back.
-IR_WINDOW_T = 1.0
-"""Optical pane thickness from conformal exterior face to interior shoulder."""
+IR_WINDOW_T = 1.15
+"""Optical pane thickness from conformal exterior face to interior shoulder.
+
+It is also the shell left over the rebate, because the rebate stops one pane
+thickness above the exterior. The back form is curved, so a 1.0 pane left the
+shell reading 0.97 normal to that surface, under the PA12 minimum. This value
+carries the reading clear of it."""
 IR_WINDOW_FLANGE = 0.8
 """Interior flange reach past aperture per side: outward retention and adhesive land."""
 IR_WINDOW_FIT = 0.1
@@ -1018,24 +1205,51 @@ BACK_STL_ANGULAR_TOLERANCE = 0.06
 """Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
-RESET_GUIDE_WALL = 0.8
-"""Guide wall thickness for two 0.4 mm extrusion widths."""
+RESET_GUIDE_WALL = 1.05
+"""Guide wall thickness, just over the PA12 minimum that PCBWay publishes for
+SLS. It was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no
+longer applies to a printed shell. At exactly 1.0 the whole tube measured the
+minimum, which the fab pass reads as a hair under."""
 RESET_GUIDE_GAP = 0.6
 """Minimum gap between the guide tip and the RESET contact face."""
+RESET_GUIDE_TOP_DROP = 1.8
+"""How far the guide stops below the front skirt, on top of SKIRT_FIT.
+
+The guide tube sits about 2 mm off the case centreline, so near its top the
+rolled back form shaves the outboard side alone. At the full height the
+inboard wall measured RESET_GUIDE_WALL and the outboard wall fell to 0.605
+over the last 1.5 mm. A fatter tube does not help, because the form cuts at a
+fixed place whatever the tube's diameter. This value ends the tube below that
+band, so every remaining wall is the full thickness.
+
+The cost is guide length. The clip leaves the bore about 2.6 mm under the
+RESET contact rather than 1.1 mm. The bore holds the clip's angle over roughly
+9 mm before that, so the tip lands within about 0.2 mm of where it would have.
+
+The value is measured off the built form, not derived from it. If the back
+contour moves, the fab pass flags the guide again."""
 QWIIC_CLEARANCE = 0.5
 """Clearance around the Qwiic housing for a plug approach from the left side."""
 QWIIC_CORNER_CHAMFER = 0.3
 """The small corner trim stays within the connector clearance at each corner."""
 QWIIC_SKIRT_CLEARANCE = 0.2
 """The hidden front skirt clears the port roof and joins the adjacent support reliefs."""
-QWIIC_KNOCKOUT_T = 0.8
-"""The flush cover uses two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_T = 1.05
+"""The flush cover, just over the PA12 minimum that PCBWay publishes for SLS.
+It was 0.8, two 0.4 mm extrusion widths. The cover follows the curved back
+form, so a flat 1.0 read 0.99 normal to that surface, the same way the IR
+window rebate did. The extra 0.05 carries it clear.
+
+A thicker cover is harder to break out, and PA12 bends where resin snaps, so
+the knockout needs a cut test on the first print."""
 QWIIC_KNOCKOUT_GAP = 0.3
 """The border separates the cover from the wall except at two side bridges."""
 QWIIC_KNOCKOUT_TAB_W = 0.8
 """Each side bridge spans four 0.2 mm layers from the panel's lower edge."""
-QWIIC_KNOCKOUT_TAB_T = 0.8
-"""The two bridges use two 0.4 mm extrusion widths through the wall."""
+QWIIC_KNOCKOUT_TAB_T = 1.0
+"""The two bridges at the PA12 minimum that PCBWay publishes for SLS. It was
+0.8, two 0.4 mm extrusion widths. The bridges are what the operator breaks, so
+they share the cut test of QWIIC_KNOCKOUT_T."""
 QWIIC_KNOCKOUT_ANCHOR = 0.4
 """Each bridge overlaps the panel and wall to keep the back shell one solid."""
 BATTERY_PLUG_REACH = 7.0
@@ -1047,7 +1261,31 @@ BATTERY_PLUG_CLEARANCE = 0.5
 # Button pad: one soft moulding, flat web with raised keys. The moulded pad has a
 # skirt on each lobe's outer edge. Held up against the ceiling by its own
 # plungers resting on the switches.
-PAD_WEB_T = 1.2
+PAD_WEB_T = 0.8
+"""Thickness of the pad's flat web, and so the height of the front cavity.
+
+CAVITY_FRONT is PAD_WEB_TOP. This value therefore sets the front shell's inner
+ceiling for the whole cavity, not for the keypad alone.
+
+It was 1.2, and the ENC1 lip held it there. The lip is a static flange under
+the fixed bezel, wider than the wheel opening. The flat ceiling over it left
+only 0.555 of air, which is less than two SLS tolerance bands.
+
+wheel_lip_relief() lifts the ceiling off the lip. That raises the gap to 1.155
+and frees this value. See WHEEL_LIP_RELIEF.
+
+Each 0.1 off this value adds 0.1 to every counterbore land, because
+COUNTERBORE_TOP is built off CAVITY_FRONT. At 0.8 the lands take 0.4 of the
+0.506 that they needed. FACE_CROWN_OVER_WHEEL carries the remaining 0.106, so
+the front is 0.4 shorter than the face alone would have made it.
+
+U3 holds it here. The expander is the tallest part that no pad lobe covers, so
+the ceiling must clear it directly. It keeps 0.605 of air at this value, about
+twice the tolerance that PCBWay publishes for SLS. The lip keeps 0.755.
+
+The value is four 0.2 mm layers. FDM_PAD_GROOVE_DEPTH is two, so the printed
+pad keeps its 0.4 hinge on whole layers.
+"""
 PAD_SKIRT_T = 1.0
 """Width of the moulded pad's skirt wall, measured inward from the lobe outer edge.
 
@@ -1057,16 +1295,34 @@ outline. The wall is wide enough to mould and to stiffen the lobe edge.
 PAD_SKIRT_CLEARANCE = 0.3
 """Gap from the pad skirt to any board part, in plan and in height.
 
-A board part whose top is within this distance of the skirt bottom, or above it,
-and whose plan box grown by this distance reaches the skirt, breaks the skirt.
+A board part whose top is within this distance of the skirt bottom, or above
+it, and whose plan box grown by this distance reaches the skirt, breaks the
+skirt. The switch bodies count, through SWITCH_BODY. On the V3 board no part
+breaks the skirt. The V2 top pad breaks its own skirt over the parts its board
+puts there, which include the V2 SW1 and SW2 bodies.
+
+This is also the gap the pad keeps from the ring insert's lobes, in
+pad_clear_y().
 """
+PAD_SKIRT_DEPTH = 0.75
+"""How far the moulded pad's skirt wall drops below the web.
+
+The wall used to reach the plunger contacts, 1.30 down, and was cut open over
+the four board parts that stood in its way: C1 under the grid lobe, and C3, R1
+and R12 under the second. This depth clears three of them. C3 misses it by
+0.06, R1 and R12 by 0.41.
+
+C1 is taller than the wall bottom, so the outline clears it in plan instead.
+PAD_MARGIN sets that outline. Its upper limit is the value at which the skirt
+comes within PAD_SKIRT_CLEARANCE of C1. As a result, the V3 skirt has no
+breaks."""
 FDM_PAD_GROOVE_W = 1.2
 """Width of each press-isolation relief in the rigid FDM grid lobe.
 
 Wide so each printed key can flex with less
 drag from the neighbouring web while still clearing stems and cap seats.
 """
-FDM_PAD_GROOVE_DEPTH = 0.8
+FDM_PAD_GROOVE_DEPTH = 0.4
 """Depth cut from the keytop face only of the FDM pad web at an isolation relief.
 
 The plunger face stays flat, so the pad prints keytops up with clean supports
@@ -1083,22 +1339,65 @@ FDM_PAD_GRID_CHAMFER = FDM_PAD_GROOVE_DEPTH
 """Leg of the 45 degree chamfer on both top lips of every FDM isolation relief.
 
 The lip chamfer reaches the groove floor, so each relief has 45 degree walls
-over a flat floor FDM_PAD_GROOVE_W wide. The grid lobe's outer top edge takes
-the same leg, so every key tile slopes down to hinge level on all four sides.
-It must stay at or below FDM_PAD_GROOVE_DEPTH and short of each keytop base.
+over a flat floor FDM_PAD_GROOVE_W wide. It must stay at or below
+FDM_PAD_GROOVE_DEPTH and short of each keytop base. The grid lobe's outer top
+edge takes FDM_PAD_EDGE_CHAMFER instead.
 """
-PAD_MARGIN = 1.0
-"""Web margin around each island's outermost buttons. Both lobes are full rounded rectangles around their buttons."""
-PAD_RADIUS = 4.8
-"""Corner radius on both lobes. Keep it below half the smallest lobe width."""
+PAD_MARGIN = 0.15
+"""Web left past the widest thing the web carries, on every side of each lobe.
+
+Each lobe is the box of its own switch centres, grown by half fdm_cap_body()
+plus this value. The TPU and FDM keytops are fused onto the web, and they are
+the widest part that every pad variant carries. So the web edge stands 4.26
+plus this value from each outer switch centre.
+
+The window is 4.26 to 4.44 from the switch centre. Below 4.26 a keytop
+overhangs the web. Above 4.44 the skirt comes within PAD_SKIRT_CLEARANCE of
+C1, and C1 breaks the wall. This value leaves a small bead round each keytop
+and keeps C1 clear.
+
+The lobes used to grow off the cap footprint by 1.00. That edge stood inside
+the ring insert's D6 and D7 lobes, and margin alone could not clear them.
+
+The rigid cap's flange is wider than this outline. So on the outer side of each
+outer key, the flange overhangs the web, and its counterbore is open to the
+cavity. The press goes through the stem, so the flange needs no web under it."""
+PAD_RADIUS = 3.0
+"""Corner radius on both lobes. It must be below half the smallest lobe width.
+Above about 3.4 a corner cuts into the corner keytop."""
+FDM_PAD_EDGE_CHAMFER = 0.15
+"""Leg of the 45 degree chamfer on the FDM grid lobe's outer top edge.
+
+It must be at most PAD_MARGIN, so the chamfer stops short of each outer keytop
+base. As a result, the outer key tiles do not slope down to hinge level as the
+groove lips do."""
 PAD_JOIN_RADIUS = 1.5
-"""Round the two corners where the mic clearance circle meets the mic lobe top edge."""
+"""Round on the two corners where the mic clearance circle meets the lobe top
+edge. pad_lobe_face() cuts the notch only if the circle reaches the lobe. At
+the present outline it does not, so this value is idle."""
 PAD_FIT = 0.3
-"""Gap from each pad lobe to the front's stiffened inner wall. The lobes no
-longer reach the wheel (see PAD_LED_CLEARANCE and case.pad_wheel_gap()), so
-this is a plain fit. It is active: it trims both lobes at the long sides, where
-their key rectangles reach past it. checks/keypad.py measures it on the built
-pads."""
+"""Least gap from each pad lobe to the front's stiffened inner wall.
+
+pad_lobe_face() clips each lobe to this gap. At the present outline the lobes
+stop short of it, so the clip is idle. checks/keypad.py holds the gap as a
+minimum on the built pads.
+
+The lobes stop short of the wall, so each lobe has two locating tabs that run
+out to this gap, see PAD_TAB_W. The tabs are what reads this gap now."""
+PAD_TAB_W = 4.0
+"""Length along y of each locating tab on the long sides of a pad lobe.
+
+Each lobe has one tab on each long side, at its mid-length. Each tab runs from
+the lobe edge out to the PAD_FIT line, so the pad floats no more than PAD_FIT
+each way in x, inside SOCKET_LEAD. Without the tabs it floats about 1.5.
+
+The tab reaches about 1.6 in x. This length is about 2.5 times that, so the
+soft tab pushes the lobe across and does not fold over. A longer tab locates no
+better and only adds a flap. The tab is web only, with no skirt under it."""
+PAD_TAB_RADIUS = 0.75
+"""Corner round on the outer corners of each locating tab. It must be less than
+half the tab's reach in x, so the outer edge keeps a straight run to bear on the
+wall."""
 PAD_MIC_CLEARANCE = 0.3
 """Gap from the pad to the mic duct's widest chamfer at the ceiling."""
 PLUNGER_D = 2.5
@@ -1362,17 +1661,28 @@ so a small change on either side puts this groove over a roof that has to carry
 the light, and what would be left there is LED_RING_ROOF less this.
 checks/fdm.py holds the floor under it for that case rather than for the
 clearance the present layout happens to have."""
-FDM_LED_RING_DEPTH_RATIO = 0.5
+FDM_LED_RING_DEPTH_RATIO = 0.8
 """LED ring channel depth on the FDM front, as a fraction of the recessed
 front's arch depth on the crown line, from CAVITY_FRONT up to LED_RING_TOP.
 
 The flat FDM face does not need the full-height light-spreading void used below
-the dished face. Half depth keeps the channel open over the LEDs and gives a
+the dished face. A shorter channel keeps it open over the LEDs and gives a
 thicker printable roof. This changes only the FDM front. On the recessed front
 the ceiling rises above the arch under the face. The outer rake starts that much
 higher at the mouth and keeps the arch depth as its height. checks/fdm.py
 measures both built shells and holds this ratio. On the recessed front it reads
-the height of the outer rake on the crown line."""
+the height of the outer rake on the crown line.
+
+It was 0.5. wheel_lip_relief() raised the channel's inner floor to
+LED_RING_FOOT, and the FDM channel was then too short to hold its inner
+chamfer. The chamfer is LED_RING_INNER_CHAMFER and it hangs from the ceiling,
+so the ceiling must stand that far above LED_RING_FOOT, plus
+LED_RING_INNER_FOOT_MIN. This value leaves a foot of about 0.16.
+
+The cost is the roof under the flat face, which falls from about 1.61 to about
+1.12. The mouth still opens at CAVITY_FRONT, so this fraction keeps its old
+meaning and checks/fdm.py needs no change.
+"""
 FDM_WHEEL_OPENING_CLEARANCE = 0.2
 """Extra radius the FDM front's own wheel opening carries, over and above
 WHEEL_OPENING_CLEARANCE, so the printed bore clears the wheel's main rotating
@@ -1576,8 +1886,12 @@ SOCKET_LEAD = 0.8
 """Chamfer around the recess mouth. Without it the mouth is a square edge
 arriving on an interference fit and it shaves the stem instead of seating on it.
 Twice what a lead-in wants, because assembly is blind: the pad goes down onto
-nine recesses at once, and this is what catches the misalignment the pad's own
-fit in the cavity allows. It eats into CAP_WALL, which is what bounds it.
+nine recesses at once, and this is what catches the misalignment. It eats into
+CAP_WALL, which is what bounds it.
+
+The pad's locating tabs, see PAD_TAB_W, keep its float in x to PAD_FIT each
+way, inside this lead. checks/keypad.py holds the float to this value on every
+pad variant.
 
 The recess itself is only 0.4 deep now, too shallow to run this full width as
 a 1:1 rise without tapering straight through it, so case.py caps the rise at
@@ -1658,11 +1972,13 @@ check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""
 
 FAB_PROCESS = "SLA"
-"""The PCBWay process that the front and back shells are ordered in. check.py
-measures the walls of the exported c6remote-case-front.stl and
-c6remote-case-back.stl against FAB_MIN_WALL[FAB_PROCESS]. SLA is the process
-that LED_RING_FACE_ROOF was set for. Set "SLS" to see the features that an SLS
-PA12 order puts on hold.
+"""The PCBWay process that check.py measures every printed part against,
+with FAB_MIN_WALL[FAB_PROCESS].
+
+The order goes to SLA. The shells are Somos Taurus and the ring insert is
+UTR-8100, and both are SLA resins, so every wall is held to the SLA minimum.
+An SLS order in PA12 needs this value set back to SLS, because its minimum is
+thicker.
 
 If a wall is thinner than the minimum, PCBWay holds the order. You then accept
 the risk or make the wall thicker. Source, read on 2026-11-11:

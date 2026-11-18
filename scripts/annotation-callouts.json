@@ -11,7 +11,7 @@
     {"name": "emitter", "points": [[365, 276], [1090, 276]], "label": "IR emitter", "tx": 1105, "ty": 307, "anchor": "start"},
     {"name": "receiver", "points": [[605, 709], [1090, 709]], "label": "IR receiver", "tx": 1105, "ty": 740, "anchor": "start"},
     {"name": "battery", "points": [[455, 2300], [1090, 2300]], "label": ["1000 mAh battery", "About a month\nper charge"], "tx": 1105, "ty": 2331, "anchor": "start"},
-    {"name": "shell", "points": [[698, 1638], [1090, 1638]], "label": ["Parametric 3D\nprinted case", "SLS and FDM\nversions available"], "tx": 1105, "ty": 1669, "anchor": "start"}
+    {"name": "shell", "points": [[698, 1638], [1090, 1638]], "label": ["Parametric 3D\nprinted case", "SLA and FDM\nversions available"], "tx": 1105, "ty": 1669, "anchor": "start"}
   ],
   "board_front": [
     {"name": "switches", "points": [[564, 365], [410, 365]], "label": "11 tactile\nswitches", "tx": 400, "ty": 381, "anchor": "end"},

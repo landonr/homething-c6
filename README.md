@@ -57,7 +57,7 @@
 | **Processor** | Seeed Studio XIAO ESP32-C6 |
 | **Infrared** | Transmits, receives, and learns codes |
 | **Status** | 6 RGB LEDs |
-| **Case** | 3D printed, SLS or FDM |
+| **Case** | 3D printed, SLA or FDM |
 | **Wireless** | Wi-Fi, BLE, Zigbee |
 
 ## Build one, or get one ready to go
@@ -92,7 +92,7 @@ Pick it up, press a button, and the lights change. No phone to unlock, no app to
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
-    <img alt="Back of the assembled c6remote with labels for the IR emitter, the IR receiver window, the parametric 3D printed case (SLS and FDM versions), and the 1000 mAh battery, which lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
+    <img alt="Back of the assembled c6remote. Labels show the IR emitter, the IR receiver window, the parametric 3D printed case in SLA and FDM versions, and the 1000 mAh battery. The battery lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
   </picture>
 </p>
 
@@ -120,19 +120,21 @@ The page has no password, so use it only on a trusted network.
 
 ### Case ([more info](case/README.md))
 
-- Parametric 3D printed case in SLS and FDM versions.
-- The SLS front has a shallow dish around the keys and the wheel, and the flat FDM front needs no support on its face.
+- Parametric 3D printed case in three versions: FDM, SLA, and SLA one-piece.
+- The flat FDM front needs no support on its face.
+- The SLA front has a shallow dish around the keys and the wheel. A translucent ring insert carries the light of the status LEDs.
+- The SLA one-piece front is the SLA front with the ring insert fused in. It prints in clear resin, so the whole front glows.
 - Optional Qwiic access: a flush cover with two breakaway bridges stays in place until you need the port.
-- Assembly needs one M2 x 5 button-head screw at the grip end.
+- Assembly needs one M2 x 5 pan head screw at the grip end.
 
 <p align="center">
   <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
 </p>
 
 <p align="center">
-  <img alt="Plan of the SLS front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="docs/readme-assets/case-front-face-sls.svg" width="260">
+  <img alt="Plan of the SLA front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="docs/readme-assets/case-front-face-sls.svg" width="260">
 </p>
-<p align="center"><sub>SLS front face</sub></p>
+<p align="center"><sub>SLA front face</sub></p>
 
 ### Board ([more info](c6remote-kicad/README.md))
 

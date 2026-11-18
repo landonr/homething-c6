@@ -21,6 +21,18 @@ ceiling. Where the ceiling is above the arch, the rake starts that much higher,
 so the roof flat keeps its width. The light enters across the flare of the
 rake. The six LEDs fire up into the channel, and the channel carries their
 light around the wheel, so the face shows a ring and not six dots.
+
+That roof came out at 0.86 at the east and west sides, under the minimum wall
+PCBWay publishes for SLS, and nothing in the stack reached it. So on the
+recessed front the roof is not shell at all. led_ring_window() cuts it away,
+and with it the web in to the bore, and led_ring_insert() is the part that
+fills both. The shell then keeps one opening from the bore out to the roof
+flat, with no thin sheet anywhere, and the lit band runs to the knob. The FDM
+front keeps its own roof and web, which are thick enough.
+
+The one-piece front is the recessed front with the insert fused in, for a clear
+print. It keeps the ring as shell, fuses the six lobes, and closes the fit over
+each lobe with led_ring_lobe_fills().
 """
 
 import functools
@@ -31,10 +43,10 @@ from build123d import (
     BuildLine,
     BuildSketch,
     Face,
-    GeomType,
     Plane,
     Polyline,
     Pos,
+    Rot,
     Wire,
     loft,
     make_face,
@@ -42,10 +54,12 @@ from build123d import (
 )
 
 import board
+import cache
 import params
 
 from .shape import _face_reach, _fuse, _hole, _isect, _offset_face, _slab
 from .stack import (
+    BOARD_TOP,
     CAVITY_FRONT,
     FDM_FACE,
     LIP_CLEAR_R,
@@ -53,7 +67,6 @@ from .stack import (
     SHELL_FRONT,
     STIFFENED_WALL,
     WHEEL_OPENING_R,
-    arch_z,
 )
 
 LED_RING_TOP = SHELL_FRONT - params.LED_RING_ROOF
@@ -63,138 +76,28 @@ The arch sets where the outer rake ends, see led_ring_flat_outer_r(). The
 ceiling rises off the arch under the face: led_ring_ceiling_under() gives it.
 The FDM channel depth comes from this value."""
 
+LED_RING_FOOT = CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+"""The plane the channel's inner wall stands on.
 
-def led_ring_ceiling_at(x):
-    """The recessed channel's arch at x: LED_RING_TOP on the crown line, on a
-    circular arc that falls LED_RING_SAG to each side wall.
+wheel_lip_relief() lifts the ceiling off the ENC1 lip out to
+led_ring_inner_r(), so the inner wall's foot is this high rather than
+CAVITY_FRONT. The mouth, the rake and the outer wall still start at
+CAVITY_FRONT, because the relief does not reach them.
 
-    The arch is the lowest that the ceiling can be, so the channel is never
-    shallower than the arch makes it. LED_RING_SAG keeps it below the face less
-    LED_RING_FACE_ROOF on the roof flat, so the ceiling follows the face all
-    the way round. If the arch rises above that at the east and west sides of
-    the knob, it holds the ceiling up and the roof gets thinner, and
-    keypad.ring_roof_left() counts that."""
-    return arch_z(x, LED_RING_TOP, params.LED_RING_SAG)
-
-
-def led_ring_ceiling_under(x, y):
-    """Ceiling of the recessed front's channel at the plan point (x, y) on the
-    roof flat: the arch, or LED_RING_FACE_ROOF under the built face where that
-    is higher.
-
-    The ceiling only rises off the arch. As a result, the roof is never thicker
-    than LED_RING_FACE_ROOF. It is thinner only where the face falls to the
-    arch, and LED_RING_SAG keeps the arch low enough that it does not."""
-    # keypad.py imports this module, so the import must stay local.
-    from .keypad import face_floor_at
-
-    face = face_floor_at(x, y) - params.LED_RING_FACE_ROOF
-    return max(led_ring_ceiling_at(x), face)
-
-
-def led_ring_flat_outer_r(angle):
-    """Outer end of the recessed channel's roof flat on the bearing `angle`, in
-    radians from +X. A 45 degree line up from the mouth at CAVITY_FRONT meets
-    the arch at this radius. The outer rake ends on the ceiling at this radius.
-    Where the ceiling is above the arch, the rake starts higher at the mouth, so
-    a raised ceiling does not make the flat narrower. See led_ring_rake_foot().
-
-    The line falls 1 in 1 outward and the arch falls more slowly, so they meet
-    once between the inner wall and the mouth. A bisection finds that point."""
-    wx, _ = board.wheel_center()
-    mouth = led_ring_mouth_outer_r()
-    lo, hi = led_ring_inner_r(), mouth
-    for _ in range(60):
-        mid = (lo + hi) / 2
-        rake = CAVITY_FRONT + mouth - mid
-        if rake > led_ring_ceiling_at(wx + mid * math.cos(angle)):
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
-
-
-def led_ring_rake_foot(angle):
-    """Height on the bearing `angle`, in radians from +X, where the recessed
-    channel's outer wall stops its plumb part at the mouth and starts its 45
-    degree rake.
-
-    The rake goes from the mouth up to the ceiling at led_ring_flat_outer_r(),
-    so it is as high as it is wide. Where the ceiling there is on the arch, the
-    rake starts at CAVITY_FRONT and the outer wall has no plumb part. Where the
-    ceiling is above the arch, the rake starts that much higher, and the outer
-    wall is plumb at the mouth below it."""
-    wx, wy = board.wheel_center()
-    flat_out = led_ring_flat_outer_r(angle)
-    rake_top = CAVITY_FRONT + led_ring_mouth_outer_r() - flat_out
-    ceiling = led_ring_ceiling_under(
-        wx + flat_out * math.cos(angle), wy + flat_out * math.sin(angle)
-    )
-    # The bisection can leave the 45 degree line a rounding error over the arch.
-    return CAVITY_FRONT + max(0.0, ceiling - rake_top)
-
-
-def led_ring_bevel(angle):
-    """Leg of the recessed channel's 45 degree inner bevel on the bearing
-    `angle`, in radians from +X: how far the bevel steps out from the inner wall
-    and down from the ceiling at its top edge.
-
-    It is LED_RING_INNER_CHAMFER where the channel is tall enough. At the east
-    and west sides of the knob the channel is shallower, and the bevel shortens
-    so that LED_RING_INNER_FOOT_MIN of upright inner wall stays above
-    CAVITY_FRONT. The ceiling at the top edge moves with the leg, so a bisection
-    finds the leg. Zero means that the channel has no height for a bevel at
-    all, and led_ring_channel() stops with an error."""
-    wx, wy = board.wheel_center()
-    inner = led_ring_inner_r()
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-
-    def spare(leg):
-        r = inner + leg
-        top = led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)
-        return top - CAVITY_FRONT - params.LED_RING_INNER_FOOT_MIN - leg
-
-    full = params.LED_RING_INNER_CHAMFER
-    if spare(full) >= 0:
-        return full
-    if spare(0.0) <= 0:
-        return 0.0
-    lo, hi = 0.0, full
-    for _ in range(40):
-        mid = (lo + hi) / 2
-        if spare(mid) >= 0:
-            lo = mid
-        else:
-            hi = mid
-    return lo
-
-
-def led_ring_bevel_edge_r(angle):
-    """Radius of the recessed channel's inner bevel top edge on the bearing
-    `angle`, in radians from +X. The roof flat starts here. It is
-    led_ring_roof_inner_r() where the bevel is full, and nearer the inner wall
-    where led_ring_bevel() shortens it."""
-    return led_ring_inner_r() + led_ring_bevel(angle)
-
-
-def led_ring_bevel_top(angle):
-    """Height of the recessed channel's ceiling at the top edge of the inner
-    bevel, on the bearing `angle`. The bevel goes led_ring_bevel(angle) down
-    from this height to the inner wall."""
-    wx, wy = board.wheel_center()
-    r = led_ring_bevel_edge_r(angle)
-    return led_ring_ceiling_under(wx + r * math.cos(angle), wy + r * math.sin(angle))
+Where the channel is shallow, at the east and west sides, this leaves less
+height for the inner bevel. led_ring_bevel() shortens the leg there, the same
+way it already did against CAVITY_FRONT."""
 
 
 def led_ring_top(fdm=False):
-    """Height of the channel's arch, or its flat ceiling, on the crown line.
+    """Height the FDM front's flat channel ceiling sits at, and the reference
+    depth it is a fraction of.
 
-    On the recessed front this is the arch's crown, and the outer rake is this
-    high above CAVITY_FRONT on the crown line. The ceiling rises above the arch
-    under the face, see led_ring_ceiling_under(), and the rake starts that much
-    higher at the mouth. The FDM front shortens the
-    wall from the cavity side and keeps this height as its flat ceiling, so
-    the roof under its lower flat face is thicker.
+    The recessed front has no channel ceiling of its own, so its value here is
+    a reference and not a surface: LED_RING_TOP, which LED_RING_ROOF sets under
+    SHELL_FRONT. The FDM front keeps a real channel and takes
+    FDM_LED_RING_DEPTH_RATIO of that depth over CAVITY_FRONT, because its own
+    face sits lower and a full-depth channel would thin its roof.
     """
     if not fdm:
         return LED_RING_TOP
@@ -213,20 +116,53 @@ def led_y_reach():
     )
 
 
+def led_ring_lobe_y_reach():
+    """Furthest any lobe of the ring insert reaches from the wheel centre in y,
+    over the whole arc of its plan wedge.
+
+    The lobes hang below the cavity ceiling down to the dome rim, so the pad's
+    web and skirt both have to stop short of this reach. D6 and D7 sit on the
+    wheel's y axis, so their full outer radius counts in y."""
+    reach = 0.0
+    for ref in led_ring_lobe_refs():
+        angle, _ = _lobe_at(ref)
+        half = led_ring_lobe_half(ref)
+        outer = led_ring_lobe_outer_r(ref)
+        bearings = [
+            angle - half + 2 * half * i / LOBE_WEDGE_POINTS
+            for i in range(LOBE_WEDGE_POINTS + 1)
+        ]
+        bearings += [a for a in (math.pi / 2, 3 * math.pi / 2) if abs(angle - a) < half]
+        reach = max(reach, max(abs(outer * math.sin(a)) for a in bearings))
+    return reach
+
+
+def pad_clear_terms():
+    """[(name, half-width)] each requirement on the band around the wheel, in y
+    off the wheel centre.
+
+    The lip's own rotating clearance, led_y_reach() plus PAD_LED_CLEARANCE, and
+    led_ring_lobe_y_reach() plus PAD_SKIRT_CLEARANCE. All of them come off the
+    placements, so a moved LED widens the band and does not end up under
+    silicone."""
+    return [
+        ("lip clearance", LIP_CLEAR_R),
+        ("LED reach", led_y_reach() + params.PAD_LED_CLEARANCE),
+        ("ring lobe reach", led_ring_lobe_y_reach() + params.PAD_SKIRT_CLEARANCE),
+    ]
+
+
 def pad_clear_y():
     """Half-width of the band around the wheel the pad has to stay out of, in y
-    off the wheel centre: whichever asks for more of the lip's own rotating
-    clearance and led_y_reach() plus PAD_LED_CLEARANCE. The LED term governs
-    at the present layout: D6 and D7 sit on the wheel's y axis, so their full
-    radial reach counts in y. It is derived off the placements, so moving an
-    LED outward widens the band rather than quietly ending up back under
-    silicone.
+    off the wheel centre: the largest of pad_clear_terms().
 
-    A requirement rather than a cut now. The pad used to be one full-width slab
-    and this band was subtracted from it, severing it in two; the pad is two
-    tight lobes that stop short of the band on their own, and
-    case.pad_wheel_gap() is what measures by how much."""
-    return max(LIP_CLEAR_R, led_y_reach() + params.PAD_LED_CLEARANCE)
+    The ring lobe term governs. Each lobe reaches out past its LED and down to
+    the dome rim, and the skirt cannot pass over a lobe that keeps its
+    RING_LOBE_WALL. So the whole pad has to stop short of it in plan.
+
+    A requirement rather than a cut. The pad is two lobes that stop short of
+    the band on their own, and case.pad_wheel_gap() measures by how much."""
+    return max(value for _, value in pad_clear_terms())
 
 
 def _opening_clip():
@@ -334,9 +270,172 @@ def led_ring_roof_flat(fdm=False):
 
 
 def led_ring_web_left():
-    """Minimum web between bore and channel, below the inner top chamfer.
-    The bevel widens it toward the roof; led_ring probes the built shell."""
+    """Width of the band between the bore and the channel's inner wall.
+
+    It is the FDM front's web, shell on that front from the ceiling to the
+    face. The recessed front has no web: the ring runs from the bore outward in
+    one piece, and the light reaches the knob across it."""
     return led_ring_inner_r() - WHEEL_OPENING_R
+
+
+@functools.cache
+def led_ring_face_r():
+    """Radius of the ring: one circle on every bearing.
+
+    It is the opening in the face, the insert's one plumb side, and the outer
+    wall of the void the insert fills, all the same circle. So the face shows a
+    round line, and nothing on the part is wider than the cavity wall it has to
+    pass on its way up.
+
+    RING_LIFT_CLEAR inside that wall where the wall comes in closest, which is
+    near the X axis. Everywhere else the wall stands further out and the circle
+    clears it by more.
+
+    The ring used to run out to led_ring_mouth_outer_r(), 1.85 further, under a
+    shell roof that came back at 0.86 against an SLS minimum of 1.00. Near the
+    X axis the cavity wall chorded both the channel and the insert flat. Pulling
+    the ring inside the wall answers both at once: no shell covers the ring, so
+    no sheet over it can be thin, and no chord cuts the circle. What the roof
+    used to do, carrying each LED's light up to the face, the insert does, and
+    led_ring_lobes() is how the light gets into it."""
+    return (
+        min(led_ring_clip_reach(angle) for angle in _ring_angles())
+        - params.RING_LIFT_CLEAR
+    )
+
+
+def led_ring_lobe_refs():
+    """The LEDs that get a lobe: all six status LEDs."""
+    return board.refs("D")[1:]
+
+
+def _lobe_at(ref):
+    """(bearing in radians from +X, radius from the wheel axis) of `ref`."""
+    wx, wy = board.wheel_center()
+    x, y = board.components()[ref][:2]
+    return math.atan2(y - wy, x - wx) % (2 * math.pi), math.hypot(x - wx, y - wy)
+
+
+def led_ring_lobe_bearing(ref):
+    """Bearing of `ref`'s lobe, in radians from +X."""
+    return _lobe_at(ref)[0]
+
+
+def led_ring_lobe_rim_z():
+    """Height of every dome's rim, RING_LOBE_WRAP under the LEDs' top face.
+
+    The lowest the insert reaches. It is under the LED top on purpose: that is
+    what makes each lobe wrap its LED rather than sit over it."""
+    return BOARD_TOP + params.LED_HEIGHT - params.RING_LOBE_WRAP
+
+
+def led_ring_lobe_blend_r(ref):
+    """Radius where `ref`'s dome runs back into the ring's own underside,
+    RING_LOBE_SIDE inside that LED's body edge.
+
+    The dome has no slope at this end, so the two surfaces meet with no edge
+    between them and the lobe has no feather there."""
+    _, r = _lobe_at(ref)
+    return r - params.LED_BODY / 2 - params.RING_LOBE_SIDE
+
+
+def _dome_z(rim_r, blend_r, r):
+    """Height at radius `r` of a dome rising from its rim to the cavity ceiling.
+
+    RING_LOBE_STRAIGHT mixes a straight cone with a parabola that meets the
+    ring's underside flat. The mix is what keeps a full RING_LOBE_WALL between
+    the dome and the 45 degree flare over it: the flare is a plane at 45, so
+    the material between the two is the vertical gap times cos(45), and the
+    parabola on its own is highest in the middle, which is where the flare
+    sits.
+
+    Both ends are fixed whatever the mix. The rim sits under the LED's top
+    face, so the surface has to climb over that LED's outer corner on its way
+    in, and led_ring_lobe_rim_r() is what sets the rim radius that leaves
+    RING_LOBE_GAP there."""
+    w = params.RING_LOBE_STRAIGHT
+    u = (rim_r - r) / (rim_r - blend_r)
+    rim_z = led_ring_lobe_rim_z()
+    return rim_z + (CAVITY_FRONT - rim_z) * (w * u + (1 - w) * u * (2 - u))
+
+
+@functools.cache
+def led_ring_lobe_rim_r(ref):
+    """Radius of the outer rim of `ref`'s dome.
+
+    Solved, not set. The rim is RING_LOBE_WRAP under the LED's top face, so
+    where the rim sits decides how much air the dome leaves over that LED's
+    outer top corner. A rim too near the package grazes it. One too far out
+    drags the whole lobe outward and buys nothing. This is the radius that
+    leaves RING_LOBE_GAP over the corner.
+
+    The dome's height over any fixed radius rises with the rim radius, so a
+    bisection finds it."""
+    _, led_r = _lobe_at(ref)
+    led_out = led_r + params.LED_BODY / 2
+    blend = led_ring_lobe_blend_r(ref)
+    want = BOARD_TOP + params.LED_HEIGHT + params.RING_LOBE_GAP
+    lo, hi = led_out, led_out + 4.0
+    if _dome_z(hi, blend, led_out) < want:
+        raise ValueError(
+            f"the dome over {ref} cannot clear its own LED: a rim 4.00 past the "
+            f"package still leaves only "
+            f"{_dome_z(hi, blend, led_out) - BOARD_TOP - params.LED_HEIGHT:.2f} "
+            f"over its outer corner, against RING_LOBE_GAP "
+            f"{params.RING_LOBE_GAP:.2f}. RING_LOBE_WRAP "
+            f"{params.RING_LOBE_WRAP:.2f} is too deep a wrap for a package this "
+            f"wide"
+        )
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if _dome_z(mid, blend, led_out) < want:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def led_ring_lobe_dome_z(ref, r):
+    """Height of `ref`'s dome at radius `r`, between its rim and its blend."""
+    return _dome_z(led_ring_lobe_rim_r(ref), led_ring_lobe_blend_r(ref), r)
+
+
+def led_ring_lobe_half(ref):
+    """Half the arc `ref`'s lobe covers, in radians: RING_LOBE_SIDE past that
+    LED's own corners, the same clearance the dome keeps beside it radially."""
+    _, r = _lobe_at(ref)
+    return math.asin((params.LED_BODY / 2 + params.RING_LOBE_SIDE) / r)
+
+
+LOBE_FACE_SAMPLES = 16
+"""Bearings each lobe's land is measured at, across its own arc. The face falls
+along the arc as well as across it, and the land is the insert's whole
+retention, so it is taken at the lobe's worst bearing and not at its middle."""
+
+
+def led_ring_lobe_land_z(ref):
+    """Height the shell's pocket for `ref` starts its 45 degree lead-in at.
+
+    LED_RING_FACE_ROOF under the lowest the built face gets over that lobe's
+    arc, so the land over the pocket is never under the minimum wall. It is
+    thinnest right where the 45 starts, against the ring's circle, and thickens
+    outward, because the face falls away more slowly than one in one."""
+    from .keypad import face_floor_at
+
+    wx, wy = board.wheel_center()
+    angle, _ = _lobe_at(ref)
+    half, r = led_ring_lobe_half(ref), led_ring_face_r()
+    bearings = [
+        angle - half + 2 * half * i / LOBE_FACE_SAMPLES
+        for i in range(LOBE_FACE_SAMPLES + 1)
+    ]
+    return (
+        min(
+            face_floor_at(wx + r * math.cos(a), wy + r * math.sin(a))
+            for a in bearings
+        )
+        - params.LED_RING_FACE_ROOF
+    )
 
 
 def led_ring_wall_height(fdm=False):
@@ -355,77 +454,482 @@ def led_ring_wall_height(fdm=False):
 
 
 LED_RING_STATIONS = 144
-"""Bearings that the recessed channel is lofted through, at equal intervals
-from +X: 2.5 degrees, or about 0.8 mm of arc on the roof flat. The loft is
-ruled between them. Over the roof flat inside the cavity wall, its ceiling then
-departs from led_ring_ceiling_under() by less than 0.005. The largest
-departures are where the ceiling leaves the arch near the X axis. Each multiple
-of 90 degrees is a station, so a probe on one of those bearings reads one
-section exactly."""
-
-LED_RING_CEILING_POINTS = 8
-"""Points on the ceiling of each section, at equal intervals from the outer
-wall to the top of the inner bevel. The ceiling changes slowly along a radius,
-so more points change the loft less than more stations do."""
+"""Bearings the ring insert's band is lofted through, at equal intervals from
++X: 2.5 degrees, or about 0.8 mm of arc at the face circle. The loft is ruled
+between them, and the one surface that has to land flush with the shell's is
+the top, which follows the dish. Each multiple of 90 degrees is a station, so a
+probe on one of those bearings reads one section exactly."""
 
 
 def _ring_angles():
-    """The bearings of the recessed channel's stations, in radians from +X."""
+    """The bearings of the ring insert's stations, in radians from +X."""
     return [2 * math.pi * i / LED_RING_STATIONS for i in range(LED_RING_STATIONS)]
 
 
-def led_ring_inner_foot():
-    """Least upright inner wall that the recessed channel keeps above
-    CAVITY_FRONT, below the foot of its inner bevel, over all stations. The
-    bevel hangs from the local ceiling and shortens where the channel is
-    shallow, so this is LED_RING_INNER_FOOT_MIN at the east and west sides."""
-    foot = min(led_ring_bevel_top(a) - led_ring_bevel(a) for a in _ring_angles())
-    return foot - CAVITY_FRONT
+def wheel_lip_relief():
+    """The ceiling lifted clear of the ENC1 lip, out to the ring channel's
+    inner wall.
+
+    A plain annular lift rather than a step in _ring_section(), because the
+    channel's inner wall is only LED_RING_INNER_FOOT_MIN tall at the east and
+    west sides. A section step there would invert. As a cut of its own it
+    merges with the channel wherever the two meet, and takes the whole wall
+    where the wall is shorter than the lift.
+
+    It reaches MERGE below CAVITY_FRONT so it breaks through the ceiling
+    rather than ending on it. The annulus holds nothing: the pad's bore is at
+    LIP_CLEAR_R, further out, and the lip is the only part under it.
+    """
+    x, y = board.wheel_center()
+    top = CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+    tool = _hole(x, y, 2 * led_ring_inner_r(), CAVITY_FRONT - MERGE, top)
+    return _isect(tool, _slab(_channel_clip(), CAVITY_FRONT - MERGE - 1, top + 1))
 
 
-def _ring_section(angle):
-    """[(r, z)] of the recessed channel's section on the bearing `angle`, as
-    radius from the wheel axis and height, in order: the overrun's floor, the
-    plumb part of the outer wall at the mouth, the 45 degree outer rake, the
-    ceiling, the inner bevel and the inner wall. The ceiling ends at
-    led_ring_bevel_edge_r(), and the bevel goes led_ring_bevel() down from it.
+RING_INSERT_TOP_POINTS = 16
+"""Points along the ring insert's top face, at equal intervals from the roof
+flat's outer end in to where led_ring_bore_round() leaves the dish.
 
-    The rake goes up from the mouth at led_ring_rake_foot() to the ceiling at
-    led_ring_flat_outer_r(). Where the ceiling is above the arch there, the
-    rake starts that much higher than CAVITY_FRONT, and the outer wall is plumb
-    at the mouth below it. The rake keeps its 45 degrees and its height, so the
-    roof flat does not get narrower. Every section has the same number of
-    points, which the ruled loft needs."""
+The top is the dish, and the dish is a bowl, so a chord between two points on
+it stands proud of it. The insert's top is the one face that has to land flush
+with the shell's own, which is why this is denser than
+LED_RING_CEILING_POINTS: the top spans from the bore now rather than from the
+inner bevel, about twice the reach, and the sag goes as the square of the
+spacing."""
+
+
+def _insert_section(angle):
+    """[(r, z)] of the ring insert's band on the bearing `angle`.
+
+    The ring without its lobes: a plain band from the wheel bore out to
+    led_ring_face_r(), under the dish, standing on the cavity ceiling. Its one
+    plumb side is the circle that shows at the face, so that side takes
+    RING_INSERT_FACE_FIT. The top lands flush with the shell's own. The bore
+    faces the knob, where the shell's seat used to stand, so it keeps that
+    radius and WHEEL_OPENING_CLEARANCE with it, and takes no fit.
+    The top meets the bore on led_ring_bore_round(), not on a sharp edge.
+
+    The underside holds nothing up. Inside LIP_CLEAR_R it stands at
+    LED_RING_FOOT, clear of the ENC1 lip. Outside it drops to CAVITY_FRONT.
+    The step is on LIP_CLEAR_R and not on led_ring_inner_r(), so it is flush
+    with the inner face of each of led_ring_feet(). Both face open cavity, so adhesive keeps the part up, led_ring_feet()
+    catches it if that fails, and the lobes are what stop it coming out the
+    front.
+
+    Every station returns the same number of points, which the ruled loft
+    needs.
+    """
+    from .keypad import face_floor_at
+
     wx, wy = board.wheel_center()
     cos_a, sin_a = math.cos(angle), math.sin(angle)
-    inner, mouth = led_ring_inner_r(), led_ring_mouth_outer_r()
-    bevel = led_ring_bevel(angle)
-    flat_in, flat_out = inner + bevel, led_ring_flat_outer_r(angle)
-    count = LED_RING_CEILING_POINTS
-    ceiling = []
-    for i in range(count):
-        r = flat_out - (flat_out - flat_in) * i / (count - 1)
-        ceiling.append((r, led_ring_ceiling_under(wx + r * cos_a, wy + r * sin_a)))
-    bevel_top = ceiling[-1][1]
-    z0 = CAVITY_FRONT - 1
+    outer = led_ring_face_r() - params.RING_INSERT_FACE_FIT
+    count = RING_INSERT_TOP_POINTS
+    arc = led_ring_bore_round(angle)
+    start = arc[0][0]
+    radii = [outer - (outer - start) * i / (count - 1) for i in range(count)]
+    top = [(r, face_floor_at(wx + r * cos_a, wy + r * sin_a)) for r in radii]
     return [
-        (inner, z0),
-        (mouth, z0),
-        (mouth, led_ring_rake_foot(angle)),
-        *ceiling,
-        (inner, bevel_top - bevel),
+        (WHEEL_OPENING_R, LED_RING_FOOT),
+        (LIP_CLEAR_R, LED_RING_FOOT),
+        (LIP_CLEAR_R, CAVITY_FRONT),
+        (outer, CAVITY_FRONT),
+        *top,
+        *arc[1:],
     ]
 
 
-def _recessed_ring_channel():
-    """The recessed front's channel: a ruled loft through _ring_section() at
-    every station, closed on itself, clipped by _channel_clip()."""
+RING_BORE_ROUND_POINTS = 12
+"""Points along the round on the ring's inner edge, from the dish down to the
+bore. A chord between two of them cuts inside the arc by about
+RING_BORE_ROUND * (1 - cos(half the step)), which is under 0.002 here."""
+
+
+def led_ring_bore_round(angle, trim=0.0):
+    """[(r, z)] of the round on the ring's inner edge on the bearing `angle`.
+
+    The points run from where the round leaves the dish down to where it meets
+    the plumb bore at WHEEL_OPENING_R. The arc has radius RING_BORE_ROUND and
+    is tangent to both.
+
+    The dish is not level at the bore. It falls outward on the X axis, where
+    the face rolls off, and rises on the crown. So the round takes the dish's
+    slope where it leaves it, and the arc's centre stands RING_BORE_ROUND out
+    from the bore on every bearing.
+
+    `trim` stops the arc that many radians short of each tangent point.
+    _insert_section() ends the insert's top on the whole arc, and
+    led_ring_bore_round_cut() cuts the trimmed arc into the one-piece front.
+    """
+    from .keypad import face_floor_at
+
     wx, wy = board.wheel_center()
-    sections, top = [], -math.inf
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def dish(r):
+        return face_floor_at(wx + r * cos_a, wy + r * sin_a)
+
+    radius = params.RING_BORE_ROUND
+    centre_r = WHEEL_OPENING_R + radius
+    leave = centre_r
+    step = 0.01
+    for _ in range(4):
+        slope = math.atan((dish(leave + step) - dish(leave - step)) / (2 * step))
+        leave = centre_r - radius * math.sin(slope)
+    centre_z = dish(leave) - radius * math.cos(slope)
+    if centre_z <= LED_RING_FOOT:
+        raise ValueError(
+            f"RING_BORE_ROUND {radius:.2f} takes the whole bore wall at "
+            f"{math.degrees(angle):.0f} degrees: the round meets the bore at "
+            f"{centre_z:.2f}, at or under the insert's foot at {LED_RING_FOOT:.2f}"
+        )
+    first, last = math.pi / 2 + slope + trim, math.pi - trim
+    return [
+        (
+            centre_r + radius * math.cos(first + (last - first) * i / (RING_BORE_ROUND_POINTS - 1)),
+            centre_z + radius * math.sin(first + (last - first) * i / (RING_BORE_ROUND_POINTS - 1)),
+        )
+        for i in range(RING_BORE_ROUND_POINTS)
+    ]
+
+
+BORE_ROUND_CUT_STEP = 0.01
+"""How far the one-piece front's round cut stops short of the dish and of the
+bore, measured normal to each.
+
+A cut that meets either surface on its tangent line meshes torn. The loft's
+chords and the true surface cross many times along that line, so the
+tessellator finds slivers there. Stopped this far short, each end of the cut
+crosses its surface at an angle. The step it leaves is under any print's
+resolution, and it is more than the 0.004 that the bore's chords sag inside
+the true bore.
+
+At the bore, the cut runs on down the arc's own tangent and through the bore,
+rather than in square from the arc's end. A square end leaves a ledge parallel
+to the underside, and checks/fab.py reads that as a sheet and not an edge."""
+
+
+def _bore_round_cut_section(angle):
+    """[(r, z)] of the material the round takes off the one-piece front on the
+    bearing `angle`: under the air over the dish, over the trimmed arc, down its
+    tangent into the bore, and MERGE into the bore so the cut leaves the solid
+    rather than ending on its surface."""
+    trim = math.acos(1 - BORE_ROUND_CUT_STEP / params.RING_BORE_ROUND)
+    arc = led_ring_bore_round(angle, trim)
+    (top_r, top_z), (low_r, low_z) = arc[0], arc[-1]
+    over = top_z + 1
+    past = WHEEL_OPENING_R - BORE_ROUND_CUT_STEP
+    below = low_z - (low_r - past) / math.tan(trim)
+    inside = WHEEL_OPENING_R - MERGE
+    return [*arc, (past, below), (inside, below), (inside, over), (top_r, over)]
+
+
+def led_ring_bore_round_cut():
+    """The cut that rounds the one-piece front's inner ring edge.
+
+    It is lofted through the same stations as led_ring_insert(), off the same
+    led_ring_bore_round() arc, trimmed by BORE_ROUND_CUT_STEP at each end. So
+    the one-piece front carries the insert's round to within that step."""
+    return _ring_loft(_bore_round_cut_section)
+
+
+LOBE_DOME_POINTS = 24
+"""Points along one dome, from its rim in to where it blends into the ring's
+underside. The dome is a parabola and a chord between two points cuts inside
+it, so the LED's own outer corner, which the dome clears by RING_LOBE_GAP,
+wants them close together."""
+
+LOBE_WEDGE_POINTS = 12
+"""Points on the arc of the plan wedge each lobe is cut to. The arc stands a
+millimetre outside the lobe's own outer face, so these only have to keep its
+chord from reaching in that far."""
+
+
+def led_ring_lobe_flare(ref):
+    """(inner radius, height there, flat top) of `ref`'s lobe's 45 degree flare.
+
+    The 45 is the line through led_ring_face_r() at RING_LOBE_FIT under the
+    shell's own pocket, so how much of it tucks under the land does not move
+    with the overlap. The inner radius is only MERGE inside the ring's circle,
+    which puts that end of the lobe inside the band rather than on its outer
+    face, and the flat top is RING_LOBE_FIT under the cavity ceiling, which is
+    where the lobe stops reaching up into the shell."""
+    face = led_ring_face_r()
+    return (
+        face - MERGE,
+        led_ring_lobe_land_z(ref) - params.RING_LOBE_FIT + MERGE,
+        CAVITY_FRONT - params.RING_LOBE_FIT,
+    )
+
+
+def led_ring_lobe_outer_r(ref):
+    """Radius of `ref`'s lobe's vertical outer face: RING_LOBE_WALL outside the
+    dome rim."""
+    return led_ring_lobe_rim_r(ref) + params.RING_LOBE_WALL
+
+
+def led_ring_lobe_lid(ref):
+    """[(r, z)] of the top of `ref`'s lobe, from the ring's circle outward.
+
+    The 45 degree flare down to its knee, the flat top, and the
+    RING_LOBE_SHOULDER chamfer down to the vertical outer face. The chamfer
+    keeps a pressed cap flange off the corner, see RING_LOBE_SHOULDER."""
+    inner, top, flat = led_ring_lobe_flare(ref)
+    knee = inner + top - flat
+    outer = led_ring_lobe_outer_r(ref)
+    leg = params.RING_LOBE_SHOULDER
+    if leg <= 0:
+        return [(inner, top), (knee, flat), (outer, flat)]
+    if outer - leg <= knee:
+        raise ValueError(
+            f"RING_LOBE_SHOULDER {leg:.2f} runs past the knee of {ref}'s flare "
+            f"at {knee:.2f}, so the lobe has no flat top left"
+        )
+    return [(inner, top), (knee, flat), (outer - leg, flat), (outer, flat - leg)]
+
+
+def _lobe_section(ref):
+    """[(r, z)] of `ref`'s lobe, as radius from the wheel axis and height.
+
+    Going round from the ring's own circle: the 45 degree flare down to just
+    under the cavity ceiling, the flat top, the RING_LOBE_SHOULDER chamfer, the
+    outer face down to the rim, the rim land, and the dome back in and up to
+    the ring's underside.
+
+    The flare does two jobs. It carries that LED's light up into the ring, and
+    it holds the insert in, because it tucks under a land of shell. It runs
+    RING_LOBE_FIT below the shell's own pocket, so the part seats on its face
+    circle and never on a lobe.
+
+    The dome is open on the inner side. A wall there would have to stand
+    between the LED's inner edge and the ENC1 lip, and LIP_CLEAR_R leaves 0.20
+    of room for one. Nothing is lost by leaving it out: the ring sits directly
+    over that half of the package and takes its light.
+
+    The last two points reach MERGE above the cavity ceiling, inside the ring's
+    own body, so the fuse has volume to work with rather than two faces lying
+    on each other.
+    """
+    rim, blend = led_ring_lobe_rim_r(ref), led_ring_lobe_blend_r(ref)
+    inner, _, _ = led_ring_lobe_flare(ref)
+    dome = [
+        (r, _dome_z(rim, blend, r))
+        for r in (
+            rim - (rim - blend) * i / (LOBE_DOME_POINTS - 1)
+            for i in range(LOBE_DOME_POINTS)
+        )
+    ]
+    return [
+        *led_ring_lobe_lid(ref),
+        (led_ring_lobe_outer_r(ref), led_ring_lobe_rim_z()),
+        *dome,
+        (blend, CAVITY_FRONT + MERGE),
+        (inner, CAVITY_FRONT + MERGE),
+    ]
+
+
+def _lobe_pocket_section(ref):
+    """[(r, z)] of the pocket the shell opens for `ref`'s lobe.
+
+    A triangle: the 45 degree lead-in from the ring's circle down to the cavity
+    ceiling, and the ceiling itself. Below the ceiling the cavity is open
+    already, so the tool only has to break through, which is why its floor runs
+    a millimetre under.
+
+    This is the whole of what the shell gives up for the lobes. The flare
+    crosses the ceiling about 1.3 out from the ring, so the shell loses a wedge
+    that size at six places and keeps everything else. The land over it is
+    LED_RING_FACE_ROOF where it is thinnest, against the ring's circle, and
+    thickens outward."""
+    r0, top = led_ring_face_r(), led_ring_lobe_land_z(ref)
+    low = CAVITY_FRONT - 1
+    return [(r0, top), (r0 + top - low, low), (r0, low)]
+
+
+LOBE_ROOF_SAMPLES = 201
+"""Points the dome is walked at when measuring the roof over it. Dense because
+the dome and the flare run nearly parallel where they come closest, so the
+minimum is shallow and sits between any two coarse samples."""
+
+
+def led_ring_lobe_roof(ref):
+    """Least material between `ref`'s dome and the insert's own top over it.
+
+    Measured normal to that top and not vertically. The flare over the dome is
+    a plane at 45 degrees, so a vertical gap of one millimetre is a wall of
+    0.71, and reading it vertically is what passed a 0.88 wall that the fab
+    pass then found. checks/fab.py measures by inward rays, which is this
+    distance, so this is the reading that has to hold.
+
+    Walked rather than reasoned. The top is the 45 over the flare, the flat
+    beyond its knee, and the RING_LOBE_SHOULDER chamfer, and the dome's slope
+    changes all the way along, so where the two come closest is neither end
+    nor a corner between them. The chamfer comes closest to the dome near the
+    rim. The vertical outer face is not read, because RING_LOBE_WALL sets it."""
+    rim, blend = led_ring_lobe_rim_r(ref), led_ring_lobe_blend_r(ref)
+    lid = led_ring_lobe_lid(ref)
+    least = math.inf
+    for i in range(LOBE_ROOF_SAMPLES):
+        r = rim - (rim - blend) * i / (LOBE_ROOF_SAMPLES - 1)
+        point = (r, _dome_z(rim, blend, r))
+        for a, b in zip(lid, lid[1:]):
+            least = min(least, _point_to_segment(point, a, b))
+    return least
+
+
+def _point_to_segment(p, a, b):
+    """Distance from (r, z) `p` to the segment `a` to `b` in the same plane."""
+    dr, dz = b[0] - a[0], b[1] - a[1]
+    t = ((p[0] - a[0]) * dr + (p[1] - a[1]) * dz) / (dr * dr + dz * dz)
+    t = max(0.0, min(1.0, t))
+    return math.hypot(p[0] - (a[0] + t * dr), p[1] - (a[1] + t * dz))
+
+
+def _lobe_solid(ref, section, half):
+    """One lobe, or one pocket: `section` revolved about the wheel axis and cut
+    to a plan wedge `half` radians either side of `ref`'s own bearing."""
+    wx, wy = board.wheel_center()
+    angle, _ = _lobe_at(ref)
+    points = section(ref)
+    with BuildSketch(Plane.XZ) as profile:
+        with BuildLine():
+            Polyline(*points, close=True)
+        make_face()
+    body = Pos(wx, wy, 0) * revolve(profile.sketch, Axis.Z)
+    reach = led_ring_lobe_rim_r(ref) + params.RING_LOBE_WALL + 1
+    plan = [(wx, wy)]
+    for i in range(LOBE_WEDGE_POINTS + 1):
+        a = angle - half + 2 * half * i / LOBE_WEDGE_POINTS
+        plan.append((wx + reach * math.cos(a), wy + reach * math.sin(a)))
+    with BuildSketch() as wedge:
+        with BuildLine():
+            Polyline(*plan, close=True)
+        make_face()
+    zs = [z for _, z in points]
+    return _isect(body, _slab(wedge.sketch.faces()[0], min(zs) - 1, max(zs) + 1))
+
+
+def led_ring_lobes():
+    """The six blisters on the insert's underside, one over each LED.
+
+    The ring stops short of the LEDs now, at led_ring_face_r(), so none of it
+    sits over the outer half of a package. Each lobe reaches out and down
+    instead: a dome that wraps its LED, a wall outside the dome's rim, and the
+    45 degree flare back up into the shell that carries the light in and holds
+    the part.
+
+    They are local on purpose. A flare all the way round would reach past the
+    cavity wall near the X axis and the insert could not lift past it. See
+    led_ring_face_r().
+    """
+    least = params.RING_LOBE_WALL
+    lobes = []
+    for ref in led_ring_lobe_refs():
+        roof = led_ring_lobe_roof(ref)
+        if roof < least - 1e-9:
+            raise ValueError(
+                f"the dome over {ref} leaves {roof:.2f} of insert above it, "
+                f"under RING_LOBE_WALL {least:.2f}: RING_LOBE_WRAP "
+                f"{params.RING_LOBE_WRAP:.2f} or RING_LOBE_GAP "
+                f"{params.RING_LOBE_GAP:.2f} has taken the dome too high, or "
+                f"RING_LOBE_SHOULDER {params.RING_LOBE_SHOULDER:.2f} has cut "
+                f"too far in"
+            )
+        lobes.append(_lobe_solid(ref, _lobe_section, led_ring_lobe_half(ref)))
+    return lobes
+
+
+def led_ring_lobe_pockets():
+    """The six pockets the shell opens for the lobes.
+
+    Each is its lobe's own wedge, widened by RING_LOBE_FIT at the rim so the
+    part is not asked to slide up between two faces that touch."""
+    return [
+        _lobe_solid(
+            ref,
+            _lobe_pocket_section,
+            led_ring_lobe_half(ref) + params.RING_LOBE_FIT / led_ring_lobe_rim_r(ref),
+        )
+        for ref in led_ring_lobe_refs()
+    ]
+
+
+def _lobe_fill_section(ref):
+    """[(r, z)] of the fill that closes the fit over `ref`'s lobe on the
+    one-piece front.
+
+    The insert's lobe stops RING_LOBE_FIT under the cavity ceiling, so the
+    two-part build seats on its face circle and not on a lobe. A fused ring has
+    no seat, so on that front the gap is a slit with no function.
+
+    The fill starts RING_LOBE_FIT under the lobe's flat top, inside the lobe,
+    and stops MERGE over the ceiling, inside the shell. So each of its joints
+    overlaps material and does not only touch it.
+
+    Its outer side continues the RING_LOBE_SHOULDER chamfer up to the ceiling.
+    The chamfer stays one plane, so a pressed SW6 flange meets the same surface
+    as on the two-part build.
+
+    Its inner end stands MERGE inboard of the point where the flare crosses its
+    top. So the top inner corner is inside the flare and not on its surface.
+    """
+    _, _, flat = led_ring_lobe_flare(ref)
+    knee = led_ring_lobe_lid(ref)[1][0]
+    outer = led_ring_lobe_outer_r(ref)
+    leg = params.RING_LOBE_SHOULDER
+    top = CAVITY_FRONT + MERGE
+    dip = min(params.RING_LOBE_FIT, leg) if leg > 0 else params.RING_LOBE_FIT
+    low = flat - dip
+    start = knee - (top - flat) - MERGE
+    dome = led_ring_lobe_dome_z(ref, start)
+    if dome >= low:
+        raise ValueError(
+            f"the fill over {ref}'s lobe starts at r {start:.2f}, where the "
+            f"dome stands at {dome:.2f}, over the fill's bottom at {low:.2f}: "
+            f"the fill would hang below the lobe"
+        )
+    if leg <= 0:
+        return [(start, low), (outer, low), (outer, top), (start, top)]
+    corner = outer - leg
+    return [
+        (start, low),
+        (corner + dip, low),
+        (corner - (top - flat), top),
+        (start, top),
+    ]
+
+
+def led_ring_lobe_fills():
+    """The six fills that close the fit over the lobes on the one-piece front.
+
+    front_shell(one_piece=True) fuses them before its key cuts. So a
+    counterbore that reaches over a lobe stays open, and the gap under it stays
+    the gap a cap needs."""
+    return [
+        _lobe_solid(ref, _lobe_fill_section, led_ring_lobe_half(ref))
+        for ref in led_ring_lobe_refs()
+    ]
+
+
+def _ring_loft(section):
+    """Close a ruled loft through `section` at every station.
+
+    Nothing clips it. The ring stands inside the cavity wall on every bearing
+    now, so there is no chord to cut and the loft is the whole band. The cavity
+    wall used to cut both the channel and the insert flat near the X axis, and
+    that flat is what stopped the part going in."""
+    wx, wy = board.wheel_center()
+    faces, top = [], -math.inf
     for angle in _ring_angles():
-        points = _ring_section(angle)
+        points = section(angle)
+        for i, ((r0, z0), (r1, z1)) in enumerate(zip(points, points[1:] + points[:1])):
+            if math.hypot(r1 - r0, z1 - z0) < 1e-6:
+                raise ValueError(
+                    f"the LED ring section repeats point {i} at "
+                    f"{math.degrees(angle):.0f} degrees, r {r0:.3f} z {z0:.3f}"
+                )
         top = max(top, *(z for _, z in points))
-        sections.append(
+        faces.append(
             Face(
                 Wire.make_polygon(
                     [
@@ -436,70 +940,175 @@ def _recessed_ring_channel():
                 )
             )
         )
-    # The same face first and last makes the loft close on itself, with no end
-    # caps to glue.
-    channel = loft([*sections, sections[0]], ruled=True)
-    caps = [
-        f
-        for f in channel.faces()
-        if f.geom_type == GeomType.PLANE
-        and abs(f.normal_at().Y) > 1 - 1e-9
-        and abs(f.center().Y - wy) < 1e-6
+    solid = loft([*faces, faces[0]], ruled=True)
+    if len(solid.solids()) != 1 or not solid.is_valid:
+        raise ValueError("the LED ring loft did not close into one solid")
+    return solid
+
+
+def led_ring_foot_angles():
+    """Bearings of the insert's feet, midway between neighbouring LEDs.
+
+    Derived off the placements rather than named, so moving an LED moves the
+    feet with it. The six LEDs leave six gaps: four short ones and two wide
+    ones on the X axis, and every gap gets a foot at its middle, which is as
+    far from the light as that gap allows.
+
+    The two on the X axis are the weaker pair. The board ends level with the
+    ring there, so they overhang its edge and bear on less of it than the other
+    four. They are redundancy rather than the main support.
+    """
+    wx, wy = board.wheel_center()
+    parts = board.components()
+    bearings = sorted(
+        math.atan2(parts[ref][1] - wy, parts[ref][0] - wx) % (2 * math.pi)
+        for ref in board.refs("D")[1:]
+    )
+    return tuple(
+        (first + ((bearings[(i + 1) % len(bearings)] - first) % (2 * math.pi)) / 2)
+        % (2 * math.pi)
+        for i, first in enumerate(bearings)
+    )
+
+
+FOOT_CHORD_INSET = 0.001
+"""How far inside the band's facets the outer arc of each foot stands.
+
+The band is a ruled loft through LED_RING_STATIONS sections, so its outer face
+is a polygon with its corners on led_ring_face_r(). An arc on that circle
+stands past the middle of each facet, and the fuse leaves a sliver face there.
+So the arc stands this far inside the facets' own inner radius."""
+
+
+def led_ring_feet():
+    """Feet under the insert that catch it if its bond fails.
+
+    Each lobe tucks under a land of shell, so the part cannot pass forward
+    through the face. But nothing stands under it, so it can drop onto the ENC1
+    flange. Adhesive holds it flush, and these feet stop it if the bond fails.
+
+    They stop RING_FOOT_GAP above the board and do not rest on it. A foot that
+    touches the board must answer for the board's float and the SLS tolerance
+    on both parts. If that stack goes the wrong way, the ring stands proud of
+    the face.
+
+    Each foot is a sector of the band, concentric with the wheel. Its outer
+    face is an arc just inside the band's facets, see FOOT_CHORD_INSET, so it
+    follows the band's outline and nothing stands past it. The feet were boxes
+    before, and the two corners of each flat outer face stood past the band.
+    RING_FOOT_W is the width at the mid radius.
+
+    The inner face is an arc at LIP_CLEAR_R and not at the band's own inner
+    edge, which stands further in. The band is above the ENC1 lip and clears it
+    on height. A foot passes the lip, so it answers to the rotating envelope.
+
+    They go MERGE into the insert's underside and do not only touch it, so the
+    fuse has volume to work with.
+    """
+    wx, wy = board.wheel_center()
+    inner = LIP_CLEAR_R
+    outer = (
+        led_ring_face_r() * math.cos(math.pi / LED_RING_STATIONS)
+        - FOOT_CHORD_INSET
+    )
+    low = BOARD_TOP + params.RING_FOOT_GAP
+    high = CAVITY_FRONT + MERGE
+    least = params.FAB_MIN_WALL[params.FAB_PROCESS]
+    if outer - inner < least:
+        raise ValueError(
+            f"the ring insert's feet are only {outer - inner:.2f} wide, under "
+            f"the {least:.2f} minimum wall: the band runs {inner:.2f} to "
+            f"{outer:.2f}, so RING_LIFT_CLEAR {params.RING_LIFT_CLEAR:.2f} has "
+            f"pulled led_ring_face_r() in too near LIP_CLEAR_R"
+        )
+    half = params.RING_FOOT_W / 2 / ((inner + outer) / 2)
+    with BuildSketch(Plane.XZ) as profile:
+        with BuildLine():
+            Polyline(
+                (inner, low), (outer, low), (outer, high), (inner, high), close=True
+            )
+        make_face()
+    foot = revolve(profile.sketch, Axis.Z, revolution_arc=math.degrees(2 * half))
+    return [
+        Pos(wx, wy, 0) * Rot(0, 0, math.degrees(angle - half)) * foot
+        for angle in led_ring_foot_angles()
     ]
-    if caps or len(channel.solids()) != 1 or not channel.is_valid:
-        raise ValueError("the LED ring channel loft did not close into one solid")
-    # The clip's slab reaches past the loft at both ends, so no face of the one
-    # lies on a face of the other.
-    return _isect(channel, _slab(_channel_clip(), CAVITY_FRONT - 2, top + 1))
+
+
+@cache.solid
+def led_ring_insert(feet=True):
+    """The translucent ring that fills the void the shell leaves round the
+    wheel.
+
+    It is a light guide rather than a window. Six lobes reach down over the six
+    LEDs and feed the band, and the band carries that light round to the east
+    and west, where no LED sits and the face would otherwise read as six dots.
+
+    It goes in from inside the shell and rises straight up. Nothing on it is
+    wider than the cavity wall it passes, because led_ring_face_r() stands
+    inside that wall, and the lobes clear the wall by much more on their own
+    bearings. The bore face needs no retention because it faces the knob.
+
+    The lobes are what hold it. Each tucks under LED_RING_FACE_ROOF of shell,
+    so the part cannot pass outward through the face at all. It can still drop
+    back into the cavity, so it needs adhesive the way the IR window does, and
+    led_ring_feet() catches it if the bond lets go. Glue it while the front
+    shell lies face down, before the board goes in.
+
+    It also carries the band the shell used to hold between the ring and the
+    bore, so the lit face runs to the knob with no shell sheet anywhere in it.
+
+    Print it in UTR-8100 by SLA, with the translucent finish. The Somos
+    Taurus shell is opaque, so this part is the only path the light has to
+    the face. A polished clear part shows six bright points and no band,
+    because clear resin does not scatter light.
+
+    `feet=False` is the same part without its feet. The one-piece front holds
+    the band and the lobes but no feet, so it is checked against this shape.
+    """
+    return _fuse(
+        _ring_loft(_insert_section),
+        *led_ring_lobes(),
+        *(led_ring_feet() if feet else []),
+    )
 
 
 def led_ring_channel(fdm=False):
-    """The channel itself, as the cut: an annular void from below the ceiling
-    underside (open to the cavity, which is where the LED light comes from) up
-    to the ceiling, clipped by _channel_clip() where its outer radius would
-    otherwise run past the cavity wall.
+    """The void the LED ring lives in, as the cut. The two fronts take very
+    different shapes.
 
-    On the recessed front the ceiling is led_ring_ceiling_under(): the arch,
-    or LED_RING_FACE_ROOF under the built face where that is higher. That
-    surface is not a revolution, so the channel is a ruled loft through one
-    section at each of LED_RING_STATIONS bearings. The inner wall stands at
-    led_ring_inner_r() and bevels out 45 degrees through led_ring_bevel(),
-    measured down from the local ceiling. That is the full
-    LED_RING_INNER_CHAMFER except at the east and west sides, where the channel
-    is shallow and the bevel shortens to keep LED_RING_INNER_FOOT_MIN of
-    upright inner wall. The outer
-    wall is plumb at the mouth up to led_ring_rake_foot(), then rakes in at 45
-    degrees up to the ceiling at led_ring_flat_outer_r(). Where the ceiling is
-    above the arch, the rake starts that much higher. As a result, the raised
-    ceiling does not make the roof flat narrower. The FDM front's channel stays
-    flat at led_ring_top(), revolved as one section.
+    The recessed front has no channel at all any more. Its cut is one plain
+    bore at led_ring_face_r(), from under the cavity ceiling clear through the
+    face, with a pocket at each of the six LEDs for that lobe's 45 degree
+    flare. So the shell keeps no roof, no inner wall and no web over the ring,
+    and led_ring_insert() is the whole of what the light passes through. That
+    is the point: the roof read 0.86 at the east and west sides, under the SLS
+    minimum, and nothing in the stack reached it.
 
-    The web behind the inner wall is at least LED_RING_WALL everywhere.
+    What is left of the shell there is the land over each pocket, which is
+    LED_RING_FACE_ROOF at its thinnest, and that land is also the insert's
+    retention.
 
-    Flaring the outer wall is what the light wants: it enters at the mouth, off
-    LEDs firing up out of the cavity, and a wall raked away from them puts more
-    of the roof in view of each one. A 45 degree rake is also what a printer can
-    close a ceiling over without support.
+    The FDM front keeps the old channel, because its own face sits lower and
+    its roof and web are thick enough to print. It is one section revolved: an
+    inner wall at led_ring_inner_r() under a 45 degree bevel, a flat ceiling at
+    led_ring_top(True), and an outer wall that rakes in at 45 degrees from the
+    mouth. The mouth is the flared end because that is where the light enters,
+    off LEDs firing up out of the cavity.
 
-    The overrun below the ceiling underside holds the mouth radii. It is there
-    to break the cut through into the cavity, and carrying the widest width down
-    through it is what leaves the cavity ceiling a clean edge rather than a
-    feather.
+    The overrun below the cavity ceiling holds the mouth radii, so the cut
+    breaks through into the cavity and leaves that ceiling a clean edge rather
+    than a feather.
     """
-    if not fdm:
-        least = min(led_ring_bevel(a) for a in _ring_angles())
-        foot = led_ring_inner_foot()
-        if least <= 0 or foot < params.LED_RING_INNER_FOOT_MIN - 1e-6:
-            raise ValueError(
-                f"the recessed LED channel has no room for its inner bevel at "
-                f"the inner wall's east and west sides: the bevel is "
-                f"{least:.2f} and leaves {foot:.2f} of upright wall, wants "
-                f"LED_RING_INNER_FOOT_MIN {params.LED_RING_INNER_FOOT_MIN:.2f}. "
-                f"LED_RING_SAG {params.LED_RING_SAG:.2f} and LED_RING_FACE_ROOF "
-                f"{params.LED_RING_FACE_ROOF:.2f} put the ceiling too low there"
-            )
-        return _recessed_ring_channel()
     x, y = board.wheel_center()
+    if not fdm:
+        # No clip. The circle stands inside the cavity wall on every bearing,
+        # which is the whole job of led_ring_face_r(), and the pockets sit
+        # above the cavity ceiling where there is no wall to answer to.
+        return _fuse(
+            _hole(x, y, 2 * led_ring_face_r(), CAVITY_FRONT - 1, SHELL_FRONT + 1),
+            *led_ring_lobe_pockets(),
+        )
     z0, z1 = CAVITY_FRONT - 1, led_ring_top(fdm)
     if params.LED_RING_INNER_CHAMFER >= led_ring_wall_height(fdm):
         raise ValueError("LED_RING_INNER_CHAMFER consumes the LED channel wall")

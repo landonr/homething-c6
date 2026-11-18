@@ -11,7 +11,10 @@ whole assembly rather than one feature is tagged `assembly` instead, so scoping
 one side of it never runs it half blind.
 
 `--jobs N` spreads the passes themselves across N processes rather than the
-features. The features are wildly uneven, one of them being better than a third
+features. It defaults to 10, because the suite is CPU-bound and a serial run
+leaves a workstation idle: a full run took 73 minutes serial and is bounded
+below by one pass, assembly.parts_are_sound, at about 10 minutes. Pass 1 to
+make a run serial again. The features are wildly uneven, one of them being better than a third
 of the suite on its own, so feature-sized units of work leave most of the pool
 idle within seconds and put a floor under the wall clock at whatever the slowest
 single feature costs. Pass-sized units have no such floor, which also means a
@@ -119,6 +122,7 @@ from .keypad import (
     neck_blends_smoothly,
     neck_continuity,
     pad_clears_board,
+    pad_x_float,
     pad_clears_wheel,
     pad_fits,
     pad_skirt_depth,
@@ -139,6 +143,7 @@ from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
 from .shells import (
     interference,
     ir_end_lap_wall,
+    one_piece_front,
     parts_are_sound,
     seam_shadow_line,
     shells_mate,
@@ -160,10 +165,12 @@ from .support import (
 from .usb import usb_clearance
 from .qwiic import qwiic_access, qwiic_knockout, qwiic_skirt_transition, battery_lead_clearance
 from .wheel_ring import (
+    bore_round,
     fdm_wheel_seat,
     inner_chamfer_is_cut,
     led_ring,
     light_path,
+    pressed_caps_clear_lobes,
     rotation_clearance,
     wheel_seat_clearance,
 )
@@ -184,6 +191,10 @@ class Solids:
     @functools.cached_property
     def front_fdm(self):
         return case.front_shell(fdm=True)
+
+    @functools.cached_property
+    def front_one_piece(self):
+        return case.front_shell(one_piece=True)
 
     @functools.cached_property
     def back(self):
@@ -226,6 +237,25 @@ class Solids:
     @functools.cached_property
     def pad_v2_top(self):
         return case.legacy_top_pad(fdm=False, skirt=True)
+
+    @functools.cached_property
+    def ring_insert(self):
+        return case.led_ring_insert()
+
+    @functools.cached_property
+    def ring_insert_footless(self):
+        return case.led_ring_insert(feet=False)
+
+    @functools.cached_property
+    def front_with_ring(self):
+        """The recessed front and the part that fills its ring, as one shape.
+
+        led_ring_channel() bores the whole ring out of the shell, so a pass
+        that reads the built front face has to read both or it finds a hole
+        where the lit band is. The two do not touch, by RING_INSERT_FACE_FIT,
+        so this stays a compound and the readers walk both.
+        """
+        return self.front + self.ring_insert
 
     @functools.cached_property
     def window(self):
@@ -315,8 +345,26 @@ def _pad_wall_fit(s):
     )
     return _report(
         problems,
-        f"every pad keeps PAD_FIT {params.PAD_FIT:.2f} to the front's wall on "
-        f"both long sides, -X/+X: {gaps}",
+        f"every pad keeps at least PAD_FIT {params.PAD_FIT:.2f} to the front's "
+        f"wall on both long sides, -X/+X: {gaps}",
+    )
+
+
+@_check("keypad")
+def _pad_x_float(s):
+    problems, readings = pad_x_float([
+        ("pad", s.front, s.pad),
+        ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("TPU pad", s.front, s.pad_tpu),
+        ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+        ("V2 TPU top pad", s.front, s.pad_tpu_v2_top),
+        ("moulded V2 top pad", s.front, s.pad_v2_top),
+    ])
+    floats = ", ".join(f"{label} {drift:.2f}" for label, drift in readings.items())
+    return _report(
+        problems,
+        f"no pad shifts more than SOCKET_LEAD {params.SOCKET_LEAD:.2f} in x "
+        f"before a locating tab meets the wall: {floats}",
     )
 
 
@@ -353,7 +401,9 @@ def _pad_clears_board(s):
 def _mic_pad_contour(s):
     return _report(
         mic_pad_contour(s.pad),
-        "mic pad is solid between its buttons, has an open mic notch and rounded notch corners",
+        "mic pad is solid between its buttons and stays out of the mic duct "
+        + ("clearance, with an open notch and rounded notch corners"
+           if case.pad_mic_notch("second") else "clearance without a notch"),
     )
 
 
@@ -366,7 +416,8 @@ def _pad_isolation_grooves(s):
         f"the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
         f"are cut from the keytop face only, leaving a flat underside and "
         f"{params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH:.2f} mm of hinge, "
-        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief and on the grid lobe outer top edge",
+        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief, "
+        f"and a {params.FDM_PAD_EDGE_CHAMFER:.2f} mm chamfer on the grid lobe outer top edge",
     )
 
 
@@ -430,7 +481,8 @@ def _pad_clears_wheel(s):
     return _report(
         pad_clears_wheel(s.pad),
         f"both pad lobes stop {case.pad_wheel_gap():.2f} short of the wheel's own "
-        f"clearance band, so nothing cuts them apart",
+        f"clearance band, which includes the ring insert's lobes, and the V2 top "
+        f"lobe stops {case.pad_wheel_gap(v2=True):.2f} short of it",
     )
 
 
@@ -557,9 +609,10 @@ def _ceilings_hold(s):
 @_check("fdm")
 def _led_channel_is_half_depth(s):
     return _report(
-        led_channel_is_half_depth(s.front_fdm, s.front),
+        led_channel_is_half_depth(s.front_fdm),
         f"the FDM LED ring channel is "
-        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's arch depth",
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the depth LED_RING_ROOF "
+        f"leaves over the cavity ceiling",
     )
 
 
@@ -585,7 +638,7 @@ def _wheel_mouth_is_chamfered(s):
 @_check("fdm")
 def _recessed_mouth_is_plain(s):
     return _report(
-        recessed_mouth_is_plain(s.front),
+        recessed_mouth_is_plain(s.front_with_ring),
         f"the recessed front carries none of that mouth: it dishes across the "
         f"same band rather than chamfering, so WHEEL_OPENING_R and every LED "
         f"ring radius derived off it are untouched",
@@ -658,6 +711,21 @@ def _ir_end_lap_wall(s):
 
 
 @_check("shells")
+def _one_piece_front(s):
+    problems, readings = one_piece_front(
+        s.front, s.ring_insert_footless, s.front_one_piece
+    )
+    return _report(
+        problems,
+        f"the one-piece front is one solid with one shell and holds every "
+        f"point of the recessed front and the footless ring insert on "
+        f"{readings['rays']} rays. {readings['held']} runs of the insert's "
+        f"loft stand off it, the furthest by {readings['worst']:.3f}, inside "
+        f"ONE_PIECE_TOL",
+    )
+
+
+@_check("shells")
 def _seam_shadow_line(s):
     problems, readings = seam_shadow_line(
         s.back, [(s.front, "case-front"), (s.front_fdm, "case-front-fdm")]
@@ -679,38 +747,48 @@ def _seam_shadow_line(s):
 @_check("wheel_ring")
 def _light_path(s):
     return _report(
-        light_path(s.shells, s.pad),
-        "every LED has an open pad below it, open channel above it and a solid "
-        "roof over that",
+        light_path(s.shells, s.pad, s.ring_insert),
+        "every LED has an open pad below it, open channel above it and solid "
+        "insert over that, with no shell roof left in between",
     )
+
+
+@_check("wheel_ring")
+def _pressed_caps_clear_lobes(s):
+    problems, line = pressed_caps_clear_lobes(s.caps, s.ring_insert)
+    return _report(problems, line)
+
+
+@_check("wheel_ring")
+def _bore_round(s):
+    problems, line = bore_round(s.ring_insert, s.front_one_piece)
+    return _report(problems, line)
 
 
 @_check("wheel_ring")
 def _led_ring(s):
     return _report(
-        led_ring(s.front),
-        "ring channel is void all the way around, webbed off the wheel opening, "
-        "roofed all the way to the dished face above it",
+        led_ring(s.front, s.ring_insert),
+        "ring insert is solid all the way around, out from the wheel bore to "
+        "the face, where the shell keeps no roof of its own",
     )
 
 
 @_check("wheel_ring")
 def _inner_chamfer_is_cut(s):
     return _report(
-        inner_chamfer_is_cut(s.front, s.front_fdm),
-        f"both LED channels have a {params.LED_RING_INNER_CHAMFER:.2f} mm "
-        "chamfer at the inner roof edge, shorter on the recessed front where "
-        f"its channel is shallow, over {params.LED_RING_INNER_FOOT_MIN:.2f} mm "
-        "of upright inner wall",
+        inner_chamfer_is_cut(s.front_fdm),
+        f"the FDM LED channel has a {params.LED_RING_INNER_CHAMFER:.2f} mm "
+        "chamfer at the inner roof edge",
     )
 
 
 @_check("wheel_ring")
 def _wheel_seat_clearance(s):
     return _report(
-        wheel_seat_clearance(s.front),
-        "shell's own opening sits flush to the bezel at "
-        "WHEEL_OPENING_CLEARANCE wherever it is cut through real shell, "
+        wheel_seat_clearance(s.ring_insert),
+        "the ring insert's bore sits flush to the bezel at "
+        "WHEEL_OPENING_CLEARANCE wherever it is cut through real material, "
         "lip stays clear of the ceiling",
     )
 
@@ -718,10 +796,10 @@ def _wheel_seat_clearance(s):
 @_check("wheel_ring")
 def _fdm_wheel_seat(s):
     return _report(
-        fdm_wheel_seat(s.front, s.front_fdm),
+        fdm_wheel_seat(s.ring_insert, s.front_fdm),
         f"the FDM front's bore measures "
-        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the recessed "
-        f"front's, which stays at WHEEL_OPENING_R, and the web to the ring "
+        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the ring "
+        f"insert's, which stays at WHEEL_OPENING_R, and the web to the ring "
         f"channel survives on it",
     )
 
@@ -729,7 +807,7 @@ def _fdm_wheel_seat(s):
 @_check("wheel_ring")
 def _rotation_clearance(s):
     return _report(
-        rotation_clearance(s.front, s.pad),
+        rotation_clearance(s.front, s.pad, s.ring_insert),
         "nothing intrudes inside the wheel's rotation clearance",
     )
 
@@ -746,7 +824,7 @@ def _recess_solid_sane(s):
 @_check("keypad")
 def _recesses_open(s):
     return _report(
-        recesses_open(s.front),
+        recesses_open(s.front_with_ring),
         "the face is dished to its predicted depth beside every key, beside the "
         "mic, on the wheel seat on four bearings and at each join's narrowest "
         "open point",
@@ -756,7 +834,7 @@ def _recesses_open(s):
 @_check("keypad")
 def _rim_chamfer_profile(s):
     return _report(
-        rim_chamfer_profile(s.front),
+        rim_chamfer_profile(s.front_with_ring),
         f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
         f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
         f"a {params.RECESS_CHAMFER_INNER_ROUND_W:.2f} round into the dish floor, "
@@ -1149,7 +1227,7 @@ def _legacy_top_pad_fits(s):
 
 @_check("legacy")
 def _legacy_skirt_depth(s):
-    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top, s.pad_tpu)
+    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top)
     return _report(
         problems,
         "V2 TPU top pad skirt ends level with the TPU pad's built plunger bottoms, is flush with the "
@@ -1191,7 +1269,7 @@ def _moulded_v2_top_pad_fits(s):
 
 @_check("legacy")
 def _moulded_v2_top_pad_skirt_depth(s):
-    problems, lines = legacy_skirt_depth(s.pad_v2_top, s.pad, fdm=False)
+    problems, lines = legacy_skirt_depth(s.pad_v2_top, fdm=False)
     return _report(
         problems,
         "the moulded V2 top pad skirt ends level with the moulded pad's built "
@@ -1283,6 +1361,7 @@ def _parts_are_sound(s):
     parts = {
         "front shell": s.front,
         "FDM front shell": s.front_fdm,
+        "one-piece front shell": s.front_one_piece,
         "back shell": s.back,
         "button pad": s.pad,
         "FDM V2 top pad": s.pad_fdm_v2_top,
@@ -1304,7 +1383,7 @@ def _parts_are_sound(s):
 
 @_check("assembly")
 def _interference(s):
-    hits = interference([s.back, s.front, s.window, s.screw])
+    hits = interference([s.back, s.front, s.window, s.screw, s.ring_insert])
     if not hits:
         print("no interference")
         return True
@@ -1317,7 +1396,9 @@ def _interference(s):
 
 @_check("fab")
 def _fab_walls(s):
-    lines, problems, accepted = fab_walls(s.front, s.back)
+    lines, problems, accepted = fab_walls(
+        s.front, s.back, s.ring_insert, s.front_one_piece
+    )
     for line in lines:
         print(line)
     process = params.FAB_PROCESS
@@ -1330,7 +1411,7 @@ def _fab_walls(s):
     )
     return _report(
         problems,
-        f"front and back walls meet the {process} {minimum:.2f} mm minimum "
+        f"every printed part meets the {process} {minimum:.2f} mm minimum "
         f"{exceptions}",
     )
 
@@ -1351,9 +1432,9 @@ def _selection(argv):
     parser.add_argument(
         "--jobs",
         type=int,
-        default=1,
+        default=10,
         metavar="N",
-        help="run passes in N independent processes (default: 1)",
+        help="run passes in N independent processes (default: 10)",
     )
     parser.add_argument(
         "--quiet",
@@ -1470,12 +1551,12 @@ def _parallel_initializer():
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": (
-        "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "pad_tpu_v2_top",
-        "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top", "window", "caps",
-        "caps_plain",
+        "front", "front_fdm", "front_one_piece", "back", "pad", "pad_fdm_v2_top",
+        "pad_tpu_v2_top", "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top",
+        "window", "caps", "caps_plain", "led_ring_insert",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
-    "fab": ("front", "back"),
+    "fab": ("front", "back", "led_ring_insert", "front_one_piece"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),
@@ -1492,11 +1573,15 @@ _FEATURE_SOLIDS = {
         "pad_v2_top", "pad", "pad_tpu", "caps",
     ),
     "mic": ("front",),
-    "shells": ("front", "front_fdm", "back"),
+    "shells": (
+        "front", "front_fdm", "front_one_piece", "back", "led_ring_insert_footless",
+    ),
     "support": ("back",),
     "usb": ("front", "front_fdm", "back"),
     "qwiic": ("front", "front_fdm", "back"),
-    "wheel_ring": ("front", "front_fdm", "back", "pad"),
+    "wheel_ring": (
+        "front", "front_fdm", "front_one_piece", "back", "pad", "led_ring_insert",
+    ),
 }
 """Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
 
@@ -1533,6 +1618,11 @@ _CACHED_SOLIDS = {
     "front": lambda: [functools.partial(case.front_shell)],
     "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
     "back": lambda: [functools.partial(case.back_shell)],
+    "front_one_piece": lambda: [functools.partial(case.front_shell, one_piece=True)],
+    "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
+    "led_ring_insert_footless": lambda: [
+        functools.partial(case.led_ring_insert, feet=False)
+    ],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
     "pad_tpu": lambda: [

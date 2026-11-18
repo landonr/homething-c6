@@ -1,4 +1,4 @@
-"""Fab walls: the front and back shells keep the PCBWay minimum wall for
+"""Fab walls: every part PCBWay prints keeps the PCBWay minimum wall for
 FAB_PROCESS. PCBWay holds an order with a thinner wall until the customer
 accepts the risk. Other passes hold a few named walls, such as the LED ring
 roof and the counterbore lands. No other pass measures every wall the way
@@ -25,9 +25,17 @@ from model.features import write_features
 
 from .common import Problem
 
-PARTS = ("c6remote-case-front.stl", "c6remote-case-back.stl")
-"""The PCBWay SLA or SLS parts, by export name. The FDM front, the pads, the
-caps and the IR window are printed elsewhere."""
+PARTS = (
+    "c6remote-case-front.stl",
+    "c6remote-case-back.stl",
+    "c6remote-ring-insert.stl",
+    "c6remote-case-front-one-piece.stl",
+)
+"""The PCBWay SLA or SLS parts, by export name. The insert goes on the same
+order as the shells, in UTR-8100 beside their Somos Taurus, so it holds the
+same minimum. The one-piece front replaces the front and the insert on a clear
+order, so it holds the same minimum too. The FDM front, the pads, the caps and
+the IR window are printed elsewhere."""
 
 SAMPLES_PER_MM2 = 10
 SEED = 1
@@ -65,81 +73,110 @@ AREA_SLACK = 1.0
 # edge. The mesh decides where the samples fall, so a change elsewhere in the
 # part moves all of them, and such a row can appear or go with no change to its
 # own geometry. Read the wall column to tell a thin sheet from an edge.
-FRONT, BACK = PARTS
+FRONT, BACK, INSERT, ONE_PIECE = PARTS
 
 LAND = (
-    "counterbore land under the dish, LAND_FLOOR_MIN in checks/keypad.py. The face hole "
-    "lead-in tapers to the hole wall"
+    "taper where the face hole lead-in runs out into the counterbore land. The "
+    "land itself clears the minimum now: FACE_CROWN_OVER_WHEEL carries all "
+    "eleven over it, the thinnest being SW4 at 1.05"
 )
-FACE_HOLE = "the counterbore land, read from the face hole"
-POCKET_LIP = "lip under the side catch pocket, SIDE_CATCH_LOWER_LAND"
-PILOT = "cap over the end screw pilot tip, END_SCREW_BLOCK_D less END_SCREW_PILOT_DEPTH"
-KNOCKOUT = "Qwiic breakaway cover at the SLA minimum, QWIIC_KNOCKOUT_T and QWIIC_KNOCKOUT_TAB_T"
-RESET = "reset guide tube, RESET_GUIDE_WALL"
+KNOCKOUT = (
+    "Qwiic breakaway cover. QWIIC_KNOCKOUT_T carries the panel over the PA12 "
+    "minimum, but each bridge is only QWIIC_KNOCKOUT_TAB_W wide, and widening "
+    "it is what stops the cover breaking out at all"
+)
+RESET = (
+    "taper at the reset guide. The tube measures RESET_GUIDE_WALL on both "
+    "sides now. The thin reading was never the wall: the rolled back form "
+    "shaved the outboard side over the top 1.5 mm, because the tube stands "
+    "about 2 mm off the case centreline. RESET_GUIDE_TOP_DROP ends the tube "
+    "below that band"
+)
 SCREW_CUT = "taper where the end screw cuts meet"
+BORE = (
+    "the taper under RING_BORE_ROUND. Next to the bore, rays up from the "
+    "underside read the plumb bore wall the round leaves, 0.62 at its least on "
+    "the X axis, where the ring is thinnest. It is an edge and not a sheet: "
+    "the full band behind it clears the minimum"
+)
+KNIFE = (
+    "a knife edge, thin only in a band a few samples wide. Which of these the "
+    "ray grid catches moves with the mesh, so they appear and vanish between "
+    "runs and their caps carry slack rather than a measured area"
+)
 
 ACCEPTED = {
-    (FRONT, "keypad_recess"): (
-        0.54, 218.7, "dish face over the LED ring roof and the counterbore lands"
-    ),
-    (FRONT, "led_ring_channel"): (
-        0.77, 275.6, "LED ring roof: LED_RING_FACE_ROOF is vertical and the face slopes"
-    ),
-    (FRONT, "wheel_opening"): (0.79, 92.4, "dish face over the LED ring roof"),
-    (FRONT, "key.SW1.counterbore"): (0.60, 10.2, LAND),
-    (FRONT, "key.SW2.counterbore"): (0.59, 11.2, LAND),
-    (FRONT, "key.SW3.counterbore"): (0.58, 15.1, LAND),
-    (FRONT, "key.SW4.counterbore"): (0.54, 22.5, LAND),
-    (FRONT, "key.SW5.counterbore"): (0.58, 14.0, LAND),
-    (FRONT, "key.SW6.counterbore"): (0.76, 13.7, LAND),
-    (FRONT, "key.SW7.counterbore"): (0.72, 25.7, LAND),
-    (FRONT, "key.SW8.counterbore"): (0.76, 11.3, LAND),
-    (FRONT, "key.SW9.counterbore"): (0.58, 13.5, LAND),
-    (FRONT, "key.SW10.counterbore"): (0.56, 23.1, LAND),
-    (FRONT, "key.SW11.counterbore"): (0.58, 15.4, LAND),
-    (FRONT, "key.SW1.face_hole"): (0.72, 3.0, FACE_HOLE),
-    (FRONT, "key.SW2.face_hole"): (0.71, 2.3, FACE_HOLE),
-    (FRONT, "key.SW3.face_hole"): (0.68, 4.7, FACE_HOLE),
-    (FRONT, "key.SW4.face_hole"): (0.66, 7.0, FACE_HOLE),
-    (FRONT, "key.SW5.face_hole"): (0.67, 4.3, FACE_HOLE),
-    (FRONT, "key.SW6.face_hole"): (0.76, 3.0, FACE_HOLE),
-    (FRONT, "key.SW7.face_hole"): (0.72, 8.1, FACE_HOLE),
-    (FRONT, "key.SW8.face_hole"): (0.76, 3.4, FACE_HOLE),
-    (FRONT, "key.SW9.face_hole"): (0.69, 5.3, FACE_HOLE),
-    (FRONT, "key.SW10.face_hole"): (0.67, 6.2, FACE_HOLE),
-    (FRONT, "key.SW11.face_hole"): (0.68, 3.6, FACE_HOLE),
-    (FRONT, "support_runs.+x.1"): (0.61, 3.1, POCKET_LIP),
-    (FRONT, "support_runs.-x.1"): (0.61, 2.9, POCKET_LIP),
-    (FRONT, "side_catch_pockets.+x"): (0.65, 3.7, POCKET_LIP),
-    (FRONT, "side_catch_pockets.-x"): (0.66, 3.1, POCKET_LIP),
-    (FRONT, "end_screw_pilot"): (0.50, 2.0, PILOT),
+    (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW2.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW3.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW4.counterbore"): (None, 1.5, LAND),
+    (FRONT, "key.SW5.counterbore"): (None, 0.6, LAND),
+    (FRONT, "key.SW6.counterbore"): (None, 0.1, LAND),
+    (FRONT, "key.SW7.counterbore"): (None, 1.3, LAND),
+    (FRONT, "key.SW8.counterbore"): (None, 0.3, LAND),
+    (FRONT, "key.SW9.counterbore"): (None, 1.1, LAND),
+    (FRONT, "key.SW10.counterbore"): (None, 1.1, LAND),
+    (FRONT, "key.SW11.counterbore"): (None, 0.7, LAND),
     (FRONT, "end_screw_block"): (
-        0.50, 7.2, PILOT + ", and a taper where the block ramp runs out"
+        None, 5.8, "taper where the end screw block ramp runs out"
+    ),
+    (FRONT, "keypad_recess"): (
+        None, 0.4,
+        KNIFE + ", on the recess rim chamfer near a side wall, where the face "
+        "is only about 0.1 deep. It came in with a new mesh of an unchanged "
+        "face"
     ),
     (FRONT, "skirt_lead_in.1"): (None, 0.3, "taper at the skirt lead-in chamfer"),
-    (FRONT, "skirt_lead_in.2"): (None, 0.2, "taper at the skirt lead-in chamfer"),
+    (FRONT, "skirt_lead_in.2"): (None, 0.3, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_stiffener"): (
-        None, 0.4, "taper where the stiffener meets the skirt lead-in"
+        None, 0.6,
+        "taper where the side skirt stiffener fades to the plain fit at the IR "
+        "corner, SIDE_SKIRT_THICKEN_RUN. The wall behind the catch pocket, "
+        "which this feature also covers, clears the minimum now"
     ),
-    (BACK, "qwiic_knockout_panel"): (0.79, 39.4, KNOCKOUT),
-    (BACK, "qwiic_knockout_tab.+y"): (0.79, 1.4, KNOCKOUT),
-    (BACK, "qwiic_knockout_tab.-y"): (0.79, 1.5, KNOCKOUT),
-    (BACK, "reset_guide"): (0.61, 48.3, RESET),
+    (BACK, "qwiic_knockout_tab.+y"): (0.80, 0.3, KNOCKOUT),
+    (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.3, KNOCKOUT),
+    (BACK, "reset_guide"): (None, 0.2, RESET),
+    (BACK, "skirt_relief"): (None, 0.1, KNIFE + ", at the skirt relief edge"),
     (BACK, "reset_bore"): (
-        0.64, 22.4, RESET + ", and a taper where the bore leaves the rolled floor"
+        None, 1.2, RESET + ", and a taper where the bore leaves the rolled floor"
     ),
     (BACK, "(no feature box)"): (
-        None, 0.4, "taper where the reset bore leaves the rolled back floor"
+        None, 0.5, "taper where the reset bore leaves the rolled back floor"
     ),
-    (BACK, "catch_detents.+x"): (None, 6.1, "nose of the catch detent wedge"),
-    (BACK, "catch_detents.-x"): (None, 7.1, "nose of the catch detent wedge"),
-    (BACK, "end_screw.head"): (None, 0.9, SCREW_CUT),
-    (BACK, "end_screw.clearance"): (None, 1.1, SCREW_CUT),
-    (BACK, "end_screw.wall_chamfer"): (None, 3.1, SCREW_CUT),
-    (BACK, "qwiic_slot"): (None, 0.1, "taper at the Qwiic slot edge"),
-    (BACK, "ir_window_opening"): (None, 0.2, "taper at the IR window opening edge"),
-    (BACK, "emitter_bore"): (None, 0.1, "taper at the emitter bore edge"),
+    (BACK, "catch_detents.+x"): (None, 9.1, "nose of the catch detent wedge"),
+    (BACK, "catch_detents.-x"): (None, 8.0, "nose of the catch detent wedge"),
+    (BACK, "side_catch_detents.+x"): (
+        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
+    ),
+    (BACK, "side_catch_detents.-x"): (
+        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
+    ),
+    (BACK, "end_screw.head"): (None, 1.2, SCREW_CUT),
+    (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
+    (BACK, "end_screw.wall_chamfer"): (None, 3.8, SCREW_CUT),
+    (BACK, "qwiic_slot"): (None, 0.3, "taper at the Qwiic slot edge"),
+    (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
+    (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
+    (INSERT, "ring_insert"): (
+        None, 2.4,
+        KNIFE + ", at the outer rim of a dome, where a lobe's outer face meets "
+        "its rim land. The insert used to read 0.88 over 19.0 here, a real "
+        "sheet between each dome and the 45 degree flare over it, and "
+        "RING_LOBE_STRAIGHT is what took it out. It also covers " + BORE
+    ),
 }
+
+# The one-piece front is the recessed front everywhere but the ring, so it
+# carries the front's accepted features under the same ids. The ring's one entry
+# is the bore round's taper, which the insert carries too. Any other thin
+# reading in the ring is new and must come to a person.
+ACCEPTED.update({
+    (ONE_PIECE, fid): entry
+    for (name, fid), entry in list(ACCEPTED.items())
+    if name == FRONT
+})
+ACCEPTED[(ONE_PIECE, "wheel_lip_relief")] = (None, 2.2, BORE[0].upper() + BORE[1:])
 
 FIRST_REACH = 4.0
 REACH_GROWTH = 4.0
@@ -392,8 +429,8 @@ def _judge(name, row, process, minimum):
     return ", ".join(flags) or "accepted", warn, problems
 
 
-def fab_walls(front, back):
-    """Measure both shells against FAB_MIN_WALL[FAB_PROCESS].
+def fab_walls(front, back, insert, one_piece):
+    """Measure each printed part against FAB_MIN_WALL[FAB_PROCESS].
 
     Returns the lines to print, the failures, and how many accepted features
     are under the minimum.
@@ -404,7 +441,7 @@ def fab_walls(front, back):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         named = write_features(tmp / "c6remote-features.json")["parts"]
-        for name, shape in zip(PARTS, (front, back)):
+        for name, shape in zip(PARTS, (front, back, insert, one_piece)):
             # The real export name, because the cached STL blob and the back's
             # angular tolerance are keyed on it.
             cache.export_stl_cached(shape, tmp / name)

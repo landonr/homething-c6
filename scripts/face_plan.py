@@ -2,9 +2,11 @@
 the wheel, and the keycaps with their legends. Every coordinate comes from the
 build123d case model at run time.
 
-The SLS version also shades the built top surface, the face less the recess,
-as one embedded PNG that darkens where the surface slopes. The FDM version
-draws its flat face's chamfer and outline groove instead.
+The SLA and SLA one-piece versions also shade the built top surface, the face
+less the recess, as one embedded PNG that darkens where the surface slopes.
+The SLA version also draws the joint line of the ring insert. The one-piece
+front has no joint there. The FDM version draws its flat face's chamfer and
+outline groove instead.
 
 scripts/render-face-svg.py writes the sheets. scripts/render-self-test-svg.py
 reuses plan_view() under its own projection."""
@@ -23,6 +25,7 @@ from model import keypad as kp  # noqa: E402
 from model import legends as lg  # noqa: E402
 from model import mic as micmod  # noqa: E402
 from model import stack  # noqa: E402
+from model import wheel_ring  # noqa: E402
 from model.shape import _offset_face  # noqa: E402
 
 # Drawing scale and layout, in sheet pixels. Nothing here describes the part.
@@ -41,13 +44,14 @@ COORD_PLACES = 1
 # The README versions are not embedded in flash, so they trade size for detail.
 DETAIL = dict(OUTLINE_STEPS=2400, CONTOUR_STEPS=1600, LEGEND_PTS_PER_MM=12.0,
               CIRCLE_PTS=180, SIMPLIFY_TOL=0.01, COORD_PLACES=2)
-SHADE_STEP = 0.1  # plan grid step of the SLS shading image, in mm
+SHADE_STEP = 0.1  # plan grid step of the SLA shading image, in mm
 SHADE_MAX = 0.48  # shade coverage where the built surface turns vertical
 SHADE_TONE = "#4f493f"  # baked into the PNG, so no theme token can reach it
-LABELS = {"web": "", "sls": "SLS ", "fdm": "FDM "}
+LABELS = {"web": "", "sls": "SLA ", "one-piece": "SLA one-piece ", "fdm": "FDM "}
 OUTPUTS = {
     "web": "case-front-face.svg",
     "sls": "case-front-face-sls.svg",
+    "one-piece": "case-front-face-one-piece.svg",
     "fdm": "case-front-face-fdm.svg",
 }
 
@@ -297,7 +301,7 @@ def wheel_controls(P, cx, cy):
 
 
 def face_shading(P, outer):
-    """The SLS built top surface, stack.face_z() less kp.face_depth_at(), as
+    """The SLA built top surface, stack.face_z() less kp.face_depth_at(), as
     one shaded image clipped to the plan outline. Coverage is SHADE_MAX times
     the square root of the surface tilt, so the arched face and the basins
     darken where they slope, steeper darker, with no contour lines."""
@@ -356,7 +360,7 @@ def plan_view(P, version="web"):
     outer = shell_outline()
     out = ['<g id="plan">']
     out.append(f'<path class="face" d="{path_d([outer], P)}"/>')
-    if version == "sls":
+    if version in ("sls", "one-piece"):
         out.append(face_shading(P, outer))
     if version == "fdm":
         out.append(chamfer_band(P, outer))
@@ -367,6 +371,11 @@ def plan_view(P, version="web"):
         out.append(f'<path class="outline" d="{path_d([outer], P)}"/>')
 
     wx, wy = board.wheel_center()
+    if version == "sls":
+        out.append(
+            f'<path class="joint" d="'
+            f'{path_d([circle_pts(wx, wy, wheel_ring.led_ring_face_r())], P)}"/>'
+        )
     out.append(
         f'<path class="bore" d="'
         f'{path_d([circle_pts(wx, wy, stack.WHEEL_OPENING_R)], P)}"/>'
@@ -460,4 +469,6 @@ def plan_style(version="web"):
             f".groove{{{dtok('stroke', 'groove')};stroke-width:{groove_w};stroke-linejoin:round}}",
             f".outline{{{tok('stroke', 'edge')};stroke-width:1.4}}",
         ]
+    if version == "sls":
+        rules.append(f".joint{{{tok('stroke', 'edge')};stroke-width:.9}}")
     return "<style>" + "".join(rules) + "</style>"

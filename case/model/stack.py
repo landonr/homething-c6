@@ -45,10 +45,12 @@ PAD_WEB_BOTTOM = BOARD_TOP + KEYPAD_KEEPOUT
 KEYPAD_PLUNGER_STUB, so the plunger below it is a short, real stub rather
 than a long unsupported peg standing in dead air."""
 
-PAD_SKIRT_BOTTOM = SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION
-"""Bottom of the moulded pad's skirt, level with the V3 plunger contacts, so
-the pad stands level on both. The V2 top pads use it too, so every lobe's
-skirt ends on one plane whichever board it is on."""
+PAD_SKIRT_BOTTOM = PAD_WEB_BOTTOM - params.PAD_SKIRT_DEPTH
+"""Where the moulded pad's skirt wall stops, under the web.
+
+It used to be the plunger contacts, SWITCH_TOP less PLUNGER_SWITCH_EXTENSION.
+PAD_SKIRT_DEPTH sets it instead, because the depth is a trade against how many
+board parts break the wall rather than anything the plungers need."""
 
 PAD_WEB_TOP = PAD_WEB_BOTTOM + params.PAD_WEB_T
 CAVITY_FRONT = PAD_WEB_TOP
@@ -473,8 +475,14 @@ def face_body():
     from _face_stations(). As a result, every section is the same superellipse,
     and every boundary pole is on FACE_WALL_TOP. The walls are the face's own
     boundary edges carried down to SKIRT_BOTTOM, so the face meets each wall
-    exactly and vertically. The face is a spline for the reason that
-    arch_block() gives."""
+    exactly and vertically.
+
+    The face is a spline and not an analytic surface on purpose. On an analytic
+    cylinder, OCCT intersects each planar facet with a closed-form ellipse, and
+    a key-hole chamfer facet that is almost parallel to the axis gives an
+    ellipse millions of millimetres long. The cut then fails without an error.
+    A spline goes through the general intersection code, which has no such
+    case."""
     from build123d import Face, Shell, Solid, Wire
 
     s_knots, sx, sz, s_error = _face_section()
@@ -507,67 +515,6 @@ def face_body():
         raise ValueError("face_body() did not close into a valid solid")
     return body
 
-
-def _arch_r(sag):
-    return (FACE_ARCH_HALF**2 + sag**2) / (2 * sag)
-
-
-def arch_z(x, crown, sag):
-    """Height at x of a circular arch with its axis along y: crown at
-    FACE_ARCH_X and sag lower at each exterior side wall. The LED ring channel
-    ceiling is such an arch. The face is not."""
-    if sag <= 0:
-        return crown
-    r, dx = _arch_r(sag), x - FACE_ARCH_X
-    return crown - r + math.sqrt(r * r - dx * dx)
-
-
-def arch_block(z_low, crown, sag):
-    """A prism along Y whose top is arch_z(x, crown, sag) and whose bottom is
-    z_low.
-
-    The arc is one rational quadratic Bezier segment, which is an exact circle.
-    It is not an analytic circle on purpose. On an analytic cylinder, OCCT
-    intersects each planar facet with a closed-form ellipse. A key-hole chamfer
-    facet that is almost parallel to the axis gives an ellipse millions of
-    millimetres long. The cut then fails without an error. The spline surface
-    goes through the general intersection code, which has no such case."""
-    from build123d import Box, Edge, Face, Pos, Wire, extrude
-
-    half = FACE_ARCH_HALF + ARCH_BLOCK_MARGIN
-    x0, x1 = FACE_ARCH_X - half, FACE_ARCH_X + half
-    y0 = EXTERIOR[1] - ARCH_BLOCK_MARGIN
-    y1 = EXTERIOR[3] + ARCH_BLOCK_MARGIN
-    if sag <= 0:
-        return Pos(FACE_ARCH_X, (y0 + y1) / 2, (z_low + crown) / 2) * Box(
-            x1 - x0, y1 - y0, crown - z_low
-        )
-    r = _arch_r(sag)
-    theta = math.asin(half / r)
-    side = arch_z(x0, crown, sag)
-    # The control point is where the end tangents meet. Its weight cos(theta)
-    # makes the quadratic an exact arc of the circle.
-    apex = crown - r + r / math.cos(theta)
-    arc = Edge.make_bspline(
-        [(x1, y0, side), (FACE_ARCH_X, y0, apex), (x0, y0, side)],
-        [0, 0, 0, 1, 1, 1],
-        2,
-        [1, math.cos(theta), 1],
-    )
-    wire = Wire(
-        [
-            Edge.make_line((x0, y0, z_low), (x1, y0, z_low)),
-            Edge.make_line((x1, y0, z_low), (x1, y0, side)),
-            arc,
-            Edge.make_line((x0, y0, side), (x0, y0, z_low)),
-        ]
-    )
-    return extrude(Face(wire), amount=y1 - y0, dir=(0, 1, 0)).solids()[0]
-
-
-ARCH_BLOCK_MARGIN = 10.0
-"""How far arch_block() reaches past the exterior on every side, so that no
-face of the block lies on a face of the solid it trims."""
 
 FDM_FACE = SHELL_FRONT - params.FDM_FACE_DROP
 """The FDM front's own outer face, FDM_FACE_DROP below the recessed front's.

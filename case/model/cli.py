@@ -55,9 +55,11 @@ from .keypad import (
     legacy_top_pad,
     outline_length,
     pad_lobes,
+    pad_reach,
+    pad_skirt_breaks,
     pad_wheel_gap,
     recess_span,
-    ring_roof_left,
+    ring_land_left,
     wheel_ledge_left,
 )
 from .legends import _bounds, _legend_faces, legend_entry, legend_solids
@@ -77,23 +79,18 @@ from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
 from .support import support_bearing_margins, support_run_lengths
 from .wheel_ring import (
     led_ring_insert,
-    LED_RING_STATIONS,
-    LED_RING_TOP,
-    led_ring_bevel,
-    led_ring_bevel_top,
-    led_ring_ceiling_at,
     led_ring_clip_reach,
-    led_ring_flat_outer_r,
-    led_ring_inner_foot,
+    led_ring_face_r,
     led_ring_inner_r,
-    led_ring_mouth_outer_r,
-    led_ring_outer_r,
-    led_ring_rake_foot,
-    led_ring_roof_flat,
-    led_ring_roof_outer_r,
-    led_ring_wall_height,
+    led_ring_lobe_blend_r,
+    led_ring_lobe_land_z,
+    led_ring_lobe_refs,
+    led_ring_lobe_rim_r,
+    led_ring_lobe_rim_z,
+    led_ring_lobe_roof,
     led_ring_web_left,
     led_y_reach,
+    pad_clear_terms,
     pad_clear_y,
 )
 from .stack import (
@@ -290,62 +287,52 @@ def main():
         f"rim keeps {wheel_ledge_left():.2f} of seat clear of the bore all the way "
         f"round, against a {params.WHEEL_RIM_LEDGE:.2f} floor"
     )
+    governs = max(pad_clear_terms(), key=lambda term: term[1])[0]
     print(
         f"  pad kept {pad_clear_y():.2f} either side of the wheel "
-        f"({'lip clearance' if pad_clear_y() == LIP_CLEAR_R else 'LED reach'} "
-        f"governs), which its two lobes clear by {pad_wheel_gap():.2f}; no "
-        f"moulded ring and no bore cut any more"
+        f"({governs} governs), which its two lobes clear by "
+        f"{pad_wheel_gap():.2f} and the V2 top lobe by "
+        f"{pad_wheel_gap(v2=True):.2f}; no moulded ring and no bore cut any more"
     )
     print(
         f"  LEDs uncovered by {pad_clear_y() - led_y_reach():.2f}, "
         f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
-        f"package, firing into the ring channel: {led_ring_inner_r():.2f} to "
-        f"{led_ring_outer_r():.2f} around the wheel, under an arch from "
-        f"{LED_RING_TOP:.2f} at the crown to "
-        f"{led_ring_ceiling_at(wx + led_ring_inner_r()):.2f} at the inner wall's "
-        f"east side, {params.LED_RING_SAG:.2f} lower at each side wall"
+        f"package, firing into the ring insert. The ring is one circle at "
+        f"{led_ring_face_r():.2f}, {params.RING_LIFT_CLEAR:.2f} inside the "
+        f"cavity wall at {led_ring_clip_reach(0.0):.2f}, so the part lifts past "
+        f"that wall and the opening in the face is round"
     )
-    bevel = {
-        side: led_ring_bevel_top(math.radians(deg))
-        for side, deg in (("east", 0), ("north", 90), ("west", 180), ("south", 270))
-    }
+    refs = led_ring_lobe_refs()
     print(
-        f"  ceiling raised off the arch to keep {params.LED_RING_FACE_ROOF:.2f} "
-        f"under the built face wherever that is higher, so that run is "
-        f"{ring_roof_left():.2f} at its thinnest; it is the insert's and not "
-        f"the shell's, since led_ring_window() takes the roof out. At the "
-        f"inner bevel's top the ceiling stands "
-        + ", ".join(f"{side} {z:.2f}" for side, z in bevel.items())
-    )
-    legs = [
-        led_ring_bevel(2 * math.pi * i / LED_RING_STATIONS)
-        for i in range(LED_RING_STATIONS)
-    ]
-    short = [leg for leg in legs if leg < params.LED_RING_INNER_CHAMFER]
-    print(
-        f"  the {params.LED_RING_INNER_CHAMFER:.2f} inner chamfer hangs from the "
-        f"local ceiling, shortened to {min(legs):.2f} on {len(short)} of "
-        f"{len(legs)} stations where the channel is shallow, and leaves at least "
-        f"{led_ring_inner_foot():.2f} of upright inner wall. On the recessed "
-        f"front that wall and its bevel are the insert's: the window steps down "
-        f"at the bevel's own top edge, so the shell keeps neither"
+        f"  the ring stops short of the LEDs, so {len(refs)} lobes reach out and "
+        f"down over them: a dome from "
+        f"{min(led_ring_lobe_blend_r(ref) for ref in refs):.2f} out to a rim at "
+        f"{max(led_ring_lobe_rim_r(ref) for ref in refs):.2f} and "
+        f"{led_ring_lobe_rim_z():.2f}, which is {params.RING_LOBE_WRAP:.2f} under "
+        f"each package top, with {params.RING_LOBE_WALL:.2f} of wall outside it"
     )
     print(
-        f"  inner wall plumb at {led_ring_inner_r():.2f} below the bevel, outer "
-        f"wall plumb at the mouth, {led_ring_mouth_outer_r():.2f}, up to "
-        f"{led_ring_rake_foot(math.pi / 2):.2f} at the crown and "
-        f"{led_ring_rake_foot(math.pi / 4):.2f} on the diagonals, then raked 45 "
-        f"degrees over {led_ring_wall_height():.2f} at the crown to meet the "
-        f"ceiling at {led_ring_roof_outer_r():.2f} on the crown line and "
-        f"{led_ring_flat_outer_r(math.pi / 4):.2f} on the diagonals, so at least "
-        f"{led_ring_roof_flat():.2f} of flat glows, and the insert carries the "
-        f"{led_ring_web_left():.2f} of band in to the bore that used to be "
-        f"shell web"
+        f"  each dome clears its own LED by {params.RING_LOBE_GAP:.2f} and keeps "
+        f"{min(led_ring_lobe_roof(ref) for ref in refs):.2f} of insert over it, "
+        f"against RING_LOBE_WALL {params.RING_LOBE_WALL:.2f}, with a "
+        f"{params.RING_LOBE_SHOULDER:.2f} chamfer on its top outer corner. It is "
+        f"open on the inner side, where the ring already sits over the package"
+    )
+    reach = max(
+        led_ring_face_r() + led_ring_lobe_land_z(ref) - CAVITY_FRONT for ref in refs
     )
     print(
-        f"  chorded flush against the cavity wall at "
-        f"{led_ring_clip_reach(0.0):.2f} near the X axis, which still leaves "
-        f"{led_ring_clip_reach(0.0) - led_ring_inner_r():.2f} of ring there"
+        f"  each lobe's 45 degree flare carries that LED's light up into the "
+        f"ring and tucks under the shell. The shell gives up a wedge from "
+        f"{led_ring_face_r():.2f} out to {reach:.2f} at those {len(refs)} places "
+        f"and keeps {ring_land_left():.2f} of land over it, against "
+        f"LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}. That land is the "
+        f"whole of the insert's retention"
+    )
+    print(
+        f"  the insert carries the {led_ring_web_left():.2f} of band in to the "
+        f"bore that used to be shell web, over an inner wall at "
+        f"{led_ring_inner_r():.2f}, so no shell sheet covers the ring anywhere"
     )
     print(
         f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} pouch, "
@@ -542,13 +529,16 @@ def main():
     )
     print(
         f"  every counterbore inside the rim, thinnest land {lands[0][0]:.2f} at "
-        f"{lands[0][1]}; the ring insert's top run is {ring_roof_left():.2f} at "
-        f"its thinnest, against LED_RING_FACE_ROOF "
-        f"{params.LED_RING_FACE_ROOF:.2f}, and the shell has no roof there"
+        f"{lands[0][1]}; the land over the ring's lobe pockets is "
+        f"{ring_land_left():.2f} at its thinnest, against LED_RING_FACE_ROOF "
+        f"{params.LED_RING_FACE_ROOF:.2f}, and the shell keeps no roof over the "
+        f"ring itself"
     )
     print(
-        f"pad two lobes, {params.PAD_MARGIN:.1f} of web past each island's own "
-        f"keys on all four sides, {params.PAD_RADIUS:.1f} corners:"
+        f"pad two lobes, {pad_reach(cap_refs()[0]):.2f} of web past each outer "
+        f"switch centre ({params.PAD_MARGIN:.2f} past the fused keytop), "
+        f"{params.PAD_RADIUS:.1f} corners, skirt breaks "
+        f"{sum(len(pad_skirt_breaks(name)) for name, *_ in pad_lobes())}:"
     )
     for name, x0, y0, x1, y1 in pad_lobes():
         print(f"  {name:<6} {x1 - x0:.2f} x {y1 - y0:.2f}")

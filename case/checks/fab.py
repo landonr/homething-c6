@@ -98,20 +98,6 @@ KNIFE = (
 )
 
 ACCEPTED = {
-    (FRONT, "keypad_recess"): (
-        0.85, 121.1,
-        "dish face over the LED ring roof. It read 0.55 over 338.4 while the "
-        "counterbore lands were thin too, and raising the face took the lands "
-        "out of it"
-    ),
-    (FRONT, "led_ring_window"): (
-        None, 1.3,
-        "the window's own edge where its outer wall meets the dish face, which "
-        "is a knife edge and not a sheet: every one of its thin samples reads "
-        "as taper. The roof this cut removes is what used to be thin here, and "
-        "led_ring_insert() carries it now, so the entries for "
-        "led_ring_channel and wheel_opening came out of this table with it"
-    ),
     (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),
     (FRONT, "key.SW2.counterbore"): (None, 0.6, LAND),
     (FRONT, "key.SW3.counterbore"): (None, 0.6, LAND),
@@ -153,14 +139,11 @@ ACCEPTED = {
     (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
     (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
     (INSERT, "ring_insert"): (
-        None, 0.5,
-        KNIFE + ", on the corner the trimmed outer tip leaves. A fill of the "
-        "channel's 45 degree outer corner used to run out to the height of "
-        "the plumb wall at the mouth, 0.12, and read 142.8 mm2 over the whole "
-        "circumference. RING_INSERT_TIP stops the underside where the rake is "
-        "already thick enough. At the east and west sides the channel is too "
-        "shallow for that tip at any radius, and RING_INSERT_TIP_RUN ends the "
-        "trim there with about 0.66"
+        None, 0.4,
+        KNIFE + ", at the outer rim of a dome, where a lobe's outer face meets "
+        "its rim land. The insert used to read 0.88 over 19.0 here, a real "
+        "sheet between each dome and the 45 degree flare over it, and "
+        "RING_LOBE_STRAIGHT is what took it out"
     ),
 }
 

@@ -122,6 +122,7 @@ from .keypad import (
     neck_blends_smoothly,
     neck_continuity,
     pad_clears_board,
+    pad_x_float,
     pad_clears_wheel,
     pad_fits,
     pad_skirt_depth,
@@ -167,6 +168,7 @@ from .wheel_ring import (
     inner_chamfer_is_cut,
     led_ring,
     light_path,
+    pressed_caps_clear_lobes,
     rotation_clearance,
     wheel_seat_clearance,
 )
@@ -238,9 +240,9 @@ class Solids:
     def front_with_ring(self):
         """The recessed front and the part that fills its ring, as one shape.
 
-        led_ring_window() takes the roof and the web out of the shell, so a
-        pass that reads the built front face has to read both or it finds a
-        hole where the lit band is. The two do not touch, by RING_INSERT_FIT,
+        led_ring_channel() bores the whole ring out of the shell, so a pass
+        that reads the built front face has to read both or it finds a hole
+        where the lit band is. The two do not touch, by RING_INSERT_FACE_FIT,
         so this stays a compound and the readers walk both.
         """
         return self.front + self.ring_insert
@@ -333,8 +335,26 @@ def _pad_wall_fit(s):
     )
     return _report(
         problems,
-        f"every pad keeps PAD_FIT {params.PAD_FIT:.2f} to the front's wall on "
-        f"both long sides, -X/+X: {gaps}",
+        f"every pad keeps at least PAD_FIT {params.PAD_FIT:.2f} to the front's "
+        f"wall on both long sides, -X/+X: {gaps}",
+    )
+
+
+@_check("keypad")
+def _pad_x_float(s):
+    problems, readings = pad_x_float([
+        ("pad", s.front, s.pad),
+        ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("TPU pad", s.front, s.pad_tpu),
+        ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+        ("V2 TPU top pad", s.front, s.pad_tpu_v2_top),
+        ("moulded V2 top pad", s.front, s.pad_v2_top),
+    ])
+    floats = ", ".join(f"{label} {drift:.2f}" for label, drift in readings.items())
+    return _report(
+        problems,
+        f"no pad shifts more than SOCKET_LEAD {params.SOCKET_LEAD:.2f} in x "
+        f"before a locating tab meets the wall: {floats}",
     )
 
 
@@ -371,7 +391,9 @@ def _pad_clears_board(s):
 def _mic_pad_contour(s):
     return _report(
         mic_pad_contour(s.pad),
-        "mic pad is solid between its buttons, has an open mic notch and rounded notch corners",
+        "mic pad is solid between its buttons and stays out of the mic duct "
+        + ("clearance, with an open notch and rounded notch corners"
+           if case.pad_mic_notch("second") else "clearance without a notch"),
     )
 
 
@@ -384,7 +406,8 @@ def _pad_isolation_grooves(s):
         f"the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
         f"are cut from the keytop face only, leaving a flat underside and "
         f"{params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH:.2f} mm of hinge, "
-        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief and on the grid lobe outer top edge",
+        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief, "
+        f"and a {params.FDM_PAD_EDGE_CHAMFER:.2f} mm chamfer on the grid lobe outer top edge",
     )
 
 
@@ -448,7 +471,8 @@ def _pad_clears_wheel(s):
     return _report(
         pad_clears_wheel(s.pad),
         f"both pad lobes stop {case.pad_wheel_gap():.2f} short of the wheel's own "
-        f"clearance band, so nothing cuts them apart",
+        f"clearance band, which includes the ring insert's lobes, and the V2 top "
+        f"lobe stops {case.pad_wheel_gap(v2=True):.2f} short of it",
     )
 
 
@@ -575,9 +599,10 @@ def _ceilings_hold(s):
 @_check("fdm")
 def _led_channel_is_half_depth(s):
     return _report(
-        led_channel_is_half_depth(s.front_fdm, s.front),
+        led_channel_is_half_depth(s.front_fdm),
         f"the FDM LED ring channel is "
-        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the recessed front's arch depth",
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the depth LED_RING_ROOF "
+        f"leaves over the cavity ceiling",
     )
 
 
@@ -701,6 +726,12 @@ def _light_path(s):
         "every LED has an open pad below it, open channel above it and solid "
         "insert over that, with no shell roof left in between",
     )
+
+
+@_check("wheel_ring")
+def _pressed_caps_clear_lobes(s):
+    problems, line = pressed_caps_clear_lobes(s.caps, s.ring_insert)
+    return _report(problems, line)
 
 
 @_check("wheel_ring")
@@ -1165,7 +1196,7 @@ def _legacy_top_pad_fits(s):
 
 @_check("legacy")
 def _legacy_skirt_depth(s):
-    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top, s.pad_tpu)
+    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top)
     return _report(
         problems,
         "V2 TPU top pad skirt ends level with the TPU pad's built plunger bottoms, is flush with the "
@@ -1207,7 +1238,7 @@ def _moulded_v2_top_pad_fits(s):
 
 @_check("legacy")
 def _moulded_v2_top_pad_skirt_depth(s):
-    problems, lines = legacy_skirt_depth(s.pad_v2_top, s.pad, fdm=False)
+    problems, lines = legacy_skirt_depth(s.pad_v2_top, fdm=False)
     return _report(
         problems,
         "the moulded V2 top pad skirt ends level with the moulded pad's built "

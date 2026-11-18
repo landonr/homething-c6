@@ -45,7 +45,7 @@ Both versions use the same back shell, IR window, interior, and board position. 
 | Face | A shallow dish around the keys and the wheel | One flat plane. The dish outline is a shallow groove. |
 | Face height | Base level | `FDM_FACE_DROP` lower |
 | Top edge | None. The face rolls down into every wall. | 45 degree chamfer, `EDGE_R_FRONT_FDM` |
-| LED ring channel | Full depth. A separate insert fills it and closes the face. | Half the arch depth, under a roof of its own |
+| LED ring | One circle bored clear through the face. A separate insert fills it. | A channel at a fraction of the reference depth, under a roof of its own |
 | Button pad | `c6remote-case-pad-tpu.stl` in one piece, or `c6remote-case-pad.stl` with the 11 caps | `c6remote-case-pad-fdm.stl`, with the keytops fused to the lobes |
 | Pad web | Plain | Isolation grooves, `FDM_PAD_GROOVE_W` wide |
 | Print | SLS. A filament printer must support the dish floor, and the support marks the face. | Filament, face down. The face needs no support. |
@@ -162,11 +162,13 @@ The model derives geometry from the board where possible. Manual values include 
 
 Print the shells in any colour. The STL files contain no color or material data.
 
-The status LEDs do not shine through the front shell. They shine into `c6remote-ring-insert.stl`, which fills the LED ring channel and closes the window in the face. Print that part in natural undyed PA12. A dyed part does not pass enough light. The IR window is the other part that the dye must miss.
+The status LEDs do not shine through the front shell. They shine into `c6remote-ring-insert.stl`, which fills the LED ring. Print that part in natural undyed PA12. A dyed part does not pass enough light. The IR window is the other part that the dye must miss.
 
-The insert goes in from inside the shell before the board. The channel is wider at its mouth than at the face, so the part cannot pass outward through the face. Nothing holds it the other way, so bond it to the raked channel wall while the front shell lies face down. Use the same adhesive as the IR window.
+The insert goes in from inside the shell before the board. It rises straight up, and nothing on it is wider than the cavity wall it passes. Six lobes reach down over the six LEDs, and each lobe tucks under a land of shell. As a result, the part cannot pass outward through the face.
 
-The insert has six feet on its underside, one in each gap between the LEDs. They are a limit and not a seat. At rest they touch nothing. If the bond fails, they land on the board and stop the part, so it cannot reach the ENC1 flange. Do not cut them back to make the insert sit lower.
+Nothing holds it the other way, so bond it while the front shell lies face down. Use the same adhesive as the IR window.
+
+The insert has six feet on its underside, one in each gap between the LEDs. Each is a sector of the band it hangs off. Outward, its face is an arc on the ring's outline, so no corner stands past the round outer face. Do not make the feet boxes, because the corners of a flat face break that line. Inward, each stops on `LIP_CLEAR_R`, which is the wheel's own rotating clearance rather than the band's inner edge. They are a limit and not a seat. At rest they touch nothing. If the bond fails, they land on the board and stop the part, so it cannot reach the ENC1 flange. Do not cut them back to make the insert sit lower.
 
 The two feet on the long-side axis carry less than the other four. The board ends level with the ring there, so each one overhangs the board edge and bears only on the part of its face that is still over the board. They are redundancy. The four between them are the support.
 
@@ -182,8 +184,19 @@ The IR window material must transmit 940 nm infrared light. Test the selected fi
 If the shell filament blocks too much infrared light, make the same insert from IR-pass acrylic.
 
 Prototype the button pad in TPU. Use translucent silicone for a molded part.
-The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide and its bottom is level with the plunger contacts, so the pad stands level on the plungers and the skirt.
-The skirt has a break over each board part that it would otherwise touch. `PAD_SKIRT_CLEARANCE` sets the gap.
+The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide. Its outer face is flush with the web edge, so the pad keeps its plan outline.
+
+Each lobe is the box of its own switch centres, grown by `pad_reach()`. That is half the keytop of the TPU and FDM pads, plus `PAD_MARGIN`. The keytop is the widest part that every pad variant carries on its web.
+
+The rigid cap's flange is wider than the keytop. On the outer side of each outer key, the flange overhangs the web and its counterbore is open to the cavity. The press goes through the stem, so the flange needs no web under it.
+
+`PAD_MARGIN` must stay in a narrow window. If it goes below zero, a keytop overhangs the web. If it goes too high, the skirt comes within `PAD_SKIRT_CLEARANCE` of C1, and C1 breaks the wall.
+
+`PAD_SKIRT_DEPTH` sets how far the wall drops below the web. The wall has a break over each board part still in its way. `PAD_SKIRT_CLEARANCE` sets the gap that decides which parts those are. The switch bodies count. The STEP has no switch model, so `switch_bodies()` adds a `SWITCH_BODY` box for each switch. On the current board, no part breaks the wall.
+
+The pad stops short of the ring insert in plan. `pad_clear_y()` includes the reach of the insert's lobes plus `PAD_SKIRT_CLEARANCE`. A skirt cannot pass over a lobe that keeps `RING_LOBE_WALL`, so the outline must stay outside the lobes.
+
+The lobes stop short of the side walls. So each lobe has a locating tab on each long side, at its mid-length, and each tab runs out to the `PAD_FIT` line. As a result, the pad cannot shift in x by more than `SOCKET_LEAD`, and the stems still find the cap lead-ins during blind assembly. `PAD_TAB_W` sets the tab length along the side, and `PAD_TAB_RADIUS` rounds its outer corners. Each tab is web only, with no skirt under it. Every pad variant has the tabs, the V2 top pads included.
 The molded pad and the one-piece TPU pad have a plain web without isolation grooves. Only the FDM pad has grooves.
 
 `c6remote-case-pad-tpu.stl` goes with the recessed front `c6remote-case-front.stl`. Print it in TPU as one piece in place of the TPU pad and the PETG caps. Do not install separate caps with it.
@@ -209,7 +222,7 @@ Keytops up puts the pad on the keytop stems. The pad then stands on 26 mm2. Use 
 
 The FDM pad cuts its isolation grooves from the keytop side only. As a result, the web underside is flat, and the supports for a keytops-up print come off easily.
 
-The chamfer on both lips of each groove and on the grid lobe outer top edge runs down to the groove floor, set by `FDM_PAD_GRID_CHAMFER`.
+The chamfer on both lips of each groove runs down to the groove floor, set by `FDM_PAD_GRID_CHAMFER`. The grid lobe's outer top edge takes the smaller `FDM_PAD_EDGE_CHAMFER`. It must not exceed `PAD_MARGIN`, so it stops short of the outer keytops.
 
 If you print keytops down, the grooves face the support. Then the supports fill the grooves and are hard to remove.
 
@@ -239,7 +252,7 @@ If a wall is thinner than the minimum, PCBWay suspends the order. It sends photo
 
 PCBWay does not publish a minimum hole size or a minimum embossed or engraved detail. It also does not publish a clearance between parts or rules for drain holes and overhangs.
 
-`LED_RING_FACE_ROOF` is equal to the SLA minimum. `ROOF_LEFT_MIN` in `case/checks/wheel_ring.py` holds the thinnest roof to a floor just under this value. The table in [SLS and FDM versions](#sls-and-fdm-versions) calls the recessed front "SLS". If you order the recessed front in SLS PA12, the roof is thinner than the 1 mm minimum.
+`LED_RING_FACE_ROOF` is equal to the SLS minimum. It sets the land of shell over each lobe pocket, which is the only shell the recessed front keeps over the LED ring. `RING_LAND_MIN` in `case/checks/wheel_ring.py` holds that land to a floor just under this value. `ROOF_LEFT_MIN` holds the FDM front's own channel roof.
 
 The `fab` pass of `check.py` measures the walls of each part that PCBWay prints: `c6remote-case-front.stl`, `c6remote-case-back.stl`, and `c6remote-ring-insert.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
 
@@ -281,15 +294,29 @@ Over `FACE_END_ROLL` from each end wall, the face rolls down into the end wall w
 
 Every dish follows the face, so the bore rim is lower at the east and west sides of the knob. The thumb can then reach more of the knob there.
 
-The LED ring channel ceiling keeps a vertical height of `LED_RING_FACE_ROOF` under the built face all the way round. On the recessed front that run is not shell. A roof of this thickness is under the minimum wall that PCBWay publishes for SLS nylon, and no parameter reaches it, so `led_ring_window()` cuts the roof away, together with the web between the channel and the wheel bore. `c6remote-ring-insert.stl` fills both. As a result, the front shell has no thin sheet, the lit band runs in to the knob, and the web no longer needs the roof to hold it. The ceiling does not drop below a circular arch, `LED_RING_ROOF` below the crown and `LED_RING_SAG` lower at each side wall. `LED_RING_SAG` keeps the arch below the ceiling at the east and west sides of the knob, where the face is lowest. As a result, the channel is shallowest there. The ring roof check holds the roof above its floor.
+The recessed front keeps no shell over the LED ring. A roof thin enough to pass light is under the minimum wall that PCBWay publishes for SLS nylon, and no parameter reaches it. So `led_ring_channel()` bores one circle from the cavity ceiling clear through the face, and `c6remote-ring-insert.stl` fills it. As a result, the front shell has no thin sheet, and the lit band runs in to the knob.
 
-The outer wall of the channel is plumb at the mouth, then rakes in at 45 degrees up to the ceiling. The rake ends where a 45 degree line from the mouth meets the arch. Where the ceiling is above the arch, the rake starts higher at the mouth, so the roof flat does not get narrower. The inner bevel, `LED_RING_INNER_CHAMFER`, hangs from the local ceiling. Where the channel is too shallow for the full bevel, at the east and west sides, the bevel shortens and keeps `LED_RING_INNER_FOOT_MIN` of upright inner wall above `LED_RING_FOOT`. The FDM front's channel depth comes from the arch, so `LED_RING_FACE_ROOF` does not change the FDM front.
+`led_ring_face_r()` is that circle. It stands `RING_LIFT_CLEAR` inside the cavity wall where the wall comes closest to the wheel, and it is the same on every bearing. As a result, the opening in the face is round, and the insert clears the wall as it rises.
 
-`wheel_lip_relief()` lifts the ceiling off the ENC1 lip. The lip is a static flange under the fixed bezel, wider than the wheel opening, so it can never pass up through the face. Without the relief the ceiling sat flat at `CAVITY_FRONT` over the lip. That gap pinned `PAD_WEB_T`, because `CAVITY_FRONT` is `PAD_WEB_TOP`, and through it the counterbore lands. The relief is an annular lift of `WHEEL_LIP_RELIEF` out to `led_ring_inner_r()`, so it merges into the channel's inner wall. As a result, the channel opens into the wheel bore, and the ring glows into the gap round the bezel. `LED_RING_FOOT` is the plane the inner wall now stands on, and the roof above the relief is what limits `WHEEL_LIP_RELIEF`.
+The ring stops short of the LEDs, so each LED gets a lobe on the insert. A lobe is a dome over its LED, a wall outside the dome's rim, and a 45 degree flare back up into the shell. The flare carries that LED's light into the band. It also holds the insert in: the shell opens a pocket for each flare and keeps `LED_RING_FACE_ROOF` of land over it.
+
+The rim of each dome sits `RING_LOBE_WRAP` under its LED's top face, so the dome wraps the package instead of covering it. `led_ring_lobe_rim_r()` solves for the rim radius that leaves `RING_LOBE_GAP` of air over the LED's outer corner.
+
+`RING_LOBE_STRAIGHT` sets how straight each dome runs. The flare over the dome is a plane at 45 degrees, so the material between them is the vertical gap times the cosine of 45, not the vertical gap. A dome that meets the band's underside flat climbs hardest in the middle, which is where the flare sits over it, and the wall there came back under the minimum. A straighter dome spends that climb earlier. It costs reach, because the rim must still clear the LED's outer corner.
+
+Each dome is open on its inner side. A wall there would have to stand between the LED and the ENC1 lip, and `LIP_CLEAR_R` leaves no room for one. The band itself sits over that half of the package and takes its light.
+
+The lobes are local to the six LEDs. A flare all the way round would reach past the cavity wall near the long sides, and the insert could not lift past it.
+
+Each lobe has a 45 degree chamfer on its top outer corner, set by `RING_LOBE_SHOULDER`. The flange of SW6 stands over the D7 lobe, and without the chamfer a full press brings it onto that corner. The corner carries no retention. `led_ring_lobe_roof()` measures the dome wall to the chamfer, and `pressed_caps_clear_lobes()` in `case/checks/wheel_ring.py` measures the gap to a pressed flange.
+
+The FDM front keeps a channel of its own, because its face sits lower and its roof is thick enough to print. Its depth is `FDM_LED_RING_DEPTH_RATIO` of the depth `LED_RING_ROOF` leaves over the cavity ceiling, so `LED_RING_FACE_ROOF` does not change that front.
+
+`wheel_lip_relief()` lifts the ceiling off the ENC1 lip. The lip is a static flange under the fixed bezel, wider than the wheel opening, so it can never pass up through the face. Without the relief the ceiling sat flat at `CAVITY_FRONT` over the lip. That gap pinned `PAD_WEB_T`, because `CAVITY_FRONT` is `PAD_WEB_TOP`, and through it the counterbore lands. The relief is an annular lift of `WHEEL_LIP_RELIEF` out to `led_ring_inner_r()`. `LED_RING_FOOT` is the plane it leaves, and the insert's underside steps up to that plane over the bore. As a result, the ring glows into the gap round the bezel.
 
 A chamfer, `RECESS_CHAMFER_W` wide, runs round the whole recess inside the rim, between the face and the dish. In each section across the rim, a round leaves the face `RECESS_CHAMFER_ROUND_OUT` outside the rim with the face's own slope and runs `RECESS_CHAMFER_ROUND_W` inside it. Its start outside the rim gives it room to turn gently, and the face is cut there. A second round, `RECESS_CHAMFER_INNER_ROUND_W` wide, meets the dish floor with the floor's own slope. If the two rounds leave room, the section is straight between them. The two rounds fill the chamfer, so the section is one S-curve from the face to the dish. The chamfer replaces the soft roll that the dish had, so `WHEEL_RIM_SOFT`, `KEYPAD_RIM_SOFT` and `KEYPAD_RIM_SOFT_2` are zero. The rim outline does not move.
 
-The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring channel north and south of the knob, so the ring roof check limits how deep they can go.
+The floor does not rise across a neck. It runs flat from the key row nearest the wheel and then falls into the wheel basin. The plan outline of the neck does not change. The necks cross the LED ring north and south of the knob, where two of the lobes are, so the ring land check limits how deep they can go.
 
 Each dish depth is measured down from the face, so the dish rim keeps its designed outline. The face falls toward the side walls, so it lowers the dish floor under the outer edge of each outer-column key. In the key dishes, `KEYPAD_LIP_LIFT` gives part of that drop back, so the floor rises to a crest before the rim. The counterbore lands there are the thinnest. The counterbore lands limit how deep `KEYPAD_DISH_DEPTH` and `KEYPAD_DISH_DEPTH_2` can go.
 
@@ -321,7 +348,7 @@ The FDM front has a 45 degree top-edge chamfer, `EDGE_R_FRONT_FDM`. The recessed
 
 On the recessed front, the rim runs where the face already turns down toward the side walls. The FDM front keeps its groove on flat face outside the chamfer.
 
-`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the recessed front's arch depth, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
+`FDM_FACE_DROP`, `FDM_OUTLINE_W`, `FDM_OUTLINE_DEPTH`, `FDM_OUTLINE_EDGE_CLEAR`, and `EDGE_R_FRONT_FDM` set the face. On this front the LED ring channel is `FDM_LED_RING_DEPTH_RATIO` of the depth `LED_RING_ROOF` leaves over the cavity ceiling, so the roof is thicker and prints. Run `check.py --only fdm` to validate it.
 
 ## Parts
 
@@ -428,7 +455,9 @@ For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl
 
 `c6remote-case-pad-tpu-v2-blank.stl` is a complete V2 pad with blank keytops in one STL. Print it alone, with the recessed front `c6remote-case-front.stl`.
 
-Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements.
+Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements, and from the V2 switch bodies.
+
+The V2 top pad has its own outline, `pad_lobe_box(v2=True)`. It reaches the nib over each V2 switch and stops short of the ring insert, so it has no notch. The V2 SW1 and SW2 bodies stand under its edge nearest the wheel, so its skirt opens over each of them.
 
 For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the recessed front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
 

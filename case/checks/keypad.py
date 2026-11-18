@@ -2,9 +2,14 @@
 switch takes a cap now, so nothing of the pad itself still has to come
 out the far side; caps_fit() covers all eleven against the shell.
 
-Pad wall fit: every pad keeps PAD_FIT to the built front's wall on both long
-sides. The fit above rejects overlap only, so it passes a lobe that nearly
-touches the wall.
+Pad wall fit: every pad keeps at least PAD_FIT to the built front's wall on
+both long sides. The fit above rejects overlap only, so it passes a lobe that
+nearly touches the wall. The lobes stop well short of the wall, so the locating
+tabs are what this reads.
+
+Pad x float: no pad can shift in x by more than SOCKET_LEAD before a tab meets
+the wall, so a pad pushed to either side still lands its stems in the cap
+lead-ins.
 
 Plunger stub contact: every switch's plunger actually lands on SWITCH_TOP,
 not merely in the formula, probed on the built pad rather than trusted from
@@ -13,8 +18,9 @@ one short or overlong without any volume-based check noticing either.
 
 Pad lobes clear the wheel: the pad is two tight rectangles now and the wheel
 bore that used to sever one slab into them is gone, so what used to be
-guaranteed by a cut has to be measured instead. Both the lip's rotating
-clearance and the LEDs' sight line depend on it.
+guaranteed by a cut has to be measured instead. The lip's rotating clearance,
+the LEDs' sight line and the ring insert's lobes all depend on it. The V2 top
+lobe has its own outline and is read too.
 
 Recesses open: the front face is genuinely dished at the floor face_floor_at()
 says, probed beside every key, beside the mic, on the wheel's own seat on four
@@ -168,8 +174,9 @@ def pad_isolation_grooves(pad):
 
 
 def grid_outer_edge(pad):
-    """Read the chamfer on the built grid lobe's outer top edge, once per side."""
-    c = params.FDM_PAD_GRID_CHAMFER
+    """Read the chamfer on the built grid lobe's outer top edge, once per side.
+    Its leg is FDM_PAD_EDGE_CHAMFER, not the groove lips' FDM_PAD_GRID_CHAMFER."""
+    c = params.FDM_PAD_EDGE_CHAMFER
     _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
     mx = keypad_model._grid_axes("x")[1]
     my = keypad_model._grid_axes("y")[1]
@@ -309,10 +316,15 @@ def _skirt_zones(solids=None, bottom=None):
     """Plan boxes of every board part that stands up to the skirt, read off the
     assembly itself so a skirt sample can be excused only where a part is.
 
-    `solids` and `bottom` default to the V3 assembly and PAD_SKIRT_BOTTOM. The
-    V2 top pad passes its moved V2 solids and its own skirt bottom."""
+    `solids` and `bottom` default to the V3 assembly with its switch bodies and
+    PAD_SKIRT_BOTTOM. The STEP has no switch bodies, so keypad.switch_bodies()
+    adds them. The V2 top pad passes its moved V2 solids and its own skirt
+    bottom."""
     clear = params.PAD_SKIRT_CLEARANCE
-    solids = board.assembly_solids() if solids is None else solids
+    if solids is None:
+        solids = list(board.assembly_solids()) + [
+            solid for _, solid in keypad_model.switch_bodies()
+        ]
     bottom = case.PAD_SKIRT_BOTTOM if bottom is None else bottom
     zones = []
     for solid in solids:
@@ -320,24 +332,6 @@ def _skirt_zones(solids=None, bottom=None):
         if box.max.Z > bottom - clear:
             zones.append((box.min.X - clear, box.max.X + clear, box.min.Y - clear, box.max.Y + clear))
     return zones
-
-
-def _built_plunger_bottom(pad, points=None, floor=None):
-    """(lowest, spread) of the built plunger bottoms, read with a ray down each.
-
-    `points` are the (x, y) contacts, default every V3 switch. `floor` is where
-    each ray ends, default one below PAD_SKIRT_BOTTOM."""
-    if points is None:
-        parts = board.components()
-        points = [parts[ref][:2] for ref in board.refs("SW")]
-    floor = case.PAD_SKIRT_BOTTOM - 1.0 if floor is None else floor
-    top = case.PAD_WEB_TOP - 0.1
-    bottoms = []
-    for x, y in points:
-        runs = _ray_runs(pad, (x, y, top), (x, y, floor))
-        if runs:
-            bottoms.append(top - runs[-1][1])
-    return (min(bottoms), max(bottoms) - min(bottoms)) if bottoms else (None, None)
 
 
 def _edge(pad, p, n, z):
@@ -353,40 +347,51 @@ def _edge(pad, p, n, z):
 
 
 def pad_skirt_depth(
-    pad, fdm=False, grooves=True, lobes=("grid", "second"), points=None, zones=None, floor=None,
-    reference=None,
+    pad, fdm=False, grooves=True, lobes=("grid", "second"), zones=None, v2=False,
 ):
     """Walk each moulded lobe's skirt centreline on the built pad.
 
     Returns (problems, lines). At every sample outside a board part's zone a
-    ray down must find unbroken material to the built plunger bottom. At a few
-    sites per side, rays across the wall read its thickness, and its outer
-    face against the web's, which must be flush. On the FDM pad the skirt must
-    also run unbroken across each groove exit. `grooves` False means a plain slab
-    web, with no chamfer and no groove exits.
+    ray up from below the wall must find unbroken material from
+    PAD_SKIRT_BOTTOM to the web.
 
-    `lobes` names the lobes walked. `points` are the contacts whose built
-    bottoms the skirt must match, `zones` the plan boxes a sample is excused
-    in, and `floor` where the contact rays end. All three default to the V3
-    pad's. `reference` is the pad whose built plunger bottoms set the level
-    the skirt must match, default `pad`.
+    The ray goes up and starts in air. A ray down from inside the web has to be
+    cast again from above the pad. On the TPU and FDM pads the fused keytops
+    overhang the skirt, so that second ray crosses a keytop top fillet. The
+    intersector gives two entering crossings there and one exit at the skirt
+    bottom, so the run never closes and the wall reads too deep. A zone excuses a
+    sample only where the assembly itself puts a part. On the V3 board no zone
+    reaches the skirt, so every sample has to read as material.
+
+    At a few sites per side, rays across the wall read its thickness, and its
+    outer face against the web's, which must be flush. The walk follows the
+    lobe outline without its locating tabs, and no site is read beside a tab,
+    because the web stands past the skirt there. On the FDM pad the
+    skirt must also run unbroken across each groove exit. `grooves` False
+    means a plain slab web, with no chamfer and no groove exits.
+
+    `lobes` names the lobes walked. `zones` are the plan boxes a sample is
+    excused in, default the V3 pad's. The V2 top pad passes its own, because
+    its board puts different parts under the wall, and `v2` so the walk follows
+    that pad's own outline.
     """
     from build123d import Vertex
 
     problems, lines = [], []
-    bottom, spread = _built_plunger_bottom(pad if reference is None else reference, points, floor)
-    if bottom is None:
-        return ["no built plunger could be read, so the skirt depth has no reference"], lines
-    if spread > PLUNGER_CONTACT_TOLERANCE:
-        problems.append(f"the built plunger bottoms differ by {spread:.3f}, so the skirt has no one level to match")
+    bottom = case.PAD_SKIRT_BOTTOM
     zones = _skirt_zones() if zones is None else zones
     z_top = case.PAD_WEB_BOTTOM + 0.1
-    flat = params.PAD_WEB_T - (params.FDM_PAD_GRID_CHAMFER if fdm and grooves else 0)
+    flat = params.PAD_WEB_T - (params.FDM_PAD_EDGE_CHAMFER if fdm and grooves else 0)
     z_web = case.PAD_WEB_BOTTOM + flat / 2
     z_skirt = (bottom + case.PAD_WEB_BOTTOM) / 2
     for name in lobes:
-        face = keypad_model.pad_lobe_face(name)
+        face = keypad_model.pad_lobe_face(name, v2, tabs=False)
         outline = face.outer_wire()
+        reach = params.PAD_SKIRT_T + 0.6
+        tabs = [
+            (tx0 - reach, tx1 + reach, ty0 - reach, ty1 + reach)
+            for tx0, ty0, tx1, ty1 in keypad_model.pad_tabs(name, v2)
+        ]
         centre = outline.offset_2d(-params.PAD_SKIRT_T / 2)
         count = max(8, round(centre.length / SKIRT_SPACING))
         step = centre.length / count
@@ -396,8 +401,9 @@ def pad_skirt_depth(
             if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in zones):
                 skipped += 1
                 continue
-            runs = _ray_runs(pad, (p.X, p.Y, z_top), (p.X, p.Y, bottom - 1.0))
-            if not runs or runs[0][0] > 0.05 or len(runs) != 1:
+            start = bottom - 1.0
+            runs = _ray_runs(pad, (p.X, p.Y, start), (p.X, p.Y, z_top))
+            if not runs or runs[0][1] < z_top - start - 0.05 or len(runs) != 1:
                 bad += 1
                 if bad <= 3:
                     problems.append(Problem(
@@ -405,13 +411,13 @@ def pad_skirt_depth(
                         at=(p.X, p.Y, bottom),
                     ))
                 continue
-            low = z_top - runs[0][1]
+            low = start + runs[0][0]
             if abs(low - bottom) > PLUNGER_CONTACT_TOLERANCE:
                 bad += 1
                 if bad <= 3:
                     problems.append(Problem(
                         f"the {name} lobe skirt bottom at {low:.3f} at ({p.X:.2f}, {p.Y:.2f}) "
-                        f"against the plunger bottoms at {bottom:.3f}, off by {low - bottom:.3f}",
+                        f"against PAD_SKIRT_BOTTOM at {bottom:.3f}, off by {low - bottom:.3f}",
                         at=(p.X, p.Y, low),
                     ))
                 continue
@@ -424,6 +430,8 @@ def pad_skirt_depth(
         lines.append(f"{name} {len(kept)} samples ({skipped} skipped) over {len(kept) * step:.0f} mm")
         sides = {}
         for p in kept:
+            if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in tabs):
+                continue
             _, near, _ = outline.distance_to_with_closest_points(Vertex(p.X, p.Y, 0))
             n = (near.X - p.X, near.Y - p.Y)
             norm = math.hypot(*n)
@@ -498,12 +506,12 @@ def pad_clears_board(pad, obstacles=None, columns=None, floor=None):
     is taken out first. Returns (problems, line).
 
     `obstacles` is a list of (ref, solid) and defaults to the V3 assembly, each
-    solid named by its nearest placement. `columns` are the (x, y) of the
+    solid named by its nearest placement, and the switch bodies. `columns` are the (x, y) of the
     plungers and nibs, default every V3 switch. `floor` is the lowest z kept,
-    default one below PAD_SKIRT_BOTTOM.
+    default one below the plunger contacts.
     """
     parts = board.components()
-    z0 = case.PAD_SKIRT_BOTTOM - 1 if floor is None else floor
+    z0 = case.SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION - 1 if floor is None else floor
     z1 = case.PAD_WEB_BOTTOM - case.MERGE
     below = Compound(pad.intersect(Pos(0, 0, (z0 + z1) / 2) * Box(400, 400, z1 - z0)).solids())
     if columns is None:
@@ -520,6 +528,7 @@ def pad_clears_board(pad, obstacles=None, columns=None, floor=None):
             c = solid.bounding_box().center()
             ref = min(placements, key=lambda p: math.hypot(p[1] - c.X, p[2] - c.Y))[0]
             obstacles.append((ref, solid))
+        obstacles += keypad_model.switch_bodies()
     needed = params.PAD_SKIRT_CLEARANCE
     worst = (math.inf, None)
     problems = []
@@ -566,12 +575,31 @@ def pad_wall_fit(pairs):
     sides. Returns the problems and {label: (-X gap, +X gap)}.
 
     pad_fits rejects overlap only, so a lobe 0.1 off the wall passed it. The
-    wall is cut out of the built front outboard of each board edge and stops
+    lobes stop well short of the wall, so the locating tabs are what this reads.
+    See _wall_gaps() for where the wall is read."""
+    problems = []
+    readings = _wall_gaps(pairs, problems)
+    for label, gaps in readings.items():
+        for name, gap in zip(("-X", "+X"), gaps or ()):
+            if gap < params.PAD_FIT - PAD_FIT_TOLERANCE:
+                problems.append(
+                    f"{label} stands {gap:.3f} off the {name} wall, under "
+                    f"PAD_FIT {params.PAD_FIT:.2f}"
+                )
+    return problems, readings
+
+
+def _wall_gaps(pairs, problems):
+    """{label: (-X gap, +X gap)} from each (label, front, pad) to the front's
+    wall, or None for a label whose wall could not be read. A wall that cannot
+    be read adds a line to `problems`.
+
+    The wall is cut out of the built front outboard of each board edge and stops
     under the ceiling, which the pad web bears on."""
     box = board.board_profile().bounding_box()
     z0, z1 = SKIRT_BOTTOM, CAVITY_FRONT - 0.05
     reach = LAP_OUT + 1
-    problems, readings = [], {}
+    readings = {}
     for label, front, pad in pairs:
         gaps = []
         for name, x0, x1 in (
@@ -582,23 +610,48 @@ def pad_wall_fit(pairs):
             if wall is None:
                 problems.append(f"{label} has no {name} wall to measure against")
                 continue
-            gap = pad.distance_to(wall)
-            gaps.append(gap)
-            if gap < params.PAD_FIT - PAD_FIT_TOLERANCE:
-                problems.append(
-                    f"{label} stands {gap:.3f} off the {name} wall, under "
-                    f"PAD_FIT {params.PAD_FIT:.2f}"
-                )
+            gaps.append(pad.distance_to(wall))
         readings[label] = tuple(gaps) if len(gaps) == 2 else None
+    return readings
+
+
+FLOAT_SLOP = 0.01
+"""Allowed excess on a pad's x float over SOCKET_LEAD. This is float slop, not a
+margin."""
+
+
+def pad_x_float(pairs):
+    """Each (label, front, pad) can shift in x by no more than SOCKET_LEAD before
+    it meets the front's wall. Returns the problems and {label: float}.
+
+    The lobes stop well short of the side walls, so the locating tabs are what
+    meet the wall. The float is the wider of the two gaps that pad_wall_fit()
+    reads, because the pad can be pushed all the way to either side, and a stem
+    further off its cap than SOCKET_LEAD misses the lead-in."""
+    problems, readings = [], {}
+    gaps_by_label = _wall_gaps(pairs, problems)
+    for label, gaps in gaps_by_label.items():
+        if gaps is None:
+            continue
+        drift = max(gaps)
+        readings[label] = drift
+        if drift > params.SOCKET_LEAD + FLOAT_SLOP:
+            problems.append(
+                f"{label} can shift {drift:.2f} in x before it meets the wall, "
+                f"more than SOCKET_LEAD {params.SOCKET_LEAD:.2f}"
+            )
     return problems, readings
 
 
-def mic_pad_contour(pad):
-    """Probe the mic lobe: solid web between the keys, open mic notch, filleted corners."""
+def mic_pad_contour(pad, v2=False):
+    """Probe the mic lobe: solid web between the keys, and the pad kept out of
+    the mic duct clearance. Where pad_mic_notch() says the lobe reaches the
+    clearance circle, also probe the notch and its filleted corners. `v2` reads
+    the V2 top pad's lobe."""
     refs = sorted(case.island_refs("second"), key=lambda ref: board.components()[ref][0])
     left, right = [board.components()[ref][:2] for ref in refs]
     mx, my = mic_port()
-    lobe = next(box[1:] for box in case.pad_lobes() if box[0] == "second")
+    lobe = case.pad_lobe_box("second", v2)
     top = lobe[3]
     z = (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2
     problems = []
@@ -619,6 +672,13 @@ def mic_pad_contour(pad):
     full = duct + params.PAD_MIC_CLEARANCE
     if filled(mx, my - (duct - 0.1)) > 0.01:
         problems.append("the mic pad has material inside the mic duct clearance")
+    if not case.pad_mic_notch("second", v2):
+        if filled(mx, my - full + 0.1) > 0.01:
+            problems.append(
+                "the mic pad has material inside the mic clearance circle, "
+                "but pad_mic_notch() cut no notch"
+            )
+        return problems
     if filled(mx, my - full - 0.1) < 0.99:
         problems.append("the mic notch is wider than its clearance circle")
     half = math.sqrt(full**2 - (top - my) ** 2)
@@ -706,12 +766,13 @@ def pad_clears_wheel(pad):
     guarantee by construction and neither of which anything cuts for now.
     """
     problems = []
-    gap = case.pad_wheel_gap()
-    if gap <= 0:
-        problems.append(
-            f"a pad lobe reaches {-gap:.2f} into the wheel's own "
-            f"{case.pad_clear_y():.2f} band"
-        )
+    for label, gap in (("a pad lobe", case.pad_wheel_gap()),
+                       ("the V2 top lobe", case.pad_wheel_gap(v2=True))):
+        if gap <= 0:
+            problems.append(
+                f"{label} reaches {-gap:.2f} into the wheel's own "
+                f"{case.pad_clear_y():.2f} band"
+            )
     _, wy = board.wheel_center()
     half = case.pad_clear_y()
     for solid in pad.solids():
@@ -1167,20 +1228,22 @@ def _sites_box(points):
     )
 
 
-RING_SEAM_STEP = params.RING_INSERT_FIT + 0.03
+RING_SEAM_STEP = params.RING_INSERT_FACE_FIT + 0.15
 """How far either side of a dry chamfer reading the ring seam is looked for.
 
-RING_INSERT_FIT wide plus room for the reading. A hole the rim chamfer meets
-that is narrower than this, inside the ring's own radii, is the clearance
-between the two parts of the face. A wider one is something missing."""
+RING_INSERT_FACE_FIT is zero, so the seam is nominally a hairline and what
+this really covers is the reading: the ray, the fitted face and the ruled loft
+the insert's outer wall comes off. A hole the rim chamfer meets that is
+narrower than this, inside the ring's own radii, is the joint between the two
+parts of the face. A wider one is something missing."""
 
 
 def _is_ring_seam(shell, x, y, lo, hi):
     """True when the hole under (x, y) is only the ring insert's clearance.
 
-    led_ring_window() takes the roof and the web out of the front shell and
-    led_ring_insert() fills them, so the face around the wheel is two parts
-    with RING_INSERT_FIT between them. The recess rim passes close enough to
+    led_ring_channel() bores the whole ring out of the front shell and
+    led_ring_insert() fills it, so the face around the wheel is two parts with
+    RING_INSERT_FACE_FIT between them. The recess rim passes close enough to
     the ring at the east and west sides that the rim chamfer crosses that seam,
     and a ray down the chamfer can fall into the gap and read no material
     although nothing is missing.
@@ -1194,7 +1257,7 @@ def _is_ring_seam(shell, x, y, lo, hi):
     """
     wx, wy = board.wheel_center()
     r = math.hypot(x - wx, y - wy)
-    if not case.WHEEL_OPENING_R <= r <= case.led_ring_mouth_outer_r():
+    if not case.WHEEL_OPENING_R <= r <= case.led_ring_face_r():
         return False
     ux, uy = (x - wx) / r, (y - wy) / r
     for step in (-RING_SEAM_STEP, RING_SEAM_STEP):
@@ -1211,8 +1274,8 @@ def rim_chamfer_profile(front):
     leave room, read on the built face.
 
     `front` is the shell and the ring insert together, because the face is two
-    parts now: led_ring_window() takes the channel roof and the web out of the
-    shell and led_ring_insert() fills them. At the east and west sides the
+    parts now: led_ring_channel() bores the whole ring out of the shell and
+    led_ring_insert() fills it. At the east and west sides the
     recess rim passes close enough to the ring that the chamfer crosses the
     seam between them, and _is_ring_seam() is what tells that clearance apart
     from something missing.

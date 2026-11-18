@@ -339,33 +339,15 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
         ),
-        # The recessed channel's sections take their ceiling from helpers, so
-        # those helpers' parameters move its box too.
         _entry(
             "wheel_lip_relief",
             "wheel_ring.wheel_lip_relief",
             "cut",
             wheel_ring.wheel_lip_relief(),
         ),
-        # The recessed front's alone, as shells.py cuts it. The FDM front keeps
-        # its own roof and web, so nothing takes them out there.
-        *(
-            []
-            if fdm
-            else [
-                _entry(
-                    "led_ring_window",
-                    "wheel_ring.led_ring_window",
-                    "cut",
-                    wheel_ring.led_ring_window(),
-                    sorted(set(
-                        _reads("wheel_ring.led_ring_window")
-                        + _reads("wheel_ring._window_section")
-                        + _reads("wheel_ring.led_ring_ceiling_under")
-                    )),
-                )
-            ]
-        ),
+        # The recessed front's cut is the ring bore and the six lobe pockets,
+        # so the lobes' own helpers move its box. The FDM front's is the old
+        # channel, revolved, and nothing of the lobes reaches it.
         _entry(
             "led_ring_channel",
             "wheel_ring.led_ring_channel",
@@ -373,10 +355,10 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             wheel_ring.led_ring_channel(fdm),
             None if fdm else sorted(set(
                 _reads("wheel_ring.led_ring_channel")
-                + _reads("wheel_ring._ring_section")
-                + _reads("wheel_ring.led_ring_bevel")
-                + _reads("wheel_ring.led_ring_ceiling_under")
-                + _reads("wheel_ring.led_ring_ceiling_at")
+                + _reads("wheel_ring.led_ring_face_r")
+                + _reads("wheel_ring._lobe_pocket_section")
+                + _reads("wheel_ring.led_ring_lobe_flare")
+                + _reads("wheel_ring.led_ring_lobe_land_z")
             )),
         ),
         _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)),
@@ -509,8 +491,9 @@ def _pad(fdm=False, skirt=None, grooves=True):
     return out
 
 
-def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTENSION, fdm=False, skirt=None, grooves=True):
-    """One pad lobe: its web, its stems and plungers, and its cuts."""
+def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTENSION, fdm=False, skirt=None, grooves=True, v2=False):
+    """One pad lobe: its web, its stems and plungers, and its cuts. `v2` uses
+    the V2 top pad's own outline."""
     placements = board.components()
     v2_reads = sorted(
         {n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"}
@@ -521,14 +504,15 @@ def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTE
             f"lobe.{name}",
             "keypad.pad_lobe_face",
             "add",
-            _slab(keypad.pad_lobe_face(name), PAD_WEB_BOTTOM, PAD_WEB_TOP),
+            _slab(keypad.pad_lobe_face(name, v2), PAD_WEB_BOTTOM, PAD_WEB_TOP),
         )
     ]
     skirt = not fdm if skirt is None else skirt
     if skirt:
         out.append(_entry(f"skirt.{name}", "keypad.pad_skirt", "add", keypad.pad_skirt(name)))
         out += [
-            _entry(f"skirt_break.{ref}", "keypad.pad_skirt_breaks", "cut", box, ["PAD_SKIRT_CLEARANCE"])
+            _entry(f"skirt_break.{ref}", "keypad.pad_skirt_breaks", "cut", box,
+                   ["PAD_SKIRT_CLEARANCE", "PAD_SKIRT_DEPTH"])
             for ref, box in keypad.pad_skirt_breaks(name)
         ]
     for ref in keypad.island_refs(name):
@@ -596,7 +580,7 @@ def _v2_top(skirt=False, fdm=True):
     With `skirt` it is the one-piece TPU version: the V2 skirt and one break per
     V2 obstacle. With `fdm` false it is the moulded pad's lobe: stems for the
     separate caps, a plain web, and no keytops."""
-    lobe = next(box for box in keypad.pad_lobes() if box[0] == "second")
+    lobe = ("second", *keypad.pad_lobe_box("second", v2=True))
     refs = keypad.island_refs("second")
     legacy = board.legacy_components()
     out = _pad_lobe(
@@ -604,6 +588,7 @@ def _v2_top(skirt=False, fdm=True):
         plunger_extension=params.LEGACY_NIB_EXTENSION,
         fdm=fdm,
         skirt=False if not fdm else None,
+        v2=True,
     )
     if skirt:
         out.append(
@@ -623,7 +608,7 @@ def _v2_top(skirt=False, fdm=True):
                 "cut",
                 box,
                 ["PAD_SKIRT_CLEARANCE", "PLUNGER_SWITCH_EXTENSION", "SUPPORT_GAP",
-                 "SWITCH_HEIGHT"],
+                 "SWITCH_BODY", "SWITCH_HEIGHT"],
             )
             for name, box in keypad.legacy_skirt_breaks()
         ]
@@ -670,7 +655,10 @@ def _ring_insert():
             sorted(set(
                 _reads("wheel_ring.led_ring_insert")
                 + _reads("wheel_ring._insert_section")
-                + _reads("wheel_ring.led_ring_ceiling_under")
+                + _reads("wheel_ring._lobe_section")
+                + _reads("wheel_ring.led_ring_lobe_flare")
+                + _reads("wheel_ring.led_ring_lobe_rim_r")
+                + _reads("wheel_ring.led_ring_lobe_land_z")
             )),
         )
     ]

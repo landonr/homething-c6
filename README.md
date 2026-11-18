@@ -125,7 +125,7 @@ The page has no password, so use it only on a trusted network.
 - The SLA front has a shallow dish around the keys and the wheel. A translucent ring insert carries the light of the status LEDs.
 - The SLA one-piece front is the SLA front with the ring insert fused in. It prints in clear resin, so the whole front glows.
 - Optional Qwiic access: a flush cover with two breakaway bridges stays in place until you need the port.
-- Assembly needs one M2 x 5 button-head screw at the grip end.
+- Assembly needs one M2 x 5 pan head screw at the grip end.
 
 <p align="center">
   <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">

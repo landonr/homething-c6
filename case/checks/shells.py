@@ -20,6 +20,12 @@ exists because everything else looks at the BRep instead. A shell can be torn
 open in the STL, which is the artifact that ships and the only thing anyone ever
 renders, while every probe in every other module reads the solid behind it and
 reports clean.
+
+One-piece front: the recessed front with the ring insert fused in is one solid
+with one shell, so no void is closed inside it where the two parts met. It
+holds every point that the recessed front and the insert without its feet
+hold. Rays read both builds on the ring, on each lobe and across the whole
+part.
 """
 
 import math
@@ -28,30 +34,42 @@ from collections import Counter
 import board
 import params
 
-from build123d import Box, Compound, GeomType, Pos, Rot
+from build123d import Box, Compound, GeomType, Pos, Rot, Vertex
 
 from model import shells
 from model.hardware import end_screw_axis, end_screw_block_span
 from model.ir import emitter_bore
 from model.qwiic import qwiic_slot
 from model.stack import (
+    BOARD_TOP,
     CAVITY_FRONT,
     LAP_IN,
     LAP_OUT,
     SHELL_BACK,
+    SHELL_FRONT,
     SHELL_SEAM,
     SKIRT_BOTTOM,
     SKIRT_OUT,
     SUPPORT_TOP,
+    WHEEL_OPENING_R,
 )
 from model.support import front_support_cuts
 from model.usb import usb_slot
 
-from .common import CROP_MARGIN, TOLERANCE, Problem, _Crop, _volume
+from .common import (
+    CROP_MARGIN,
+    RUN_MIN,
+    TOLERANCE,
+    Problem,
+    _Crop,
+    _ray_runs,
+    _volume,
+)
 
 
 EXPORT_STEMS = {
     "front shell": "case-front",
+    "one-piece front shell": "case-front-one-piece",
     "back shell": "case-back",
     "button pad": "case-pad",
     "FDM V2 top pad": "case-pad-fdm-v2-top",
@@ -984,6 +1002,208 @@ def parts_are_sound(parts):
                 part=part,
             ))
     return problems
+
+
+ONE_PIECE_TOL = 0.02
+"""How far from the one-piece front a point of the two-part build can lie and
+still count as held.
+
+The insert's band is a ruled loft through LED_RING_STATIONS sections. Its bore
+and its inner step are facets a few thousandths inside the round cuts that the
+one-piece front takes, and its top is chords a few thousandths over the dish.
+A point in those facets is in the two-part build and not in the one-piece
+front. A real hole is a ring part that is not there, and it reads tenths."""
+
+ONE_PIECE_RING_R = 22.6
+"""Radius off the wheel axis that the dense rays reach to, past the outer face
+of every lobe."""
+
+ONE_PIECE_BEARINGS = 144
+"""Bearings of the dense rays round the wheel: about one millimetre of arc at
+the lobes, so each lobe takes several."""
+
+ONE_PIECE_STEP = 0.15
+"""Radial step of the rays that drop through the ring."""
+
+ONE_PIECE_GRID = 2.0
+"""Step of the coarse grid of rays over the whole part."""
+
+ONE_PIECE_LEAN = 0.03
+"""How far each ray leans off its axis for each unit along it. See
+_one_piece_rays()."""
+
+ONE_PIECE_SHOWN = 10
+"""Most misses the one-piece check reports one by one. A front with no ring at
+all misses on thousands of rays, and the worst few say where."""
+
+ONE_PIECE_MEASURED = 200
+"""Most misses the one-piece check measures off the surface. Each measure costs
+a distance query, and a front with no ring would pay thousands of them for a
+verdict that the first one already gives. The rest are only counted."""
+
+
+def _one_piece_rays(front):
+    """(start, end) of each ray the one-piece check reads.
+
+    Rays that drop through a polar grid over the ring and its lobes, radial
+    rays at heights from the lobe rims to the face, and a coarse grid that drops
+    through the whole part. The polar grid walks each dome and each joint of
+    the two-part build. The radial rays cross the bore and the band's plumb
+    side. The coarse grid holds the rest of the shell.
+
+    Every ray leans by ONE_PIECE_LEAN. A ray that runs along a face of the
+    insert's loft reads a run that is not there, and a plumb ray at the bore
+    radius did exactly that. A leaning ray crosses each plumb face and each
+    level face, and does not run along it."""
+    wx, wy = board.wheel_center()
+    top = SHELL_FRONT + 1
+    low = BOARD_TOP - 0.5
+    drop = top - low
+    lean_x, lean_y = ONE_PIECE_LEAN * drop, 0.6 * ONE_PIECE_LEAN * drop
+    count = ONE_PIECE_BEARINGS
+    for i in range(count):
+        a = 2 * math.pi * (i + 0.5) / count
+        r = WHEEL_OPENING_R - 0.3
+        while r < ONE_PIECE_RING_R:
+            x, y = wx + r * math.cos(a), wy + r * math.sin(a)
+            yield (x, y, top), (x + lean_x, y + lean_y, low)
+            r += ONE_PIECE_STEP
+    near, far = WHEEL_OPENING_R - 1, ONE_PIECE_RING_R + 0.4
+    rise = ONE_PIECE_LEAN * (far - near)
+    for z in (2.1, 2.5, 3.0, 3.5, 3.9, 4.1, 4.2, 4.35, 4.6, 5.0, 5.5, 6.0, 6.5):
+        for i in range(count):
+            a = 2 * math.pi * (i + 0.25) / count
+            c, s = math.cos(a), math.sin(a)
+            yield (
+                (wx + near * c, wy + near * s, z),
+                (wx + far * c, wy + far * s, z + rise),
+            )
+    box = front.bounding_box()
+    drop = box.max.Z - box.min.Z + 2
+    x = box.min.X + 0.37
+    while x < box.max.X:
+        y = box.min.Y + 0.41
+        while y < box.max.Y:
+            yield (
+                (x, y, box.max.Z + 1),
+                (x + ONE_PIECE_LEAN * drop, y + 0.6 * ONE_PIECE_LEAN * drop,
+                 box.min.Z - 1),
+            )
+            y += ONE_PIECE_GRID
+        x += ONE_PIECE_GRID
+
+
+def _uncovered(want, have):
+    """The parts of the runs `want` that the runs `have` do not cover."""
+    out = []
+    for first, last in want:
+        at = first
+        for lo, hi in have:
+            if hi <= at or lo >= last:
+                continue
+            if lo > at:
+                out.append((at, lo))
+            at = max(at, hi)
+        if at < last:
+            out.append((at, last))
+    return [(a, b) for a, b in out if b - a > RUN_MIN]
+
+
+def _merged(*run_lists):
+    out = []
+    for first, last in sorted(run for runs in run_lists for run in runs):
+        if out and first <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], last))
+        else:
+            out.append((first, last))
+    return out
+
+
+def one_piece_front(front, insert, one_piece):
+    """The one-piece front is one solid with one shell, and it holds every
+    point that the recessed front and the footless ring insert hold.
+
+    One shell is what proves that no closed void is left inside where the two
+    parts met. The containment is read along rays: on each ray, the runs of
+    the front and of the insert together must lie inside the runs of the
+    one-piece front. The insert's loft stands a few thousandths off the true
+    cuts, so a run that is not inside still passes if it is no longer than
+    ONE_PIECE_TOL, or if its middle is within ONE_PIECE_TOL of the one-piece
+    front's own surface. Returns the problems and the readings."""
+    problems = []
+    part = "case-front-one-piece"
+    solids = one_piece.solids()
+    shells = one_piece.shells()
+    if len(solids) != 1:
+        problems.append(Problem(
+            f"the one-piece front is {len(solids)} solids, not one", part=part
+        ))
+    if len(shells) != 1:
+        problems.append(Problem(
+            f"the one-piece front has {len(shells)} shells, not one: a second "
+            "shell is a void closed inside the part, where the insert met the "
+            "front",
+            part=part,
+        ))
+    if not one_piece.is_valid:
+        problems.append(Problem("the one-piece front is not a valid solid", part=part))
+
+    wx, wy = board.wheel_center()
+    top = SHELL_FRONT + 1
+    reach = ONE_PIECE_RING_R + CROP_MARGIN
+    ring_box = Pos(wx, wy, (BOARD_TOP - 1 + top) / 2) * Box(
+        2 * reach, 2 * reach, top - BOARD_TOP + 1
+    )
+    near = one_piece.intersect(ring_box)
+    if isinstance(near, list):
+        near = Compound(list(near))
+    inner = reach - 1
+
+    def in_box(p):
+        return (
+            abs(p[0] - wx) < inner and abs(p[1] - wy) < inner
+            and BOARD_TOP < p[2] < top - 1
+        )
+
+    rays = held = unmeasured = 0
+    worst = 0.0
+    misses = []
+    for start, end in _one_piece_rays(front):
+        rays += 1
+        want = _merged(_ray_runs(front, start, end), _ray_runs(insert, start, end))
+        have = _ray_runs(one_piece, start, end)
+        span = [b - a for a, b in zip(start, end)]
+        length = math.sqrt(sum(c * c for c in span))
+        for first, last in _uncovered(want, have):
+            if last - first <= ONE_PIECE_TOL:
+                held += 1
+                continue
+            if len(misses) >= ONE_PIECE_MEASURED:
+                unmeasured += 1
+                continue
+            t = (first + last) / 2 / length
+            p = tuple(a + t * c for a, c in zip(start, span))
+            off = (near if in_box(p) else one_piece).distance_to(Vertex(*p))
+            if off <= ONE_PIECE_TOL:
+                held += 1
+                worst = max(worst, off)
+            else:
+                misses.append((off, last - first, p))
+    misses.sort(reverse=True)
+    for off, run, p in misses[:ONE_PIECE_SHOWN]:
+        problems.append(Problem(
+            f"the one-piece front misses {run:.3f} of material that the "
+            f"two-part build holds, {off:.3f} from its own surface, over "
+            f"ONE_PIECE_TOL {ONE_PIECE_TOL:.3f}",
+            at=p, part=part,
+        ))
+    more = len(misses) - min(len(misses), ONE_PIECE_SHOWN) + unmeasured
+    if more:
+        problems.append(Problem(
+            f"{more} more runs miss material of the two-part build",
+            part=part,
+        ))
+    return problems, {"rays": rays, "held": held, "worst": worst}
 
 
 def interference(parts):

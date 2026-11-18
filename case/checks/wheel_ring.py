@@ -80,6 +80,7 @@ from .common import (
     _fill_fraction,
     _opening_crop,
     _opening_radius,
+    _ray_runs,
     _volume,
 )
 
@@ -496,11 +497,11 @@ def led_ring(front, insert):
     reads a run under BAND_MIN.
 
     A band probe then stands in the part of that run outside
-    led_ring_inner_r(), over the band's whole depth from the cavity ceiling up
+    LIP_CLEAR_R, over the band's whole depth from the cavity ceiling up
     to the local face floor, sized to the run less BAND_PROBE_GAP either side
     and capped at PROBE_D. The ray reads one line, so the probe is what covers
     the height between the ends the ray saw and catches a hollow that does not
-    reach either wall. It stands outside led_ring_inner_r() because the
+    reach either wall. It stands outside LIP_CLEAR_R because the
     insert's underside steps there, from the cavity ceiling down under the bore
     to the relief it seats on, and a probe straddling that step would read the
     air under its own inner half as a hollow.
@@ -533,7 +534,7 @@ def led_ring(front, insert):
     # here is taken on one.
     z_floor = case.CAVITY_FRONT
     # One height for every ray, just over that seat. The insert is present
-    # there on both sides of led_ring_inner_r() and nowhere near its top, so
+    # there on both sides of LIP_CLEAR_R and nowhere near its top, so
     # one ray reads the whole band on every bearing.
     z_ray = case.LED_RING_FOOT + 0.05
     per_sector = math.ceil(LED_RING_SAMPLES / RING_CROP_SECTORS)
@@ -616,19 +617,19 @@ def led_ring(front, insert):
                 )
                 continue
 
-            # The probe stands outside led_ring_inner_r() rather than in the
+            # The probe stands outside LIP_CLEAR_R rather than in the
             # middle of the whole band. The insert's underside steps there,
             # from the cavity ceiling down under the bore to the relief it
             # seats on, and a probe straddling that step reads the air under
             # its own inner half as a hollow in the part. Sizing it off the
             # same radius keeps it clear of the step by BAND_PROBE_GAP whatever
             # the run measures.
-            deep_in = max(inner, case.led_ring_inner_r())
+            deep_in = max(inner, case.LIP_CLEAR_R)
             deep_r = (deep_in + outer) / 2
             probe_d = min(PROBE_D, outer - deep_in - 2 * BAND_PROBE_GAP)
             if probe_d <= 0:
                 problems.append(
-                    f"the insert's run outside led_ring_inner_r() is only "
+                    f"the insert's run outside LIP_CLEAR_R is only "
                     f"{outer - deep_in:.2f} at {deg} degrees, too narrow to "
                     "stand a probe in"
                 )
@@ -1107,3 +1108,65 @@ def pressed_caps_clear_lobes(caps, insert):
         f"{PRESSED_FLANGE_CLEAR_MIN:.2f}, and the built caps over a lobe "
         f"({', '.join(sorted(near))}) share no volume with the built insert"
     )
+
+
+BORE_ROUND_TOL = 0.02
+"""How far off the led_ring_bore_round() arc a built surface may read. The arc
+goes in as RING_BORE_ROUND_POINTS chords, which sag under 0.002, so this is the
+same allowance as ONE_PIECE_TOL rather than room for a missing round."""
+
+BORE_ROUND_STEP = 6
+"""Every this many loft stations, bore_round() reads both parts. The rays sit
+on stations, where the loft is the section itself."""
+
+
+def bore_round(insert, one_piece):
+    """(problems, line): the insert and the one-piece front both carry the
+    RING_BORE_ROUND arc on the ring's inner edge.
+
+    A vertical ray drops onto each part at three radii across the round, on
+    every BORE_ROUND_STEP-th station. The first surface it meets must be the
+    arc. A missing cut on the one-piece front leaves the sharp dish there, which
+    one_piece_front() cannot see, because the dish still holds the insert.
+    """
+    wx, wy = board.wheel_center()
+    radius = params.RING_BORE_ROUND
+    centre_r = case.WHEEL_OPENING_R + radius
+    worst, drop, count = 0.0, math.inf, 0
+    problems = []
+    for station in range(0, case.LED_RING_STATIONS, BORE_ROUND_STEP):
+        angle = 2 * math.pi * station / case.LED_RING_STATIONS
+        arc = case.led_ring_bore_round(angle)
+        leave, centre_z = arc[0][0], arc[-1][1]
+        bore_x = wx + case.WHEEL_OPENING_R * math.cos(angle)
+        bore_y = wy + case.WHEEL_OPENING_R * math.sin(angle)
+        drop = min(drop, case.face_floor_at(bore_x, bore_y) - centre_z)
+        for frac in (0.15, 0.5, 0.85):
+            r = case.WHEEL_OPENING_R + (leave - case.WHEEL_OPENING_R) * frac
+            want = centre_z + math.sqrt(radius ** 2 - (r - centre_r) ** 2)
+            x, y = wx + r * math.cos(angle), wy + r * math.sin(angle)
+            top = case.SHELL_FRONT + 1
+            for name, part in (("insert", insert), ("one-piece front", one_piece)):
+                runs = _ray_runs(part, (x, y, top), (x, y, case.CAVITY_FRONT))
+                if not runs:
+                    problems.append(
+                        f"the {name} has no material under the bore round at "
+                        f"{math.degrees(angle):.1f} degrees, r {r:.2f}"
+                    )
+                    continue
+                got = top - runs[0][0]
+                off = abs(got - want)
+                worst = max(worst, off)
+                count += 1
+                if off > BORE_ROUND_TOL:
+                    problems.append(
+                        f"the {name} reads {got:.3f} at {math.degrees(angle):.1f} "
+                        f"degrees, r {r:.2f}, against the bore round at "
+                        f"{want:.3f}, {off:.3f} off, wants {BORE_ROUND_TOL:.3f}"
+                    )
+    line = (
+        f"the ring's inner edge carries the {radius:.2f} bore round on the insert "
+        f"and the one-piece front: {count} readings, worst {worst:.3f} off the "
+        f"arc, and the bore wall stops at least {drop:.2f} under the sharp edge"
+    )
+    return problems, line

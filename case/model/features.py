@@ -34,6 +34,10 @@ They are keyed under `c6remote-case-front-fdm.stl`,
 because that is the file the viewer loaded and therefore the name it looks a
 click up under. The two fronts are never both on screen, so nothing of one ever
 ranks against the other.
+
+The one-piece front is keyed under `c6remote-case-front-one-piece.stl` for the
+same reason. Its entries are the recessed front's, less the LED ring cut, plus
+one fill and one lobe for each LED.
 """
 
 import inspect
@@ -234,13 +238,31 @@ def _support_gaps(runs, obstacles, prefix="support_gap", src="support.support_ob
     return out
 
 
-def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
+def _lobe_params():
+    """The parameters that move a ring lobe's box, on the insert and on the
+    one-piece front."""
+    return sorted(set(
+        _reads("wheel_ring._lobe_section")
+        + _reads("wheel_ring.led_ring_lobe_lid")
+        + _reads("wheel_ring.led_ring_lobe_flare")
+        + _reads("wheel_ring.led_ring_lobe_rim_r")
+        + _reads("wheel_ring.led_ring_lobe_blend_r")
+        + _reads("wheel_ring.led_ring_lobe_half")
+        + _reads("wheel_ring.led_ring_lobe_land_z")
+    ))
+
+
+def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False, one_piece=False):
     """The front shell, in the order front_shell() builds and cuts it.
 
     `fdm` swaps the two entries the fronts differ by: the outline groove the
     filament build cuts where the standard shell cuts the keypad recess, and
     the wheel opening, which on that build carries its own clearance and a
     chamfered mouth because it meets a flat face rather than a dish.
+
+    `one_piece` drops the LED ring cut, because that front keeps the ring as
+    shell. It adds the six lobe fills before the cuts and the six lobes after
+    them, one entry for each LED.
     """
     placements = board.components()
     out = [
@@ -312,6 +334,20 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
         )),
     )
     out += _support_gaps(runs, obstacles)
+    lobe_refs = wheel_ring.led_ring_lobe_refs()
+    if one_piece:
+        out += [
+            _entry(
+                f"ring_lobe_fill.{ref}",
+                "wheel_ring.led_ring_lobe_fills",
+                "add",
+                fill,
+                sorted(set(
+                    _reads("wheel_ring._lobe_fill_section") + _lobe_params()
+                )),
+            )
+            for ref, fill in zip(lobe_refs, wheel_ring.led_ring_lobe_fills())
+        ]
     out.append(
         _entry(
             "end_screw_pilot",
@@ -345,24 +381,37 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
             "cut",
             wheel_ring.wheel_lip_relief(),
         ),
-        # The recessed front's cut is the ring bore and the six lobe pockets,
-        # so the lobes' own helpers move its box. The FDM front's is the old
-        # channel, revolved, and nothing of the lobes reaches it.
-        _entry(
-            "led_ring_channel",
-            "wheel_ring.led_ring_channel",
-            "cut",
-            wheel_ring.led_ring_channel(fdm),
-            None if fdm else sorted(set(
-                _reads("wheel_ring.led_ring_channel")
-                + _reads("wheel_ring.led_ring_face_r")
-                + _reads("wheel_ring._lobe_pocket_section")
-                + _reads("wheel_ring.led_ring_lobe_flare")
-                + _reads("wheel_ring.led_ring_lobe_land_z")
-            )),
-        ),
-        _entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)),
     ]
+    # The recessed front's cut is the ring bore and the six lobe pockets,
+    # so the lobes' own helpers move its box. The FDM front's is the old
+    # channel, revolved, and nothing of the lobes reaches it.
+    if not one_piece:
+        out.append(
+            _entry(
+                "led_ring_channel",
+                "wheel_ring.led_ring_channel",
+                "cut",
+                wheel_ring.led_ring_channel(fdm),
+                None if fdm else sorted(set(
+                    _reads("wheel_ring.led_ring_channel")
+                    + _reads("wheel_ring.led_ring_face_r")
+                    + _reads("wheel_ring._lobe_pocket_section")
+                    + _reads("wheel_ring.led_ring_lobe_flare")
+                    + _reads("wheel_ring.led_ring_lobe_land_z")
+                )),
+            )
+        )
+    if one_piece:
+        out.append(
+            _entry(
+                "led_ring_bore_round",
+                "wheel_ring.led_ring_bore_round_cut",
+                "cut",
+                wheel_ring.led_ring_bore_round_cut(),
+                _reads("wheel_ring.led_ring_bore_round"),
+            )
+        )
+    out.append(_entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)))
     # Both holes per key, at the depths front_shell() cuts them, so a box is the
     # cut rather than the ceiling it opens in.
     for ref in board.refs("SW"):
@@ -415,6 +464,12 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False):
         _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
     ]
+    if one_piece:
+        out += [
+            _entry(f"ring_lobe.{ref}", "wheel_ring.led_ring_lobes", "add", lobe,
+                   _lobe_params())
+            for ref, lobe in zip(lobe_refs, wheel_ring.led_ring_lobes())
+        ]
     return out
 
 
@@ -655,6 +710,7 @@ def _ring_insert():
             sorted(set(
                 _reads("wheel_ring.led_ring_insert")
                 + _reads("wheel_ring._insert_section")
+                + _reads("wheel_ring.led_ring_bore_round")
                 + _reads("wheel_ring._lobe_section")
                 + _reads("wheel_ring.led_ring_lobe_flare")
                 + _reads("wheel_ring.led_ring_lobe_rim_r")
@@ -732,6 +788,9 @@ def features():
         "c6remote-case-front-fdm.stl": _front(
             front_runs, obstacles, ledges, ledge_obstacles, fdm=True
         ),
+        "c6remote-case-front-one-piece.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles, one_piece=True
+        ),
         "c6remote-case-back.stl": _back(back_runs, obstacles),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-case-pad-fdm.stl": _fdm_pad(),
@@ -761,7 +820,9 @@ def features():
 
 
 def _payload():
-    body = json.dumps({"frame": "case", "parts": features()}, indent=2)
+    wx, wy = board.wheel_center()
+    axes = {"wheel": {"at": [wx, wy, 0.0], "dir": [0, 0, 1]}}
+    body = json.dumps({"frame": "case", "axes": axes, "parts": features()}, indent=2)
     return (body + "\n").encode()
 
 

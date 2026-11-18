@@ -143,6 +143,7 @@ from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
 from .shells import (
     interference,
     ir_end_lap_wall,
+    one_piece_front,
     parts_are_sound,
     seam_shadow_line,
     shells_mate,
@@ -164,6 +165,7 @@ from .support import (
 from .usb import usb_clearance
 from .qwiic import qwiic_access, qwiic_knockout, qwiic_skirt_transition, battery_lead_clearance
 from .wheel_ring import (
+    bore_round,
     fdm_wheel_seat,
     inner_chamfer_is_cut,
     led_ring,
@@ -189,6 +191,10 @@ class Solids:
     @functools.cached_property
     def front_fdm(self):
         return case.front_shell(fdm=True)
+
+    @functools.cached_property
+    def front_one_piece(self):
+        return case.front_shell(one_piece=True)
 
     @functools.cached_property
     def back(self):
@@ -235,6 +241,10 @@ class Solids:
     @functools.cached_property
     def ring_insert(self):
         return case.led_ring_insert()
+
+    @functools.cached_property
+    def ring_insert_footless(self):
+        return case.led_ring_insert(feet=False)
 
     @functools.cached_property
     def front_with_ring(self):
@@ -701,6 +711,21 @@ def _ir_end_lap_wall(s):
 
 
 @_check("shells")
+def _one_piece_front(s):
+    problems, readings = one_piece_front(
+        s.front, s.ring_insert_footless, s.front_one_piece
+    )
+    return _report(
+        problems,
+        f"the one-piece front is one solid with one shell and holds every "
+        f"point of the recessed front and the footless ring insert on "
+        f"{readings['rays']} rays. {readings['held']} runs of the insert's "
+        f"loft stand off it, the furthest by {readings['worst']:.3f}, inside "
+        f"ONE_PIECE_TOL",
+    )
+
+
+@_check("shells")
 def _seam_shadow_line(s):
     problems, readings = seam_shadow_line(
         s.back, [(s.front, "case-front"), (s.front_fdm, "case-front-fdm")]
@@ -731,6 +756,12 @@ def _light_path(s):
 @_check("wheel_ring")
 def _pressed_caps_clear_lobes(s):
     problems, line = pressed_caps_clear_lobes(s.caps, s.ring_insert)
+    return _report(problems, line)
+
+
+@_check("wheel_ring")
+def _bore_round(s):
+    problems, line = bore_round(s.ring_insert, s.front_one_piece)
     return _report(problems, line)
 
 
@@ -1330,6 +1361,7 @@ def _parts_are_sound(s):
     parts = {
         "front shell": s.front,
         "FDM front shell": s.front_fdm,
+        "one-piece front shell": s.front_one_piece,
         "back shell": s.back,
         "button pad": s.pad,
         "FDM V2 top pad": s.pad_fdm_v2_top,
@@ -1364,7 +1396,9 @@ def _interference(s):
 
 @_check("fab")
 def _fab_walls(s):
-    lines, problems, accepted = fab_walls(s.front, s.back, s.ring_insert)
+    lines, problems, accepted = fab_walls(
+        s.front, s.back, s.ring_insert, s.front_one_piece
+    )
     for line in lines:
         print(line)
     process = params.FAB_PROCESS
@@ -1517,12 +1551,12 @@ def _parallel_initializer():
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": (
-        "front", "front_fdm", "back", "pad", "pad_fdm_v2_top", "pad_tpu_v2_top",
-        "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top", "window", "caps",
-        "caps_plain", "led_ring_insert",
+        "front", "front_fdm", "front_one_piece", "back", "pad", "pad_fdm_v2_top",
+        "pad_tpu_v2_top", "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top",
+        "window", "caps", "caps_plain", "led_ring_insert",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
-    "fab": ("front", "back", "led_ring_insert"),
+    "fab": ("front", "back", "led_ring_insert", "front_one_piece"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
     "ir": ("front", "back", "window"),
@@ -1539,11 +1573,15 @@ _FEATURE_SOLIDS = {
         "pad_v2_top", "pad", "pad_tpu", "caps",
     ),
     "mic": ("front",),
-    "shells": ("front", "front_fdm", "back"),
+    "shells": (
+        "front", "front_fdm", "front_one_piece", "back", "led_ring_insert_footless",
+    ),
     "support": ("back",),
     "usb": ("front", "front_fdm", "back"),
     "qwiic": ("front", "front_fdm", "back"),
-    "wheel_ring": ("front", "front_fdm", "back", "pad", "led_ring_insert"),
+    "wheel_ring": (
+        "front", "front_fdm", "front_one_piece", "back", "pad", "led_ring_insert",
+    ),
 }
 """Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
 
@@ -1580,7 +1618,11 @@ _CACHED_SOLIDS = {
     "front": lambda: [functools.partial(case.front_shell)],
     "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
     "back": lambda: [functools.partial(case.back_shell)],
+    "front_one_piece": lambda: [functools.partial(case.front_shell, one_piece=True)],
     "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
+    "led_ring_insert_footless": lambda: [
+        functools.partial(case.led_ring_insert, feet=False)
+    ],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
     "pad_tpu": lambda: [

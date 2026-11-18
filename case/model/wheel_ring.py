@@ -29,6 +29,10 @@ and with it the web in to the bore, and led_ring_insert() is the part that
 fills both. The shell then keeps one opening from the bore out to the roof
 flat, with no thin sheet anywhere, and the lit band runs to the knob. The FDM
 front keeps its own roof and web, which are thick enough.
+
+The one-piece front is the recessed front with the insert fused in, for a clear
+print. It keeps the ring as shell, fuses the six lobes, and closes the fit over
+each lobe with led_ring_lobe_fills().
 """
 
 import functools
@@ -484,7 +488,7 @@ def wheel_lip_relief():
 
 RING_INSERT_TOP_POINTS = 16
 """Points along the ring insert's top face, at equal intervals from the roof
-flat's outer end in to the wheel bore.
+flat's outer end in to where led_ring_bore_round() leaves the dish.
 
 The top is the dish, and the dish is a bowl, so a chord between two points on
 it stands proud of it. The insert's top is the one face that has to land flush
@@ -503,10 +507,12 @@ def _insert_section(angle):
     RING_INSERT_FACE_FIT. The top lands flush with the shell's own. The bore
     faces the knob, where the shell's seat used to stand, so it keeps that
     radius and WHEEL_OPENING_CLEARANCE with it, and takes no fit.
+    The top meets the bore on led_ring_bore_round(), not on a sharp edge.
 
-    The underside holds nothing up. Inside led_ring_inner_r() it stands at
-    LED_RING_FOOT, clear of the ENC1 lip; outside it drops to CAVITY_FRONT.
-    Both face open cavity, so adhesive keeps the part up, led_ring_feet()
+    The underside holds nothing up. Inside LIP_CLEAR_R it stands at
+    LED_RING_FOOT, clear of the ENC1 lip. Outside it drops to CAVITY_FRONT.
+    The step is on LIP_CLEAR_R and not on led_ring_inner_r(), so it is flush
+    with the inner face of each of led_ring_feet(). Both face open cavity, so adhesive keeps the part up, led_ring_feet()
     catches it if that fails, and the lobes are what stop it coming out the
     front.
 
@@ -517,20 +523,114 @@ def _insert_section(angle):
 
     wx, wy = board.wheel_center()
     cos_a, sin_a = math.cos(angle), math.sin(angle)
-    inner = led_ring_inner_r()
     outer = led_ring_face_r() - params.RING_INSERT_FACE_FIT
     count = RING_INSERT_TOP_POINTS
-    radii = [
-        outer - (outer - WHEEL_OPENING_R) * i / (count - 1) for i in range(count)
-    ]
+    arc = led_ring_bore_round(angle)
+    start = arc[0][0]
+    radii = [outer - (outer - start) * i / (count - 1) for i in range(count)]
     top = [(r, face_floor_at(wx + r * cos_a, wy + r * sin_a)) for r in radii]
     return [
         (WHEEL_OPENING_R, LED_RING_FOOT),
-        (inner, LED_RING_FOOT),
-        (inner, CAVITY_FRONT),
+        (LIP_CLEAR_R, LED_RING_FOOT),
+        (LIP_CLEAR_R, CAVITY_FRONT),
         (outer, CAVITY_FRONT),
         *top,
+        *arc[1:],
     ]
+
+
+RING_BORE_ROUND_POINTS = 12
+"""Points along the round on the ring's inner edge, from the dish down to the
+bore. A chord between two of them cuts inside the arc by about
+RING_BORE_ROUND * (1 - cos(half the step)), which is under 0.002 here."""
+
+
+def led_ring_bore_round(angle, trim=0.0):
+    """[(r, z)] of the round on the ring's inner edge on the bearing `angle`.
+
+    The points run from where the round leaves the dish down to where it meets
+    the plumb bore at WHEEL_OPENING_R. The arc has radius RING_BORE_ROUND and
+    is tangent to both.
+
+    The dish is not level at the bore. It falls outward on the X axis, where
+    the face rolls off, and rises on the crown. So the round takes the dish's
+    slope where it leaves it, and the arc's centre stands RING_BORE_ROUND out
+    from the bore on every bearing.
+
+    `trim` stops the arc that many radians short of each tangent point.
+    _insert_section() ends the insert's top on the whole arc, and
+    led_ring_bore_round_cut() cuts the trimmed arc into the one-piece front.
+    """
+    from .keypad import face_floor_at
+
+    wx, wy = board.wheel_center()
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def dish(r):
+        return face_floor_at(wx + r * cos_a, wy + r * sin_a)
+
+    radius = params.RING_BORE_ROUND
+    centre_r = WHEEL_OPENING_R + radius
+    leave = centre_r
+    step = 0.01
+    for _ in range(4):
+        slope = math.atan((dish(leave + step) - dish(leave - step)) / (2 * step))
+        leave = centre_r - radius * math.sin(slope)
+    centre_z = dish(leave) - radius * math.cos(slope)
+    if centre_z <= LED_RING_FOOT:
+        raise ValueError(
+            f"RING_BORE_ROUND {radius:.2f} takes the whole bore wall at "
+            f"{math.degrees(angle):.0f} degrees: the round meets the bore at "
+            f"{centre_z:.2f}, at or under the insert's foot at {LED_RING_FOOT:.2f}"
+        )
+    first, last = math.pi / 2 + slope + trim, math.pi - trim
+    return [
+        (
+            centre_r + radius * math.cos(first + (last - first) * i / (RING_BORE_ROUND_POINTS - 1)),
+            centre_z + radius * math.sin(first + (last - first) * i / (RING_BORE_ROUND_POINTS - 1)),
+        )
+        for i in range(RING_BORE_ROUND_POINTS)
+    ]
+
+
+BORE_ROUND_CUT_STEP = 0.01
+"""How far the one-piece front's round cut stops short of the dish and of the
+bore, measured normal to each.
+
+A cut that meets either surface on its tangent line meshes torn. The loft's
+chords and the true surface cross many times along that line, so the
+tessellator finds slivers there. Stopped this far short, each end of the cut
+crosses its surface at an angle. The step it leaves is under any print's
+resolution, and it is more than the 0.004 that the bore's chords sag inside
+the true bore.
+
+At the bore, the cut runs on down the arc's own tangent and through the bore,
+rather than in square from the arc's end. A square end leaves a ledge parallel
+to the underside, and checks/fab.py reads that as a sheet and not an edge."""
+
+
+def _bore_round_cut_section(angle):
+    """[(r, z)] of the material the round takes off the one-piece front on the
+    bearing `angle`: under the air over the dish, over the trimmed arc, down its
+    tangent into the bore, and MERGE into the bore so the cut leaves the solid
+    rather than ending on its surface."""
+    trim = math.acos(1 - BORE_ROUND_CUT_STEP / params.RING_BORE_ROUND)
+    arc = led_ring_bore_round(angle, trim)
+    (top_r, top_z), (low_r, low_z) = arc[0], arc[-1]
+    over = top_z + 1
+    past = WHEEL_OPENING_R - BORE_ROUND_CUT_STEP
+    below = low_z - (low_r - past) / math.tan(trim)
+    inside = WHEEL_OPENING_R - MERGE
+    return [*arc, (past, below), (inside, below), (inside, over), (top_r, over)]
+
+
+def led_ring_bore_round_cut():
+    """The cut that rounds the one-piece front's inner ring edge.
+
+    It is lofted through the same stations as led_ring_insert(), off the same
+    led_ring_bore_round() arc, trimmed by BORE_ROUND_CUT_STEP at each end. So
+    the one-piece front carries the insert's round to within that step."""
+    return _ring_loft(_bore_round_cut_section)
 
 
 LOBE_DOME_POINTS = 24
@@ -754,6 +854,63 @@ def led_ring_lobe_pockets():
     ]
 
 
+def _lobe_fill_section(ref):
+    """[(r, z)] of the fill that closes the fit over `ref`'s lobe on the
+    one-piece front.
+
+    The insert's lobe stops RING_LOBE_FIT under the cavity ceiling, so the
+    two-part build seats on its face circle and not on a lobe. A fused ring has
+    no seat, so on that front the gap is a slit with no function.
+
+    The fill starts RING_LOBE_FIT under the lobe's flat top, inside the lobe,
+    and stops MERGE over the ceiling, inside the shell. So each of its joints
+    overlaps material and does not only touch it.
+
+    Its outer side continues the RING_LOBE_SHOULDER chamfer up to the ceiling.
+    The chamfer stays one plane, so a pressed SW6 flange meets the same surface
+    as on the two-part build.
+
+    Its inner end stands MERGE inboard of the point where the flare crosses its
+    top. So the top inner corner is inside the flare and not on its surface.
+    """
+    _, _, flat = led_ring_lobe_flare(ref)
+    knee = led_ring_lobe_lid(ref)[1][0]
+    outer = led_ring_lobe_outer_r(ref)
+    leg = params.RING_LOBE_SHOULDER
+    top = CAVITY_FRONT + MERGE
+    dip = min(params.RING_LOBE_FIT, leg) if leg > 0 else params.RING_LOBE_FIT
+    low = flat - dip
+    start = knee - (top - flat) - MERGE
+    dome = led_ring_lobe_dome_z(ref, start)
+    if dome >= low:
+        raise ValueError(
+            f"the fill over {ref}'s lobe starts at r {start:.2f}, where the "
+            f"dome stands at {dome:.2f}, over the fill's bottom at {low:.2f}: "
+            f"the fill would hang below the lobe"
+        )
+    if leg <= 0:
+        return [(start, low), (outer, low), (outer, top), (start, top)]
+    corner = outer - leg
+    return [
+        (start, low),
+        (corner + dip, low),
+        (corner - (top - flat), top),
+        (start, top),
+    ]
+
+
+def led_ring_lobe_fills():
+    """The six fills that close the fit over the lobes on the one-piece front.
+
+    front_shell(one_piece=True) fuses them before its key cuts. So a
+    counterbore that reaches over a lobe stays open, and the gap under it stays
+    the gap a cap needs."""
+    return [
+        _lobe_solid(ref, _lobe_fill_section, led_ring_lobe_half(ref))
+        for ref in led_ring_lobe_refs()
+    ]
+
+
 def _ring_loft(section):
     """Close a ruled loft through `section` at every station.
 
@@ -879,7 +1036,7 @@ def led_ring_feet():
 
 
 @cache.solid
-def led_ring_insert():
+def led_ring_insert(feet=True):
     """The translucent ring that fills the void the shell leaves round the
     wheel.
 
@@ -901,10 +1058,19 @@ def led_ring_insert():
     It also carries the band the shell used to hold between the ring and the
     bore, so the lit face runs to the knob with no shell sheet anywhere in it.
 
-    Print it in natural PA12 while the shell takes the dye. The IR window
-    already needs one undyed part, so this adds no process.
+    Print it in UTR-8100 by SLA, with the translucent finish. The Somos
+    Taurus shell is opaque, so this part is the only path the light has to
+    the face. A polished clear part shows six bright points and no band,
+    because clear resin does not scatter light.
+
+    `feet=False` is the same part without its feet. The one-piece front holds
+    the band and the lobes but no feet, so it is checked against this shape.
     """
-    return _fuse(_ring_loft(_insert_section), *led_ring_lobes(), *led_ring_feet())
+    return _fuse(
+        _ring_loft(_insert_section),
+        *led_ring_lobes(),
+        *(led_ring_feet() if feet else []),
+    )
 
 
 def led_ring_channel(fdm=False):

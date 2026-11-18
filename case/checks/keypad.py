@@ -901,7 +901,9 @@ def _probe_sites():
         sites.append((f"beside {label}", best[1], best[2]))
 
     wx, wy = board.wheel_center()
-    r = case.WHEEL_OPENING_R + params.WHEEL_RIM_LEDGE / 2
+    # Out past RING_BORE_ROUND, because the round takes the seat below the
+    # dish on purpose and checks/wheel_ring.py bore_round() reads it there.
+    r = case.WHEEL_OPENING_R + params.RING_BORE_ROUND + params.WHEEL_RIM_LEDGE / 2
     sites.append(("on the wheel seat on the axis", wx + r, wy))
     sites.append(
         ("on the wheel seat on the diagonal", wx + r * 0.70711, wy + r * 0.70711)

@@ -897,7 +897,8 @@ starts. It is also the roof the insert keeps between a dome and its own top,
 and the roof the FDM front keeps over its channel.
 
 This value is the minimum wall that PCBWay publishes for PA12 printed by SLS.
-It was 0.8, the SLA resin minimum, while the shells were ordered in resin. The
+The shells are now Somos Taurus by SLA, where the minimum is 0.8, so this value
+keeps a margin over that order and still passes an SLS order. The
 land is measured vertically and the face slopes, so the wall normal to the face
 reads a little under this value.
 
@@ -939,6 +940,16 @@ worse failure. The face is vertical and parallel to the way the part goes in,
 so zero is a touch and not a press.
 
 Raise this a few hundredths if a print comes back tight at the face."""
+RING_BORE_ROUND = 0.6
+"""Radius of the round on the ring's inner edge, where the dish meets the
+wheel bore.
+
+The ring insert and the one-piece front both carry it. It drops the edge
+next to the knob, so the knob stands this much higher over the ring's edge.
+
+It is half of FDM_WHEEL_OPENING_CHAMFER, so it reads as a soft edge and not
+as a lead-in. On the X axis the ring is only 1.24 thick at the bore, and this
+round leaves 0.64 of plumb bore wall there. A 0.8 round would leave 0.44."""
 RING_LIFT_CLEAR = 0.15
 """How far inside the cavity wall the ring's circle stands.
 
@@ -1960,12 +1971,14 @@ the arrows' ink.
 check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""
 
-FAB_PROCESS = "SLS"
-"""The PCBWay process that the front and back shells are ordered in. check.py
-measures the walls of the exported c6remote-case-front.stl and
-c6remote-case-back.stl against FAB_MIN_WALL[FAB_PROCESS]. SLS is the PA12
-process the shells are going to, and its 1.0 mm minimum is the stricter of the
-two, so a part that passes here also passes an SLA order.
+FAB_PROCESS = "SLA"
+"""The PCBWay process that check.py measures every printed part against,
+with FAB_MIN_WALL[FAB_PROCESS].
+
+The order goes to SLA. The shells are Somos Taurus and the ring insert is
+UTR-8100, and both are SLA resins, so every wall is held to the SLA minimum.
+An SLS order in PA12 needs this value set back to SLS, because its minimum is
+thicker.
 
 If a wall is thinner than the minimum, PCBWay holds the order. You then accept
 the risk or make the wall thicker. Source, read on 2026-11-11:

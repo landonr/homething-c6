@@ -67,7 +67,10 @@ from .stack import (
 )
 from .usb import round_usb_boot_rim, usb_boot_pocket, usb_slot
 from .wheel_ring import (
+    led_ring_bore_round_cut,
     led_ring_channel,
+    led_ring_lobe_fills,
+    led_ring_lobes,
     wheel_lip_relief,
     wheel_opening,
 )
@@ -644,7 +647,7 @@ def _cap_face_hole_cut(ref, fdm=False):
 
 
 @cache.solid
-def front_shell(fdm=False):
+def front_shell(fdm=False, one_piece=False):
     """The front shell. `fdm` swaps the one cut the face is finished with.
 
     Everything under the face is identical between the two, and deliberately
@@ -668,7 +671,38 @@ def front_shell(fdm=False):
     face_z() states, crown at SHELL_FRONT, rolled down into every wall to
     FACE_WALL_TOP. face_body() builds it. The FDM face stays flat, because it
     prints face down.
+
+    `one_piece` is the recessed front with led_ring_insert() fused into it, as
+    one solid for a clear SLS or SLA print. Each fit between the two parts
+    closes to an overlap:
+
+    - The band fills the ring bore with RING_INSERT_FACE_FIT at its face. With
+      that fit at an overlap, the band and the bore cancel. So this front does
+      not cut led_ring_channel(), and the ring stays shell. The face over the
+      ring is then the dish itself, with no joint line.
+    - Each lobe pocket holds its flare with RING_LOBE_FIT all round. The
+      pockets are part of led_ring_channel(), so they cancel the same way.
+    - Each lobe stops RING_LOBE_FIT under the cavity ceiling.
+      led_ring_lobe_fills() closes that gap. They go in before the key cuts,
+      so a counterbore over a lobe stays open.
+
+    The ring's inner edge takes the insert's round. led_ring_bore_round_cut()
+    cuts the same led_ring_bore_round() arc that ends the insert's top.
+
+    The lobes go in after every cut, so no cut changes them and the domes stay
+    as the insert has them. The feet stay out, because a fused ring cannot come
+    loose. Everything else is the recessed front's, so a cap, a pad and a back
+    shell fit it.
+
+    Light reaches the face only through the part's own material, and the whole
+    front then glows, not only the ring. A dyed or opaque print of it lights
+    nothing, so a Somos Taurus or other opaque shell must use the two-part
+    build.
     """
+    if fdm and one_piece:
+        raise ValueError(
+            "the one-piece front is the recessed front, so it has no FDM version"
+        )
     # The body is built to its own face and finished there before any key or
     # wheel hole is cut into it: the only top edge loop is the outer perimeter,
     # so its chamfer or roll cannot land on an aperture's own edge.
@@ -722,16 +756,21 @@ def front_shell(fdm=False):
             _key_prism(x, y, cap_counterbore(ref), CAVITY_FRONT - 1, COUNTERBORE_TOP)
         )
         keys.append(_cap_face_hole_cut(ref, fdm))
-    return _cut(
+    if one_piece:
+        shell = _fuse(shell, *led_ring_lobe_fills())
+    shell = _cut(
         shell,
         end_screw_pilot(),
         *catch_windows(),
         *side_catch_pockets(),
         wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
-        led_ring_channel(fdm),
+        *([led_ring_bore_round_cut()] if one_piece else [led_ring_channel(fdm)]),
         wheel_lip_relief(),
         mic_bore(fdm),
         *keys,
         keypad_outline_groove() if fdm else keypad_recess_cut(),
         *shared_cuts(),
     )
+    if one_piece:
+        shell = _fuse(shell, *led_ring_lobes())
+    return shell

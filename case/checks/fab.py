@@ -29,11 +29,13 @@ PARTS = (
     "c6remote-case-front.stl",
     "c6remote-case-back.stl",
     "c6remote-ring-insert.stl",
+    "c6remote-case-front-one-piece.stl",
 )
 """The PCBWay SLA or SLS parts, by export name. The insert goes on the same
-order as the shells, in natural PA12 where they take the dye, so it holds the
-same minimum. The FDM front, the pads, the caps and the IR window are printed
-elsewhere."""
+order as the shells, in UTR-8100 beside their Somos Taurus, so it holds the
+same minimum. The one-piece front replaces the front and the insert on a clear
+order, so it holds the same minimum too. The FDM front, the pads, the caps and
+the IR window are printed elsewhere."""
 
 SAMPLES_PER_MM2 = 10
 SEED = 1
@@ -71,7 +73,7 @@ AREA_SLACK = 1.0
 # edge. The mesh decides where the samples fall, so a change elsewhere in the
 # part moves all of them, and such a row can appear or go with no change to its
 # own geometry. Read the wall column to tell a thin sheet from an edge.
-FRONT, BACK, INSERT = PARTS
+FRONT, BACK, INSERT, ONE_PIECE = PARTS
 
 LAND = (
     "taper where the face hole lead-in runs out into the counterbore land. The "
@@ -91,6 +93,12 @@ RESET = (
     "below that band"
 )
 SCREW_CUT = "taper where the end screw cuts meet"
+BORE = (
+    "the taper under RING_BORE_ROUND. Next to the bore, rays up from the "
+    "underside read the plumb bore wall the round leaves, 0.62 at its least on "
+    "the X axis, where the ring is thinnest. It is an edge and not a sheet: "
+    "the full band behind it clears the minimum"
+)
 KNIFE = (
     "a knife edge, thin only in a band a few samples wide. Which of these the "
     "ray grid catches moves with the mesh, so they appear and vanish between "
@@ -112,6 +120,12 @@ ACCEPTED = {
     (FRONT, "end_screw_block"): (
         None, 5.8, "taper where the end screw block ramp runs out"
     ),
+    (FRONT, "keypad_recess"): (
+        None, 0.4,
+        KNIFE + ", on the recess rim chamfer near a side wall, where the face "
+        "is only about 0.1 deep. It came in with a new mesh of an unchanged "
+        "face"
+    ),
     (FRONT, "skirt_lead_in.1"): (None, 0.3, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_lead_in.2"): (None, 0.3, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_stiffener"): (
@@ -132,6 +146,12 @@ ACCEPTED = {
     ),
     (BACK, "catch_detents.+x"): (None, 9.1, "nose of the catch detent wedge"),
     (BACK, "catch_detents.-x"): (None, 8.0, "nose of the catch detent wedge"),
+    (BACK, "side_catch_detents.+x"): (
+        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
+    ),
+    (BACK, "side_catch_detents.-x"): (
+        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
+    ),
     (BACK, "end_screw.head"): (None, 1.2, SCREW_CUT),
     (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
     (BACK, "end_screw.wall_chamfer"): (None, 3.8, SCREW_CUT),
@@ -139,13 +159,24 @@ ACCEPTED = {
     (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
     (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
     (INSERT, "ring_insert"): (
-        None, 0.4,
+        None, 2.4,
         KNIFE + ", at the outer rim of a dome, where a lobe's outer face meets "
         "its rim land. The insert used to read 0.88 over 19.0 here, a real "
         "sheet between each dome and the 45 degree flare over it, and "
-        "RING_LOBE_STRAIGHT is what took it out"
+        "RING_LOBE_STRAIGHT is what took it out. It also covers " + BORE
     ),
 }
+
+# The one-piece front is the recessed front everywhere but the ring, so it
+# carries the front's accepted features under the same ids. The ring's one entry
+# is the bore round's taper, which the insert carries too. Any other thin
+# reading in the ring is new and must come to a person.
+ACCEPTED.update({
+    (ONE_PIECE, fid): entry
+    for (name, fid), entry in list(ACCEPTED.items())
+    if name == FRONT
+})
+ACCEPTED[(ONE_PIECE, "wheel_lip_relief")] = (None, 2.2, BORE[0].upper() + BORE[1:])
 
 FIRST_REACH = 4.0
 REACH_GROWTH = 4.0
@@ -398,7 +429,7 @@ def _judge(name, row, process, minimum):
     return ", ".join(flags) or "accepted", warn, problems
 
 
-def fab_walls(front, back, insert):
+def fab_walls(front, back, insert, one_piece):
     """Measure each printed part against FAB_MIN_WALL[FAB_PROCESS].
 
     Returns the lines to print, the failures, and how many accepted features
@@ -410,7 +441,7 @@ def fab_walls(front, back, insert):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         named = write_features(tmp / "c6remote-features.json")["parts"]
-        for name, shape in zip(PARTS, (front, back, insert)):
+        for name, shape in zip(PARTS, (front, back, insert, one_piece)):
             # The real export name, because the cached STL blob and the back's
             # angular tolerance are keyed on it.
             cache.export_stl_cached(shape, tmp / name)

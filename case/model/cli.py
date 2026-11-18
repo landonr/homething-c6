@@ -153,12 +153,14 @@ def main():
         show(*parts.values(), *caps.values())
         return
 
-    # The FDM front is a second copy of the same part, not a fifth part of the
-    # assembly, so it is added after --show has returned: showing both would
-    # draw two front shells in the same place. features.py keys its features
-    # under its own file name, since that is the file the viewer loads. The V2
-    # top pads replace one lobe of the FDM pads, so they stay out of --show too.
+    # The FDM front and the one-piece front are two more copies of the same
+    # part, not further parts of the assembly, so they are added after --show
+    # has returned: showing them would draw three front shells in one place.
+    # features.py keys their features under their own file names, since those
+    # are the files the viewer loads. The V2 top pads replace one lobe of the
+    # FDM pads, so they stay out of --show too.
     parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
+    parts["c6remote-case-front-one-piece"] = front_shell(one_piece=True)
     parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
     parts["c6remote-case-pad-tpu"] = button_pad(fdm=True, skirt=True, grooves=False)
     parts["c6remote-case-pad-tpu-blank"] = button_pad(
@@ -333,6 +335,12 @@ def main():
         f"  the insert carries the {led_ring_web_left():.2f} of band in to the "
         f"bore that used to be shell web, over an inner wall at "
         f"{led_ring_inner_r():.2f}, so no shell sheet covers the ring anywhere"
+    )
+    print(
+        f"  the one-piece front keeps the ring as shell and fuses the "
+        f"{len(refs)} lobes without feet. Each fill closes the "
+        f"{params.RING_LOBE_FIT:.2f} over its lobe, so no slit is left between "
+        f"the two parts"
     )
     print(
         f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} pouch, "

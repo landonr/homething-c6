@@ -2,7 +2,8 @@
 """Write the c6remote front face plan as one SVG sheet.
 
 scripts/face_plan.py holds the drawing. This script is the command line for the
-three sheets: the web page plan, and the detailed SLS and FDM README faces."""
+four sheets: the web page plan, and the detailed SLA, SLA one-piece and FDM
+README faces."""
 
 import argparse
 import sys
@@ -20,7 +21,7 @@ def main():
         "--version",
         choices=sorted(OUTPUTS),
         default="web",
-        help="web: the web page plan. sls, fdm: detailed README faces",
+        help="web: the web page plan. sls, one-piece, fdm: detailed README faces",
     )
     ap.add_argument("-o", "--out", help="where to write the SVG")
     args = ap.parse_args()

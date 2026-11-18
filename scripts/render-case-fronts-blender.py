@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Render the SLS and FDM front shells alone, in matte clay, from one isometric
-camera, for case/README.md.
+"""Render the SLA, FDM and SLA one-piece front shells alone, in matte clay, from
+one isometric camera, for case/README.md. The SLA front keeps its old "sls" file
+name, because the site and the build scripts link to it.
 
     python3 scripts/render-case-fronts-blender.py [--samples N] [--width PX]
 
@@ -20,6 +21,7 @@ OUT = ROOT / "docs" / "readme-assets"
 SHELLS = (
     ("sls", "c6remote-case-front.stl"),
     ("fdm", "c6remote-case-front-fdm.stl"),
+    ("one-piece", "c6remote-case-front-one-piece.stl"),
 )
 
 try:

@@ -10,13 +10,20 @@ from tempfile import TemporaryDirectory
 parser = argparse.ArgumentParser(description='Apply the saved halftone presets to a KiCad board copy.')
 parser.add_argument('board', type=Path)
 parser.add_argument('output', type=Path)
+parser.add_argument('--preset', help='Use a named preset from settings.json.')
 args = parser.parse_args()
 if args.board.resolve() == args.output.resolve():
     parser.error('Specify a separate output file.')
 source_dir = Path(__file__).resolve().parent
 scratch = TemporaryDirectory(prefix='c6-halftone-')
 work = Path(scratch.name)
-subprocess.run(['node', str(source_dir/'extract.mjs'), str(source_dir/'tuner.html'), str(work)], check=True)
+command = [
+    'node', str(source_dir / 'extract.mjs'), str(source_dir / 'tuner.html'),
+    str(source_dir / 'settings.json'), str(work),
+]
+if args.preset is not None:
+    command.append(args.preset)
+subprocess.run(command, check=True)
 specs = [
     ('F.SilkS', 'Front ripple artwork', work/'front.svg', '34.837455', 1),
     ('B.SilkS', 'Back ripple artwork', work/'back.svg', '71.819855', -1),

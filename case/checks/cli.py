@@ -480,9 +480,8 @@ def _caps_flush(s):
 def _pad_clears_wheel(s):
     return _report(
         pad_clears_wheel(s.pad),
-        f"both pad lobes stop {case.pad_wheel_gap():.2f} short of the wheel's own "
-        f"clearance band, which includes the ring insert's lobes, and the V2 top "
-        f"lobe stops {case.pad_wheel_gap(v2=True):.2f} short of it",
+        f"both pad lobes stay out of the wheel's keep-outs, which include the "
+        f"ring insert's lobes, and so does the V2 top lobe",
     )
 
 

@@ -92,8 +92,8 @@ FRONT_LEDGE_REACH = 31.5
 """How far from the board's grip (-Y) edge the front ledges may run. The two
 screw bosses these replace stood 26.5 in from that edge, so this keeps their
 position inside the window with 5.0 to spare. It is bound from above by the
-button pad: the grid lobe's grip-side edge stands 32.2 in from the board edge
-and the ledges must stay clear of it, so the window ends 0.7 short of that.
+button pad: the grid lobe's grip-side edge stands 33.2 in from the board edge
+and the ledges must stay clear of it, so the window ends 1.7 short of that.
 checks/front_ledge.py measures the clearance on the built pad."""
 
 # Vertical clearance measured from the board faces, not from z=0.
@@ -794,10 +794,10 @@ LED_BODY = 2.0
 LED_HEIGHT."""
 PAD_LED_CLEARANCE = 0.6
 """How far past an LED's own body edge the pad has to stop, so the web's edge
-stands clear of the package and does not graze it. One term of pad_clear_y(),
-off the LED placements plus LED_BODY, so a moved LED moves it. The other terms
-are the lip's own rotating clearance and the reach of the ring insert's lobes.
-The lobe term governs, because each lobe reaches past its LED."""
+stands clear of the package and does not graze it. pad_keepouts() grows each
+LED body by this value, off the LED placements plus LED_BODY, so a moved LED
+moves its keep-out. Each ring-insert lobe keep-out reaches past its LED, so the
+lobe keep-outs are the ones that notch the pad."""
 WHEEL_OPENING_EDGE = 0.65
 """Minimum ceiling between the shell's wheel opening and the side wall. The
 opening is clipped to a chord near the X axis if it would come closer than
@@ -1302,20 +1302,18 @@ breaks the skirt. The V2 top pad breaks its own skirt over the parts its board
 puts there, which include the V2 SW1 and SW2 bodies.
 
 This is also the gap the pad keeps from the ring insert's lobes, in
-pad_clear_y().
+pad_keepouts().
 """
-PAD_SKIRT_DEPTH = 0.75
+PAD_SKIRT_DEPTH = 1.6
 """How far the moulded pad's skirt wall drops below the web.
 
-The wall used to reach the plunger contacts, 1.30 down, and was cut open over
-the four board parts that stood in its way: C1 under the grid lobe, and C3, R1
-and R12 under the second. This depth clears three of them. C3 misses it by
-0.06, R1 and R12 by 0.41.
+The wall stops PAD_SKIRT_CLEARANCE above the board face, the deepest it can go.
+stack.py fails if a larger value takes it closer. The clearance is more than
+SWITCH_TRAVEL, so a press near a lobe edge cannot put the wall on the board.
 
-C1 is taller than the wall bottom, so the outline clears it in plan instead.
-PAD_MARGIN sets that outline. Its upper limit is the value at which the skirt
-comes within PAD_SKIRT_CLEARANCE of C1. As a result, the V3 skirt has no
-breaks."""
+No board part stands under the wall in plan. C1, C3, R1, R4 and R5 moved
+clear of the lobes, so the depth breaks nothing. It was 0.75 while C3 and R1
+stood under the top lobe and R5 under the grid lobe's edge."""
 FDM_PAD_GROOVE_W = 1.2
 """Width of each press-isolation relief in the rigid FDM grid lobe.
 
@@ -1344,27 +1342,20 @@ FDM_PAD_GROOVE_DEPTH and short of each keytop base. The grid lobe's outer top
 edge takes FDM_PAD_EDGE_CHAMFER instead.
 """
 PAD_MARGIN = 0.15
-"""Web left past the widest thing the web carries, on every side of each lobe.
+"""Web left past the widest thing over the pad, on every side of each lobe.
 
-Each lobe is the box of its own switch centres, grown by half fdm_cap_body()
-plus this value. The TPU and FDM keytops are fused onto the web, and they are
-the widest part that every pad variant carries. So the web edge stands 4.26
-plus this value from each outer switch centre.
+Each lobe is the hull of its own keycaps, each drawn on the keycap
+superellipse at half cap_flange() plus this value. The rigid cap's flange is
+the widest part over the pad. The fused TPU and FDM keytops, the stems and the
+plungers are narrower, so the pad covers all of them. Each corner follows the
+corner cap's own curve.
 
-The window is 4.26 to 4.44 from the switch centre. Below 4.26 a keytop
-overhangs the web. Above 4.44 the skirt comes within PAD_SKIRT_CLEARANCE of
-C1, and C1 breaks the wall. This value leaves a small bead round each keytop
-and keeps C1 clear.
+Where a lobe reaches a wheel keep-out, pad_lobe_face() notches it. The D7 ring
+lobe takes the one notch under a key, so the SW6 flange overhangs that notch.
 
-The lobes used to grow off the cap footprint by 1.00. That edge stood inside
-the ring insert's D6 and D7 lobes, and margin alone could not clear them.
-
-The rigid cap's flange is wider than this outline. So on the outer side of each
-outer key, the flange overhangs the web, and its counterbore is open to the
-cavity. The press goes through the stem, so the flange needs no web under it."""
-PAD_RADIUS = 3.0
-"""Corner radius on both lobes. It must be below half the smallest lobe width.
-Above about 3.4 a corner cuts into the corner keytop."""
+The board keeps its parts clear of this outline by PAD_SKIRT_CLEARANCE, so no
+part breaks the skirt. A larger value needs the same clearance from C1, R1 and
+the ring-lobe notches."""
 FDM_PAD_EDGE_CHAMFER = 0.15
 """Leg of the 45 degree chamfer on the FDM grid lobe's outer top edge.
 
@@ -1372,9 +1363,9 @@ It must be at most PAD_MARGIN, so the chamfer stops short of each outer keytop
 base. As a result, the outer key tiles do not slope down to hinge level as the
 groove lips do."""
 PAD_JOIN_RADIUS = 1.5
-"""Round on the two corners where the mic clearance circle meets the lobe top
-edge. pad_lobe_face() cuts the notch only if the circle reaches the lobe. At
-the present outline it does not, so this value is idle."""
+"""Round on the convex corners that the pad's notches leave: where the mic
+clearance circle meets the top lobe's edge, and at the mouth of each notch for
+pad_keepouts(). pad_lobe_face() cuts a notch only where a lobe reaches it."""
 PAD_FIT = 0.3
 """Least gap from each pad lobe to the front's stiffened inner wall.
 
@@ -1393,7 +1384,9 @@ each way in x, inside SOCKET_LEAD. Without the tabs it floats about 1.5.
 
 The tab reaches about 1.6 in x. This length is about 2.5 times that, so the
 soft tab pushes the lobe across and does not fold over. A longer tab locates no
-better and only adds a flap. The tab is web only, with no skirt under it."""
+better and only adds a flap. On a pad with a skirt, a 45 degree chamfer under
+the tab runs down into the skirt, so the tab prints with no support. The FDM pad
+has no skirt, so its tabs are web only."""
 PAD_TAB_RADIUS = 0.75
 """Corner round on the outer corners of each locating tab. It must be less than
 half the tab's reach in x, so the outer edge keeps a straight run to bear on the

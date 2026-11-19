@@ -40,12 +40,16 @@ import math
 
 from build123d import (
     Axis,
+    Box,
     BuildLine,
     BuildSketch,
+    Circle,
     Face,
+    Locations,
     Plane,
     Polyline,
     Pos,
+    Rectangle,
     Rot,
     Wire,
     loft,
@@ -64,6 +68,8 @@ from .stack import (
     FDM_FACE,
     LIP_CLEAR_R,
     MERGE,
+    PAD_SKIRT_BOTTOM,
+    PAD_WEB_TOP,
     SHELL_FRONT,
     STIFFENED_WALL,
     WHEEL_OPENING_R,
@@ -106,63 +112,50 @@ def led_ring_top(fdm=False):
     )
 
 
-def led_y_reach():
-    """Furthest any status LED's body edge sits from the wheel centre in y:
-    the reach the pad's cut has to uncover."""
-    _, wy = board.wheel_center()
+def _plan_box(x0, y0, x1, y1):
+    with BuildSketch() as sketch:
+        with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
+            Rectangle(x1 - x0, y1 - y0)
+    return sketch.sketch.faces()[0]
+
+
+@functools.cache
+def pad_keepouts():
+    """[Face] what the pad's lobes stay out of round the wheel, in plan: the
+    lip's own rotating clearance, each LED body grown by PAD_LED_CLEARANCE, and
+    each ring-insert lobe grown by PAD_SKIRT_CLEARANCE.
+
+    A ring lobe counts only where it stands between the skirt bottom and the
+    web top, because its flare above the ceiling stands in the shell and not in
+    the cavity. All of them come off the placements, so a moved LED moves its
+    keep-out. pad_lobe_face() notches each lobe round these, so the pad still
+    covers the cap flanges everywhere else."""
+    wx, wy = board.wheel_center()
+    with BuildSketch() as lip:
+        with Locations((wx, wy)):
+            Circle(LIP_CLEAR_R)
+    out = [lip.sketch.faces()[0]]
     parts = board.components()
-    return max(
-        abs(parts[ref][1] - wy) + params.LED_BODY / 2 for ref in board.refs("D")[1:]
-    )
-
-
-def led_ring_lobe_y_reach():
-    """Furthest any lobe of the ring insert reaches from the wheel centre in y,
-    over the whole arc of its plan wedge.
-
-    The lobes hang below the cavity ceiling down to the dome rim, so the pad's
-    web and skirt both have to stop short of this reach. D6 and D7 sit on the
-    wheel's y axis, so their full outer radius counts in y."""
-    reach = 0.0
-    for ref in led_ring_lobe_refs():
-        angle, _ = _lobe_at(ref)
-        half = led_ring_lobe_half(ref)
-        outer = led_ring_lobe_outer_r(ref)
-        bearings = [
-            angle - half + 2 * half * i / LOBE_WEDGE_POINTS
-            for i in range(LOBE_WEDGE_POINTS + 1)
-        ]
-        bearings += [a for a in (math.pi / 2, 3 * math.pi / 2) if abs(angle - a) < half]
-        reach = max(reach, max(abs(outer * math.sin(a)) for a in bearings))
-    return reach
-
-
-def pad_clear_terms():
-    """[(name, half-width)] each requirement on the band around the wheel, in y
-    off the wheel centre.
-
-    The lip's own rotating clearance, led_y_reach() plus PAD_LED_CLEARANCE, and
-    led_ring_lobe_y_reach() plus PAD_SKIRT_CLEARANCE. All of them come off the
-    placements, so a moved LED widens the band and does not end up under
-    silicone."""
-    return [
-        ("lip clearance", LIP_CLEAR_R),
-        ("LED reach", led_y_reach() + params.PAD_LED_CLEARANCE),
-        ("ring lobe reach", led_ring_lobe_y_reach() + params.PAD_SKIRT_CLEARANCE),
-    ]
-
-
-def pad_clear_y():
-    """Half-width of the band around the wheel the pad has to stay out of, in y
-    off the wheel centre: the largest of pad_clear_terms().
-
-    The ring lobe term governs. Each lobe reaches out past its LED and down to
-    the dome rim, and the skirt cannot pass over a lobe that keeps its
-    RING_LOBE_WALL. So the whole pad has to stop short of it in plan.
-
-    A requirement rather than a cut. The pad is two lobes that stop short of
-    the band on their own, and case.pad_wheel_gap() measures by how much."""
-    return max(value for _, value in pad_clear_terms())
+    for ref in board.refs("D")[1:]:
+        x, y, rot = parts[ref][:3]
+        a = math.radians(rot)
+        half = (
+            params.LED_BODY / 2 * (abs(math.cos(a)) + abs(math.sin(a)))
+            + params.PAD_LED_CLEARANCE
+        )
+        out.append(_plan_box(x - half, y - half, x + half, y + half))
+    grow = params.PAD_SKIRT_CLEARANCE
+    z0, z1 = PAD_SKIRT_BOTTOM - grow, PAD_WEB_TOP + grow
+    slab = Pos(0, 0, (z0 + z1) / 2) * Box(1000, 1000, z1 - z0)
+    for lobe in led_ring_lobes():
+        section = lobe & slab
+        if not section.solids():
+            continue
+        box = section.bounding_box()
+        out.append(
+            _plan_box(box.min.X - grow, box.min.Y - grow, box.max.X + grow, box.max.Y + grow)
+        )
+    return out
 
 
 def _opening_clip():

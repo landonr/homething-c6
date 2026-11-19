@@ -46,11 +46,14 @@ KEYPAD_PLUNGER_STUB, so the plunger below it is a short, real stub rather
 than a long unsupported peg standing in dead air."""
 
 PAD_SKIRT_BOTTOM = PAD_WEB_BOTTOM - params.PAD_SKIRT_DEPTH
-"""Where the moulded pad's skirt wall stops, under the web.
-
-It used to be the plunger contacts, SWITCH_TOP less PLUNGER_SWITCH_EXTENSION.
-PAD_SKIRT_DEPTH sets it instead, because the depth is a trade against how many
-board parts break the wall rather than anything the plungers need."""
+"""Where the moulded pad's skirt wall stops, under the web, PAD_SKIRT_CLEARANCE
+above the board face at the present PAD_SKIRT_DEPTH."""
+if PAD_SKIRT_BOTTOM < BOARD_TOP + params.PAD_SKIRT_CLEARANCE - 1e-9:
+    raise ValueError(
+        f"PAD_SKIRT_DEPTH {params.PAD_SKIRT_DEPTH:.2f} puts the skirt "
+        f"{PAD_SKIRT_BOTTOM - BOARD_TOP:.2f} above the board, closer than "
+        f"PAD_SKIRT_CLEARANCE {params.PAD_SKIRT_CLEARANCE:.2f}"
+    )
 
 PAD_WEB_TOP = PAD_WEB_BOTTOM + params.PAD_WEB_T
 CAVITY_FRONT = PAD_WEB_TOP

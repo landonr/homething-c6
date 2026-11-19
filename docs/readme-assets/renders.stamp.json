@@ -1,10 +1,10 @@
 {
   "board": {
-    "fingerprint": "ffc6f9466cbc7e4183e64ab9fd4a7b43d1e9c40e04b6213affcf43e2a7108d35",
+    "fingerprint": "b340f11f2ad74ffe6b824364e1fc6a67ea3ee2557d27f7c37cc167277df12fbc",
     "source": "index"
   },
   "board-annotated": {
-    "fingerprint": "acf04a42ddbe90705ad8c5c6b8900accdaf751acf0393a65945d93010bd87a3e",
+    "fingerprint": "b5daf316ff48bd551254db747c87d18bbd4a625eff6768b6b08f12c36ce5ae05",
     "source": "index"
   },
   "case-annotated": {
@@ -28,7 +28,7 @@
     "source": "index"
   },
   "self-test-diagrams": {
-    "fingerprint": "eb8e7e90900a11f620d9defbe604d7aae7881e12d0ca343f1f8907483fc40b5c",
+    "fingerprint": "9ec3a9900a70145780bcc115a5e4e4d5354cc90f7895857e4c09c3ffb899728f",
     "source": "index"
   },
   "site-hero": {

@@ -203,20 +203,20 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <section class="step">
 <h3><span class="step-number">Step 2</span><span class="step-title">Buttons and wheel</span></h3>
 <div class="step-notes">
+<p>The wheel actions are optional. The customer installs the wheel <code>ENC1</code>, so the board usually arrives without it.</p>
 <p>Each wheel step moves one white LED one position round the ring, in the direction of the turn.</p>
 <p>Each press puts one color on the top half of the ring and another on the bottom half. The pair identifies the input, and the section "Color reference" gives every pair.</p>
 </div>
 <div class="step-body">
-<div class="step-figure"><figure><img alt="Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, the wheel direction ring and the wheel center." src="assets/self-test-step-2-inputs.svg"></figure></div>
+<div class="step-figure"><figure><img alt="Front face of the remote with every input marked for a press: the two buttons above the wheel, the nine buttons below it, and the optional wheel direction ring and wheel center." src="assets/self-test-step-2-inputs.svg"></figure></div>
 <div class="step-text">
 <ol class="step-actions">
 <li>Press each button, <code>SW1</code> to <code>SW11</code>, for less than 1 s.</li>
-<li>Press each wheel direction for less than 1 s: up, down, left, right, and the wheel center.</li>
-<li>Turn the wheel one step clockwise.</li>
-<li>Turn the wheel one step counterclockwise.</li>
+<li>If the wheel is installed, press each wheel direction for less than 1 s: up, down, left, right, and the wheel center.</li>
+<li>If the wheel is installed, turn it one step clockwise, then one step counterclockwise.</li>
 </ol>
 <ul class="verdicts">
-<li class="verdict pass"><strong>Pass:</strong> Every input changes the ring, and each one gives its own pair of colors.</li>
+<li class="verdict pass"><strong>Pass:</strong> Every input that you pressed or turned changes the ring, and each one gives its own pair of colors.</li>
 <li class="verdict fail"><strong>Fail:</strong> An input does not change the ring. That switch or its expander line has a fault.</li>
 </ul>
 </div>
@@ -229,12 +229,12 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <p>In the VU meter, a green bar grows clockwise from <code>D2</code> with the sound level. The last LED of the ring is red, not green. Unlit positions show dim blue.</p>
 </div>
 <div class="step-body">
-<div class="step-figure"><figure><img alt="Front face of the remote with the wheel center marked for a 2 s hold and the microphone hole marked at the top center of the face." src="assets/self-test-step-3-microphone.svg"></figure></div>
+<div class="step-figure"><figure><img alt="Front face of the remote with SW2, the top left button above the wheel, marked for a 2 s hold and the microphone hole marked at the top center of the face." src="assets/self-test-step-3-microphone.svg"></figure></div>
 <div class="step-text">
 <ol class="step-actions">
-<li>Press and hold the wheel center for 2 s. The ring changes to the VU meter.</li>
+<li>Press and hold <code>SW2</code> for 2 s. The ring changes to the VU meter.</li>
 <li>Speak toward the front of the board, at a distance of approximately 30 cm.</li>
-<li>Press and hold the wheel center for 2 s again. The ring goes back to its resting glow.</li>
+<li>Press and hold <code>SW2</code> for 2 s again. The ring goes back to its resting glow.</li>
 </ol>
 <ul class="verdicts">
 <li class="verdict pass"><strong>Pass:</strong> The bar moves with your voice.</li>
@@ -372,6 +372,7 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <li>The Qwiic connector <code>J2</code>, because that check needs a known Qwiic device at the station.</li>
 <li>The battery charge circuit, because that check takes too long for the station.</li>
 <li>The Wi-Fi radio and the Bluetooth radio. The antenna is part of the <code>U1</code> module, which the module supplier tests before assembly.</li>
+<li>The wheel connections, if the board has no wheel <code>ENC1</code>. The customer installs the wheel, so the station cannot check its five direction lines and its two encoder lines.</li>
 </ul>
 <h2>Color reference</h2>
 <p>These tables hold the colors that the steps use.</p>
@@ -408,7 +409,7 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 </tbody></table>
 <p>The azure of <code>D3</code> is a lighter blue than the blue of <code>D5</code>.</p>
 <h3>Held input colors</h3>
-<p>Step 2 shows this pair of colors while you hold an input. A group of four inputs shares a top color.</p>
+<p>Step 2 shows this pair of colors while you hold an input. A group of four inputs shares a top color. The wheel rows apply only when the wheel is installed.</p>
 <table><thead><tr>
 <th>Input</th>
 <th>Top half</th>

@@ -285,7 +285,9 @@ def end_screw_block():
     material within reach this far down.
 
     The block stops at the selected grip corner tangent and before the complete
-    module. The web also ties into the selected side skirt at web height.
+    module. The web also ties into the selected side skirt at web height. The
+    tie stops END_SCREW_BLOCK_TIE_LAND before the ramp leaves its underside, so
+    the ramp ends on a vertical face there and not on a knife edge.
     Below SKIRT_BOTTOM, the block and its root fillet keep the block's width.
 
     It carries END_SCREW_BLOCK_BOTTOM under the axis and rises toward
@@ -345,7 +347,15 @@ def end_screw_block():
     web = Pos(x, (web_y0 + web_y1) / 2, (SKIRT_BOTTOM + SUPPORT_TOP) / 2) * Box(
         width, web_y1 - web_y0, SUPPORT_TOP - SKIRT_BOTTOM
     )
-    tie = _block_side_tie(x0 if end_screw_side() < 0 else x1, back)
+    land = params.END_SCREW_BLOCK_TIE_LAND
+    if not 0 < land < SUPPORT_TOP - SKIRT_BOTTOM:
+        raise ValueError(
+            f"END_SCREW_BLOCK_TIE_LAND {land} is not inside the web height "
+            f"{SUPPORT_TOP - SKIRT_BOTTOM:.2f}"
+        )
+    # Where _ramp_block_top's 45 degree ramp leaves the tie's underside.
+    ramp_exit = cavity + params.END_SCREW_BLOCK_RAMP_LEDGE + SUPPORT_TOP - SKIRT_BOTTOM
+    tie = _block_side_tie(x0 if end_screw_side() < 0 else x1, min(back, ramp_exit - land))
     fillet = _block_root_fillet(face)
     return _ramp_block_top(_fuse(block, web, tie, fillet), cavity)
 

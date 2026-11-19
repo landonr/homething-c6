@@ -552,14 +552,26 @@ def catch_detents():
     wedge. A plain rectangle lofted to a sliver is simpler and is what this was
     first: it fouled all four rounded corners and stood proud of the window's top,
     which is what the shells-mate pass reported.
+
+    The nose keeps a vertical land CATCH_NOSE_LAND tall over the catch face, and
+    the lead-in slope runs from the top of that land to the lap's inner face at
+    the detent's top. A slope down to the catch face itself leaves a knife edge
+    that PCBWay flags.
     """
     edge = board.board_profile().bounding_box().max.Y
-    base, tip = edge + LAP_IN + MERGE, edge + LAP_IN - params.CATCH_D
+    face = edge + LAP_IN
+    base, tip = face + MERGE, face - params.CATCH_D
     f = params.CATCH_FIT
     z0, z1 = CATCH_Z0 + f, CATCH_Z0 + params.CATCH_H - f
+    land = params.CATCH_NOSE_LAND
+    if not 0 <= land < z1 - z0:
+        raise ValueError(
+            f"CATCH_NOSE_LAND {land} is not under the detent's own height "
+            f"{z1 - z0:.2f}, so no lead-in slope is left"
+        )
     # The detent stands in along -Y at this end, so tip is below base in y and
-    # every span below is taken as a magnitude with the direction carried by
-    # copysign. Rectangle and extrude both refuse a negative one.
+    # every span below is taken as a magnitude. Rectangle and extrude both
+    # refuse a negative one.
     reach = abs(tip - base)
     out = []
     for x in catch_x():
@@ -570,14 +582,14 @@ def catch_detents():
             params.CATCH_W - 2 * f, params.CATCH_H - 2 * f, max(params.CATCH_R - f, 0.2)
         )
         prism = extrude(profile, amount=reach / 2 + 1, both=True)
-        wedge = loft(
-            [
-                Pos(x, (base + tip) / 2, z0) * Rectangle(params.CATCH_W + 2, reach),
-                Pos(x, base + math.copysign(0.05, tip - base), z1)
-                * Rectangle(params.CATCH_W + 2, 0.1),
-            ],
-            ruled=True,
+        full = Rectangle(params.CATCH_W + 2, reach)
+        sections = [Pos(x, (base + tip) / 2, z0) * full]
+        if land > 0:
+            sections.append(Pos(x, (base + tip) / 2, z0 + land) * full)
+        sections.append(
+            Pos(x, (base + face) / 2, z1) * Rectangle(params.CATCH_W + 2, abs(base - face))
         )
+        wedge = loft(sections, ruled=True)
         out.append(_isect(prism, wedge))
     return out
 

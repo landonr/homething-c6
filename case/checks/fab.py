@@ -75,23 +75,12 @@ AREA_SLACK = 1.0
 # own geometry. Read the wall column to tell a thin sheet from an edge.
 FRONT, BACK, INSERT, ONE_PIECE = PARTS
 
-LAND = (
-    "taper where the face hole lead-in runs out into the counterbore land. The "
-    "land itself clears the minimum now: FACE_CROWN_OVER_WHEEL carries all "
-    "eleven over it, the thinnest being SW4 at 1.05"
-)
 KNOCKOUT = (
     "Qwiic breakaway cover. QWIIC_KNOCKOUT_T carries the panel over the PA12 "
     "minimum, but each bridge is only QWIIC_KNOCKOUT_TAB_W wide, and widening "
     "it is what stops the cover breaking out at all"
 )
-RESET = (
-    "taper at the reset guide. The tube measures RESET_GUIDE_WALL on both "
-    "sides now. The thin reading was never the wall: the rolled back form "
-    "shaved the outboard side over the top 1.5 mm, because the tube stands "
-    "about 2 mm off the case centreline. RESET_GUIDE_TOP_DROP ends the tube "
-    "below that band"
-)
+RESET_FLOOR = "taper where the reset bore leaves the rolled back floor"
 SCREW_CUT = "taper where the end screw cuts meet"
 BORE = (
     "the taper under RING_BORE_ROUND. Next to the bore, rays up from the "
@@ -106,25 +95,11 @@ KNIFE = (
 )
 
 ACCEPTED = {
-    (FRONT, "key.SW1.counterbore"): (None, 0.6, LAND),
-    (FRONT, "key.SW2.counterbore"): (None, 0.6, LAND),
-    (FRONT, "key.SW3.counterbore"): (None, 0.6, LAND),
-    (FRONT, "key.SW4.counterbore"): (None, 1.5, LAND),
-    (FRONT, "key.SW5.counterbore"): (None, 0.6, LAND),
-    (FRONT, "key.SW6.counterbore"): (None, 0.1, LAND),
-    (FRONT, "key.SW7.counterbore"): (None, 1.3, LAND),
-    (FRONT, "key.SW8.counterbore"): (None, 0.3, LAND),
-    (FRONT, "key.SW9.counterbore"): (None, 1.1, LAND),
-    (FRONT, "key.SW10.counterbore"): (None, 1.1, LAND),
-    (FRONT, "key.SW11.counterbore"): (None, 0.7, LAND),
     (FRONT, "end_screw_block"): (
-        None, 5.8, "taper where the end screw block ramp runs out"
-    ),
-    (FRONT, "keypad_recess"): (
-        None, 0.4,
-        KNIFE + ", on the recess rim chamfer near a side wall, where the face "
-        "is only about 0.1 deep. It came in with a new mesh of an unchanged "
-        "face"
+        None, 0.5,
+        "taper where the block's END_SCREW_BLOCK_END_R round meets the tie "
+        "underside, one sample near 0.80. The ramp no longer runs out through "
+        "the tie: END_SCREW_BLOCK_TIE_LAND ends the tie on a vertical face"
     ),
     (FRONT, "skirt_lead_in.1"): (None, 0.3, "taper at the skirt lead-in chamfer"),
     (FRONT, "skirt_lead_in.2"): (None, 0.3, "taper at the skirt lead-in chamfer"),
@@ -136,22 +111,8 @@ ACCEPTED = {
     ),
     (BACK, "qwiic_knockout_tab.+y"): (0.80, 0.3, KNOCKOUT),
     (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.3, KNOCKOUT),
-    (BACK, "reset_guide"): (None, 0.2, RESET),
-    (BACK, "skirt_relief"): (None, 0.1, KNIFE + ", at the skirt relief edge"),
-    (BACK, "reset_bore"): (
-        None, 1.2, RESET + ", and a taper where the bore leaves the rolled floor"
-    ),
-    (BACK, "(no feature box)"): (
-        None, 0.5, "taper where the reset bore leaves the rolled back floor"
-    ),
-    (BACK, "catch_detents.+x"): (None, 9.1, "nose of the catch detent wedge"),
-    (BACK, "catch_detents.-x"): (None, 8.0, "nose of the catch detent wedge"),
-    (BACK, "side_catch_detents.+x"): (
-        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
-    ),
-    (BACK, "side_catch_detents.-x"): (
-        None, 0.4, KNIFE + ", at the nose of the side catch detent wedge"
-    ),
+    (BACK, "reset_bore"): (None, 1.2, RESET_FLOOR),
+    (BACK, "(no feature box)"): (None, 0.5, RESET_FLOOR),
     (BACK, "end_screw.head"): (None, 1.2, SCREW_CUT),
     (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
     (BACK, "end_screw.wall_chamfer"): (None, 3.8, SCREW_CUT),
@@ -170,13 +131,19 @@ ACCEPTED = {
 # The one-piece front is the recessed front everywhere but the ring, so it
 # carries the front's accepted features under the same ids. The ring's one entry
 # is the bore round's taper, which the insert carries too. Any other thin
-# reading in the ring is new and must come to a person.
+# reading in the ring is new and must come to a person. Its own mesh also reads
+# the recess rim knife edge that the recessed front's mesh no longer does.
 ACCEPTED.update({
     (ONE_PIECE, fid): entry
     for (name, fid), entry in list(ACCEPTED.items())
     if name == FRONT
 })
 ACCEPTED[(ONE_PIECE, "wheel_lip_relief")] = (None, 2.2, BORE[0].upper() + BORE[1:])
+ACCEPTED[(ONE_PIECE, "keypad_recess")] = (
+    None, 0.4,
+    KNIFE + ", on the recess rim chamfer near a side wall, where the face is "
+    "only about 0.1 deep. It came in with a new mesh of an unchanged face"
+)
 
 FIRST_REACH = 4.0
 REACH_GROWTH = 4.0

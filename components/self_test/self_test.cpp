@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <span>
 
 namespace esphome::self_test {
 
@@ -163,7 +164,7 @@ void SelfTest::setup() {
   }
   if (!this->v3_)
     this->start_battery_check_(millis());
-  this->mic_->add_data_callback([this](const std::vector<uint8_t> &data) { this->mic_block_(data); });
+  this->mic_->add_data_callback([this](const microphone::AudioCapture &capture) { this->mic_block_(capture); });
   this->mic_->start();
 #ifdef USE_OTA_STATE_LISTENER
   ota::get_global_ota_callback()->add_global_state_listener(this);
@@ -373,7 +374,8 @@ void SelfTest::update_battery_(uint32_t now) {
 }
 
 // Runs in the mic task.
-void SelfTest::mic_block_(const std::vector<uint8_t> &data) {
+void SelfTest::mic_block_(const microphone::AudioCapture &capture) {
+  const std::span<const uint8_t> data = capture.data;
   const size_t n = data.size() / sizeof(int32_t);
   if (n == 0)
     return;

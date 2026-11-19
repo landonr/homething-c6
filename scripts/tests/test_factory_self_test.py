@@ -463,13 +463,19 @@ class InputTest(unittest.TestCase):
 
     def test_the_bit_order_matches_the_production_config(self) -> None:
         """SW9 is bit 9 and SW10 is bit 8 in c6remote.yaml."""
-        for name, bit in (("sw9", 9), ("sw10", 8), ("wheel_press", 13), ("sw1", 0)):
+        for name, bit in (("sw9", 9), ("sw10", 8), ("wheel_press", 13), ("sw1", 0), ("sw2", 1)):
             entry = next(e for e in list_entries(top_level_block(FACTORY, "binary_sensor"))
                          if re.search(rf"(?m)^    id: {name}$", e))
             self.assertIn(f"number: {bit}\n", entry)
         self.assertIn("name: Button 9\n    id: button_9\n    pin:\n      <<: *button_1\n      number: 9\n", CONFIG)
         self.assertIn("name: Button 10\n    id: button_10\n    pin:\n      <<: *button_1\n      number: 8\n", CONFIG)
-        self.assertEqual(constant(HEADER, "VU_BIT"), 13)
+
+    def test_every_hold_is_on_a_discrete_button(self) -> None:
+        """The assembler does not fit ENC1, so no station hold can be on bits 11 to 15."""
+        for name in ("TRANSMIT_BIT", "VU_BIT", "SLEEP_BIT"):
+            with self.subTest(hold=name):
+                self.assertLessEqual(constant(HEADER, name), 10)
+        self.assertEqual(constant(HEADER, "VU_BIT"), 1)
 
     def test_both_encoder_directions_feed_the_self_test(self) -> None:
         encoder = next(e for e in list_entries(top_level_block(FACTORY, "sensor")) if "rotary_encoder" in e)

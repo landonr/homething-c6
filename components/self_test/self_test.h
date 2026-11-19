@@ -64,8 +64,9 @@ class SelfTest : public Component
 
   // SW1, the power key.
   static constexpr uint8_t TRANSMIT_BIT = 0;
-  // ENC1 centre.
-  static constexpr uint8_t VU_BIT = 13;
+  // SW2, not the wheel centre: the assembler does not fit ENC1, so the station
+  // reaches the VU meter only from a discrete button.
+  static constexpr uint8_t VU_BIT = 1;
   static constexpr uint8_t SLEEP_BIT = 2;
   static constexpr uint32_t LONG_PRESS_MS = 2000;
   // The sleep hold works on every display mode, so it is longer than the other

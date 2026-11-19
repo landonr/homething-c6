@@ -314,23 +314,24 @@ SHEETS = {
         quiet=[ref for ref in capmod.cap_refs() if ref != "SW2"],
         alt=(
             "Front face of the remote with every input marked for a press: the two "
-            "buttons above the wheel, the nine buttons below it, the wheel direction "
-            "ring and the wheel center."
+            "buttons above the wheel, the nine buttons below it, and the optional "
+            "wheel direction ring and wheel center."
         ),
         calls=[
             press("SW2", "left", "SW1 to SW11", "press each button"),
-            press("wheel-ring", "right", "wheel", "press up, down,", "left and right"),
-            press("wheel-center", "right", "wheel center", "press it once"),
+            press("wheel-ring", "right", "wheel (optional)", "press up, down,", "left and right"),
+            press("wheel-center", "right", "wheel center", "(optional)", "press it once"),
         ],
     ),
     "step-3-microphone": dict(
         file="self-test-step-3-microphone.svg",
         alt=(
-            "Front face of the remote with the wheel center marked for a 2 s hold and "
-            "the microphone hole marked at the top center of the face."
+            "Front face of the remote with SW2, the top left button above the wheel, "
+            "marked for a 2 s hold and the microphone hole marked at the top center "
+            "of the face."
         ),
         calls=[
-            press("wheel-center", "right", "wheel center", "hold 2 s for the", "VU meter"),
+            press("SW2", "left", "SW2", "hold 2 s for the", "VU meter"),
             watch("mic", "right", "microphone hole", "speak at the front"),
         ],
     ),

@@ -555,7 +555,7 @@ The animation is the only evidence of a wake that the operator can see, because 
 
 The self-test keeps no result of its own. The operator writes the result of each step, so the ring reports only the response to the action in front of it.
 
-`SW2` has no hold function. It is an ordinary button that the buttons and wheel step presses.
+The assembler does not fit `ENC1`, because the customer installs it. So every hold of the self-test uses a discrete button, and the wheel actions of step 2 are optional.
 
 Between actions the ring rests at a dim white, which shows that the board is awake and that every LED lights.
 
@@ -577,7 +577,7 @@ While an operator holds an input, the ring shows one colour on its top half and 
 
 The chase gives each LED one colour, so step 1 cannot find an LED that makes one colour alone. The held inputs of step 2 put four or more colours on each half.
 
-The VU meter is the microphone step of the procedure. The 2 s hold of the wheel centre turns it on and off. The microphone LED passes on the level threshold alone, so the procedure has no separate clap step.
+The VU meter is the microphone step of the procedure. The 2 s hold of `SW2` turns it on and off. The microphone LED passes on the level threshold alone, so the procedure has no separate clap step.
 
 `status_led_count` selects the board. The default of 4 builds for a V2 board. The value 6 adds the V3 checks for `D6`, `D7`, and the USB detector on `GPIO7`.
 

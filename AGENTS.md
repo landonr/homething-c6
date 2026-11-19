@@ -579,6 +579,18 @@ The chase gives each LED one colour, so step 1 cannot find an LED that makes one
 
 The VU meter is the microphone step of the procedure. The 2 s hold of `SW2` turns it on and off. The microphone LED passes on the level threshold alone, so the procedure has no separate clap step.
 
+The battery step reads `bat_sense` on battery power. The charger output can read in range without a cell, so a V3 board starts the check at each USB disconnect.
+
+Three stable readings in range blink the whole ring green three times. If no pass comes in `BATTERY_WINDOW_MS`, the ring blinks red three times.
+
+A USB connection stops the check and the blinks, so the ring answers only the disconnect in front of the operator. The boot reading starts no check.
+
+A flat cell and a divider fault both read low. The procedure tells them apart with a second try on a charged battery.
+
+The battery red blinks, and the sleep refusal red is steady, so the two cannot look alike.
+
+A V2 board has no USB detector, so it cannot tell a cell reading from the charger output. Its check runs from boot, and it only logs the result.
+
 `status_led_count` selects the board. The default of 4 builds for a V2 board. The value 6 adds the V3 checks for `D6`, `D7`, and the USB detector on `GPIO7`.
 
 The self-test transmits IR only while an operator holds `SW1` for 2 s. Customers also run this image, so do not add a transmit that starts by itself.

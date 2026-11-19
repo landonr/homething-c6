@@ -306,19 +306,21 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <h3><span class="step-number">Step 6</span><span class="step-title">Battery</span></h3>
 <div class="step-notes">
 <p>Step 1 connected USB power. Disconnect it here, because the battery check accepts only a reading on battery power.</p>
-<p>The disconnection also gives the orange flash. Step 7 connects USB power again for the cyan flash.</p>
+<p>The disconnection gives the orange flash. Then the board reads the battery voltage, and the whole ring blinks three times with the result.</p>
+<p>Step 7 connects USB power again for the cyan flash.</p>
 </div>
 <div class="step-body">
 <div class="step-figure"><figure><img alt="Front face of the remote for the battery check. The sheet marks no button, because the step disconnects USB power." src="assets/self-test-step-6-battery.svg"></figure></div>
 <div class="step-text">
 <ol class="step-actions">
 <li>Disconnect USB power. Keep the battery connected. The ring flashes orange one time.</li>
-<li>Wait 10 s.</li>
+<li>Wait 10 s. Look at the color of the three blinks.</li>
 </ol>
 <ul class="verdicts">
-<li class="verdict pass"><strong>Pass:</strong> The board stays on, and the ring stays lit.</li>
+<li class="verdict pass"><strong>Pass:</strong> The ring blinks green three times, and the board stays on.</li>
+<li class="verdict fail"><strong>Fail:</strong> The ring blinks red three times. Connect a charged battery and USB power, then do step 6 again. If the ring blinks red again, the battery sense resistors <code>R7</code> and <code>R8</code> have a fault.</li>
 <li class="verdict fail"><strong>Fail:</strong> The board turns off when you disconnect USB power. This shows a fault at the battery or at <code>J1</code>.</li>
-<li class="verdict fail"><strong>Fail:</strong> The ring goes dark, or it flashes and the board restarts.</li>
+<li class="verdict fail"><strong>Fail:</strong> The ring stays dark, or the boot animation starts again.</li>
 </ul>
 </div>
 </div>
@@ -527,11 +529,19 @@ esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin<
 <td>You disconnected USB power</td>
 </tr>
 <tr>
+<td>Three green blinks of the whole ring</td>
+<td>The battery voltage is correct after you disconnected USB power</td>
+</tr>
+<tr>
+<td>Three red blinks of the whole ring</td>
+<td>The battery voltage is out of range after you disconnected USB power</td>
+</tr>
+<tr>
 <td>Dark blue ring for 0.5 s</td>
 <td>The <code>SW3</code> hold armed the sleep check</td>
 </tr>
 <tr>
-<td>Red ring for 1.5 s</td>
+<td>Steady red ring for 1.5 s</td>
 <td>The board refused the sleep request</td>
 </tr>
 <tr>

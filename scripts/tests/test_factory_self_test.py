@@ -586,6 +586,103 @@ class BootAnimationTest(unittest.TestCase):
         self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", CONFIG)
 
 
+class BatteryTest(unittest.TestCase):
+    """Step 6 reads the R7 and R8 divider, and the ring answers each USB disconnect."""
+
+    @staticmethod
+    def step_six() -> str:
+        return FLAT[FLAT.index("Step 6 Battery"):FLAT.index("Step 7 USB power")]
+
+    @staticmethod
+    def show_ms() -> int:
+        on, off = constant(CPP, "BATTERY_BLINK_ON_MS"), constant(CPP, "BATTERY_BLINK_OFF_MS")
+        return constant(CPP, "BATTERY_BLINKS") * (on + off) - off
+
+    def test_the_component_stores_no_battery_result(self) -> None:
+        for source in (CPP, HEADER):
+            self.assertNotIn("battery_passed_", source)
+
+    def test_a_v3_check_starts_at_each_disconnect_and_stops_at_a_connection(self) -> None:
+        usb = function_body(CPP, "void SelfTest::update_usb_(uint32_t now)")
+        branches = usb.split("if (raw) {", 1)[1]
+        plugged, unplugged = branches.split("} else {", 1)
+        self.assertIn("this->battery_checking_ = false;", plugged)
+        self.assertIn("this->battery_show_ = false;", plugged)
+        # The first reading at boot is not an operator action.
+        self.assertIn("if (!first)\n      this->start_battery_check_(now);", unplugged.split("\n  }", 1)[0])
+        self.assertEqual(CPP.count("this->start_battery_check_("), 2)
+        start = function_body(CPP, "void SelfTest::start_battery_check_(uint32_t now)")
+        for line in ("this->battery_checking_ = true;", "this->battery_check_ms_ = now;",
+                     "this->battery_count_ = 0;"):
+            self.assertIn(line, start)
+
+    def test_a_v2_board_checks_once_from_boot_and_only_logs(self) -> None:
+        self.assertIn("if (!this->v3_)\n    this->start_battery_check_(millis());",
+                      function_body(CPP, "void SelfTest::setup()"))
+        sample = function_body(CPP, "void SelfTest::battery_sample(float volts)")
+        self.assertIn('ESP_LOGI(TAG, "Battery check passed at %.2f V", volts);\n  if (this->v3_) {', sample)
+        timeout = function_body(CPP, "void SelfTest::update_battery_(uint32_t now)")
+        self.assertIn("!this->battery_checking_ || !this->v3_ ||", timeout)
+        self.assertEqual(CPP.count("this->battery_show_ = true;"), 2)
+
+    def test_three_stable_readings_pass_and_the_window_fails(self) -> None:
+        sample = function_body(CPP, "void SelfTest::battery_sample(float volts)")
+        self.assertIn("if (!this->battery_checking_)\n    return;", sample)
+        self.assertIn("std::isnan(volts) || volts < BATTERY_MIN_V || volts > BATTERY_MAX_V", sample)
+        self.assertIn("std::fabs(volts - this->battery_first_v_) > BATTERY_SPREAD_V", sample)
+        self.assertIn("if (++this->battery_count_ < BATTERY_SAMPLES)\n    return;", sample)
+        self.assertIn("this->battery_show_pass_ = true;", sample)
+        timeout = function_body(CPP, "void SelfTest::update_battery_(uint32_t now)")
+        self.assertIn("now - this->battery_check_ms_ < BATTERY_WINDOW_MS", timeout)
+        self.assertIn("this->battery_show_pass_ = false;", timeout)
+        self.assertIn("this->update_battery_(now);", function_body(CPP, "void SelfTest::loop()"))
+        adc = next(e for e in list_entries(top_level_block(FACTORY, "sensor")) if "id: battery_voltage" in e)
+        self.assertIn("- lambda: id(hw_test).battery_sample(x);", adc)
+        interval_ms = int(re.search(r"update_interval: (\d+)s\n", adc).group(1)) * 1000
+        # A good cell gets two full sets of samples before the window fails it.
+        self.assertGreaterEqual(constant(CPP, "BATTERY_WINDOW_MS"),
+                                2 * constant(CPP, "BATTERY_SAMPLES") * interval_ms)
+
+    def test_the_result_blinks_the_whole_ring(self) -> None:
+        self.assertEqual(constant(CPP, "BATTERY_BLINKS"), 3)
+        self.assertIn("BATTERY_BLINKS * (BATTERY_BLINK_ON_MS + BATTERY_BLINK_OFF_MS) - BATTERY_BLINK_OFF_MS;", CPP)
+        # An operator counts each blink and each gap by eye.
+        self.assertGreaterEqual(constant(CPP, "BATTERY_BLINK_ON_MS"), 200)
+        self.assertGreaterEqual(constant(CPP, "BATTERY_BLINK_OFF_MS"), 200)
+        render = function_body(CPP, "void SelfTest::render(light::AddressableLight &it)")
+        self.assertIn("this->battery_show_ && now - this->battery_show_ms_ < BATTERY_SHOW_MS", render)
+        self.assertIn("t % (BATTERY_BLINK_ON_MS + BATTERY_BLINK_OFF_MS) < BATTERY_BLINK_ON_MS", render)
+        blink = render.index("it.all() = lit ? (this->battery_show_pass_ ? BATTERY_PASS : FAILED) : Color::BLACK;")
+        # Over the resting ring and the USB flash, under each input response and both sleep answers.
+        for earlier in ("it.all() = IDLE;", "it.all() = this->usb_flash_plug_ ? USB_PLUG : USB_UNPLUG;"):
+            self.assertLess(render.index(earlier), blink)
+        for later in ("it.all() = IR_FLASH;", "this->draw_input_(it, this->shown_bit_);", "it[LED_D6] = TRANSMIT;",
+                      "it.all() = SLEEP_ARMED_FLASH;", "it.all() = FAILED;"):
+            self.assertLess(blink, render.index(later))
+
+    def test_the_pass_colour_is_no_other_ring_colour(self) -> None:
+        colours = {name: (int(r), int(g), int(b))
+                   for name, r, g, b in re.findall(r"static const Color (\w+)\((\d+), (\d+), (\d+)\);", CPP)}
+        self.assertEqual(colour_name(colours["BATTERY_PASS"]), "green")
+        for name, rgb in colours.items():
+            if name != "BATTERY_PASS":
+                with self.subTest(colour=name):
+                    self.assertNotEqual(rgb, colours["BATTERY_PASS"])
+
+    def test_the_page_gives_the_battery_result(self) -> None:
+        step = self.step_six()
+        self.assertIn("Pass: The ring blinks green three times, and the board stays on.", step)
+        self.assertIn("Fail: The ring blinks red three times.", step)
+        self.assertIn("the battery sense resistors R7 and R8 have a fault.", step)
+        wait_ms = int(re.search(r"Wait (\d+) s\.", step).group(1)) * 1000
+        self.assertGreaterEqual(wait_ms, constant(CPP, "BATTERY_WINDOW_MS") + self.show_ms())
+        for row in ("Three green blinks of the whole ring The battery voltage is correct",
+                    "Three red blinks of the whole ring The battery voltage is out of range",
+                    "Steady red ring for 1.5 s The board refused the sleep request"):
+            with self.subTest(row=row):
+                self.assertIn(row, FLAT)
+
+
 class DocTest(unittest.TestCase):
     CHECKS = {
         "inputs_passed_": "Buttons and wheel",

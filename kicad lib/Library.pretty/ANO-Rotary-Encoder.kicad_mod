@@ -55,7 +55,7 @@
 			)
 		)
 	)
-	(attr smd)
+	(attr through_hole)
 	(duplicate_pad_numbers_are_jumpers no)
 	(fp_arc
 		(start -15.963226 1.282187)

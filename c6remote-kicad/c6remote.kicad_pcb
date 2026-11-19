@@ -10006,7 +10006,7 @@
 				(pins "7" "3" "2" "9" "1" "6" "4" "8" "5")
 			)
 		)
-		(attr smd exclude_from_pos_files)
+		(attr through_hole exclude_from_pos_files)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_arc
 			(start -15.963226 1.282187)

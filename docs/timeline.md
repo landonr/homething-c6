@@ -86,6 +86,7 @@ Unit 1 hand rework so far: `sw*` traces cut and jumpered to the free terminal on
 | 2026-10-15 | **OSHW logo removed.** The OSHW gear group of 18 `gr_poly` left `B.SilkS`. The Canadian flag and the made-in text stay on the back. |
 | 2026-11-05 | **`U1` moved to the board back.** The XIAO module moved from F.Cu to B.Cu at `(52.85, 137.12)`. Its pin map did not change, so the firmware did not change. The same work added the `J2` Qwiic connector, changed `J1` to a Molex PicoBlade `53261-0271` and refit the case for the back-side module. PR #26 merged into `develop` at `6dd7b7c` and closes issues #15 and #23 |
 | 2026-11-06 | **USB detection added to the board design.** `U1` pad 14 supplies `usb_vbus` to the `Q4` base through `R13` (100k). `R15` (1M) pulls the base to GND. `R14` (100k) pulls the collector to `+3.3V`. The collector connects to `GPIO7` on `U1` pad 25 as `usb_present_n`. The signal is low when USB VBUS is present and high when it is absent. This circuit is not present on unit 1 or rev-B. |
+| 2026-11-19 | **`MK1` port-end ring added to the back silkscreen.** The pin-1 walk for #65 found that the circle on the `MK1` lid marks the port end, not pin 1. Two sibling PUI data sheets confirm how the top and bottom views relate. A B.SilkS ring now marks the port end, and the dot still marks pin 1. The `C5` reference moved 0.3 mm to make room. Issue #85 records the finding. |
 
 ## Design decisions and closed findings
 

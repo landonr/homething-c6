@@ -653,6 +653,7 @@ Follow named nets across the schematic. Then verify the corresponding board nets
 
 - Audio uses `MK1`, a PUI Audio `DMM-4026-B-I2S-R` I2S microphone, on `sck`, `ws`, and `sd`.
 - `MK1` pins are 1 LR, 2 CONFIG, 3 VDD, 4 GND, 5 WS, 6 SCK, and 7 SD. Pins 1, 2, and 4 go to GND.
+- On B.SilkS, a dot marks `MK1` pin 1 and a ring marks the port end. The circle on the `MK1` lid also marks the port end, not pin 1.
 - Pin 1 low selects the left channel, so ESPHome must keep `channel: left`.
 - `C5` is the 100nF VDD decoupling capacitor. `R12` is the 100k pull-down that the datasheet requires on `sd`.
 - The part needs a 2.048 to 4.096 MHz bit clock in normal mode. GitHub issue #12 tracks the sample-rate change.

@@ -45,6 +45,14 @@
 		(layer "B.SilkS")
 		(uuid "bd29ab25-c8d6-4436-aee0-b3154938d7ce")
 	)
+	(fp_circle
+		(center -1.93 -1)
+		(end -1.63 -1)
+		(stroke (width 0.15) (type default))
+		(fill none)
+		(layer "B.SilkS")
+		(uuid "de6f8572-a1c8-410e-9ecc-1891afb1d542")
+	)
 	(property "Reference" "REF**"
 		(at 0.15 -2.817 0)
 		(unlocked yes)

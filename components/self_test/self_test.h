@@ -98,7 +98,7 @@ class SelfTest : public Component
     this->active_ = true;
     this->active_ms_ = now;
   }
-  void mic_block_(const std::vector<uint8_t> &data);
+  void mic_block_(const microphone::AudioCapture &capture);
   void update_mic_(uint32_t now);
   void update_usb_(uint32_t now);
   void start_battery_check_(uint32_t now);

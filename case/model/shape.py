@@ -151,6 +151,26 @@ def _squircle_points(cx, cy, ax, ay, n, count):
     return out
 
 
+def _convex_hull(points):
+    """Convex hull of (x, y) points, counter-clockwise, without collinear
+    points (Andrew's monotone chain)."""
+    pts = sorted(set(points))
+
+    def turn(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
 def _squircle_prism(x, y, size, n, count, z0, z1):
     """A square-aspect superellipse prism: the keycap plan shape, and the two
     holes in the face that a cap passes through.

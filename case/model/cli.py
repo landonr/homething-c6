@@ -56,8 +56,8 @@ from .keypad import (
     outline_length,
     pad_lobes,
     pad_reach,
+    pad_keepout_overlap,
     pad_skirt_breaks,
-    pad_wheel_gap,
     recess_span,
     ring_land_left,
     wheel_ledge_left,
@@ -89,9 +89,7 @@ from .wheel_ring import (
     led_ring_lobe_rim_z,
     led_ring_lobe_roof,
     led_ring_web_left,
-    led_y_reach,
-    pad_clear_terms,
-    pad_clear_y,
+    pad_keepouts,
 )
 from .stack import (
     BOARD_TOP,
@@ -289,15 +287,13 @@ def main():
         f"rim keeps {wheel_ledge_left():.2f} of seat clear of the bore all the way "
         f"round, against a {params.WHEEL_RIM_LEDGE:.2f} floor"
     )
-    governs = max(pad_clear_terms(), key=lambda term: term[1])[0]
     print(
-        f"  pad kept {pad_clear_y():.2f} either side of the wheel "
-        f"({governs} governs), which its two lobes clear by "
-        f"{pad_wheel_gap():.2f} and the V2 top lobe by "
-        f"{pad_wheel_gap(v2=True):.2f}; no moulded ring and no bore cut any more"
+        f"  pad notched round {len(pad_keepouts())} wheel keep-outs (lip, LEDs, "
+        f"ring lobes); its two lobes overlap them by {pad_keepout_overlap():.3f} "
+        f"mm2 and the V2 top lobe by {pad_keepout_overlap(v2=True):.3f} mm2"
     )
     print(
-        f"  LEDs uncovered by {pad_clear_y() - led_y_reach():.2f}, "
+        f"  LEDs uncovered, "
         f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
         f"package, firing into the ring insert. The ring is one circle at "
         f"{led_ring_face_r():.2f}, {params.RING_LIFT_CLEAR:.2f} inside the "
@@ -545,7 +541,7 @@ def main():
     print(
         f"pad two lobes, {pad_reach(cap_refs()[0]):.2f} of web past each outer "
         f"switch centre ({params.PAD_MARGIN:.2f} past the fused keytop), "
-        f"{params.PAD_RADIUS:.1f} corners, skirt breaks "
+        f"keytop corners, skirt {params.PAD_SKIRT_DEPTH:.2f} deep, skirt breaks "
         f"{sum(len(pad_skirt_breaks(name)) for name, *_ in pad_lobes())}:"
     )
     for name, x0, y0, x1, y1 in pad_lobes():

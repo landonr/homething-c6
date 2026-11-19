@@ -202,17 +202,15 @@ If the selected material blocks too much infrared light, make the same insert fr
 Prototype the button pad in TPU. Use translucent silicone for a molded part.
 The molded pad has a skirt on the outer edge of each lobe. The skirt is `PAD_SKIRT_T` wide. Its outer face is flush with the web edge, so the pad keeps its plan outline.
 
-Each lobe is the box of its own switch centres, grown by `pad_reach()`. That is half the keytop of the TPU and FDM pads, plus `PAD_MARGIN`. The keytop is the widest part that every pad variant carries on its web.
+Each lobe is the convex hull of its own keycaps. Each keycap is drawn on the keycap superellipse, `KEY_SQUIRCLE_N`, at the half size `pad_reach()` gives. That is half the rigid cap's flange, plus `PAD_MARGIN`. So each lobe corner follows the curve of its corner cap. The flange is the widest part over the pad, so the pad also covers the fused keytops of the TPU and FDM pads.
 
-The rigid cap's flange is wider than the keytop. On the outer side of each outer key, the flange overhangs the web and its counterbore is open to the cavity. The press goes through the stem, so the flange needs no web under it.
+The board keeps its parts clear of this outline by `PAD_SKIRT_CLEARANCE`. If `PAD_MARGIN` grows, C1, R1 and the parts near the ring-lobe notches must move with it.
 
-`PAD_MARGIN` must stay in a narrow window. If it goes below zero, a keytop overhangs the web. If it goes too high, the skirt comes within `PAD_SKIRT_CLEARANCE` of C1, and C1 breaks the wall.
+`PAD_SKIRT_DEPTH` sets how far the wall drops below the web. The wall stops `PAD_SKIRT_CLEARANCE` above the board, and `stack.py` fails if the depth takes it closer. The wall has a break over each board part still in its way. `PAD_SKIRT_CLEARANCE` sets the gap that decides which parts those are. The switch bodies count. The STEP has no switch model, so `switch_bodies()` adds a `SWITCH_BODY` box for each switch. On the current board, no part breaks the wall.
 
-`PAD_SKIRT_DEPTH` sets how far the wall drops below the web. The wall has a break over each board part still in its way. `PAD_SKIRT_CLEARANCE` sets the gap that decides which parts those are. The switch bodies count. The STEP has no switch model, so `switch_bodies()` adds a `SWITCH_BODY` box for each switch. On the current board, no part breaks the wall.
+The pad stays out of the keep-outs round the wheel, `pad_keepouts()`: the lip's rotating clearance, each LED plus `PAD_LED_CLEARANCE`, and each ring-insert lobe plus `PAD_SKIRT_CLEARANCE`. A skirt cannot pass over a lobe that keeps `RING_LOBE_WALL`. So `pad_lobe_face()` cuts a notch in a lobe where it reaches a keep-out, and rounds the notch mouth with `PAD_JOIN_RADIUS`. The D7 lobe takes the one notch under a key, so the SW6 flange overhangs that notch.
 
-The pad stops short of the ring insert in plan. `pad_clear_y()` includes the reach of the insert's lobes plus `PAD_SKIRT_CLEARANCE`. A skirt cannot pass over a lobe that keeps `RING_LOBE_WALL`, so the outline must stay outside the lobes.
-
-The lobes stop short of the side walls. So each lobe has a locating tab on each long side, at its mid-length, and each tab runs out to the `PAD_FIT` line. As a result, the pad cannot shift in x by more than `SOCKET_LEAD`, and the stems still find the cap lead-ins during blind assembly. `PAD_TAB_W` sets the tab length along the side, and `PAD_TAB_RADIUS` rounds its outer corners. Each tab is web only, with no skirt under it. Every pad variant has the tabs, the V2 top pads included.
+The lobes stop short of the side walls. So each lobe has a locating tab on each long side, at its mid-length, and each tab runs out to the `PAD_FIT` line. As a result, the pad cannot shift in x by more than `SOCKET_LEAD`, and the stems still find the cap lead-ins during blind assembly. `PAD_TAB_W` sets the tab length along the side, and `PAD_TAB_RADIUS` rounds its outer corners. On a pad with a skirt, a 45 degree chamfer under each tab runs down into the skirt, so the tab prints with no support. The FDM pad has no skirt, so its tabs are web only. Every pad variant has the tabs, the V2 top pads included.
 The molded pad and the one-piece TPU pad have a plain web without isolation grooves. Only the FDM pad has grooves.
 
 `c6remote-case-pad-tpu.stl` goes with the SLA front `c6remote-case-front.stl`. Print it in TPU as one piece in place of the TPU pad and the PETG caps. Do not install separate caps with it.
@@ -496,7 +494,7 @@ For the one-piece TPU pad on a V2 board, print `c6remote-case-pad-tpu-v2-top.stl
 
 Its skirt ends level with the skirt of `c6remote-case-pad-tpu.stl`, so both lobes stand on one plane. Its skirt breaks come from the V3 part bodies, moved to the V2 placements, and from the V2 switch bodies.
 
-The V2 top pad has its own outline, `pad_lobe_box(v2=True)`. It reaches the nib over each V2 switch and stops short of the ring insert, so it has no notch. The V2 SW1 and SW2 bodies stand under its edge nearest the wheel, so its skirt opens over each of them.
+The V2 top pad has its own outline, `pad_lobe_face(v2=True)`. It reaches the nib over each V2 switch and stops short of the ring insert, so it has no notch. The V2 SW1 and SW2 bodies stand under its edge nearest the wheel, so its skirt opens over each of them.
 
 For the moulded pad with separate caps on a V2 board, print `c6remote-case-pad-v2-top.stl`. Use it in place of the SW1 and SW2 lobe of `c6remote-case-pad.stl`, with the standard caps and the SLA front `c6remote-case-front.stl`. Its stems stay at the V3 SW1 and SW2 positions, so the standard caps fit it unchanged.
 

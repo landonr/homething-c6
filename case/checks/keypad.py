@@ -66,7 +66,7 @@ column along y and so what one spine and one loft depend on.
 
 import math
 
-from build123d import Axis, Box, Compound, Cylinder, Pos
+from build123d import Axis, Box, Compound, Cylinder, Pos, extrude
 
 import board
 import case
@@ -689,9 +689,11 @@ def mic_pad_contour(pad, v2=False):
         tangent = (-side * abs(radial[1]), -abs(radial[0]))
         norm = math.hypot(side + tangent[0], tangent[1])
         bx, by = (side + tangent[0]) / norm, tangent[1] / norm
-        # A sharp corner is solid here. The round only takes about 0.13 off this
-        # line-to-arc corner, so the probe is small and sits well inside that.
-        probe = Pos(corner[0] + bx * 0.05, corner[1] + by * 0.05, z) * Cylinder(
+        # A sharp corner is solid here. The round takes R(1/sin(a/2) - 1) off the
+        # corner along the bisector, less as the corner opens, so probe halfway in.
+        half_angle = math.acos(side * tangent[0]) / 2
+        reach = params.PAD_JOIN_RADIUS * (1 / math.sin(half_angle) - 1) / 2
+        probe = Pos(corner[0] + bx * reach, corner[1] + by * reach, z) * Cylinder(
             radius=0.01, height=params.PAD_WEB_T / 2
         )
         if _fill_fraction(pad, probe) > 0.01:
@@ -755,33 +757,39 @@ def plunger_stub_contact(pad):
     return plunger_bottoms(pad, points, case.SWITCH_TOP)
 
 
-def pad_clears_wheel(pad):
-    """Neither lobe reaches into the band the wheel needs to itself.
+KEEPOUT_AREA_SLOP = 1e-3
+"""Plan area, in mm2, a lobe may share with a wheel keep-out before
+pad_clears_wheel() calls it a reach. Not zero, because each notch is cut on the
+keep-out's own edge and the shared boundary can read a sliver."""
+KEEPOUT_VOLUME_SLOP = 1e-3
+"""The same allowance for the built pad, in mm3."""
 
-    Arithmetic first, on the lobe rectangles, and then on the built pad's own
+
+def pad_clears_wheel(pad):
+    """Neither lobe reaches into the keep-outs round the wheel.
+
+    Arithmetic first, on the lobe faces, and then on the built pad's own
     solids, because the two can disagree: a lobe is clipped against the cavity
-    and a stem is raised
-    on it after that. What the band protects is the lip's rotating clearance
-    and the LEDs firing up past the pad, both of which the bore used to
-    guarantee by construction and neither of which anything cuts for now.
+    and a stem is raised on it after that. The keep-outs hold the lip's
+    rotating clearance, the LEDs firing up past the pad, and the ring insert's
+    lobes.
     """
     problems = []
-    for label, gap in (("a pad lobe", case.pad_wheel_gap()),
-                       ("the V2 top lobe", case.pad_wheel_gap(v2=True))):
-        if gap <= 0:
-            problems.append(
-                f"{label} reaches {-gap:.2f} into the wheel's own "
-                f"{case.pad_clear_y():.2f} band"
-            )
-    _, wy = board.wheel_center()
-    half = case.pad_clear_y()
-    for solid in pad.solids():
-        box = solid.bounding_box()
-        if box.min.Y < wy + half and box.max.Y > wy - half:
-            problems.append(
-                f"a built pad solid spans y {box.min.Y:.2f} .. {box.max.Y:.2f}, "
-                f"inside the wheel's band at {wy - half:.2f} .. {wy + half:.2f}"
-            )
+    for label, area in (("a pad lobe", case.pad_keepout_overlap()),
+                        ("the V2 top lobe", case.pad_keepout_overlap(v2=True))):
+        if area > KEEPOUT_AREA_SLOP:
+            problems.append(f"{label} covers {area:.3f} mm2 of the wheel's keep-outs")
+    for keepout in case.pad_keepouts():
+        prism = Pos(0, 0, -50) * extrude(keepout, amount=100)
+        centre = keepout.center()
+        for solid in pad.solids():
+            hit = solid & prism
+            volume = hit.volume if hit is not None else 0.0
+            if volume > KEEPOUT_VOLUME_SLOP:
+                problems.append(
+                    f"a built pad solid enters the wheel keep-out at "
+                    f"({centre.X:.2f}, {centre.Y:.2f}) by {volume:.3f} mm3"
+                )
     return problems
 
 

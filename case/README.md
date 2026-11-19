@@ -276,10 +276,11 @@ Other features are also thinner than the minimum. `ACCEPTED` in `case/checks/fab
 
 These features are under the SLA minimum on the current shells:
 
-- The counterbore lands under the key dishes are real thin walls. `LAND_FLOOR_MIN` in `case/checks/keypad.py` holds them, but it is below the PCBWay minimum. The lead-in chamfer of each face hole makes a taper at the hole wall.
 - The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
-- On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`. Parts of the reset guide tube are thinner than `RESET_GUIDE_WALL`.
-- The catch detent noses, the end screw cuts and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
+- On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`.
+- The end screw cuts, the reset bore and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
+
+Two features end on a vertical land so that they are not thin. Each catch detent nose keeps `CATCH_NOSE_LAND` over its catch face. The side tie of the end screw block ends `END_SCREW_BLOCK_TIE_LAND` above its underside.
 
 A taper feature with a thin area of a fraction of a square millimetre is one or two samples. The mesh sets where the samples fall. As a result, a change elsewhere in the part can move such a feature into the table or out of it. Its own geometry did not change. Update `ACCEPTED` when this happens.
 

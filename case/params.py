@@ -301,6 +301,19 @@ CATCH_D = 1.1
 """How far a detent stands in off the lap. Bounded above by the skirt it sits in:
 past the skirt thickness less the fit it breaks through into the cavity, and the
 whole end wall has to flex this far to let the front in."""
+CATCH_NOSE_LAND = 0.8
+"""Height of the vertical land on the nose of each detent, above the catch face.
+
+Without a land, the lead-in slope meets the catch face in a knife edge. PCBWay
+flags that edge, because it is thinner than the SLA minimum wall. At 0.8 the
+nose is as thick as FAB_MIN_WALL["SLA"], so the fab pass reads no thin area on
+the detent.
+
+The slope starts at the top of the land and ends on the inner face of the lap at
+the top of the detent. So the lead-in is steeper. It is 40.2 degrees off the
+closing direction, against 35.5 degrees with no land. The front needs about 18%
+more push to close. Below 0.8, a thin band stays on the nose. The land must stay
+under CATCH_H less two CATCH_FIT, or no slope is left."""
 CATCH_FIT = 0.15
 CATCH_EMITTER_CLEAR = 2.5
 """Wall kept between the +x window and D1's emitter bore in the same end face.
@@ -445,6 +458,18 @@ block's -Y face, against a ramp that starts at the board fit plane.
 Bounded by END_SCREW_BLOCK_GAP. If the step reached the block's own face, the
 block would keep a flat ceiling again. checks/hardware.py reads the cover over
 the pilot and the neck on the built front."""
+END_SCREW_BLOCK_TIE_LAND = 0.8
+"""Height of the vertical end face where the side tie stops under the ramp.
+
+The 45 degree ramp falls through the tie, which is only web height. If the tie
+runs on, the ramp leaves its underside in a knife edge. PCBWay flags that edge,
+because it is thinner than the SLA minimum wall. So the tie stops where the ramp
+is still this far above its underside, and a vertical face closes it.
+
+At 0.8 the end face is as thick as FAB_MIN_WALL["SLA"]. The face is vertical as
+the front prints face down, so it needs no support. The cut removes only the
+tail of the tie, so the tie keeps its full section everywhere else. The land
+must stay under the web height, SUPPORT_TOP less SKIRT_BOTTOM."""
 
 # Cell: a generic 102050 LiPo pouch lying flat along the board underneath it. Its
 # leads and PicoBlade plug leave the protection-board end, which faces J1 at the -Y

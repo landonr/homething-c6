@@ -66,6 +66,14 @@ static constexpr float BATTERY_MIN_V = 3.3f;
 static constexpr float BATTERY_MAX_V = 4.4f;
 static constexpr float BATTERY_SPREAD_V = 0.15f;
 static constexpr uint8_t BATTERY_SAMPLES = 3;
+// The sensor reads once each second, so the window gives a good cell some spare
+// samples before it fails.
+static constexpr uint32_t BATTERY_WINDOW_MS = 6000;
+static constexpr uint32_t BATTERY_BLINKS = 3;
+static constexpr uint32_t BATTERY_BLINK_ON_MS = 300;
+static constexpr uint32_t BATTERY_BLINK_OFF_MS = 300;
+static constexpr uint32_t BATTERY_SHOW_MS =
+    BATTERY_BLINKS * (BATTERY_BLINK_ON_MS + BATTERY_BLINK_OFF_MS) - BATTERY_BLINK_OFF_MS;
 
 // gamma_correct is 1.0 on this strip, so each value is the PWM level.
 // One colour for each LED of the chase, the README render palette in chain order:
@@ -88,6 +96,9 @@ static const Color INSTALL_DONE(0, 0, 64);
 static const Color INSTALL_LEFT(0, 0, 6);
 static const Color INSTALL_HEAD(64, 64, 96);
 static const Color FAILED(64, 0, 0);
+// The battery result blinks, so its red reads apart from the steady red of a
+// sleep refusal.
+static const Color BATTERY_PASS(0, 96, 0);
 // Both sleep results cover the whole ring, so each one reads over the VU meter
 // and over the resting glow. Dark blue stays apart from the dim VU blue.
 static const Color SLEEP_ARMED_FLASH(0, 0, 64);
@@ -150,6 +161,8 @@ void SelfTest::setup() {
     this->usb_raw_ = this->usb_pin_->digital_read();
     this->usb_raw_since_ms_ = millis();
   }
+  if (!this->v3_)
+    this->start_battery_check_(millis());
   this->mic_->add_data_callback([this](const std::vector<uint8_t> &data) { this->mic_block_(data); });
   this->mic_->start();
 #ifdef USE_OTA_STATE_LISTENER
@@ -162,10 +175,12 @@ void SelfTest::dump_config() {
                 "Self-test:\n"
                 "  Board: %s, %" PRId32 " status LEDs\n"
                 "  USB detector: %s\n"
+                "  Battery check: %s\n"
                 "  IR transmit: hold %s for %" PRIu32 " ms\n"
                 "  VU meter: hold %s for %" PRIu32 " ms\n"
                 "  Sleep test: hold %s for %" PRIu32 " ms",
-                this->v3_ ? "V3" : "V2", this->led_count_, this->v3_ ? "GPIO7" : "none", INPUT_NAME[TRANSMIT_BIT],
+                this->v3_ ? "V3" : "V2", this->led_count_, this->v3_ ? "GPIO7" : "none",
+                this->v3_ ? "ring, after each USB disconnect" : "log only, from boot", INPUT_NAME[TRANSMIT_BIT],
                 LONG_PRESS_MS, INPUT_NAME[VU_BIT], LONG_PRESS_MS, INPUT_NAME[SLEEP_BIT], SLEEP_HOLD_MS);
 }
 
@@ -173,6 +188,7 @@ void SelfTest::loop() {
   const uint32_t now = millis();
   this->update_mic_(now);
   this->update_usb_(now);
+  this->update_battery_(now);
   this->update_long_presses_(now);
   this->update_sleep_();
   if (this->tx_started_ && !this->tx_done_ && !this->transmitting_(now)) {
@@ -311,13 +327,20 @@ void SelfTest::ir_frame(const std::vector<int32_t> &raw) {
   }
 }
 
+// With USB present, the charger output can read in range without a cell, so a
+// V3 check starts only when USB power goes away.
+void SelfTest::start_battery_check_(uint32_t now) {
+  this->battery_checking_ = true;
+  this->battery_check_ms_ = now;
+  this->battery_count_ = 0;
+  this->battery_last_v_ = NAN;
+}
+
 void SelfTest::battery_sample(float volts) {
-  if (this->battery_passed_)
+  if (!this->battery_checking_)
     return;
-  // With USB present, the charger output can read in range without a cell, so
-  // V3 counts only samples on battery power.
-  const bool on_battery = !this->v3_ || (this->usb_known_ && !this->usb_present_);
-  if (std::isnan(volts) || volts < BATTERY_MIN_V || volts > BATTERY_MAX_V || !on_battery) {
+  this->battery_last_v_ = volts;
+  if (std::isnan(volts) || volts < BATTERY_MIN_V || volts > BATTERY_MAX_V) {
     this->battery_count_ = 0;
     return;
   }
@@ -328,8 +351,25 @@ void SelfTest::battery_sample(float volts) {
   }
   if (++this->battery_count_ < BATTERY_SAMPLES)
     return;
-  this->battery_passed_ = true;
+  this->battery_checking_ = false;
   ESP_LOGI(TAG, "Battery check passed at %.2f V", volts);
+  if (this->v3_) {
+    this->battery_show_ = true;
+    this->battery_show_pass_ = true;
+    this->battery_show_ms_ = millis();
+  }
+}
+
+// A low reading can be a flat cell or a divider fault, so the log keeps the value.
+void SelfTest::update_battery_(uint32_t now) {
+  if (!this->battery_checking_ || !this->v3_ || now - this->battery_check_ms_ < BATTERY_WINDOW_MS)
+    return;
+  this->battery_checking_ = false;
+  ESP_LOGW(TAG, "Battery check failed: last reading %.2f V, range %.2f to %.2f V", this->battery_last_v_,
+           BATTERY_MIN_V, BATTERY_MAX_V);
+  this->battery_show_ = true;
+  this->battery_show_pass_ = false;
+  this->battery_show_ms_ = now;
 }
 
 // Runs in the mic task.
@@ -408,8 +448,14 @@ void SelfTest::update_usb_(uint32_t now) {
   this->usb_present_ = raw;
   if (raw) {
     this->usb_plugged_seen_ = true;
+    // The ring answers only the disconnect in front of the operator.
+    this->battery_checking_ = false;
+    this->battery_show_ = false;
   } else {
     this->usb_unplugged_seen_ = true;
+    // The boot reading is not an operator action, so it starts no check.
+    if (!first)
+      this->start_battery_check_(now);
   }
   ESP_LOGI(TAG, "USB power %s", raw ? "present" : "absent");
   this->mark_active_(now);
@@ -452,6 +498,11 @@ void SelfTest::render(light::AddressableLight &it) {
 
   if (now < this->usb_flash_until_ms_)
     it.all() = this->usb_flash_plug_ ? USB_PLUG : USB_UNPLUG;
+  if (this->battery_show_ && now - this->battery_show_ms_ < BATTERY_SHOW_MS) {
+    const uint32_t t = now - this->battery_show_ms_;
+    const bool lit = t % (BATTERY_BLINK_ON_MS + BATTERY_BLINK_OFF_MS) < BATTERY_BLINK_ON_MS;
+    it.all() = lit ? (this->battery_show_pass_ ? BATTERY_PASS : FAILED) : Color::BLACK;
+  }
   if (now < this->ir_flash_until_ms_)
     it.all() = IR_FLASH;
   if (this->encoder_moved_ && now - this->encoder_ms_ < ENCODER_SHOW_MS) {

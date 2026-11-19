@@ -15,6 +15,7 @@
 #endif
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -100,6 +101,8 @@ class SelfTest : public Component
   void mic_block_(const std::vector<uint8_t> &data);
   void update_mic_(uint32_t now);
   void update_usb_(uint32_t now);
+  void start_battery_check_(uint32_t now);
+  void update_battery_(uint32_t now);
   void update_long_presses_(uint32_t now);
   void update_sleep_();
   const char *sleep_block_();
@@ -165,9 +168,16 @@ class SelfTest : public Component
   bool vu_mode_{false};
   float vu_level_{0.0f};
 
-  bool battery_passed_{false};
+  // A V3 check runs for each USB disconnect. A V2 board has no USB detector, so
+  // its one check runs from boot and only logs.
+  bool battery_checking_{false};
+  uint32_t battery_check_ms_{0};
   uint8_t battery_count_{0};
   float battery_first_v_{0.0f};
+  float battery_last_v_{NAN};
+  bool battery_show_{false};
+  bool battery_show_pass_{false};
+  uint32_t battery_show_ms_{0};
 
   bool usb_raw_{false};
   uint32_t usb_raw_since_ms_{0};

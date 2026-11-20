@@ -2140,8 +2140,7 @@ def _stem(ref):
     an undercut on every stem in a moulded pad while fighting the blind assembly
     that seats nine of them at once.
 
-    It stops at stem_top(ref), so a stem under a lower cap in an outer column is
-    shorter by the same value.
+    It stops at stem_top(ref), which is one level for every key.
     """
     x, y = board.components()[ref][:2]
     return _rounded_prism(

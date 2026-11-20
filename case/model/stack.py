@@ -543,15 +543,22 @@ fixed and CAVITY_FRONT is not: a derived report value rather than a tunable
 input, the inverse of how the two used to relate."""
 
 
-def cap_top(ref):
-    """Top of the released cap on switch `ref`: CAP_PROTRUSION above the built
-    face at the cap's centre.
+@functools.cache
+def key_top_level():
+    """The one height of every released cap and keytop: CAP_PROTRUSION above
+    the face at the highest key centre.
 
-    Each cap top is flat. A cap in an outer column stands lower than a cap on
-    the centreline, by the face's drop at its x, so the row of cap tops follows
-    the face."""
-    x, y = board.components()[ref][:2]
-    return face_z(x, y) + params.CAP_PROTRUSION
+    All key tops share this level, so a silkscreen or a laser marks every
+    legend in one pass. The face falls toward the side walls, so a key in an
+    outer column stands prouder of the face than a key on the centreline."""
+    parts = board.components()
+    return max(face_z(*parts[ref][:2]) for ref in board.refs("SW")) + params.CAP_PROTRUSION
+
+
+def cap_top(ref):
+    """Top of the released cap on switch `ref`. Each cap top is flat, and every
+    cap top is at key_top_level()."""
+    return key_top_level()
 
 
 CAP_BOTTOM = PAD_WEB_TOP + params.CAP_LIFT
@@ -581,9 +588,9 @@ def stem_top(ref):
     """Ceiling of the socket in the cap on switch `ref`, and the top of the stem
     that reaches it: CAP_TOP_T under that cap's own top. The two meet, so a
     press drives through the stem rather than through the flange, and the pad's
-    silicone touches the cap where the backlight has to cross. A stem under a
-    lower cap is shorter by the same value, so every cap roof stays CAP_TOP_T
-    thick."""
+    silicone touches the cap where the backlight has to cross. Every cap top is
+    at one level, so every stem is the same height and every cap roof stays
+    CAP_TOP_T thick."""
     return cap_top(ref) - params.CAP_TOP_T
 
 LIP_CLEAR_R = WHEEL_LIP_OD / 2 + params.WHEEL_CLEARANCE

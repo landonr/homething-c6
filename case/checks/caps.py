@@ -3,15 +3,16 @@ other, fit their stems, stay captive under the face land, and still go in from
 inside. A positive STEM_GRIP requires interference. A zero or negative value
 requires clearance. The solids alone cannot prove either fit mode.
 
-Caps face height: a released cap's top lands CAP_PROTRUSION above the curved
-front face at the cap's own centre, not merely close to it. It exists to catch
-cap_top() drifting away from the design parameter that is meant to drive it. A
-full press must also leave the top at or above the face.
+Caps face height: every released cap top lands at one level, and the cap with
+the least room stands exactly CAP_PROTRUSION above the curved front face at its
+own centre. It exists to catch cap_top() drifting away from the design parameter
+that is meant to drive it. A full press must also leave every top at or above
+the face.
 
 Caps proud of pocket: a cap stands proud of the recess floor around it by
-exactly CAP_PROTRUSION plus how far the dish sinks below the curved face there,
-the same reasoning as the face-height check applied to the dished floor instead
-of the undished face.
+exactly its height over the curved face plus how far the dish sinks below that
+face there, the same reasoning as the face-height check applied to the dished
+floor instead of the undished face.
 
 Legends present: every cap carries a real legend, cut out of one solid cap,
 in a glyph the vendored font actually has. A blank cap is the quietest
@@ -271,25 +272,34 @@ def caps_rest_on_pad(pad, caps, label="pad"):
 
 
 def caps_flush():
-    """A released cap's top has to land CAP_PROTRUSION above the built front
-    face at the cap's own centre, and a full press of SWITCH_TRAVEL must leave it at
-    or above the face there. Every cap, because the face height changes with x."""
+    """Every released cap top has to land at one level. The cap over the
+    highest face stands exactly CAP_PROTRUSION above the built front face at its
+    centre, and every other cap stands at least that far. A full press of
+    SWITCH_TRAVEL must leave each top at or above the face there."""
     problems = []
-    for ref in case.cap_refs():
+    tops = {ref: case.cap_top(ref) for ref in case.cap_refs()}
+    if max(tops.values()) - min(tops.values()) > FACE_HEIGHT_TOLERANCE:
+        problems.append(
+            f"cap tops range {min(tops.values()):.3f} .. {max(tops.values()):.3f}, "
+            "wants every cap top at one level"
+        )
+    offs = {}
+    for ref, top in tops.items():
         x, y = board.components()[ref][:2]
-        top, face = case.cap_top(ref), case.face_z(x, y)
-        off = top - face
+        off = top - case.face_z(x, y)
+        offs[ref] = off
         pressed = off - params.SWITCH_TRAVEL
         if pressed < -FACE_HEIGHT_TOLERANCE:
             problems.append(
                 f"a full press of {params.SWITCH_TRAVEL:.3f} leaves {ref}'s cap "
                 f"top {pressed:.3f} below the front face, wants it at or above"
             )
-        elif abs(off - params.CAP_PROTRUSION) > FACE_HEIGHT_TOLERANCE:
-            problems.append(
-                f"{ref}'s cap top {top:.3f} against face {face:.3f}, "
-                f"stands {off:.3f} proud but wants {params.CAP_PROTRUSION:.3f}"
-            )
+    least = min(offs, key=offs.get)
+    if abs(offs[least] - params.CAP_PROTRUSION) > FACE_HEIGHT_TOLERANCE:
+        problems.append(
+            f"{least}, the cap with the least room, stands {offs[least]:.3f} proud "
+            f"of the face but wants {params.CAP_PROTRUSION:.3f}"
+        )
     return problems
 
 
@@ -301,8 +311,9 @@ recess that got shallow enough to stop showing, not a target."""
 
 
 def caps_proud_of_pocket():
-    """A released cap stands above its recess floor by CAP_PROTRUSION plus how
-    far face_depth_at() says the dish sits below the curved face there.
+    """A released cap stands above its recess floor by its height over the
+    curved face plus how far face_depth_at() says the dish sits below that face
+    there.
 
     Arithmetic, because case.cap_top() and the recess floor are both built off
     the curved face by construction and the failure this catches is one of them
@@ -314,7 +325,7 @@ def caps_proud_of_pocket():
     problems = []
     for ref in case.cap_refs():
         x, y = board.components()[ref][:2]
-        want = params.CAP_PROTRUSION + case.face_depth_at(x, y)
+        want = case.cap_top(ref) - case.face_z(x, y) + case.face_depth_at(x, y)
         proud = case.cap_proud(ref)
         if abs(proud - want) > FACE_HEIGHT_TOLERANCE:
             problems.append(

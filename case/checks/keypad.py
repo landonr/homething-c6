@@ -366,7 +366,10 @@ def pad_skirt_depth(
     At a few sites per side, rays across the wall read its thickness, and its
     outer face against the web's, which must be flush. The walk follows the
     lobe outline without its locating tabs, and no site is read beside a tab,
-    because the web stands past the skirt there. On the FDM pad the
+    because the web stands past the skirt there. No site is read beside a round
+    tighter than the probe's reach either, because the ray then runs through
+    the corner and not across the wall, or beside a part zone, where it reads
+    the trim at the end of a skirt break. On the FDM pad the
     skirt must also run unbroken across each groove exit. `grooves` False
     means a plain slab web, with no chamfer and no groove exits.
 
@@ -375,7 +378,7 @@ def pad_skirt_depth(
     its board puts different parts under the wall, and `v2` so the walk follows
     that pad's own outline.
     """
-    from build123d import Vertex
+    from build123d import GeomType, Vertex
 
     problems, lines = [], []
     bottom = case.PAD_SKIRT_BOTTOM
@@ -391,6 +394,13 @@ def pad_skirt_depth(
         tabs = [
             (tx0 - reach, tx1 + reach, ty0 - reach, ty1 + reach)
             for tx0, ty0, tx1, ty1 in keypad_model.pad_tabs(name, v2)
+        ]
+        # A ray across the wall beside a round tighter than its own reach runs
+        # through the corner, where the skirt fills solid, and not across the
+        # wall. The notch mouths (PAD_JOIN_RADIUS) are such rounds.
+        tight = [
+            edge for edge in outline.edges()
+            if edge.geom_type == GeomType.CIRCLE and edge.radius < reach
         ]
         centre = outline.offset_2d(-params.PAD_SKIRT_T / 2)
         count = max(8, round(centre.length / SKIRT_SPACING))
@@ -431,6 +441,15 @@ def pad_skirt_depth(
         sides = {}
         for p in kept:
             if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in tabs):
+                continue
+            if any(edge.distance_to(Vertex(p.X, p.Y, 0)) < reach for edge in tight):
+                continue
+            # Beside a part zone the ray reads the trim at the end of a skirt
+            # break, not the wall. The walk above still runs up to each zone.
+            if any(
+                a - reach <= p.X <= b + reach and c - reach <= p.Y <= d + reach
+                for a, b, c, d in zones
+            ):
                 continue
             _, near, _ = outline.distance_to_with_closest_points(Vertex(p.X, p.Y, 0))
             n = (near.X - p.X, near.Y - p.Y)

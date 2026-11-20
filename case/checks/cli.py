@@ -471,8 +471,8 @@ def _caps_rest_on_pad(s):
 def _caps_flush(s):
     return _report(
         caps_flush(),
-        f"released caps stand {params.CAP_PROTRUSION:.2f} proud of the front face "
-        f"and stay at or above it through a full press",
+        f"released cap tops share one level, at least {params.CAP_PROTRUSION:.2f} "
+        f"proud of the front face, and stay at or above it through a full press",
     )
 
 

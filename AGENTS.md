@@ -355,7 +355,9 @@ Use the KiCad DRC panel or ratsnest airwire to locate an island.
 
 The project ignores `silk_over_copper` and `silk_edge_clearance`. Do not enable these rules to restore the baseline.
 
-The artwork still has 8 `silk_over_copper` cases, all at `D1`, and no `silk_edge_clearance` case.
+The artwork has no `silk_over_copper` case and no `silk_edge_clearance` case.
+
+The front ripple artwork has a gap at each `D1` pad. If you change that artwork, keep each dot off the exposed pads.
 
 The ENC1 wheel-outline silk has a gap at each pad, so it has no `silk_over_copper` case.
 

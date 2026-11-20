@@ -109,6 +109,11 @@ ACCEPTED = {
         "corner, SIDE_SKIRT_THICKEN_RUN. The wall behind the catch pocket, "
         "which this feature also covers, clears the minimum now"
     ),
+    (FRONT, "keypad_recess"): (
+        None, 0.4,
+        KNIFE + ", on the recess rim chamfer near a side wall, where the face is "
+        "only about 0.1 deep. Which side wall the rays catch moves with the mesh"
+    ),
     (BACK, "qwiic_knockout_tab.+y"): (0.80, 0.3, KNOCKOUT),
     (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.3, KNOCKOUT),
     (BACK, "reset_bore"): (None, 1.2, RESET_FLOOR),
@@ -131,19 +136,13 @@ ACCEPTED = {
 # The one-piece front is the recessed front everywhere but the ring, so it
 # carries the front's accepted features under the same ids. The ring's one entry
 # is the bore round's taper, which the insert carries too. Any other thin
-# reading in the ring is new and must come to a person. Its own mesh also reads
-# the recess rim knife edge that the recessed front's mesh no longer does.
+# reading in the ring is new and must come to a person.
 ACCEPTED.update({
     (ONE_PIECE, fid): entry
     for (name, fid), entry in list(ACCEPTED.items())
     if name == FRONT
 })
 ACCEPTED[(ONE_PIECE, "wheel_lip_relief")] = (None, 2.2, BORE[0].upper() + BORE[1:])
-ACCEPTED[(ONE_PIECE, "keypad_recess")] = (
-    None, 0.4,
-    KNIFE + ", on the recess rim chamfer near a side wall, where the face is "
-    "only about 0.1 deep. It came in with a new mesh of an unchanged face"
-)
 
 FIRST_REACH = 4.0
 REACH_GROWTH = 4.0

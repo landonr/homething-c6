@@ -218,6 +218,8 @@ The molded pad and the one-piece TPU pad have a plain web without isolation groo
 For keytops with no legend, print `c6remote-case-pad-tpu-blank.stl` in place of `c6remote-case-pad-tpu.stl`.
 It is the FDM pad with the same skirt as the molded pad. It has no edge chamfer, because TPU flexes on its own. Its grid web is a plain slab with square edges.
 
+To print or engrave the legends on the blank pad, run `case/.venv/bin/python scripts/export-pad-marking.py`. It writes the legend artwork as SVG, and a placement drawing as DXF and SVG, into `case/export/pad-marking/`. The legends come from the same model as the debossed legends. Issue #90 tracks the choice between silkscreen and laser engraving.
+
 Print the caps in translucent PETG or PLA. Either orientation works. For a key with no legend, print `c6remote-cap-sw<n>-blank.stl` in place of `c6remote-cap-sw<n>.stl`. The blank cap has the same fit.
 
 The cap flange rests on the pad web, so a press moves the cap and the web together. `CAP_LIFT` sets any air under the flange.
@@ -353,7 +355,7 @@ The groove is narrow, so the layer above it bridges the gap in one span. The FDM
 
 The FDM front's face sits `FDM_FACE_DROP` below the SLA front's crown, so the part is slimmer than a flat face at the raised level.
 
-On the FDM front, the caps and the wheel stand that much higher above the face than on the SLA front. The SLA front stands its caps proud of the dish by `CAP_PROTRUSION` plus the local dish depth. The SLA front's crown stands `FACE_CROWN_OVER_WHEEL` above the knob top.
+On the FDM front, the caps and the wheel stand that much higher above the face than on the SLA front. Every cap top stands at one level, `CAP_PROTRUSION` above the face at the highest key, so a key in an outer column stands prouder. Each cap also stands proud of the dish by the local dish depth. The SLA front's crown stands `FACE_CROWN_OVER_WHEEL` above the knob top.
 
 The drop thins the ceilings that the dish never reaches. Run `check.py --only fdm` to check their thickness.
 

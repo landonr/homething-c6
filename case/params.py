@@ -1311,11 +1311,14 @@ twice the tolerance that PCBWay publishes for SLS. The lip keeps 0.755.
 The value is four 0.2 mm layers. FDM_PAD_GROOVE_DEPTH is two, so the printed
 pad keeps its 0.4 hinge on whole layers.
 """
-PAD_SKIRT_T = 1.0
+PAD_SKIRT_T = 1.2
 """Width of the moulded pad's skirt wall, measured inward from the lobe outer edge.
 
 The outer face of the wall is flush with the web edge, so the pad keeps its plan
 outline. The wall is wide enough to mould and to stiffen the lobe edge.
+
+The one-piece TPU pad has the same skirt, and PCBWay recommends a wall of at
+least 1.2 for an FDM print. So the wall is 1.2 and not 1.0.
 """
 PAD_SKIRT_CLEARANCE = 0.3
 """Gap from the pad skirt to any board part, in plan and in height.
@@ -1764,7 +1767,12 @@ Keep in board order if this ever grows past a pair: keypad_coverage() does
 not sort it."""
 
 CAP_PROTRUSION = 0.75
-"""How far a released cap or keytop stands proud of the front face.
+"""How far a released cap or keytop stands proud of the front face at the
+highest key centre.
+
+Every key top stands at that one level, key_top_level(), so a silkscreen or a
+laser marks every legend in one pass. The face falls toward the side walls, so
+the keys in the outer columns stand prouder of the face than the centre column.
 
 This value is larger than SWITCH_TRAVEL. A full nominal press leaves the top
 proud of the face by the difference, so a pressed top stays above the face.

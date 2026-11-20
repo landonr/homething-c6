@@ -21,10 +21,11 @@ single feature costs. Pass-sized units have no such floor, which also means a
 larger --jobs is worth asking for than it used to be.
 
 Passes then finish in whatever order they finish, and each one says so the
-moment it does. The report proper is replayed afterwards in registry order, so
-what a run prints as its verdict never depends on how the work happened to land
-across the pool; only the progress lines are in completion order, and nothing
-reads those back.
+moment it does. A failed pass also prints its reasons under that line, so a long
+run shows why it failed before the run ends. The report proper is replayed
+afterwards in registry order, so what a run prints as its verdict never depends
+on how the work happened to land across the pool. Only the progress lines and
+those reasons are in completion order, and nothing reads them back.
 
 What a pass decided is kept, so a run that changed neither the geometry nor the
 checks replays the last answer rather than spending the CPU again. verdicts.py
@@ -1753,6 +1754,10 @@ def _progress(record, suite_started, done, total, quiet):
     the interleaving these lines inevitably have between workers cannot make the
     report itself depend on scheduling. --quiet suppresses the passes that
     passed, the same passes it already suppresses from the report.
+
+    A failed pass also prints its reasons under its line, from
+    _failure_detail(). If a long run stops before the report, these lines
+    keep the reasons.
     """
     if quiet and record["passed"]:
         return
@@ -1763,6 +1768,31 @@ def _progress(record, suite_started, done, total, quiet):
         f"({_cost(record)}) [{done}/{total}]",
         flush=True,
     )
+    if not record["passed"]:
+        print(_failure_detail(record), flush=True)
+
+
+def _failure_detail(record):
+    """Return the reasons for one failed pass, one indented line each.
+
+    The problems give the reasons, with their location when they have one. A
+    crash, or a pass that prints its own table, has no problems. Its output
+    gives the reasons, and for a crash that output is the traceback.
+    """
+    problems = record.get("problems") or []
+    if problems and not record.get("crashed"):
+        lines = []
+        for problem in problems:
+            where = []
+            if problem.get("at"):
+                where.append("at " + ", ".join(f"{v:g}" for v in problem["at"]))
+            if problem.get("part"):
+                where.append(f"part {problem['part']}")
+            suffix = f" [{'; '.join(where)}]" if where else ""
+            lines.append(f"  {problem['text']}{suffix}")
+        return "\n".join(lines)
+    output = record["output"].rstrip() or "failed without diagnostic"
+    return "\n".join(f"  {line}" for line in output.splitlines())
 
 
 def _report_record(record, suite_started, quiet):

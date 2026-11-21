@@ -400,7 +400,7 @@ Buy these parts in addition to the board and the printed parts.
 
 | Part | Specification | Qty | Use |
 | --- | --- | --- | --- |
-| End-wall screw | M2 x 5 slotted cheese head screw, ISO 1207 (DIN 84), A2 or 18-8 stainless steel. A pan head is too tall for the counterbore. | 1 | Closes the shells at the grip end |
+| End-wall screw | M2 x 5 slotted cheese head screw, ISO 1207 (DIN 84), A2 or 18-8 stainless steel. A pan head is too tall for the counterbore. [Westfield Fasteners](https://www.westfieldfasteners.co.uk/A2-ScrewBolt-SlotChs-M2.html) | 1 | Closes the shells at the grip end |
 | Battery | 102050 LiPo pouch cell, single cell, 1000 mAh | 1 | Supplies power to the board |
 | Battery plug housing | Molex PicoBlade `51021-0200` | 1 | Mates with `J1` |
 | Battery plug terminals | Molex PicoBlade `50079-8000` crimp terminals | 2 | Go in the plug housing |

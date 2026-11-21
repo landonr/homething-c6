@@ -337,16 +337,18 @@ SHELL_SCREW_HEAD_D = 4.2
 plus 0.2. Slacker than
 the fits elsewhere in this model on purpose: a head that will not sit flush is
 the one screw feature visible from outside the case."""
-SHELL_SCREW_HEAD_H = 1.7
-"""Counterbore depth: the 1.6 mm tallest standard M2 head plus 0.1, so the tallest standard M2 head
-lands a shade below the outer face instead of standing in it. It comes out of
-the end wall rather than out of FLOOR now, and WALL is 3.0 there, so 1.3 of
-wall is left under the head."""
-END_SCREW_HEAD_D = 4.0
-"""Head diameter of the modelled screw, the ISO 7045 dk for M2. It must stay
+SHELL_SCREW_HEAD_H = 1.5
+"""Counterbore depth, from the outer face of the -Y end wall. It is LAP_OUT less
+LAP_IN, so the counterbore floor lands on the lap's inner face. At 1.7 the floor
+went past that face, and the strip of relief floor over the counterbore read
+under FAB_MIN_WALL["SLA"]. WALL is 3.0 here, so 1.5 of wall is left under the
+head. The M2 cheese head, END_SCREW_HEAD_K, sits 0.2 below the outer face. A
+pan head is too tall for this depth."""
+END_SCREW_HEAD_D = 3.8
+"""Head diameter of the modelled screw, the ISO 1207 dk for M2. It must stay
 under SHELL_SCREW_HEAD_D, or the head runs into the counterbore wall."""
-END_SCREW_HEAD_K = 1.6
-"""Head height of the modelled screw, the ISO 7045 k for M2. It must stay
+END_SCREW_HEAD_K = 1.3
+"""Head height of the modelled screw, the ISO 1207 k for M2. It must stay
 under SHELL_SCREW_HEAD_H, or the head stands proud of the end wall."""
 END_SCREW_X_OFFSET = -5.8
 """The screw sits left of centre to keep the USB opening clear.
@@ -391,20 +393,20 @@ brings the pilot closer to where the ramp starts, and this lets the screw sit
 higher."""
 END_SCREW_BLOCK_D = 4.3
 """How far the block reaches back into the cavity: END_SCREW_PILOT_DEPTH plus
-1.1, so the pilot ends inside it and the thread is never drilled out the back
-of its own boss. The plus was 0.5, which left a cap under the PA12 minimum that
-PCBWay publishes for SLS. At 1.0 the cap measured exactly the minimum, which
-the fab pass reads as a hair under, so the plus carries its own margin.
+1.3, so the pilot ends inside it and the thread is never drilled out the back
+of its own boss. The plus must stay at least 1.1. At 0.5 the cap was under the
+PA12 minimum that PCBWay publishes for SLS. At 1.0 the cap measured exactly the
+minimum, which the fab pass reads as a hair under.
 
 The block's +Y back face sets the clearance to the cell. The 45 degree ramp
 across the top, see END_SCREW_BLOCK_RAMP_LEDGE, falls the whole of this depth,
 so a deeper block also takes more off the cover over the pilot's tip."""
-END_SCREW_PILOT_DEPTH = 3.2
+END_SCREW_PILOT_DEPTH = 3.0
 """Engagement this one screw takes.
 
 The screw is an M2 x 5. The screw length is the fixed quantity here, so the
-pilot is what is left after the wall under the head and END_SCREW_BLOCK_GAP. It
-remains more than one and a half diameters into a self-tapped boss that is
+pilot is what is left after the wall under the head and END_SCREW_BLOCK_GAP:
+5.0 less 1.5 less 0.5. It is one and a half diameters into a self-tapped boss that is
 END_SCREW_BLOCK_W wide. This screw only closes two shells and does not carry the
 board."""
 END_SCREW_BLOCK_BOTTOM = 2.5
@@ -470,6 +472,17 @@ At 0.8 the end face is as thick as FAB_MIN_WALL["SLA"]. The face is vertical as
 the front prints face down, so it needs no support. The cut removes only the
 tail of the tie, so the tie keeps its full section everywhere else. The land
 must stay under the web height, SUPPORT_TOP less SKIRT_BOTTOM."""
+
+END_SCREW_CHAMFER_COVER = 0.85
+"""Wall that the back's end wall chamfer leaves over the clearance bore, at the
+cavity face.
+
+A chamfer from corner to corner comes down to 0.1 above the bore, and PCBWay
+flags the sliver between them. So the chamfer and the block's root fillet both
+rise by end_screw_root_lift, and each leg gets that much shorter. The two faces
+stay parallel, so the gap between them does not change. The fab pass reads
+this wall vertically, from the bore up, and 0.85 keeps it over
+FAB_MIN_WALL["SLA"]. A larger value shortens the root fillet more."""
 
 # Cell: a generic 102050 LiPo pouch lying flat along the board underneath it. Its
 # leads and PicoBlade plug leave the protection-board end, which faces J1 at the -Y
@@ -1230,6 +1243,33 @@ BACK_STL_ANGULAR_TOLERANCE = 0.06
 """Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
+RESET_CHAMFER_W = 0.5
+"""How far the countersink at the outer end of the reset bore reaches past the
+bore on its -Y side. Measure it flat, out from the bore wall.
+
+The bore leaves the back where the floor rolls up into the -Y end wall. Without
+the countersink, the -Y rim is a knife edge of about 61 degrees, and the fab pass
+read it as a 0.12 mm taper. The countersink makes each rim edge obtuse.
+
+The thinnest wall that stays is on a ray from the -Y mouth up to the bore wall.
+That ray reads this width divided by the sine of the floor slope at the mouth,
+which is about 34 degrees. At 0.45 the ray just clears FAB_MIN_WALL["SLA"], and
+0.5 gives a margin of 12%. The countersink also gives a paper clip a lead-in."""
+RESET_CHAMFER_ANGLE = 45.0
+"""Half angle of the reset countersink about its own axis, in degrees, so 45 is
+a 90 degree countersink. A smaller angle makes the mouth narrower across x."""
+RESET_CHAMFER_TILT = 12.0
+"""How far the axis of the reset countersink leans from the bore axis toward -Y,
+in degrees.
+
+The floor under the bore slopes about 16 degrees at the +Y rim and about 34
+degrees at the -Y mouth. So a countersink on the bore axis opens much wider on
+the +Y side, about 4.3 mm by 3.8 mm. With this lean, the mouth is almost the same
+width all round the bore, about 3.0 mm by 2.6 mm.
+
+More lean makes the mouth smaller on the +Y side. At 16 degrees the thinnest ray
+moves to the -Y bore wall above the countersink. At 20 degrees that ray is under
+FAB_MIN_WALL["SLA"]."""
 RESET_GUIDE_WALL = 1.05
 """Guide wall thickness, just over the PA12 minimum that PCBWay publishes for
 SLS. It was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no

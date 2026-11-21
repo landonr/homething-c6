@@ -39,7 +39,7 @@ from .ir import emitter_bore, ir_window_opening, ir_window_rebate
 from .keypad import keypad_outline_groove, keypad_recess_cut
 from .mic import mic_bore, mic_duct, mic_face
 from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
-from .reset import reset_bore, reset_guide
+from .reset import reset_bore, reset_chamfer, reset_guide
 from .shape import (
     _cut,
     _fuse,
@@ -634,7 +634,7 @@ def back_shell():
     )
     shell = _fuse(shell, qwiic_knockout_panel(), *qwiic_knockout_tabs())
     shell = round_usb_boot_rim(shell, exterior)
-    return _cut(shell, reset_bore())
+    return _cut(shell, reset_bore(), reset_chamfer())
 
 
 def _cap_face_hole_cut(ref, fdm=False):

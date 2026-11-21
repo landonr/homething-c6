@@ -190,22 +190,38 @@ def _round_block_ends(block, x0, x1, bottom, radii):
     return block
 
 
+def end_screw_root_lift():
+    """How far the root fillet and the end wall chamfer both stand above corner
+    to corner, so the chamfer leaves END_SCREW_CHAMFER_COVER over the clearance
+    bore at the cavity face. Zero if corner to corner already leaves that."""
+    _, z = end_screw_axis()
+    floor = SKIRT_BOTTOM - params.SKIRT_FIT
+    bottom = z + params.SHELL_SCREW_CLEAR_D / 2 + params.END_SCREW_CHAMFER_COVER
+    return max(0.0, (LAP_IN - params.BOARD_FIT) - (floor - bottom))
+
+
 def end_screw_fillet_start():
-    """Y where the block's root fillet leaves SKIRT_BOTTOM: the skirt's outer
-    face at the grip end, the plane grip_skirt_relief cuts it back to."""
-    return end_wall_edge() - (SKIRT_OUT - params.GRIP_SKIRT_RELIEF)
+    """Y where the block's root fillet leaves SKIRT_BOTTOM: end_screw_root_lift
+    in from the skirt's outer face at the grip end, the plane grip_skirt_relief
+    cuts it back to."""
+    return (
+        end_wall_edge() - (SKIRT_OUT - params.GRIP_SKIRT_RELIEF) + end_screw_root_lift()
+    )
 
 
 def end_screw_root_legs():
     """(fillet, chamfer): the legs of the block's root fillet and of the back's
-    end wall chamfer. Each runs corner to corner, so neither is a parameter.
+    end wall chamfer.
 
-    The fillet runs from end_screw_fillet_start to the block's -Y face. The
-    chamfer runs from the lap's inner face at the relief floor to the cavity
-    wall, which is the whole floor. A wider one would notch the lap.
+    Corner to corner, the fillet runs from the grip skirt relief face to the
+    block's -Y face, and the chamfer runs from the lap's inner face to the
+    cavity wall, which is the whole relief floor. A wider chamfer would notch
+    the lap. end_screw_root_lift raises both faces by the same amount, so each
+    leg is that much shorter and the gap between the faces does not change.
     """
     face = end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
-    return face - end_screw_fillet_start(), LAP_IN - params.BOARD_FIT
+    lift = end_screw_root_lift()
+    return face - end_screw_fillet_start(), LAP_IN - params.BOARD_FIT - lift
 
 
 def _block_root_fillet(face):
@@ -215,11 +231,11 @@ def _block_root_fillet(face):
     The screw pulls the block toward the wall, so the web bends at its neck.
     The ramp limits the neck from above, so the fillet deepens it from below.
 
-    Its hypotenuse starts on SKIRT_BOTTOM at the skirt's relieved outer face,
-    end_screw_fillet_start, and falls at 45 degrees to the block's face. So it
-    deepens the neck at the skirt root too, and leaves no flat strip of skirt
-    underside beside it. The start lies in the plane of the relief cut, the way
-    the back's chamfer starts on the lap's inner face. It reaches MERGE up into
+    Its hypotenuse starts on SKIRT_BOTTOM at end_screw_fillet_start, which is
+    end_screw_root_lift in from the skirt's relieved outer face, and falls at
+    45 degrees to the block's face. The back's chamfer rises by the same lift,
+    so a flat strip of skirt underside that wide is the cost of the wall the
+    chamfer keeps over the clearance bore. It reaches MERGE up into
     the skirt and web and MERGE into the block, both inside material, so it
     fuses as one solid.
 
@@ -363,8 +379,8 @@ def end_screw_block():
 def end_screw_pilot():
     """The block's blind self-tapping pilot, drilled in along -Y.
 
-    END_SCREW_BLOCK_D is END_SCREW_PILOT_DEPTH plus half a millimetre, so this
-    stops inside the block rather than opening out of the back of it.
+    END_SCREW_BLOCK_D is deeper than END_SCREW_PILOT_DEPTH, so this stops
+    inside the block rather than opening out of the back of it.
     """
     x, z = end_screw_axis()
     face = end_wall_edge() - params.BOARD_FIT + params.END_SCREW_BLOCK_GAP
@@ -392,15 +408,15 @@ def end_screw_cuts():
 
 
 def end_screw():
-    """The closure screw itself, an M2 x 5 ISO 7045 pan head, where it sits
-    when the case is closed. A reference part for the exports and the viewer.
-    Nobody prints it.
+    """The closure screw itself, an M2 x 5 ISO 1207 slotted cheese head, where
+    it sits when the case is closed. A reference part for the exports and the
+    viewer. Nobody prints it.
 
     Placed off the same helpers as end_screw_cuts(): the head's underside sits
     on the counterbore floor, and the shank runs end_screw_length() along +Y
-    from there into the pilot. The shank has no thread. The cross recess, the
-    top round and the tip chamfer scale off the head and the shank, because
-    they only make the part read as a screw.
+    from there into the pilot. The shank has no thread. The slot, the top round
+    and the tip chamfer scale off the head and the shank, because they only
+    make the part read as a screw.
     """
     x, z = end_screw_axis()
     floor = end_wall_edge() - LAP_OUT + params.SHELL_SCREW_HEAD_H
@@ -409,17 +425,15 @@ def end_screw():
     tip = floor + end_screw_length()
     head = _y_hole(x, z, head_d, floor - k, floor)
     head = fillet(head.edges().sort_by(Axis.Y)[0], radius=k / 5)
-    # A plain cross stands in for the No. 1 Phillips recess.
-    span, width, depth = head_d / 2, head_d / 8, 0.55 * k
-    # The shank starts inside the head, between the floor and the recess, so
-    # the fuse joins two overlapped solids and not two faces that only touch.
+    width, depth = head_d / 8, 0.55 * k
+    # The shank starts inside the head, between the floor and the slot, so the
+    # fuse joins two overlapped solids and not two faces that only touch.
     shank = _y_hole(x, z, shank_d, floor - (k - depth) / 2, tip)
     shank = chamfer(shank.edges().sort_by(Axis.Y)[-1], length=shank_d / 10)
-    cross = [
-        Pos(x, floor - k + (depth - MERGE) / 2, z) * Box(*size)
-        for size in ((span, depth + MERGE, width), (width, depth + MERGE, span))
-    ]
-    return _cut(_fuse(head, shank), *cross)
+    slot = Pos(x, floor - k + (depth - MERGE) / 2, z) * Box(
+        head_d + 2 * MERGE, depth + MERGE, width
+    )
+    return _cut(_fuse(head, shank), slot)
 
 
 def end_screw_wall_chamfer():
@@ -428,9 +442,10 @@ def end_screw_wall_chamfer():
 
     The fillet goes below SKIRT_BOTTOM, where this wall is. A planar wedge cut
     at 45 degrees, so its face stays parallel to the fillet's. Its leg is the
-    relief floor's own width, see end_screw_root_legs, so the chamfer starts at
-    the lap's inner face and takes the whole floor. It cannot grow without
-    notching the lap.
+    relief floor's width less end_screw_root_lift, see end_screw_root_legs. So
+    it starts that far in from the lap's inner face and stops
+    END_SCREW_CHAMFER_COVER above the clearance bore at the cavity face. It
+    cannot grow without notching the lap or thinning that cover.
 
     The two legs differ. The horizontal gap between the faces is the skirt's
     own clearance to the lap at the grip end, LAP_IN - SKIRT_OUT +

@@ -280,9 +280,13 @@ These features are under the SLA minimum on the current shells:
 
 - The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
 - On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`.
-- The end screw cuts, the reset bore and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
+- The skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
 
 Two features end on a vertical land so that they are not thin. Each catch detent nose keeps `CATCH_NOSE_LAND` over its catch face. The side tie of the end screw block ends `END_SCREW_BLOCK_TIE_LAND` above its underside.
+
+The reset bore has a countersink at its outer end. The bore leaves the back where the floor rolls up into the end wall. Without the countersink, the rim on that side is a knife edge. `RESET_CHAMFER_W` sets how far the mouth reaches past the bore on that side, and the rim wall increases with it. `RESET_CHAMFER_TILT` leans the countersink toward the end wall, so the mouth stays small on the other side.
+
+The end screw cuts are not thin. The end wall chamfer keeps `END_SCREW_CHAMFER_COVER` over the clearance bore, and the block's root fillet rises with it. `SHELL_SCREW_HEAD_H` puts the counterbore floor on the lap's inner face, so no strip of relief floor stays over the counterbore.
 
 A taper feature with a thin area of a fraction of a square millimetre is one or two samples. The mesh sets where the samples fall. As a result, a change elsewhere in the part can move such a feature into the table or out of it. Its own geometry did not change. Update `ACCEPTED` when this happens.
 
@@ -396,7 +400,7 @@ Buy these parts in addition to the board and the printed parts.
 
 | Part | Specification | Qty | Use |
 | --- | --- | --- | --- |
-| End-wall screw | M2 x 5 pan head Phillips screw, ISO 7045 (DIN 7985 H), A2 or 18-8 stainless steel. [Westfield Fasteners](https://www.westfieldfasteners.co.uk/A2-ScrewBolt-PhilRaPan-M2.html) | 1 | Closes the shells at the grip end |
+| End-wall screw | M2 x 5 slotted cheese head screw, ISO 1207 (DIN 84), A2 or 18-8 stainless steel. A pan head is too tall for the counterbore. | 1 | Closes the shells at the grip end |
 | Battery | 102050 LiPo pouch cell, single cell, 1000 mAh | 1 | Supplies power to the board |
 | Battery plug housing | Molex PicoBlade `51021-0200` | 1 | Mates with `J1` |
 | Battery plug terminals | Molex PicoBlade `50079-8000` crimp terminals | 2 | Go in the plug housing |
@@ -429,7 +433,7 @@ Each back detent sits lower than its pocket and bears on the lower lip with a li
 The preload holds the seam closed.
 `SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
 
-One M2 x 5 screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and cuts its own thread in a block behind the front skirt.
+One M2 x 5 cheese head screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and cuts its own thread in a block behind the front skirt. Use a flat-blade screwdriver.
 
 If you install the screw again, turn it counterclockwise until it drops into its thread. Then turn it clockwise and tighten it lightly, so that it does not cut a new thread.
 

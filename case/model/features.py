@@ -529,6 +529,7 @@ def _back(runs, obstacles):
         ),
         _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
         _entry("reset_bore", "reset.reset_bore", "cut", reset.reset_bore()),
+        _entry("reset_chamfer", "reset.reset_chamfer", "cut", reset.reset_chamfer()),
     ]
     out.append(_entry("qwiic_knockout_panel", "qwiic.qwiic_knockout_panel", "add", qwiic.qwiic_knockout_panel()))
     out += _split(

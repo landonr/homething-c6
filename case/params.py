@@ -1240,7 +1240,8 @@ front skirt."""
 USB_BOOT_RIM_R = 0.6
 """Radius at the outside mouth of the USB boot pocket."""
 BACK_STL_ANGULAR_TOLERANCE = 0.06
-"""Angular deflection in radians. This keeps the mesh closed at the USB rim."""
+"""Angular deflection in radians for both back shells. This keeps the mesh
+closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
 RESET_CHAMFER_W = 0.5

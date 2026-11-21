@@ -35,7 +35,13 @@ from .hardware import (
 )
 from .front_ledge import front_ledge_runs
 from .support import front_support_cuts, support_obstacles, support_runs
-from .ir import emitter_bore, ir_window_opening, ir_window_rebate
+from .ir import (
+    emitter_bore,
+    ir_window_opening,
+    ir_window_rebate,
+    ir_window_step,
+    ir_window_well,
+)
 from .keypad import keypad_outline_groove, keypad_recess_cut
 from .mic import mic_bore, mic_duct, mic_face
 from .qwiic import qwiic_slot, qwiic_knockout_panel, qwiic_knockout_tabs
@@ -600,7 +606,20 @@ def shared_cuts():
 
 
 @cache.solid
-def back_shell():
+def back_shell(one_piece=False):
+    """The back shell. `one_piece` fuses the IR window into it.
+
+    The one-piece back is for a clear SLA print, so the demo set needs no
+    separate window. It is the back shell with ir_window() fused in and the
+    IR_WINDOW_FIT gap round the flange closed. ir_window_well() and
+    ir_window_step() replace the opening and the rebate, so U2's beam crosses
+    the same IR_WINDOW_T as through the pane. Everything else is the back's,
+    so the same front and screw fit it.
+
+    Light reaches U2 only through the part's own material. A dyed or opaque
+    print of it blinds U2, so a Somos Ledo or other opaque back must use the
+    two-part build.
+    """
     inner, outer = _profiles()
     form = back_form(0, 0)
     # Inset by the wall and lifted by the floor, so the shell keeps its thickness
@@ -624,11 +643,15 @@ def back_shell():
         *side_catch_detents(),
         reset_guide(),
     )
+    window = (
+        [ir_window_well(), ir_window_step()]
+        if one_piece
+        else [ir_window_opening(), ir_window_rebate()]
+    )
     shell = _cut(
         shell,
         *shared_cuts(),
-        ir_window_opening(),
-        ir_window_rebate(),
+        *window,
         *end_screw_cuts(),
         end_screw_wall_chamfer(),
     )

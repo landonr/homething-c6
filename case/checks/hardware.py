@@ -315,9 +315,9 @@ def end_screw(front, back):
         )
 
     # The root fillet under the web, the skirt underside it starts on, and its
-    # start at the grip skirt relief face, all read as material on the built
-    # front. The first box is sized off the fillet's own leg, so it stays
-    # inside the fillet at any value of it.
+    # start at end_screw_fillet_start, all read as material on the built front.
+    # The first box is sized off the fillet's own leg, so it stays inside the
+    # fillet at any value of it.
     start = case.end_screw_fillet_start()
     front_leg, back_leg = case.end_screw_root_legs()
     flat = x1 - x0 - 0.4
@@ -334,11 +334,11 @@ def end_screw(front, back):
             "fillet hangs off nothing",
         ),
         # The hypotenuse is 0.2 under SKIRT_BOTTOM at start + 0.2, so this box
-        # sits inside it. A fillet that starts inboard of the relief reads void.
+        # sits inside it. A fillet that starts inboard of its start reads void.
         (
             Pos(cx, start + 0.25, case.SKIRT_BOTTOM - 0.1) * Box(flat, 0.1, 0.1),
-            "of the root fillet is material next to the grip skirt relief, so "
-            "the fillet stops short of it and the skirt underside keeps a flat",
+            "of the root fillet is material just past end_screw_fillet_start, "
+            "so the fillet stops short of its start",
         ),
     ):
         filled = _fill_fraction(front, probe)

@@ -80,7 +80,6 @@ KNOCKOUT = (
     "minimum, but each bridge is only QWIIC_KNOCKOUT_TAB_W wide, and widening "
     "it is what stops the cover breaking out at all"
 )
-SCREW_CUT = "taper where the end screw cuts meet"
 BORE = (
     "the taper under RING_BORE_ROUND. Next to the bore, rays up from the "
     "underside read the plumb bore wall the round leaves, 0.62 at its least on "
@@ -115,14 +114,13 @@ ACCEPTED = {
     ),
     (BACK, "qwiic_knockout_tab.+y"): (0.80, 0.3, KNOCKOUT),
     (BACK, "qwiic_knockout_tab.-y"): (0.80, 1.3, KNOCKOUT),
-    (BACK, "end_screw.head"): (None, 1.2, SCREW_CUT),
-    (BACK, "end_screw.clearance"): (None, 1.2, SCREW_CUT),
-    (BACK, "end_screw.wall_chamfer"): (None, 3.8, SCREW_CUT),
     (BACK, "qwiic_slot"): (None, 0.3, "taper at the Qwiic slot edge"),
     (BACK, "ir_window_opening"): (None, 0.3, "taper at the IR window opening edge"),
     (BACK, "emitter_bore"): (None, 0.4, KNIFE + ", at the emitter bore edge"),
     (BACK, "catch_detents.+x"): (None, 0.3, KNIFE + ", at an edge of the detent"),
     (BACK, "catch_detents.-x"): (None, 0.3, KNIFE + ", at an edge of the detent"),
+    (BACK, "side_catch_detents.+x"): (None, 0.3, KNIFE + ", at an edge of the detent"),
+    (BACK, "side_catch_detents.-x"): (None, 0.3, KNIFE + ", at an edge of the detent"),
     (INSERT, "ring_insert"): (
         None, 2.4,
         KNIFE + ", at the outer rim of a dome, where a lobe's outer face meets "

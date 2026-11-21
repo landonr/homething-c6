@@ -280,9 +280,11 @@ These features are under the SLA minimum on the current shells:
 
 - The lip under each side catch pocket, `SIDE_CATCH_LOWER_LAND`, and the cap over the end screw pilot are thin walls by design.
 - On the back, the Qwiic knockout cover, its tabs and the reset guide tube use the SLA minimum by design. Their params are `QWIIC_KNOCKOUT_T`, `QWIIC_KNOCKOUT_TAB_T` and `RESET_GUIDE_WALL`.
-- The end screw cuts, the reset bore and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
+- The end screw cuts and the skirt lead-ins are tapers. The edges of the Qwiic slot, the IR window and the emitter bore are also tapers. A taper is thin only along an edge.
 
 Two features end on a vertical land so that they are not thin. Each catch detent nose keeps `CATCH_NOSE_LAND` over its catch face. The side tie of the end screw block ends `END_SCREW_BLOCK_TIE_LAND` above its underside.
+
+The reset bore has a countersink at its outer end. The bore leaves the back where the floor rolls up into the end wall. Without the countersink, the rim on that side is a knife edge. `RESET_CHAMFER_W` sets how far the mouth reaches past the bore on that side, and the rim wall increases with it. `RESET_CHAMFER_TILT` leans the countersink toward the end wall, so the mouth stays small on the other side.
 
 A taper feature with a thin area of a fraction of a square millimetre is one or two samples. The mesh sets where the samples fall. As a result, a change elsewhere in the part can move such a feature into the table or out of it. Its own geometry did not change. Update `ACCEPTED` when this happens.
 

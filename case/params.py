@@ -1230,6 +1230,33 @@ BACK_STL_ANGULAR_TOLERANCE = 0.06
 """Angular deflection in radians. This keeps the mesh closed at the USB rim."""
 RESET_BORE_D = 1.6
 """Bore diameter with clearance for a straightened paper clip."""
+RESET_CHAMFER_W = 0.5
+"""How far the countersink at the outer end of the reset bore reaches past the
+bore on its -Y side. Measure it flat, out from the bore wall.
+
+The bore leaves the back where the floor rolls up into the -Y end wall. Without
+the countersink, the -Y rim is a knife edge of about 61 degrees, and the fab pass
+read it as a 0.12 mm taper. The countersink makes each rim edge obtuse.
+
+The thinnest wall that stays is on a ray from the -Y mouth up to the bore wall.
+That ray reads this width divided by the sine of the floor slope at the mouth,
+which is about 34 degrees. At 0.45 the ray just clears FAB_MIN_WALL["SLA"], and
+0.5 gives a margin of 12%. The countersink also gives a paper clip a lead-in."""
+RESET_CHAMFER_ANGLE = 45.0
+"""Half angle of the reset countersink about its own axis, in degrees, so 45 is
+a 90 degree countersink. A smaller angle makes the mouth narrower across x."""
+RESET_CHAMFER_TILT = 12.0
+"""How far the axis of the reset countersink leans from the bore axis toward -Y,
+in degrees.
+
+The floor under the bore slopes about 16 degrees at the +Y rim and about 34
+degrees at the -Y mouth. So a countersink on the bore axis opens much wider on
+the +Y side, about 4.3 mm by 3.8 mm. With this lean, the mouth is almost the same
+width all round the bore, about 3.0 mm by 2.6 mm.
+
+More lean makes the mouth smaller on the +Y side. At 16 degrees the thinnest ray
+moves to the -Y bore wall above the countersink. At 20 degrees that ray is under
+FAB_MIN_WALL["SLA"]."""
 RESET_GUIDE_WALL = 1.05
 """Guide wall thickness, just over the PA12 minimum that PCBWay publishes for
 SLS. It was 0.8, two 0.4 mm extrusion widths, which is an FDM rationale that no

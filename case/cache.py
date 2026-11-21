@@ -278,7 +278,7 @@ def export_stl_cached(shape, dest):
     dest = Path(dest)
     angular_tolerance = (
         params.BACK_STL_ANGULAR_TOLERANCE
-        if dest.name == "c6remote-case-back.stl"
+        if dest.name in ("c6remote-case-back.stl", "c6remote-case-back-one-piece.stl")
         else STL_ANGULAR_TOLERANCE
     )
     if not enabled():

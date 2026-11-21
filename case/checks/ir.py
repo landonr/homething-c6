@@ -215,8 +215,9 @@ def receiver_paths(shells, back):
     return problems
 
 
-def receiver_clearance(back, window):
-    """Built shell and installed insert stay clear of U2 plus its optical margin."""
+def receiver_clearance(back, window=None):
+    """Built shell and installed insert stay clear of U2 plus its optical margin.
+    The one-piece back has no insert, so it comes with `window` None."""
     u2 = board.part_envelope("U2", radius=3.0)
     c = params.IR_CLEARANCE
     clearance = Pos(
@@ -228,7 +229,7 @@ def receiver_clearance(back, window):
         u2.size.Y + 2 * c,
         u2.max.Z - (u2.min.Z - c),
     )
-    intruding = (back + window).intersect(clearance)
+    intruding = (back if window is None else back + window).intersect(clearance)
     fouled = _volume(intruding)
     if fouled > TOLERANCE:
         # The intruding material's own bounds rather than the clearance volume's:
@@ -344,3 +345,63 @@ def window_installation(back, window):
                 box=closure, part="ir-window",
             ))
     return problems
+
+
+WELL_INSET = 0.25
+"""How far inside the well's own walls the pane readings stay."""
+
+WELL_STEP = 0.5
+"""Step of the pane readings across the well."""
+
+
+def one_piece_window(one_piece):
+    """The one-piece back keeps the insert's optical path. Across the well
+    under U2, each vertical bearing meets one run of material, IR_WINDOW_T
+    thick, from the exterior. Under the flange it meets IR_WINDOW_T plus
+    IR_WINDOW_FLANGE_T. Returns the problems and the thinnest and thickest
+    pane readings."""
+    part = "case-back-one-piece"
+    x0, x1, y0, y1 = _receiver_span()
+    inset = OPENING_INSET + WELL_INSET
+    problems, panes = [], []
+    x = x0 + inset
+    while x <= x1 - inset + 1e-9:
+        y = y0 + inset
+        while y <= y1 - inset + 1e-9:
+            runs = _bearing_runs(one_piece, x, y)
+            if len(runs) != 1:
+                problems.append(Problem(
+                    f"U2's beam meets {len(runs)} runs of the one-piece back "
+                    "here, wants the pane alone",
+                    at=(x, y, runs[0][0] if runs else 0.0), part=part,
+                ))
+            else:
+                depth = runs[0][1] - runs[0][0]
+                panes.append(depth)
+                if abs(depth - params.IR_WINDOW_T) > TOLERANCE:
+                    problems.append(Problem(
+                        f"U2's beam crosses {depth:.2f} of the one-piece back "
+                        f"here, wants the pane's {params.IR_WINDOW_T:.2f}",
+                        at=(x, y, runs[0][1]), part=part,
+                    ))
+            y += WELL_STEP
+        x += WELL_STEP
+    flange = params.IR_WINDOW_T + params.IR_WINDOW_FLANGE_T
+    mid = (OPENING_INSET + params.IR_WINDOW_FLANGE) / 2
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    for x, y in ((x1 + mid - OPENING_INSET, cy), (x0 - mid + OPENING_INSET, cy),
+                 (cx, y1 + mid - OPENING_INSET), (cx, y0 - mid + OPENING_INSET)):
+        runs = _bearing_runs(one_piece, x, y)
+        depth = runs[0][1] - runs[0][0] if runs else 0.0
+        if abs(depth - flange) > TOLERANCE:
+            problems.append(Problem(
+                f"the one-piece back stands {depth:.2f} off the exterior under "
+                f"the flange, wants the pane and flange's {flange:.2f}",
+                at=(x, y, runs[0][1] if runs else 0.0), part=part,
+            ))
+    if not panes:
+        problems.append(Problem(
+            "no pane reading across the one-piece back's well", part=part
+        ))
+        return problems, None
+    return problems, (len(panes), min(panes), max(panes))

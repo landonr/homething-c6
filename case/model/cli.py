@@ -151,14 +151,15 @@ def main():
         show(*parts.values(), *caps.values())
         return
 
-    # The FDM front and the one-piece front are two more copies of the same
-    # part, not further parts of the assembly, so they are added after --show
-    # has returned: showing them would draw three front shells in one place.
-    # features.py keys their features under their own file names, since those
-    # are the files the viewer loads. The V2 top pads replace one lobe of the
-    # FDM pads, so they stay out of --show too.
+    # The FDM front, the one-piece front and the one-piece back are more copies
+    # of the same parts, not further parts of the assembly, so they are added
+    # after --show has returned: showing them would draw three front shells in
+    # one place. features.py keys their features under their own file names,
+    # since those are the files the viewer loads. The V2 top pads replace one
+    # lobe of the FDM pads, so they stay out of --show too.
     parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
     parts["c6remote-case-front-one-piece"] = front_shell(one_piece=True)
+    parts["c6remote-case-back-one-piece"] = back_shell(one_piece=True)
     parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
     parts["c6remote-case-pad-tpu"] = button_pad(fdm=True, skirt=True, grooves=False)
     parts["c6remote-case-pad-tpu-blank"] = button_pad(
@@ -462,6 +463,11 @@ def main():
         f"{params.IR_WINDOW_FLANGE_T:.2f} thick reaches "
         f"{params.IR_WINDOW_FLANGE:.2f} past the opening, retaining on "
         f"{ir_window_retention():.2f} with {params.IR_WINDOW_FIT:.2f} adhesive gap"
+    )
+    print(
+        f"  the one-piece back fuses the window in and closes the "
+        f"{params.IR_WINDOW_FIT:.2f} gap, so U2 still looks through "
+        f"{params.IR_WINDOW_T:.2f} of resin and needs no separate window"
     )
     lens = board.emitter_envelope()
     print(

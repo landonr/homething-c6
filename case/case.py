@@ -30,6 +30,7 @@ floor. Its pane follows the built back contour, presses into the aperture, and
 lands flush outside; its open interior flange retains on a continuous shell
 shoulder that also carries adhesive. It installs from inside the back shell
 before the shells close. The emitter fires along +Y through a separate flared bore.
+The one-piece back fuses the window into the back shell for a clear print.
 
     python case.py            write an STL for each part, shells, pad, window
                               and caps

@@ -26,6 +26,11 @@ with one shell, so no void is closed inside it where the two parts met. It
 holds every point that the recessed front and the insert without its feet
 hold. Rays read both builds on the ring, on each lobe and across the whole
 part.
+
+One-piece back: the back with the IR window fused in is one solid with one
+shell. It holds every point that the back and the window hold, and the only
+material it adds is the closed IR_WINDOW_FIT gap round the flange. Rays read
+both builds over the window and across the whole part.
 """
 
 import math
@@ -38,7 +43,7 @@ from build123d import Box, Compound, GeomType, Pos, Rot, Vertex
 
 from model import shells
 from model.hardware import end_screw_axis, end_screw_block_span
-from model.ir import emitter_bore
+from model.ir import emitter_bore, ir_window_span
 from model.qwiic import qwiic_slot
 from model.stack import (
     BOARD_TOP,
@@ -71,6 +76,7 @@ EXPORT_STEMS = {
     "front shell": "case-front",
     "one-piece front shell": "case-front-one-piece",
     "back shell": "case-back",
+    "one-piece back shell": "case-back-one-piece",
     "button pad": "case-pad",
     "FDM V2 top pad": "case-pad-fdm-v2-top",
     "moulded V2 top pad": "case-pad-v2-top",
@@ -1204,6 +1210,133 @@ def one_piece_front(front, insert, one_piece):
             part=part,
         ))
     return problems, {"rays": rays, "held": held, "worst": worst}
+
+
+ONE_PIECE_BACK_STEP = 0.2
+"""Step of the dense rays over the IR window. Each side of the flange and of
+the closed IR_WINDOW_FIT gap then takes several rays."""
+
+ONE_PIECE_BACK_REACH = 1.0
+"""How far past the rebate the dense rays reach, into plain floor."""
+
+
+def _one_piece_back_rays(back):
+    """(start, end) of each ray the one-piece back check reads: a dense grid
+    that drops through the IR window and a coarse grid over the whole part.
+    Each ray leans by ONE_PIECE_LEAN, for the reason in _one_piece_rays()."""
+    x0, x1, y0, y1 = ir_window_span()
+    m = params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT + ONE_PIECE_BACK_REACH
+    top, low = BOARD_TOP, SHELL_BACK - 1
+    drop = top - low
+    lean_x, lean_y = ONE_PIECE_LEAN * drop, 0.6 * ONE_PIECE_LEAN * drop
+    x = x0 - m + 0.013
+    while x < x1 + m:
+        y = y0 - m + 0.017
+        while y < y1 + m:
+            yield (x, y, top), (x + lean_x, y + lean_y, low)
+            y += ONE_PIECE_BACK_STEP
+        x += ONE_PIECE_BACK_STEP
+    box = back.bounding_box()
+    drop = box.max.Z - box.min.Z + 2
+    x = box.min.X + 0.37
+    while x < box.max.X:
+        y = box.min.Y + 0.41
+        while y < box.max.Y:
+            yield (
+                (x, y, box.max.Z + 1),
+                (x + ONE_PIECE_LEAN * drop, y + 0.6 * ONE_PIECE_LEAN * drop,
+                 box.min.Z - 1),
+            )
+            y += ONE_PIECE_GRID
+        x += ONE_PIECE_GRID
+
+
+def one_piece_back(back, window, one_piece):
+    """The one-piece back is one solid with one shell. It holds every point
+    that the back and the IR window hold, and it adds material only in the
+    gap between the two.
+
+    Rays read both builds. On each ray, the runs of the back and the window
+    together must lie inside the runs of the one-piece back. A run of the
+    one-piece back that neither part holds passes only if its middle is
+    between the two parts, no further from both together than IR_WINDOW_FIT
+    plus ONE_PIECE_TOL. That is the closed adhesive gap round the flange.
+    Returns the problems and the readings."""
+    problems = []
+    part = "case-back-one-piece"
+    solids = one_piece.solids()
+    shells_ = one_piece.shells()
+    if len(solids) != 1:
+        problems.append(Problem(
+            f"the one-piece back is {len(solids)} solids, not one", part=part
+        ))
+    if len(shells_) != 1:
+        problems.append(Problem(
+            f"the one-piece back has {len(shells_)} shells, not one: a second "
+            "shell is a void closed inside the part",
+            part=part,
+        ))
+    if not one_piece.is_valid:
+        problems.append(Problem("the one-piece back is not a valid solid", part=part))
+
+    x0, x1, y0, y1 = ir_window_span()
+    m = params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT + ONE_PIECE_BACK_REACH + 1
+    crop = Pos((x0 + x1) / 2, (y0 + y1) / 2, (SHELL_BACK + BOARD_TOP) / 2) * Box(
+        x1 - x0 + 2 * m, y1 - y0 + 2 * m, BOARD_TOP - SHELL_BACK + 2
+    )
+    near = back.intersect(crop)
+    if isinstance(near, list):
+        near = Compound(list(near))
+    gap = params.IR_WINDOW_FIT + ONE_PIECE_TOL
+
+    rays = filled = 0
+    worst = 0.0
+    misses, extras = [], []
+    for start, end in _one_piece_back_rays(back):
+        rays += 1
+        want = _merged(_ray_runs(back, start, end), _ray_runs(window, start, end))
+        have = _ray_runs(one_piece, start, end)
+        span = [b - a for a, b in zip(start, end)]
+        length = math.sqrt(sum(c * c for c in span))
+
+        def at(first, last):
+            t = (first + last) / 2 / length
+            return tuple(a + t * c for a, c in zip(start, span))
+
+        for first, last in _uncovered(want, have):
+            if last - first > ONE_PIECE_TOL:
+                misses.append((last - first, at(first, last)))
+        for first, last in _uncovered(have, want):
+            if last - first <= ONE_PIECE_TOL:
+                continue
+            p = at(first, last)
+            across = near.distance_to(Vertex(*p)) + window.distance_to(Vertex(*p))
+            if across <= gap:
+                filled += 1
+                worst = max(worst, across)
+            else:
+                extras.append((across, last - first, p))
+    misses.sort(reverse=True)
+    for run, p in misses[:ONE_PIECE_SHOWN]:
+        problems.append(Problem(
+            f"the one-piece back misses {run:.3f} of material that the back "
+            "and the IR window hold",
+            at=p, part=part,
+        ))
+    extras.sort(reverse=True)
+    for across, run, p in extras[:ONE_PIECE_SHOWN]:
+        problems.append(Problem(
+            f"the one-piece back holds {run:.3f} of material that neither the "
+            f"back nor the IR window holds, {across:.3f} across from one to the "
+            f"other, over IR_WINDOW_FIT plus ONE_PIECE_TOL {gap:.3f}",
+            at=p, part=part,
+        ))
+    more = max(len(misses) - ONE_PIECE_SHOWN, 0) + max(len(extras) - ONE_PIECE_SHOWN, 0)
+    if more:
+        problems.append(Problem(
+            f"{more} more runs differ from the two-part build", part=part
+        ))
+    return problems, {"rays": rays, "filled": filled, "worst": worst}
 
 
 def interference(parts):

@@ -30,12 +30,14 @@ PARTS = (
     "c6remote-case-back.stl",
     "c6remote-ring-insert.stl",
     "c6remote-case-front-one-piece.stl",
+    "c6remote-case-back-one-piece.stl",
 )
 """The PCBWay SLA or SLS parts, by export name. The insert goes on the same
 order as the shells, in UTR-8100 beside their Somos Taurus, so it holds the
 same minimum. The one-piece front replaces the front and the insert on a clear
-order, so it holds the same minimum too. The FDM front, the pads, the caps and
-the IR window are printed elsewhere."""
+order, so it holds the same minimum too. The one-piece back replaces the back
+and the IR window in the same way. The FDM front, the pads, the caps and the
+IR window are printed elsewhere."""
 
 SAMPLES_PER_MM2 = 10
 SEED = 1
@@ -73,7 +75,7 @@ AREA_SLACK = 1.0
 # edge. The mesh decides where the samples fall, so a change elsewhere in the
 # part moves all of them, and such a row can appear or go with no change to its
 # own geometry. Read the wall column to tell a thin sheet from an edge.
-FRONT, BACK, INSERT, ONE_PIECE = PARTS
+FRONT, BACK, INSERT, ONE_PIECE, ONE_PIECE_BACK = PARTS
 
 KNOCKOUT = (
     "Qwiic breakaway cover. QWIIC_KNOCKOUT_T carries the panel over the PA12 "
@@ -140,6 +142,21 @@ ACCEPTED.update({
     if name == FRONT
 })
 ACCEPTED[(ONE_PIECE, "wheel_lip_relief")] = (None, 2.2, BORE[0].upper() + BORE[1:])
+
+# The one-piece back is the back everywhere but the IR window, so it carries the
+# back's accepted features under the same ids. It has no opening edge, so the
+# opening's taper does not carry over. Any thin reading at the window is new
+# and must come to a person.
+ACCEPTED.update({
+    (ONE_PIECE_BACK, fid): entry
+    for (name, fid), entry in list(ACCEPTED.items())
+    if name == BACK and fid != "ir_window_opening"
+})
+ACCEPTED[(ONE_PIECE_BACK, "end_screw.head")] = (
+    None, 0.3,
+    KNIFE + ", at the end screw counterbore rim. The back has the same rim, and "
+    "its samples miss it"
+)
 
 FIRST_REACH = 4.0
 REACH_GROWTH = 4.0
@@ -392,7 +409,7 @@ def _judge(name, row, process, minimum):
     return ", ".join(flags) or "accepted", warn, problems
 
 
-def fab_walls(front, back, insert, one_piece):
+def fab_walls(front, back, insert, one_piece, one_piece_back):
     """Measure each printed part against FAB_MIN_WALL[FAB_PROCESS].
 
     Returns the lines to print, the failures, and how many accepted features
@@ -404,7 +421,9 @@ def fab_walls(front, back, insert, one_piece):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         named = write_features(tmp / "c6remote-features.json")["parts"]
-        for name, shape in zip(PARTS, (front, back, insert, one_piece)):
+        for name, shape in zip(
+            PARTS, (front, back, insert, one_piece, one_piece_back)
+        ):
             # The real export name, because the cached STL blob and the back's
             # angular tolerance are keyed on it.
             cache.export_stl_cached(shape, tmp / name)

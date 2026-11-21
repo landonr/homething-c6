@@ -103,6 +103,7 @@
     main.doc code {
       background: var(--grey); padding: .1em .35em; border-radius: 4px;
       font-size: .86em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-wrap: anywhere;
     }
     main.doc pre {
       background: var(--grey); padding: 1rem 1.2rem; border-radius: 10px;
@@ -166,7 +167,7 @@
 
 <p class="lede">Test an assembled homeThing C6 board with the factory firmware. You need no computer and no Wi-Fi credentials.</p>
 
-<p>Download <a href="firmware/homething-c6-provisioning.factory.bin"><code>homething-c6-provisioning.factory.bin</code></a>, which is always the newest firmware release. Erase the flash first, so that the board has no saved Wi-Fi network. Then write the file at offset <code>0x0</code> over USB:</p>
+<p>Download <a href="firmware/homething-c6-provisioning.factory.bin"><code>homething-c6-provisioning.factory.bin</code></a>, which is always the newest firmware release. Its address is <code>https://landonr.github.io/homething-c6/firmware/homething-c6-provisioning.factory.bin</code>. Erase the flash first, so that the board has no saved Wi-Fi network. Then write the file at offset <code>0x0</code> over USB:</p>
 <pre><code>esptool.py --chip esp32c6 erase_flash
 esptool.py --chip esp32c6 write_flash 0x0 homething-c6-provisioning.factory.bin</code></pre>
 <p>This firmware also does the Wi-Fi setup for the customer. Do not give the board a network during the test, because the board then installs the full firmware and the self-test is gone.</p>

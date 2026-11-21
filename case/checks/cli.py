@@ -1,0 +1,1959 @@
+"""Run every pass in order and print one line each.
+
+check.py is the entry point that calls main() here. The order is the report,
+so a new pass goes where its subject belongs rather than at the end.
+
+Every pass carries the name of the checks module it lives in, and `--only`
+takes a comma list of those names. Scoping is worth having because the solids
+are built on demand: an ir-only run never touches the pad or the keycap
+legends, so it skips the build a full run pays for. A pass whose subject is the
+whole assembly rather than one feature is tagged `assembly` instead, so scoping
+one side of it never runs it half blind.
+
+`--jobs N` spreads the passes themselves across N processes rather than the
+features. It defaults to 10, because the suite is CPU-bound and a serial run
+leaves a workstation idle: a full run took 73 minutes serial and is bounded
+below by one pass, assembly.parts_are_sound, at about 10 minutes. Pass 1 to
+make a run serial again. The features are wildly uneven, one of them being better than a third
+of the suite on its own, so feature-sized units of work leave most of the pool
+idle within seconds and put a floor under the wall clock at whatever the slowest
+single feature costs. Pass-sized units have no such floor, which also means a
+larger --jobs is worth asking for than it used to be.
+
+Passes then finish in whatever order they finish, and each one says so the
+moment it does. A failed pass also prints its reasons under that line, so a long
+run shows why it failed before the run ends. The report proper is replayed
+afterwards in registry order, so what a run prints as its verdict never depends
+on how the work happened to land across the pool. Only the progress lines and
+those reasons are in completion order, and nothing reads them back.
+
+What a pass decided is kept, so a run that changed neither the geometry nor the
+checks replays the last answer rather than spending the CPU again. verdicts.py
+holds the key and says what it does and does not cover. The replay happens here
+before anything is built, so a fully stored run prewarms nothing and starts no
+pool: only the passes still missing reach a worker. `--recheck` runs them all
+again and keeps the solids warm.
+"""
+
+import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import functools
+import io
+import json
+import multiprocessing
+import os
+import sys
+import time
+import traceback
+
+import board
+import cache
+import case
+import params
+
+from . import verdicts
+from .apertures import probe_apertures
+from .common import Problem
+from .caps import (
+    cap_fits_around_perimeter,
+    caps_fit,
+    caps_flush,
+    caps_proud_of_pocket,
+    caps_rest_on_pad,
+    legends_are_strokes,
+    legends_present,
+)
+from .fab import fab_walls
+from .fdm import (
+    ceilings_hold,
+    edge_chamfer_is_sized,
+    face_is_flat,
+    fdm_keytops_are_attached,
+    fdm_keytops_have_top_fillets,
+    fdm_pad_fits,
+    led_channel_is_half_depth,
+    outline_is_cut,
+    outline_solid_sane,
+    recessed_mouth_is_plain,
+    wheel_mouth_is_chamfered,
+)
+from .hardware import (
+    cell_clearance,
+    end_screw,
+    end_screw_fit,
+    end_screw_grip_corner,
+    end_screw_side_tie,
+    feature_clashes,
+)
+from .ir import (
+    emitter_beam_clearance,
+    emitter_chamfer_angle,
+    end_ports_open,
+    receiver_clearance,
+    receiver_paths,
+    window_installation,
+)
+from .front_ledge import (
+    front_ledge_bearing,
+    front_ledge_clearance,
+    front_ledge_fit,
+    front_ledge_fused,
+    front_ledge_intact,
+    front_ledge_printable,
+    front_ledge_window,
+)
+from .legacy import (
+    MOULDED_TOP_PAD,
+    TPU_TOP_PAD,
+    legacy_keytops_level,
+    legacy_nib_contact,
+    legacy_part_moves,
+    legacy_frame_shared,
+    legacy_skirt_clears_board,
+    legacy_skirt_depth,
+    legacy_top_pad_fits,
+    moulded_top_pad_caps_rest,
+)
+from .keypad import (
+    TPU_PART,
+    blank_tpu_pads,
+    tpu_pad_fits,
+    groove_clearances,
+    mic_pad_contour,
+    neck_blends_smoothly,
+    neck_continuity,
+    pad_clears_board,
+    pad_x_float,
+    pad_clears_wheel,
+    pad_fits,
+    pad_skirt_depth,
+    grid_outer_edge,
+    pad_isolation_grooves,
+    plain_web_problems,
+    pad_wall_fit,
+    plunger_stub_contact,
+    recess_edge_clearance,
+    recess_land,
+    recess_margins,
+    recess_solid_sane,
+    recesses_open,
+    rim_chamfer_profile,
+    wheel_basin_shape,
+)
+from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
+from .shells import (
+    interference,
+    ir_end_lap_wall,
+    one_piece_front,
+    parts_are_sound,
+    seam_shadow_line,
+    shells_mate,
+    side_seam_retention,
+    side_skirt_lead_ins,
+)
+from .support import (
+    support_board_clearance,
+    support_case_containment,
+    support_cell_clearance,
+    support_flat_bearing,
+    support_inner_round,
+    support_min_run,
+    support_part_clearance,
+    support_printable,
+    support_skirt_fit,
+    support_wall_merge,
+)
+from .usb import usb_clearance
+from .qwiic import qwiic_access, qwiic_knockout, qwiic_skirt_transition, battery_lead_clearance
+from .wheel_ring import (
+    bore_round,
+    fdm_wheel_seat,
+    inner_chamfer_is_cut,
+    led_ring,
+    light_path,
+    pressed_caps_clear_lobes,
+    rotation_clearance,
+    wheel_seat_clearance,
+)
+
+
+class Solids:
+    """The shapes the passes probe, each built the first time one asks for it.
+
+    Demand-driven rather than built up front so that `--only` is worth using on
+    a cache miss, which is the state right after the edit that prompts a scoped
+    run.
+    """
+
+    @functools.cached_property
+    def front(self):
+        return case.front_shell()
+
+    @functools.cached_property
+    def front_fdm(self):
+        return case.front_shell(fdm=True)
+
+    @functools.cached_property
+    def front_one_piece(self):
+        return case.front_shell(one_piece=True)
+
+    @functools.cached_property
+    def back(self):
+        return case.back_shell()
+
+    @functools.cached_property
+    def shells(self):
+        return self.back + self.front
+
+    @functools.cached_property
+    def pad(self):
+        return case.button_pad()
+
+    @functools.cached_property
+    def pad_fdm(self):
+        return case.button_pad(fdm=True)
+
+    @functools.cached_property
+    def pad_tpu(self):
+        return case.button_pad(fdm=True, skirt=True, grooves=False)
+
+    @functools.cached_property
+    def pad_tpu_blank(self):
+        return case.button_pad(fdm=True, skirt=True, grooves=False, legend=False)
+
+    @functools.cached_property
+    def pad_tpu_v2_blank(self):
+        return case.button_pad(
+            fdm=True, skirt=True, grooves=False, legend=False, v2=True
+        )
+
+    @functools.cached_property
+    def pad_fdm_v2_top(self):
+        return case.legacy_top_pad()
+
+    @functools.cached_property
+    def pad_tpu_v2_top(self):
+        return case.legacy_top_pad(skirt=True)
+
+    @functools.cached_property
+    def pad_v2_top(self):
+        return case.legacy_top_pad(fdm=False, skirt=True)
+
+    @functools.cached_property
+    def ring_insert(self):
+        return case.led_ring_insert()
+
+    @functools.cached_property
+    def ring_insert_footless(self):
+        return case.led_ring_insert(feet=False)
+
+    @functools.cached_property
+    def front_with_ring(self):
+        """The recessed front and the part that fills its ring, as one shape.
+
+        led_ring_channel() bores the whole ring out of the shell, so a pass
+        that reads the built front face has to read both or it finds a hole
+        where the lit band is. The two do not touch, by RING_INSERT_FACE_FIT,
+        so this stays a compound and the readers walk both.
+        """
+        return self.front + self.ring_insert
+
+    @functools.cached_property
+    def window(self):
+        return case.ir_window()
+
+    @functools.cached_property
+    def screw(self):
+        return case.end_screw()
+
+    @functools.cached_property
+    def caps(self):
+        return {ref: case.keycap(ref) for ref in case.cap_refs()}
+
+    @functools.cached_property
+    def caps_plain(self):
+        return {ref: case.keycap(ref, legend=False) for ref in case.cap_refs()}
+
+
+CHECKS = []
+
+CHECKS_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "export", "c6remote-checks.json")
+
+_PENDING = []
+"""The problems the pass now running has reported, drained by _run_pass().
+
+A pass says where a failure is by appending a checks.common.Problem rather than
+a bare string, and the printed report cannot carry that. This is where the
+objects wait to be written to the JSON report, which is what the viewer draws
+from. It is filled and drained inside one process, so a --jobs run keeps its own
+per worker and only dicts ever cross a fork.
+"""
+
+
+def _check(feature):
+    def register(fn):
+        CHECKS.append((feature, fn))
+        return fn
+
+    return register
+
+
+def _report(problems, passed):
+    """Print a pass's problem lines, or its one-line all-clear, and say which."""
+    if problems:
+        _PENDING.extend(problems)
+        for line in problems:
+            print(f"  {line}")
+        return False
+    print(passed)
+    return True
+
+
+@_check("apertures")
+def _apertures(s):
+    blocked = probe_apertures(s.shells)
+    if blocked:
+        print(f"{len(blocked)} apertures blocked:")
+        for name, volume in blocked:
+            print(f"  {name:<6} {volume:8.2f} mm3 of material on the centreline")
+        return False
+    print("all apertures clear")
+    return True
+
+
+@_check("keypad")
+def _pad_fits(s):
+    return _report(
+        pad_fits(s.front, s.pad), "pad seats in the front shell without fouling it"
+    )
+
+
+@_check("keypad")
+def _pad_wall_fit(s):
+    problems, readings = pad_wall_fit([
+        ("pad", s.front, s.pad),
+        ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("TPU pad", s.front, s.pad_tpu),
+        ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+        ("V2 TPU top pad", s.front, s.pad_tpu_v2_top),
+        ("moulded V2 top pad", s.front, s.pad_v2_top),
+    ])
+    gaps = ", ".join(
+        f"{label} {pair[0]:.2f}/{pair[1]:.2f}"
+        for label, pair in readings.items()
+        if pair
+    )
+    return _report(
+        problems,
+        f"every pad keeps at least PAD_FIT {params.PAD_FIT:.2f} to the front's "
+        f"wall on both long sides, -X/+X: {gaps}",
+    )
+
+
+@_check("keypad")
+def _pad_x_float(s):
+    problems, readings = pad_x_float([
+        ("pad", s.front, s.pad),
+        ("FDM pad", s.front_fdm, s.pad_fdm),
+        ("TPU pad", s.front, s.pad_tpu),
+        ("V2 top pad", s.front_fdm, s.pad_fdm_v2_top),
+        ("V2 TPU top pad", s.front, s.pad_tpu_v2_top),
+        ("moulded V2 top pad", s.front, s.pad_v2_top),
+    ])
+    floats = ", ".join(f"{label} {drift:.2f}" for label, drift in readings.items())
+    return _report(
+        problems,
+        f"no pad shifts more than SOCKET_LEAD {params.SOCKET_LEAD:.2f} in x "
+        f"before a locating tab meets the wall: {floats}",
+    )
+
+
+@_check("keypad")
+def _plunger_stub_contact(s):
+    return _report(
+        plunger_stub_contact(s.pad),
+        "every plunger lands on its switch top within tolerance",
+    )
+
+
+@_check("keypad")
+def _pad_skirt_depth(s):
+    problems, lines = pad_skirt_depth(s.pad)
+    more, fdm_lines = pad_skirt_depth(s.pad_tpu, True, False)
+    problems.extend(f"TPU pad: {problem}" for problem in more)
+    return _report(
+        problems,
+        "pad skirts reach the plunger bottoms, are flush with the web edge and "
+        f"{params.PAD_SKIRT_T:.2f} mm thick. "
+        "Moulded: " + ", ".join(lines) + ". TPU: " + ", ".join(fdm_lines),
+    )
+
+
+@_check("keypad")
+def _pad_clears_board(s):
+    problems, line = pad_clears_board(s.pad)
+    more, fdm_line = pad_clears_board(s.pad_tpu)
+    problems.extend(f"TPU pad: {problem}" for problem in more)
+    return _report(problems, f"moulded: {line}. TPU: {fdm_line}")
+
+
+@_check("keypad")
+def _mic_pad_contour(s):
+    return _report(
+        mic_pad_contour(s.pad),
+        "mic pad is solid between its buttons and stays out of the mic duct "
+        + ("clearance, with an open notch and rounded notch corners"
+           if case.pad_mic_notch("second") else "clearance without a notch"),
+    )
+
+
+@_check("keypad")
+def _pad_isolation_grooves(s):
+    problems = pad_isolation_grooves(s.pad_fdm)
+    problems.extend(grid_outer_edge(s.pad_fdm))
+    return _report(
+        problems,
+        f"the FDM reliefs are {params.FDM_PAD_GROOVE_W:.2f} mm wide and "
+        f"are cut from the keytop face only, leaving a flat underside and "
+        f"{params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH:.2f} mm of hinge, "
+        f"with 45 degree walls down to the floor ({params.FDM_PAD_GRID_CHAMFER:.2f} mm leg) on both lips of each relief, "
+        f"and a {params.FDM_PAD_EDGE_CHAMFER:.2f} mm chamfer on the grid lobe outer top edge",
+    )
+
+
+@_check("keypad")
+def _tpu_pad_plain_web(s):
+    problems = plain_web_problems(s.pad, "moulded pad")
+    problems.extend(plain_web_problems(s.pad_tpu, "TPU pad"))
+    return _report(
+        problems,
+        "the moulded pad and the one-piece TPU pad have a plain web with square edges: "
+        "no grooves along the grid lines and no chamfer on the outer top edge",
+    )
+
+
+@_check("keypad")
+def _groove_clearances(s):
+    return _report(
+        groove_clearances(s.pad_fdm),
+        "FDM grooves clear stems and keytop bases; the reliefs exit "
+        "both grid-lobe edges at full width; SW1/SW2 stay unchanged",
+    )
+
+
+@_check("caps")
+def _caps_fit(s):
+    return _report(
+        caps_fit(s.front, s.pad, s.caps),
+        f"{len(s.caps)} caps clear the shell, grip their stems and stay captive "
+        "under the face land",
+    )
+
+
+@_check("caps")
+def _cap_fits_around_perimeter(s):
+    return _report(
+        cap_fits_around_perimeter(),
+        "flange overlap, counterbore clearance and guide clearance are all no "
+        "tighter around the cap curve than the widths they are stated at",
+    )
+
+
+@_check("caps")
+def _caps_rest_on_pad(s):
+    return _report(
+        caps_rest_on_pad(s.pad, s.caps),
+        f"all {len(s.caps)} cap flanges rest on the pad web",
+    )
+
+
+@_check("caps")
+def _caps_flush(s):
+    return _report(
+        caps_flush(),
+        f"released cap tops share one level, at least {params.CAP_PROTRUSION:.2f} "
+        f"proud of the front face, and stay at or above it through a full press",
+    )
+
+
+@_check("keypad")
+def _pad_clears_wheel(s):
+    return _report(
+        pad_clears_wheel(s.pad),
+        f"both pad lobes stay out of the wheel's keep-outs, which include the "
+        f"ring insert's lobes, and so does the V2 top lobe",
+    )
+
+
+@_check("caps")
+def _caps_proud_of_pocket(s):
+    return _report(
+        caps_proud_of_pocket(),
+        "every cap stands proud of the recess floor by exactly its local depth",
+    )
+
+
+@_check("caps")
+def _legends_present(s):
+    return _report(
+        legends_present(s.caps),
+        f"all {len(s.caps)} legends cut a real deboss out of one solid cap, "
+        "every glyph in the font",
+    )
+
+
+@_check("caps")
+def _legends_are_strokes(s):
+    return _report(
+        legends_are_strokes(s.caps),
+        f"all {len(s.caps)} legends are shallow lines read off the built caps: "
+        "right depth, hollow glyph interiors, line weight within reach",
+    )
+
+
+@_check("fdm")
+def _fdm_keytops_are_attached(s):
+    return _report(
+        fdm_keytops_are_attached(s.pad_fdm),
+        f"all {len(case.cap_refs())} FDM keytops start flush with and are fused "
+        "to their pad lobes",
+    )
+
+
+@_check("keypad")
+def _tpu_keytops_are_attached(s):
+    return _report(
+        fdm_keytops_are_attached(s.pad_tpu, TPU_PART),
+        f"all {len(case.cap_refs())} TPU keytops start flush with and are fused "
+        "to their pad lobes",
+    )
+
+
+@_check("keypad")
+def _blank_tpu_pads(s):
+    v2_twin = case.button_pad(fdm=True, skirt=True, grooves=False, v2=True)
+    problems, lines = blank_tpu_pads([
+        ("TPU pad", s.pad_tpu_blank, s.pad_tpu, []),
+        (
+            "V2 TPU pad",
+            s.pad_tpu_v2_blank,
+            v2_twin,
+            [("V2 lobe", case.legacy_top_pad(skirt=True, legend=False))],
+        ),
+    ])
+    return _report(
+        problems,
+        "blank TPU pads match their legend twins' extents, contain them and the V2 lobe, hold more material "
+        f"({', '.join(lines)} mm3) and are flat at all {len(case.cap_refs())} "
+        "keytop centres each",
+    )
+
+
+@_check("keypad")
+def _tpu_pad_fits(s):
+    return _report(
+        tpu_pad_fits(s.front, s.pad_tpu),
+        "the TPU pad clears the recessed front released and through switch "
+        "travel, its keytops keep FDM_CAP_GUIDE_CLEARANCE "
+        f"({params.FDM_CAP_GUIDE_CLEARANCE:.2f}) to their face holes and stand proud of the recess",
+    )
+
+
+@_check("fdm")
+def _fdm_keytops_have_top_fillets(s):
+    return _report(
+        fdm_keytops_have_top_fillets(),
+        f"all {len(case.cap_refs())} FDM keytops have the rigid caps' "
+        f"{params.CAP_TOP_FILLET:.2f} mm exposed-top fillet",
+    )
+
+
+@_check("fdm")
+def _fdm_pad_fits(s):
+    return _report(
+        fdm_pad_fits(s.front_fdm, s.pad_fdm),
+        "the FDM pad clears the FDM front released and through switch travel",
+    )
+
+
+@_check("fdm")
+def _outline_solid_sane(s):
+    return _report(
+        outline_solid_sane(),
+        f"the FDM outline cut is one band {params.FDM_OUTLINE_W:.2f} wide and "
+        f"{params.FDM_OUTLINE_DEPTH:.2f} deep, on the recess's own rim",
+    )
+
+
+@_check("fdm")
+def _edge_chamfer_is_sized(s):
+    return _report(
+        edge_chamfer_is_sized(s.front_fdm),
+        f"the FDM front's top edge has a {case.front_edge_round(True):.2f} "
+        f"45 degree chamfer rather than the {case.front_edge_round():.2f} end roll, "
+        f"leaving the outline "
+        f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it",
+    )
+
+
+@_check("fdm")
+def _ceilings_hold(s):
+    return _report(
+        ceilings_hold(s.front_fdm),
+        f"the {params.FDM_FACE_DROP:.2f} the FDM face drops leaves every "
+        f"ceiling it thins above the floor the recessed front holds it to",
+    )
+
+
+@_check("fdm")
+def _led_channel_is_half_depth(s):
+    return _report(
+        led_channel_is_half_depth(s.front_fdm),
+        f"the FDM LED ring channel is "
+        f"{params.FDM_LED_RING_DEPTH_RATIO:.2f} times the depth LED_RING_ROOF "
+        f"leaves over the cavity ceiling",
+    )
+
+
+@_check("fdm")
+def _face_is_flat(s):
+    return _report(
+        face_is_flat(s.front_fdm),
+        "the FDM front's face is flat everywhere the recessed one is dished",
+    )
+
+
+@_check("fdm")
+def _wheel_mouth_is_chamfered(s):
+    return _report(
+        wheel_mouth_is_chamfered(s.front_fdm),
+        f"the FDM front's bore opens at "
+        f"{case.fdm_wheel_opening_r():.2f} and its mouth chamfers out to "
+        f"{case.fdm_wheel_mouth_r():.2f} on one 45 degree cone, with the flat "
+        f"face resuming outside it",
+    )
+
+
+@_check("fdm")
+def _recessed_mouth_is_plain(s):
+    return _report(
+        recessed_mouth_is_plain(s.front_with_ring),
+        f"the recessed front carries none of that mouth: it dishes across the "
+        f"same band rather than chamfering, so WHEEL_OPENING_R and every LED "
+        f"ring radius derived off it are untouched",
+    )
+
+
+@_check("fdm")
+def _outline_is_cut(s):
+    return _report(
+        outline_is_cut(s.front_fdm),
+        f"the outline is cut to depth all the way round and leaves material "
+        f"under every point of itself",
+    )
+
+
+@_check("shells")
+def _shells_mate(s):
+    problems, preload = shells_mate(s.front, s.back)
+    readings = []
+    for name, (volume, box) in sorted(preload.items()):
+        if box is None:
+            readings.append(f"{name} none")
+            continue
+        inner, outer, z0, z1, reach = box
+        readings.append(
+            f"{name} {volume:.3f} mm3 at r {inner:.3f}..{outer:.3f} "
+            f"z {z0:.3f}..{z1:.3f} y +/-{reach:.3f}"
+        )
+    return _report(
+        problems,
+        "front and back mate with no overlap but the side catch preload on "
+        f"the lower lip: {', '.join(readings) or 'none'}",
+    )
+
+
+@_check("shells")
+def _side_seam_retention(s):
+    return _report(
+        side_seam_retention(s.front, s.back),
+        "both blind side pockets retain a continuous skirt floor, engage "
+        "lowered detents with insertion and release ramps, preload the lower "
+        "lip, clear the upper lip, and keep lower and upper skirt land, board-edge "
+        "clearance, the stiffener round the grip end and its IR-end taper, "
+        "flush up to the ceiling past the seam and the LED ring channel, and "
+        "grip-end relief with its side tapers",
+    )
+
+
+@_check("shells")
+def _side_skirt_lead_ins(s):
+    return _report(
+        side_skirt_lead_ins(s.front),
+        "side support-break ramps cut across the full reinforced skirt depth",
+    )
+
+
+@_check("shells")
+def _ir_end_lap_wall(s):
+    problems, thinnest = ir_end_lap_wall(s.back)
+    where = (
+        f"thinnest {thinnest[0]:.2f} mm at {thinnest[1]}, z {thinnest[2]:.2f}"
+        if thinnest
+        else "no reading"
+    )
+    return _report(
+        problems,
+        f"back lap keeps LAP_MIN_WALL {params.LAP_MIN_WALL:.2f} of wall to its "
+        f"outer round around the IR end: {where}",
+    )
+
+
+@_check("shells")
+def _one_piece_front(s):
+    problems, readings = one_piece_front(
+        s.front, s.ring_insert_footless, s.front_one_piece
+    )
+    return _report(
+        problems,
+        f"the one-piece front is one solid with one shell and holds every "
+        f"point of the recessed front and the footless ring insert on "
+        f"{readings['rays']} rays. {readings['held']} runs of the insert's "
+        f"loft stand off it, the furthest by {readings['worst']:.3f}, inside "
+        f"ONE_PIECE_TOL",
+    )
+
+
+@_check("shells")
+def _seam_shadow_line(s):
+    problems, readings = seam_shadow_line(
+        s.back, [(s.front, "case-front"), (s.front_fdm, "case-front-fdm")]
+    )
+    spans = [
+        f"{label} {readings[key][0]:.3f}..{readings[key][1]:.3f}"
+        for key, label in (("depth", "depth"), ("height", "height"), ("wall", "lap wall"))
+        if readings[key]
+    ]
+    return _report(
+        problems,
+        f"seam shadow groove is open round all {readings['stations']} stations "
+        f"of the back lap, {', '.join(spans)} over LAP_MIN_WALL "
+        f"{params.LAP_MIN_WALL:.2f}, and both fronts roof it and leave it open "
+        f"at {readings['fronts']} stations",
+    )
+
+
+@_check("wheel_ring")
+def _light_path(s):
+    return _report(
+        light_path(s.shells, s.pad, s.ring_insert),
+        "every LED has an open pad below it, open channel above it and solid "
+        "insert over that, with no shell roof left in between",
+    )
+
+
+@_check("wheel_ring")
+def _pressed_caps_clear_lobes(s):
+    problems, line = pressed_caps_clear_lobes(s.caps, s.ring_insert)
+    return _report(problems, line)
+
+
+@_check("wheel_ring")
+def _bore_round(s):
+    problems, line = bore_round(s.ring_insert, s.front_one_piece)
+    return _report(problems, line)
+
+
+@_check("wheel_ring")
+def _led_ring(s):
+    return _report(
+        led_ring(s.front, s.ring_insert),
+        "ring insert is solid all the way around, out from the wheel bore to "
+        "the face, where the shell keeps no roof of its own",
+    )
+
+
+@_check("wheel_ring")
+def _inner_chamfer_is_cut(s):
+    return _report(
+        inner_chamfer_is_cut(s.front_fdm),
+        f"the FDM LED channel has a {params.LED_RING_INNER_CHAMFER:.2f} mm "
+        "chamfer at the inner roof edge",
+    )
+
+
+@_check("wheel_ring")
+def _wheel_seat_clearance(s):
+    return _report(
+        wheel_seat_clearance(s.ring_insert),
+        "the ring insert's bore sits flush to the bezel at "
+        "WHEEL_OPENING_CLEARANCE wherever it is cut through real material, "
+        "lip stays clear of the ceiling",
+    )
+
+
+@_check("wheel_ring")
+def _fdm_wheel_seat(s):
+    return _report(
+        fdm_wheel_seat(s.ring_insert, s.front_fdm),
+        f"the FDM front's bore measures "
+        f"{params.FDM_WHEEL_OPENING_CLEARANCE:.2f} wider than the ring "
+        f"insert's, which stays at WHEEL_OPENING_R, and the web to the ring "
+        f"channel survives on it",
+    )
+
+
+@_check("wheel_ring")
+def _rotation_clearance(s):
+    return _report(
+        rotation_clearance(s.front, s.pad, s.ring_insert),
+        "nothing intrudes inside the wheel's rotation clearance",
+    )
+
+
+@_check("keypad")
+def _recess_solid_sane(s):
+    return _report(
+        recess_solid_sane(),
+        "the built recess is one solid of positive volume filling exactly the box "
+        "its own field spans",
+    )
+
+
+@_check("keypad")
+def _recesses_open(s):
+    return _report(
+        recesses_open(s.front_with_ring),
+        "the face is dished to its predicted depth beside every key, beside the "
+        "mic, on the wheel seat on four bearings and at each join's narrowest "
+        "open point",
+    )
+
+
+@_check("keypad")
+def _rim_chamfer_profile(s):
+    return _report(
+        rim_chamfer_profile(s.front_with_ring),
+        f"the recess has a {params.RECESS_CHAMFER_W:.2f} rim chamfer all the way "
+        f"round, a {params.RECESS_CHAMFER_ROUND_W:.2f} round at its top edge and "
+        f"a {params.RECESS_CHAMFER_INNER_ROUND_W:.2f} round into the dish floor, "
+        "with no soft roll left in the dish",
+    )
+
+
+@_check("mic")
+def _mic_fillet(s):
+    return _report(
+        mic_fillet(s.front),
+        f"mic inlet is one funnel: {case.mic_throat_d():.2f} throat on the board's "
+        f"own {case.mic_port_drill():.2f} port, tapering out to "
+        f"{2 * case.mic_taper_r():.2f} and then on a {case.mic_fillet_r():.2f} "
+        f"concave fillet band that rides the recess floor",
+    )
+
+
+@_check("mic")
+def _mic_mouth_edge(s):
+    return _report(
+        mic_mouth_edge(s.front),
+        f"mic mouth meets the recess floor in one edge "
+        f"{2 * case.mic_floor_edge_r():.2f} across on {MIC_EDGE_BEARINGS} "
+        f"bearings, floor intact outside it and the fillet band below the floor "
+        f"inside it",
+    )
+
+
+@_check("keypad")
+def _recess_land(s):
+    thinnest = min(case.counterbore_land(ref) for ref in case.cap_refs())
+    return _report(
+        recess_land(s.front),
+        f"every counterbore keeps a solid face land on all four sides under its "
+        f"recess and face-hole lead-in, {thinnest:.2f} at the thinnest",
+    )
+
+
+@_check("usb")
+def _usb_clearance(s):
+    return _report(
+        usb_clearance(s.front, s.front_fdm, s.back),
+        "USB plug approach clears both front variants and the back, and the USB tip "
+        "clears both fronts as the board drops in and the back as it folds closed, "
+        "with 0.20 mm minimum margin. The cable boot pocket is clear in all three "
+        "shells, and its floor stops near enough to the receptacle mouth for the "
+        "plug to seat",
+    )
+
+
+@_check("qwiic")
+def _qwiic_access(s):
+    return _report(
+        qwiic_access(s.front, s.front_fdm, s.back),
+        "J2 plug approach clears both fronts, the back after panel removal, and the cell",
+    )
+
+
+@_check("qwiic")
+def _qwiic_knockout(s):
+    return _report(
+        qwiic_knockout(s.back),
+        "Qwiic is covered by a flush panel with a free border and exactly two printable side bridges",
+    )
+
+
+@_check("qwiic")
+def _qwiic_skirt_transition(s):
+    return _report(
+        qwiic_skirt_transition(s.front, s.front_fdm),
+        "both front skirts join the Qwiic opening to the support reliefs without a thin tongue",
+    )
+
+
+@_check("hardware")
+def _battery_lead_clearance(s):
+    return _report(
+        battery_lead_clearance(s.front, s.front_fdm, s.back),
+        "J1 plug and wire corridor clears both built shells, the cell, and board parts",
+    )
+
+
+@_check("keypad")
+def _recess_margins(s):
+    return _report(
+        recess_margins(),
+        "every counterbore sits inside the recess rim, the rim clears the "
+        "exterior wall by KEYPAD_EDGE_MARGIN, and the dish centres share one x",
+    )
+
+
+@_check("keypad")
+def _wheel_basin_shape(s):
+    return _report(
+        wheel_basin_shape(),
+        "wheel basin has circular cardinal curvature and exact "
+        f"exponent {params.WHEEL_SQUIRCLE_N:.1f} diagonals",
+    )
+
+
+@_check("keypad")
+def _neck_continuity(s):
+    return _report(
+        neck_continuity(),
+        "the recess runs unbroken along its centreline from one island's keys to "
+        "the other's, both joins inside their reach bounds and round enough",
+    )
+
+
+@_check("keypad")
+def _neck_blends_smoothly(s):
+    return _report(
+        neck_blends_smoothly(),
+        "floor and outline are tangent-continuous across every join junction and "
+        "waist, so the merged recess has no crease and no cusp",
+    )
+
+
+@_check("keypad")
+def _recess_edge_clearance(s):
+    return _report(
+        recess_edge_clearance(s.front),
+        "the built recess clears the side wall by KEYPAD_EDGE_MARGIN",
+    )
+
+
+@_check("hardware")
+def _cell_clearance(s):
+    fouled = cell_clearance()
+    if fouled:
+        print(f"{len(fouled)} things the cell runs into:")
+        for what, volume in fouled:
+            print(f"  {what:<28} {volume:8.2f} mm3")
+        return False
+    print("cell clears the board and the shells")
+    return True
+
+
+@_check("hardware")
+def _end_screw(s):
+    return _report(
+        end_screw(s.front, s.back),
+        f"end screw is an M2 x {case.end_screw_length():.0f} through "
+        f"{case.LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.2f} of flat "
+        f"-Y wall into a block the front carries clear of the back and the cell",
+    )
+
+
+@_check("hardware")
+def _end_screw_fit(s):
+    return _report(
+        end_screw_fit(s.screw, s.front, s.back),
+        "end screw head seats in its counterbore below the back's outer surface, "
+        "clears the back, and its tip ends inside the pilot",
+    )
+
+
+@_check("hardware")
+def _end_screw_side_tie(s):
+    return _report(
+        end_screw_side_tie(s.front)
+        + end_screw_side_tie(s.front_fdm, part="case-front-fdm"),
+        "end screw block's web ties into the selected side skirt at web height only, "
+        "on both fronts",
+    )
+
+
+@_check("hardware")
+def _end_screw_grip_corner(s):
+    return _report(
+        end_screw_grip_corner(
+            s.back, (s.front, "case-front"), (s.front_fdm, "case-front-fdm")
+        ),
+        "end screw block and root fillet stay out of the selected grip corner round "
+        "on both fronts, and the back's wall chamfer leaves the lap whole there",
+    )
+
+
+@_check("support")
+def _support_board_clearance(s):
+    return _report(
+        support_board_clearance(case.support_ledges()),
+        f"support ledges stop {params.SUPPORT_GAP:.2f} below the board",
+    )
+
+
+@_check("support")
+def _support_part_clearance(s):
+    return _report(
+        support_part_clearance(case.support_ledges()),
+        "support ledges clear every bottom courtyard and the end screw block",
+    )
+
+
+@_check("support")
+def _support_cell_clearance(s):
+    return _report(
+        support_cell_clearance(case.support_ledges()),
+        "support ledges clear the cell envelope",
+    )
+
+
+@_check("support")
+def _support_flat_bearing(s):
+    ledge = case.support_ledges()
+    widths = case.support_bearing_widths(ledge)
+    return _report(
+        support_flat_bearing(ledge),
+        "support flat bearing remains: "
+        + ", ".join(f"{side} {width:.2f} mm" for side, width in widths.items()),
+    )
+
+
+@_check("support")
+def _support_min_run(s):
+    return _report(
+        support_min_run(),
+        f"all {len(case.support_runs())} support runs meet SUPPORT_MIN_RUN",
+    )
+
+
+@_check("support")
+def _support_printable(s):
+    return _report(
+        support_printable(),
+        f"support undersides rise at {params.SUPPORT_UNDER_ANGLE:.1f} degrees",
+    )
+
+
+@_check("support")
+def _support_inner_round(s):
+    return _report(
+        support_inner_round(case.support_ledges()),
+        f"support inboard edges have a {params.SUPPORT_INNER_R:.2f} radius",
+    )
+
+
+@_check("support")
+def _support_skirt_fit(s):
+    problems, sites = support_skirt_fit(s.front, s.back)
+    return _report(
+        problems,
+        f"front skirt stands clear of the support ledge tops by more than "
+        f"SUPPORT_GAP {params.SUPPORT_GAP:.2f} (fit {params.SUPPORT_SKIRT_FIT:.2f}), "
+        f"with skirt above the fit, at {sites} sites",
+    )
+
+
+@_check("support")
+def _support_wall_merge(s):
+    return _report(
+        support_wall_merge(s.back),
+        "support ledges overlap the back shell cavity wall",
+    )
+
+
+@_check("support")
+def _support_case_containment(s):
+    return _report(
+        support_case_containment(s.back),
+        "back shell stays inside the case envelope",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_window(s):
+    return _report(
+        front_ledge_window(s.front) + front_ledge_window(s.front_fdm),
+        f"both fronts have a ledge run on each side inside the first "
+        f"{params.FRONT_LEDGE_REACH:.1f} of the grip end, each at least "
+        f"{params.SUPPORT_MIN_RUN:.1f} long, and none outside it",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_fused(s):
+    return _report(
+        front_ledge_fused(s.front) + front_ledge_fused(s.front_fdm),
+        "both fronts are one solid with the ledges fused into it",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_bearing(s):
+    problems, sites = front_ledge_bearing(s.front)
+    fdm_problems, fdm_sites = front_ledge_bearing(s.front_fdm)
+    return _report(
+        problems + fdm_problems,
+        f"front ledge undersides bear at the board's top face "
+        f"+ {params.FRONT_LEDGE_GAP:.2f} over a flat of at least "
+        f"{params.SUPPORT_MIN_BEARING:.2f}, read at {sites + fdm_sites} sites",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_clearance(s):
+    problems, runs = front_ledge_clearance(s.front)
+    return _report(
+        problems,
+        f"{runs} front ledge runs stand {params.SUPPORT_CLEARANCE:.2f} off every top "
+        "courtyard, assembly solid and V2 body above the bearing plane",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_intact(s):
+    return _report(
+        front_ledge_intact(s.front) + front_ledge_intact(s.front_fdm),
+        "no cut in either front takes material out of a ledge run",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_printable(s):
+    problems, sites = front_ledge_printable(s.front)
+    fdm_problems, fdm_sites = front_ledge_printable(s.front_fdm)
+    return _report(
+        problems + fdm_problems,
+        f"front ledge ceiling-side faces rise at {params.SUPPORT_UNDER_ANGLE:.1f} "
+        f"degrees or steeper, read at {sites + fdm_sites} sites, so the face-down "
+        "print needs no support",
+    )
+
+
+@_check("front_ledge")
+def _front_ledge_fit(s):
+    pads = {
+        "moulded": s.pad,
+        "fdm": s.pad_fdm,
+        "tpu": s.pad_tpu,
+        "v2 fdm top": s.pad_fdm_v2_top,
+        "v2 tpu top": s.pad_tpu_v2_top,
+        "v2 moulded top": s.pad_v2_top,
+    }
+    problems, runs = front_ledge_fit(s.front, pads, s.caps)
+    return _report(
+        problems,
+        f"{runs} front ledge runs clear every pad and cap, released and pressed",
+    )
+
+
+@_check("legacy")
+def _legacy_frame_shared(s):
+    return _report(
+        legacy_frame_shared(),
+        "V2's outline read off its own STEP shares the V3 frame, so its "
+        "placements mean something in the case frame",
+    )
+
+
+@_check("legacy")
+def _legacy_nib_contact(s):
+    return _report(
+        legacy_nib_contact(s.pad_fdm_v2_top)
+        + legacy_nib_contact(s.pad_tpu_v2_top, TPU_TOP_PAD),
+        "V2 top pads (FDM and TPU) are each one solid, their nibs reach LEGACY_NIB_EXTENSION "
+        f"({params.LEGACY_NIB_EXTENSION:.2f}) below the V2 switch tops and its "
+        "V3 plungers the same below the V3 ones, each within tolerance, the plungers "
+        "at least SWITCH_TRAVEL above the nibs",
+    )
+
+
+@_check("legacy")
+def _legacy_keytops_level(s):
+    return _report(
+        legacy_keytops_level(s.pad_fdm_v2_top, s.pad_fdm)
+        + legacy_keytops_level(s.pad_tpu_v2_top, s.pad_tpu, TPU_TOP_PAD),
+        "V2 top pads' SW1/SW2 keytops stand level with SW7 on the main FDM and "
+        "TPU pads, legends cut open at the keytop top",
+    )
+
+
+@_check("legacy")
+def _legacy_top_pad_fits(s):
+    return _report(
+        legacy_top_pad_fits(s.front_fdm, s.pad_fdm_v2_top)
+        + tpu_pad_fits(
+            s.front,
+            s.pad_tpu_v2_top,
+            TPU_TOP_PAD,
+            refs=case.island_refs("second"),
+            label="V2 TPU top pad",
+        ),
+        "the V2 FDM top pad clears the FDM front and the V2 TPU top pad clears "
+        "the recessed front, each released and through switch travel, and the "
+        "TPU keytops keep their face hole gap and stand proud of the recess",
+    )
+
+
+@_check("legacy")
+def _legacy_skirt_depth(s):
+    problems, lines = legacy_skirt_depth(s.pad_tpu_v2_top)
+    return _report(
+        problems,
+        "V2 TPU top pad skirt ends level with the TPU pad's built plunger bottoms, is flush with the "
+        f"web edge and {params.PAD_SKIRT_T:.2f} mm thick: " + ", ".join(lines),
+    )
+
+
+@_check("legacy")
+def _legacy_skirt_clears_board(s):
+    problems, line = legacy_skirt_clears_board(s.pad_tpu_v2_top)
+    return _report(problems, f"V2 TPU top pad: {line}")
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_nib_contact(s):
+    return _report(
+        legacy_nib_contact(s.pad_v2_top, MOULDED_TOP_PAD, "the moulded V2 top pad"),
+        "the moulded V2 top pad is one solid, its nibs reach LEGACY_NIB_EXTENSION "
+        f"({params.LEGACY_NIB_EXTENSION:.2f}) below the V2 switch tops and its V3 "
+        "plungers the same below the V3 ones, the plungers at least SWITCH_TRAVEL "
+        "above the nibs",
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_fits(s):
+    return _report(
+        legacy_top_pad_fits(
+            s.front,
+            s.pad_v2_top,
+            MOULDED_TOP_PAD,
+            label="the moulded V2 top pad",
+            front="the recessed front",
+        ),
+        "the moulded V2 top pad clears the recessed front, released and through "
+        "switch travel",
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_skirt_depth(s):
+    problems, lines = legacy_skirt_depth(s.pad_v2_top, fdm=False)
+    return _report(
+        problems,
+        "the moulded V2 top pad skirt ends level with the moulded pad's built "
+        "plunger bottoms, is flush "
+        f"with the web edge and {params.PAD_SKIRT_T:.2f} mm thick: " + ", ".join(lines),
+    )
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_skirt_clears_board(s):
+    problems, line = legacy_skirt_clears_board(s.pad_v2_top)
+    return _report(problems, f"the moulded V2 top pad: {line}")
+
+
+@_check("legacy")
+def _moulded_v2_top_pad_caps_rest(s):
+    return _report(
+        moulded_top_pad_caps_rest(s.pad_v2_top, s.caps),
+        "the SW1 and SW2 caps rest on the moulded V2 top pad web and do not "
+        "overlap it",
+    )
+
+
+@_check("legacy")
+def _legacy_part_moves(s):
+    problems, moved = legacy_part_moves()
+    return _report(
+        problems,
+        "each V2 top-side part's V3 body sits at its V2 placement; moved: "
+        + ", ".join(moved),
+    )
+
+
+@_check("assembly")
+def _feature_clashes(s):
+    clashes = feature_clashes()
+    if clashes:
+        print(f"\n{len(clashes)} case features overlap a courtyard:")
+        for name, ref, depth in sorted(clashes, key=lambda c: -c[2]):
+            print(f"  {name:<12} into {ref:<6} by {depth:5.2f} mm")
+        return False
+    print("the mic duct, front ledges and the battery clear every courtyard")
+    return True
+
+
+@_check("ir")
+def _end_ports_open(s):
+    return _report(
+        end_ports_open(s.shells),
+        "D1's bore and the USB shell remain open at their end-wall centrelines",
+    )
+
+
+@_check("ir")
+def _emitter_beam_clearance(s):
+    return _report(
+        emitter_beam_clearance(s.shells) + emitter_chamfer_angle(s.shells),
+        "D1's 45° chamfer clears the 15° half-intensity angle in eight directions",
+    )
+
+
+@_check("ir")
+def _receiver_paths(s):
+    return _report(
+        receiver_paths(s.shells, s.back),
+        "U2 has a clear -Z sightline and its obsolete +Y end-wall path is closed",
+    )
+
+
+@_check("ir")
+def _receiver_clearance(s):
+    return _report(
+        receiver_clearance(s.back, s.window),
+        "built back shell and installed insert clear U2's complete envelope",
+    )
+
+
+@_check("ir")
+def _window_installation(s):
+    return _report(
+        window_installation(s.back, s.window),
+        f"IR insert is exterior-flush, press-held, closes the sightline, and "
+        f"retains on {case.ir_window_retention():.2f} of flanged adhesive land",
+    )
+
+
+@_check("assembly")
+def _parts_are_sound(s):
+    parts = {
+        "front shell": s.front,
+        "FDM front shell": s.front_fdm,
+        "one-piece front shell": s.front_one_piece,
+        "back shell": s.back,
+        "button pad": s.pad,
+        "FDM V2 top pad": s.pad_fdm_v2_top,
+        "V2 TPU top pad": s.pad_tpu_v2_top,
+        "blank TPU pad": s.pad_tpu_blank,
+        "blank V2 TPU pad": s.pad_tpu_v2_blank,
+        "moulded V2 top pad": s.pad_v2_top,
+        "IR window": s.window,
+        "end screw": s.screw,
+        **{f"{ref} cap": cap for ref, cap in s.caps.items()},
+        **{f"{ref} blank cap": cap for ref, cap in s.caps_plain.items()},
+    }
+    return _report(
+        parts_are_sound(parts),
+        f"all {len(parts)} exported parts are valid solids and mesh to closed "
+        "manifolds",
+    )
+
+
+@_check("assembly")
+def _interference(s):
+    hits = interference([s.back, s.front, s.window, s.screw, s.ring_insert])
+    if not hits:
+        print("no interference")
+        return True
+    print(f"\n{len(hits)} colliding solids (ref is the nearest placement, approximate")
+    print("for multi-solid models):")
+    for ref, volume, lo, hi in sorted(hits, key=lambda h: -h[1]):
+        print(f"  {ref:<6} {volume:8.2f} mm3   solid z {lo:6.2f} .. {hi:6.2f}")
+    return False
+
+
+@_check("fab")
+def _fab_walls(s):
+    lines, problems, accepted = fab_walls(
+        s.front, s.back, s.ring_insert, s.front_one_piece
+    )
+    for line in lines:
+        print(line)
+    process = params.FAB_PROCESS
+    minimum = params.FAB_MIN_WALL[process]
+    exceptions = (
+        f"except {accepted} accepted features, none thinner than its floor or "
+        "larger than its area cap"
+        if accepted
+        else "everywhere"
+    )
+    return _report(
+        problems,
+        f"every printed part meets the {process} {minimum:.2f} mm minimum "
+        f"{exceptions}",
+    )
+
+
+FEATURES = sorted({feature for feature, _ in CHECKS})
+
+
+def _selection(argv):
+    """The features to run, or None for all of them."""
+    parser = argparse.ArgumentParser(
+        prog="check.py", description="Verify the case against the board."
+    )
+    parser.add_argument(
+        "--only",
+        metavar="FEATURE[,FEATURE...]",
+        help="run only these features' passes: " + ", ".join(FEATURES),
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=10,
+        metavar="N",
+        help="run passes in N independent processes (default: 10)",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="show failures, provenance, counts, and scoped-run warnings only",
+    )
+    parser.add_argument(
+        "--json",
+        metavar="PATH",
+        default=CHECKS_JSON,
+        help=f"where to write the machine-readable report (default: {CHECKS_JSON})",
+    )
+    parser.add_argument(
+        "--timings",
+        action="store_true",
+        help="show per-pass elapsed times after the report",
+    )
+    parser.add_argument(
+        "--recheck",
+        action="store_true",
+        help="run every pass again rather than replaying stored verdicts, "
+        "keeping the solids warm",
+    )
+    args = parser.parse_args(argv)
+    if args.jobs < 1:
+        parser.error("--jobs must be at least 1")
+    if args.only is None:
+        return None, args
+    wanted = [name.strip() for name in args.only.split(",") if name.strip()]
+    unknown = [name for name in wanted if name not in FEATURES]
+    if unknown or not wanted:
+        parser.error(
+            f"unknown feature: {', '.join(unknown) or '(none given)'}. "
+            f"Valid names: {', '.join(FEATURES)}"
+        )
+    return wanted, args
+
+
+def _run_pass(feature, run, solids):
+    """Run one pass and retain its output for deterministic parent reporting."""
+    output = io.StringIO()
+    _PENDING.clear()
+    started = time.perf_counter()
+    crashed = False
+    try:
+        previous = sys.stdout
+        sys.stdout = output
+        try:
+            passed = bool(run(solids))
+        finally:
+            sys.stdout = previous
+    except Exception:
+        passed = False
+        crashed = True
+        output.write(traceback.format_exc())
+    record = {
+        "feature": feature,
+        "name": run.__name__.lstrip("_"),
+        "passed": passed,
+        "output": output.getvalue(),
+        "elapsed": time.perf_counter() - started,
+        "crashed": crashed,
+        "problems": [
+            p.as_dict() if isinstance(p, Problem) else {"text": str(p)}
+            for p in _PENDING
+        ],
+    }
+    # Stored here rather than in the parent so that a run which dies partway
+    # keeps what its workers had already decided.
+    verdicts.store(record)
+    return record
+
+
+_WORKER_SOLIDS = None
+"""The one Solids() this worker process owns, made by the pool initializer.
+
+Work is handed out a pass at a time, so a worker runs many passes and they come
+from whichever features happen to still be pending. Solids is a lazy holder
+whose properties cost minutes to fill the first time and nothing every time
+after, so it has to outlive the task that first asked for a shape: building a
+fresh one per task would throw away everything the previous task built and pay
+for it again, which is strictly worse than owning a whole feature was. The pool
+is spawned rather than forked, so nothing can be inherited from the parent and
+the initializer is the only place this can be made.
+"""
+
+
+def _run_indexed(index):
+    """Run CHECKS[index] against this worker's solids.
+
+    A task is an index into CHECKS rather than the pass's own function because
+    the task has to cross a spawn. An int is an int on both sides; a function
+    survives the trip only by being importable under the qualified name it was
+    defined at, which silently couples the schedule to where a pass happens to
+    live. CHECKS is built at import time in one fixed order in the parent and in
+    every worker, so an index names the same pass everywhere.
+    """
+    feature, run = CHECKS[index]
+    return _run_pass(feature, run, _WORKER_SOLIDS)
+
+
+def _parallel_initializer():
+    """Set a worker up: off its neighbours' cache directory, and with solids.
+
+    CASE_CACHE_PARALLEL keeps concurrent writers from deleting another worker's
+    cache directory. The Solids() is this process's only one, for the reason in
+    _WORKER_SOLIDS.
+    """
+    global _WORKER_SOLIDS
+    os.environ["CASE_CACHE_PARALLEL"] = "1"
+    _WORKER_SOLIDS = Solids()
+
+
+_FEATURE_SOLIDS = {
+    "apertures": ("front", "back"),
+    "assembly": (
+        "front", "front_fdm", "front_one_piece", "back", "pad", "pad_fdm_v2_top",
+        "pad_tpu_v2_top", "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top",
+        "window", "caps", "caps_plain", "led_ring_insert",
+    ),
+    "caps": ("front", "pad", "caps", "caps_plain"),
+    "fab": ("front", "back", "led_ring_insert", "front_one_piece"),
+    "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
+    "hardware": ("front", "front_fdm", "back"),
+    "ir": ("front", "back", "window"),
+    "keypad": (
+        "front", "pad", "pad_fdm", "pad_tpu", "pad_tpu_blank", "pad_tpu_v2_blank",
+        "pad_tpu_v2", "pad_tpu_v2_top_blank", "keypad_recess",
+    ),
+    "front_ledge": (
+        "front", "front_fdm", "pad", "pad_fdm", "pad_tpu", "pad_fdm_v2_top",
+        "pad_tpu_v2_top", "pad_v2_top", "caps",
+    ),
+    "legacy": (
+        "front", "front_fdm", "pad_fdm_v2_top", "pad_tpu_v2_top",
+        "pad_v2_top", "pad", "pad_tpu", "caps",
+    ),
+    "mic": ("front",),
+    "shells": (
+        "front", "front_fdm", "front_one_piece", "back", "led_ring_insert_footless",
+    ),
+    "support": ("back",),
+    "usb": ("front", "front_fdm", "back"),
+    "qwiic": ("front", "front_fdm", "back"),
+    "wheel_ring": (
+        "front", "front_fdm", "front_one_piece", "back", "pad", "led_ring_insert",
+    ),
+}
+"""Which cached solids each feature's passes reach for, by _CACHED_SOLIDS name.
+
+Rows name cached builders, not Solids properties. The first version of this
+table named properties, and drifted within a day for the reason that distinction
+exists: a pass is free to call a cached builder on `case` directly rather than
+through a property, and four of them do (checks/hardware.py reads back_shell,
+checks/keypad.py reads keypad_recess, checks/fdm.py reads keypad_outline_groove,
+checks/caps.py reads the unlegended keycaps), so a table keyed on properties
+cannot even express what those passes need. `shells` is still absent as a name
+because it is `back` fused to `front` in memory and has no blob of its own, so a
+feature that reads it wants those two.
+
+The table only ever decides what to prewarm. It never gates what a pass can
+reach: builders stay lazy and go through the cache themselves, so a pass touches
+whatever it touches whether or not this expected it. A feature listed short, or
+left out, or naming something _CACHED_SOLIDS has never heard of, costs a worker
+one build it would have done anyway; a feature listed long costs one solid
+nobody reads. Neither can move a verdict, and that is the whole reason a
+hand-maintained list is acceptable here when it would not be if it stood between
+a pass and its geometry.
+
+To re-derive it, which is the only thing that catches drift, walk the AST:
+for each function in this module carrying an @_check decorator, collect the
+`s.<property>` reads in the pass body itself, then follow the checks/ functions
+it calls, transitively, collecting every `case.<builder>(...)` call whose
+builder carries @cache.solid (grep model/ for that decorator: there are nine).
+Map the properties onto names here through Solids, take the builders as they
+are, and compare against the rows above. Collect properties from the pass body
+only, not through the call, or every local named `s` in checks/ reads as one.
+"""
+
+_CACHED_SOLIDS = {
+    "front": lambda: [functools.partial(case.front_shell)],
+    "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
+    "back": lambda: [functools.partial(case.back_shell)],
+    "front_one_piece": lambda: [functools.partial(case.front_shell, one_piece=True)],
+    "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
+    "led_ring_insert_footless": lambda: [
+        functools.partial(case.led_ring_insert, feet=False)
+    ],
+    "pad": lambda: [functools.partial(case.button_pad)],
+    "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],
+    "pad_tpu": lambda: [
+        functools.partial(case.button_pad, fdm=True, skirt=True, grooves=False)
+    ],
+    "pad_tpu_blank": lambda: [
+        functools.partial(
+            case.button_pad, fdm=True, skirt=True, grooves=False, legend=False
+        )
+    ],
+    "pad_tpu_v2_blank": lambda: [
+        functools.partial(
+            case.button_pad, fdm=True, skirt=True, grooves=False, legend=False, v2=True
+        )
+    ],
+    "pad_tpu_v2": lambda: [
+        functools.partial(case.button_pad, fdm=True, skirt=True, grooves=False, v2=True)
+    ],
+    "pad_tpu_v2_top_blank": lambda: [
+        functools.partial(case.legacy_top_pad, skirt=True, legend=False)
+    ],
+    "pad_tpu_v2_top": lambda: [functools.partial(case.legacy_top_pad, skirt=True)],
+    "pad_fdm_v2_top": lambda: [functools.partial(case.legacy_top_pad)],
+    "pad_v2_top": lambda: [
+        functools.partial(case.legacy_top_pad, fdm=False, skirt=True)
+    ],
+    "window": lambda: [functools.partial(case.ir_window)],
+    "keypad_recess": lambda: [functools.partial(case.keypad_recess)],
+    "keypad_outline_groove": lambda: [functools.partial(case.keypad_outline_groove)],
+    "caps": lambda: [functools.partial(case.keycap, ref) for ref in case.cap_refs()],
+    "caps_plain": lambda: [
+        functools.partial(case.keycap, ref, legend=False) for ref in case.cap_refs()
+    ],
+}
+"""What each name in _FEATURE_SOLIDS stands for, as the builder calls themselves.
+
+A partial rather than a name and an argument list because one object then
+answers both questions prewarming has: cache.cached() reads .func, .args and
+.keywords to ask whether the blob is written, and calling it builds the thing.
+A row is a list because a name can stand for more than one blob: `caps` is one
+per keycap, and `caps_plain` is the same eleven again at legend=False, which the
+cache keys separately because the argument is part of the blob name.
+
+Every entry is a lambda so that nothing here runs at import. cap_refs() reads
+the board, and the table must not make `check.py --help` pay for that.
+"""
+
+
+def _cold_calls(name):
+    """The builder calls one name stands for that are not on disk yet.
+
+    Per blob rather than per cache directory. cache.provenance() calls a key
+    directory a hit as soon as it holds any blob at all, which is the right
+    answer for the line it prints and the wrong one here: an interrupted run or
+    an evicted blob leaves a directory that reads as a hit and is still most of
+    a cold build, and prewarming exists for exactly that state.
+
+    A name with no entry prewarms nothing rather than raising. The justification
+    for maintaining _FEATURE_SOLIDS by hand is that being wrong about it costs
+    time and never correctness, and a KeyError here would break precisely that:
+    a typo in a performance-only table would kill the parent before the pool
+    starts, on a run that would otherwise have completed. It is silent as well
+    as harmless, because the alternative is a diagnostic line in the middle of a
+    report that a serial run, which never prewarms, would not carry.
+    """
+    calls = _CACHED_SOLIDS.get(name)
+    if calls is None:
+        return []
+    return [
+        call
+        for call in calls()
+        if not cache.cached(call.func, *call.args, **call.keywords)
+    ]
+
+
+def _prewarm(features):
+    """Build whatever this selection needs and does not have, once, here.
+
+    Each worker builds its own solids and every one of those goes through the
+    disk cache in case/cache.py. Warm, that is a BREP import per worker and
+    costs nothing worth avoiding. Cold, which is exactly the state right after
+    the geometry edit that prompted the run, every worker independently builds
+    the same shells from scratch, so the expensive half of the suite is paid for
+    once per worker instead of once. Building them here, before the pool exists,
+    turns those N cold builds into one cold build and N imports.
+
+    Scoped runs get this too, and only for what they use: a one feature run can
+    still fan out across that feature's passes, so it can still pay for the same
+    shell N times, while prewarming the full set for --only ir would cost far
+    more than the fan-out could ever save. That is what _FEATURE_SOLIDS is for.
+
+    A fully warm selection returns having built nothing and said nothing, which
+    is the common case and must stay free: this runs in the parent, serially,
+    so anything it does is time the pool is not running.
+    """
+    wanted = dict.fromkeys(
+        name for feature in features for name in _FEATURE_SOLIDS.get(feature, ())
+    )
+    cold = [name for name in wanted if _cold_calls(name)]
+    if not cold:
+        return
+    print(f"prewarming {', '.join(cold)} before fanning out", flush=True)
+    for name in cold:
+        # Retested rather than reusing the list above, because one build can
+        # write another name's blob on the way past: front_shell cuts the
+        # keypad recess, so building the front leaves the recess warm and the
+        # second entry with nothing left to do.
+        for call in _cold_calls(name):
+            call()
+
+
+def _cost(record):
+    """What the pass cost, and whether this run paid it or replayed it."""
+    return f"{record['elapsed']:.2f}s{' cached' if record.get('cached') else ''}"
+
+
+def _progress(record, suite_started, done, total, quiet):
+    """Say that a pass finished, the moment it finishes.
+
+    The report is replayed in registry order once everything is home, which is
+    what makes a --jobs run comparable to a serial one, but it also means not a
+    line of it can be printed until the last pass lands. A full run is a quarter
+    of an hour, and a quarter of an hour of silence is indistinguishable from a
+    hang. So completion gets a channel of its own: unordered, one flushed line
+    per pass, carrying enough to place the run in time (suite clock, which pass,
+    what it cost, how it went, how many of how many are home).
+
+    None of this reaches the JSON report or the pass's own buffered output, so
+    the interleaving these lines inevitably have between workers cannot make the
+    report itself depend on scheduling. --quiet suppresses the passes that
+    passed, the same passes it already suppresses from the report.
+
+    A failed pass also prints its reasons under its line, from
+    _failure_detail(). If a long run stops before the report, these lines
+    keep the reasons.
+    """
+    if quiet and record["passed"]:
+        return
+    print(
+        f"[{time.perf_counter() - suite_started:8.2f}s] "
+        f"{'ok  ' if record['passed'] else 'FAIL'} "
+        f"{record['feature']}.{record['name']} "
+        f"({_cost(record)}) [{done}/{total}]",
+        flush=True,
+    )
+    if not record["passed"]:
+        print(_failure_detail(record), flush=True)
+
+
+def _failure_detail(record):
+    """Return the reasons for one failed pass, one indented line each.
+
+    The problems give the reasons, with their location when they have one. A
+    crash, or a pass that prints its own table, has no problems. Its output
+    gives the reasons, and for a crash that output is the traceback.
+    """
+    problems = record.get("problems") or []
+    if problems and not record.get("crashed"):
+        lines = []
+        for problem in problems:
+            where = []
+            if problem.get("at"):
+                where.append("at " + ", ".join(f"{v:g}" for v in problem["at"]))
+            if problem.get("part"):
+                where.append(f"part {problem['part']}")
+            suffix = f" [{'; '.join(where)}]" if where else ""
+            lines.append(f"  {problem['text']}{suffix}")
+        return "\n".join(lines)
+    output = record["output"].rstrip() or "failed without diagnostic"
+    return "\n".join(f"  {line}" for line in output.splitlines())
+
+
+def _report_record(record, suite_started, quiet):
+    """Render buffered output in registry order, regardless of worker completion."""
+    if not quiet or not record["passed"]:
+        output = record["output"]
+        if not output and not record["passed"]:
+            output = f"{record['feature']}.{record['name']}: failed without diagnostic\n"
+        print(output, end="")
+    if not quiet:
+        print(
+            f"[{time.perf_counter() - suite_started:8.2f}s] "
+            f"done  {record['feature']}.{record['name']} "
+            f"({_cost(record)})",
+            flush=True,
+        )
+
+
+def _write_report(path, records, features, scoped):
+    """The machine-readable half of the report: what ran, what failed, and where.
+
+    Written on every run rather than behind a flag, because the viewer reads it
+    beside the geometry and a report older than the case it is drawn on is worse
+    than none. A scoped run writes only the features it ran and says so, so the
+    ones it skipped are never mistaken for clean.
+
+    The location comes from the problems, which is why a pass that prints its own
+    table rather than going through _report() carries none: its lines are in
+    `output` and the viewer lists them without a marker.
+    """
+    payload = {
+        "provenance": cache.provenance(),
+        "features": features,
+        "scoped": scoped,
+        "passes": [
+            {
+                "feature": record["feature"],
+                "name": record["name"],
+                "passed": record["passed"],
+                "elapsed": round(record["elapsed"], 3),
+                "cached": bool(record.get("cached")),
+                "problems": record.get("problems", []),
+                **({} if record["passed"] else {"output": record["output"].strip()}),
+            }
+            for record in records
+        ],
+    }
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        json.dump(payload, handle, indent=1)
+        handle.write("\n")
+
+
+def _timing_report(records):
+    print("timings:")
+    for record in records:
+        print(f"  {record['feature']}.{record['name']}: {_cost(record)}")
+
+
+def main(argv=None):
+    selected, args = _selection(sys.argv[1:] if argv is None else argv)
+    if args.recheck:
+        verdicts.force()
+    print(cache.provenance())
+    suite_started = time.perf_counter()
+    selected_indices = [
+        index
+        for index, (feature, _) in enumerate(CHECKS)
+        if selected is None or feature in selected
+    ]
+    selected_checks = [CHECKS[index] for index in selected_indices]
+    selected_features = list(dict.fromkeys(feature for feature, _ in selected_checks))
+    total = len(selected_indices)
+    # Replayed before a single solid is asked for, so a run that moves neither
+    # key never builds one either: the prewarm and the pool below are both handed
+    # an empty list and the whole suite comes back off the disk.
+    by_index = {}
+    for index in selected_indices:
+        feature, run = CHECKS[index]
+        stored = verdicts.load(feature, run.__name__.lstrip("_"))
+        if stored is not None:
+            by_index[index] = stored
+    print(verdicts.provenance(len(by_index), total))
+    pending = [index for index in selected_indices if index not in by_index]
+    if args.jobs == 1 or len(pending) < 2:
+        solids = Solids()
+        for index in selected_indices:
+            feature, run = CHECKS[index]
+            if index not in by_index:
+                if not args.quiet:
+                    print(
+                        f"[{time.perf_counter() - suite_started:8.2f}s] "
+                        f"start {feature}.{run.__name__.lstrip('_')}",
+                        flush=True,
+                    )
+                by_index[index] = _run_pass(feature, run, solids)
+            _report_record(by_index[index], suite_started, args.quiet)
+    else:
+        pending_features = list(dict.fromkeys(CHECKS[index][0] for index in pending))
+        # Nothing to prewarm into when the cache is off: the workers would
+        # rebuild regardless, so the parent's build would be pure added time.
+        if cache.enabled():
+            _prewarm(pending_features)
+        workers = min(args.jobs, len(pending))
+        if not args.quiet:
+            print(
+                f"running {len(pending)} checks with {workers} workers",
+                flush=True,
+            )
+        done = 0
+        for index in selected_indices:
+            if index in by_index:
+                done += 1
+                _progress(by_index[index], suite_started, done, total, args.quiet)
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_parallel_initializer,
+            mp_context=multiprocessing.get_context("spawn"),
+        ) as executor:
+            futures = {
+                executor.submit(_run_indexed, index): index for index in pending
+            }
+            for future in as_completed(futures):
+                index = futures[future]
+                feature, run = CHECKS[index]
+                try:
+                    record = future.result()
+                except Exception:
+                    # A worker that dies takes its task with it, and the pool
+                    # fails every task still outstanding. Each of those is one
+                    # pass now rather than a whole feature, so each gets its own
+                    # failed record and the traceback that explains it; the
+                    # alternative is a pass that silently drops out of a report
+                    # that still says it ran.
+                    record = {
+                        "feature": feature,
+                        "name": run.__name__.lstrip("_"),
+                        "passed": False,
+                        "output": f"{feature} worker failed:\n{traceback.format_exc()}",
+                        "elapsed": 0.0,
+                        "problems": [],
+                    }
+                by_index[index] = record
+                done += 1
+                _progress(record, suite_started, done, total, args.quiet)
+        # Back into registry order for the report. The printed body and
+        # _write_report both read this list, and both have to see the same order
+        # whatever order the pool happened to finish in.
+        for index in selected_indices:
+            _report_record(by_index[index], suite_started, args.quiet)
+    records = [by_index[index] for index in selected_indices]
+    passed = all(record["passed"] for record in records)
+    _write_report(args.json, records, selected_features, selected is not None)
+    print(f"checks: {sum(record['passed'] for record in records)}/{len(records)} passed")
+    if args.timings:
+        _timing_report(records)
+    if selected is not None:
+        skipped = [name for name in FEATURES if name not in selected]
+        print(
+            f"SCOPED RUN, NOT A FULL PASS: skipped {', '.join(skipped)}"
+            if skipped
+            else "SCOPED RUN, NOT A FULL PASS: nothing skipped"
+        )
+    sys.exit(0 if passed else 1)

@@ -1,0 +1,54 @@
+{
+  "board": {
+    "fingerprint": "1fdeb3513859ebd70e410025477ca9b4c111a508e0fb7fc92ca33723d97e2abf",
+    "source": "index"
+  },
+  "board-annotated": {
+    "fingerprint": "9eb39cddcf978126fde4e4158cd7499033678b7d10053e1a7f01fccbaa67f41b",
+    "source": "index"
+  },
+  "case-annotated": {
+    "fingerprint": "f464c51fe3a535394522fd6ee9896958b32d01138e534d5fa0b333170d19e1ff",
+    "source": "index"
+  },
+  "case-front-face": {
+    "fingerprint": "1e00eee31139151cf6c3f50c28b7184ec7aa0e1795a1e9d5a12f150fab19c094",
+    "source": "index"
+  },
+  "case-fronts": {
+    "fingerprint": "9b73ee5e715fa4b97aee958d8bb7019d890665e7821807082e92ed69beda61da",
+    "source": "index"
+  },
+  "case-stills": {
+    "fingerprint": "e4ca2d17af8d7ef1eb1ded9fd6822fbad5856bd4bb5bb12fe59b5db9d1e7c58c",
+    "source": "index"
+  },
+  "schematic": {
+    "fingerprint": "ba363cee7736916dac125f2c882c6d000848538775a17c233158f6454e13b52a",
+    "source": "index"
+  },
+  "self-test-diagrams": {
+    "fingerprint": "80d9ecf766acd0ad9534183094abbdda26d034b14071994fd382fabe3b498a4a",
+    "source": "index"
+  },
+  "site-hero": {
+    "fingerprint": "e4ca2d17af8d7ef1eb1ded9fd6822fbad5856bd4bb5bb12fe59b5db9d1e7c58c",
+    "source": "index"
+  },
+  "site-media": {
+    "fingerprint": "4ed93d041d37ddc3832553940d8624cbd224d043d064ea9e9ff986a8abfde744",
+    "source": "index"
+  },
+  "site-voice": {
+    "fingerprint": "a86e9b4f909975a8dea86fa08e1297536340396e480a4789ff696ad1473d9b81",
+    "source": "index"
+  },
+  "web-page-framed": {
+    "fingerprint": "d14662d53ca29fad041c5398bad246511b328815bdf1f6829870e67bbc2d1542",
+    "source": "index"
+  },
+  "web-page-shots": {
+    "fingerprint": "3fdee91aeea8fa96bebabce384823e637a50378f30e5fd963b92335f269b9b84",
+    "source": "index"
+  }
+}

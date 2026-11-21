@@ -8,167 +8,246 @@
 <h1 align="center">homeThing C6</h1>
 
 <p align="center">
-  A handheld remote for TV, Sonos, Zigbee lights, and Home Assistant.<br>
-  Physical buttons, a rotary control, fast access, and long idle life. No touchscreen, no apps, no daily charging.
+  An open source universal remote that can control anything.<br>
+  For your TV, Sonos, Zigbee lights, and Home Assistant. No touchscreen, no apps, no daily charging.
+</p>
+
+<p align="center">
+  <a href="https://landonr.github.io/homething-c6/"><b>landonr.github.io/homething-c6</b></a>
 </p>
 
 <p align="center">
   <a href="https://discord.gg/BX6ZtGKHTy"><img alt="Discord" src="https://img.shields.io/discord/1021434469917413498?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
   <a href="https://www.instagram.com/homething.io/"><img alt="Instagram" src="https://img.shields.io/badge/Instagram-%40homething.io-E4405F?style=for-the-badge&logo=instagram&logoColor=white"></a>
-  <a href="https://homething.io/"><img alt="Website" src="https://img.shields.io/badge/Website-homething.io-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+  <a href="https://landonr.github.io/homething-c6/"><img alt="Website" src="https://img.shields.io/badge/Website-GitHub%20Pages-6E40C9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
   <a href="https://github.com/landonr/homeThing"><img alt="homeThing on GitHub" src="https://img.shields.io/github/stars/landonr/homeThing?style=for-the-badge&logo=github&logoColor=white&label=homeThing&color=181717"></a>
 </p>
 
 <p align="center">
   <sub>Prototype and fab costs sponsored by <a href="https://pcbway.com/g/Xymq6O">PCBWay</a>. Boards arrive fully assembled, no soldering required.</sub>
   <br>
-  <a href="https://pcbway.com/g/Xymq6O"><img alt="PCBWay" src="https://freight.cargo.site/w/800/i/a931690205c27162476213b8bcc171585aad9d84d65cdc121ca425e813114121/0x0.png" width="140"></a>
+  <a href="https://pcbway.com/g/Xymq6O"><img alt="Sponsored by PCBWay" src="https://img.shields.io/badge/Sponsored%20by-PCBWay-2EA44F?style=for-the-badge"></a>
 </p>
-
-This repo contains the KiCad hardware and ESPHome bring-up configuration for a prototype built around a Seeed Studio XIAO ESP32-C6. The hardware source of truth lives in `c6remote-kicad/`.
 
 <p align="center">
-  <img alt="Raytraced 3D top view of the board" src="docs/readme-assets/board-3d-rotated-top.png" width="49%">
-  <img alt="Raytraced 3D bottom view of the board" src="docs/readme-assets/board-3d-rotated-bottom.png" width="49%">
+  <img alt="A white homeThing C6 remote with its status LEDs glowing around the dial, standing upright on an oak table, with rows of remotes in other colours blurred behind it and a bay window over the prairie under a clear evening sky" src="site/assets/c6/hero.jpg" width="720">
 </p>
-<p align="center"><sub>Raytraced renders, top and bottom</sub></p>
+<p align="center"><sub>One button lights the fireplace, another controls the lights, and the rest control the TV. <a href="https://landonr.github.io/homething-c6/">Learn more</a></sub></p>
 
-## Features
+## What homeThing C6 does
 
-- Control a TV with on-board IR receive and transmit hardware
-- Drive music playback over Wi-Fi and BLE
-- Switch lights over Zigbee, Thread, or Matter
-- Map Home Assistant actions to physical buttons instead of app screens
-- Run for a long time between charges
+- **Runs your TV.** It learns the IR codes from the remote you already have. Then the wheel and pad drive the TV.
+- **Switches the lights.** A button talks straight to Zigbee lights and groups.
+- **Any button, any device.** Each button can drive something different, for example a gas fireplace over Zigbee.
+- **Sleeps on its own.** It sleeps between presses, with a target of about a month per charge.
+- **No hub needed.** Presses go straight to your Zigbee lights and IR devices. They work without Wi-Fi, Home Assistant, or Zigbee2MQTT.
+- **No flashing needed.** Set every button from the remote's own web page, in any browser. You do not edit YAML or rebuild the firmware.
+- **Bluetooth keys too.** Pair it like a Bluetooth keyboard or gamepad, and send media keys to a computer, phone, or tablet.
+- **Open source, all of it.** The board, the case, and the ESPHome firmware are in this repository.
 
-## Hardware
+## Specs
+
+### One remote, no screen.
+
+| Spec | Detail |
+| --- | --- |
+| **Controls** | Scroll wheel with 5-way pad, 11 assignable buttons |
+| **Battery** | 1000 mAh LiPo, with a target of about a month per charge |
+| **Charging** | USB-C |
+| **Processor** | Seeed Studio XIAO ESP32-C6 |
+| **Infrared** | Transmits, receives, and learns codes |
+| **Status** | 6 RGB LEDs |
+| **Case** | 3D printed, SLA or FDM |
+| **Wireless** | Wi-Fi, BLE, Zigbee |
+
+## Build one, or get one ready to go
+
+The board arrives fully assembled, so there is no soldering. The board design, the firmware, and the case files are all open source in this repository, so you can build your own from scratch.
+
+- **Case:** The [`case/` README](case/README.md) documents the enclosure files and assembly information.
+- **Board:** The [`c6remote-kicad/` README](c6remote-kicad/README.md) documents the KiCad hardware source.
+- **Firmware:** The [Make It Yours](#make-it-yours) section documents button assignment. [`c6remote.yaml`](c6remote.yaml) is the ESPHome configuration.
+- **Scripts:** The [`scripts/` README](scripts/README.md) documents project utilities and generated assets.
+
+<p align="center">
+  <img alt="Four c6remote units on a table. From left to right: the bare board, the complete remote with lit LEDs, the case without the scroll wheel, and the empty case." src="docs/readme-assets/remote-build-stages.jpg" width="720">
+</p>
+<p align="center"><sub>V2 board and case</sub></p>
+
+## Your smart home, on real buttons
+
+### Control Anything
+
+Pick it up, press a button, and the lights change. No phone to unlock, no app to open.
+
+- **TV:** Learns the IR codes from the remote you already have, then sends them.
+- **Music:** Controls Sonos over Wi-Fi, or pairs with a phone, tablet, or computer over BLE for media keys.
+- **Lights:** Talks straight to Zigbee lights and groups.
+- **Home Assistant:** Puts any action or script on a button.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-controls-annotated-dark.svg">
+    <img alt="Front of the assembled c6remote with labels for the microphone, scroll wheel and 5-way control, RGB status LEDs, 11 assignable buttons, the XIAO ESP32-C6 module with Zigbee, Wi-Fi, and BLE radios, and USB-C port." src="docs/readme-assets/remote-controls-annotated.svg" width="350" hspace="25">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/remote-back-annotated-dark.svg">
+    <img alt="Back of the assembled c6remote. Labels show the IR emitter, the IR receiver window, the parametric 3D printed case in SLA and FDM versions, and the 1000 mAh battery. The battery lasts about a month per charge." src="docs/readme-assets/remote-back-annotated.svg" width="350" hspace="25">
+  </picture>
+</p>
+
+## Make It Yours
+
+### Every button is yours to set.
+
+Open the remote's own web page from any browser on your network. Pick a button, then pick what it does: an IR code, a Zigbee light or group, a BLE media key, or a Home Assistant action. You can also assign buttons on the remote itself. No app, no cloud.
+
+#### Button assignment ([more info](RECEIVER.md))
+
+Open `http://homething-c6-xxxxxx.local/` in a browser. `xxxxxx` is the end of the remote's MAC address.
+Home Assistant also shows this address as the **Web Page** entity.
+To assign buttons on the remote itself, hold `SW9` for two seconds.
+[`RECEIVER.md`](RECEIVER.md) has the full steps.
+The page has no password, so use it only on a trusted network.
+
+<p align="center">
+  <img alt="The Buttons tab in a browser window. Button 7 is selected and set to a Zigbee target" src="docs/readme-assets/buttons-page-assign-framed.png" width="62%">
+  <img alt="The Config tab in a browser window, with the Wi-Fi, sleep, Home Assistant, Zigbee, and Bluetooth settings" src="docs/readme-assets/buttons-page-config-framed.png" width="35%">
+</p>
+<p align="center"><sub>The Buttons tab with a Zigbee assignment, and the Config tab</sub></p>
+
+## Built Your Way
+
+### Case ([more info](case/README.md))
+
+- Parametric 3D printed case in three versions: FDM, SLA, and SLA one-piece.
+- The flat FDM front needs no support on its face.
+- The SLA front has a shallow dish around the keys and the wheel. A translucent ring insert carries the light of the status LEDs.
+- The SLA one-piece front is the SLA front with the ring insert fused in. It prints in clear resin, so the whole front glows.
+- Optional Qwiic access: a flush cover with two breakaway bridges stays in place until you need the port.
+- Assembly needs one M2 x 5 pan head screw at the grip end.
+
+<p align="center">
+  <img alt="The case, the pad, and the main board parts come apart. The exploded remote turns once, and then the parts go back together. The status LEDs play the boot animation" src="docs/readme-assets/case-explode-loop.webp" width="640">
+</p>
+
+<p align="center">
+  <img alt="Plan of the SLA front face. The shading is darker where the face or the dish is steeper, so the arched face and the basins show without contour lines." src="docs/readme-assets/case-front-face-sls.svg" width="260">
+</p>
+<p align="center"><sub>SLA front face</sub></p>
+
+### Board ([more info](c6remote-kicad/README.md))
+
+- Custom PCB built around the Seeed Studio XIAO ESP32-C6.
+- Sleeps between presses and wakes on any button.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-front-annotated-dark.svg">
+    <img alt="Front of the c6remote board. Labels identify the ANO rotary encoder with 5 addressable buttons, RGB status LEDs, tactile switches, and GPIO expander." src="docs/readme-assets/board-front-annotated.svg" width="350" hspace="25">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/board-back-annotated-dark.svg">
+    <img alt="Back of the c6remote board. Labels identify the IR emitter, I2S microphone, IR receiver, 1000 mAh LiPo battery, XIAO ESP32-C6 module, Qwiic I2C port, and Molex PicoBlade battery connector." src="docs/readme-assets/board-back-annotated.svg" width="350" hspace="25">
+  </picture>
+</p>
+<p align="center"><sub>PCB front and back</sub></p>
+
+<p align="center">
+  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180" hspace="25">
+  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180" hspace="25">
+</p>
+<p align="center"><sub>Copper top and bottom</sub></p>
 
 | Ref | Part | Role |
 | --- | --- | --- |
 | `U1` | [Seeed Studio XIAO ESP32-C6](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8932/102010636.pdf) | Main module: Wi-Fi, BLE, Zigbee/Thread |
-| `MK1` | [ICS-43434 I2S microphone](https://invensense.tdk.com/wp-content/uploads/2016/02/DS-000069-ICS-43434-v1.2.pdf) | Audio input |
-| `U2` | [TSOP4136 IR receiver](https://www.vishay.com/docs/82460/tsop45.pdf) | IR receive |
+| `MK1` | [DMM-4026-B-I2S-R I2S microphone](https://api.puiaudio.com/filename/DMM-4026-B-I2S-R.pdf) | Audio input: PUI Audio bottom-port MEMS part on the back copper, hearing through a 0.5mm NPTH. `LR` and `CONFIG` tie to ground for left-channel output, `C5` decouples VDD and `R12` pulls `sd` down. It replaced the ICS-43434 on 2026-09-07, after three of the five rev-B microphones failed |
+| `U2` | [TSOP6136 IR receiver](https://www.vishay.com/docs/82457/tsop61.pdf) | IR receive: Vishay Panhead SMD part on the back copper, listening out the top end wall. AGC1, the most permissive of Vishay's settings, which is what lets `remote_receiver` learn arbitrary remotes. VDD sits on the switched `ir_vdd` rail rather than straight on `+3.3V`, gated by `Q3` below |
 | `D1`, `Q1` | [INL-3AHIR30 IR LED](http://www.inolux-corp.com/datasheet/IR/Emitter/3mm%20Lamp/INL-3AHIR30_V1.0.pdf) driven by [MMBT2222A](https://assets.nexperia.com/documents/data-sheet/MMBT2222A.pdf) | IR transmit; D1 leads hand-bent 90° to fire through the top-edge notch (see `BEND 90°` silk mark) |
 | `U3` | [PCF8575DBR I2C GPIO expander](https://www.ti.com/lit/ds/symlink/pcf8575.pdf) | Button input fan-out |
 | `SW1`–`SW11` | [TL3315NF160Q tactile switches](https://www.e-switch.com/wp-content/uploads/2022/06/TL3315.pdf) | Discrete buttons |
 | `ENC1` | [Adafruit ANO rotary encoder](https://cdn-learn.adafruit.com/assets/assets/000/104/942/original/tsw.pdf) | Scroll wheel: encoder channels plus five switch signals |
-| `D2`–`D5` | [XL-2020RGBC-WS2812B addressable LEDs](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf) | Status light chain of 4, WS2812B protocol: `GPIO17` drives `D2` DIN, DOUT cascades to `D5`. VDD sits on the switched `led_vdd` rail rather than straight on `+3.3V`, gated by `Q2` below, with `C4` as the only bulk cap on the chain (see `ROADMAP.md`) |
-| `Q2`, `R10`, `C4` | [AO3401A P-channel MOSFET](https://www.aosmd.com/res/datasheets/AO3401A.pdf), 1M 0603 pull-up, 1µF X7R 0805 cap | LED rail load switch: high-side `Q2` gates `+3.3V` (source) onto `led_vdd` (drain) for `D2`–`D5`, gate net `led_en` on `U1` pad 11 (`GPIO18`/`D10`), driven low for rail on. `R10` pulls the gate to the source so the rail is off by default at boot while `GPIO18` floats as an input; `C4` is the mid-chain bulk cap on `led_vdd`. Cuts the ~2.0mA the LEDs burned when dark to tens of µA (calculated, not yet measured). Firmware must hold `GPIO17` low or high-impedance whenever the rail is down, or DIN pushes current into the dead rail |
-| `J1` | [JST S2B-PH-SM4-TB(LF)(SN)](https://www.jst-mfg.com/product/pdf/eng/ePH.pdf) | Battery connector, PH series right-angle SMD |
+| `D2`–`D7` | [XL-2020RGBC-WS2812B addressable LEDs](https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8903/5962_XL-2020RGBC-WS2812B.pdf) | Status light ring of 6 round the scroll wheel, WS2812B protocol: `GPIO17` drives `D2` DIN, and DOUT cascades clockwise through `D3`, `D6`, `D4`, and `D5` to `D7`. VDD sits on the switched `led_vdd` rail rather than straight on `+3.3V`, gated by `Q2` below, with `C4` as the only bulk cap on the chain (see [`docs/timeline.md`](docs/timeline.md)) |
+| `Q2`, `R10`, `C4` | [AO3401A P-channel MOSFET](https://www.aosmd.com/res/datasheets/AO3401A.pdf), 1M 0603 pull-up, 1µF X7R 0805 cap | LED rail load switch: high-side `Q2` gates `+3.3V` (source) onto `led_vdd` (drain) for `D2`–`D7`, gate net `led_en` on `U1` pad 11 (`GPIO18`/`D10`), driven low for rail on. `R10` pulls the gate to the source so the rail is off by default at boot while `GPIO18` floats as an input; `C4` is the mid-chain bulk cap on `led_vdd`. Cuts the ~3.0mA the six LEDs draw when dark to tens of µA (calculated, not yet measured). Firmware must hold `GPIO17` low or high-impedance whenever the rail is down, or DIN pushes current into the dead rail |
+| `J1` | [Molex PicoBlade 53261-0271](https://www.molex.com/content/dam/molex/molex-dot-com/products/automated/en-us/salesdrawingpdf/532/53261/532610271_sd.pdf) | Battery connector, PicoBlade 1.25 mm right-angle SMD on the back copper. Its mouth faces `U1`. Pin 1 is BAT, next to the "+" silk. The cell plug is a `51021-0200` housing with `50079-8000` terminals. Cells with 1.25 mm plugs have no standard polarity, so some cells have reversed leads. Before you connect a cell, make sure that its polarity agrees with the silk |
+| `J2` | [JST SM04B-SRSS-TB(LF)(SN)](https://www.jst-mfg.com/product/pdf/eng/eSH.pdf) | Qwiic I2C port, SH series right-angle SMD on the back copper. Its mouth faces the long edge opposite `U1`. A Qwiic device must not use `0x20`, the `U3` address |
 
 The auto-generated BOM lives at [c6remote-kicad/export/c6remote-bom.csv](c6remote-kicad/export/c6remote-bom.csv). It tracks the latest repo state and is not release-validated.
 
-## Board views
+#### Schematic
 
 <p align="center">
-  <img alt="Basic 3D top view" src="docs/readme-assets/board-3d-top.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper top view" src="docs/readme-assets/board-flat-top.svg" width="180">
+  <a href="docs/readme-assets/schematic.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/readme-assets/schematic-dark.svg">
+      <img alt="Current schematic" src="docs/readme-assets/schematic.svg">
+    </picture>
+  </a>
+  <br>
+  <sub>Open the <a href="docs/readme-assets/schematic.svg">full-size schematic</a> to read the part values and the net names.</sub>
 </p>
-<p align="center"><sub>Top: basic 3D and flat copper</sub></p>
 
-<p align="center">
-  <img alt="Basic 3D bottom view" src="docs/readme-assets/board-3d-bottom.png" width="180">
-  &nbsp;&nbsp;
-  <img alt="Flat copper bottom view" src="docs/readme-assets/board-flat-bottom.svg" width="180">
-</p>
-<p align="center"><sub>Bottom: basic 3D and flat copper</sub></p>
+## Status ([more info](docs/timeline.md))
 
-## Schematic
+The fabrication and bring-up history, the rev-B delivery, and the unit 1 versus current design comparison are in [`docs/timeline.md`](docs/timeline.md). Open work is in the [GitHub issues](https://github.com/landonr/homething-c6/issues). The power budget is in [`docs/power-budget.md`](docs/power-budget.md).
 
-![Current schematic](docs/readme-assets/schematic.svg)
+The factory test procedure for an assembled board is at [homeThing C6 Factory Test](https://landonr.github.io/homething-c6/factory-self-test.html). The board runs the factory firmware, and an operator watches the status LED ring at each step. The test needs no computer, and the page prints to PDF for the bench.
 
-## Repo layout
-
-```text
-.
-├── c6remote-kicad/          Main KiCad project
-│   ├── c6remote.kicad_sch   Schematic
-│   ├── c6remote.kicad_pcb   PCB layout
-│   ├── c6remote.kicad_pro   Project settings
-│   ├── 3dmodels/            STEP models used for 3D board view
-│   └── export/              Generated fabrication outputs
-├── kicad lib/Library.pretty Custom PCB footprints used by board
-└── ano rotary.kicad_sym     Project-local schematic symbol library
-```
-
-## Opening the project
-
-Open `c6remote-kicad/c6remote.kicad_pro` in KiCad. The board uses local custom footprints under `kicad lib/Library.pretty/`, which KiCad must resolve under the library nickname `Library`.
-
-Symbol libraries are registered in `c6remote-kicad/sym-lib-table`:
-
-- `ano rotary`: project-local custom rotary symbol (`ano rotary.kicad_sym`) for the [Adafruit ANO rotary encoder](https://www.adafruit.com/product/5001)
-- `Seeed_Studio_XIAO_Series`: XIAO module symbols from [Seeed-Studio/OPL_Kicad_Library](https://github.com/Seeed-Studio/OPL_Kicad_Library/tree/master/Seeed%20Studio%20XIAO%20Series%20Library)
-
-STEP models for the 3D board view live in `c6remote-kicad/3dmodels/`:
-
-- `5221 ANO Rotary Encoder.step`: [GrabCAD Adafruit 5001 ANO Rotary Encoder](https://grabcad.com/library/adafruit-5001-ano-rotary-encoder-1)
-- `SW_SPST_PTS647Sx50_black.step`: local fork matching the [C&K PTS647 series](https://www.ckswitches.com/products/switches/product-details/Tactile/PTS647/)
-- `Seeed Studio XIAO ESP32-C6.step`: [GrabCAD XIAO ESP32-C6 3D model](https://grabcad.com/library/seeed-studio-xiao-esp32-c6-1)
-
-## KiCad MCP
-
-The repo is set up to use the same KiCad MCP server with Codex and GitHub Copilot / VS Code:
-
-- Codex workspace config: `.mcp.json`
-- VS Code / Copilot workspace config: `.vscode/mcp.json`
-
-## Validation and fabrication
-
-Run from `c6remote-kicad/`:
-
-```bash
-# Schematic ERC
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc c6remote.kicad_sch --exit-code-violations
-
-# Board DRC
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --exit-code-violations
-
-# Full board DRC with schematic parity and zone refill
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations
-```
-
-Regenerate all fabrication outputs (gerbers, drill, position file, BOM) into `export/`:
-
-```bash
-scripts/regen-fab.sh
-```
-
-Regenerate just the BOM after editing symbol sourcing fields (Datasheet, MPN, vendor links). Use this, not the KiCad MCP `export_bom` tool, which emits a different schema and drops the custom sourcing columns:
-
-```bash
-scripts/export-bom.sh
-```
-
-Render reusable 2D board views (default output: `c6remote-kicad/renders/<format>/`):
-
-```bash
-./scripts/render-2d.sh
-./scripts/render-2d.sh --side top
-./scripts/render-2d.sh --side bottom --format pdf
-```
-
-Regenerate the README preview assets in `docs/readme-assets/`:
-
-```bash
-./scripts/render-readme-assets.sh
-```
-
-Generate the interactive HTML BOM used for the pre-fab pin-1 orientation walk. Output is `c6remote-kicad/ibom.html`, a gitignored review artifact that the pre-commit hook also refreshes whenever `c6remote.kicad_pcb` is staged:
-
-```bash
-./scripts/gen-ibom.sh
-```
-
-Everything that has to happen before a board order, including the orientation and pinout checks ERC and DRC cannot do, is in [`docs/pre-fab-checklist.md`](docs/pre-fab-checklist.md).
-
-## Status
-
-The first assembled prototype arrived from PCBWay on Monday 2026-07-20 (order YT1753739, PCB plus SMD assembly). Bring-up found three wiring faults, all fixed in the design: ANO encoder pad 6/8 swap, TL3315 switch terminal short, ICS-43434 microphone pin numbering. Switches and encoder are reworkable on unit 1, the microphone is not, so a rev-B board is needed for the first working mic.
-
-Unit 1 was built from the [2026.6.0](https://github.com/landonr/homething-c6/releases/tag/2026.6.0) fab package and differs from the current design in ten blocks, so its photos and measurements do not describe what the next order will build. Full fab and bring-up history, plus the unit 1 versus current comparison, is in [`docs/timeline.md`](docs/timeline.md).
-
-## Relationship to homeThing
+## Relationship to homeThing ([more info](https://github.com/landonr/homeThing))
 
 This project grew out of [homeThing](https://github.com/landonr/homeThing) but has a narrower job: instead of a general smart display, it is a simple dedicated remote. It has no screen and more buttons, and is built on a custom PCB that is easy to build.
+
+## License
+
+This repository uses three licenses. A file uses the license of the row that contains its path.
+
+| Path | License |
+| --- | --- |
+| The ESPHome configs (`c6remote*.yaml`, `secrets.example.yaml`, `partitions.csv`), the root C++ headers (`*.h`), `components/`, `scripts/`, and `.github/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+| `c6remote-kicad/` (the schematic, the board, the symbol and footprint libraries, and the `export/` fabrication files), `kicad lib/`, and `case/` (the build123d model source, its checks, the board STEP and DXF files, and the meshes and STEP files that the model exports) | [CERN-OHL-S-2.0](LICENSE-CERN-OHL-S-2.0) |
+| The documentation (`README.md`, `RECEIVER.md`, `ZIGBEE.md`, `TRANSMITTING.md`, and `docs/`, with the images in `docs/readme-assets/`), and `site/` | [CC-BY-4.0](LICENSE-CC-BY-4.0) |
+| All other files, for example `AGENTS.md`, `.gitignore`, `.gitattributes`, `.mcp.json`, and `.vscode/` | [GPL-3.0-or-later](LICENSE-GPL-3.0) |
+
+A firmware binary that you build from these configs links the GPL-3.0 C++ core of ESPHome. As a result, a distributed binary is GPL-3.0. Its source is this repository and the dependencies below.
+
+For CERN-OHL-S-2.0, the Source Location of the hardware is <https://github.com/landonr/homething-c6>.
+
+### Third-party files
+
+These files keep their own licenses:
+
+| File | Origin | License |
+| --- | --- | --- |
+| `case/fonts/DejaVuSans.ttf` | DejaVu fonts | Bitstream Vera license, see [`case/fonts/LICENSE`](case/fonts/LICENSE) |
+| `scripts/assets/env-studio.hdr` | Poly Haven `studio_small_09` HDRI | CC0-1.0 |
+| The Wi-Fi and Bluetooth icons in `site/index.html` | Feather icons | MIT |
+| `kicad lib/Library.pretty/LED_D3.0mm_Horizontal_O1.27mm_Z2.0mm_IRBlack.kicad_mod`, and the `SW_TL3315NF160Q` and `TSOP61xx` symbols in `c6remote-kicad/Local.kicad_sym` | KiCad libraries | CC-BY-SA-4.0 with the [KiCad library exception](https://www.kicad.org/libraries/license/) |
+
+Because of the KiCad library exception, CC-BY-SA-4.0 does not apply to a design that uses these items. The schematic and the board also contain stock KiCad symbols and footprints. The same exception applies to them.
+
+These items are not in this repository:
+
+- The KiCad 3D models are in a private repository. See `scripts/link-3dmodels.sh`.
+- The build fetches these firmware dependencies:
+  - ESPHome: MIT for the Python code, and GPL-3.0 for the C++ code.
+  - ESP-IDF and `esp-zigbee-lib`: Apache-2.0.
+  - `luar123/zigbee_esphome`: no license file yet. [Issue 119](https://github.com/luar123/zigbee_esphome/issues/119) asks for one.
+
+The licenses do not give rights to trademarks, for example ESPHome, Home Assistant, Seeed Studio XIAO, Adafruit ANO, Discord, and GitHub. Some of these trademarks are in images, for example `site/assets/legacy/s3-video.jpg`.
+
+# Includes
+- <a href="https://esphome.io/">ESPHome</a>
+- <a href="https://dejavu-fonts.github.io/">DejaVu Sans Bold</a>, used for the board silkscreen brand text
+- [@luar123](https://github.com/luar123)'s <a href="https://github.com/luar123/zigbee_esphome">Zigbee ESPHome component</a>
+- <a href="https://www.kicad.org/">KiCad</a>
+- <a href="https://github.com/landonr/homeThing">homeThing</a>
+
+# Sponsorship
+
+<a href="https://pcbway.com/g/Xymq6O"><img alt="Sponsored by PCBWay" src="https://img.shields.io/badge/Sponsored%20by-PCBWay-2EA44F?style=for-the-badge"></a>
+
+## [PCBWay](https://pcbway.com/g/Xymq6O "PCBWay") sponsors 3D Printing and PCB assembly costs on this project during the prototyping phase! 
+If you are interested in their awesome fabrication services please check them out.&nbsp; They offer 
+
+3D prototyping,&nbsp;PCB design and assembly, as well as CNC metal fabrication.&nbsp; Costs are reasonable and the quality is as good as it gets.&nbsp; Thank you PCBWay for sponsoring us and other fun projects!

@@ -1,0 +1,545 @@
+# Zigbee operation
+
+## Role
+
+The remote is an always-on Zigbee end device. It is not a router.
+
+The remote uses endpoint 1 as a client of every cluster it can command. Each
+assigned button sends one ZCL command to its stored target, which is a group or
+one device.
+
+The firmware holds no MQTT client. The web page reads the Zigbee2MQTT
+inventory in the browser and posts only the resolved address to the remote. The
+page never publishes to Zigbee2MQTT. That websocket is read only.
+
+The remote does not need MQTT, Wi-Fi, Home Assistant, or Zigbee2MQTT for button
+playback. It needs Wi-Fi to configure it from the page and to send a Home Assistant action.
+
+## Requirements
+
+Install Zigbee2MQTT and enable its frontend. The browser connects to the
+frontend websocket, so the remote needs no broker credentials.
+
+Use the pinned `luar123/zigbee_esphome` external component in `c6remote.yaml`.
+Do not change its revision without validation.
+
+ZHA does not supply the group and device lists this page reads. Use
+Zigbee2MQTT.
+
+## Pair the remote
+
+A new remote boots with the Zigbee radio off. It has no record in flash, so it
+starts no 802.15.4 stack and `D5` stays dark until you pair it.
+
+1. Permit joining in Zigbee2MQTT.
+2. Open `http://homething-c6-xxxxxx.local/`. `xxxxxx` is the last six
+   hex digits of the remote MAC address.
+3. Select **Pair this remote for 3 minutes** in the Zigbee block.
+4. Wait for Zigbee2MQTT to show `homething-c6` as joined.
+5. Confirm that `D5` is solid green.
+
+A join needs both sides. Step 1 opens the coordinator, and step 3 opens the
+remote. The page reports the coordinator state but never opens it.
+
+The remote does not route Zigbee traffic. It does not enter deep sleep while a
+pairing request or the pairing window is active. Keep it powered while the
+coordinator forms or repairs the network.
+
+If `D5` pulses red, the Zigbee stack has started but has no stored network.
+Pair the remote again.
+
+If `D5` stays yellow, the remote has a stored network but cannot rejoin it. Make
+sure that the coordinator is on and in range.
+
+## Pair the remote from the page
+
+The button turns the Zigbee radio on, opens a 3 minute window, and restarts the
+remote to get there. The ESP-Zigbee stack starts only at boot, so a restart is
+the only way to bring the radio up.
+
+While the window is open, the button reads **Stop pairing** and the line next to it
+counts down, such as "The remote is pairing for 2:54." `D5` pulses blue.
+
+If the remote joins inside the window, the window closes, the radio stays on and
+`D5` goes solid green. If the window closes with no join, the remote turns the
+radio off and restarts, and `D5` goes dark.
+
+A radio that went off that way stays off. The flag is in flash, so a restart
+alone never brings it back. The web page names the cause, so an off radio
+is never a mystery:
+
+`Zigbee radio is off. Zigbee buttons are disabled. The last pairing attempt
+found no coordinator, so the radio went off.`
+
+There are two ways back. Select **Pair this remote for 3 minutes** again, with
+joining permitted in Zigbee2MQTT this time. Or turn the **Zigbee Radio** switch
+on and restart the remote. Either one clears the line above.
+
+**Stop pairing** sets no such line, because you closed that window yourself.
+
+**Stop pairing** ends the window the same way. The credentials are already gone
+by then, so a stopped window leaves the remote unpaired with the radio off.
+
+The pairing request lasts only through the restarts that the pairing sequence
+starts itself. Any other restart ends pairing. Examples are the **Restart**
+button, a power loss, and a crash. The remote then starts with the Zigbee radio
+off. To try again, select **Pair this remote for 3 minutes**.
+
+### What a pairing press erases
+
+A pairing press on a remote that already holds credentials erases them first,
+which costs one more restart. The SDK calls that a factory reset, but its scope
+on this board is only the Zigbee network:
+
+- **Erased:** the network key, the PAN ID, the extended PAN ID, the channel, the
+  short address and the binding table.
+- **Kept:** all 18 button assignments, both radio switches, the stored IR codes,
+  the Bluetooth bond, and the Wi-Fi credentials.
+
+The Zigbee stack keeps its data in the `zigbee` NVS namespace and clears that
+namespace alone. ESPHome keeps its preferences in the `esphome` namespace, so no
+assignment is at risk. The page asks for a confirmation before this, but only
+when the state endpoint reports the remote as paired.
+
+Zigbee2MQTT still holds the old entry after the erase. Remove the device there
+before you pair the remote again, or the bridge shows two.
+
+### The coordinator window
+
+The Zigbee2MQTT block reports the coordinator window from the retained
+`bridge/info` message. The line reads "Pairing is closed on the coordinator.
+Permit joining in Zigbee2MQTT." or "Pairing is open on the coordinator for 2:54."
+with a live countdown.
+
+The page cannot open that window. Permit joining in Zigbee2MQTT itself.
+
+If the socket is down, the line reads "The coordinator pairing state needs the
+Zigbee2MQTT link."
+
+## Groups and devices
+
+A button holds one of two target kinds. A group target sends a groupcast. A
+device target sends a unicast to one device.
+
+Use a group when one button must switch more than one light together. Group
+membership lives in the group table of the light, not in the remote, and only
+Zigbee2MQTT can write it.
+
+One group can serve more than one button. A button reads only the ID, so a later
+membership change in Zigbee2MQTT needs no change on the remote.
+
+Use a device target for one light. Zigbee2MQTT writes nothing for it, so a
+repeated assignment leaves no group behind.
+
+## Assign a button from the web page
+
+1. Open `http://homething-c6-xxxxxx.local/`.
+2. Select an input, then select **Zigbee target** in the Action selector.
+3. The first time, enter the Zigbee2MQTT frontend websocket address, such as
+   `ws://zigbee2mqtt.local:8080/api`. Enter the frontend token if one is set.
+4. Select **Connect**.
+5. Select **Group** or **Device** in the Target kind selector.
+6. Select a group or a device. The picker fills the boxes below it.
+7. Select the command in the **Action** selector, then fill its value box if it
+   shows one.
+8. Select **Save** in the button card.
+
+The device list holds only a device that accepts at least one of the actions. A
+device the bridge published no endpoint list for stays in the list, because that
+says nothing about what it accepts.
+
+The Target kind selector decides which fields the panel shows. **Group** shows
+the group picker and a **Group ID** box. **Device** shows the device picker, an
+**IEEE address** box, and an **Endpoint** box.
+
+The panel therefore holds one target at a time, and **Save** sends what is on
+screen. Changing the kind clears every field, so a value the panel stopped
+showing can never be assigned.
+
+Opening a slot that already holds a device target opens the panel on
+**Device**.
+
+The browser keeps the address and the token in `localStorage`. Neither value
+reaches the remote, so each browser enters them once.
+
+You can also type into a box. A picker does not appear without its bridge list,
+so typing is the only route when this browser cannot reach the frontend.
+
+A group ID is a decimal value, such as `4609`, or a hex value, such as `0x1201`.
+The remote refuses `0` and every value above `0xFFF7`, because `0xFFF8` and
+above are the reserved Zigbee broadcast addresses.
+
+An IEEE address is 16 hex digits, such as `0x94deb8fffe9db81e`. The `0x` prefix
+is optional. The page refuses a shorter value before it reaches the remote.
+
+A device uses the value in the **Endpoint** box, and endpoint 1 when that box is
+empty.
+
+The page reads the target name from the bridge lists when it sends, not when you
+pick. An edited box therefore cannot keep the name of the target it replaced.
+
+The remote stores the address and the name. It writes the record to flash at
+once, because no target needs a network confirmation to be stored.
+
+### A device target
+
+**Save** sends the IEEE address, the endpoint, the action and its value to
+the remote. The browser publishes nothing to Zigbee2MQTT.
+
+The page picks the lowest endpoint that has the input cluster of the action. A
+device can carry `genOnOff` on one endpoint and `hvacThermostat` on another, so
+the endpoint follows the action. If the bridge publishes no endpoint list, the
+page uses endpoint 1.
+
+The remote stores the address and writes the record to flash at once. It looks
+up the network address later, on the first press.
+
+Use a mains device for a device target. A battery device keeps its radio off, so
+the unicast waits at its parent until the device polls.
+
+The assignment replaces any IR code or Home Assistant action on that input.
+
+## How the remote finds a device
+
+A Zigbee unicast needs the 16-bit network address, but the remote stores the
+64-bit IEEE address. The network address is a lease that ends when the device
+rejoins, so the remote never writes one to flash.
+
+The remote resolves the address in this order:
+
+1. It reads its own address map. This costs no radio traffic.
+2. If the map has no entry, it broadcasts `NWK_addr_req` and caches the answer.
+3. It sends the command to the cached address.
+
+The APS confirm reports whether the device received the unicast. If the confirm
+fails, the remote drops the cached address, resolves it again, and resends the
+command one time. A second failure stops there, and the next press starts
+again.
+
+A slot broadcasts `NWK_addr_req` at most once every 10 seconds, because the
+request reaches the whole mesh. A request that gets no answer in 5 seconds
+fails.
+
+After the remote joins, it warms the cache for each device slot. It reads the
+address map first, and asks the mesh only for a slot the map does not hold. Each
+slot is warmed at most once for each join, at one slot per second.
+
+A warm cache only saves time on the first press. Correctness comes from the
+confirm and the resend, so a cold or stale cache still works.
+
+## How the browser reads the group list
+
+The Zigbee2MQTT frontend relays every MQTT message on its websocket as a
+`{topic, payload}` object, with the base topic already removed. The page keeps
+the `bridge/groups` and `bridge/devices` messages and ignores the rest.
+
+`bridge/devices` carries the endpoint list of each device, and each endpoint
+carries its input cluster list. That list decides which actions the panel
+offers and which endpoint an action goes to.
+
+A websocket needs no CORS grant. A `fetch` to the same host would need one,
+because the page comes from the remote.
+
+The remote never subscribes to `bridge/devices`. ESPHome buffers a whole MQTT
+payload before it delivers the message, and the retained device inventory of a
+real network is larger than the free heap.
+
+## Actions
+
+A slot holds one target and one action. The action is one press, so a pair such
+as brighter and dimmer costs two inputs. The wheel is the usual home for a pair,
+because the up and down directions are two assignable slots.
+
+| Action | Cluster | Value |
+| --- | --- | --- |
+| Toggle, On, Off | `genOnOff` | none |
+| Brighter, Dimmer | `genLevelCtrl` | step size, 1 to 254 |
+| Warmer white, Cooler white | `lightingColorCtrl` | step in mireds, 1 to 2000 |
+| Recall scene | `genScenes` | scene ID, 0 to 255 |
+| Open, Close, Stop | `closuresWindowCovering` | none |
+| Warmer, Cooler | `hvacThermostat` | step in tenths of a degree, 1 to 127 |
+| Lock, Unlock | `closuresDoorLock` | none |
+| Alarm | `ssIasWd` | seconds, 1 to 600 |
+| Squawk | `ssIasWd` | none |
+
+The **Action** selector lists only the actions the target accepts. The page
+reads the input cluster list of the device from Zigbee2MQTT, and a group offers
+what every member of it accepts. A typed address describes nothing, so it offers
+every action.
+
+An action with a value shows a box for it. An empty box means the value the
+placeholder names, so the panel always sends what it shows. The remote bounds
+the value again, because an imported block reaches it without a picker.
+
+The command does not wait for a coordinator, a broker, or a target state report.
+The mesh routes it, so the button works while Zigbee2MQTT and Home Assistant are
+both down.
+
+Toggle does not mean "set on" or "set off." Each target changes its current
+On/Off state. Use On or Off for a group whose members can fall out of step.
+
+Brighter and Dimmer use StepWithOnOff, so a step up wakes a light that is off.
+
+Warmer and Cooler send a relative setpoint change, which needs no attribute
+read. A Tuya thermostat answers no standard command, so it needs Home Assistant.
+
+A lock refuses a frame the remote is not bound for, so Lock and Unlock only work
+on a lock that has this remote in its access list.
+
+## State in Zigbee2MQTT and Home Assistant
+
+The remote sends each command directly to the target. The command does not pass
+through the coordinator as a request, so Zigbee2MQTT does not learn the new
+state of the light. Home Assistant reads the state from Zigbee2MQTT, so it shows
+the old state.
+
+A group command also reaches the coordinator. Zigbee2MQTT shows it as an
+`action` with an `action_group`, but it reads no light after the command. Its
+built-in poll reads only lights from some brands, for example Signify. A device
+command does not reach the coordinator.
+
+To keep the state correct, configure reporting on each target light in
+Zigbee2MQTT. Open the device, open the **Reporting** tab, and use endpoint 1.
+These values are the Zigbee2MQTT defaults for a light.
+
+| Cluster | Attribute | Minimum | Maximum | Change | Actions |
+| --- | --- | --- | --- | --- | --- |
+| `genOnOff` | `onOff` | 0 | 3600 | 0 | Toggle, On, Off |
+| `genLevelCtrl` | `currentLevel` | 5 | 3600 | 1 | Brighter, Dimmer |
+| `lightingColorCtrl` | `colorTemperature` | 5 | 3600 | 1 | Warmer white, Cooler white |
+
+If a light accepts the configuration but sends no reports, its state stays
+stale.
+
+## Battery level
+
+The remote has a Power Configuration server cluster on endpoint 1. Attribute
+`0x0021`, `batteryPercentageRemaining`, holds the battery level in units of
+0.5 %. The value `0xFF` means that the remote has no reading.
+
+The remote sends the value one time for each wake, after it rejoins the network.
+While it stays awake, it sends the value again only after a change of 2 % or more.
+
+Zigbee2MQTT generates a `battery` property from this cluster. No external
+converter is necessary. The same percent also shows as the `Battery` sensor in
+Home Assistant over the ESPHome API when Wi-Fi and the API server are on.
+
+After the first flash of this build, re-interview the remote one time in
+Zigbee2MQTT. Do this while the remote is awake, because Zigbee2MQTT must read the
+new cluster list.
+
+## Send path
+
+`zigbee_learning.h` holds the send path. The SDK is `esp-zigbee-lib` 2.0.4, which
+uses the `ezb_*` API.
+
+A press calls `play()`. A group target goes straight to `send_command_()`. A
+device target goes through `play_device_()`, which resolves the network address
+first.
+
+`send_command_()` fills one `ezb_zcl_cluster_cmd_ctrl_t` and hands it to
+`dispatch_()`. Only `dispatch_()` knows the action, so it picks the payload
+struct and the request function.
+
+A group request uses `EZB_ADDR_MODE_GROUP` and the group ID. A device request
+uses `EZB_ADDR_MODE_SHORT` and the resolved network address.
+
+`src_ep` is always `CLIENT_ENDPOINT`, which is endpoint 1. A device request also
+sets `dst_ep` from the record.
+
+Every SDK call must run between `esp_zigbee_lock_acquire()` and
+`esp_zigbee_lock_release()`. The main loop sends, and the Zigbee task runs the
+confirm and resolve callbacks.
+
+A device request sets `cmd_ctrl.cnf_ctx.cb` to `on_confirm_`. A group request
+sets no callback, because a groupcast returns no acknowledgement.
+
+A callback must not block on flash or on the record mutex. It parks the slot in
+`pending_state_`, and the next main loop tick does the work.
+
+`dispatch_()` reads no attribute, so a press stays one frame with no round trip.
+
+### Where the numbers come from
+
+The `Action` enum in `zigbee_learning.h` and the `ZA` table in
+`components/button_config/button_config_page.html` hold the same numbers. A new
+action needs a row in both, or the page names a command the remote does not
+know.
+
+`action_valid_()` bounds the value of each action. The page bounds it too, but
+an import block reaches the manager without passing a picker.
+
+The cluster of an action must also appear as a `role: CLIENT` cluster on
+endpoint 1 in `c6remote.yaml`.
+
+### Other commands the SDK can send
+
+The library compiles the full ZCL client command set, and the remote uses part
+of it. The headers are in
+`managed_components/espressif__esp-zigbee-lib/include/ezbee/zcl/cluster/`.
+
+These commands are compiled but unused:
+
+| Cluster | Commands |
+| --- | --- |
+| On/Off `0x0006` | `off_with_effect`, `on_with_timed_off` |
+| Level `0x0008` | `move_to_level_with_on_off`, `move`, `stop` |
+| Color control `0x0300` | `move_to_color_temperature`, `move_to_hue_and_saturation`, `color_loop_set` |
+| Scenes `0x0005` | `store_scene` |
+| Identify `0x0003` | `identify` |
+| Thermostat `0x0201` | the weekly schedule commands |
+| Any cluster | `read_attr`, `write_attr`, `config_report`, `custom_cluster_cmd` |
+
+`ezb_zcl_write_attr_cmd_req()` and `ezb_zcl_custom_cluster_cmd_req()` reach an
+attribute or a manufacturer cluster that has no named command.
+
+`move` and `stop` need a press edge and a release edge, so they need an input
+that reports both. Every action the remote sends today is one press.
+
+An absolute setpoint needs a write to cluster `0x0201`. Attribute `0x0012` is
+the heating setpoint, and `0x0011` is the cooling setpoint. Both are `int16` in
+0.01 C.
+
+Attribute `0x001C` is the system mode. Its values include off `0x00`, auto
+`0x01`, cool `0x03`, and heat `0x04`.
+
+A Tuya thermostat does not answer cluster `0x0201`. It uses manufacturer cluster
+`0xEF00` and a datapoint payload for each model.
+
+## Clear a button
+
+Clear a button from the web page, or with the last tap of the assignment
+cycle on the remote.
+
+Clearing removes the local record only. A group and its membership stay in
+Zigbee2MQTT, so another button can still use that group. A device target leaves
+nothing behind, because the assignment wrote nothing to Zigbee2MQTT.
+
+## The radio switch
+
+One switch turns the Zigbee radio off for the whole remote. The switch is on the
+web page, on the heading line of the **Zigbee2MQTT** block, and in Home
+Assistant as **Zigbee Radio**.
+
+If the switch is off, every button that sends Zigbee is disabled and the remote
+asks for no network address. The assignments stay in flash, so the buttons work again when
+the switch goes back on.
+
+The stack keeps its place on the network only until the next reboot, because the
+ESP-Zigbee stack has no restart. A rejoin would cost the pairing that the buttons
+point at.
+
+An `on_boot` trigger at priority 800 reads the stored switch from flash with
+`ZigbeeAssignmentManager::radio_enabled_from_flash()`. A remote with no record
+has never paired, so an unreadable record also reads as off. If the switch is off, it
+calls `mark_failed()` on the Zigbee component and records the gate with
+`zigbee_assignments.set_boot_gated(true)`. A failed ESPHome component never runs
+its setup, so the 802.15.4 stack never starts.
+
+While the gate holds, turning the switch back on cannot start the stack. Reboot
+the remote to lift the gate. See "Network state on the page" for the line the
+page shows.
+
+Select the **Restart** button entity to reboot the remote from Home Assistant or
+from the web page. A pairing press also restarts the remote, and it turns
+the radio on first, so it lifts the gate as well.
+
+`D5` is dark while the switch is off. It also stays dark until a reboot lifts the gate.
+
+The switch state lives in the Zigbee assignment record, so the remote restores it
+after a reboot.
+
+## Network state on the page
+
+The stack reports three states, and the web page names the one it is in
+under the switch:
+
+| Line | Meaning |
+| --- | --- |
+| `Zigbee radio is on. The stack has not started.` | The stack has not answered its start signal yet. |
+| `Zigbee radio is on. Not paired.` | The stack is factory new. It has no credentials and it searches for a coordinator. |
+| `Zigbee radio is on. Not on the network yet. The remote is rejoining.` | The stack holds credentials and it rejoins the network. |
+| `Zigbee radio is on. Pairing.` | A 3 minute pairing window is open. |
+| `Zigbee radio is on. Paired to a Zigbee network.` | The remote joined a network. |
+| `Zigbee radio is on. Paired, but the last command to a device was not acknowledged.` | See "Reachability" below. |
+| `Zigbee radio is on. The stack is down. Reboot the remote to start it.` | The switch was off at boot, so the stack never started. Reboot to lift the gate. |
+
+The component latches its connected flag on the first join and never clears it,
+so `Paired` means joined once, not reachable now.
+
+The `zigbee` component keeps its instance file-static, so the 250 ms interval in
+`c6remote.yaml` pushes `is_started()`, `is_connected()`, and `factory_new_` into
+`zigbee_assignments`. The `/buttons/api/state` endpoint reads them from there.
+
+## Reachability
+
+The component sets its connected flag on the first join and never clears it, so
+solid green means joined once and not reachable now. The amber pulse is what
+reports reach, and the remote derives it from traffic the buttons already send.
+
+A device unicast carries an APS confirm. Each press gets one resend, so the state
+goes to failed only when the resend fails too. A `NWK_addr_req` that times out or
+that the mesh answers with a failure counts the same way. Any success clears it.
+
+Two limits follow from that:
+
+- A group target sets no confirm callback, because a groupcast is
+  unacknowledged. A remote whose buttons are all group targets therefore learns
+  nothing and stays unknown, which reads as solid green.
+- An idle remote learns nothing. Amber means the last device command was not
+  acknowledged, not that the network is down now.
+
+A join clears the state back to unknown. The warm-cache pass that follows a join
+is the one probe the remote makes without a press.
+
+After a deep-sleep wake, the remote rejoins the network.
+If **Send Zigbee on wake** is on, the remote sends the Zigbee command when the link is ready.
+If the link takes more than 3 s after setup, the remote discards the wake press.
+See [Wake](RECEIVER.md#wake) in RECEIVER.md.
+
+## Storage
+
+The remote stores one record for each of the 18 assignable slots. A record holds
+a target kind, the target name, the address for that kind, the action, and the
+value of the action.
+
+A group record holds the group ID. A device record holds the IEEE address and
+the endpoint of one device.
+
+The record format is version 5. The remote reads a version 4 or a version 3
+record and writes it back as version 5, so the assignments survive the update.
+An older record names no action, so the migration gives it Toggle.
+
+Each format has a different length, so a newer load fails first and the
+migration runs. Version 2 and earlier do not load, and those slots start
+clear.
+
+## LED meanings
+
+`D5` shows Zigbee state at all times.
+
+| `D5` | Meaning |
+| --- | --- |
+| dark | The radio is off, the boot gate holds the stack down, or a pairing restart has not started the stack. |
+| blue pulse, 1600 ms | A pairing window is open. |
+| solid yellow | The remote has a stored network but has not joined it since the boot or wake. |
+| red pulse, 3200 ms | The stack is up with no stored network, or a pairing restart has not erased the old network yet. |
+| solid green | The remote joined a network. |
+| amber pulse, 4000 ms | Joined, but the last device command was not acknowledged. |
+
+Pairing is tested before the join, so an open window never shows the red that
+means a fault.
+
+`D2` shows Wi-Fi and the API. Wi-Fi serves the web page and Home Assistant actions only, so a dark
+`D2` does not stop a button.
+
+Assignment mode uses `D3` and `D4` only, so `D5` stays readable.
+
+| LEDs | Meaning |
+| --- | --- |
+| `D3` and `D4` solid blue | Assignment mode waits for an input. |
+| `D3` and `D4` blue chase | The selected input waits for an IR code. |
+| `D3` and `D4` solid green | IR assignment saved. |
+| `D3` and `D4` flash red | An IR or flash operation failed. |
+| `D3` and `D4` pulsing blue | The selected input now starts Assist. |
+| `D3` and `D4` amber | The selected input is clear. |

@@ -1,5 +1,5 @@
 # Shared package for the c6remote bring-up firmwares. Not flashable alone:
-# c6remote-test-v1.yaml / c6remote-test-v2.yaml include it, override
+# c6remote-test-v2.yaml includes it, override
 # substitutions and define the LED strip.
 #
 # Pin map (c6remote.kicad_sch):
@@ -8,12 +8,14 @@
 #   GPIO2  sck             GPIO18 led_en (D10)  GPIO23 scl
 #   GPIO4  bat_sense /2    GPIO19 ano_enc2
 #   GPIO5  exp_int (nINT)  GPIO20 ano_enc1
+#   GPIO6  ir_en           GPIO7  usb_present_n (current design)
 #
 # led_en gates Q2, a high-side P-FET feeding led_vdd on D2-D5: low powers the
-# rail, and R10 1M holds it off while GPIO18 floats.
+# rail, and R10 1M holds it off while GPIO18 floats. ir_en gates Q3 the same way
+# for ir_vdd on U2, but defaults on, since the receiver is useless unpowered.
 #
-# Spare, unconnected at U1: GPIO6, GPIO7. Both are deep-sleep wake capable
-# (C6 wakes only on GPIO0-7).
+# GPIO7 is unconnected on rev-B but carries usb_present_n on the current design.
+# IR REC uses GPIO16, outside the GPIO0-7 deep-sleep wake range.
 
 # Defaults; version files override (main config wins per packages docs).
 substitutions:
@@ -267,7 +269,7 @@ pcf8574:
 #   bit 12 up, 14 down, 15 left, 11 right, 13 centre (defined per revision)
 binary_sensor:
   - platform: gpio
-    name: Encoder Up
+    name: Wheel Up
     id: ano_up
     pin: &expander_pin
       pcf8574: button_expander
@@ -290,7 +292,7 @@ binary_sensor:
             - delay: 90ms
 
   - platform: gpio
-    name: Encoder Down
+    name: Wheel Down
     id: ano_down
     pin:
       <<: *expander_pin
@@ -310,7 +312,7 @@ binary_sensor:
             - delay: 90ms
 
   - platform: gpio
-    name: Encoder Left
+    name: Wheel Left
     id: ano_left
     pin:
       <<: *expander_pin
@@ -321,7 +323,7 @@ binary_sensor:
           dir: -1
 
   - platform: gpio
-    name: Encoder Right
+    name: Wheel Right
     id: ano_right
     pin:
       <<: *expander_pin
@@ -344,15 +346,16 @@ binary_sensor:
 
 sensor:
   - platform: rotary_encoder
-    name: Encoder
+    name: Wheel
     id: wheel
+    # A on GPIO19 makes a clockwise turn fire on_clockwise.
     pin_a:
-      number: GPIO20
+      number: GPIO19
       mode:
         input: true
         pullup: true
     pin_b:
-      number: GPIO19
+      number: GPIO20
       mode:
         input: true
         pullup: true
@@ -492,6 +495,19 @@ switch:
             light.is_on: led_strip
           then:
             - light.turn_off: led_strip
+
+  # Q3 gates ir_vdd on U2 the same way, inverted, R11 1M holding it off while
+  # GPIO6 floats. Defaults ON: remote_receiver cannot decode with U2 unpowered,
+  # and turning it off while awake leaks about 44uA through GPIO16's pullup into
+  # U2's internal 30k against a dead Vs.
+  - platform: gpio
+    name: IR Rail
+    id: ir_rail
+    entity_category: config
+    pin:
+      number: GPIO6
+      inverted: true
+    restore_mode: ALWAYS_ON
 
   - platform: template
     name: Mic Reactive

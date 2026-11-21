@@ -1,0 +1,782 @@
+#include "ble_hid.h"
+
+#include "esphome/core/application.h"
+#include "esphome/core/log.h"
+
+#include "esp_hid_common.h"
+#include "esp_bt.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_gap.h"
+#include "host/ble_gatt.h"
+#include "host/ble_hs.h"
+#include "host/ble_store.h"
+#include "services/gap/ble_svc_gap.h"
+
+#include "esphome/components/button_slots/ir_learning.h"
+#include "esphome/components/button_slots/zigbee_learning.h"
+
+#include <algorithm>
+#include <cstring>
+
+// The NimBLE key store lives in its own source file and has no public header.
+extern "C" void ble_store_config_init(void);
+
+namespace esphome::ble_hid {
+
+static const char *const TAG = "ble_hid";
+static constexpr uint16_t HID_SERVICE_UUID = 0x1812;
+static_assert(BleHid::DEVICE_NAME_MAX <= CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN,
+              "ble_svc_gap_device_name_set() refuses a name longer than the GAP limit");
+static constexpr uint32_t STORE_KEY = 0x424C4831U;
+static constexpr uint32_t STORE_MAGIC = 0x424C4844U;
+static constexpr uint8_t STORE_VERSION = 1;
+
+static constexpr uint8_t REPORT_KEYBOARD = 1;
+static constexpr uint8_t REPORT_CONSUMER = 2;
+static constexpr uint8_t REPORT_GAMEPAD = 3;
+
+// One report map keeps the device visible as one composite HID peripheral.
+static const uint8_t REPORT_MAP[] = {
+    0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, REPORT_KEYBOARD,
+    0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x95, 0x08, 0x81, 0x02,
+    0x05, 0x07, 0x19, 0x00, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x96, 0xE8, 0x00, 0x81, 0x02, 0xC0,
+
+    0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x85, REPORT_CONSUMER,
+    0x15, 0x00, 0x26, 0xFF, 0x03, 0x19, 0x00, 0x2A, 0xFF, 0x03,
+    0x75, 0x10, 0x95, 0x01, 0x81, 0x00, 0xC0,
+
+    0x05, 0x01, 0x09, 0x05, 0xA1, 0x01, 0x85, REPORT_GAMEPAD,
+    0x05, 0x09, 0x19, 0x01, 0x29, 0x10, 0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x95, 0x10, 0x81, 0x02,
+    0x05, 0x01, 0x09, 0x39, 0x15, 0x00, 0x25, 0x07,
+    0x35, 0x00, 0x46, 0x3B, 0x01, 0x65, 0x14,
+    0x75, 0x04, 0x95, 0x01, 0x81, 0x42,
+    0x65, 0x00, 0x75, 0x04, 0x95, 0x01, 0x81, 0x01, 0xC0,
+};
+
+static esp_hid_raw_report_map_t REPORT_MAPS[] = {{REPORT_MAP, sizeof(REPORT_MAP)}};
+// init_hid_() fills device_name from the stored name.
+static esp_hid_device_config_t DEVICE_CONFIG = {
+    .vendor_id = 0x16C0,
+    .product_id = 0x05DF,
+    .version = 0x0100,
+    .device_name = nullptr,
+    .manufacturer_name = "homeThing",
+    .serial_number = "C6",
+    .report_maps = REPORT_MAPS,
+    .report_maps_len = 1,
+};
+
+BleHid *BleHid::global_instance_ = nullptr;
+const ble_gatt_svc_def *BleHid::extra_services_[BleHid::MAX_EXTRA_SERVICES] = {};
+size_t BleHid::extra_service_count_ = 0;
+
+bool BleHid::add_gatt_services(const ble_gatt_svc_def *services) {
+  if (services == nullptr || extra_service_count_ >= MAX_EXTRA_SERVICES)
+    return false;
+  extra_services_[extra_service_count_++] = services;
+  return true;
+}
+
+void BleHid::set_extra_service_uuid(const ble_uuid128_t *uuid) {
+  this->extra_uuid_.store(uuid, std::memory_order_release);
+}
+
+static int bond_count() {
+  int count = 0;
+  return ble_store_util_count(BLE_STORE_OBJ_TYPE_PEER_SEC, &count) == 0 ? count : 0;
+}
+
+// ble_store_config keeps the keys in this NVS namespace of the default
+// partition, so the bond can be read and dropped while the host stack is down.
+static const char *const BOND_NAMESPACE = "nimble_bond";
+
+static bool stored_bond_present() {
+  nvs_iterator_t iterator = nullptr;
+  const esp_err_t result =
+      nvs_entry_find(NVS_DEFAULT_PART_NAME, BOND_NAMESPACE, NVS_TYPE_ANY, &iterator);
+  if (iterator != nullptr)
+    nvs_release_iterator(iterator);
+  return result == ESP_OK;
+}
+
+static bool erase_stored_bonds() {
+  nvs_handle_t handle = 0;
+  esp_err_t result = nvs_open(BOND_NAMESPACE, NVS_READWRITE, &handle);
+  if (result == ESP_ERR_NVS_NOT_FOUND)
+    return true;
+  if (result != ESP_OK)
+    return false;
+  result = nvs_erase_all(handle);
+  if (result == ESP_OK)
+    result = nvs_commit(handle);
+  nvs_close(handle);
+  return result == ESP_OK;
+}
+
+// The build allows one bond, so the saved host is the first and only entry.
+static bool bonded_peer(ble_addr_t *address) {
+  int count = 0;
+  return ble_store_util_bonded_peers(address, &count, 1) == 0 && count == 1;
+}
+
+// A cut inside a multi-byte character leaves invalid UTF-8, so the cut moves
+// back to the lead byte of that character.
+static size_t utf8_prefix_length(const char *text, size_t length, size_t limit) {
+  if (length <= limit)
+    return length;
+  size_t cut = limit;
+  while (cut > 0 && (static_cast<uint8_t>(text[cut]) & 0xC0) == 0x80)
+    cut--;
+  return cut;
+}
+
+static void host_task(void *param) {
+  nimble_port_run();
+  nimble_port_freertos_deinit();
+  (void) param;
+}
+
+float BleHid::get_setup_priority() const { return setup_priority::BLUETOOTH - 1.0f; }
+
+// setup_assignments() runs from on_boot, which is ahead of this priority, so the
+// stored switch decides whether the controller comes up at all.
+void BleHid::setup() {
+  if (!this->radio_enabled()) {
+    // The key store answers without the stack, so the page can still show the
+    // bond and drop it.
+    this->bonded_.store(stored_bond_present(), std::memory_order_release);
+    ESP_LOGI(TAG, "Bluetooth radio is off, so the stack stays down");
+    return;
+  }
+  if (!this->init_stack_()) {
+    this->stack_failed_ = true;
+    this->mark_failed();
+    return;
+  }
+  this->stack_failed_ = false;
+  this->bonded_.store(bond_count() > 0, std::memory_order_release);
+}
+
+void BleHid::loop() {
+  if (this->disconnect_pending_.exchange(false, std::memory_order_acq_rel))
+    this->release_all_();
+  if (this->report_sync_pending_.exchange(false, std::memory_order_acq_rel))
+    this->send_reports_();
+  if (this->name_update_pending_.exchange(false, std::memory_order_acq_rel))
+    this->apply_device_name_();
+  if (this->pair_failed_pending_.exchange(false, std::memory_order_acq_rel)) {
+    this->pair_failed_at_ = millis();
+    this->pair_failed_seen_ = true;
+  }
+}
+
+void BleHid::dump_config() {
+  DeviceName name{};
+  this->copy_device_name_(name);
+  ESP_LOGCONFIG(TAG, "BLE HID:");
+  ESP_LOGCONFIG(TAG, "  Name: %s", name.data());
+  ESP_LOGCONFIG(TAG, "  Radio: %s", ONOFF(this->radio_enabled()));
+  ESP_LOGCONFIG(TAG, "  Connected: %s", YESNO(this->connected()));
+  ESP_LOGCONFIG(TAG, "  Bonded: %s", YESNO(this->bonded()));
+}
+
+// With the stack down, the name waits for init_stack_().
+void BleHid::set_device_name(const char *name) {
+  if (name == nullptr)
+    return;
+  this->store_device_name_(name, std::strlen(name));
+  if (this->stack_ready_)
+    this->name_update_pending_.store(true, std::memory_order_release);
+}
+
+void BleHid::store_device_name_(const char *name, size_t length) {
+  const size_t kept = utf8_prefix_length(name, length, DEVICE_NAME_MAX);
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  this->device_name_.fill('\0');
+  std::memcpy(this->device_name_.data(), name, kept);
+  this->device_name_generation_++;
+}
+
+uint32_t BleHid::copy_device_name_(DeviceName &name) const {
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  name = this->device_name_;
+  return this->device_name_generation_;
+}
+
+bool BleHid::device_name_current_(uint32_t generation) const {
+  const std::lock_guard<std::mutex> lock(this->device_name_mutex_);
+  return this->device_name_generation_ == generation;
+}
+
+// Main loop only. A connected host reads the GAP name, and the advert after the
+// disconnect reads the new name, so only a running advert restarts here.
+void BleHid::apply_device_name_() {
+  DeviceName name{};
+  this->copy_device_name_(name);
+  const int named = ble_svc_gap_device_name_set(name.data());
+  if (named != 0)
+    ESP_LOGW(TAG, "Could not set the GAP device name: %d", named);
+  if (this->link_connected_.load(std::memory_order_acquire) ||
+      !this->advertising_.load(std::memory_order_acquire))
+    return;
+  // BLE_HS_EALREADY means that no advert runs yet or any more. The claim holder
+  // checks the generation after its start. After a connect or a host reset,
+  // the next advert reads the new name.
+  const int stopped = ble_gap_adv_stop();
+  if (stopped != 0) {
+    if (stopped != BLE_HS_EALREADY)
+      ESP_LOGW(TAG, "Advertising stop for the new name failed: %d", stopped);
+    return;
+  }
+  this->advertising_.store(false, std::memory_order_release);
+  this->start_advertising_();
+}
+
+void BleHid::setup_assignments() {
+  this->pref_ = esphome::global_preferences->make_preference<Record>(STORE_KEY, true);
+  Record loaded{};
+  if (this->pref_.load(&loaded) && valid_record_(loaded)) {
+    this->record_ = loaded;
+  } else {
+    this->record_.magic = STORE_MAGIC;
+    this->record_.version = STORE_VERSION;
+    this->record_.checksum = checksum_(this->record_);
+  }
+  this->assignments_ready_ = true;
+  this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0, std::memory_order_release);
+
+  ::ir_code_store.add_assignment_clear_callback([](uint8_t slot, IrCodeStore::Owner keep) {
+    if (keep != IrCodeStore::OWNER_BLE && BleHid::instance() != nullptr)
+      BleHid::instance()->clear(slot);
+  });
+  ::ir_ui.set_hid_play_callback([](uint8_t slot, bool pressed) {
+    return BleHid::instance() != nullptr && BleHid::instance()->set_pressed(slot, pressed);
+  });
+  ESP_LOGI(TAG, "Loaded BLE HID assignments");
+}
+
+BleHid::Assignment BleHid::assignment(uint8_t slot) const {
+  if (!slot_valid_(slot) || !this->assignments_ready_)
+    return {};
+  const std::lock_guard<std::mutex> lock(this->record_mutex_);
+  const Entry &entry = this->record_.entries[slot - FIRST_SLOT];
+  const Kind kind = static_cast<Kind>(entry.kind);
+  if (!valid_assignment_(kind, entry.usage, entry.modifiers))
+    return {};
+  return {true, kind, entry.usage, entry.modifiers};
+}
+
+bool BleHid::assign(uint8_t slot, Kind kind, uint16_t usage, uint8_t modifiers) {
+  if (!slot_valid_(slot) || !this->assignments_ready_ || !valid_assignment_(kind, usage, modifiers))
+    return false;
+  const bool local_cleared = ::ir_code_store.clear_for_zigbee(slot);
+  if (!local_cleared)
+    return false;
+  ::ir_code_store.release_others(slot, IrCodeStore::OWNER_BLE);
+  bool stored;
+  {
+    const std::lock_guard<std::mutex> lock(this->record_mutex_);
+    this->active_[slot - FIRST_SLOT] = false;
+    Entry &entry = this->record_.entries[slot - FIRST_SLOT];
+    entry = {static_cast<uint8_t>(kind), modifiers, usage};
+    stored = this->save_();
+  }
+  ESP_LOGI(TAG, "Slot %u assigned HID kind %u usage 0x%04X modifiers 0x%02X", slot,
+           static_cast<unsigned>(kind), usage, modifiers);
+  if (this->connected())
+    this->send_reports_();
+  return stored;
+}
+
+void BleHid::clear(uint8_t slot) {
+  if (!slot_valid_(slot) || !this->assignments_ready_)
+    return;
+  const size_t index = slot - FIRST_SLOT;
+  {
+    const std::lock_guard<std::mutex> lock(this->record_mutex_);
+    if (this->record_.entries[index].kind == NONE)
+      return;
+    this->active_[index] = false;
+    this->record_.entries[index] = {};
+    this->save_();
+  }
+  if (this->connected())
+    this->send_reports_();
+}
+
+bool BleHid::set_pressed(uint8_t slot, bool pressed) {
+  const Assignment value = this->assignment(slot);
+  if (!value.assigned || !this->radio_enabled())
+    return false;
+  const size_t index = slot - FIRST_SLOT;
+  if (!this->connected()) {
+    this->active_[index] = false;
+    return true;
+  }
+  this->active_[index] = pressed;
+  this->send_reports_();
+  return true;
+}
+
+bool BleHid::slot_valid_(uint8_t slot) { return slot >= FIRST_SLOT && slot <= LAST_SLOT; }
+
+uint32_t BleHid::checksum_(const Record &record) {
+  const auto *bytes = reinterpret_cast<const uint8_t *>(&record);
+  uint32_t hash = 2166136261U;
+  for (size_t i = 0; i < sizeof(record) - sizeof(record.checksum); i++) {
+    hash ^= bytes[i];
+    hash *= 16777619U;
+  }
+  return hash;
+}
+
+bool BleHid::valid_record_(const Record &record) {
+  if (record.magic != STORE_MAGIC || record.version != STORE_VERSION || record.checksum != checksum_(record))
+    return false;
+  for (const Entry &entry : record.entries) {
+    if (entry.kind != NONE &&
+        !valid_assignment_(static_cast<Kind>(entry.kind), entry.usage, entry.modifiers))
+      return false;
+  }
+  return true;
+}
+
+bool BleHid::valid_assignment_(Kind kind, uint16_t usage, uint8_t modifiers) {
+  switch (kind) {
+    case KEYBOARD:
+      return usage <= 0xE7 && (usage != 0 || modifiers != 0);
+    case CONSUMER:
+      return usage > 0 && usage <= 0x03FF && modifiers == 0;
+    case GAMEPAD_BUTTON:
+      return usage >= 1 && usage <= 16 && modifiers == 0;
+    case GAMEPAD_DPAD:
+      return usage <= 7 && modifiers == 0;
+    default:
+      return false;
+  }
+}
+
+bool BleHid::save_() {
+  this->record_.magic = STORE_MAGIC;
+  this->record_.version = STORE_VERSION;
+  this->record_.checksum = checksum_(this->record_);
+  return this->pref_.save(&this->record_);
+}
+
+// The switch owns the whole radio, so a button that carries a HID assignment
+// sends nothing while it is off. The stack starts on the first enable and stays
+// up after that, because a NimBLE teardown drops the host keys with it.
+bool BleHid::set_radio_enabled(bool enabled) {
+  if (this->radio_enabled() == enabled)
+    return true;
+  this->radio_on_.store(enabled, std::memory_order_release);
+  if (this->assignments_ready_) {
+    const std::lock_guard<std::mutex> lock(this->record_mutex_);
+    this->record_.flags = enabled ? static_cast<uint8_t>(this->record_.flags & ~FLAG_RADIO_OFF)
+                                  : static_cast<uint8_t>(this->record_.flags | FLAG_RADIO_OFF);
+    this->save_();
+  }
+
+  if (enabled) {
+    if (!this->stack_ready_) {
+      if (!this->init_stack_()) {
+        ESP_LOGE(TAG, "Bluetooth radio could not start");
+        this->stack_failed_ = true;
+        return false;
+      }
+      this->stack_failed_ = false;
+      this->bonded_.store(bond_count() > 0, std::memory_order_release);
+    } else {
+      this->start_advertising_();
+    }
+    ESP_LOGI(TAG, "Bluetooth radio on");
+    return true;
+  }
+
+  this->release_all_();
+  this->pair_failed_seen_ = false;
+  if (this->stack_ready_) {
+    ble_gap_adv_stop();
+    this->advertising_.store(false, std::memory_order_release);
+    const uint16_t connection = this->connection_.load(std::memory_order_acquire);
+    if (connection != NO_CONNECTION)
+      ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
+  }
+  ESP_LOGI(TAG, "Bluetooth radio off");
+  return true;
+}
+
+bool BleHid::forget_bond() {
+  this->pair_failed_seen_ = false;
+  // With the stack down there is no link to close and no host to tell, so the
+  // key store is dropped where it lives.
+  if (!this->stack_ready_) {
+    const bool erased = erase_stored_bonds();
+    if (!erased) {
+      ESP_LOGE(TAG, "Could not erase the stored Bluetooth bond");
+      return false;
+    }
+    this->bonded_.store(false, std::memory_order_release);
+    ESP_LOGI(TAG, "Stored Bluetooth host bond removed with the radio off");
+    return true;
+  }
+  ble_addr_t peer{};
+  if (!bonded_peer(&peer)) {
+    this->bonded_.store(false, std::memory_order_release);
+    this->pairing_.store(false, std::memory_order_release);
+    this->start_advertising_();
+    return true;
+  }
+
+  // ble_gap_unpair() closes the link before it drops the key, so the disconnect
+  // event restarts advertising on its own.
+  const int result = ble_gap_unpair(&peer);
+  if (result != 0) {
+    ESP_LOGE(TAG, "Could not remove the Bluetooth bond: %d", result);
+    return false;
+  }
+  this->bonded_.store(bond_count() > 0, std::memory_order_release);
+  this->pairing_.store(false, std::memory_order_release);
+  ESP_LOGI(TAG, "Bluetooth host bond removed");
+  this->start_advertising_();
+  return true;
+}
+
+bool BleHid::init_stack_() {
+  esp_err_t result;
+  if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_IDLE) {
+    esp_bt_controller_config_t config = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+    result = esp_bt_controller_init(&config);
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "Bluetooth controller init failed: %s", esp_err_to_name(result));
+      return false;
+    }
+  }
+  if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_INITED) {
+    result = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    if (result != ESP_OK) {
+      ESP_LOGE(TAG, "Bluetooth controller enable failed: %s", esp_err_to_name(result));
+      return false;
+    }
+  }
+  result = esp_nimble_init();
+  if (result != ESP_OK) {
+    ESP_LOGE(TAG, "NimBLE init failed: %s", esp_err_to_name(result));
+    return false;
+  }
+
+  // No display and no keypad, so the host pairs without a passkey. Secure
+  // connections still give an encrypted and bonded link.
+  ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
+  ble_hs_cfg.sm_bonding = 1;
+  ble_hs_cfg.sm_mitm = 0;
+  ble_hs_cfg.sm_sc = 1;
+  ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+  ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+  ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+  ble_store_config_init();
+
+  // ButtonConfig sets up after this component, so a saved name arrives later
+  // through set_device_name(). Until then the name is the YAML friendly name.
+  DeviceName name{};
+  if (this->copy_device_name_(name) == 0) {
+    const StringRef &friendly = App.get_friendly_name();
+    this->store_device_name_(friendly.c_str(), friendly.size());
+    this->copy_device_name_(name);
+  }
+
+  // esp_hidd_dev_init() registers the GATT database and takes the host sync
+  // callback, so it must run before the host task starts.
+  this->init_hid_();
+  if (this->is_failed())
+    return false;
+  // Another component's services go in next, while the database is still open.
+  for (size_t index = 0; index < extra_service_count_; index++) {
+    int added = ble_gatts_count_cfg(extra_services_[index]);
+    if (added == 0)
+      added = ble_gatts_add_svcs(extra_services_[index]);
+    if (added != 0)
+      ESP_LOGE(TAG, "Could not add the GATT services of another component: %d", added);
+  }
+  const int named = ble_svc_gap_device_name_set(name.data());
+  if (named != 0)
+    ESP_LOGW(TAG, "Could not set the GAP device name: %d", named);
+  ble_svc_gap_device_appearance_set(ESP_HID_APPEARANCE_GAMEPAD);
+
+  result = esp_nimble_enable(reinterpret_cast<void *>(host_task));
+  if (result != ESP_OK) {
+    ESP_LOGE(TAG, "NimBLE host task start failed: %s", esp_err_to_name(result));
+    return false;
+  }
+  this->stack_ready_ = true;
+  return true;
+}
+
+void BleHid::init_hid_() {
+  // esp_hidd_dev_init() keeps its own copy of the name.
+  DeviceName name{};
+  this->copy_device_name_(name);
+  esp_hid_device_config_t config = DEVICE_CONFIG;
+  config.device_name = name.data();
+  const esp_err_t result = esp_hidd_dev_init(&config, ESP_HID_TRANSPORT_BLE,
+                                              hidd_event_handler_, &this->device_);
+  if (result != ESP_OK) {
+    ESP_LOGE(TAG, "HID init failed: %s", esp_err_to_name(result));
+    this->mark_failed();
+    return;
+  }
+}
+
+void BleHid::send_reports_() {
+  if (!this->connected() || this->device_ == nullptr || !this->radio_enabled())
+    return;
+
+  uint8_t keyboard[30]{};
+  uint16_t consumer = 0;
+  uint16_t buttons = 0;
+  int dpad_x = 0;
+  int dpad_y = 0;
+  for (size_t i = 0; i < SLOT_COUNT; i++) {
+    if (!this->active_[i])
+      continue;
+    const Entry &entry = this->record_.entries[i];
+    if (entry.kind == KEYBOARD) {
+      keyboard[0] |= entry.modifiers;
+      if (entry.usage != 0)
+        keyboard[1 + entry.usage / 8] |= static_cast<uint8_t>(1U << (entry.usage % 8));
+    } else if (entry.kind == CONSUMER && consumer == 0) {
+      consumer = entry.usage;
+    } else if (entry.kind == GAMEPAD_BUTTON) {
+      buttons |= static_cast<uint16_t>(1U << (entry.usage - 1));
+    } else if (entry.kind == GAMEPAD_DPAD) {
+      static constexpr int8_t DX[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+      static constexpr int8_t DY[8] = {-1, -1, 0, 1, 1, 1, 0, -1};
+      dpad_x += DX[entry.usage];
+      dpad_y += DY[entry.usage];
+    }
+  }
+
+  uint8_t consumer_report[2] = {static_cast<uint8_t>(consumer), static_cast<uint8_t>(consumer >> 8)};
+  uint8_t hat = 8;
+  const int x = (dpad_x > 0) - (dpad_x < 0);
+  const int y = (dpad_y > 0) - (dpad_y < 0);
+  if (x == 0 && y < 0) hat = 0;
+  else if (x > 0 && y < 0) hat = 1;
+  else if (x > 0 && y == 0) hat = 2;
+  else if (x > 0 && y > 0) hat = 3;
+  else if (x == 0 && y > 0) hat = 4;
+  else if (x < 0 && y > 0) hat = 5;
+  else if (x < 0 && y == 0) hat = 6;
+  else if (x < 0 && y < 0) hat = 7;
+  uint8_t gamepad[3] = {static_cast<uint8_t>(buttons), static_cast<uint8_t>(buttons >> 8), hat};
+
+  esp_hidd_dev_input_set(this->device_, 0, REPORT_KEYBOARD, keyboard, sizeof(keyboard));
+  esp_hidd_dev_input_set(this->device_, 0, REPORT_CONSUMER, consumer_report, sizeof(consumer_report));
+  esp_hidd_dev_input_set(this->device_, 0, REPORT_GAMEPAD, gamepad, sizeof(gamepad));
+}
+
+void BleHid::release_all_() {
+  this->active_.fill(false);
+}
+
+void BleHid::start_advertising_() {
+  if (!this->radio_enabled() || !this->hid_started_.load(std::memory_order_acquire) ||
+      this->link_connected_.load(std::memory_order_acquire))
+    return;
+  // The main loop, the NimBLE task, and the HID event task all start adverts.
+  // The claim lets one caller through, and a failed start gives it back.
+  bool idle = false;
+  if (!this->advertising_.compare_exchange_strong(idle, true, std::memory_order_acq_rel))
+    return;
+
+  DeviceName name{};
+  const uint32_t generation = this->copy_device_name_(name);
+  const size_t name_length = std::strlen(name.data());
+  const auto *name_bytes = reinterpret_cast<const uint8_t *>(name.data());
+
+  const ble_uuid16_t hid_uuid = BLE_UUID16_INIT(HID_SERVICE_UUID);
+  ble_hs_adv_fields fields{};
+  fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+  fields.appearance = ESP_HID_APPEARANCE_GAMEPAD;
+  fields.appearance_is_present = 1;
+  fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+  fields.tx_pwr_lvl_is_present = 1;
+  fields.uuids16 = &hid_uuid;
+  fields.num_uuids16 = 1;
+  fields.uuids16_is_complete = 1;
+  // A legacy advert holds BLE_HS_ADV_MAX_SZ bytes. The name gets the space that
+  // the other fields leave, less its own two header bytes.
+  uint8_t encoded[BLE_HS_ADV_MAX_SZ];
+  uint8_t used = 0;
+  int result = ble_hs_adv_set_fields(&fields, encoded, &used, sizeof(encoded));
+  if (result == 0) {
+    const size_t room = used < BLE_HS_ADV_MAX_FIELD_SZ ? BLE_HS_ADV_MAX_FIELD_SZ - used : 0;
+    const size_t advert_length = utf8_prefix_length(name.data(), name_length, room);
+    if (advert_length > 0) {
+      fields.name = name_bytes;
+      fields.name_len = static_cast<uint8_t>(advert_length);
+      fields.name_is_complete = advert_length == name_length ? 1 : 0;
+    }
+    result = ble_gap_adv_set_fields(&fields);
+  }
+  if (result != 0) {
+    this->advertising_.store(false, std::memory_order_release);
+    ESP_LOGE(TAG, "Advertising data setup failed: %d", result);
+    return;
+  }
+
+  // The scan response carries the name, and the Improv UUID when provisioning
+  // is open. A 128-bit UUID field costs its 16 bytes plus two header bytes, and
+  // the name takes what is left.
+  ble_hs_adv_fields response{};
+  size_t response_room = BLE_HS_ADV_MAX_FIELD_SZ;
+  const ble_uuid128_t *extra = this->extra_uuid_.load(std::memory_order_acquire);
+  if (extra != nullptr) {
+    response.uuids128 = extra;
+    response.num_uuids128 = 1;
+    response.uuids128_is_complete = 1;
+    constexpr size_t UUID128_FIELD_SZ = 18;
+    response_room = response_room > UUID128_FIELD_SZ ? response_room - UUID128_FIELD_SZ : 0;
+  }
+  const size_t response_length = utf8_prefix_length(name.data(), name_length, response_room);
+  if (response_length > 0) {
+    response.name = name_bytes;
+    response.name_len = static_cast<uint8_t>(response_length);
+    response.name_is_complete = response_length == name_length ? 1 : 0;
+  }
+  result = ble_gap_adv_rsp_set_fields(&response);
+  if (result != 0) {
+    this->advertising_.store(false, std::memory_order_release);
+    ESP_LOGE(TAG, "Scan response setup failed: %d", result);
+    return;
+  }
+
+  ble_gap_adv_params parameters{};
+  parameters.conn_mode = BLE_GAP_CONN_MODE_UND;
+  parameters.disc_mode = BLE_GAP_DISC_MODE_GEN;
+  parameters.itvl_min = BLE_GAP_ADV_ITVL_MS(30);
+  parameters.itvl_max = BLE_GAP_ADV_ITVL_MS(50);
+  result = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, nullptr, BLE_HS_FOREVER, &parameters,
+                             &BleHid::gap_event_, this);
+  // BLE_HS_EALREADY means that an advert still runs, for example after a stop
+  // that failed. The controller already took the new data above.
+  if (result != 0 && result != BLE_HS_EALREADY) {
+    this->advertising_.store(false, std::memory_order_release);
+    ESP_LOGE(TAG, "Advertising start failed: %d", result);
+    return;
+  }
+  // A rename after the copy above left the older name on air.
+  if (!this->device_name_current_(generation))
+    this->name_update_pending_.store(true, std::memory_order_release);
+  if (result == 0)
+    ESP_LOGI(TAG, "Advertising as %s", name.data());
+}
+
+void BleHid::hidd_event_handler_(void *, esp_event_base_t, int32_t id, void *data) {
+  BleHid *self = instance();
+  if (self == nullptr)
+    return;
+  if (static_cast<esp_hidd_event_t>(id) == ESP_HIDD_START_EVENT) {
+    // The event follows every host sync, and a host reset drops advertising, so
+    // the flag has to clear before the restart.
+    self->hid_started_.store(true, std::memory_order_release);
+    self->advertising_.store(false, std::memory_order_release);
+    ESP_LOGI(TAG, "HID services ready");
+    self->start_advertising_();
+  }
+  (void) data;
+}
+
+int BleHid::gap_event_(ble_gap_event *event, void *arg) {
+  auto *self = static_cast<BleHid *>(arg);
+  return self == nullptr ? 0 : self->handle_gap_event_(event);
+}
+
+int BleHid::handle_gap_event_(ble_gap_event *event) {
+  switch (event->type) {
+    case BLE_GAP_EVENT_CONNECT: {
+      this->advertising_.store(false, std::memory_order_release);
+      if (event->connect.status != 0) {
+        ESP_LOGI(TAG, "BLE connect failed, status %d", event->connect.status);
+        this->start_advertising_();
+        return 0;
+      }
+      this->connection_.store(event->connect.conn_handle, std::memory_order_release);
+      this->link_connected_.store(true, std::memory_order_release);
+
+      ble_gap_conn_desc link{};
+      if (ble_gap_conn_find(event->connect.conn_handle, &link) == 0) {
+        ESP_LOGI(TAG, "BLE link up, interval %u x1.25 ms, latency %u, timeout %u x10 ms", link.conn_itvl,
+                 link.conn_latency, link.supervision_timeout);
+      } else {
+        ESP_LOGI(TAG, "BLE link up");
+      }
+
+      ble_addr_t peer{};
+      ble_gap_conn_desc description{};
+      const bool has_bond = bonded_peer(&peer);
+      if (has_bond && ble_gap_conn_find(event->connect.conn_handle, &description) == 0 &&
+          ble_addr_cmp(&description.peer_id_addr, &peer) != 0) {
+        ESP_LOGW(TAG, "Rejected a second HID host");
+        this->pair_failed_pending_.store(true, std::memory_order_release);
+        ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+        return 0;
+      }
+      this->pairing_.store(!has_bond, std::memory_order_release);
+      // The host waits for the peripheral to ask, so send the security request.
+      ble_gap_security_initiate(event->connect.conn_handle);
+      return 0;
+    }
+    case BLE_GAP_EVENT_ENC_CHANGE: {
+      const bool ok = event->enc_change.status == 0;
+      ESP_LOGI(TAG, "BLE encryption %s, status %d", ok ? "on" : "failed", event->enc_change.status);
+      this->pairing_.store(false, std::memory_order_release);
+      this->bonded_.store(bond_count() > 0, std::memory_order_release);
+      this->connected_.store(ok, std::memory_order_release);
+      if (ok) {
+        this->report_sync_pending_.store(true, std::memory_order_release);
+      } else {
+        this->pair_failed_pending_.store(true, std::memory_order_release);
+        ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+      }
+      return 0;
+    }
+    case BLE_GAP_EVENT_REPEAT_PAIRING: {
+      // The host lost its key. Drop the stale bond so the retry can store a new one.
+      ble_gap_conn_desc description{};
+      if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &description) == 0)
+        ble_store_util_delete_peer(&description.peer_id_addr);
+      return BLE_GAP_REPEAT_PAIRING_RETRY;
+    }
+    case BLE_GAP_EVENT_DISCONNECT:
+      ESP_LOGI(TAG, "BLE link down, reason 0x%03X", event->disconnect.reason);
+      this->connected_.store(false, std::memory_order_release);
+      this->link_connected_.store(false, std::memory_order_release);
+      this->pairing_.store(false, std::memory_order_release);
+      this->connection_.store(NO_CONNECTION, std::memory_order_release);
+      this->disconnect_pending_.store(true, std::memory_order_release);
+      // The name belongs to the bond, not to the link, so it stays until the
+      // bond goes. The page reads connected() to say which of the two it is.
+      this->start_advertising_();
+      return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+      ble_gap_conn_desc link{};
+      if (ble_gap_conn_find(event->conn_update.conn_handle, &link) == 0) {
+        ESP_LOGI(TAG, "BLE link update, status %d, interval %u x1.25 ms, latency %u, timeout %u x10 ms",
+                 event->conn_update.status, link.conn_itvl, link.conn_latency, link.supervision_timeout);
+      }
+      return 0;
+    }
+    default:
+      return 0;
+  }
+}
+
+}  // namespace esphome::ble_hid

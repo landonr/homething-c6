@@ -1,0 +1,844 @@
+"""Names for what the exported meshes are made of, so a click in the viewer can
+be answered with an id instead of a description.
+
+An STL is triangle soup. Every feature in this package is built by a named
+function, and the name is the first thing the mesh throws away, so the viewer at
+../c6remote-explode can show a surface but cannot say what it is. This module
+writes the names back out beside the meshes: one entry per feature, carrying the
+module and function that builds it, the parameters that source reads, whether it
+is material or void, and its bounding box in the case frame.
+
+The boxes overlap, and nothing here tries to stop that. A key's own prism sits
+inside the recess it is cut through, and the smaller box is the better answer, so
+the viewer ranks by which containing box is smallest. Per-instance ids are what
+make that ranking useful, so a feature the model builds eleven or three or two of
+gets that many entries, by refdes where the board has one.
+
+`op` is what a box alone cannot say: "add" is a solid the part's builder fuses,
+"cut" is a volume it subtracts, and "clear" is a volume both shells keep clear of
+the support ledge. The keepout gaps need that third word, because the same break
+is a relief cut in the front and absent material in the back, so "add" and "cut"
+would invert between the two parts.
+
+Two things are deliberately left out. The keycaps carry no entries, because
+each is already one part in the export and its STL is moved to the origin rather
+than left where it was built, so a box in the case frame would not describe it.
+The base skirt and the cavities carry none either: each spans the whole plan
+profile, so its box is the part's own box and says nothing that ranking can use.
+
+The FDM front does carry entries, and they are the front shell's own but for the
+two cuts that answer to its flat face: the outline groove where the standard
+shell has the keypad recess, and a wheel opening carrying its own clearance and
+a chamfered mouth where the standard shell's bore opens into a dish instead.
+They are keyed under `c6remote-case-front-fdm.stl`,
+because that is the file the viewer loaded and therefore the name it looks a
+click up under. The two fronts are never both on screen, so nothing of one ever
+ranks against the other.
+
+The one-piece front is keyed under `c6remote-case-front-one-piece.stl` for the
+same reason. Its entries are the recessed front's, less the LED ring cut, plus
+one fill and one lobe for each LED.
+"""
+
+import inspect
+import json
+import re
+from pathlib import Path
+
+from build123d import Box, Pos
+
+import board
+import cache
+import params
+
+from . import caps, cell, front_ledge, hardware, ir, keypad, mic, reset, shells, support, usb, wheel_ring, qwiic
+from .shape import _cut, _slab
+from .stack import (
+    CAVITY_FRONT,
+    COUNTERBORE_TOP,
+    LEGACY_SWITCH_TOP,
+    PAD_WEB_BOTTOM,
+    PAD_WEB_TOP,
+    SHELL_FRONT,
+    SWITCH_TOP,
+)
+
+MODULES = {
+    "caps": caps,
+    "cell": cell,
+    "front_ledge": front_ledge,
+    "hardware": hardware,
+    "ir": ir,
+    "keypad": keypad,
+    "mic": mic,
+    "reset": reset,
+    "shells": shells,
+    "support": support,
+    "usb": usb,
+    "qwiic": qwiic,
+    "wheel_ring": wheel_ring,
+}
+
+PARAM = re.compile(r"params\.([A-Z][A-Z0-9_]*)")
+
+
+def _reads(src):
+    """The params.<NAME> identifiers a builder's own source reads.
+
+    Static and direct only. A builder that calls another does not inherit that
+    one's parameters, because the entry has to say what to edit to move this
+    box, not restate the module's dependency tree. A builder that reads only
+    derived constants out of stack.py reads no parameter, and gets an empty
+    list rather than a guess.
+    """
+    module, _, name = src.partition(".")
+    return sorted(set(PARAM.findall(inspect.getsource(getattr(MODULES[module], name)))))
+
+
+def _entry(name, src, op, shapes, reads=None):
+    """One feature. `shapes` may be several solids that share an id, in which
+    case the box is the union of theirs."""
+    if not isinstance(shapes, (list, tuple)):
+        shapes = [shapes]
+    boxes = [shape.bounding_box() for shape in shapes]
+    low = [
+        min(b.min.X for b in boxes),
+        min(b.min.Y for b in boxes),
+        min(b.min.Z for b in boxes),
+    ]
+    high = [
+        max(b.max.X for b in boxes),
+        max(b.max.Y for b in boxes),
+        max(b.max.Z for b in boxes),
+    ]
+    return {
+        "id": name,
+        "src": src,
+        "op": op,
+        "params": _reads(src) if reads is None else reads,
+        "box": [[round(v, 3) for v in low], [round(v, 3) for v in high]],
+    }
+
+
+def _split(name, src, op, shapes, axis="x", reads=None):
+    """One entry per solid of a pair, each labelled by which of the two it is.
+
+    Against the pair's own mean rather than the middle of the case, so a pair
+    that sits entirely at one end still gets one id each. A pair that sits well off the case centre is
+    still split on its own mean.
+    """
+    centres = []
+    for shape in shapes:
+        centre = shape.bounding_box().center()
+        centres.append(centre.X if axis == "x" else centre.Y)
+    middle = sum(centres) / len(centres)
+    out = [
+        _entry(f"{name}.{'-' if at < middle else '+'}{axis}", src, op, shape, reads)
+        for shape, at in zip(shapes, centres)
+    ]
+    return sorted(out, key=lambda entry: entry["id"])
+
+
+# Runs that merely touch across a rounding leave no break worth a name.
+GAP_MIN = 0.01
+
+
+def _support_sides(runs):
+    """[(side, [run])], each side's runs in order along y.
+
+    The runs are scattered down both walls, so a side and a rank along that
+    wall is what tells one from another. Both the runs and the breaks between
+    them are named off this one ordering.
+    """
+    middle = board.board_profile().bounding_box().center().X
+    sides = {}
+    for run in runs:
+        side = "-x" if run.bounding_box().center().X < middle else "+x"
+        sides.setdefault(side, []).append(run)
+    for group in sides.values():
+        group.sort(key=lambda run: run.bounding_box().center().Y)
+    return sorted(sides.items())
+
+
+def _support_entries(runs, op, src="support.support_runs", reads=None, prefix="support_runs"):
+    """The board support runs, one entry each. Per instance because one box
+    around all of them would cover the whole cavity."""
+    out = []
+    for side, group in _support_sides(runs):
+        for index, run in enumerate(group, 1):
+            out.append(_entry(f"{prefix}.{side}.{index}", src, op, run, reads))
+    return out
+
+
+def _obstacle_ref(name):
+    """The board name inside an obstacle's own label.
+
+    A bottom courtyard is already a bare refdes. The other two labels are
+    sentences, and an id has to stay one token.
+    """
+    if name.startswith("through-board solid "):
+        return f"solid.{name.split(' ')[-1]}"
+    if name.startswith("part solid "):
+        return f"solid.{name.split(' ')[-1]}"
+    if name == "end screw block":
+        return "end_screw_block"
+    if name.startswith("V2 "):
+        return f"v2.{name.split(' ')[-1]}"
+    return name
+
+
+def _support_gaps(runs, obstacles, prefix="support_gap", src="support.support_obstacles"):
+    """The breaks between the runs, named for the obstacle that opens each.
+
+    A run's box answers a click on the ledge, but the wall between two runs is
+    bare, and a click there used to land in no box at all. The break is a
+    keepout rather than anything built, so it carries the obstacle's own source
+    and the "clear" op.
+
+    A break can be wider than the obstacle that opens it: where SUPPORT_MIN_RUN
+    drops a short fragment between two obstacles, one break spans both. So the
+    widest y overlap wins the name rather than the first or the nearest.
+    """
+    out = []
+    for side, group in _support_sides(runs):
+        for lower, upper in zip(group, group[1:]):
+            low = lower.bounding_box()
+            high = upper.bounding_box()
+            y0, y1 = low.max.Y, high.min.Y
+            if y1 - y0 < GAP_MIN:
+                continue
+            # x and z off both runs, so the front's SKIRT_OUT reach and the
+            # back's LAP_IN reach each stay the part's own.
+            x0, x1 = min(low.min.X, high.min.X), max(low.max.X, high.max.X)
+            z0, z1 = min(low.min.Z, high.min.Z), max(low.max.Z, high.max.Z)
+            gap = Pos((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2) * Box(
+                x1 - x0, y1 - y0, z1 - z0
+            )
+            overlaps = []
+            for name, solid in obstacles:
+                box = solid.bounding_box()
+                if box.max.X <= x0 or box.min.X >= x1:
+                    continue
+                overlaps.append(
+                    (min(box.max.Y, y1) - max(box.min.Y, y0), _obstacle_ref(name))
+                )
+            widest = max(overlaps, default=None)
+            if widest is None or widest[0] <= 0:
+                raise ValueError(
+                    f"support gap on {side} at y {y0:.2f} to {y1:.2f} has no obstacle"
+                )
+            out.append(
+                _entry(
+                    f"{prefix}.{side}.{widest[1]}",
+                    src,
+                    "clear",
+                    gap,
+                )
+            )
+    return out
+
+
+def _lobe_params():
+    """The parameters that move a ring lobe's box, on the insert and on the
+    one-piece front."""
+    return sorted(set(
+        _reads("wheel_ring._lobe_section")
+        + _reads("wheel_ring.led_ring_lobe_lid")
+        + _reads("wheel_ring.led_ring_lobe_flare")
+        + _reads("wheel_ring.led_ring_lobe_rim_r")
+        + _reads("wheel_ring.led_ring_lobe_blend_r")
+        + _reads("wheel_ring.led_ring_lobe_half")
+        + _reads("wheel_ring.led_ring_lobe_land_z")
+    ))
+
+
+def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False, one_piece=False):
+    """The front shell, in the order front_shell() builds and cuts it.
+
+    `fdm` swaps the two entries the fronts differ by: the outline groove the
+    filament build cuts where the standard shell cuts the keypad recess, and
+    the wheel opening, which on that build carries its own clearance and a
+    chamfered mouth because it meets a flat face rather than a dish.
+
+    `one_piece` drops the LED ring cut, because that front keeps the ring as
+    shell. It adds the six lobe fills before the cuts and the six lobes after
+    them, one entry for each LED.
+    """
+    placements = board.components()
+    out = [
+        _entry("mic_duct", "mic.mic_duct", "add", mic.mic_duct()),
+        _entry(
+            "skirt_stiffener", "shells.skirt_stiffener", "add",
+            shells.skirt_stiffener(),
+            sorted(set(
+                _reads("shells.skirt_stiffener")
+                + _reads("shells.skirt_stiffener_taper_span")
+            )),
+        ),
+        *[
+            _entry(f"skirt_lead_in.{index}", "shells.skirt_lead_in_cuts", "cut", solid)
+            for index, solid in enumerate(shells.skirt_lead_in_cuts().solids(), 1)
+        ],
+    ]
+    out += _support_entries(
+        ledges,
+        "add",
+        "front_ledge.front_ledge_runs",
+        sorted(set(
+            _reads("front_ledge.front_ledge_runs")
+            + _reads("front_ledge.front_ledge_fragments")
+            + _reads("front_ledge.front_ledge_window")
+            + _reads("front_ledge.front_ledge_bottom")
+            + _reads("support._ledge_blank")
+        )),
+        prefix="front_ledge",
+    )
+    out += _support_gaps(
+        ledges,
+        ledge_obstacles,
+        "front_ledge_gap",
+        "front_ledge.front_ledge_obstacles",
+    )
+    # The side tie reaches to side_skirt_inner_x() and the block spans
+    # end_screw_block_span(), so those helpers' parameters move this box too.
+    out.append(
+        _entry(
+            "end_screw_block",
+            "hardware.end_screw_block",
+            "add",
+            hardware.end_screw_block(),
+            sorted(set(
+                _reads("hardware.end_screw_block")
+                + _reads("hardware.side_skirt_inner_x")
+                + _reads("hardware.end_screw_axis")
+                + _reads("hardware.end_screw_side")
+                + _reads("hardware.end_screw_block_span")
+            )),
+        )
+    )
+    out.append(_entry(
+        "qwiic_skirt_relief", "shells.qwiic_skirt_relief", "cut", shells.qwiic_skirt_relief(),
+    ))
+    out.append(_entry(
+        "grip_skirt_relief", "shells.grip_skirt_relief", "cut",
+        shells.grip_skirt_relief(),
+    ))
+    # The relief is the runs lifted by SUPPORT_SKIRT_FIT, so both builders'
+    # parameters move these boxes.
+    out += _support_entries(
+        runs,
+        "cut",
+        "support.front_support_cuts",
+        sorted(set(
+            _reads("support.support_runs") + _reads("support.front_support_cuts")
+        )),
+    )
+    out += _support_gaps(runs, obstacles)
+    lobe_refs = wheel_ring.led_ring_lobe_refs()
+    if one_piece:
+        out += [
+            _entry(
+                f"ring_lobe_fill.{ref}",
+                "wheel_ring.led_ring_lobe_fills",
+                "add",
+                fill,
+                sorted(set(
+                    _reads("wheel_ring._lobe_fill_section") + _lobe_params()
+                )),
+            )
+            for ref, fill in zip(lobe_refs, wheel_ring.led_ring_lobe_fills())
+        ]
+    out.append(
+        _entry(
+            "end_screw_pilot",
+            "hardware.end_screw_pilot",
+            "cut",
+            hardware.end_screw_pilot(),
+        )
+    )
+    out += _split(
+        "catch_windows", "shells.catch_windows", "cut", shells.catch_windows()
+    )
+    # Both catch builders take their heights from a helper, so its parameters
+    # are what moves the box and belong in the entry.
+    out += _split(
+        "side_catch_pockets", "shells.side_catch_pockets", "cut",
+        shells.side_catch_pockets(),
+        reads=sorted(set(
+            _reads("shells.side_catch_pockets") + _reads("shells.side_catch_bottom")
+        )),
+    )
+    out += [
+        _entry(
+            "wheel_opening",
+            "wheel_ring.wheel_opening",
+            "cut",
+            wheel_ring.wheel_opening(CAVITY_FRONT - 1, SHELL_FRONT + 1, fdm),
+        ),
+        _entry(
+            "wheel_lip_relief",
+            "wheel_ring.wheel_lip_relief",
+            "cut",
+            wheel_ring.wheel_lip_relief(),
+        ),
+    ]
+    # The recessed front's cut is the ring bore and the six lobe pockets,
+    # so the lobes' own helpers move its box. The FDM front's is the old
+    # channel, revolved, and nothing of the lobes reaches it.
+    if not one_piece:
+        out.append(
+            _entry(
+                "led_ring_channel",
+                "wheel_ring.led_ring_channel",
+                "cut",
+                wheel_ring.led_ring_channel(fdm),
+                None if fdm else sorted(set(
+                    _reads("wheel_ring.led_ring_channel")
+                    + _reads("wheel_ring.led_ring_face_r")
+                    + _reads("wheel_ring._lobe_pocket_section")
+                    + _reads("wheel_ring.led_ring_lobe_flare")
+                    + _reads("wheel_ring.led_ring_lobe_land_z")
+                )),
+            )
+        )
+    if one_piece:
+        out.append(
+            _entry(
+                "led_ring_bore_round",
+                "wheel_ring.led_ring_bore_round_cut",
+                "cut",
+                wheel_ring.led_ring_bore_round_cut(),
+                _reads("wheel_ring.led_ring_bore_round"),
+            )
+        )
+    out.append(_entry("mic_bore", "mic.mic_bore", "cut", mic.mic_bore(fdm)))
+    # Both holes per key, at the depths front_shell() cuts them, so a box is the
+    # cut rather than the ceiling it opens in.
+    for ref in board.refs("SW"):
+        x, y = placements[ref][:2]
+        out.append(
+            _entry(
+                f"key.{ref}.counterbore",
+                "caps._key_prism",
+                "cut",
+                caps._key_prism(
+                    x, y, caps.cap_counterbore(ref), CAVITY_FRONT - 1, COUNTERBORE_TOP
+                ),
+            )
+        )
+        out.append(
+            _entry(
+                f"key.{ref}.face_hole",
+                "caps._key_prism",
+                "cut",
+                caps._key_prism(
+                    x, y, caps.cap_face_hole(ref), CAVITY_FRONT - 1, SHELL_FRONT + 1
+                ),
+                [
+                    "CAP_FACE_HOLE_CHAMFER",
+                    "CAP_FACE_HOLE_CHAMFER_ANGLE",
+                    "CAP_FLANGE_OVERLAP",
+                    "KEY_SQUIRCLE_N",
+                ],
+            )
+        )
+    out += [
+        _entry(
+            "keypad_outline_groove",
+            "keypad.keypad_outline_groove",
+            "cut",
+            keypad.keypad_outline_groove(),
+        )
+        if fdm
+        else _entry(
+            "keypad_recess", "keypad.keypad_recess", "cut", keypad.keypad_recess()
+        ),
+        _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry(
+            "usb_boot_pocket", "usb.usb_boot_pocket", "cut", usb.usb_boot_pocket(),
+            sorted(set(
+                _reads("usb.usb_boot_pocket") + _reads("usb.usb_boot_floor_y")
+                + _reads("usb.usb_boot_outline")
+            )),
+        ),
+        _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
+        _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
+    ]
+    if one_piece:
+        out += [
+            _entry(f"ring_lobe.{ref}", "wheel_ring.led_ring_lobes", "add", lobe,
+                   _lobe_params())
+            for ref, lobe in zip(lobe_refs, wheel_ring.led_ring_lobes())
+        ]
+    return out
+
+
+def _back(runs, obstacles):
+    """The back shell, in the order back_shell() builds and cuts it."""
+    out = [
+        _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
+        _entry("seam_shadow", "shells.seam_shadow", "cut", shells.seam_shadow()),
+    ]
+    out += _support_entries(runs, "add")
+    out += _support_gaps(runs, obstacles)
+    out += _split(
+        "catch_detents", "shells.catch_detents", "add", shells.catch_detents()
+    )
+    out += _split(
+        "side_catch_detents", "shells.side_catch_detents", "add",
+        shells.side_catch_detents(),
+        reads=sorted(set(
+            _reads("shells.side_catch_detents") + _reads("shells.side_catch_detent_z")
+            + _reads("shells.side_catch_bottom")
+        )),
+    )
+    out.append(_entry("reset_guide", "reset.reset_guide", "add", reset.reset_guide()))
+    # The two end-screw cuts share one hole, so the shank and the head
+    # counterbore are told apart by what each does rather than by where it is.
+    # No refdes: this screw goes into a case feature, not a board hole.
+    for name, shape in zip(("clearance", "head"), hardware.end_screw_cuts()):
+        out.append(
+            _entry(f"end_screw.{name}", "hardware.end_screw_cuts", "cut", shape)
+        )
+    out.append(
+        _entry(
+            "end_screw.wall_chamfer",
+            "hardware.end_screw_wall_chamfer",
+            "cut",
+            hardware.end_screw_wall_chamfer(),
+            sorted(set(
+                _reads("hardware.end_screw_wall_chamfer")
+                + _reads("hardware.end_screw_block_span")
+            )),
+        )
+    )
+    out += [
+        _entry("usb_slot", "usb.usb_slot", "cut", usb.usb_slot()),
+        _entry(
+            "usb_boot_pocket", "usb.usb_boot_pocket", "cut", usb.usb_boot_pocket(),
+            sorted(set(
+                _reads("usb.usb_boot_pocket") + _reads("usb.usb_boot_floor_y")
+                + _reads("usb.usb_boot_outline")
+                + _reads("usb.round_usb_boot_rim")
+            )),
+        ),
+        _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
+        _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
+        _entry(
+            "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
+        ),
+        _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
+        _entry("reset_bore", "reset.reset_bore", "cut", reset.reset_bore()),
+        _entry("reset_chamfer", "reset.reset_chamfer", "cut", reset.reset_chamfer()),
+    ]
+    out.append(_entry("qwiic_knockout_panel", "qwiic.qwiic_knockout_panel", "add", qwiic.qwiic_knockout_panel()))
+    out += _split(
+        "qwiic_knockout_tab", "qwiic.qwiic_knockout_tabs", "add", qwiic.qwiic_knockout_tabs(), axis="y",
+        reads=sorted(set(_reads("qwiic.qwiic_knockout_tabs") + _reads("qwiic.qwiic_knockout_panel"))),
+    )
+    return out
+
+
+def _pad(fdm=False, skirt=None, grooves=True):
+    """The button pad, one group per lobe."""
+    out = []
+    for lobe in keypad.pad_lobes():
+        out += _pad_lobe(*lobe, fdm=fdm, skirt=skirt, grooves=grooves)
+    return out
+
+
+def _pad_lobe(name, x0, y0, x1, y1, plunger_extension=params.PLUNGER_SWITCH_EXTENSION, fdm=False, skirt=None, grooves=True, v2=False):
+    """One pad lobe: its web, its stems and plungers, and its cuts. `v2` uses
+    the V2 top pad's own outline."""
+    placements = board.components()
+    v2_reads = sorted(
+        {n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"}
+        | {"LEGACY_NIB_EXTENSION"}
+    )
+    out = [
+        _entry(
+            f"lobe.{name}",
+            "keypad.pad_lobe_face",
+            "add",
+            _slab(keypad.pad_lobe_face(name, v2), PAD_WEB_BOTTOM, PAD_WEB_TOP),
+        )
+    ]
+    skirt = not fdm if skirt is None else skirt
+    if skirt:
+        out.append(_entry(f"skirt.{name}", "keypad.pad_skirt", "add", keypad.pad_skirt(name)))
+        out += [
+            _entry(f"skirt_break.{ref}", "keypad.pad_skirt_breaks", "cut", box,
+                   ["PAD_SKIRT_CLEARANCE", "PAD_SKIRT_DEPTH"])
+            for ref, box in keypad.pad_skirt_breaks(name)
+        ]
+    for ref in keypad.island_refs(name):
+        x, y = placements[ref][:2]
+        out.append(_entry(f"stem.{ref}", "keypad._stem", "add", keypad._stem(ref)))
+        out.append(
+            _entry(
+                f"plunger.{ref}",
+                "keypad.plunger",
+                "add",
+                keypad.plunger(x, y, extension=plunger_extension),
+                None if plunger_extension == params.PLUNGER_SWITCH_EXTENSION else v2_reads,
+            )
+        )
+    if name == "grid" and fdm and grooves:
+        for index, cut in enumerate(keypad._pad_grooves()):
+            out.append(
+                _entry(
+                    f"isolation_groove.{index}.top",
+                    "keypad._pad_grooves",
+                    "cut",
+                    cut,
+                )
+            )
+    return out
+
+
+def _keytops(refs):
+    """The printed FDM keytops over these switches."""
+    return [
+        _entry(
+            f"keytop.{ref}",
+            "keypad.fdm_keycap",
+            "add",
+            keypad.fdm_keycap(ref),
+            ["FDM_CAP_GUIDE_CLEARANCE", "KEY_SQUIRCLE_N", "LEGEND_DEPTH", "LEGEND_STROKE_W"],
+        )
+        for ref in refs
+    ]
+
+
+def _fdm_pad():
+    """The FDM pad, with printed keytops flush with its lobe webs."""
+    return _pad(fdm=True) + _keytops(board.refs("SW"))
+
+
+def _tpu_pad():
+    """The one-piece TPU pad: the FDM pad with the moulded skirt, no grooves."""
+    return _pad(fdm=True, skirt=True, grooves=False) + _keytops(board.refs("SW"))
+
+
+def _tpu_v2_pad():
+    """The complete V2 TPU pad: the TPU pad's grid lobe plus the V2 top lobe."""
+    grid = next(box for box in keypad.pad_lobes() if box[0] == "grid")
+    return (
+        _pad_lobe(*grid, fdm=True, skirt=True, grooves=False)
+        + _keytops(keypad.island_refs("grid"))
+        + _v2_top(skirt=True)
+    )
+
+
+def _v2_top(skirt=False, fdm=True):
+    """The V2 top pad: the FDM pad's second lobe, plus a nib per V2 switch.
+
+    With `skirt` it is the one-piece TPU version: the V2 skirt and one break per
+    V2 obstacle. With `fdm` false it is the moulded pad's lobe: stems for the
+    separate caps, a plain web, and no keytops."""
+    lobe = ("second", *keypad.pad_lobe_box("second", v2=True))
+    refs = keypad.island_refs("second")
+    legacy = board.legacy_components()
+    out = _pad_lobe(
+        *lobe,
+        plunger_extension=params.LEGACY_NIB_EXTENSION,
+        fdm=fdm,
+        skirt=False if not fdm else None,
+        v2=True,
+    )
+    if skirt:
+        out.append(
+            _entry(
+                "skirt.second",
+                "keypad.legacy_pad_skirt",
+                "add",
+                keypad.legacy_pad_skirt(),
+                ["BOARD_THICKNESS", "PAD_SKIRT_T", "PLUNGER_SWITCH_EXTENSION",
+                 "SUPPORT_GAP", "SWITCH_HEIGHT"],
+            )
+        )
+        out += [
+            _entry(
+                f"skirt_break.{name}",
+                "keypad.legacy_skirt_breaks",
+                "cut",
+                box,
+                ["PAD_SKIRT_CLEARANCE", "PLUNGER_SWITCH_EXTENSION", "SUPPORT_GAP",
+                 "SWITCH_BODY", "SWITCH_HEIGHT"],
+            )
+            for name, box in keypad.legacy_skirt_breaks()
+        ]
+    reads = sorted(set(
+        [n for n in _reads("keypad.plunger") if n != "PLUNGER_SWITCH_EXTENSION"]
+        + [
+            "BOARD_THICKNESS",
+            "LEGACY_NIB_EXTENSION",
+            "SUPPORT_GAP",
+            "SWITCH_HEIGHT",
+        ]
+    ))
+    for ref in refs:
+        x, y = legacy[ref][:2]
+        out.append(
+            _entry(
+                f"nib.{ref}",
+                "keypad.plunger",
+                "add",
+                keypad.plunger(
+                    x, y, LEGACY_SWITCH_TOP, params.LEGACY_NIB_EXTENSION
+                ),
+                reads,
+            )
+        )
+    if not fdm:
+        return out
+    return out + _keytops(refs)
+
+
+def _ring_insert():
+    """The LED ring insert: one part, one feature.
+
+    It is lofted as a whole rather than fused out of handles, so there is
+    nothing finer to name. The entry exists so a click on the lit band in the
+    viewer resolves to the part that makes it.
+    """
+    return [
+        _entry(
+            "ring_insert",
+            "wheel_ring.led_ring_insert",
+            "add",
+            wheel_ring.led_ring_insert(),
+            sorted(set(
+                _reads("wheel_ring.led_ring_insert")
+                + _reads("wheel_ring._insert_section")
+                + _reads("wheel_ring.led_ring_bore_round")
+                + _reads("wheel_ring._lobe_section")
+                + _reads("wheel_ring.led_ring_lobe_flare")
+                + _reads("wheel_ring.led_ring_lobe_rim_r")
+                + _reads("wheel_ring.led_ring_lobe_land_z")
+            )),
+        )
+    ]
+
+
+def _window():
+    """The IR window insert: the pane in the beam and the flange behind it.
+
+    The two layers are rebuilt here the way ir_window() fuses them, since the
+    part is the fusion and carries no separate handle on either half.
+    """
+    pane = ir._surface_layer(params.IR_WINDOW_PRESS, 0, params.IR_WINDOW_T)
+    flange = ir._surface_layer(
+        params.IR_WINDOW_FLANGE,
+        params.IR_WINDOW_T,
+        params.IR_WINDOW_T + params.IR_WINDOW_FLANGE_T,
+    )
+    flange = _cut(flange, ir._bottom_prism(-0.5))
+    return [
+        _entry(
+            "pane",
+            "ir.ir_window",
+            "add",
+            pane,
+            ["IR_WINDOW_PRESS", "IR_WINDOW_T"],
+        ),
+        _entry(
+            "flange",
+            "ir.ir_window",
+            "add",
+            flange,
+            ["IR_WINDOW_FLANGE", "IR_WINDOW_FLANGE_T", "IR_WINDOW_T"],
+        ),
+    ]
+
+
+def _screw():
+    """The end screw, one part with one id. It is placed off the counterbore
+    floor and runs end_screw_length(), so the parameters those read move its
+    box too."""
+    return [
+        _entry(
+            "end_screw",
+            "hardware.end_screw",
+            "add",
+            hardware.end_screw(),
+            sorted(set(
+                _reads("hardware.end_screw")
+                + _reads("hardware.end_screw_axis")
+                + _reads("hardware.end_screw_length")
+            )),
+        )
+    ]
+
+
+def features():
+    """{stl name: [entry]}, keyed by the file the viewer loads.
+
+    The back supports and front clearance cuts use separate wall extensions so
+    each finishes flush with its shell surface.
+    """
+    back_runs = support.support_runs()
+    front_runs = support.front_support_cuts()
+    obstacles = support.support_obstacles()
+    ledges = front_ledge.front_ledge_runs()
+    ledge_obstacles = front_ledge.front_ledge_obstacles()
+    out = {
+        "c6remote-case-front.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles
+        ),
+        "c6remote-case-front-fdm.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles, fdm=True
+        ),
+        "c6remote-case-front-one-piece.stl": _front(
+            front_runs, obstacles, ledges, ledge_obstacles, one_piece=True
+        ),
+        "c6remote-case-back.stl": _back(back_runs, obstacles),
+        "c6remote-case-pad.stl": _pad(),
+        "c6remote-case-pad-fdm.stl": _fdm_pad(),
+        "c6remote-case-pad-tpu.stl": _tpu_pad(),
+        "c6remote-case-pad-tpu-blank.stl": _tpu_pad(),
+        "c6remote-case-pad-tpu-v2-blank.stl": _tpu_v2_pad(),
+        "c6remote-case-pad-fdm-v2-top.stl": _v2_top(),
+        "c6remote-case-pad-tpu-v2-top.stl": _v2_top(skirt=True),
+        "c6remote-case-pad-v2-top.stl": _v2_top(skirt=True, fdm=False),
+        "c6remote-ir-window.stl": _window(),
+        "c6remote-ring-insert.stl": _ring_insert(),
+        "c6remote-case-screw.stl": _screw(),
+    }
+    # An id is what a viewer hands back to be acted on, so two features holding
+    # the same one is worse than either being unnamed. This is the guard the
+    # per-instance labelling needs: a pair or a group that grows a third member,
+    # or one labelled off the wrong axis, collides here rather than quietly
+    # exporting two boxes under one name.
+    for part, entries in out.items():
+        ids = [entry["id"] for entry in entries]
+        clashes = sorted({name for name in ids if ids.count(name) > 1})
+        if clashes:
+            raise ValueError(
+                f"{part} has {len(clashes)} repeated feature ids: {clashes}"
+            )
+    return out
+
+
+def _payload():
+    wx, wy = board.wheel_center()
+    axes = {"wheel": {"at": [wx, wy, 0.0], "dir": [0, 0, 1]}}
+    body = json.dumps({"frame": "case", "axes": axes, "parts": features()}, indent=2)
+    return (body + "\n").encode()
+
+
+def write_features(dest):
+    """Write the features JSON, from the cache when this key already has it.
+
+    Cached as finished bytes, the way the STLs are. Only the two shells, the
+    recess, the caps and the window insert are cached solids, so measuring every
+    feature means building the rest of the model from scratch: on a warm run
+    that would cost more than the shells it was meant to save.
+    """
+    dest = Path(dest)
+    data = cache.bytes_cached(dest.name, _payload)
+    dest.write_bytes(data)
+    # Read back rather than returned from features(): on a warm run nothing was
+    # built, and the caller's own count has to come off the bytes that were
+    # written for that to stay true.
+    return json.loads(data)

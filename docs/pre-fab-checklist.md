@@ -2,7 +2,7 @@
 
 Run before every board order, on top of routine ERC/DRC. Covers what ERC/DRC cannot see: real manufacturer capability limits, mechanical fit, pin-1 orientation.
 
-Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad` and `KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli`.
+Open findings: the GitHub issues. Board status and history: `docs/timeline.md`. Commands assume `cd c6remote-kicad` and `KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli`.
 
 ## Automated
 
@@ -11,10 +11,13 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 
 - [x] **DRC, parity, refill** `$KC pcb drc c6remote.kicad_pcb --schematic-parity --refill-zones --exit-code-violations`
   2026-08-01: 0 errors, 0 unconnected, 1 warning (`lib_footprint_mismatch` on `U1`). Parity 0. Known, not a defect.
+  At `1943101`, with `U1` on B.Cu, the counts are the same.
 
 - [x] **STEP export** catches broken 3D model refs before they become mechanical surprises.
   `$KC pcb export step c6remote.kicad_pcb --subst-models -o /tmp/c6remote-check.step`
+  The custom models are in the private `c6remote-explode` repository. Run `../scripts/link-3dmodels.sh` first, or every custom model shows as missing.
   2026-07-28: succeeds, 3.0MB. Two models still missing, both cosmetic since STEP substitutes or omits and fab geometry is unaffected: `D2`-`D5` want `LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step`, `J1` wants `Connector_JST.3dshapes/JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal.step`. VRML-only models skip too, expected.
+  2026-11-02: exits 2 but writes the file. `J1` uses the stock Molex PicoBlade model, and the file contains it. `SW1`-`SW11` have only a VRML model, so the file omits them.
 
 - [x] **IBOM** `scripts/gen-ibom.sh`, feeds the pin-1 walk below.
   2026-07-28: `c6remote-kicad/ibom.html`, 282KB. First run clones `openscopeproject/InteractiveHtmlBom` into `~/.cache/InteractiveHtmlBom`, runs under KiCad's bundled Python (needs `pcbnew`).
@@ -23,13 +26,26 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 
 ## Manual, before ordering
 
-- [ ] **JLCPCB DFM.** Upload `export/` gerbers through the order flow, read the DFM report. Authoritative capability check: acid traps, mask slivers, annular rings against their real process.
+- [ ] **PCBWay DFM.** Upload `export/` gerbers through the order flow, read the DFM report. Authoritative capability check: acid traps, mask slivers, annular rings against their real process.
 
-- [ ] **IBOM pin-1 walk.** Open `ibom.html`, verify pin 1 on `U1`, `U2`, `U3`, `D2`-`D5`, `Q1`, `Q2`, `ENC1` against the primary datasheet diagram. DRC cannot do this. `Q2` first: SOT-23, pin 1 is the gate, so a mis-rotation puts `+3.3V` on the gate, the P-FET never turns on, the LED rail stays dead, and nothing complains. Two documented reasons it is not optional: the `ENC1` pad 6/8 swap that shipped once, and the `XL-2020RGBC-WS2812B` datasheet whose pin table contradicts its own diagram (see `AGENTS.md`).
+- [ ] **Declare `MK1` as a no-wash part in the order notes.** Not optional, and not something the fab will infer. `MK1` is a bottom-port MEMS microphone whose acoustic port opens into a 0.5mm NPTH. The part became the `DMM-4026-B-I2S-R` on 2026-09-07, and its own data sheet page 4 keeps every prohibition: "Do not boards wash or clean after the reflow process", "Do not apply over 0.3Mpa of air pressure into the port hole", "Do not expose to ultrasonic processing or cleaning", and "Do not pull a vacuum over port hole of the microphone". PCBWay publishes ten assembly stages but no cleaning policy, and its own blog says the factory "primarily uses rosin-based flux", which implies a solvent clean. State in the notes: no ultrasonic cleaning, no aqueous wash or DI rinse, no compressed-air blow-off, and hand-place `MK1` after any wash step if one is unavoidable. Ask for the reflow profile and confirm peak stays under the 260°C limit, which the data sheet gives as 260°C for 30 seconds with 90 seconds maximum above 217°C. The MSL question is now answered on paper: the part is MSL 1 while it stays in sealed packaging until use, so ask only what the line does with opened reels. Reason this exists: three of the five rev-B microphones did not work and one worked with distortion, off one design and one fab batch, and assembly-stage port contamination is the leading explanation, see `docs/mic-v2-debugging.md`.
+
+- [ ] **Orient `MK1` by its acoustic port, not by its lid mark.** In the `MK1` datasheet top view on page 6, the lid circle is level with the acoustic port. So the circle marks the port end, not pin 1. Pin 1 (LR) is at the other end, next to the B.SilkS dot. A B.SilkS ring beside the port end marks where the lid circle goes. If the assembler aligns the circle with the dot, `MK1` sits rotated by 180 degrees and no microphone on the order works. In the order notes, state that the `MK1` port goes over the 0.5mm sound hole. Also state that the lid circle marks the port end, not pin 1. Before you confirm the order, make sure that the PCBWay placement preview shows the `MK1` port over the hole. Issue #85 records this finding.
+  2026-11-19: the order notes in #65 contain both statements, and the board has the port-end ring. The check of the placement preview is still open.
+
+- [x] **IBOM pin-1 walk.** Open `ibom.html`, verify pin 1 on `U1`, `U2`, `U3`, `D2`-`D7`, `Q1`, `Q2`, `Q3`, `ENC1`, `MK1`, `J1`, `J2` against the primary datasheet diagram. `U1`, `J1`, and `J2` are on the bottom side, so walk their pin 1 in the iBOM back view. `J1` pin 1 is BAT (+), next to the B.SilkS "+" mark. `J2` pin 1 is GND, next to the B.SilkS "GND" marker. `MK1` is new as of 2026-09-07 and its seven pads are the first instance of that land pattern on a built board. DRC cannot do this. `Q2` first: SOT-23, pin 1 is the gate, so a mis-rotation puts `+3.3V` on the gate, the P-FET never turns on, the LED rail stays dead, and nothing complains. Two documented reasons it is not optional: the `ENC1` pad 6/8 swap that shipped once, and the `XL-2020RGBC-WS2812B` datasheet whose pin table contradicts its own diagram (see `AGENTS.md`).
+  2026-11-19: done for the V3 order in issue #65. The walk also covered `Q4`, and it used the back view for `U2` and `MK1`. Pad 1 of each part agrees with its datasheet drawing. Each silk or fab pin-1 mark is next to pad 1. On the DigiKey revision of the `XL-2020RGBC-WS2812B` datasheet, the page 11 drawing agrees with the pin table. The `ENC1` datasheet gives no pin numbers, but each pad function agrees with its component-side layout. The circle on the `MK1` lid is at the port end, not at pin 1. So the order notes in #65 tell the assembler to orient `MK1` by its port.
+
+- [x] **`J1` pad 1 against the Molex drawing.** Open `532610271_sd.pdf`, the `Datasheet` link on `J1`. Find the circuit-1 mark on the drawing. Make sure that `J1` pad 1, the BAT pad, is at the circuit-1 position. The stock KiCad footprint and the LCSC `C177225` footprint agree. This agreement does not show that pad 1 agrees with the drawing.
+  2026-11-02: verified. `J1` pad 1 agrees with circuit 1 on sheet 2 of the Molex drawing `532610001-SD`.
+
+- [ ] **Battery cell polarity before first power.** When the boards arrive, do this check before you connect a cell for the first time. Cells with 1.25 mm plugs have no standard polarity. Some off-the-shelf cells have reversed leads. Measure the cell plug with a multimeter. Make sure that the positive contact mates with `J1` pin 1, next to the B.SilkS "+" mark. If the polarity is reversed, do not connect the cell.
+
+- [ ] **Assembly sides.** `U1`, `J1`, and `J2` are on the bottom side, and the position file lists all three as `bottom`. Make sure that the assembler can place `U1`, `J1`, and `J2` on the bottom side. `U1` pads 32 (BAT) and 33 (GND) are SMD pads on B.Cu, so the assembler reflows them with the other `U1` pads. `J1` is the SMD PicoBlade battery connector, LCSC `C177225`. `J2` is the SMD Qwiic connector, LCSC `C160404`. The BOM and the position file include `J1` and `J2`, so the assembler places both. `TP1`-`TP6` are bare debug pads on the front. The assembler does not put a part on them, because the BOM and the position file exclude them.
 
 - [ ] **Gerber review.** Open `export/` in GerbView. Layer completeness, silk readability, drill alignment.
 
-- [ ] **Zone refill in the GUI, then save**, before committing any board change (repo rule). `--refill-zones` fills in memory only, never writes back to `c6remote.kicad_pcb`.
+- [ ] **Zone refill written to the board file** before each board commit (repo rule). `--refill-zones` fills in memory only and does not write to `c6remote.kicad_pcb`. Run `python3 scripts/refill-zones.py` from the repository root.
 
 - [x] **1:1 mechanical fit** against a real hand. Done as a 3D print, which also checks hole positions and thickness.
   `$KC pcb export stl --board-only -f -o /tmp/c6remote-board.stl c6remote.kicad_pcb`
@@ -46,5 +62,7 @@ Board status and open findings: `ROADMAP.md`. Commands assume `cd c6remote-kicad
 - **2026-07-30:** Mechanical check closed by 3D print. All nine holes nominal in the mesh, three mount 2.9mm, four ANO 4.0mm, two pegs 1.6mm; slab 1.51mm rather than 1.6mm because that is what the project stackup stores. No board change.
 
 - **2026-07-30:** PCBWay flagged four vias inside SMD pads on the `2026.7.0` package, solder-paste leakage risk. All four cleared, front silk revision bumped to `2026.7.1`.
+
+- **2026-08-25:** Traced the deaf `MK1` to a probable assembly cause and added the no-wash order item above. Read `AN-100`, the handling guide `DS-000069` defers to, now in `localdatasheets/`; it forbids cleaning processes, ultrasonic baths and vapor phase soldering outright, because "cleaning solvents can enter through the port hole and damage the device". Cross-checked against what PCBWay publishes: ten assembly stages, no cleaning policy, no MSL or bake procedure, no reflow profile, and no order field for special handling, while their own cleaning article describes an ultrasonic bath, a DI water rinse and compressed-air drying, and states the factory "primarily uses rosin-based flux". So every prohibition in `AN-100` maps onto a step PCBWay describes, and nothing published says whether this order got them. Corroboration, not proof: two people on the ESPHome Discord independently built ICS-43434 boards with the same symptom, data and clocks fine and no acoustic response, one across three PCBWay boards, and both had the 0.1uF decoupling cap this board lacks. Also unchecked to date: this board's reflow peak against the 260°C limit for a sub-1.6mm part. No board change from this entry.
 
 - **2026-08-01:** PCBWay reported vias in pad again against the newer files. Not reproducible: a geometric sweep of every via against every pad (via centre plus annular ring versus each pad rectangle, layer-agnostic) finds the four originals at `1693423^` sitting dead centre in R9.1, R9.2, SW11.2 and U3.1 at -0.300mm, and zero hits on both `2026.7.1` and the current board. Closest approach now is 0.305mm of clear copper at U3 pin 1. Either their review ran against the `2026.7.0` package or their DFM means something else by the term, so their marked-up file is needed to close it. Reusable check: `scripts/check-via-in-pad.py`.

@@ -1,0 +1,1172 @@
+"""Light path: the pad is genuinely open over each LED, the LED fires up into
+air rather than into material, that air ends at the dome on the insert's
+underside, and the band the dome feeds is solid translucent material from the
+cavity ceiling to the face. The moulded light-pipe ring these passes once
+probed is gone: the pad no longer reaches over the LEDs at all, and the light
+pipe is the ring insert, a separate translucent part. The last leg is measured
+up to the local front-face floor, which the keypad recess dishes down where its
+wheel dish's diagonals and both its necks cross the ring, rather than to any
+one plane.
+
+Led ring: the ring itself, on the built parts. The ring used to be a void in
+the shell under a roof of shell, and these passes walked the void. That roof
+came back under the PA12 minimum wall and nothing in the stack reached it. The
+shell keeps no roof over the ring at all now: led_ring_channel() bores one
+circle at led_ring_face_r() from the cavity ceiling clear through the face, and
+led_ring_insert() fills it. So the ring is a solid, and the readings walk the
+solid: the insert runs from the wheel bore out to that circle at every bearing
+(one gap and the ring shows as arcs, which is the failure the feature exists to
+avoid), and the shell is empty over the whole band, which is the one claim here
+that inverted. The run is still measured rather than restated, because what
+closes it is the built part's own outer wall, and a ray is the only thing that
+reads where a loft actually ended.
+
+Wheel seat clearance: the wheel seat clears the fixed bezel
+(board.wheel_profile()'s main_od) by WHEEL_OPENING_CLEARANCE, its own gap
+rather than the pad's WHEEL_CLEARANCE, at every height there is material to cut
+it through, which is the relieved ceiling up to the front face's own dished
+floor over the seat and not up to the knob's peak; above that floor there is no
+seat and rotation_clearance holds the claim instead. And the lip stays clear of
+the ceiling in the first place. Replaces a claim that the opening had to match
+the lip so it could pass through on assembly, which does not happen: the board
+is lowered into an already-closed front shell, so the lip never transits the
+ceiling. That seat is the ring insert's bore now rather than the shell's web,
+and the probe moved to the insert with it. Probed by bisecting for the true
+radius, not trusted from WHEEL_OPENING_R, because this exact feature was once
+silently erased by a stale full-ceiling clearance cut while the formulas behind
+it still looked right on paper.
+
+FDM wheel seat: the printed front's bore is its own. It stands at
+WHEEL_OPENING_R plus FDM_WHEEL_OPENING_CLEARANCE where the recessed side's seat
+stands at WHEEL_OPENING_R, both bisected off the built parts at the same
+heights, because that widening has to be the FDM shell's alone: led_ring_inner_r()
+is derived off WHEEL_OPENING_R, so a widening that reached it would take the
+whole channel outward off the LEDs. The recessed side's seat is the ring
+insert's bore, because the shell has no web left to carry one. And the web the
+widening and its mouth chamfer are spent out of still stands on the FDM front,
+which is the one front that still has a web at all.
+
+Pressed caps clear the lobes: a cap pressed through SWITCH_TRAVEL must keep
+RING_LOBE_FIT off every lobe of the ring insert. SW6 stands over the D7 lobe,
+and its flange edge reaches past the lobe's outer face in plan, so the
+RING_LOBE_SHOULDER chamfer is all that keeps the two apart. Read on the lobe
+section along each bearing of its wedge, and then on the built cap and insert.
+
+Wheel rotation clearance: nothing of the pad or the front shell may intrude
+inside the wheel's rotating envelope, at the lip's own clearance radius at and
+below its top face and at the main body's clearance above it, where the shell's
+opening now closes in flush.
+"""
+
+import math
+
+import board
+import case
+import params
+from build123d import Cylinder, Pos
+from model import wheel_ring as wheel_ring_model
+
+from .common import (
+    CROP_MARGIN,
+    OPENING_PROBE_H,
+    OPENING_PROBE_R,
+    OPENING_SEARCH_LO,
+    PROBE_D,
+    RUN_MIN,
+    TOLERANCE,
+    OpeningNotFound,
+    Problem,
+    _Crop,
+    _fill_fraction,
+    _opening_crop,
+    _opening_radius,
+    _ray_runs,
+    _volume,
+)
+
+
+def light_path(shells, pad, insert):
+    """Each LED fires up through open air into the ring insert, and the insert
+    is solid translucent material from there to the face.
+
+    All three legs of the path: the pad's wheel cut genuinely uncovers the LED
+    (probe the pad over the package and expect air, the inverse of the flange
+    this replaced), the shell is genuinely open from the package top to the
+    channel's own ceiling (the LED must fire into the channel, not into the
+    ceiling outside it), and the run between there and the local face floor is
+    genuinely closed, so the light lands on material rather than escaping
+    through a hole that should not exist over an LED.
+
+    The last leg is the insert's now rather than the shell's, and it is read
+    on the band rather than straight over the package. The ring stops short of
+    the LEDs at led_ring_face_r(), so a column over a package leaves the band
+    entirely: what it meets above the lobe is the land of shell that lobe tucks
+    under, which is not the path the light takes. The light goes up into the
+    dome, in through the lobe's flare, and out through the band, so that is
+    where this reads it.
+    """
+    problems = _ring_stack_sane()
+    if problems:
+        return problems
+    wx, wy = board.wheel_center()
+    parts = board.components()
+    z0 = params.BOARD_THICKNESS + params.LED_HEIGHT
+    for ref in board.refs("D")[1:]:
+        x, y, _, _ = parts[ref]
+        opening = Pos(x, y, (z0 + case.PAD_WEB_TOP) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=case.PAD_WEB_TOP - z0
+        )
+        if _volume(pad.intersect(opening)) > TOLERANCE:
+            problems.append(f"{ref} is still covered: silicone over it")
+
+        # The package's own column, not its footprint. It ends under the
+        # lowest the dome gets across the column's own width, because the dome
+        # is a surface of revolution and so changes across it in x and y.
+        low, high = _dome_span(ref, x, y, PROBE_D / 2)
+        air = Pos(x, y, (z0 + low) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=low - z0 - 0.02
+        )
+        if _volume(shells.intersect(air)) > TOLERANCE:
+            problems.append(f"{ref} fires into shell: the cavity is not open over it")
+        if _volume(insert.intersect(air)) > TOLERANCE:
+            problems.append(
+                f"{ref} fires into the insert: its dome hangs lower over the "
+                f"package than RING_LOBE_GAP"
+            )
+
+        # Over the dome the lobe has to be solid, so the light enters material
+        # rather than crossing the dome and coming straight back out.
+        lid = _lobe_top(ref, math.hypot(x - wx, y - wy) + PROBE_D / 2)
+        dome = Pos(x, y, (high + lid) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=lid - high - 0.04
+        )
+        if _fill_fraction(insert, dome) < BAND_FILL_MIN:
+            problems.append(f"{ref} has no solid lobe over its dome to shine into")
+
+        # Then the band on this LED's own bearing, which is what carries the
+        # light to the face. The column spans the band's whole depth, so it
+        # catches both a hollow insert and a shell that kept a roof.
+        angle = math.atan2(y - wy, x - wx) % (2 * math.pi)
+        mid_r = (case.led_ring_inner_r() + case.led_ring_face_r()) / 2
+        bx, by = wx + mid_r * math.cos(angle), wy + mid_r * math.sin(angle)
+        base = case.CAVITY_FRONT + 0.05
+        floor = case.face_floor_at(bx, by)
+        band = Pos(bx, by, (base + floor) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=floor - base - 0.04
+        )
+        if _fill_fraction(insert, band) < BAND_FILL_MIN:
+            problems.append(f"{ref} has no solid band beside it to shine through")
+        if _fill_fraction(shells, band) > ROOF_OPEN_MAX:
+            problems.append(
+                f"{ref} still has shell over the ring: led_ring_channel() left "
+                "the thin sheet the insert exists to replace"
+            )
+    return problems
+
+
+def _dome_span(ref, x, y, half):
+    """(lowest, highest) of `ref`'s dome over a probe of radius `half` centred
+    at (x, y): its centre and eight points on its rim.
+
+    The dome is a surface of revolution, so it changes across a probe disc in
+    both x and y. A column that has to stand clear under it needs the lowest
+    reading, and one that has to stand in material over it needs the
+    highest."""
+    wx, wy = board.wheel_center()
+    zs = [case.led_ring_lobe_dome_z(ref, math.hypot(x - wx, y - wy))]
+    for i in range(8):
+        a = i * math.pi / 4
+        px, py = x + half * math.cos(a), y + half * math.sin(a)
+        zs.append(case.led_ring_lobe_dome_z(ref, math.hypot(px - wx, py - wy)))
+    return min(zs), max(zs)
+
+
+def _lobe_top(ref, r):
+    """Height of `ref`'s lobe's own top surface at radius `r`.
+
+    The 45 degree flare over the stretch it covers, the flat just under the
+    cavity ceiling past the knee where that flare ends, and the
+    RING_LOBE_SHOULDER chamfer down to the outer face."""
+    lid = case.led_ring_lobe_lid(ref)
+    if r <= lid[0][0]:
+        return lid[0][1]
+    for (r0, z0), (r1, z1) in zip(lid, lid[1:]):
+        if r <= r1:
+            return z0 + (z1 - z0) * (r - r0) / (r1 - r0)
+    return lid[-1][1]
+
+
+WEB_PROBE_D = 0.2
+"""Width of fdm_wheel_seat's web probe. Set when the channel's inner wall raked
+and LED_RING_CHAMFER left only 0.4 of web down at the mouth, where PROBE_D could
+not stand without hanging into the channel and reading a sound web as open. That
+wall is plumb now and the web is a full LED_RING_WALL at every height, so this
+reads the web's middle fifth and PROBE_D would fit with 0.25 either side.
+
+The FDM front is the only one with a web left to probe. The recessed front has
+none: its ring runs from the bore outward in one piece, and led_ring() reads
+that as a band rather than as a barrier."""
+
+BAND_PROBE_GAP = 0.05
+"""Standoff the band probe keeps off each wall of the run it stands in. It
+sets what counts as a hollow: anything reaching further than this into the
+measured width trips the probe. The probe is capped at PROBE_D regardless, so
+this is live only where the channel runs narrower than PROBE_D plus twice it."""
+
+BAND_FILL_MIN = 0.99
+"""How much of the band probe must read as insert before the ring counts as
+continuous there. The probe is sized to the width measured at its own angle, so
+it is not one fixed volume and an absolute mm3 floor could not mean the same
+thing at both sizes. It replaces a void probe that read the same place on the
+shell: the channel used to be the thing that had to be empty, and is now the
+thing that has to be filled."""
+
+ROOF_OPEN_MAX = 0.02
+"""How much of the band probe may read as shell before the bore counts as
+having left a roof behind.
+
+The bore exists to take that roof out, because it came back under the PA12
+minimum wall and no parameter reached it. So the claim inverts: where the old
+pass wanted the shell solid between the ceiling and the face, this wants it
+empty, and wants the insert solid there instead. Not zero, because the probe is
+a cylinder of PROBE_D standing inside a band whose own top is the dished face,
+so it can clip a sliver at the top of its travel."""
+
+SEAM_OFFSET_STATIONS = 0.5
+"""How far off a loft station the ring is sampled, in stations.
+
+The insert is a ruled loft through LED_RING_STATIONS sections, so every
+multiple of 2.5 degrees is a seam between two patches. A ray lying exactly in
+one of those planes meets the solid along an edge rather than through a face,
+and the reading comes back unbounded: at 0 degrees the band measured out to the
+ray's own far end, while a third of a degree either side of it read the part's
+real outer wall. LED_RING_SAMPLES divides into LED_RING_STATIONS, so without
+this offset every single sample sat on a seam, and the two bearings where the
+cavity wall chords the ring off are where that first showed.
+
+Half a station puts every ray as far from a seam as it can get. It also reads
+the loft where it is least accurate, across the chord between two sections
+rather than through a section, which is the better place to ask anyway."""
+
+BAND_REACH_SLACK = 0.5
+"""How far past the ring's own circle the band ray is allowed to run.
+
+Its job is only to end in air past the part, so the ray's far end carries no
+claim. The outer end it reports is a reading of where the insert actually
+stopped, which is what BAND_OUTER_TOLERANCE then holds against the circle."""
+
+BORE_STANDOFF = 0.5
+"""How far inside the wheel bore the band ray starts.
+
+It has to begin in air so that the first run it crosses is the insert itself.
+Nothing of either part stands inside WHEEL_OPENING_R, and the knob is not in
+the model, so anywhere short of the bore does. This also bounds how far short
+of the bore the pass can see the insert stop."""
+
+BAND_REACH_TOLERANCE = 0.05
+"""How far off WHEEL_OPENING_R the insert's own inner face may read before it
+counts as leaving a dark gap at the knob. It is a ray against the built solid,
+so this covers the reading and not a design allowance: the insert's bore takes
+no fit, because it stands where the shell's own seat used to."""
+
+BAND_TOP_STANDOFF = 0.05
+"""How far under the band's own top the roundness ray runs.
+
+It has to be under the lowest the dished face gets across the band on that
+bearing, or the ray leaves through the top rather than through the outer wall,
+and far enough under that the reading is of a wall and not of an edge."""
+
+BAND_OUTER_TOLERANCE = 0.08
+"""How far off led_ring_face_r() the insert's own outer face may read.
+
+This is the one that proves the ring came out round. The circle is the same on
+every bearing by construction, so a reading that wanders means the loft, the
+cavity wall or a lobe took a bite out of it, and a ring that is not round shows
+as a kinked line on the front of the remote. It covers the ray crossing the
+ruled loft's chord rather than a section, plus RING_INSERT_FACE_FIT, which is
+zero."""
+
+BAND_MIN = 0.5
+"""Narrowest the lit band may run, from the wheel bore out to the ring's own
+circle.
+
+Two passes hold it. _ring_stack_sane() applies it to led_ring_face_r() less
+WHEEL_OPENING_R, which is arithmetic and answers for the whole ring at once.
+led_ring() then applies it to the run it measures at each angle on the built
+part, which is what catches a loft that came out short on one bearing.
+
+A floor rather than a design target: the probes need somewhere to stand, and a
+ring glowing through a slit narrower than this is not the ring the feature is
+for."""
+
+RING_LAND_MIN = 0.98
+"""Thinnest shell the land over a lobe pocket may come back at.
+
+It is the one wall the recessed front still keeps over the LED ring, and it is
+the insert's whole retention. LED_RING_FACE_ROOF is the PCBWay SLS minimum and
+sets the land by construction, so this floor sits just under it. The difference
+allows for the fitted face, which is a spline and not the formula the land is
+measured off.
+
+Thinner than this and the land is both under the minimum wall and a weaker
+catch than it was designed to be."""
+
+ROOF_LEFT_MIN = 0.78
+"""Thinnest roof the FDM front may keep over its own LED channel.
+
+The print sets this limit, not the light: a thicker shell diffuses better, but
+less light gets through it. PCBWay publishes a minimum wall of 0.8 mm for SLA
+resin, and a thinner wall puts the order on hold. LED_RING_FACE_ROOF is that
+minimum, and this floor is just under it.
+
+Only checks/fdm.py reads it now. The recessed front keeps no roof over the ring
+at all, so RING_LAND_MIN is what holds its one remaining wall there."""
+
+LED_RING_SAMPLES = 24
+"""Angles sampled around the channel for led_ring: 15 degrees apart, a few
+millimetres of arc at the channel's own radius, so anything blocking enough of
+the ring to show as a dark sector is caught. The count was once justified by
+the gap between the two keypad islands, a sector the ring had to survive; no
+keypad recess reaches the channel at all now, so arc length is most of what it
+answers to. The other half is the roof probe riding along with it: the rotary
+recess thins the roof on the four diagonals and where each neck crosses, and 24
+samples land on all of those exactly."""
+
+
+RING_CROP_SECTORS = 4
+"""How many crops of the shell led_ring cuts, each serving a run of consecutive
+angles that then cut their own out of it.
+
+Measured, not chosen. Every reading wants a crop small enough to be a handful
+of faces, but cutting each of the 24 straight out of the built front costs
+about 1.4 seconds of boolean apiece and dominates the pass. Cutting one crop
+covering the whole ring and reading everything against that is far worse: the
+box bounding the ring holds over half the shell's faces, because the wheel is
+where the keypad recess crosses in plan, and 96 readings against 5284 faces
+took three times as long as the per-angle crops did. Nesting is what wins. One
+crop per quarter of the ring holds about 1400 faces, and an angle's crop comes
+out of that for a fraction of what it costs out of the shell.
+
+Four rather than more or fewer because the two costs pull opposite ways: every
+extra sector is another cut against the whole front, and every sector dropped
+makes all 24 angle cuts dearer. Two and four measure about the same and eight
+is worse, so this sits on the flat of the curve rather than on a peak, and
+LED_RING_SAMPLES can move a good way either side of 24 without stranding it."""
+
+
+def _ring_crop_box(wx, wy, r_in, r_out, angles, z_lo):
+    """The box holding every reading led_ring takes at `angles`: each angle's
+    ray from `r_in` out to `r_out`, the widest probe that can stand anywhere on
+    it, and margin, over the whole height from below the channel up past the
+    front face. No face floor is above the undished face, so SHELL_FRONT tops it
+    whatever the keypad recess does over the channel.
+
+    One builder for both levels of the crop, which is what makes the nesting
+    sound rather than merely plausible: a sector's box is this function over its
+    own angles, so it is at least the union of its members' boxes by
+    construction and contains every one of them. _Crop checks that anyway when
+    it cuts a child out of a parent, and refuses rather than hand back a crop
+    quietly missing the material outside its parent.
+    """
+    pad = PROBE_D / 2 + CROP_MARGIN
+    xs = [wx + r * math.cos(a) for a in angles for r in (r_in, r_out)]
+    ys = [wy + r * math.sin(a) for a in angles for r in (r_in, r_out)]
+    return (
+        (min(xs) - pad, min(ys) - pad, z_lo - CROP_MARGIN),
+        (max(xs) + pad, max(ys) + pad, case.SHELL_FRONT + CROP_MARGIN),
+    )
+
+
+def _ring_stack_sane():
+    """Arithmetic bounds the probes need before they can even be built: the
+    band has to be wide enough to stand a probe in, the land over a lobe pocket
+    has to be real shell, and the ring's circle has to sit inside the cavity
+    wall it is derived off. Without these the probe cylinders come out with
+    non-positive heights or standing in material, and the pass dies in
+    build123d instead of reporting what went wrong."""
+    problems = []
+    band = case.led_ring_face_r() - case.WHEEL_OPENING_R
+    if band <= BAND_MIN:
+        problems.append(
+            f"the lit band is only {band:.2f} wide, wants {BAND_MIN:.2f}: the "
+            f"ring runs {case.WHEEL_OPENING_R:.2f} to "
+            f"{case.led_ring_face_r():.2f}, so RING_LIFT_CLEAR "
+            f"{params.RING_LIFT_CLEAR:.2f} has pulled the circle in too far or "
+            "the cavity wall has moved in on it"
+        )
+    land = case.ring_land_left()
+    if land <= RING_LAND_MIN:
+        problems.append(
+            f"the shell leaves only {land:.2f} of land over a lobe pocket, "
+            f"wants {RING_LAND_MIN:.2f}: LED_RING_FACE_ROOF "
+            f"{params.LED_RING_FACE_ROOF:.2f} is too thin, or the keypad recess "
+            "dishes the face lower over a lobe than led_ring_lobe_land_z() saw"
+        )
+    return problems
+
+
+def _channel_width(crop, angle, z):
+    """(inner, outer) radii of the channel's void at `angle`, height `z`, read
+    off the built shell.
+
+    One ray out from the wheel centre, from mid-web to led_ring_mouth_outer_r(),
+    which nothing of the channel reaches past. The first run of material it
+    crosses is the web, and the void after that run is the channel. The void
+    ends wherever the shell closes again, so one reading covers the outer wall,
+    the cavity wall's own chord, and anything that has blocked the channel, none
+    of which share a formula and only one of which any radius in the model knows
+    about.
+
+    `crop` is that angle's crop of the built shell rather than the shell itself,
+    for the same reason every other reading here takes one: a line against the
+    front's ten thousand faces costs a second, and the same line against the few
+    dozen the crop holds costs nothing measurable. The crop spans the whole ray
+    by construction, and refuses the reading outright if it does not, because a
+    segment clipped at a crop wall would report the shell closing where it does
+    not.
+
+    Two answers are not a width, and the caller reports each rather than
+    measuring off it. None at all means the ray began in air: it starts mid-web,
+    which is material by design, so the web has gone. `outer` of None means the
+    shell never opened again out to led_ring_mouth_outer_r(), which is either a
+    ring severed there or a channel running out past its own outer wall.
+    """
+    wx, wy = board.wheel_center()
+    r0 = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
+    r1 = case.led_ring_mouth_outer_r()
+    dx, dy = math.cos(angle), math.sin(angle)
+    runs = crop.ray_runs(
+        (wx + r0 * dx, wy + r0 * dy, z), (wx + r1 * dx, wy + r1 * dy, z)
+    )
+    if not runs or runs[0][0] > RUN_MIN:
+        return None
+    inner = r0 + runs[0][1]
+    return inner, (r0 + runs[1][0] if len(runs) > 1 else None)
+
+
+def _band_run(crop, angle, z):
+    """(inner, outer) radii of the ring insert's own run at `angle`, height
+    `z`, read off the built part.
+
+    One ray out from the wheel centre, starting BORE_STANDOFF inside the bore
+    where neither part stands, so the first run it crosses is the insert
+    itself. The inner end is therefore the insert's bore and the outer end is
+    its own outer wall, which should be led_ring_face_r() on every bearing. It
+    is measured rather than restated because that is the claim: a ring that is
+    round reads the same radius all the way round, and a loft that came out
+    short or a lobe that bit into the circle reads otherwise.
+
+    None means the ray met nothing at all on that bearing: the ring is severed
+    there, which is the failure the whole feature exists to avoid.
+    """
+    wx, wy = board.wheel_center()
+    r0 = case.WHEEL_OPENING_R - BORE_STANDOFF
+    r1 = case.led_ring_face_r() + BAND_REACH_SLACK
+    dx, dy = math.cos(angle), math.sin(angle)
+    runs = crop.ray_runs(
+        (wx + r0 * dx, wy + r0 * dy, z), (wx + r1 * dx, wy + r1 * dy, z)
+    )
+    if not runs:
+        return None
+    return r0 + runs[0][0], r0 + runs[0][1]
+
+
+def led_ring(front, insert):
+    """The ring proves out on the built parts, all the way around.
+
+    What is being measured changed with the geometry. The ring used to be a
+    void in the shell under a roof of shell, and the pass walked the void. That
+    roof came back under the PA12 minimum wall, so led_ring_channel() bores the
+    whole ring out of the shell instead and led_ring_insert() is the part that
+    fills it. The ring is now a solid, and this walks the solid.
+
+    Four things per angle, each a reading rather than a formula restated.
+
+    The insert's radial run is measured just over the seat its underside steps
+    at. Its inner end has to be the wheel bore, because that is what carries
+    the light to the knob and what the shell no longer has a seat at. Its outer
+    end at that height is whatever closed the run, which at the six LED
+    bearings is a lobe's flare and not the circle.
+
+    Roundness is a second ray, run just under the band's own top, where every
+    flare has ended. Its outer end has to be led_ring_face_r() within
+    BAND_OUTER_TOLERANCE, and that is what proves the ring came out round: the
+    circle is the same on every bearing by construction, so a reading that
+    wanders is a kinked line on the front of the remote. A ring severed
+    anywhere reads as no run at all on its bearing, and a ring merely pinched
+    reads a run under BAND_MIN.
+
+    A band probe then stands in the part of that run outside
+    LIP_CLEAR_R, over the band's whole depth from the cavity ceiling up
+    to the local face floor, sized to the run less BAND_PROBE_GAP either side
+    and capped at PROBE_D. The ray reads one line, so the probe is what covers
+    the height between the ends the ray saw and catches a hollow that does not
+    reach either wall. It stands outside LIP_CLEAR_R because the
+    insert's underside steps there, from the cavity ceiling down under the bore
+    to the relief it seats on, and a probe straddling that step would read the
+    air under its own inner half as a hollow.
+
+    The shell is read over that same column and has to be empty. That is the
+    bore's own proof, and it is the one claim that would quietly invert if the
+    bore stopped being cut: the old pass wanted that run solid.
+
+    The insert is read over the same column and has to be solid, so the light
+    lands on material and the face reads as a ring.
+
+    Every one of those readings is taken against a crop cut for that one angle
+    rather than against the whole part, and those crops come out of
+    RING_CROP_SECTORS sector crops rather than out of the part each time. Both
+    parts get their own crop of the same box, so a probe is never read against
+    one part's crop while meaning the other's. Every level checks containment
+    on every reading and refuses what it cannot hold, because a probe outside
+    its crop reads open whatever the part does there, which is how a pass like
+    this goes vacuous.
+    """
+    problems = _ring_stack_sane()
+    if problems:
+        return problems
+    wx, wy = board.wheel_center()
+    r_in = case.WHEEL_OPENING_R - BORE_STANDOFF
+    r_out = case.led_ring_face_r() + BAND_REACH_SLACK
+    # The insert reaches down to CAVITY_FRONT over the band and only to
+    # LED_RING_FOOT over the bore it seats on, so the crops have to hold both.
+    # The lobes hang lower still, but they sit outside the band and no reading
+    # here is taken on one.
+    z_floor = case.CAVITY_FRONT
+    # One height for every ray, just over that seat. The insert is present
+    # there on both sides of LIP_CLEAR_R and nowhere near its top, so
+    # one ray reads the whole band on every bearing.
+    z_ray = case.LED_RING_FOOT + 0.05
+    per_sector = math.ceil(LED_RING_SAMPLES / RING_CROP_SECTORS)
+    problems = []
+    for first in range(0, LED_RING_SAMPLES, per_sector):
+        seam = SEAM_OFFSET_STATIONS * 2 * math.pi / case.LED_RING_STATIONS
+        angles = [
+            2 * math.pi * i / LED_RING_SAMPLES + seam
+            for i in range(first, min(first + per_sector, LED_RING_SAMPLES))
+        ]
+        box = _ring_crop_box(wx, wy, r_in, r_out, angles, z_floor)
+        shell_sector = _Crop(front, *box)
+        band_sector = _Crop(insert, *box)
+
+        for a in angles:
+            deg = round(math.degrees(a), 2)
+            cos_a, sin_a = math.cos(a), math.sin(a)
+            one = _ring_crop_box(wx, wy, r_in, r_out, [a], z_floor)
+            shell = _Crop(shell_sector, *one)
+            band = _Crop(band_sector, *one)
+            circle = case.led_ring_face_r()
+
+            run = _band_run(band, a, z_ray)
+            if run is None:
+                problems.append(
+                    f"the ring insert is missing at {deg} degrees: the ray from "
+                    f"the bore out to {circle + BAND_REACH_SLACK:.2f} meets no "
+                    "material, so the ring reads as arcs"
+                )
+                continue
+            inner, outer = run
+            if inner > case.WHEEL_OPENING_R + BAND_REACH_TOLERANCE:
+                problems.append(
+                    f"the insert stops {inner - case.WHEEL_OPENING_R:.2f} short of "
+                    f"the bore at {deg} degrees: it stands at {inner:.2f} against "
+                    f"WHEEL_OPENING_R {case.WHEEL_OPENING_R:.2f}, so the face goes "
+                    "dark before it reaches the knob"
+                )
+                continue
+            if outer - inner < BAND_MIN:
+                problems.append(
+                    f"the lit band is down to {outer - inner:.2f} at {deg} degrees, "
+                    f"wants {BAND_MIN:.2f}: it runs {inner:.2f} to {outer:.2f} "
+                    f"there, against a circle at {circle:.2f} and the cavity "
+                    f"wall at {case.led_ring_clip_reach(a):.2f}"
+                )
+                continue
+            # Roundness is read near the top of the band and not at z_ray.
+            # At the six LED bearings a lobe's flare stands outside the circle
+            # lower down, by design: it is what tucks under the land. The
+            # circle that has to be round is the one the face shows, so this
+            # ray runs just under the band's own top, over every flare.
+            radii = [
+                case.WHEEL_OPENING_R + (circle - case.WHEEL_OPENING_R) * k / 8
+                for k in range(9)
+            ]
+            z_round = (
+                min(
+                    case.face_floor_at(wx + r * cos_a, wy + r * sin_a)
+                    for r in radii
+                )
+                - BAND_TOP_STANDOFF
+            )
+            top = _band_run(band, a, z_round)
+            if top is None:
+                problems.append(
+                    f"the ring insert is missing near the face at {deg} "
+                    f"degrees, z {z_round:.2f}: the ray meets no material, so "
+                    "the band does not reach the face there"
+                )
+                continue
+            if abs(top[1] - circle) > BAND_OUTER_TOLERANCE:
+                problems.append(
+                    f"the ring is not round at {deg} degrees: its outer face "
+                    f"reads {top[1]:.2f} at z {z_round:.2f} against "
+                    f"led_ring_face_r() {circle:.2f}, which is "
+                    f"{abs(top[1] - circle):.2f} off and wants "
+                    f"{BAND_OUTER_TOLERANCE:.2f}, so the joint line on the face "
+                    "kinks there"
+                )
+                continue
+
+            # The probe stands outside LIP_CLEAR_R rather than in the
+            # middle of the whole band. The insert's underside steps there,
+            # from the cavity ceiling down under the bore to the relief it
+            # seats on, and a probe straddling that step reads the air under
+            # its own inner half as a hollow in the part. Sizing it off the
+            # same radius keeps it clear of the step by BAND_PROBE_GAP whatever
+            # the run measures.
+            deep_in = max(inner, case.LIP_CLEAR_R)
+            deep_r = (deep_in + outer) / 2
+            probe_d = min(PROBE_D, outer - deep_in - 2 * BAND_PROBE_GAP)
+            if probe_d <= 0:
+                problems.append(
+                    f"the insert's run outside LIP_CLEAR_R is only "
+                    f"{outer - deep_in:.2f} at {deg} degrees, too narrow to "
+                    "stand a probe in"
+                )
+                continue
+            dx, dy = wx + deep_r * cos_a, wy + deep_r * sin_a
+            # The band's whole depth: the cavity ceiling its underside stands
+            # on, up to the dished face its top lands flush with. One column
+            # carries both claims, that the insert fills it and that the shell
+            # is out of it.
+            base = case.CAVITY_FRONT + 0.05
+            top = case.face_floor_at(dx, dy) - 0.02
+            column = Pos(dx, dy, (base + top) / 2) * Cylinder(
+                radius=probe_d / 2, height=top - base
+            )
+            filled = band.fill_fraction(column)
+            if filled < BAND_FILL_MIN:
+                problems.append(
+                    f"the insert is hollow at {deg} degrees: only {filled:.0%} of "
+                    f"the {top - base:.2f} of band depth it fills there is "
+                    "material"
+                )
+            left = shell.fill_fraction(column)
+            if left > ROOF_OPEN_MAX:
+                problems.append(
+                    f"the shell still has {left:.0%} of material over the ring at "
+                    f"{deg} degrees: led_ring_channel() left the thin sheet the "
+                    "insert exists to replace"
+                )
+    return problems
+
+
+INNER_CHAMFER_TOLERANCE = 0.05
+"""Allowance when rays measure the 45 degree inner LED channel wall."""
+
+
+def inner_chamfer_is_cut(front_fdm):
+    """Read the FDM channel's inner bevel off the built shell at three heights.
+
+    The FDM channel is only a little taller than the bevel, so probes stay
+    inside the bevel itself rather than on its nearly vanished upright foot.
+    Four bearings also catch a section clipped or omitted on one side.
+
+    The recessed front has no inner bevel to read any more, and no inner wall
+    either. led_ring_channel() bores the whole ring out of that shell from the
+    cavity ceiling up, so the wall, the bevel and the web they stood on all
+    leave with it and led_ring_insert() carries the band instead.
+    """
+    problems = []
+    wx, wy = board.wheel_center()
+    r_web = case.WHEEL_OPENING_R + case.led_ring_web_left() / 2
+    r_out = case.led_ring_mouth_outer_r()
+    leg = params.LED_RING_INNER_CHAMFER
+    base = case.led_ring_top(True) - leg
+    for i in range(4):
+        angle = i * math.pi / 2
+        crop = _Crop(
+            front_fdm,
+            *_ring_crop_box(wx, wy, r_web, r_out, [angle], case.CAVITY_FRONT),
+        )
+        for fraction in (0.25, 0.5, 0.75):
+            z = base + fraction * leg
+            width = _channel_width(crop, angle, z)
+            if width is None:
+                problems.append(
+                    f"FDM LED channel has no inner wall at {i * 90} "
+                    f"degrees, z={z:.2f}"
+                )
+                continue
+            inner = width[0]
+            want = case.led_ring_inner_r() + fraction * leg
+            if abs(inner - want) > INNER_CHAMFER_TOLERANCE:
+                problems.append(
+                    f"FDM LED inner chamfer stands at radius {inner:.2f} "
+                    f"at {i * 90} degrees, z={z:.2f}, wants {want:.2f}"
+                )
+    return problems
+
+
+WHEEL_SEAT_SAMPLES = 5
+"""Heights sampled across the run of shell the wheel opening is actually cut
+through, from the cavity ceiling underside up to the front face's own floor over
+the seat, for wheel_seat_clearance: enough to span that run rather than
+resampling one or two points every run. It used to span up to the wheel's own
+top, which is above the shell out there, and the two samples that reached past
+the face floor read the same empty air whatever the opening did."""
+
+
+def wheel_seat_clearance(insert):
+    """The wheel seat clears the wheel's fixed bezel, board.wheel_profile()'s
+    main_od, by at least WHEEL_OPENING_CLEARANCE at every height there is
+    material for it to be cut through: from the relieved ceiling up to the
+    front face's own floor over the seat. That is the opening's own gap;
+    WHEEL_CLEARANCE is the pad's, against the lip, and this pass has nothing to
+    do with it. The seat is built to exactly that radius, flush to the wheel,
+    so this is the pass that catches anything eating into it.
+
+    The seat is the ring insert's bore now rather than the shell's. The shell
+    had a web of its own between the bore and the channel, and that web was the
+    seat; led_ring_channel() bores it out because the roof holding it came back
+    under the PA12 minimum, and the insert carries both. So the probe reads the
+    insert. Reading the shell would find nothing inside led_ring_face_r() at
+    all and the bisection would saturate rather than report a seat.
+
+    This is the real guard behind what used to be a claim that the shell's
+    hole had to be sized to the lip so it could pass through on assembly.
+    It does not: the board is lowered into an already-closed front shell,
+    so the lip stops well short of the ceiling and never transits it. That
+    fact is checked first, arithmetic, since it is what excuses the lip
+    from the rest of this check; the opening itself is then measured by
+    _opening_radius on the built shell at several heights, not trusted from
+    WHEEL_OPENING_R, because this exact feature was silently erased by
+    _wheel_hole while the formulas behind it still looked right on paper.
+
+    Why the span stops at the face floor and not at the knob's peak, which is
+    what it claimed before. The bore is cut from under the ceiling to past the
+    face, but the shell it is cut out of ends at the face, and over the wheel
+    that face is the keypad recess's wheel basin: a dish whose floor is
+    case.face_floor_at() and not SHELL_FRONT. Just outside the bore the dish
+    takes that floor below the knob's own top on every bearing, so between the
+    two there is no front shell on this ray at any radius the search covers. Sampling up there sent the bisection to find
+    a wall above all the material there was, and a bisection that meets nothing used to return its own upper bound:
+    17.03 against a requirement of 16.05, which passes, and passes no matter
+    what the opening does. So the span ends at that floor, read at `needed`,
+    the tightest radius the seat is allowed to have and therefore the lowest the
+    floor gets anywhere a reading can land: wider seats meet the floor further
+    out, where it is higher still.
+
+    Both ends then pull in by the probe's own height, and for one reason. A
+    probe centred on a horizontal boundary straddles material and air, so it
+    fills half at most, and the bisection wants a strict majority; every radius
+    reads open and the search saturates again. The top had this pull-in
+    already, against the face plane it was then thought to end at. The bottom
+    never did, and sat exactly on the cavity ceiling underside, which is such a
+    boundary: that is why breaking the opening failed only the three interior
+    samples.
+
+    Above the face floor the claim is rotation_clearance's, which is where it
+    belongs. There is no seat up there to measure a radius of, only the
+    requirement that nothing of the shell reaches inside WHEEL_OPENING_R
+    between the lip's top face and past the knob's peak, and that pass probes
+    that whole band by volume.
+
+    Saturation is loud now rather than laundered. _opening_radius raises instead
+    of handing back its bound, and each height catches that and reports itself
+    unmeasured, so a span that goes wrong again, or a seat that grows out past
+    the bound the ring channel's inner wall puts on the search, fails rather
+    than passes for free.
+    """
+    problems = []
+    profile = board.wheel_profile()
+
+    # wheel_lip_relief() lifts the ceiling off the lip, so this reads the
+    # relief floor rather than CAVITY_FRONT. The pad web no longer sets the
+    # clearance over the lip, which is the whole point of the relief: see
+    # WHEEL_LIP_RELIEF and PAD_WEB_T.
+    lip_ceiling = case.CAVITY_FRONT + params.WHEEL_LIP_RELIEF
+    if profile.lip_z1 + params.WHEEL_CLEARANCE > lip_ceiling:
+        problems.append(
+            f"lip top {profile.lip_z1:.3f} plus WHEEL_CLEARANCE reaches the "
+            f"relieved ceiling at {lip_ceiling:.2f}: the lip is not clear of "
+            "it, so the shell's opening has to answer for it too"
+        )
+        return problems
+
+    wx, wy = board.wheel_center()
+    needed = profile.main_od / 2 + params.WHEEL_OPENING_CLEARANCE
+    # The run of shell the opening is cut through, both ends pulled in off their
+    # own boundary plane by the probe's own height so that no sample straddles
+    # one. See the docstring: a straddling probe is half air at every radius and
+    # the bisection it feeds cannot find anything.
+    z0 = case.LED_RING_FOOT + OPENING_PROBE_H
+    z1 = case.face_floor_at(wx + needed, wy) - OPENING_PROBE_H
+    if z1 <= z0:
+        problems.append(
+            f"no shell left to seat the wheel against: the face floor over the "
+            f"opening is at {case.face_floor_at(wx + needed, wy):.2f}, against a "
+            f"relieved ceiling at {case.LED_RING_FOOT:.2f}"
+        )
+        return problems
+    # Bounded inside the ring channel's inner wall: past it the material is
+    # no longer monotonic along the radius (web, channel void, outer wall),
+    # and a bisect that wanders into the void reads the channel's outer wall
+    # as the opening, hiding an undersized seat behind a passing number. That
+    # wall is plumb, so one radius bounds every height this samples.
+    hi = case.led_ring_inner_r() - OPENING_PROBE_R
+    # One crop of the shell for all five heights. Every probe of every bisection
+    # stands on the same +x ray out of the wheel axis between OPENING_SEARCH_LO
+    # and that bound, so the lot of them live in one thin box spanning the
+    # heights sampled, and cutting it once replaces a hundred booleans against
+    # the built front with a hundred against a few dozen faces. It moves no
+    # probe and changes no bound; it only changes what the probe meets. The crop
+    # refuses any probe it does not wholly contain, so the alternative to a
+    # correct crop here is a stopped pass, not a seat measured against nothing.
+    crop = _opening_crop(insert, wx, wy, z0, z1, OPENING_SEARCH_LO, hi)
+    for i in range(WHEEL_SEAT_SAMPLES):
+        z = z0 + (z1 - z0) * i / (WHEEL_SEAT_SAMPLES - 1)
+        try:
+            opening = _opening_radius(insert, wx, wy, z, hi=hi, crop=crop)
+        except OpeningNotFound as missing:
+            problems.append(
+                f"opening unmeasurable at z={z:.2f}: {missing}"
+            )
+            continue
+        if opening < needed - OPENING_PROBE_R:
+            problems.append(
+                f"opening only {opening:.2f} at z={z:.2f}, wants {needed:.2f}"
+            )
+    return problems
+
+
+FDM_SEAT_SAMPLES = 3
+"""Heights fdm_wheel_seat bisects both fronts' bores at. Fewer than
+WHEEL_SEAT_SAMPLES because the span is shorter: it stops under the FDM front's
+own mouth chamfer rather than running up to a face floor, and both bores are
+plain cylinders over the whole of it, so this is here to catch a bore that is
+not a cylinder at all rather than to trace a profile."""
+
+FDM_WEB_SAMPLES = 4
+"""Angles fdm_wheel_seat stands its web probe at on the FDM front. Far fewer
+than LED_RING_SAMPLES, and not for the same job: led_ring() walks the channel
+looking for a sector something has blocked, which is a regional failure, while
+this is asking whether a bore and a cone both revolved about the wheel axis
+have eaten a web also revolved about it. Nothing here varies with angle by
+construction, so these are the sanity that it did not, on the four cardinal
+bearings rather than at a single one."""
+
+
+def fdm_wheel_seat(insert, fdm_front):
+    """The FDM front's bore stands at its own widened radius where the recessed
+    side's seat stands at WHEEL_OPENING_R, and the web that widening is spent
+    out of still reaches the LED ring channel on that front.
+
+    The recessed side's seat is the ring insert's bore, because
+    led_ring_channel() bores the shell's own web away and the insert replaces
+    it. The comparison is unchanged in substance: one part measuring wide and
+    the other measuring narrow at the same heights is what says the widening
+    stayed on the printed front.
+
+    The claim is a difference, so both fronts are read in one pass.
+    FDM_WHEEL_OPENING_CLEARANCE belongs to the printed shell alone: it is there
+    because that front's face is flat, with no wheel basin opening the top of
+    the bore and no dish taking the fit off the knob. Widening WHEEL_OPENING_R
+    instead would look identical on this front and carry led_ring_inner_r(),
+    and with it the whole LED ring channel, outward off the LEDs it is built
+    over. One front measuring wide and the other measuring narrow at the same
+    heights is what says the widening stayed where it was put.
+
+    Both radii are bisected off the built shells by _opening_radius rather than
+    read back out of the parameters that were meant to produce them, for the
+    reason wheel_seat_clearance() gives at length: this exact feature has been
+    silently erased before while every formula behind it still looked right.
+
+    The span stops OPENING_PROBE_H under the FDM front's mouth chamfer, so what
+    each bisection meets is the bore itself and not the cone that opens it. The
+    cone is checks/fdm.py's, read at the face where it lives.
+
+    The web is then probed on the FDM front where led_ring()'s own web probe
+    stands on the recessed one, mid-web over the channel's full height. That
+    web is where both FDM_WHEEL_OPENING_CLEARANCE and
+    FDM_WHEEL_OPENING_CHAMFER are spent, so it is the one that can go, and
+    _fdm_mouth_budget()'s arithmetic is no proof that the shell it produced
+    still has material standing there.
+    """
+    problems = _ring_stack_sane()
+    if problems:
+        return problems
+    wx, wy = board.wheel_center()
+    fdm_r = case.fdm_wheel_opening_r()
+    # Under the mouth chamfer on the FDM front, and under the recessed front's
+    # own dished floor over the seat, so one span suits both bores. Each end is
+    # pulled in by the probe's own height for the reason wheel_seat_clearance()
+    # gives: a probe straddling a horizontal boundary is half air at every
+    # radius and the bisection it feeds saturates.
+    ceiling = min(
+        case.FDM_FACE - params.FDM_WHEEL_OPENING_CHAMFER,
+        case.face_floor_at(wx + fdm_r, wy),
+    )
+    z0 = case.LED_RING_FOOT + OPENING_PROBE_H
+    z1 = ceiling - OPENING_PROBE_H
+    if z1 <= z0:
+        return [
+            f"no bore left to measure: the FDM mouth chamfer and the recessed "
+            f"front's own floor leave a ceiling at {ceiling:.2f}, against a "
+            f"relieved ceiling at {case.LED_RING_FOOT:.2f}"
+        ]
+    # The same bound wheel_seat_clearance() uses, for the same reason: past the
+    # channel's inner wall the material stops being monotonic along the radius
+    # and a bisection that wanders into the void reads the channel's outer wall
+    # as the opening.
+    hi = case.led_ring_inner_r() - OPENING_PROBE_R
+    for label, shell, want in (
+        ("FDM front", fdm_front, fdm_r),
+        ("ring insert", insert, case.WHEEL_OPENING_R),
+    ):
+        crop = _opening_crop(shell, wx, wy, z0, z1, OPENING_SEARCH_LO, hi)
+        for i in range(FDM_SEAT_SAMPLES):
+            z = z0 + (z1 - z0) * i / (FDM_SEAT_SAMPLES - 1)
+            try:
+                opening = _opening_radius(shell, wx, wy, z, hi=hi, crop=crop)
+            except OpeningNotFound as missing:
+                problems.append(
+                    f"the {label}'s bore unmeasurable at z={z:.2f}: {missing}"
+                )
+                continue
+            if abs(opening - want) > OPENING_PROBE_R + TOLERANCE:
+                problems.append(
+                    f"the {label}'s bore measures {opening:.2f} at z={z:.2f} "
+                    f"where it should be {want:.2f}: FDM_WHEEL_OPENING_CLEARANCE is "
+                    f"the printed front's alone, and WHEEL_OPENING_R is what "
+                    f"led_ring_inner_r() and the whole channel hang off"
+                )
+
+    r_web = (fdm_r + case.led_ring_inner_r()) / 2
+    z_lo, z_hi = case.LED_RING_FOOT + 0.05, case.LED_RING_TOP - 0.05
+    for i in range(FDM_WEB_SAMPLES):
+        a = 2 * math.pi * i / FDM_WEB_SAMPLES
+        web = Pos(
+            wx + r_web * math.cos(a), wy + r_web * math.sin(a), (z_lo + z_hi) / 2
+        ) * Cylinder(radius=WEB_PROBE_D / 2, height=z_hi - z_lo)
+        filled = _fill_fraction(fdm_front, web)
+        if filled < 0.99:
+            problems.append(
+                f"the FDM front's web to the LED ring channel is {filled:.0%} "
+                f"material at {round(math.degrees(a))} degrees: the widened bore "
+                f"and its mouth chamfer have eaten into the light barrier "
+                f"LED_RING_WALL leaves"
+            )
+    return problems
+
+
+def rotation_clearance(front, pad, insert):
+    """Nothing of the pad, the shell or the ring insert may intrude inside the
+    wheel's rotating envelope: LIP_CLEAR_R at and below the lip's top face,
+    where the widest disc has to clear, and WHEEL_OPENING_R above it, where the
+    seat closes in flush on the main body. The lip being the widest disc is
+    what lets the pad's plain bore answer for the main body too, so that fact
+    is checked first, arithmetic, rather than assumed.
+
+    The insert is probed with them because it is what stands at the seat now.
+    led_ring_channel() bores the shell's web out and the insert carries the
+    bore, so a part that came back oversize, or an insert section that reached
+    inward, would foul the knob where no reading of the shell could see it.
+    """
+    hits = []
+    if case.WHEEL_LIP_OD < case.WHEEL_MAIN_OD:
+        hits.append(
+            f"lip {case.WHEEL_LIP_OD:.2f} is narrower than the main body "
+            f"{case.WHEEL_MAIN_OD:.2f}: the pad's bore is sized to the wrong disc"
+        )
+    wx, wy = board.wheel_center()
+    regions = [
+        ("at and below the lip", case.WHEEL_LIP_Z0, case.WHEEL_LIP_Z1, case.LIP_CLEAR_R),
+        ("above the lip", case.WHEEL_LIP_Z1, case.WHEEL_TOP + 1, case.WHEEL_OPENING_R),
+    ]
+    for label, z0, z1, radius in regions:
+        probe = Pos(wx, wy, (z0 + z1) / 2) * Cylinder(radius=radius - 0.05, height=z1 - z0)
+        for name, shell in (
+            ("pad", pad),
+            ("front shell", front),
+            ("ring insert", insert),
+        ):
+            volume = _volume(shell.intersect(probe))
+            if volume > TOLERANCE:
+                hits.append(
+                    f"{name} intrudes {volume:.2f} mm3 inside the wheel's clearance {label}"
+                )
+    return hits
+
+
+PRESSED_FLANGE_CLEAR_MIN = params.RING_LOBE_FIT
+"""Least gap a cap flange pressed through SWITCH_TRAVEL keeps to a lobe of the
+ring insert. It is the gap each lobe keeps to its own pocket, because both
+answer for the SLS tolerance on the insert."""
+
+PRESSED_FLANGE_BEARINGS = 41
+"""Bearings each lobe's wedge is read on, edge to edge."""
+
+PRESSED_FLANGE_STEP = 0.01
+"""Spacing of the points each lobe section edge is read at. It bounds the
+error on the gap."""
+
+
+def _flange_entry(ref, angle, far):
+    """Distance from the wheel centre at which the ray at `angle` first enters
+    the flange of `ref`'s cap, or None if it does not within `far`. The flange is
+    the cap's own superellipse, so the ray is walked and the crossing bisected."""
+    wx, wy = board.wheel_center()
+    x, y = board.components()[ref][:2]
+    half = case.cap_flange(ref) / 2
+    n = params.KEY_SQUIRCLE_N
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def inside(t):
+        dx = (wx + t * cos_a - x) / half
+        dy = (wy + t * sin_a - y) / half
+        return abs(dx) ** n + abs(dy) ** n <= 1.0
+
+    step, t = 0.05, 0.0
+    while t <= far:
+        if inside(t):
+            lo, hi = max(t - step, 0.0), t
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                lo, hi = (lo, mid) if inside(mid) else (mid, hi)
+            return hi
+        t += step
+    return None
+
+
+def _dense(section):
+    """Points along every edge of a closed (r, z) section, PRESSED_FLANGE_STEP
+    apart."""
+    out = []
+    for a, b in zip(section, section[1:] + section[:1]):
+        count = max(1, math.ceil(math.dist(a, b) / PRESSED_FLANGE_STEP))
+        out += [
+            (a[0] + (b[0] - a[0]) * i / count, a[1] + (b[1] - a[1]) * i / count)
+            for i in range(count)
+        ]
+    return out
+
+
+def pressed_caps_clear_lobes(caps, insert):
+    """(problems, line): every cap, pressed through SWITCH_TRAVEL, keeps
+    PRESSED_FLANGE_CLEAR_MIN off every lobe of the ring insert.
+
+    The arithmetic reads each lobe's own section on each bearing of its wedge.
+    The pressed flange there is everything past the ray's entry into the flange
+    outline, from CAP_BOTTOM less SWITCH_TRAVEL up through CAP_FLANGE_T. The gap
+    is the least distance from the lobe section to that region. Then each cap
+    that the arithmetic found over a lobe is moved down SWITCH_TRAVEL and
+    intersected with the built insert, which must share no volume with it.
+    """
+    wx, wy = board.wheel_center()
+    low = case.CAP_BOTTOM - params.SWITCH_TRAVEL
+    high = low + params.CAP_FLANGE_T
+    worst = (math.inf, None, None)
+    near = set()
+    problems = []
+    for lobe in case.led_ring_lobe_refs():
+        angle = case.led_ring_lobe_bearing(lobe)
+        half = case.led_ring_lobe_half(lobe)
+        points = _dense(wheel_ring_model._lobe_section(lobe))
+        far = case.led_ring_lobe_outer_r(lobe) + 2.0
+        for cap in case.cap_refs():
+            least = math.inf
+            for i in range(PRESSED_FLANGE_BEARINGS):
+                a = angle - half + 2 * half * i / (PRESSED_FLANGE_BEARINGS - 1)
+                entry = _flange_entry(cap, a, far)
+                if entry is None:
+                    continue
+                for r, z in points:
+                    dr = max(entry - r, 0.0)
+                    dz = max(low - z, z - high, 0.0)
+                    least = min(least, math.hypot(dr, dz))
+            if least == math.inf:
+                continue
+            near.add(cap)
+            if least < worst[0]:
+                worst = (least, cap, lobe)
+            if least < PRESSED_FLANGE_CLEAR_MIN:
+                problems.append(Problem(
+                    f"{cap}'s flange, fully pressed, comes {least:.2f} from the "
+                    f"{lobe} lobe, under {PRESSED_FLANGE_CLEAR_MIN:.2f}",
+                    at=(wx + far * math.cos(angle), wy + far * math.sin(angle), low),
+                ))
+    for cap in sorted(near):
+        shared = _volume(insert.intersect(Pos(0, 0, -params.SWITCH_TRAVEL) * caps[cap]))
+        if shared > TOLERANCE:
+            problems.append(f"{cap}, fully pressed, shares {shared:.2f} mm3 with the ring insert")
+    if worst[1] is None:
+        return problems, "no cap flange stands over a lobe of the ring insert"
+    return problems, (
+        f"a fully pressed cap flange keeps {worst[0]:.2f} off the ring insert's "
+        f"lobes, at {worst[1]} over {worst[2]}, against "
+        f"{PRESSED_FLANGE_CLEAR_MIN:.2f}, and the built caps over a lobe "
+        f"({', '.join(sorted(near))}) share no volume with the built insert"
+    )
+
+
+BORE_ROUND_TOL = 0.02
+"""How far off the led_ring_bore_round() arc a built surface may read. The arc
+goes in as RING_BORE_ROUND_POINTS chords, which sag under 0.002, so this is the
+same allowance as ONE_PIECE_TOL rather than room for a missing round."""
+
+BORE_ROUND_STEP = 6
+"""Every this many loft stations, bore_round() reads both parts. The rays sit
+on stations, where the loft is the section itself."""
+
+
+def bore_round(insert, one_piece):
+    """(problems, line): the insert and the one-piece front both carry the
+    RING_BORE_ROUND arc on the ring's inner edge.
+
+    A vertical ray drops onto each part at three radii across the round, on
+    every BORE_ROUND_STEP-th station. The first surface it meets must be the
+    arc. A missing cut on the one-piece front leaves the sharp dish there, which
+    one_piece_front() cannot see, because the dish still holds the insert.
+    """
+    wx, wy = board.wheel_center()
+    radius = params.RING_BORE_ROUND
+    centre_r = case.WHEEL_OPENING_R + radius
+    worst, drop, count = 0.0, math.inf, 0
+    problems = []
+    for station in range(0, case.LED_RING_STATIONS, BORE_ROUND_STEP):
+        angle = 2 * math.pi * station / case.LED_RING_STATIONS
+        arc = case.led_ring_bore_round(angle)
+        leave, centre_z = arc[0][0], arc[-1][1]
+        bore_x = wx + case.WHEEL_OPENING_R * math.cos(angle)
+        bore_y = wy + case.WHEEL_OPENING_R * math.sin(angle)
+        drop = min(drop, case.face_floor_at(bore_x, bore_y) - centre_z)
+        for frac in (0.15, 0.5, 0.85):
+            r = case.WHEEL_OPENING_R + (leave - case.WHEEL_OPENING_R) * frac
+            want = centre_z + math.sqrt(radius ** 2 - (r - centre_r) ** 2)
+            x, y = wx + r * math.cos(angle), wy + r * math.sin(angle)
+            top = case.SHELL_FRONT + 1
+            for name, part in (("insert", insert), ("one-piece front", one_piece)):
+                runs = _ray_runs(part, (x, y, top), (x, y, case.CAVITY_FRONT))
+                if not runs:
+                    problems.append(
+                        f"the {name} has no material under the bore round at "
+                        f"{math.degrees(angle):.1f} degrees, r {r:.2f}"
+                    )
+                    continue
+                got = top - runs[0][0]
+                off = abs(got - want)
+                worst = max(worst, off)
+                count += 1
+                if off > BORE_ROUND_TOL:
+                    problems.append(
+                        f"the {name} reads {got:.3f} at {math.degrees(angle):.1f} "
+                        f"degrees, r {r:.2f}, against the bore round at "
+                        f"{want:.3f}, {off:.3f} off, wants {BORE_ROUND_TOL:.3f}"
+                    )
+    line = (
+        f"the ring's inner edge carries the {radius:.2f} bore round on the insert "
+        f"and the one-piece front: {count} readings, worst {worst:.3f} off the "
+        f"arc, and the bore wall stops at least {drop:.2f} under the sharp edge"
+    )
+    return problems, line

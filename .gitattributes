@@ -1,0 +1,5 @@
+# Generated outputs. GitHub collapses these files in pull request diffs.
+docs/readme-assets/*.svg linguist-generated=true
+docs/readme-assets/homeThingLogo*.svg -linguist-generated
+c6remote-kicad/export/** linguist-generated=true
+case/board/*.step linguist-generated=true

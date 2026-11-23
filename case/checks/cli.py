@@ -144,6 +144,7 @@ from .keypad import (
 from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
 from .shells import (
     interference,
+    ir_catch_clearance,
     ir_end_lap_wall,
     one_piece_back,
     one_piece_front,
@@ -172,6 +173,7 @@ from .wheel_ring import (
     fdm_wheel_seat,
     inner_chamfer_is_cut,
     led_ring,
+    led_ring_fit,
     light_path,
     pressed_caps_clear_lobes,
     rotation_clearance,
@@ -686,7 +688,7 @@ def _side_seam_retention(s):
         side_seam_retention(s.front, s.back),
         "both blind side pockets retain a continuous skirt floor, engage "
         "lowered detents with insertion and release ramps, preload the lower "
-        "lip, clear the upper lip, and keep lower and upper skirt land, board-edge "
+        "lip, clear the floor, upper lip and ends, and keep lower and upper skirt land, board-edge "
         "clearance, the stiffener round the grip end and its IR-end taper, "
         "flush up to the ceiling past the seam and the LED ring channel, and "
         "grip-end relief with its side tapers",
@@ -694,10 +696,19 @@ def _side_seam_retention(s):
 
 
 @_check("shells")
+def _ir_catch_clearance(s):
+    return _report(
+        ir_catch_clearance(s.front, s.back),
+        f"IR catch detents clear their window edges by {params.PCBWAY_ASSEMBLY_CLEARANCE:.2f} mm or more",
+    )
+
+
+@_check("shells")
 def _side_skirt_lead_ins(s):
     return _report(
         side_skirt_lead_ins(s.front),
-        "side support-break ramps cut across the full reinforced skirt depth",
+        "side support-break ramps cut across the full reinforced skirt depth "
+        f"with at least {params.PCBWAY_ASSEMBLY_CLEARANCE:.2f} mm of relief",
     )
 
 
@@ -738,8 +749,8 @@ def _one_piece_back(s):
         problems,
         f"the one-piece back is one solid with one shell and holds every point "
         f"of the back and the IR window on {readings['rays']} rays. It adds "
-        f"material only in the {params.IR_WINDOW_FIT:.2f} gap round the "
-        f"flange, on {readings['filled']} runs, the widest "
+        "material only in the gaps round the pane and flange, "
+        f"on {readings['filled']} runs, the widest "
         f"{readings['worst']:.3f} across",
     )
 
@@ -791,6 +802,12 @@ def _led_ring(s):
         "ring insert is solid all the way around, out from the wheel bore to "
         "the face, where the shell keeps no roof of its own",
     )
+
+
+@_check("wheel_ring")
+def _led_ring_fit(s):
+    problems, gap = led_ring_fit(s.front, s.ring_insert)
+    return _report(problems, f"front shell clears the ring insert by {gap:.3f} mm")
 
 
 @_check("wheel_ring")
@@ -1386,7 +1403,8 @@ def _one_piece_window(s):
 def _window_installation(s):
     return _report(
         window_installation(s.back, s.window),
-        f"IR insert is exterior-flush, press-held, closes the sightline, and "
+        f"IR pane and flange clear their openings by {params.PCBWAY_ASSEMBLY_CLEARANCE:.2f}, "
+        "the pane is flush at the sightline, and the insert "
         f"retains on {case.ir_window_retention():.2f} of flanged adhesive land",
     )
 

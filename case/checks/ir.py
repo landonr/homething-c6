@@ -7,6 +7,7 @@ from build123d import Box, Pos
 import board
 import case
 import params
+from model.backform import back_form
 
 from .common import (
     PROBE_D,
@@ -19,11 +20,9 @@ from .common import (
 
 
 OPENING_INSET = 0.5
-PRESS_INTERFERENCE_REQUIRED = 0.05
-"""Required interference per side, independent of production parameter."""
-PRESS_PROBE_D = 0.02
-FLANGE_OVERLAP_MIN = 0.4
-ADHESIVE_LAND_MIN = 0.4
+WINDOW_EDGE_TOL = 0.005
+"""Precision of the assembly clearance comparison, in mm."""
+WINDOW_BOND_LAND_MIN = 0.4
 EMITTER_HALF_ANGLE_REQUIRED = 15.0
 """Half-intensity angle of the INL-3AHIR30 from the optical axis."""
 EMITTER_CHAMFER_ANGLE_REQUIRED = 45.0
@@ -74,11 +73,6 @@ def _surface_run(shape, x, y):
     """
     runs = _bearing_runs(shape, x, y)
     return runs[0] if runs else None
-
-
-def _covers(shape, x, y, z):
-    """Whether this bearing is inside built material at this height."""
-    return any(lo <= z <= hi for lo, hi in _bearing_runs(shape, x, y))
 
 
 def _floor_bearing_xy():
@@ -240,93 +234,83 @@ def receiver_clearance(back, window=None):
     return []
 
 
-def window_installation(back, window):
-    """Insert is flush, press-held, flanged onto adhesive land, and closes."""
+def _window_edges():
+    """Outward normals at the four flats and four rounded corners."""
     x0, x1, y0, y1 = _receiver_span()
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    radius = params.IR_WINDOW_R
+    corner_component = math.sqrt(0.5)
+    yield from (
+        (x0, cy, -1, 0), (x1, cy, 1, 0), (cx, y0, 0, -1), (cx, y1, 0, 1),
+    )
+    inset = radius * (1 - corner_component)
+    for x, sx in ((x0, -1), (x1, 1)):
+        for y, sy in ((y0, -1), (y1, 1)):
+            yield x - sx * inset, y - sy * inset, sx * corner_component, sy * corner_component
+
+
+def _window_edge_clearances(back, window):
+    """Read both gaps and the bond land between the built mating edges."""
     problems = []
-
-    press = max(params.IR_WINDOW_PRESS, PRESS_INTERFERENCE_REQUIRED)
-    inside = PRESS_PROBE_D / 2
-    press_points = (
-        (x0 - press + inside, cy),
-        (x1 + press - inside, cy),
-        (cx, y0 - press + inside),
-        (cx, y1 + press - inside),
-    )
-    for x, y in press_points:
-        shell = _surface_run(back, x, y)
-        if shell is None:
+    minimum = params.PCBWAY_ASSEMBLY_CLEARANCE
+    for x, y, nx, ny in _window_edges():
+        shoulder = _surface_run(back, x + 0.03 * nx, y + 0.03 * ny)
+        overlap = params.IR_WINDOW_FLANGE / 2
+        bond_point = (x + overlap * nx, y + overlap * ny)
+        seat = _surface_run(back, *bond_point)
+        flange = _surface_run(window, *bond_point)
+        if shoulder is None or seat is None or flange is None:
             problems.append(Problem(
-                "no built back-shell material beside U2's aperture",
-                at=(x, y, 0.0), part="case-back",
+                "IR flange or shell shoulder is absent at the adhesive land",
+                at=(x, y, 0.0), part="ir-window",
             ))
-            break
-        press_z = shell[0] + params.IR_WINDOW_T / 2
-        probe = Pos(x, y, press_z) * Box(PRESS_PROBE_D, PRESS_PROBE_D, PRESS_PROBE_D)
-        if _fill_fraction(window, probe) < 0.8 or _fill_fraction(back, probe) < 0.8:
+            continue
+        if abs(flange[0] - seat[1]) > TOLERANCE:
             problems.append(Problem(
-                f"IR insert does not fill the full {press:.2f} press band "
-                "at every bearing",
-                at=(x, y, press_z), box=probe, part="ir-window",
+                "IR flange does not seat on the shell shoulder",
+                at=(*bond_point, seat[1]), part="case-back",
             ))
-            break
-        # Shell and insert are read on one bearing, so the exterior's own rise
-        # cancels out and what is left is the step across the seam.
-        flush_error = _surface_run(window, x, y)[0] - shell[0]
-        if abs(flush_error) > TOLERANCE:
+        # Start inside the pane and end beyond the outer flange rebate.
+        inward = OPENING_INSET
+        outward = params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT + OPENING_INSET
+        edges = {}
+        for name, run in (("pane", shoulder), ("flange", flange)):
+            z = sum(run) / 2
+            start = (x - inward * nx, y - inward * ny, z)
+            end = (x + outward * nx, y + outward * ny, z)
+            shell_runs = _ray_runs(back, start, end)
+            insert_runs = _ray_runs(window, start, end)
+            if not shell_runs or not insert_runs:
+                problems.append(Problem(
+                    f"IR {name} clearance probe misses a mating edge",
+                    at=(x, y, z), part="ir-window",
+                ))
+                continue
+            shell_edge = shell_runs[0][0]
+            insert_edge = insert_runs[-1][1]
+            gap = shell_edge - insert_edge
+            if gap < minimum - WINDOW_EDGE_TOL:
+                problems.append(Problem(
+                    f"IR {name} clearance is {gap:.3f} mm, wants {minimum:.2f} mm",
+                    at=(x, y, z), part="ir-window",
+                ))
+            edges[name] = (shell_edge, insert_edge)
+        if "pane" in edges and "flange" in edges:
+            land = edges["flange"][1] - edges["pane"][0]
+            if land >= WINDOW_BOND_LAND_MIN:
+                continue
             problems.append(Problem(
-                f"IR insert exterior is {flush_error:+.2f} mm from the built "
-                "back surface",
-                at=(x, y, shell[0]), part="ir-window",
-            ))
-            break
-
-    overlap = params.IR_WINDOW_FLANGE / 2
-    flange_points = (
-        (x1 + overlap, cy),
-        (x0 - overlap, cy),
-        (cx, y1 + overlap),
-        (cx, y0 - overlap),
-    )
-    for x, y in flange_points:
-        shoulder = _surface_run(back, x, y)
-        if shoulder is None:
-            problems.append(Problem(
-                "IR insert flange has no continuous shell shoulder for adhesive",
-                at=(x, y, 0.0), part="case-back",
-            ))
-            break
-        depth = shoulder[1] - shoulder[0]
-        if abs(depth - params.IR_WINDOW_T) > TOLERANCE:
-            problems.append(Problem(
-                f"shell shoulder stands {depth:.2f} mm off the exterior here, "
-                f"wants the pane's {params.IR_WINDOW_T:.2f}",
-                at=(x, y, shoulder[1]), part="case-back",
-            ))
-            break
-        if not _covers(window, x, y, shoulder[1] + PRESS_PROBE_D):
-            problems.append(Problem(
-                "IR insert flange does not overlap the aperture on every side",
+                f"IR adhesive land is {land:.2f} mm, wants {WINDOW_BOND_LAND_MIN:.2f} mm",
                 at=(x, y, shoulder[1]), part="ir-window",
             ))
-            break
+    return problems
 
-    # Both of these are read off the parameters rather than off a probe, so the
-    # insert as a whole is the most either can point at.
-    held = case.ir_window_retention()
-    if held < FLANGE_OVERLAP_MIN:
-        problems.append(Problem(
-            f"IR insert retention is {held:.2f}, wants {FLANGE_OVERLAP_MIN:.2f}",
-            part="ir-window",
-        ))
-    land = params.IR_WINDOW_FLANGE - params.IR_WINDOW_PRESS
-    if land < ADHESIVE_LAND_MIN:
-        problems.append(Problem(
-            f"IR adhesive land is {land:.2f}, wants {ADHESIVE_LAND_MIN:.2f}",
-            part="ir-window",
-        ))
 
+def window_installation(back, window):
+    """Check the pane, adhesive shoulder, and both fitted clearances."""
+    x0, x1, y0, y1 = _receiver_span()
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    problems = _window_edge_clearances(back, window)
     pane = _surface_run(window, cx, cy)
     if pane is None:
         problems.append(Problem(
@@ -334,6 +318,12 @@ def window_installation(back, window):
             at=(cx, cy, 0.0), part="ir-window",
         ))
     else:
+        exterior = _surface_run(back_form(0, 0), cx, cy)
+        if exterior is None or abs(pane[0] - exterior[0]) > TOLERANCE:
+            problems.append(Problem(
+                "IR pane is not flush with the back form at the optical centreline",
+                at=(cx, cy, pane[0]), part="ir-window",
+            ))
         closure = Pos(cx, cy, pane[0] + params.IR_WINDOW_T / 2) * Box(
             PROBE_D, PROBE_D, params.IR_WINDOW_T
         )

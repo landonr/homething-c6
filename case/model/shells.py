@@ -322,8 +322,9 @@ def side_catch_detent_z():
             f"SIDE_CATCH_PRELOAD {preload} must be above zero and below the "
             f"detent's {engage:.2f} reach past the skirt face"
         )
-    if not engage < params.SIDE_CATCH_POCKET_DEPTH:
-        raise ValueError("side catch detent tip reaches the pocket floor")
+    floor_gap = params.SIDE_CATCH_POCKET_DEPTH - engage
+    if floor_gap + 1e-9 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+        raise ValueError(f"side catch detent tip clears the pocket floor by only {floor_gap:.3f} mm")
     pocket0 = side_catch_bottom()
     pocket1 = pocket0 + params.SIDE_CATCH_H
     land0 = pocket0 + (engage - preload) / slope
@@ -610,9 +611,9 @@ def back_shell(one_piece=False):
     """The back shell. `one_piece` fuses the IR window into it.
 
     The one-piece back is for a clear SLA print, so the demo set needs no
-    separate window. It is the back shell with ir_window() fused in and the
-    IR_WINDOW_FIT gap round the flange closed. ir_window_well() and
-    ir_window_step() replace the opening and the rebate, so U2's beam crosses
+    separate window. The fused window fills both the pane and flange gaps.
+    ir_window_well() and ir_window_step() replace the opening and the rebate,
+    so U2's beam crosses
     the same IR_WINDOW_T as through the pane. Everything else is the back's,
     so the same front and screw fit it.
 
@@ -711,12 +712,10 @@ def front_shell(fdm=False, one_piece=False):
     one solid for a clear SLS or SLA print. Each fit between the two parts
     closes to an overlap:
 
-    - The band fills the ring bore with RING_INSERT_FACE_FIT at its face. With
-      that fit at an overlap, the band and the bore cancel. So this front does
-      not cut led_ring_channel(), and the ring stays shell. The face over the
-      ring is then the dish itself, with no joint line.
-    - Each lobe pocket holds its flare with RING_LOBE_FIT all round. The
-      pockets are part of led_ring_channel(), so they cancel the same way.
+    - This front keeps shell material across the ring bore. The face over the
+      ring follows the dish with no joint line.
+    - The lobe pockets are part of led_ring_channel(), so this front keeps
+      their material too.
     - Each lobe stops RING_LOBE_FIT under the cavity ceiling.
       led_ring_lobe_fills() closes that gap. They go in before the key cuts,
       so a counterbore over a lobe stays open.

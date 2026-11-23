@@ -72,12 +72,10 @@ def ir_window_rebate():
 def ir_window():
     """Exterior-flush stepped insert, installed through back shell from inside.
 
-    Pane follows the actual back-form surface and carries IR_WINDOW_PRESS into
-    aperture on every side. Interior flange is an open ring: optical centre
-    crosses only IR_WINDOW_T, while ring supplies outward retention and adhesive
-    land on shell shoulder.
+    The pane follows the back form and clears the aperture on all sides.
+    The open flange retains the insert and gives the adhesive a continuous land.
     """
-    pane = _surface_layer(params.IR_WINDOW_PRESS, 0, params.IR_WINDOW_T)
+    pane = _surface_layer(-params.IR_WINDOW_PANE_CLEARANCE, 0, params.IR_WINDOW_T)
     flange = _surface_layer(
         params.IR_WINDOW_FLANGE,
         params.IR_WINDOW_T,
@@ -96,10 +94,9 @@ def ir_window_well():
 def ir_window_step():
     """The one-piece back's rebate above the flange top.
 
-    The one-piece back is the back shell with ir_window() fused in and the
-    IR_WINDOW_FIT gap round the flange closed. The pane fills the opening and
-    the flange fills the rebate up to its top. So this step and
-    ir_window_well() are the only cuts left of the opening and the rebate.
+    The one-piece back fills the pane and flange gaps. Its pane fills the
+    opening, and its flange fills the rebate up to its top. This step and
+    ir_window_well() replace the opening and the rebate.
     """
     return _isect(
         _bottom_prism(params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT),
@@ -108,8 +105,8 @@ def ir_window_step():
 
 
 def ir_window_retention():
-    """Flange left outside pane's press band, per side."""
-    return params.IR_WINDOW_FLANGE - params.IR_WINDOW_PRESS
+    """Flange overlap on the shell shoulder, per side."""
+    return params.IR_WINDOW_FLANGE
 
 
 def emitter_bore():

@@ -185,7 +185,7 @@ The one-piece back has no separate IR window, so it cannot be an opaque resin ei
 
 The insert goes in from inside the shell before the board. It rises straight up, and nothing on it is wider than the cavity wall it passes. Six lobes reach down over the six LEDs, and each lobe tucks under a land of shell. As a result, the part cannot pass outward through the face.
 
-Nothing holds it the other way, so bond it while the front shell lies face down. Use the same adhesive as the IR window.
+Bond the insert with the front shell face down. Centre the insert in the bore and hold it flush with the front face until the adhesive sets. Use the same adhesive as the IR window.
 
 The insert has six feet on its underside, one in each gap between the LEDs. Each is a sector of the band it hangs off. Outward, its face is an arc on the ring's outline, so no corner stands past the round outer face. Do not make the feet boxes, because the corners of a flat face break that line. Inward, each stops on `LIP_CLEAR_R`, which is the wheel's own rotating clearance rather than the band's inner edge. The band's underside steps down on the same radius, so each foot is flush with it. They are a limit and not a seat. At rest they touch nothing. If the bond fails, they land on the board and stop the part, so it cannot reach the ENC1 flange. Do not cut them back to make the insert sit lower.
 
@@ -269,7 +269,9 @@ For transparent resin, PCBWay asks for walls of "at least 0.8 mm". Thinner clear
 
 If a wall is thinner than the minimum, PCBWay suspends the order. It sends photos that show the thin areas in red. You then accept the risk or make the wall thicker. The order page has an option to accept the risk before the review.
 
-PCBWay does not publish a minimum hole size or a minimum embossed or engraved detail. It also does not publish a clearance between parts or rules for drain holes and overhangs.
+PCBWay does not publish a minimum hole size or a minimum embossed or engraved detail. It also does not publish rules for drain holes and overhangs.
+
+For this order, PCBWay requires at least 0.20 mm nominal clearance at free mating edges. Obtain PCBWay approval for any required exception at a latch, seat, or other intentional contact.
 
 `LED_RING_FACE_ROOF` is equal to the SLS minimum in the first table, so it keeps a margin over the SLA minimum. It sets the land of shell over each lobe pocket, which is the only shell the SLA front keeps over the LED ring. `RING_LAND_MIN` in `case/checks/wheel_ring.py` holds that land to a floor just under this value. `ROOF_LEFT_MIN` holds the FDM front's own channel roof.
 
@@ -301,6 +303,8 @@ The vendor tolerance is close to the size of these print fits, so a printed fit 
 - `KEY_CLEARANCE` round the SW1 and SW2 keytops in their holes
 - `WHEEL_OPENING_CLEARANCE` between the wheel and its bore
 - `SKIRT_FIT` in the lap joint between the shells
+- `RING_INSERT_FACE_FIT` at the ring bore and `RING_LOBE_FIT` at the lobe pockets
+- `IR_WINDOW_PANE_CLEARANCE` at the aperture and `IR_WINDOW_FIT` at the flange rebate
 
 Check these fits on the first print.
 
@@ -320,9 +324,11 @@ Every dish follows the face, so the bore rim is lower at the east and west sides
 
 The SLA front keeps no shell over the LED ring. The Taurus shell passes no light at any thickness, so a roof of shell would make the ring dark. In a material that passes light, a roof thin enough to light up is also under the PCBWay minimum wall. So `led_ring_channel()` bores one circle from the cavity ceiling clear through the face, and `c6remote-ring-insert.stl` fills it. As a result, the front shell has no thin sheet, and the lit band runs in to the knob.
 
-`led_ring_face_r()` is that circle. It stands `RING_LIFT_CLEAR` inside the cavity wall where the wall comes closest to the wheel, and it is the same on every bearing. As a result, the opening in the face is round, and the insert clears the wall as it rises.
+`led_ring_face_r()` is that circle. At the closest point, the circle stands `RING_LIFT_CLEAR` inside the cavity wall. The insert has a radial gap of `RING_INSERT_FACE_FIT` to the bore, so it has additional clearance from the wall during insertion.
 
 The ring stops short of the LEDs, so each LED gets a lobe on the insert. A lobe is a dome over its LED, a wall outside the dome's rim, and a 45 degree flare back up into the shell. The flare carries that LED's light into the band. It also holds the insert in: the shell opens a pocket for each flare and keeps `LED_RING_FACE_ROOF` of land over it.
+
+`RING_LOBE_FIT` sets the clearance perpendicular to the flare, pocket sides, and flat roof.
 
 The rim of each dome sits `RING_LOBE_WRAP` under its LED's top face, so the dome wraps the package instead of covering it. `led_ring_lobe_rim_r()` solves for the rim radius that leaves `RING_LOBE_GAP` of air over the LED's outer corner.
 
@@ -382,12 +388,11 @@ Use this front only for a clear or translucent print. The light of the LEDs reac
 
 On a clear print, the whole front glows, not only the ring. The light enters through the lobes and spreads through all of the shell.
 
-The two-part build has a fit at each place where the insert meets the shell. On this front, each of those fits closes, so no slit or void stays between the two parts:
+This front has a continuous surface across the separate insert's joint line:
 
-- The band of the insert fills the ring bore with `RING_INSERT_FACE_FIT` at its face. With that fit closed, the band and the bore cancel, so this front keeps the ring as shell. The face over the ring is the dish itself, with no joint line.
+- The shell keeps its own material across the ring bore. The face over the ring is part of the dish.
 - The ring's inner edge takes the same `RING_BORE_ROUND` as the insert. A cut of the same arc makes it, so the two builds show the same edge.
-- Each lobe pocket keeps `RING_LOBE_FIT` round the flare of its lobe. The pockets and the flares cancel in the same way.
-- Each lobe stops `RING_LOBE_FIT` under the cavity ceiling. `led_ring_lobe_fills()` closes that gap. Each fill continues the `RING_LOBE_SHOULDER` chamfer up to the ceiling, so a pressed SW6 flange meets the same surface as on the two-part build.
+- Each lobe joins the shell without a pocket. `led_ring_lobe_fills()` closes the gap below the cavity ceiling and continues the `RING_LOBE_SHOULDER` chamfer up to the ceiling. This clears the path of the SW6 flange.
 
 The fills go in before the key cuts, so a counterbore over a lobe stays open. The six lobes go in after all the cuts, so no cut changes them, and their domes hang over the LEDs as on the insert.
 
@@ -414,8 +419,8 @@ In UTR-8100, ask for the transparent finish with spray varnish, not the transluc
 
 The two-part back has a fit at each place where the window meets the shell. On this back, each fit closes:
 
-- The pane presses `IR_WINDOW_PRESS` into the opening. The pane and the opening cancel, so the exterior has no joint line.
-- The flange keeps `IR_WINDOW_FIT` round its edge for adhesive. On this back, that gap is shell.
+- The pane clears the opening by `IR_WINDOW_PANE_CLEARANCE` per side. The one-piece back fills this gap, so the exterior has no joint line.
+- The flange keeps `IR_WINDOW_FIT` round its edge for adhesive. The one-piece back fills this gap too.
 
 Two cuts stay. `ir_window_well()` is the open centre of the flange. It stops `IR_WINDOW_T` above the exterior, so U2 looks through the same resin thickness as through the pane. `ir_window_step()` is the rebate above the flange top, so U2 keeps the same clearance.
 
@@ -465,6 +470,7 @@ The back detents ramp on both sides so the shells can be opened for service.
 Each back detent sits lower than its pocket and bears on the lower lip with a light preload.
 The preload holds the seam closed.
 `SIDE_CATCH_LOWER_LAND` sets the lower lip height, and `SIDE_CATCH_PRELOAD` sets the preload.
+The lower lip and seam shoulder are contact surfaces. The free catch edges and the skirt lead-ins have 0.20 mm minimum nominal clearance.
 
 One M2 x 5 cheese head screw secures the grip end. It enters horizontally through the back shell's negative Y end wall and cuts its own thread in a block behind the front skirt. Use a flat-blade screwdriver.
 
@@ -482,10 +488,10 @@ To open the port, remove the cover before you install the board. Break both brid
 
 Prepare the back shell first. If you use the SLA one-piece back, omit these steps:
 
-1. Insert the IR window from inside the back shell.
-2. Make the pane flush with the outside surface.
-3. Apply adhesive to the continuous shoulder below the interior flange.
-4. Let the adhesive set.
+1. Apply adhesive to the continuous shoulder below the interior flange.
+2. Insert the IR window from inside the back shell.
+3. Centre the pane in the aperture and make it flush with the outside surface.
+4. Hold the pane centred and flush until the adhesive sets.
 
 Prepare the battery before shell assembly. Use the PicoBlade plug for J1. The model reserves a wire path from the connector, but does not measure the mating plug. Verify the plug and wire fit on the first print. Stretch-release adhesive strips hold the pouch cell:
 
@@ -548,7 +554,7 @@ On the first print, make sure that SW1 and SW2 operate and do not bind. Each V3 
 
 `U2` receives infrared light through the back face along negative Z. Its opening includes the receiver body and lead envelope.
 
-The IR window insert enters this opening from inside. Its exterior pane must be flush with the back shell.
+The IR window insert enters this opening from inside. The pane and flange each have 0.20 mm clearance per side. The flange bears on its adhesive shoulder, and the exterior pane must be flush with the back shell.
 
 `D1` emits through a separate bore in the positive Y end wall. A 45 degree chamfer clears the 15 degree half-intensity angle on each side of the emitter axis.
 

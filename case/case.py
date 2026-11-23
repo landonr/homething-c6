@@ -26,10 +26,10 @@ reprint rather than a new pad. Each is captive: a flange at its base rides a
 counterbore in the ceiling, so it drops in from inside and cannot fall out.
 
 The IR window insert closes the receiver's rounded -Z aperture in the back
-floor. Its pane follows the built back contour, presses into the aperture, and
-lands flush outside; its open interior flange retains on a continuous shell
-shoulder that also carries adhesive. It installs from inside the back shell
-before the shells close. The emitter fires along +Y through a separate flared bore.
+floor. Its pane follows the back contour and sits flush in the aperture.
+The open flange rests on a continuous shoulder for adhesive. The insert fits
+inside the back shell before the shells close. The emitter fires along +Y
+through a separate flared bore.
 The one-piece back fuses the window into the back shell for a clear print.
 
     python case.py            write an STL for each part, shells, pad, window

@@ -249,6 +249,7 @@ def _lobe_params():
         _reads("wheel_ring._lobe_section")
         + _reads("wheel_ring.led_ring_lobe_lid")
         + _reads("wheel_ring.led_ring_lobe_flare")
+        + _reads("wheel_ring.led_ring_insert_outer_r")
         + _reads("wheel_ring.led_ring_lobe_rim_r")
         + _reads("wheel_ring.led_ring_lobe_blend_r")
         + _reads("wheel_ring.led_ring_lobe_half")
@@ -400,6 +401,7 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False, one_piece=False)
                     _reads("wheel_ring.led_ring_channel")
                     + _reads("wheel_ring.led_ring_face_r")
                     + _reads("wheel_ring._lobe_pocket_section")
+                    + _reads("wheel_ring.led_ring_lobe_pocket_half")
                     + _reads("wheel_ring.led_ring_lobe_flare")
                     + _reads("wheel_ring.led_ring_lobe_land_z")
                 )),
@@ -730,7 +732,7 @@ def _ring_insert():
             wheel_ring.led_ring_insert(),
             sorted(set(
                 _reads("wheel_ring.led_ring_insert")
-                + _reads("wheel_ring._insert_section")
+                + _reads("wheel_ring.led_ring_insert_outer_r")
                 + _reads("wheel_ring.led_ring_bore_round")
                 + _reads("wheel_ring._lobe_section")
                 + _reads("wheel_ring.led_ring_lobe_flare")
@@ -747,7 +749,7 @@ def _window():
     The two layers are rebuilt here the way ir_window() fuses them, since the
     part is the fusion and carries no separate handle on either half.
     """
-    pane = ir._surface_layer(params.IR_WINDOW_PRESS, 0, params.IR_WINDOW_T)
+    pane = ir._surface_layer(-params.IR_WINDOW_PANE_CLEARANCE, 0, params.IR_WINDOW_T)
     flange = ir._surface_layer(
         params.IR_WINDOW_FLANGE,
         params.IR_WINDOW_T,
@@ -760,7 +762,7 @@ def _window():
             "ir.ir_window",
             "add",
             pane,
-            ["IR_WINDOW_PRESS", "IR_WINDOW_T"],
+            ["IR_WINDOW_PANE_CLEARANCE", "IR_WINDOW_T"],
         ),
         _entry(
             "flange",

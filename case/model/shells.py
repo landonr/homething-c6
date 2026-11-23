@@ -75,6 +75,7 @@ from .usb import round_usb_boot_rim, usb_boot_pocket, usb_slot
 from .wheel_ring import (
     led_ring_bore_round_cut,
     led_ring_channel,
+    led_ring_flange_relief,
     led_ring_lobe_fills,
     led_ring_lobes,
     wheel_lip_relief,
@@ -807,4 +808,6 @@ def front_shell(fdm=False, one_piece=False):
     )
     if one_piece:
         shell = _fuse(shell, *led_ring_lobes())
+    elif not fdm:
+        shell = _cut(shell, led_ring_flange_relief())
     return shell

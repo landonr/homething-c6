@@ -65,6 +65,7 @@ import case
 import params
 from build123d import Cylinder, Pos
 from model import wheel_ring as wheel_ring_model
+from model.stack import SKIRT_BOTTOM
 
 from .common import (
     CROP_MARGIN,
@@ -724,6 +725,101 @@ def led_ring_fit(front, insert):
             )
 
     return problems, min(gaps, default=math.inf)
+
+
+FLANGE_PROBE_TOL = 1e-5
+"""Numerical allowance for rays against coincident BRep boundaries."""
+
+
+def led_ring_flange_fit(front, insert, pad, caps):
+    """The built seam is backed by the insert and has room to assemble."""
+    wx, wy = board.wheel_center()
+    bore = case.led_ring_face_r()
+    band = wheel_ring_model.led_ring_insert_outer_r()
+    outer = wheel_ring_model.led_ring_flange_outer_r()
+    low, high = wheel_ring_model.led_ring_flange_z()
+    clearance = params.PCBWAY_ASSEMBLY_CLEARANCE
+    problems = []
+    for station in range(case.LED_RING_STATIONS):
+        # Stay off shared loft edges, including at the two narrow side walls.
+        angle = math.tau * (station + 0.01) / case.LED_RING_STATIONS
+        ux, uy = math.cos(angle), math.sin(angle)
+        label = f"at {math.degrees(angle):.1f} degrees"
+
+        def point(radius, z):
+            return wx + radius * ux, wy + radius * uy, z
+
+        seam_z = min(
+            case.face_floor_at(*point(radius, 0)[:2]) for radius in (band, bore)
+        ) - 0.15
+        start_r = band - clearance
+        start, end = point(start_r, seam_z), point(bore + clearance, seam_z)
+        insert_runs = _ray_runs(insert, start, end)
+        front_runs = _ray_runs(front, start, end)
+        if not insert_runs or not front_runs:
+            problems.append(Problem(f"the ring seam has no opposing edges {label}", at=start))
+            continue
+        seam_in = start_r + insert_runs[0][1]
+        seam_out = start_r + front_runs[0][0]
+        if seam_out <= seam_in:
+            problems.append(Problem(f"the ring seam is closed {label}", at=start))
+            continue
+
+        depth = seam_z - case.BOARD_TOP
+        for fraction in (0.1, 0.5, 0.9):
+            r = seam_in + fraction * (seam_out - seam_in)
+            x, y, _ = point(r, seam_z)
+            start = (x, y, seam_z)
+            if not _ray_runs(insert, start, point(r, case.BOARD_TOP)):
+                problems.append(Problem(
+                    f"the ring seam opens toward the PCB {label}", at=start,
+                ))
+                break
+            # Exercise inward, outward and tangential sightlines at 45 degrees.
+            for dx, dy in ((ux, uy), (-ux, -uy), (-uy, ux), (uy, -ux)):
+                end = (x + depth * dx, y + depth * dy, case.BOARD_TOP)
+                if not _ray_runs(insert, start, end) and not _ray_runs(front, start, end):
+                    problems.append(Problem(
+                        f"the ring seam has an oblique PCB sightline {label}", at=start,
+                    ))
+                    break
+
+        # The flange overlaps the shell here. Read both facing surfaces above
+        # the flange midplane so a covered seam alone cannot hide a collision.
+        start = point((bore + outer) / 2, (low + high) / 2)
+        end = (*start[:2], case.SHELL_FRONT + 1)
+        flange_runs = _ray_runs(insert, start, end)
+        roof_runs = _ray_runs(front, start, end)
+        if not flange_runs or flange_runs[0][0] > FLANGE_PROBE_TOL or not roof_runs:
+            problems.append(Problem(f"the ring flange lacks an overlapping seat {label}", at=start))
+        else:
+            gap = roof_runs[0][0] - flange_runs[0][1]
+            if gap < clearance - FLANGE_PROBE_TOL:
+                problems.append(Problem(
+                    f"the ring flange has only {gap:.3f} mm of height clearance {label}",
+                    at=start,
+                ))
+
+        # Confirm the shell stays out of the edge-clearance cylinder all the
+        # way from the back of the skirt to the height of the seated flange.
+        sweep_r = outer + clearance - FLANGE_PROBE_TOL
+        start = point(sweep_r, SKIRT_BOTTOM - clearance)
+        if _ray_runs(front, start, point(sweep_r, high)):
+            problems.append(Problem(f"the ring flange insertion path is obstructed {label}", at=start))
+
+    flange = wheel_ring_model.led_ring_flange()
+    if _volume(flange.intersect(pad)) > TOLERANCE:
+        problems.append(Problem("the keypad pad intersects the ring flange"))
+    for ref, cap in caps.items():
+        bounds = cap.bounding_box()
+        if bounds.min.Z - params.SWITCH_TRAVEL >= high or bounds.max.Z <= low:
+            continue
+        if any(
+            _volume(flange.intersect(Pos(0, 0, -travel) * cap)) > TOLERANCE
+            for travel in (0, params.SWITCH_TRAVEL)
+        ):
+            problems.append(Problem(f"{ref} intersects the ring flange during key travel"))
+    return problems
 
 
 INNER_CHAMFER_TOLERANCE = 0.05

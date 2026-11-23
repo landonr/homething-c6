@@ -183,7 +183,7 @@ The one-piece front has no separate insert, so it cannot be Taurus. Print the wh
 
 The one-piece back has no separate IR window, so it cannot be an opaque resin either. Print the whole back in clear resin. Read [SLA one-piece back](#sla-one-piece-back).
 
-The insert goes in from inside the shell before the board. It rises straight up, and nothing on it is wider than the cavity wall it passes. Six lobes reach down over the six LEDs, and each lobe tucks under a land of shell. As a result, the part cannot pass outward through the face.
+Install the insert from inside the shell before you install the board. The flange passes through the relief in the cavity wall. The six lobes sit over the LEDs and under the shell lands. The shell lands prevent the insert from passing outward through the face.
 
 Bond the insert with the front shell face down. Centre the insert in the bore and hold it flush with the front face until the adhesive sets. Use the same adhesive as the IR window.
 
@@ -325,6 +325,8 @@ Every dish follows the face, so the bore rim is lower at the east and west sides
 The SLA front keeps no shell over the LED ring. The Taurus shell passes no light at any thickness, so a roof of shell would make the ring dark. In a material that passes light, a roof thin enough to light up is also under the PCBWay minimum wall. So `led_ring_channel()` bores one circle from the cavity ceiling clear through the face, and `c6remote-ring-insert.stl` fills it. As a result, the front shell has no thin sheet, and the lit band runs in to the knob.
 
 `led_ring_face_r()` is that circle. At the closest point, the circle stands `RING_LIFT_CLEAR` inside the cavity wall. The insert has a radial gap of `RING_INSERT_FACE_FIT` to the bore, so it has additional clearance from the wall during insertion.
+
+The flange extends 0.30 mm beyond the bore all around the insert. This overlap blocks the direct view of the PCB through the seam. The relief gives the flange 0.20 mm clearance at its top and outer edge.
 
 The ring stops short of the LEDs, so each LED gets a lobe on the insert. A lobe is a dome over its LED, a wall outside the dome's rim, and a 45 degree flare back up into the shell. The flare carries that LED's light into the band. It also holds the insert in: the shell opens a pocket for each flare and keeps `LED_RING_FACE_ROOF` of land over it.
 

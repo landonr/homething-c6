@@ -60,6 +60,7 @@ from model.stack import (
 )
 from model.support import front_support_cuts
 from model.usb import usb_slot
+from model.wheel_ring import led_ring_flange_outer_r, led_ring_flange_relief
 
 from .common import (
     CROP_MARGIN,
@@ -422,12 +423,12 @@ def side_seam_retention(front, back):
         probe(crop, f"{name} full stiffener past its taper at y {at:.2f}", (x, at, taper_z),
               (0.06, 0.2, 0.2), True)
 
-    # The stiffener reaches the ceiling, so the wall has no step at the seam or
-    # where the LED ring channel meets it beside the wheel.
+    # Check the seam and the stiffener outside the ring flange relief.
     flush = params.BOARD_FIT - 0.1
     flush_z = SHELL_SEAM + 0.3
     side_y = shells.side_catch_y() - params.SIDE_CATCH_W / 2 - 0.7
-    _, wheel_y = board.wheel_center()
+    wheel_x, wheel_y = board.wheel_center()
+    flange_relief = led_ring_flange_outer_r() + params.PCBWAY_ASSEMBLY_CLEARANCE
     grip_x = (wall_x0 + wall_x1) / 2
     sites = []
     for side, edge, name in (
@@ -438,9 +439,21 @@ def side_seam_retention(front, back):
             f"{name} inner wall flush above the seam at y {side_y:.2f}",
             (edge + side * flush, side_y, flush_z), (0.06, 0.2, 0.2),
         ))
-        sites.append((
-            f"{name} inner wall flush under the LED ring channel at y {wheel_y:.2f}",
-            (edge + side * flush, wheel_y, CAVITY_FRONT - 0.3), (0.06, 0.2, 0.2),
+        section = edge + side * flush
+        next_to_relief = wheel_y + math.sqrt(max(
+            (flange_relief + 0.2) ** 2 - (section - wheel_x) ** 2, 0.0
+        ))
+        sites.extend((
+            (
+                f"{name} wall behind the ring flange relief",
+                (wheel_x + side * (flange_relief + 0.1), wheel_y, CAVITY_FRONT - 0.3),
+                (0.06, 0.2, 0.2),
+            ),
+            (
+                f"{name} stiffener beside the ring flange relief",
+                (section, next_to_relief, CAVITY_FRONT - 0.3),
+                (0.06, 0.2, 0.2),
+            ),
         ))
     sites.append((
         f"grip end inner wall flush above the seam at x {grip_x:.2f}",
@@ -485,6 +498,7 @@ def side_skirt_lead_ins(front):
     board_box = board.board_profile().bounding_box()
     middle_y = board_box.center().Y
     runs = front_support_cuts()
+    flange_relief = led_ring_flange_relief()
     for side, edge, name in (
         (-1, board_box.min.X, "-X"),
         (1, board_box.max.X, "+X"),
@@ -519,15 +533,25 @@ def side_skirt_lead_ins(front):
                 ("skirt after ramp", edge_y + run_length + 0.35, True),
             ):
                 probe = Pos(x, y, z) * Box(0.12, 0.12, 0.12)
-                filled = cropped.fill_fraction(probe)
-                if (should_be_material and filled < 0.9) or (
-                    not should_be_material and filled > 0.1
-                ):
-                    problems.append(Problem(
-                        f"{name} {position} {label} is {filled:.0%} material, "
-                        f"expected {'solid' if should_be_material else 'open'}",
-                        box=probe,
-                    ))
+                if should_be_material and position == "reinforced inner":
+                    # At the wheel the relief can cross the surviving strip.
+                    # Check the material and the intended opening separately.
+                    sites = (
+                        (label, Compound(_solids(probe.cut(flange_relief))), True),
+                        ("ring flange relief", Compound(_solids(probe.intersect(flange_relief))), False),
+                    )
+                else:
+                    sites = ((label, probe, should_be_material),)
+                for site, shape, solid in sites:
+                    if _volume(shape) < 1e-6:
+                        continue
+                    filled = cropped.fill_fraction(shape)
+                    if (solid and filled < 0.9) or (not solid and filled > 0.1):
+                        problems.append(Problem(
+                            f"{name} {position} {site} is {filled:.0%} material, "
+                            f"expected {'solid' if solid else 'open'}",
+                            box=shape,
+                        ))
             # Subtract the ramp's reach below the roof to read the flat relief.
             below_roof = 0.05
             fit_z = SKIRT_BOTTOM + height - below_roof

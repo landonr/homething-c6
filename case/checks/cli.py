@@ -174,6 +174,7 @@ from .wheel_ring import (
     inner_chamfer_is_cut,
     led_ring,
     led_ring_fit,
+    led_ring_flange_fit,
     light_path,
     pressed_caps_clear_lobes,
     rotation_clearance,
@@ -253,7 +254,7 @@ class Solids:
 
     @functools.cached_property
     def ring_insert_footless(self):
-        return case.led_ring_insert(feet=False)
+        return case.led_ring_insert(feet=False, flange=False)
 
     @functools.cached_property
     def front_with_ring(self):
@@ -808,6 +809,15 @@ def _led_ring(s):
 def _led_ring_fit(s):
     problems, gap = led_ring_fit(s.front, s.ring_insert)
     return _report(problems, f"front shell clears the ring insert by {gap:.3f} mm")
+
+
+@_check("wheel_ring")
+def _led_ring_flange_fit(s):
+    return _report(
+        led_ring_flange_fit(s.front, s.ring_insert, s.pad, s.caps),
+        f"ring flange blocks PCB sightlines and keeps "
+        f"{params.PCBWAY_ASSEMBLY_CLEARANCE:.2f} mm assembly clearance",
+    )
 
 
 @_check("wheel_ring")
@@ -1677,7 +1687,7 @@ _CACHED_SOLIDS = {
     "front_one_piece": lambda: [functools.partial(case.front_shell, one_piece=True)],
     "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
     "led_ring_insert_footless": lambda: [
-        functools.partial(case.led_ring_insert, feet=False)
+        functools.partial(case.led_ring_insert, feet=False, flange=False)
     ],
     "pad": lambda: [functools.partial(case.button_pad)],
     "pad_fdm": lambda: [functools.partial(case.button_pad, fdm=True)],

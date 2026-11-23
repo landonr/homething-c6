@@ -476,6 +476,15 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False, one_piece=False)
                    _lobe_params())
             for ref, lobe in zip(lobe_refs, wheel_ring.led_ring_lobes())
         ]
+    elif not fdm:
+        out.append(_entry(
+            "ring_flange_relief",
+            "wheel_ring.led_ring_flange_relief",
+            "cut",
+            wheel_ring.led_ring_flange_relief(),
+            ["RING_FLANGE_OVERLAP", "RING_FLANGE_T", "RING_FLANGE_DROP",
+             "PCBWAY_ASSEMBLY_CLEARANCE"],
+        ))
     return out
 
 
@@ -718,12 +727,7 @@ def _v2_top(skirt=False, fdm=True):
 
 
 def _ring_insert():
-    """The LED ring insert: one part, one feature.
-
-    It is lofted as a whole rather than fused out of handles, so there is
-    nothing finer to name. The entry exists so a click on the lit band in the
-    viewer resolves to the part that makes it.
-    """
+    """Identify the ring insert and the flange under its outer seam."""
     return [
         _entry(
             "ring_insert",
@@ -739,7 +743,14 @@ def _ring_insert():
                 + _reads("wheel_ring.led_ring_lobe_rim_r")
                 + _reads("wheel_ring.led_ring_lobe_land_z")
             )),
-        )
+        ),
+        _entry(
+            "ring_insert.flange",
+            "wheel_ring.led_ring_flange",
+            "add",
+            wheel_ring.led_ring_flange(),
+            ["RING_FLANGE_OVERLAP", "RING_FLANGE_T", "RING_FLANGE_DROP"],
+        ),
     ]
 
 

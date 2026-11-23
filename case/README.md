@@ -21,6 +21,7 @@ The model exports the SLA front shell, back shell, soft button pad, IR window in
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports an FDM front shell for a filament printer. Read [Front versions](#front-versions).
 It also exports an SLA one-piece front for a clear print, with the LED ring insert fused in. Read [SLA one-piece front](#sla-one-piece-front).
+It also exports an SLA one-piece back for a clear print, with the IR window fused in. Read [SLA one-piece back](#sla-one-piece-back).
 It also exports the V2 top pads, an FDM one and a one-piece TPU one, for a V2 board. Read [V2 board](#v2-board).
 It also exports the end-wall screw, `c6remote-case-screw.stl`, in its installed position. Buy this screw. Do not print it. Read [Parts](#parts).
 
@@ -46,7 +47,7 @@ The case has three front versions:
 </p>
 <p align="center"><sub>FDM front (left), SLA front (middle), and SLA one-piece front (right), isometric</sub></p>
 
-All three versions use the same back shell, IR window, interior, and board position. Only the face, the LED ring, and the button pad change.
+All three versions use the same back, interior, and board position. Only the face, the LED ring, and the button pad change. The back is the back shell with the IR window, or the SLA one-piece back.
 
 | | FDM | SLA | SLA one-piece |
 | --- | --- | --- | --- |
@@ -180,6 +181,8 @@ The IR window cannot be shell material either. Print it as a clear part or as an
 
 The one-piece front has no separate insert, so it cannot be Taurus. Print the whole front in clear resin. Read [SLA one-piece front](#sla-one-piece-front).
 
+The one-piece back has no separate IR window, so it cannot be an opaque resin either. Print the whole back in clear resin. Read [SLA one-piece back](#sla-one-piece-back).
+
 The insert goes in from inside the shell before the board. It rises straight up, and nothing on it is wider than the cavity wall it passes. Six lobes reach down over the six LEDs, and each lobe tucks under a land of shell. As a result, the part cannot pass outward through the face.
 
 Nothing holds it the other way, so bond it while the front shell lies face down. Use the same adhesive as the IR window.
@@ -270,7 +273,7 @@ PCBWay does not publish a minimum hole size or a minimum embossed or engraved de
 
 `LED_RING_FACE_ROOF` is equal to the SLS minimum in the first table, so it keeps a margin over the SLA minimum. It sets the land of shell over each lobe pocket, which is the only shell the SLA front keeps over the LED ring. `RING_LAND_MIN` in `case/checks/wheel_ring.py` holds that land to a floor just under this value. `ROOF_LEFT_MIN` holds the FDM front's own channel roof.
 
-The `fab` pass of `check.py` measures the walls of each part that PCBWay prints: `c6remote-case-front.stl`, `c6remote-case-back.stl`, `c6remote-ring-insert.stl`, and `c6remote-case-front-one-piece.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
+The `fab` pass of `check.py` measures the walls of each part that PCBWay prints: `c6remote-case-front.stl`, `c6remote-case-back.stl`, `c6remote-ring-insert.stl`, `c6remote-case-front-one-piece.stl`, and `c6remote-case-back-one-piece.stl`. It compares each wall with `FAB_MIN_WALL[FAB_PROCESS]`. For each feature under the minimum, it shows the thinnest wall and the thin area. The thin area is the surface area where the wall is thinner than the minimum. For each process, the pass also shows the total thin area under the minimum of that process.
 
 The pass sorts each thin reading by the angle at the far face. A wall reading has two faces that are almost parallel. A taper reading is near an edge where two faces meet at a sharp angle. The material is thin only in a narrow band along that edge. A square corner is not thin, so the pass ignores it.
 
@@ -394,6 +397,36 @@ Everything else is the SLA front: the face outside the ring, the bore round the 
 
 The `shells` pass of `check.py` makes sure that this front is one solid with one shell, so no void stays inside it. The same pass makes sure that this front holds all the material of the SLA front and of the insert without its feet. The `fab` pass measures its walls.
 
+## SLA one-piece back
+
+`c6remote-case-back-one-piece.stl` is the back shell with the IR window fused into it. Print it as one part in clear resin by SLA. It needs no separate IR window and no adhesive.
+
+| | Back shell and IR window | SLA one-piece back |
+| --- | --- | --- |
+| Files | `c6remote-case-back.stl` and `c6remote-ir-window.stl` | `c6remote-case-back-one-piece.stl` |
+| Material | An opaque resin for the shell. A clear resin for the window. | Clear resin for all of the part. In UTR-8100, the transparent finish with spray varnish. |
+| Resin in U2's beam | `IR_WINDOW_T`, the pane | `IR_WINDOW_T`, the floor of the well |
+| Assembly | Bond the window into the shell | No window and no adhesive |
+
+Use this back only for a clear print. U2 receives through the material of the part, so an opaque print of it blinds U2. For an opaque back, use the back shell with the IR window.
+
+In UTR-8100, ask for the transparent finish with spray varnish, not the translucent finish. A translucent surface scatters the infrared light at both faces of the pane, so less of the signal reaches U2. The transparent finish is also the finish of the IR window, so the two backs receive the same signal.
+
+The two-part back has a fit at each place where the window meets the shell. On this back, each fit closes:
+
+- The pane presses `IR_WINDOW_PRESS` into the opening. The pane and the opening cancel, so the exterior has no joint line.
+- The flange keeps `IR_WINDOW_FIT` round its edge for adhesive. On this back, that gap is shell.
+
+Two cuts stay. `ir_window_well()` is the open centre of the flange. It stops `IR_WINDOW_T` above the exterior, so U2 looks through the same resin thickness as through the pane. `ir_window_step()` is the rebate above the flange top, so U2 keeps the same clearance.
+
+Everything else is the back shell. So each front, the screw, the battery, and the board fit it with no change. Assemble it as the back shell, but omit the IR window steps.
+
+The 940 nm rule for the IR window applies to all of this back. Test the print with a physical remote. If the print blocks too much infrared light, use the back shell with the IR window.
+
+D1 fires through its own bore in the end wall. That bore is open on both backs.
+
+The `shells` pass of `check.py` makes sure that this back is one solid with one shell. The same pass makes sure that this back holds all the material of the back shell and the IR window, and adds material only in the closed gap. The `ir` pass makes sure that U2's beam crosses only `IR_WINDOW_T` of this back, and that U2 keeps its clearance. The `fab` pass measures its walls.
+
 ## Parts
 
 Buy these parts in addition to the board and the printed parts.
@@ -447,7 +480,7 @@ The Qwiic opening has a flush cover with two breakaway bridges. The cover stays 
 
 To open the port, remove the cover before you install the board. Break both bridges carefully and trim any nubs that obstruct the plug. Do not press on the connector.
 
-Prepare the back shell first:
+Prepare the back shell first. If you use the SLA one-piece back, omit these steps:
 
 1. Insert the IR window from inside the back shell.
 2. Make the pane flush with the outside surface.

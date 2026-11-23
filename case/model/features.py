@@ -38,6 +38,10 @@ ranks against the other.
 The one-piece front is keyed under `c6remote-case-front-one-piece.stl` for the
 same reason. Its entries are the recessed front's, less the LED ring cut, plus
 one fill and one lobe for each LED.
+
+The one-piece back is keyed under `c6remote-case-back-one-piece.stl`. Its
+entries are the back's, with the IR window's well and step in place of the
+opening and the rebate.
 """
 
 import inspect
@@ -473,8 +477,11 @@ def _front(runs, obstacles, ledges, ledge_obstacles, fdm=False, one_piece=False)
     return out
 
 
-def _back(runs, obstacles):
-    """The back shell, in the order back_shell() builds and cuts it."""
+def _back(runs, obstacles, one_piece=False):
+    """The back shell, in the order back_shell() builds and cuts it.
+
+    `one_piece` takes the well and the step in place of the IR window's
+    opening and rebate, because that back keeps the window as shell."""
     out = [
         _entry("skirt_relief", "shells.skirt_relief", "cut", shells.skirt_relief()),
         _entry("seam_shadow", "shells.seam_shadow", "cut", shells.seam_shadow()),
@@ -524,10 +531,23 @@ def _back(runs, obstacles):
         ),
         _entry("qwiic_slot", "qwiic.qwiic_slot", "cut", qwiic.qwiic_slot()),
         _entry("emitter_bore", "ir.emitter_bore", "cut", ir.emitter_bore()),
-        _entry(
-            "ir_window_opening", "ir.ir_window_opening", "cut", ir.ir_window_opening()
+        *(
+            [
+                _entry("ir_window_well", "ir.ir_window_well", "cut", ir.ir_window_well()),
+                _entry("ir_window_step", "ir.ir_window_step", "cut", ir.ir_window_step()),
+            ]
+            if one_piece
+            else [
+                _entry(
+                    "ir_window_opening", "ir.ir_window_opening", "cut",
+                    ir.ir_window_opening(),
+                ),
+                _entry(
+                    "ir_window_rebate", "ir.ir_window_rebate", "cut",
+                    ir.ir_window_rebate(),
+                ),
+            ]
         ),
-        _entry("ir_window_rebate", "ir.ir_window_rebate", "cut", ir.ir_window_rebate()),
         _entry("reset_bore", "reset.reset_bore", "cut", reset.reset_bore()),
         _entry("reset_chamfer", "reset.reset_chamfer", "cut", reset.reset_chamfer()),
     ]
@@ -733,7 +753,7 @@ def _window():
         params.IR_WINDOW_T,
         params.IR_WINDOW_T + params.IR_WINDOW_FLANGE_T,
     )
-    flange = _cut(flange, ir._bottom_prism(-0.5))
+    flange = _cut(flange, ir._flange_bore())
     return [
         _entry(
             "pane",
@@ -793,6 +813,7 @@ def features():
             front_runs, obstacles, ledges, ledge_obstacles, one_piece=True
         ),
         "c6remote-case-back.stl": _back(back_runs, obstacles),
+        "c6remote-case-back-one-piece.stl": _back(back_runs, obstacles, one_piece=True),
         "c6remote-case-pad.stl": _pad(),
         "c6remote-case-pad-fdm.stl": _fdm_pad(),
         "c6remote-case-pad-tpu.stl": _tpu_pad(),

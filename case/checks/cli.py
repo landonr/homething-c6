@@ -89,6 +89,7 @@ from .ir import (
     emitter_beam_clearance,
     emitter_chamfer_angle,
     end_ports_open,
+    one_piece_window,
     receiver_clearance,
     receiver_paths,
     window_installation,
@@ -144,6 +145,7 @@ from .mic import MIC_EDGE_BEARINGS, mic_fillet, mic_mouth_edge
 from .shells import (
     interference,
     ir_end_lap_wall,
+    one_piece_back,
     one_piece_front,
     parts_are_sound,
     seam_shadow_line,
@@ -200,6 +202,10 @@ class Solids:
     @functools.cached_property
     def back(self):
         return case.back_shell()
+
+    @functools.cached_property
+    def back_one_piece(self):
+        return case.back_shell(one_piece=True)
 
     @functools.cached_property
     def shells(self):
@@ -722,6 +728,19 @@ def _one_piece_front(s):
         f"{readings['rays']} rays. {readings['held']} runs of the insert's "
         f"loft stand off it, the furthest by {readings['worst']:.3f}, inside "
         f"ONE_PIECE_TOL",
+    )
+
+
+@_check("shells")
+def _one_piece_back(s):
+    problems, readings = one_piece_back(s.back, s.window, s.back_one_piece)
+    return _report(
+        problems,
+        f"the one-piece back is one solid with one shell and holds every point "
+        f"of the back and the IR window on {readings['rays']} rays. It adds "
+        f"material only in the {params.IR_WINDOW_FIT:.2f} gap round the "
+        f"flange, on {readings['filled']} runs, the widest "
+        f"{readings['worst']:.3f} across",
     )
 
 
@@ -1348,6 +1367,22 @@ def _receiver_clearance(s):
 
 
 @_check("ir")
+def _one_piece_window(s):
+    problems, panes = one_piece_window(s.back_one_piece)
+    problems += receiver_clearance(s.back_one_piece)
+    where = (
+        f"{panes[0]} readings across the well, {panes[1]:.3f} .. {panes[2]:.3f}"
+        if panes
+        else "no reading"
+    )
+    return _report(
+        problems,
+        f"the one-piece back clears U2's complete envelope, and U2's beam "
+        f"crosses only the pane's {params.IR_WINDOW_T:.2f}: {where}",
+    )
+
+
+@_check("ir")
 def _window_installation(s):
     return _report(
         window_installation(s.back, s.window),
@@ -1363,6 +1398,7 @@ def _parts_are_sound(s):
         "FDM front shell": s.front_fdm,
         "one-piece front shell": s.front_one_piece,
         "back shell": s.back,
+        "one-piece back shell": s.back_one_piece,
         "button pad": s.pad,
         "FDM V2 top pad": s.pad_fdm_v2_top,
         "V2 TPU top pad": s.pad_tpu_v2_top,
@@ -1397,7 +1433,7 @@ def _interference(s):
 @_check("fab")
 def _fab_walls(s):
     lines, problems, accepted = fab_walls(
-        s.front, s.back, s.ring_insert, s.front_one_piece
+        s.front, s.back, s.ring_insert, s.front_one_piece, s.back_one_piece
     )
     for line in lines:
         print(line)
@@ -1551,15 +1587,15 @@ def _parallel_initializer():
 _FEATURE_SOLIDS = {
     "apertures": ("front", "back"),
     "assembly": (
-        "front", "front_fdm", "front_one_piece", "back", "pad", "pad_fdm_v2_top",
-        "pad_tpu_v2_top", "pad_tpu_blank", "pad_tpu_v2_blank", "pad_v2_top",
-        "window", "caps", "caps_plain", "led_ring_insert",
+        "front", "front_fdm", "front_one_piece", "back", "back_one_piece", "pad",
+        "pad_fdm_v2_top", "pad_tpu_v2_top", "pad_tpu_blank", "pad_tpu_v2_blank",
+        "pad_v2_top", "window", "caps", "caps_plain", "led_ring_insert",
     ),
     "caps": ("front", "pad", "caps", "caps_plain"),
-    "fab": ("front", "back", "led_ring_insert", "front_one_piece"),
+    "fab": ("front", "back", "led_ring_insert", "front_one_piece", "back_one_piece"),
     "fdm": ("front_fdm", "pad_fdm", "keypad_outline_groove"),
     "hardware": ("front", "front_fdm", "back"),
-    "ir": ("front", "back", "window"),
+    "ir": ("front", "back", "back_one_piece", "window"),
     "keypad": (
         "front", "pad", "pad_fdm", "pad_tpu", "pad_tpu_blank", "pad_tpu_v2_blank",
         "pad_tpu_v2", "pad_tpu_v2_top_blank", "keypad_recess",
@@ -1574,7 +1610,8 @@ _FEATURE_SOLIDS = {
     ),
     "mic": ("front",),
     "shells": (
-        "front", "front_fdm", "front_one_piece", "back", "led_ring_insert_footless",
+        "front", "front_fdm", "front_one_piece", "back", "back_one_piece",
+        "led_ring_insert_footless", "window",
     ),
     "support": ("back",),
     "usb": ("front", "front_fdm", "back"),
@@ -1618,6 +1655,7 @@ _CACHED_SOLIDS = {
     "front": lambda: [functools.partial(case.front_shell)],
     "front_fdm": lambda: [functools.partial(case.front_shell, fdm=True)],
     "back": lambda: [functools.partial(case.back_shell)],
+    "back_one_piece": lambda: [functools.partial(case.back_shell, one_piece=True)],
     "front_one_piece": lambda: [functools.partial(case.front_shell, one_piece=True)],
     "led_ring_insert": lambda: [functools.partial(case.led_ring_insert)],
     "led_ring_insert_footless": lambda: [

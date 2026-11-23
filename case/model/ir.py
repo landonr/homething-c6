@@ -1,4 +1,8 @@
-"""U2's bottom window insert and D1's chamfered +Y emitter bore."""
+"""U2's bottom window insert and D1's chamfered +Y emitter bore.
+
+The one-piece back has no insert. ir_window_well() and ir_window_step() are
+its cuts, in place of the opening and the rebate.
+"""
 
 import functools
 import math
@@ -43,6 +47,11 @@ def _surface_layer(expand, low, high):
     return _cut(body, back_form(0, high))
 
 
+def _flange_bore():
+    """The open centre of the insert's flange, 0.5 inside the aperture."""
+    return _bottom_prism(-0.5)
+
+
 def ir_window_opening():
     """U2's nominal rounded aperture through the back floor along -Z."""
     return _bottom_prism()
@@ -74,8 +83,28 @@ def ir_window():
         params.IR_WINDOW_T,
         params.IR_WINDOW_T + params.IR_WINDOW_FLANGE_T,
     )
-    flange = _cut(flange, _bottom_prism(-0.5))
+    flange = _cut(flange, _flange_bore())
     return _fuse(pane, flange)
+
+
+def ir_window_well():
+    """The one-piece back's well over U2: the flange's open centre, down to
+    one pane thickness above the exterior, so the beam crosses IR_WINDOW_T."""
+    return _isect(_flange_bore(), back_form(0, params.IR_WINDOW_T))
+
+
+def ir_window_step():
+    """The one-piece back's rebate above the flange top.
+
+    The one-piece back is the back shell with ir_window() fused in and the
+    IR_WINDOW_FIT gap round the flange closed. The pane fills the opening and
+    the flange fills the rebate up to its top. So this step and
+    ir_window_well() are the only cuts left of the opening and the rebate.
+    """
+    return _isect(
+        _bottom_prism(params.IR_WINDOW_FLANGE + params.IR_WINDOW_FIT),
+        back_form(0, params.IR_WINDOW_T + params.IR_WINDOW_FLANGE_T),
+    )
 
 
 def ir_window_retention():

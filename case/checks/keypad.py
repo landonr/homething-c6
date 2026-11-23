@@ -73,6 +73,7 @@ import case
 from model import keypad as keypad_model
 from model.mic import mic_duct_or, mic_port
 from model.stack import CAVITY_FRONT, LAP_OUT, SKIRT_BOTTOM
+from model.wheel_ring import led_ring_insert_outer_r
 import params
 
 from .common import (
@@ -1260,11 +1261,11 @@ def _sites_box(points):
 RING_SEAM_STEP = params.RING_INSERT_FACE_FIT + 0.15
 """How far either side of a dry chamfer reading the ring seam is looked for.
 
-RING_INSERT_FACE_FIT is zero, so the seam is nominally a hairline and what
-this really covers is the reading: the ray, the fitted face and the ruled loft
-the insert's outer wall comes off. A hole the rim chamfer meets that is
-narrower than this, inside the ring's own radii, is the joint between the two
-parts of the face. A wider one is something missing."""
+The step crosses the specified seam and the small offset from the fitted
+face and insert loft."""
+
+RING_SEAM_CHORD_ALLOWANCE = 0.01
+"""Allowance for the insert's faceted wall inside its nominal radius."""
 
 
 def _is_ring_seam(shell, x, y, lo, hi):
@@ -1280,13 +1281,13 @@ def _is_ring_seam(shell, x, y, lo, hi):
     Measured rather than assumed, and bounded twice. The same ray is fired one
     RING_SEAM_STEP either side, radially off the wheel, which is across the
     seam rather than along it, and both have to land on material: a hole wider
-    than the step is not the seam. And the reading has to sit between the
-    ring's own inner and outer radii, so this cannot excuse a hole anywhere
-    else on the face.
+    than the step is not the seam. The reading must also sit between the
+    insert's outer radius and the shell bore.
     """
     wx, wy = board.wheel_center()
     r = math.hypot(x - wx, y - wy)
-    if not case.WHEEL_OPENING_R <= r <= case.led_ring_face_r():
+    inner = led_ring_insert_outer_r() - RING_SEAM_CHORD_ALLOWANCE
+    if not inner <= r <= case.led_ring_face_r():
         return False
     ux, uy = (x - wx) / r, (y - wy) / r
     for step in (-RING_SEAM_STEP, RING_SEAM_STEP):

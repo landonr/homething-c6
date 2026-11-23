@@ -147,7 +147,7 @@ def light_path(shells, pad, insert):
         # light to the face. The column spans the band's whole depth, so it
         # catches both a hollow insert and a shell that kept a roof.
         angle = math.atan2(y - wy, x - wx) % (2 * math.pi)
-        mid_r = (case.led_ring_inner_r() + case.led_ring_face_r()) / 2
+        mid_r = (case.LIP_CLEAR_R + wheel_ring_model.led_ring_insert_outer_r()) / 2
         bx, by = wx + mid_r * math.cos(angle), wy + mid_r * math.sin(angle)
         base = case.CAVITY_FRONT + 0.05
         floor = case.face_floor_at(bx, by)
@@ -277,14 +277,9 @@ bearing, or the ray leaves through the top rather than through the outer wall,
 and far enough under that the reading is of a wall and not of an edge."""
 
 BAND_OUTER_TOLERANCE = 0.08
-"""How far off led_ring_face_r() the insert's own outer face may read.
+"""How far off the nominal radius the insert's outer face may read.
 
-This is the one that proves the ring came out round. The circle is the same on
-every bearing by construction, so a reading that wanders means the loft, the
-cavity wall or a lobe took a bite out of it, and a ring that is not round shows
-as a kinked line on the front of the remote. It covers the ray crossing the
-ruled loft's chord rather than a section, plus RING_INSERT_FACE_FIT, which is
-zero."""
+This allowance covers the ray crossing a ruled loft chord between stations."""
 
 BAND_MIN = 0.5
 """Narrowest the lit band may run, from the wheel bore out to the ring's own
@@ -385,12 +380,13 @@ def _ring_stack_sane():
     non-positive heights or standing in material, and the pass dies in
     build123d instead of reporting what went wrong."""
     problems = []
-    band = case.led_ring_face_r() - case.WHEEL_OPENING_R
+    insert_radius = wheel_ring_model.led_ring_insert_outer_r()
+    band = insert_radius - case.WHEEL_OPENING_R
     if band <= BAND_MIN:
         problems.append(
             f"the lit band is only {band:.2f} wide, wants {BAND_MIN:.2f}: the "
             f"ring runs {case.WHEEL_OPENING_R:.2f} to "
-            f"{case.led_ring_face_r():.2f}, so RING_LIFT_CLEAR "
+            f"{insert_radius:.2f}, so RING_LIFT_CLEAR "
             f"{params.RING_LIFT_CLEAR:.2f} has pulled the circle in too far or "
             "the cavity wall has moved in on it"
         )
@@ -451,10 +447,7 @@ def _band_run(crop, angle, z):
     One ray out from the wheel centre, starting BORE_STANDOFF inside the bore
     where neither part stands, so the first run it crosses is the insert
     itself. The inner end is therefore the insert's bore and the outer end is
-    its own outer wall, which should be led_ring_face_r() on every bearing. It
-    is measured rather than restated because that is the claim: a ring that is
-    round reads the same radius all the way round, and a loft that came out
-    short or a lobe that bit into the circle reads otherwise.
+    its own outer wall. A round insert reads the same radius on all bearings.
 
     None means the ray met nothing at all on that bearing: the ring is severed
     there, which is the failure the whole feature exists to avoid.
@@ -489,14 +482,14 @@ def led_ring(front, insert):
     bearings is a lobe's flare and not the circle.
 
     Roundness is a second ray, run just under the band's own top, where every
-    flare has ended. Its outer end has to be led_ring_face_r() within
+    flare has ended. Its outer end has to be the insert radius within
     BAND_OUTER_TOLERANCE, and that is what proves the ring came out round: the
     circle is the same on every bearing by construction, so a reading that
     wanders is a kinked line on the front of the remote. A ring severed
     anywhere reads as no run at all on its bearing, and a ring merely pinched
     reads a run under BAND_MIN.
 
-    A band probe then stands in the part of that run outside
+    A band probe then stands in the common part of both runs outside
     LIP_CLEAR_R, over the band's whole depth from the cavity ceiling up
     to the local face floor, sized to the run less BAND_PROBE_GAP either side
     and capped at PROBE_D. The ray reads one line, so the probe is what covers
@@ -527,7 +520,9 @@ def led_ring(front, insert):
         return problems
     wx, wy = board.wheel_center()
     r_in = case.WHEEL_OPENING_R - BORE_STANDOFF
-    r_out = case.led_ring_face_r() + BAND_REACH_SLACK
+    circle = case.led_ring_face_r()
+    fit_radius = wheel_ring_model.led_ring_insert_outer_r()
+    r_out = circle + BAND_REACH_SLACK
     # The insert reaches down to CAVITY_FRONT over the band and only to
     # LED_RING_FOOT over the bore it seats on, so the crops have to hold both.
     # The lobes hang lower still, but they sit outside the band and no reading
@@ -555,8 +550,6 @@ def led_ring(front, insert):
             one = _ring_crop_box(wx, wy, r_in, r_out, [a], z_floor)
             shell = _Crop(shell_sector, *one)
             band = _Crop(band_sector, *one)
-            circle = case.led_ring_face_r()
-
             run = _band_run(band, a, z_ray)
             if run is None:
                 problems.append(
@@ -598,39 +591,36 @@ def led_ring(front, insert):
                 )
                 - BAND_TOP_STANDOFF
             )
-            top = _band_run(band, a, z_round)
-            if top is None:
+            face_run = _band_run(band, a, z_round)
+            if face_run is None:
                 problems.append(
                     f"the ring insert is missing near the face at {deg} "
                     f"degrees, z {z_round:.2f}: the ray meets no material, so "
                     "the band does not reach the face there"
                 )
                 continue
-            if abs(top[1] - circle) > BAND_OUTER_TOLERANCE:
+            face_inner, face_outer = face_run
+            if abs(face_outer - fit_radius) > BAND_OUTER_TOLERANCE:
                 problems.append(
                     f"the ring is not round at {deg} degrees: its outer face "
-                    f"reads {top[1]:.2f} at z {z_round:.2f} against "
-                    f"led_ring_face_r() {circle:.2f}, which is "
-                    f"{abs(top[1] - circle):.2f} off and wants "
+                    f"reads {face_outer:.2f} at z {z_round:.2f} against "
+                    f"the nominal insert radius {fit_radius:.2f}, which is "
+                    f"{abs(face_outer - fit_radius):.2f} off and wants "
                     f"{BAND_OUTER_TOLERANCE:.2f}, so the joint line on the face "
                     "kinks there"
                 )
                 continue
 
-            # The probe stands outside LIP_CLEAR_R rather than in the
-            # middle of the whole band. The insert's underside steps there,
-            # from the cavity ceiling down under the bore to the relief it
-            # seats on, and a probe straddling that step reads the air under
-            # its own inner half as a hollow in the part. Sizing it off the
-            # same radius keeps it clear of the step by BAND_PROBE_GAP whatever
-            # the run measures.
-            deep_in = max(inner, case.LIP_CLEAR_R)
-            deep_r = (deep_in + outer) / 2
-            probe_d = min(PROBE_D, outer - deep_in - 2 * BAND_PROBE_GAP)
+            # Use the common radial span. The lower ray can exit through a
+            # lobe beyond the band, and the lip relief steps in at LIP_CLEAR_R.
+            deep_in = max(inner, face_inner, case.LIP_CLEAR_R)
+            deep_out = min(outer, face_outer)
+            deep_r = (deep_in + deep_out) / 2
+            probe_d = min(PROBE_D, deep_out - deep_in - 2 * BAND_PROBE_GAP)
             if probe_d <= 0:
                 problems.append(
                     f"the insert's run outside LIP_CLEAR_R is only "
-                    f"{outer - deep_in:.2f} at {deg} degrees, too narrow to "
+                    f"{deep_out - deep_in:.2f} at {deg} degrees, too narrow to "
                     "stand a probe in"
                 )
                 continue
@@ -659,6 +649,81 @@ def led_ring(front, insert):
                     "insert exists to replace"
                 )
     return problems
+
+
+def led_ring_fit(front, insert):
+    """Measure the built gap at the ring band and the three pocket surfaces."""
+    wx, wy = board.wheel_center()
+    required = params.PCBWAY_ASSEMBLY_CLEARANCE
+    circle = case.led_ring_face_r()
+    insert_radius = wheel_ring_model.led_ring_insert_outer_r()
+    problems = []
+    gaps = []
+
+    def point(r, angle, z):
+        return wx + r * math.cos(angle), wy + r * math.sin(angle), z
+
+    def probe(label, surface, normal):
+        # Use the nominal interface only to aim the rays. Both transitions
+        # come from the built parts. A probe between the parts starts in air.
+        def at(distance):
+            return tuple(p + distance * n for p, n in zip(surface, normal))
+
+        start = at(required / 2)
+        insert_runs = _ray_runs(insert, start, at(-0.4))
+        front_runs = _ray_runs(front, start, at(0.6))
+        if not insert_runs or not front_runs:
+            problems.append(Problem(f"no opposing surfaces at {label}", at=start))
+            return
+        gap = insert_runs[0][0] + front_runs[0][0]
+        gaps.append(gap)
+        if gap < required - 1e-6:  # CAD distance calculation tolerance.
+            problems.append(Problem(
+                f"{label} clearance is {gap:.3f} mm, under {required:.2f} mm",
+                at=start,
+            ))
+
+    # Read just off a loft station to avoid a ray on the join between facets.
+    offset = math.tau * 0.01 / case.LED_RING_STATIONS
+    for i in range(LED_RING_SAMPLES):
+        angle = math.tau * i / LED_RING_SAMPLES + offset
+        z = min(
+            case.face_floor_at(*point(radius, angle, 0)[:2])
+            for radius in (insert_radius, circle)
+        ) - 0.15
+        probe(
+            f"ring band at {round(math.degrees(angle))} degrees",
+            point(insert_radius, angle, z), (math.cos(angle), math.sin(angle), 0),
+        )
+
+    for ref in case.led_ring_lobe_refs():
+        angle = case.led_ring_lobe_bearing(ref)
+        half = case.led_ring_lobe_half(ref)
+        (rim, top), (knee, flat), (flat_end, _) = (
+            wheel_ring_model.led_ring_lobe_lid(ref)[:3]
+        )
+        flat_start = circle + case.led_ring_lobe_land_z(ref) - case.CAVITY_FRONT
+        r = (circle + knee) / 2
+        z = top + rim - r
+        diagonal = 1 / math.sqrt(2)
+        for bearing in (angle - half / 2, angle, angle + half / 2):
+            probe(
+                f"{ref} lobe slope", point(r, bearing, z),
+                (math.cos(bearing) * diagonal, math.sin(bearing) * diagonal, diagonal),
+            )
+            probe(
+                f"{ref} lobe flat", point((flat_start + flat_end) / 2, bearing, flat),
+                (0, 0, 1),
+            )
+        side_z = (case.CAVITY_FRONT + z) / 2
+        for sign in (-1, 1):
+            bearing = angle + sign * half
+            probe(
+                f"{ref} lobe side {sign:+d}", point(r, bearing, side_z),
+                (-sign * math.sin(bearing), sign * math.cos(bearing), 0),
+            )
+
+    return problems, min(gaps, default=math.inf)
 
 
 INNER_CHAMFER_TOLERANCE = 0.05

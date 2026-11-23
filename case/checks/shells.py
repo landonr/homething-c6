@@ -223,7 +223,7 @@ def side_seam_retention(front, back):
         )
         lap_face = edge + side * LAP_IN
         engaged = edge + side * (SKIRT_OUT - 0.08)
-        deep = edge + side * (SKIRT_OUT - 0.30)
+        deep = edge + side * (SKIRT_OUT - 0.15)
         root = edge + side * (LAP_IN - 0.1)
         skirt_face = edge + side * (SKIRT_OUT - 0.025)
         gap_face = edge + side * (SKIRT_OUT - 0.02)
@@ -263,6 +263,18 @@ def side_seam_retention(front, back):
               (0.08, 0.2, 0.08), True)
         probe(back_crop, f"{name} detent tip depth", (deep, y, z_detent),
               (0.08, 0.2, 0.08), True)
+        start = (board_gap, y, z_detent)
+        end = (lap_face + side * 0.2, y, z_detent)
+        skirt = _ray_runs(front, start, end)
+        detent = _ray_runs(back, start, end)
+        if len(skirt) != 1 or len(detent) != 1:
+            problems.append(Problem(f"{name} cannot measure the side detent to pocket floor gap"))
+        else:
+            floor_gap = detent[0][0] - skirt[0][1]
+            if floor_gap + 1e-6 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+                problems.append(Problem(
+                    f"{name} side detent clears the pocket floor by only {floor_gap:.3f} mm"
+                ))
         # A ramp is material at the lap and open at the tip depth at one
         # height. A square block fills both sites, and a short block empties
         # both.
@@ -295,6 +307,31 @@ def side_seam_retention(front, back):
                   (abs(lip_out - lip_in), lip_len, part_z1 - part_z0), True)
         probe(back_crop, f"{name} upper lip clearance",
               (gap_face, y, z0 + params.SIDE_CATCH_H - 0.08), (0.04, 0.2, 0.12), False)
+        start = (gap_face, y, z_detent)
+        end = (gap_face, y, z0 + params.SIDE_CATCH_H + 0.1)
+        skirt = _ray_runs(front, start, end)
+        detent = _ray_runs(back, start, end)
+        if len(skirt) != 1 or len(detent) != 1 or detent[0][0] > RUN_MIN:
+            problems.append(Problem(f"{name} cannot measure the side detent to upper lip gap"))
+        else:
+            upper_gap = skirt[0][0] - detent[0][1]
+            if upper_gap + 1e-6 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+                problems.append(Problem(
+                    f"{name} side detent clears the upper lip by only {upper_gap:.3f} mm"
+                ))
+        for end_sign in (-1, 1):
+            start = (deep, y, z_detent)
+            end = (deep, y + end_sign * (params.SIDE_CATCH_W / 2 + 0.1), z_detent)
+            skirt = _ray_runs(front, start, end)
+            detent = _ray_runs(back, start, end)
+            if len(skirt) != 1 or len(detent) != 1 or detent[0][0] > RUN_MIN:
+                problems.append(Problem(f"{name} cannot measure the side detent to pocket end gap"))
+                continue
+            end_gap = skirt[0][0] - detent[0][1]
+            if end_gap + 1e-6 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+                problems.append(Problem(
+                    f"{name} side detent clears pocket end {end_sign:+} by only {end_gap:.3f} mm"
+                ))
         land_z = z0 + params.SIDE_CATCH_H + params.SIDE_CATCH_UPPER_LAND_MIN
         lap_x = edge + side * (LAP_IN + params.SKIRT_T / 2)
         probe(front_crop, f"{name} upper skirt land", (pocket_x, y, land_z),
@@ -415,6 +452,33 @@ def side_seam_retention(front, back):
     return problems
 
 
+def ir_catch_clearance(front, back):
+    """Measure the free gap from each IR-end detent to its window edges."""
+    problems = []
+    edge = board.board_profile().bounding_box().max.Y
+    y = edge + SKIRT_OUT - 0.1
+    z0 = shells.CATCH_Z0
+    z = z0 + params.CATCH_H / 4
+    for index, x in enumerate(shells.catch_x(), start=1):
+        start = (x, y, z)
+        ends = (
+            ("left", (x - params.CATCH_W / 2 - 0.1, y, z)),
+            ("right", (x + params.CATCH_W / 2 + 0.1, y, z)),
+            ("bottom", (x, y, z0 - 0.1)),
+            ("top", (x, y, z0 + params.CATCH_H + 0.1)),
+        )
+        for label, end in ends:
+            window = _ray_runs(front, start, end)
+            detent = _ray_runs(back, start, end)
+            if not window or len(detent) != 1 or detent[0][0] > RUN_MIN:
+                problems.append(Problem(f"IR catch {index} cannot measure its {label} gap"))
+                continue
+            gap = window[0][0] - detent[0][1]
+            if gap + 1e-6 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+                problems.append(Problem(f"IR catch {index} clears its {label} by only {gap:.3f} mm"))
+    return problems
+
+
 def side_skirt_lead_ins(front):
     """The support-break ramps remove the complete reinforced skirt width."""
     problems = []
@@ -464,21 +528,20 @@ def side_skirt_lead_ins(front):
                         f"expected {'solid' if should_be_material else 'open'}",
                         box=probe,
                     ))
-            # Near the top of the lead-in the original triangular ramp is
-            # almost zero-width. This site reads the added fit strip itself.
-            if params.SKIRT_LEAD_FIT > 0:
-                fit_probe = Pos(
-                    x,
-                    edge_y + 0.8 * params.SKIRT_LEAD_FIT,
-                    SKIRT_BOTTOM + height - 0.05,
-                ) * Box(0.02, 0.02, 0.02)
-                filled = cropped.fill_fraction(fit_probe)
-                if filled > 0.1:
-                    problems.append(Problem(
-                        f"{name} {position} lead-in fit strip is {filled:.0%} "
-                        "material, expected clearance for printed oversize",
-                        box=fit_probe,
-                    ))
+            # Subtract the ramp's reach below the roof to read the flat relief.
+            below_roof = 0.05
+            fit_z = SKIRT_BOTTOM + height - below_roof
+            start = (x, edge_y, fit_z)
+            end = (x, edge_y + run_length + 0.7, fit_z)
+            relief_runs = _ray_runs(front, start, end)
+            extra = below_roof / math.tan(math.radians(params.SKIRT_LEAD_ANGLE))
+            if not relief_runs:
+                problems.append(Problem(f"{name} {position} lead-in has no skirt after its ramp"))
+            elif relief_runs[0][0] - extra + 1e-6 < params.PCBWAY_ASSEMBLY_CLEARANCE:
+                problems.append(Problem(
+                    f"{name} {position} lead-in clears the support break by only "
+                    f"{relief_runs[0][0] - extra:.3f} mm"
+                ))
     return problems
 
 
@@ -1213,8 +1276,7 @@ def one_piece_front(front, insert, one_piece):
 
 
 ONE_PIECE_BACK_STEP = 0.2
-"""Step of the dense rays over the IR window. Each side of the flange and of
-the closed IR_WINDOW_FIT gap then takes several rays."""
+"""Step of the dense rays over the IR window, including both closed gaps."""
 
 ONE_PIECE_BACK_REACH = 1.0
 """How far past the rebate the dense rays reach, into plain floor."""
@@ -1259,8 +1321,8 @@ def one_piece_back(back, window, one_piece):
     Rays read both builds. On each ray, the runs of the back and the window
     together must lie inside the runs of the one-piece back. A run of the
     one-piece back that neither part holds passes only if its middle is
-    between the two parts, no further from both together than IR_WINDOW_FIT
-    plus ONE_PIECE_TOL. That is the closed adhesive gap round the flange.
+    between the two parts, within the larger of the pane and flange gaps
+    plus ONE_PIECE_TOL.
     Returns the problems and the readings."""
     problems = []
     part = "case-back-one-piece"
@@ -1287,7 +1349,7 @@ def one_piece_back(back, window, one_piece):
     near = back.intersect(crop)
     if isinstance(near, list):
         near = Compound(list(near))
-    gap = params.IR_WINDOW_FIT + ONE_PIECE_TOL
+    gap = max(params.IR_WINDOW_PANE_CLEARANCE, params.IR_WINDOW_FIT) + ONE_PIECE_TOL
 
     rays = filled = 0
     worst = 0.0
@@ -1328,7 +1390,7 @@ def one_piece_back(back, window, one_piece):
         problems.append(Problem(
             f"the one-piece back holds {run:.3f} of material that neither the "
             f"back nor the IR window holds, {across:.3f} across from one to the "
-            f"other, over IR_WINDOW_FIT plus ONE_PIECE_TOL {gap:.3f}",
+            f"other, over the allowed window clearance plus tolerance {gap:.3f}",
             at=p, part=part,
         ))
     more = max(len(misses) - ONE_PIECE_SHOWN, 0) + max(len(extras) - ONE_PIECE_SHOWN, 0)

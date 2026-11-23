@@ -75,8 +75,8 @@ from .stack import (
 from .wheel_ring import (
     led_ring_face_r,
     led_ring_lobe_bearing,
-    led_ring_lobe_half,
     led_ring_lobe_land_z,
+    led_ring_lobe_pocket_half,
     led_ring_lobe_refs,
     pad_keepouts,
 )
@@ -916,7 +916,8 @@ def ring_land_left():
     r0 = led_ring_face_r()
     thinnest = math.inf
     for ref in led_ring_lobe_refs():
-        bearing, half = led_ring_lobe_bearing(ref), led_ring_lobe_half(ref)
+        bearing = led_ring_lobe_bearing(ref)
+        half = led_ring_lobe_pocket_half(ref)
         top = led_ring_lobe_land_z(ref)
         reach = r0 + top - CAVITY_FRONT
         for i in range(RING_LAND_ANGLES):

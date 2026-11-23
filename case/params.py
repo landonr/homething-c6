@@ -226,9 +226,10 @@ minimum. It was 0.6 while the band had no room for more."""
 SIDE_CATCH_R = 0.45
 """Round the pocket corners to avoid sharp stress risers in the printed skirt."""
 SIDE_CATCH_POCKET_DEPTH = 0.40
-"""Blind cut inward from the skirt's outer face. The detent tip stops 0.05
-short of the floor. The wall behind the floor is exactly SIDE_CATCH_WALL_MIN,
-so a deeper pocket fails the wall check."""
+"""Depth of the blind cut from the skirt's outer face.
+
+The detent tip stops 0.20 mm short of the floor. The wall behind the floor
+has thickness SIDE_CATCH_WALL_MIN."""
 SIDE_CATCH_POCKET_CHAMFER = 0.15
 """Inset of the pocket's rounded inner profile from its outer mouth. The
 resulting bevel around both lips matches the detent's insertion and release
@@ -240,10 +241,10 @@ SIDE_CATCH_UPPER_LAND_MIN = 1.0
 """Minimum height of intact skirt above the pocket, checked on the built
 shell. SIDE_CATCH_LOWER_LAND leaves about 1.05 nominally above its top edge.
 If the pocket leaves less, side_catch_bottom() fails."""
-SIDE_CATCH_D = 0.65
-"""How far each back-lap detent projects inward. It crosses the 0.30 shell fit
-and enters the pocket by 0.35. The earlier 0.15 of engagement held too little
-on FDM prints."""
+SIDE_CATCH_D = 0.50
+"""Inward projection of each back-lap detent.
+
+The detent crosses the 0.30 mm shell gap and enters the pocket by 0.20 mm."""
 SIDE_CATCH_FLANK_ANGLE = 45.0
 """Angle in degrees between each detent flank and the lap face. The detent
 height comes from this angle, SIDE_CATCH_D and SIDE_CATCH_LAND_H. At this
@@ -257,7 +258,7 @@ the seam."""
 SIDE_CATCH_LAND_H = 0.1
 """Short full-depth land at the tip of each detent. Both flanks ramp away from
 it, so the shell can be opened and closed for service."""
-SIDE_CATCH_FIT = 0.15
+SIDE_CATCH_FIT = 0.20
 """Inset of each detent's two lengthwise ends from the ends of the pocket's
 straight lower lip. Past those ends the lip curls up into the rounded pocket
 ends and buries the tip, which is a hard stop. It is also the minimum
@@ -276,11 +277,10 @@ Each lead-in uses the full exposed height of its cut, not this value, to remove
 small steps. Zero disables all skirt lead-ins."""
 SKIRT_LEAD_ANGLE = 65.0
 """Lead-in angle in degrees from the flat skirt bottom along Y. A shallow angle reduces contact during assembly."""
-SKIRT_LEAD_FIT = 0.1
-"""Extra Y relief at every front-skirt lead-in, on both long sides. A 0.1 mm
-flat strip before the ramp accommodates printed skirt oversize without holding
-the two shells apart; the original ramp angle and support-break positions stay
-fixed."""
+SKIRT_LEAD_FIT = 0.20
+"""Extra Y clearance at every front-skirt lead-in on both long sides.
+
+The flat strip before the ramp gives the skirt room to pass each ledge."""
 
 # At the IR end, the plain skirt carries two rounded rectangular windows. Each
 # window sits CATCH_RISE above the skirt bottom. The back lap has a detent behind
@@ -314,7 +314,7 @@ the top of the detent. So the lead-in is steeper. It is 40.2 degrees off the
 closing direction, against 35.5 degrees with no land. The front needs about 18%
 more push to close. Below 0.8, a thin band stays on the nose. The land must stay
 under CATCH_H less two CATCH_FIT, or no slope is left."""
-CATCH_FIT = 0.15
+CATCH_FIT = 0.20
 CATCH_EMITTER_CLEAR = 2.5
 """Wall kept between the +x window and D1's emitter bore in the same end face.
 
@@ -963,21 +963,11 @@ So the gap is deliberate: at rest nothing touches, and the feet come into play
 only if the bond lets go. Then the ring drops this far and stops, instead of
 dropping onto the ENC1 flange. The board reads a little lower than BOARD_TOP in
 the STEP assembly, so the built gap is a little larger than this."""
-RING_INSERT_FACE_FIT = 0.0
-"""Clearance on the ring insert's one face that runs to the front face.
+RING_INSERT_FACE_FIT = 0.20
+"""Radial clearance from the separate ring insert to the front shell bore.
 
-The insert is a plain circle at led_ring_face_r() now, so that face is the
-whole of the joint line on the front of the remote and nothing else of the part
-reaches the face at all.
-
-Zero rather than a press. The IR window presses its pane into the aperture by
-IR_WINDOW_PRESS, which suits a pane that size. This joint is 117 mm of
-circumference, and an interference that long on an SLS part is as likely to
-stop the insert seating as to close the gap, which on the cosmetic face is the
-worse failure. The face is vertical and parallel to the way the part goes in,
-so zero is a touch and not a press.
-
-Raise this a few hundredths if a print comes back tight at the face."""
+The same clearance applies around the full joint. Adhesive holds the insert
+flush with the front face."""
 RING_BORE_ROUND = 0.6
 """Radius of the round on the ring's inner edge, where the dish meets the
 wheel bore.
@@ -989,17 +979,10 @@ It is half of FDM_WHEEL_OPENING_CHAMFER, so it reads as a soft edge and not
 as a lead-in. On the X axis the ring is only 1.24 thick at the bore, and this
 round leaves 0.64 of plumb bore wall there. A 0.8 round would leave 0.44."""
 RING_LIFT_CLEAR = 0.15
-"""How far inside the cavity wall the ring's circle stands.
+"""Minimum radial inset of the round shell bore from the cavity wall.
 
-The insert goes in from inside the shell and rises straight up. Near the X axis
-the cavity wall comes in nearer the wheel centre than anywhere else, and the
-part has to pass it. So the circle stands this far inside the wall at its
-closest, and the same circle holds on every bearing. That is what makes the
-opening in the face round.
-
-It is a sliding clearance on a face 2.2 deep, not a fit, because nothing
-locates on it. PCBWay publishes a tolerance of 0.3 on an SLS part of this size,
-so a part that comes back wide still passes a wall that comes back proud."""
+The separate insert stands a further RING_INSERT_FACE_FIT inside the bore.
+The two offsets give its circular outside face clearance during insertion."""
 RING_LOBE_SIDE = 0.5
 """Clearance each dome keeps beside its LED on the inner side.
 
@@ -1031,7 +1014,7 @@ built clearance and not a floor under it.
 It is RING_FOOT_GAP, the same air the feet keep over the board. Both answer for
 the same stack: the board's own float on its ledges, and the SLS tolerance on
 the insert."""
-RING_LOBE_STRAIGHT = 0.75
+RING_LOBE_STRAIGHT = 0.85
 """How straight each dome runs, from a curve that meets the band's underside
 flat (zero) to a plain cone (one).
 
@@ -1042,10 +1025,8 @@ middle is exactly where the flare sits over it. At zero the wall between the
 two came back at 0.88 over 19 mm2, under the SLS minimum, which is the reading
 this whole feature exists to remove.
 
-Straightening the dome spends that climb earlier instead. It costs reach: the
-rim moves out from 20.49 to 20.86 and the lobe with it, because
-led_ring_lobe_rim_r() still has to clear the LED's outer corner by
-RING_LOBE_GAP, and a straighter dome is lower at that corner.
+The straighter dome preserves wall thickness under the clearance flare.
+The rim moves outward to keep RING_LOBE_GAP at the LED's outer corner.
 
 It also puts a slight angle where the dome meets the band's underside rather
 than running in flat. That corner has the whole band over it, so it is a
@@ -1061,13 +1042,11 @@ inward, so this is the one real wall a lobe has.
 
 This value is the PCBWay SLS minimum. It is written out and not read from
 FAB_MIN_WALL, because the insert is an SLS part whatever FAB_PROCESS says."""
-RING_LOBE_FIT = 0.15
-"""Clearance between a lobe and the pocket the shell opens for it.
+RING_LOBE_FIT = 0.20
+"""Normal clearance between a lobe and its pocket in the front shell.
 
-Each lobe tucks under a land of shell, and that land is the whole of the
-insert's retention. The lobe's own 45 runs this far below the pocket's, and its
-flat top this far below the cavity ceiling, so the part seats on its face
-circle and never on a lobe."""
+The clearance applies to the sloped roof, flat roof and pocket sides.
+Each lobe rests below a land that keeps the insert captive."""
 RING_LOBE_SHOULDER = 0.75
 """Leg of the 45 degree chamfer on the top outer corner of each lobe.
 
@@ -1208,10 +1187,10 @@ shell reading 0.97 normal to that surface, under the PA12 minimum. This value
 carries the reading clear of it."""
 IR_WINDOW_FLANGE = 0.8
 """Interior flange reach past aperture per side: outward retention and adhesive land."""
-IR_WINDOW_FIT = 0.1
+IR_WINDOW_FIT = 0.20
 """Clearance per side around flange in rebate; adhesive fills perimeter gap."""
-IR_WINDOW_PRESS = 0.05
-"""Pane interference into aperture per side, holding insert while adhesive cures."""
+IR_WINDOW_PANE_CLEARANCE = 0.20
+"""Clearance per side between the optical pane and the aperture."""
 IR_WINDOW_FLANGE_T = 0.8
 """Interior flange thickness, recessed below cavity floor to preserve U2 clearance."""
 IR_WINDOW_R = 1.0
@@ -2037,6 +2016,9 @@ the arrows' ink.
 
 check.py holds every entry to cutting a real deboss, so a typo'd escape or
 a glyph the font drops cannot ship as a blank cap."""
+
+PCBWAY_ASSEMBLY_CLEARANCE = 0.20
+"""Minimum nominal clearance at mating edges on the PCBWay print order."""
 
 FAB_PROCESS = "SLA"
 """The PCBWay process that check.py measures every printed part against,

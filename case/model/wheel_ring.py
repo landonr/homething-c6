@@ -275,10 +275,8 @@ def led_ring_web_left():
 def led_ring_face_r():
     """Radius of the ring: one circle on every bearing.
 
-    It is the opening in the face, the insert's one plumb side, and the outer
-    wall of the void the insert fills, all the same circle. So the face shows a
-    round line, and nothing on the part is wider than the cavity wall it has to
-    pass on its way up.
+    This is the opening in the shell face. The insert is a smaller circle
+    inside it, and the radial gap lets the insert pass the cavity wall.
 
     RING_LIFT_CLEAR inside that wall where the wall comes in closest, which is
     near the X axis. Everywhere else the wall stands further out and the circle
@@ -295,6 +293,11 @@ def led_ring_face_r():
         min(led_ring_clip_reach(angle) for angle in _ring_angles())
         - params.RING_LIFT_CLEAR
     )
+
+
+def led_ring_insert_outer_r():
+    """Radius of the insert at its joint with the front shell."""
+    return led_ring_face_r() - params.RING_INSERT_FACE_FIT
 
 
 def led_ring_lobe_refs():
@@ -400,6 +403,13 @@ def led_ring_lobe_half(ref):
     return math.asin((params.LED_BODY / 2 + params.RING_LOBE_SIDE) / r)
 
 
+def led_ring_lobe_pocket_half(ref):
+    """Half angle that leaves the specified gap normal to each pocket side."""
+    return led_ring_lobe_half(ref) + math.asin(
+        params.RING_LOBE_FIT / led_ring_insert_outer_r()
+    )
+
+
 LOBE_FACE_SAMPLES = 16
 """Bearings each lobe's land is measured at, across its own arc. The face falls
 along the arc as well as across it, and the land is the insert's whole
@@ -417,7 +427,7 @@ def led_ring_lobe_land_z(ref):
 
     wx, wy = board.wheel_center()
     angle, _ = _lobe_at(ref)
-    half, r = led_ring_lobe_half(ref), led_ring_face_r()
+    half, r = led_ring_lobe_pocket_half(ref), led_ring_face_r()
     bearings = [
         angle - half + 2 * half * i / LOBE_FACE_SAMPLES
         for i in range(LOBE_FACE_SAMPLES + 1)
@@ -516,7 +526,7 @@ def _insert_section(angle):
 
     wx, wy = board.wheel_center()
     cos_a, sin_a = math.cos(angle), math.sin(angle)
-    outer = led_ring_face_r() - params.RING_INSERT_FACE_FIT
+    outer = led_ring_insert_outer_r()
     count = RING_INSERT_TOP_POINTS
     arc = led_ring_bore_round(angle)
     start = arc[0][0]
@@ -641,16 +651,15 @@ chord from reaching in that far."""
 def led_ring_lobe_flare(ref):
     """(inner radius, height there, flat top) of `ref`'s lobe's 45 degree flare.
 
-    The 45 is the line through led_ring_face_r() at RING_LOBE_FIT under the
-    shell's own pocket, so how much of it tucks under the land does not move
-    with the overlap. The inner radius is only MERGE inside the ring's circle,
-    which puts that end of the lobe inside the band rather than on its outer
-    face, and the flat top is RING_LOBE_FIT under the cavity ceiling, which is
-    where the lobe stops reaching up into the shell."""
+    The vertical offset at the flare gives RING_LOBE_FIT normal to the 45 degree
+    pocket roof. The same gap is vertical at the flat ceiling. The inner end
+    overlaps the band so the build can fuse the two solids."""
     face = led_ring_face_r()
+    inner = led_ring_insert_outer_r() - MERGE
+    flare_drop = math.sqrt(2) * params.RING_LOBE_FIT
     return (
-        face - MERGE,
-        led_ring_lobe_land_z(ref) - params.RING_LOBE_FIT + MERGE,
+        inner,
+        led_ring_lobe_land_z(ref) + face - inner - flare_drop,
         CAVITY_FRONT - params.RING_LOBE_FIT,
     )
 
@@ -689,10 +698,8 @@ def _lobe_section(ref):
     outer face down to the rim, the rim land, and the dome back in and up to
     the ring's underside.
 
-    The flare does two jobs. It carries that LED's light up into the ring, and
-    it holds the insert in, because it tucks under a land of shell. It runs
-    RING_LOBE_FIT below the shell's own pocket, so the part seats on its face
-    circle and never on a lobe.
+    The flare carries light into the ring and tucks under the shell land.
+    The pocket clears the lobe by RING_LOBE_FIT.
 
     The dome is open on the inner side. A wall there would have to stand
     between the LED's inner edge and the ENC1 lip, and LIP_CLEAR_R leaves 0.20
@@ -835,13 +842,12 @@ def led_ring_lobes():
 def led_ring_lobe_pockets():
     """The six pockets the shell opens for the lobes.
 
-    Each is its lobe's own wedge, widened by RING_LOBE_FIT at the rim so the
-    part is not asked to slide up between two faces that touch."""
+    Each pocket gives the lobe RING_LOBE_FIT across each side face."""
     return [
         _lobe_solid(
             ref,
             _lobe_pocket_section,
-            led_ring_lobe_half(ref) + params.RING_LOBE_FIT / led_ring_lobe_rim_r(ref),
+            led_ring_lobe_pocket_half(ref),
         )
         for ref in led_ring_lobe_refs()
     ]
@@ -851,9 +857,8 @@ def _lobe_fill_section(ref):
     """[(r, z)] of the fill that closes the fit over `ref`'s lobe on the
     one-piece front.
 
-    The insert's lobe stops RING_LOBE_FIT under the cavity ceiling, so the
-    two-part build seats on its face circle and not on a lobe. A fused ring has
-    no seat, so on that front the gap is a slit with no function.
+    The insert's lobe stops RING_LOBE_FIT under the cavity ceiling. The
+    one-piece front fills this gap to join the lobe to the shell.
 
     The fill starts RING_LOBE_FIT under the lobe's flat top, inside the lobe,
     and stops MERGE over the ceiling, inside the shell. So each of its joints
@@ -1001,7 +1006,7 @@ def led_ring_feet():
     wx, wy = board.wheel_center()
     inner = LIP_CLEAR_R
     outer = (
-        led_ring_face_r() * math.cos(math.pi / LED_RING_STATIONS)
+        led_ring_insert_outer_r() * math.cos(math.pi / LED_RING_STATIONS)
         - FOOT_CHORD_INSET
     )
     low = BOARD_TOP + params.RING_FOOT_GAP
@@ -1037,10 +1042,8 @@ def led_ring_insert(feet=True):
     LEDs and feed the band, and the band carries that light round to the east
     and west, where no LED sits and the face would otherwise read as six dots.
 
-    It goes in from inside the shell and rises straight up. Nothing on it is
-    wider than the cavity wall it passes, because led_ring_face_r() stands
-    inside that wall, and the lobes clear the wall by much more on their own
-    bearings. The bore face needs no retention because it faces the knob.
+    It goes in from inside the shell and rises straight up. The band and lobes
+    clear the cavity wall along that path.
 
     The lobes are what hold it. Each tucks under LED_RING_FACE_ROOF of shell,
     so the part cannot pass outward through the face at all. It can still drop

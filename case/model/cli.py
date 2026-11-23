@@ -81,14 +81,13 @@ from .wheel_ring import (
     led_ring_insert,
     led_ring_clip_reach,
     led_ring_face_r,
-    led_ring_inner_r,
+    led_ring_insert_outer_r,
     led_ring_lobe_blend_r,
     led_ring_lobe_land_z,
     led_ring_lobe_refs,
     led_ring_lobe_rim_r,
     led_ring_lobe_rim_z,
     led_ring_lobe_roof,
-    led_ring_web_left,
     pad_keepouts,
 )
 from .stack import (
@@ -296,10 +295,11 @@ def main():
     print(
         f"  LEDs uncovered, "
         f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
-        f"package, firing into the ring insert. The ring is one circle at "
-        f"{led_ring_face_r():.2f}, {params.RING_LIFT_CLEAR:.2f} inside the "
-        f"cavity wall at {led_ring_clip_reach(0.0):.2f}, so the part lifts past "
-        f"that wall and the opening in the face is round"
+        f"package, firing into the ring insert. The front face opening has a "
+        f"{led_ring_face_r():.2f} mm radius and gives the insert "
+        f"{params.RING_INSERT_FACE_FIT:.2f} mm radial clearance. The insert "
+        f"clears the cavity wall by "
+        f"{led_ring_clip_reach(0.0) - led_ring_insert_outer_r():.2f} mm at +X."
     )
     refs = led_ring_lobe_refs()
     print(
@@ -325,13 +325,12 @@ def main():
         f"ring and tucks under the shell. The shell gives up a wedge from "
         f"{led_ring_face_r():.2f} out to {reach:.2f} at those {len(refs)} places "
         f"and keeps {ring_land_left():.2f} of land over it, against "
-        f"LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}. That land is the "
-        f"whole of the insert's retention"
+        f"LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}. Each pocket "
+        f"clears its lobe by {params.RING_LOBE_FIT:.2f} mm."
     )
     print(
-        f"  the insert carries the {led_ring_web_left():.2f} of band in to the "
-        f"bore that used to be shell web, over an inner wall at "
-        f"{led_ring_inner_r():.2f}, so no shell sheet covers the ring anywhere"
+        f"  the insert's band is {led_ring_insert_outer_r() - WHEEL_OPENING_R:.2f} mm "
+        f"wide from the wheel bore to the seam."
     )
     print(
         f"  the one-piece front keeps the ring as shell and fuses the "
@@ -459,14 +458,14 @@ def main():
     )
     print(
         f"  conformal pane {params.IR_WINDOW_T:.2f} thick in the beam with "
-        f"{params.IR_WINDOW_PRESS:.2f} press per side; interior flange "
+        f"{params.IR_WINDOW_PANE_CLEARANCE:.2f} clearance per side; interior flange "
         f"{params.IR_WINDOW_FLANGE_T:.2f} thick reaches "
         f"{params.IR_WINDOW_FLANGE:.2f} past the opening, retaining on "
         f"{ir_window_retention():.2f} with {params.IR_WINDOW_FIT:.2f} adhesive gap"
     )
     print(
-        f"  the one-piece back fuses the window in and closes the "
-        f"{params.IR_WINDOW_FIT:.2f} gap, so U2 still looks through "
+        "  the one-piece back fuses the window in and closes both gaps, "
+        "so U2 still looks through "
         f"{params.IR_WINDOW_T:.2f} of resin and needs no separate window"
     )
     lens = board.emitter_envelope()

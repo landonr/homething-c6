@@ -15,6 +15,7 @@ import cache
 import params
 
 from .backform import contour_depth
+from .cap_grid import keycap_grid
 from .caps import (
     cap_body,
     cap_flat,
@@ -122,6 +123,15 @@ from .stack import (
 )
 
 
+KEYCAP_GRID_NAME = "c6remote-keycap-grid"
+
+
+def _export_part(name, part):
+    cache.export_stl_cached(part, EXPORT / f"{name}.stl")
+    box = part.bounding_box()
+    print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true", help="preview via ocp-vscode")
@@ -130,9 +140,21 @@ def main():
         action="store_true",
         help="write the STLs and cap placements only, no feature map, no summary",
     )
+    ap.add_argument(
+        "--keycap-grid-only",
+        action="store_true",
+        help="export only the breakaway grid of blank caps",
+    )
     args = ap.parse_args()
+    if args.keycap_grid_only and (args.show or args.draft):
+        ap.error("--keycap-grid-only cannot be combined with --show or --draft")
 
     print(cache.provenance())
+
+    if args.keycap_grid_only:
+        EXPORT.mkdir(exist_ok=True)
+        _export_part(KEYCAP_GRID_NAME, keycap_grid())
+        return
 
     parts = {
         "c6remote-case-front": front_shell(),
@@ -170,6 +192,7 @@ def main():
     parts["c6remote-case-pad-fdm-v2-top"] = legacy_top_pad()
     parts["c6remote-case-pad-tpu-v2-top"] = legacy_top_pad(skirt=True)
     parts["c6remote-case-pad-v2-top"] = legacy_top_pad(fdm=False, skirt=True)
+    parts[KEYCAP_GRID_NAME] = keycap_grid()
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.
@@ -198,9 +221,7 @@ def main():
         )
 
     for name, part in parts.items():
-        cache.export_stl_cached(part, EXPORT / f"{name}.stl")
-        box = part.bounding_box()
-        print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+        _export_part(name, part)
 
     # The facts below all query built geometry, which costs more than the meshes
     # on a warm cache. A draft stops here and leaves the last full run's feature

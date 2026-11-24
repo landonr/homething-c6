@@ -1893,6 +1893,25 @@ through the front face. The previous 0.15 mm clearance was too tight for the
 printed button and front-shell tolerances. The face land and counterbore still
 guide the cap. The retention check holds the flange overlap after this change."""
 
+CAP_GRID_COLUMNS = 3
+"""Number of cap columns on the print carrier for a compact layout."""
+CAP_GRID_RAIL_W = 2.2
+"""Width of the carrier rails so the grid stays rigid during transfer."""
+CAP_GRID_END_RAIL_W = 1.4
+"""Width of the end rails, which join the side rails without carrying tabs."""
+CAP_GRID_END_GAP = 0.6
+"""Distance between the widest flange and an end rail to limit the grid length."""
+CAP_GRID_CORNER_R = 1.0
+"""Radius of the outer corners so the carrier has smooth edges."""
+CAP_GRID_INDEX_R = 1.8
+"""Larger radius at the SW1 corner to orient the carrier for marking."""
+CAP_GRID_GAP = 1.0
+"""Distance from the widest flange to the rail for a short FDM bridge."""
+CAP_GRID_TAB_T = 0.45
+"""Height of each breakaway tab so it splits before the thicker flange."""
+CAP_GRID_TAB_W = 0.8
+"""Width of a tab at the flange. The tab widens toward the rail."""
+
 CAP_FACE_HOLE_CHAMFER = 0.55
 """Radial width of the lead-in cutter around each rigid cap's face hole, on the
 axes.

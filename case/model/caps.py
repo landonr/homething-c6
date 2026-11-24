@@ -4,13 +4,13 @@ behind it."""
 
 import math
 
-from build123d import Pos, RectangleRounded, extrude, fillet, loft
+from build123d import Pos, RectangleRounded, fillet, loft
 
 import board
 import cache
 import params
 
-from .cap_marks import fitted_mark, flat_faces_at, safe_area
+from .cap_marks import keytop_mark_faces, mark_cutters
 from .keypad import face_floor_at, face_floor_over, face_plan_margin, key_size
 from .shape import _cut, _fuse, _rounded_prism, _squircle_points, _squircle_prism
 from .stack import CAP_BOTTOM, COUNTERBORE_TOP, MERGE, cap_top, front_face, stem_top
@@ -245,20 +245,12 @@ def rigid_mark_faces(ref, blank=None):
     """The engraving artwork on the built blank cap, projected to XY."""
     if blank is None:
         blank = keycap(ref, legend=False)
-    x, y = board.components()[ref][:2]
-    top = cap_top(ref)
-    area = safe_area(flat_faces_at(blank, top), x, y, ref)
-    return fitted_mark(ref, False, Pos(x, y), Pos(0, 0, -top) * area)
+    return keytop_mark_faces(ref, blank)
 
 
 def rigid_legend_solids(ref, blank=None):
     """Cutters for the rigid cap's deboss at LEGEND_DEPTH."""
-    top = cap_top(ref)
-    return [
-        extrude(Pos(0, 0, top + MERGE) * face, amount=MERGE + params.LEGEND_DEPTH,
-                dir=(0, 0, -1))
-        for face in rigid_mark_faces(ref, blank)
-    ]
+    return mark_cutters(ref, rigid_mark_faces(ref, blank))
 
 
 @cache.solid

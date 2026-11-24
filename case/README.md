@@ -18,7 +18,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 </p>
 
 The model exports the SLA front shell, back shell, soft button pad, IR window insert, LED ring insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
-The debossed rigid caps use the same 11 legends as the engraving artwork.
+The debossed rigid caps and one-piece keypads use the same 11 legends as the engraving artwork.
 `c6remote-keycap-grid.stl` holds 11 blank caps and a spare in one breakaway grid for screen printing or laser engraving.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports an FDM front shell for a filament printer. Read [Front versions](#front-versions).

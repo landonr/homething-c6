@@ -1,13 +1,15 @@
-"""Shared rigid cap legend geometry for the deboss and marking artwork."""
+"""Shared cap and pad legend geometry for the deboss and marking artwork."""
 
 from functools import partial
 import math
 
-from build123d import Kind, Pos, RegularPolygon, offset
+from build123d import Kind, Pos, RegularPolygon, extrude, offset
 
+import board
 import params
 
 from .legends import _legend_faces, legend_entry
+from .stack import MERGE, cap_top
 
 DIRECTION_ANGLES = {"SW4": 180, "SW6": 90, "SW8": 270, "SW10": 0}
 
@@ -70,8 +72,8 @@ def flat_faces_at(part, z):
     return faces
 
 
-def safe_area(flat_faces, x, y, ref):
-    """Inset the actual flat face at this slot's center."""
+def flat_face_at(flat_faces, x, y, ref):
+    """Find the unbroken flat face at this key position."""
     matches = []
     for face, box in flat_faces:
         center = box.center()
@@ -79,7 +81,13 @@ def safe_area(flat_faces, x, y, ref):
             matches.append(face)
     if len(matches) != 1:
         raise ValueError(f"Expected one flat cap face for {ref}, found {len(matches)}")
-    areas = offset(matches[0], -params.CAP_GRID_MARK_CLEARANCE, kind=Kind.INTERSECTION).faces()
+    return matches[0]
+
+
+def safe_area(flat_faces, x, y, ref):
+    """Inset the actual flat face at this slot's center."""
+    face = flat_face_at(flat_faces, x, y, ref)
+    areas = offset(face, -params.CAP_GRID_MARK_CLEARANCE, kind=Kind.INTERSECTION).faces()
     if len(areas) != 1 or not areas[0].is_valid:
         raise ValueError(f"Could not inset the flat cap face for {ref}")
     return areas[0]
@@ -95,3 +103,21 @@ def fitted_mark(ref, spare, center, area):
         ):
             return marks
     raise ValueError(f"Engraving for {ref} does not fit its {params.CAP_GRID_MARK_CLEARANCE:g} mm inset")
+
+
+def keytop_mark_faces(ref, blank):
+    """Fit the artwork to the built keytop and project the marks to XY."""
+    x, y = board.components()[ref][:2]
+    top = cap_top(ref)
+    area = safe_area(flat_faces_at(blank, top), x, y, ref)
+    return fitted_mark(ref, False, Pos(x, y), Pos(0, 0, -top) * area)
+
+
+def mark_cutters(ref, faces):
+    """Extrude planar marks into cutters with the specified deboss depth."""
+    top = cap_top(ref)
+    return [
+        extrude(Pos(0, 0, top + MERGE) * face, amount=MERGE + params.LEGEND_DEPTH,
+                dir=(0, 0, -1))
+        for face in faces
+    ]

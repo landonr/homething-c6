@@ -1954,7 +1954,7 @@ def blank_tpu_pads(pairs):
     """
     refs = case.cap_refs()
     marks = sum(
-        _volume(shape) for ref in refs for shape in case.legend_solids(ref)
+        _volume(shape) for ref in refs for shape in case.fdm_legend_solids(ref)
     )
     problems, lines = [], []
     for label, blank, twin, lobes in pairs:

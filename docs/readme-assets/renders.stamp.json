@@ -8,19 +8,19 @@
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "43e764ddcc3a359b740e6cf62372817f4f84a5293959d371052e50717d4dfed3",
+    "fingerprint": "7ab0ee7ac8e2f43904664f44ac0dedcd87cb0de226421a8a9104ebdeff35bb3d",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "bbe94848af474caf83a1860c7dcd27c8bf0a73253abe3b7e3cf9d8fc9c5b8644",
+    "fingerprint": "f32de8032d2fe5bffdab9ba088e1e5eef98a6d6a12a68676b8ed6c9f7ae4bd83",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "7fcea5256730496d6620a549a34463b20287f78d92fa15324e58a882dec962cd",
+    "fingerprint": "871ed9461b9e354742815b0dc0b1266c89e5f813987d0815e45acf8982b51847",
     "source": "index"
   },
   "case-keycap-grid": {
-    "fingerprint": "22408a597b62f7de8d8c475a540bcec9916dac82ad9b0071ff65cd08579c254b",
+    "fingerprint": "c38b959f00a687755988b7dd467f39410c27bd2fb066e0f53d000820d9b8d05b",
     "source": "index"
   },
   "case-stills": {
@@ -32,11 +32,11 @@
     "source": "index"
   },
   "self-test-diagrams": {
-    "fingerprint": "c0fbebf86ecfe62fd99b5028a0b19c1e7077b3dc0cdb025c391e61e2b5cb24c9",
+    "fingerprint": "9facae3dc3ac2d6af7a3701297451ec898365ad331369b6f41ddc9552ad9707d",
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "d03050d8e541b5b2885a15ae5a302d6c139b2ae45ee857786f98f1cdac41af30",
+    "fingerprint": "6e4382729df4bfa5677805c96095e4fdaab9a1ae91c4edcf08fd757622c16091",
     "source": "index"
   },
   "site-media": {
@@ -48,11 +48,11 @@
     "source": "index"
   },
   "web-page-framed": {
-    "fingerprint": "d14662d53ca29fad041c5398bad246511b328815bdf1f6829870e67bbc2d1542",
+    "fingerprint": "8f498e7df3745749d024bb738756addf8641a97fe08ccac1829b41ef4841c6f3",
     "source": "index"
   },
   "web-page-shots": {
-    "fingerprint": "3fdee91aeea8fa96bebabce384823e637a50378f30e5fd963b92335f269b9b84",
+    "fingerprint": "59b1edf605d754e916c6c61ed1cd9eb1169d7f175b786dceaf0da5d0dfa0e0bc",
     "source": "index"
   }
 }

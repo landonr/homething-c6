@@ -39,7 +39,7 @@ import board
 import cache
 import params
 
-from .legends import legend_solids
+from .cap_marks import keytop_mark_faces, mark_cutters
 from .mic import mic_duct_or, mic_port
 from .shape import (
     _convex_hull,
@@ -2161,6 +2161,18 @@ def fdm_keycap_bottom():
     return PAD_WEB_TOP
 
 
+def fdm_mark_faces(ref, blank=None):
+    """Planar marks fitted to the flat face of an integrated keytop."""
+    if blank is None:
+        blank = fdm_keycap(ref, legend=False)
+    return keytop_mark_faces(ref, blank)
+
+
+def fdm_legend_solids(ref, blank=None):
+    """Cutters for legends on the fused FDM and TPU keytops."""
+    return mark_cutters(ref, fdm_mark_faces(ref, blank))
+
+
 def fdm_keycap(ref, legend=True):
     """One solid keytop for the FDM pad, fused across its lobe web.
 
@@ -2187,9 +2199,8 @@ def fdm_keycap(ref, legend=True):
     ]
     if not top_edges:
         raise ValueError(f"{ref}'s FDM keytop has no top perimeter edges to fillet")
-    body = fillet(top_edges, params.CAP_TOP_FILLET)
-    marks = legend_solids(ref, x, y) if legend else []
-    return _cut(body, *marks)
+    blank = fillet(top_edges, params.CAP_TOP_FILLET).clean()
+    return _cut(blank, *fdm_legend_solids(ref, blank)) if legend else blank
 
 
 def _mic_clearance():

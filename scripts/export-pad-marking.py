@@ -28,10 +28,9 @@ sys.path.insert(0, str(ROOT / "case"))
 from build123d import ExportDXF, ExportSVG, Polyline, Pos, Unit  # noqa: E402
 
 import board  # noqa: E402
-import params  # noqa: E402
-from model.caps import cap_body, cap_outline  # noqa: E402
-from model.keypad import pad_lobe_face, pad_lobes  # noqa: E402
-from model.legends import _legend_faces, legend_entry  # noqa: E402
+from model.cap_marks import flat_face_at, flat_faces_at, mark_stroke_width  # noqa: E402
+from model.keypad import fdm_keycap, fdm_mark_faces, pad_lobe_face, pad_lobes  # noqa: E402
+from model.legends import _bounds  # noqa: E402
 from model.stack import cap_top  # noqa: E402
 
 OUT_DIR = ROOT / "case" / "export" / "pad-marking"
@@ -58,15 +57,19 @@ def plan():
     keys = []
     for ref in KEYS:
         x, y = parts[ref][:2]
-        spec, size = legend_entry(ref)
+        top = tops[ref]
+        blank = fdm_keycap(ref, legend=False)
+        flat = flat_face_at(flat_faces_at(blank, top), x, y, ref)
+        marks = fdm_mark_faces(ref, blank)
+        ink = _bounds(marks).size
         keys.append({
             "ref": ref,
             "x": x,
             "y": y,
-            "size": size,
-            "rise": tops[ref] - low,
-            "legend": [Pos(x, y) * face for face in _legend_faces(spec, size)],
-            "outline": cap_outline(cap_body(ref), x, y),
+            "size": max(ink.X, ink.Y),
+            "rise": top - low,
+            "legend": marks,
+            "outline": Pos(0, 0, -top) * flat.outer_wire(),
         })
     x0 = min(box[0] for box in lobes.values())
     y0 = min(box[1] for box in lobes.values())
@@ -103,7 +106,7 @@ def write_dxf(lobes, keys, origin, path):
     for name in lobes:
         dxf.add_shape(shifted(pad_lobe_face(name).outer_wire(), origin), layer="outline")
     for key in keys:
-        dxf.add_shape(shifted(Polyline(*key["outline"], close=True), origin), layer="keytop")
+        dxf.add_shape(shifted(key["outline"], origin), layer="keytop")
         for face in key["legend"]:
             dxf.add_shape([shifted(w, origin) for w in face.wires()], layer="legend")
         x, y, h = key["x"], key["y"], CENTER_MARK
@@ -141,7 +144,7 @@ def write_drawing(lobes, keys, origin, path):
     for name in lobes:
         out.append(f'<path class="o" d="{path_of(sample(pad_lobe_face(name).outer_wire(), 600))}"/>')
     for key in keys:
-        out.append(f'<path class="k" d="{path_of(key["outline"])}"/>')
+        out.append(f'<path class="k" d="{path_of(sample(key["outline"]))}"/>')
         for face in key["legend"]:
             d = " ".join(path_of(sample(wire)) for wire in face.wires())
             out.append(f'<path class="l" fill-rule="evenodd" d="{d}"/>')
@@ -158,7 +161,7 @@ def write_drawing(lobes, keys, origin, path):
         ("t", "Units: mm. Origin: lower left corner of the pad."),
         ("t", "Print or engrave on the blank pad, top view."),
         ("t", ""),
-        ("m", "Key   centre x  centre y  size   top"),
+        ("m", "Key   centre x  centre y  ink    top"),
     ]
     for key in keys:
         lines.append(("m", f"{key['ref']:<5} {key['x'] - x0:9.2f} {key['y'] - y0:9.2f} "
@@ -173,7 +176,8 @@ def write_drawing(lobes, keys, origin, path):
             ("t", f"Each key top is flat. {raised}"),
             ("t", f"stand {step:.2f} mm higher than the other keys."),
         ]
-    lines.append(("t", f"Legend line width {params.LEGEND_STROKE_W} mm."))
+    widths = ", ".join(f"{width:g}" for width in sorted({mark_stroke_width(ref) for ref in KEYS}))
+    lines.append(("t", f"Legend stroke widths (mm): {widths}."))
     for i, (klass, text) in enumerate(lines):
         out.append(f'<text class="{klass}" x="{fmt(tx, 1)}" y="{fmt(MARGIN + 16 * (i + 1), 1)}" '
                    f'xml:space="preserve">{escape(text)}</text>')

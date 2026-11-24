@@ -1916,10 +1916,16 @@ CAP_GRID_MARK_CLEARANCE = 0.5
 CAP_GRID_MARK_CONTROL_W = 0.8
 """Stroke width that gives the engraved plus and minus more weight."""
 CAP_GRID_MARK_CORNER_R = 0.7
-"""Outer radius that rounds the engraved triangles and spare diamond."""
-CAP_GRID_MARK_TRIANGLE_R = 2.55
-"""Circumradius of each directional legend before the corner rounds."""
-CAP_GRID_MARK_DIAMOND_R = 2.1
+"""Outer radius for the engraved polygon corners."""
+CAP_GRID_MARK_TRIANGLE_R = 2.9
+"""Circumradius that gives each rounded triangle a span near the circle width."""
+CAP_GRID_MARK_SQUARE_W = 3.65
+"""Width of the stop square. The smaller width balances its longer outline."""
+CAP_GRID_MARK_CIRCLE_SIZE = 5.1
+"""Font size that makes the engraved circle approximately 3.9 mm wide."""
+CAP_GRID_MARK_CONTROL_SIZE = 4.6
+"""Maximum span of the power, microphone, plus, and minus legends."""
+CAP_GRID_MARK_DIAMOND_R = 2.2
 """Circumradius of the spare cap's diamond before the corner rounds."""
 
 CAP_FACE_HOLE_CHAMFER = 0.55

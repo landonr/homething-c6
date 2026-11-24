@@ -57,6 +57,9 @@ def mark_design(ref, spare):
     """Return an engraving shape builder and its starting size."""
     if spare:
         return partial(rounded_mark, sides=4, angle=0), params.CAP_GRID_MARK_DIAMOND_R
+    if ref == "SW5":
+        radius = params.CAP_GRID_MARK_SQUARE_W / math.sqrt(2)
+        return partial(rounded_mark, sides=4, angle=45), radius
     if ref in DIRECTION_ANGLES:
         return (
             partial(rounded_mark, sides=3, angle=DIRECTION_ANGLES[ref]),
@@ -65,6 +68,10 @@ def mark_design(ref, spare):
     spec, size = legend_entry(ref)
     if ref == "SW2":
         spec = ("svg", "glyphs/mic-engraving.svg")
+    if ref == "SW7":
+        size = params.CAP_GRID_MARK_CIRCLE_SIZE
+    elif ref in ("SW1", "SW2", "SW9", "SW11"):
+        size = params.CAP_GRID_MARK_CONTROL_SIZE
     width = params.CAP_GRID_MARK_CONTROL_W if ref in ("SW9", "SW11") else None
     return partial(_legend_faces, spec, stroke_width=width), size
 

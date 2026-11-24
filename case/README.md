@@ -475,7 +475,7 @@ SW7   SW8   SW9
 SW10  SW11   spare
 ```
 
-The spare has the same shape and legend as SW11.
+The spare fits the SW11 position and has a diamond mark.
 
 To export the 1:1 engraving artwork, install `rsvg-convert` from librsvg. Then run this command from the repository root:
 
@@ -485,6 +485,7 @@ case/.venv/bin/python scripts/export-keycap-grid-marking.py
 
 Use `keycap-grid-legends.svg` or `keycap-grid-legends.pdf` at 100% scale. Both files contain only the marks.
 Use `keycap-grid-placement.svg` to align the frame before you mark the caps. Find the files in `case/export/keycap-grid-marking/`.
+The teal outlines show the safe area 0.5 mm inside each flat cap face. Keep all marks inside these outlines.
 
 ## Assembly
 

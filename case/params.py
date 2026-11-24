@@ -1911,6 +1911,16 @@ CAP_GRID_TAB_T = 0.45
 """Height of each breakaway tab so it splits before the thicker flange."""
 CAP_GRID_TAB_W = 0.8
 """Width of a tab at the flange. The tab widens toward the rail."""
+CAP_GRID_MARK_CLEARANCE = 0.5
+"""Minimum distance from engraving to the edge of each flat cap face."""
+CAP_GRID_MARK_CONTROL_W = 0.8
+"""Stroke width that gives the engraved plus and minus more weight."""
+CAP_GRID_MARK_CORNER_R = 0.7
+"""Outer radius that rounds the engraved triangles and spare diamond."""
+CAP_GRID_MARK_TRIANGLE_R = 2.55
+"""Circumradius of each directional legend before the corner rounds."""
+CAP_GRID_MARK_DIAMOND_R = 2.1
+"""Circumradius of the spare cap's diamond before the corner rounds."""
 
 CAP_FACE_HOLE_CHAMFER = 0.55
 """Radial width of the lead-in cutter around each rigid cap's face hole, on the

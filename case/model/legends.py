@@ -41,14 +41,13 @@ def legend_size(ref):
     return legend_entry(ref)[1]
 
 
-def _outline_band(face, spec):
-    """A glyph face's inward outline, one LEGEND_STROKE_W wide, as faces.
+def _outline_band(face, spec, w):
+    """A glyph face's inward outline as faces.
 
     The band's outer edge is the glyph's own ink edge. A glyph too thin to hold
     an interior offset raises or returns nothing in build123d's offset, which
     is turned into one clear error rather than a silent fill.
     """
-    w = params.LEGEND_STROKE_W
     try:
         inner = offset(face, -w, kind=Kind.INTERSECTION).faces()
     except (ValueError, RuntimeError):
@@ -58,26 +57,25 @@ def _outline_band(face, spec):
             inner = [make_face(face.outer_wire().offset_2d(-w, kind=Kind.ARC))]
         except (ValueError, RuntimeError) as err:
             raise ValueError(
-                f"legend {spec!r} is too thin to outline at LEGEND_STROKE_W={w}: "
+                f"legend {spec!r} is too thin to outline with a {w} mm stroke: "
                 f"use a solid glyph or an SVG stroke ({err})"
             ) from err
     if not inner:
         raise ValueError(
-            f"legend {spec!r} is too thin to outline at LEGEND_STROKE_W={w}: "
+            f"legend {spec!r} is too thin to outline with a {w} mm stroke: "
             "use a solid glyph or an SVG stroke"
         )
     return list((face - Sketch(obj=Compound(list(inner)))).faces())
 
 
-def _stroke_faces(wires, size):
-    """Centerline wires thickened to LEGEND_STROKE_W, as non-overlapping faces.
+def _stroke_faces(wires, size, w):
+    """Centerline wires thickened to a fixed width as non-overlapping faces.
 
     Scaled first so the centerline's longest side is size less one stroke
     width, which makes the inked result about `size` on its longest side, then
     thickened in mm so the line weight does not depend on size. Open wires get
     round caps.
     """
-    w = params.LEGEND_STROKE_W
     box = _bounds(wires)
     k = (size - w) / max(box.size.X, box.size.Y)
     faces = []
@@ -98,12 +96,11 @@ def _stroke_faces(wires, size):
     return list(faces)
 
 
-def _legend_faces(spec, size):
+def _legend_faces(spec, size, stroke_width=None):
     """The legend as stroke faces on the XY plane, centred on its own ink.
 
-    Every legend is a line of LEGEND_STROKE_W. A string is the inward outline
-    of each font glyph, so the interior stays standing. An SVG is a set of
-    centerline paths thickened to the same weight.
+    The width defaults to LEGEND_STROKE_W. A string is the inward outline of
+    each font glyph. An SVG is a set of centerline paths thickened to that width.
 
     Centred on the ink rather than left where either source puts it. Text
     centres on the font's own layout box, which carries the ascender and
@@ -112,9 +109,10 @@ def _legend_faces(spec, size):
     brought back onto the ink's own bounding box here, so a legend sits in
     the middle of the cap whichever branch built it.
     """
+    width = params.LEGEND_STROKE_W if stroke_width is None else stroke_width
     if isinstance(spec, str):
         glyphs = Text(spec, font_size=size, font_path=str(params.LEGEND_FONT)).faces()
-        faces = [band for glyph in glyphs for band in _outline_band(glyph, spec)]
+        faces = [band for glyph in glyphs for band in _outline_band(glyph, spec, width)]
     else:
         kind, name = spec
         if kind != "svg":
@@ -122,7 +120,7 @@ def _legend_faces(spec, size):
         path = Path(name)
         art = import_svg(path if path.is_absolute() else HERE / path, align=Align.CENTER)
         wires = list(art.wires() if hasattr(art, "wires") else art)
-        faces = _stroke_faces(wires, size) if wires else []
+        faces = _stroke_faces(wires, size, width) if wires else []
 
     if not faces:
         return []

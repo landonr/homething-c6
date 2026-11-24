@@ -79,6 +79,24 @@ grp.parent = model
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=a.glb)
 new = [o for o in bpy.data.objects if o not in before]
+
+# KiCad exports the substrate and its black faces in one mesh.
+fr4 = bpy.data.materials.new("board-edge-fr4")
+fr4.use_nodes = True
+fr4_shader = bsdf(fr4)
+fr4_shader.inputs["Base Color"].default_value = lin(0xC7AC7D)
+fr4_shader.inputs["Roughness"].default_value = 0.85
+for o in new:
+    if o.type != "MESH" or o.data.name != "c6remote_PCB":
+        continue
+    normal_matrix = o.matrix_world.to_3x3().inverted().transposed()
+    edge_material_index = len(o.data.materials)
+    o.data.materials.append(fr4)
+    for polygon in o.data.polygons:
+        normal = (normal_matrix @ polygon.normal).normalized()
+        if abs(normal.z) < 1e-4:
+            polygon.material_index = edge_material_index
+
 # The GLB is in metres. The importer already converts glTF Y-up to Z-up.
 root = bpy.data.objects.new("board-mm", None)
 scene.collection.objects.link(root)
@@ -93,7 +111,7 @@ seen = set()
 for o in new:
     for slot in o.material_slots:
         m = slot.material
-        if not m or m.name in seen or not m.node_tree:
+        if not m or m == fr4 or m.name in seen or not m.node_tree:
             continue
         seen.add(m.name)
         for nd in m.node_tree.nodes:

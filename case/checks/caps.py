@@ -25,12 +25,13 @@ one of those covers the others.
 
 import math
 
-from build123d import Box, Compound, Kind, Pos, Text, Vertex, make_face, offset
+from build123d import Box, Compound, Face, Pos, Vertex
 from fontTools.ttLib import TTFont
 
 import board
 import case
 import params
+from model.cap_marks import flat_faces_at, mark_font_glyph, mark_stroke_width
 
 from .common import TOLERANCE, _volume
 
@@ -162,11 +163,6 @@ def caps_fit(front, pad, caps):
 
         if params.STEM_W > hole - 2 * SWAP_MARGIN:
             problems.append(f"{ref}'s bare stem snags its hole with the cap off")
-
-    # The flat top a legend has to fit in is checked in legends_present(), not
-    # here: LEGENDS carries a per-entry size now, so comparing one LEGEND_SIZE
-    # against every cap would test the wrong number on most of them, and a font
-    # size is an em rather than an ink height in the first place.
 
     roof = params.CAP_TOP_T - params.LEGEND_DEPTH
     if roof < LEGEND_FLOOR:
@@ -348,14 +344,6 @@ catches an empty string, an SVG whose paths imported as nothing, and a
 legend cut somewhere other than the cap top; it does not catch a missing
 glyph, which is what the cmap check beside it is for."""
 
-LEGEND_INK_MARGIN = 0.2
-"""Bare cap top left around a legend's ink, per side, inside the planar flat
-that CAP_TOP_FILLET leaves on the built blank cap. Measured against the built
-ink and the built flat rather than against the font size it was set at:
-LEGENDS' sizes are ems, and a glyph spends its em anywhere from a tenth to
-three quarters, so the size alone says nothing about whether the mark fits."""
-
-
 FLAT_SAMPLE_STEP = 0.1
 """Spacing, mm, of the points sampled along a legend's footprint and along the
 flat's outline. The clearance can over-read by less than this."""
@@ -441,7 +429,7 @@ def legends_present(caps):
     which is what a legend reaching past the roof would break.
 
     And the ink has to fit the flat top that the top fillet leaves on the
-    built blank cap, with LEGEND_INK_MARGIN between every point of every
+    built blank cap, with CAP_GRID_MARK_CLEARANCE between every point of every
     legend's footprint and the flat's edge.
     """
     font = TTFont(params.LEGEND_FONT)
@@ -449,8 +437,8 @@ def legends_present(caps):
 
     problems = []
     for ref, cap in caps.items():
-        spec, size = case.legend_entry(ref)
-        if isinstance(spec, str):
+        spec = mark_font_glyph(ref)
+        if spec is not None:
             missing = sorted({c for c in spec if ord(c) not in cmap})
             if missing:
                 names = ", ".join(f"U+{ord(c):04X}" for c in missing)
@@ -472,7 +460,7 @@ def legends_present(caps):
                 f"{LEGEND_MIN_VOLUME:.2f}: is the entry empty?"
             )
 
-        solids = case.legend_solids(ref)
+        solids = case.rigid_legend_solids(ref, blank)
         if len(cap.solids()) != 1:
             problems.append(
                 f"{ref}'s cap came out as {len(cap.solids())} solids, not one"
@@ -480,11 +468,11 @@ def legends_present(caps):
 
         if solids:
             clearance, at = legend_flat_clearance(blank, solids, case.cap_top(ref))
-            if clearance < LEGEND_INK_MARGIN:
+            if clearance < params.CAP_GRID_MARK_CLEARANCE:
                 problems.append(
                     f"{ref}'s legend ink comes within {clearance:.2f} of the "
                     f"edge of the cap's flat top at ({at[0]:.2f}, {at[1]:.2f}), "
-                    f"wants {LEGEND_INK_MARGIN:.2f} of margin"
+                    f"wants {params.CAP_GRID_MARK_CLEARANCE:.2f} of margin"
                 )
     return problems
 
@@ -526,29 +514,18 @@ def _legend_points(solids, per_solid=4):
     return found
 
 
-def _hollow_points(spec, size, x, y):
-    """(x, y) of the interior each string glyph's outline encloses, in the cap's
-    frame. For probing only: the centre of each glyph's inward offset, shifted
-    by the same ink-centring the legend gets."""
-    glyphs = Text(spec, font_size=size, font_path=str(params.LEGEND_FONT)).faces()
-    box = glyphs[0].bounding_box()
-    for glyph in glyphs[1:]:
-        box = box.add(glyph.bounding_box())
-    cx, cy = box.center().X, box.center().Y
-    points = []
-    for glyph in glyphs:
-        try:
-            inner = offset(glyph, -params.LEGEND_STROKE_W, kind=Kind.INTERSECTION).faces()
-        except (ValueError, RuntimeError):
-            inner = [make_face(glyph.outer_wire().offset_2d(-params.LEGEND_STROKE_W, kind=Kind.ARC))]
-        for face in inner:
-            c = face.center()
-            points.append((c.X - cx + x, c.Y - cy + y))
-    return points
+def _hollow_points(solids):
+    """Centers of the actual counters enclosed by the cutter outlines."""
+    for solid in solids:
+        top = solid.bounding_box().max.Z
+        for face, _ in flat_faces_at(solid, top):
+            for wire in face.inner_wires():
+                point = Face(wire).center()
+                yield point.X, point.Y
 
 
 def legends_are_strokes(caps):
-    """Every legend is a shallow line of LEGEND_STROKE_W, read off the built cap.
+    """Every legend is a shallow line, read off the built cap.
 
     Three probes, each on the finished cap solid rather than the legend
     builder's own output.
@@ -557,25 +534,23 @@ def legends_are_strokes(caps):
     LEGEND_DEPTH below the cap's own cap_top() and material the same distance
     below it.
 
-    Hollow: a string legend's glyph interior, the part its outline encloses,
-    is material half a LEGEND_DEPTH below cap_top(). A legend that reverts to a
-    fill is void there.
+    Hollow: a closed outline contains material half a LEGEND_DEPTH below
+    cap_top(). A legend that reverts to a fill is void there.
 
     Line weight: a grid over the legend's ink box is sampled half a
     LEGEND_DEPTH below cap_top(). Each void sample's horizontal distance to the
     groove walls, the cap faces wholly within the legend depth that are not
     flat, is how far it sits from the nearest wall, and the largest must stay
-    within LEGEND_STROKE_REACH * LEGEND_STROKE_W. No section is cut because a
-    planar boolean through the top fillet is unreliable.
+    within LEGEND_STROKE_REACH times the mark's stroke width. A planar boolean
+    through the top fillet is unreliable.
     """
     problems = []
-    bound = LEGEND_STROKE_REACH * params.LEGEND_STROKE_W
     for ref, cap in caps.items():
-        x, y = board.components()[ref][:2]
         top = case.cap_top(ref)
         z_mid = top - params.LEGEND_DEPTH / 2
-        spec, size = case.legend_entry(ref)
-        solids = case.legend_solids(ref)
+        width = mark_stroke_width(ref)
+        bound = LEGEND_STROKE_REACH * width
+        solids = case.rigid_legend_solids(ref)
         if not solids:
             continue
 
@@ -593,13 +568,15 @@ def legends_are_strokes(caps):
                 )
                 break
 
-        if isinstance(spec, str):
-            for px, py in _hollow_points(spec, size, x, y):
-                if not cap.is_inside((px, py, z_mid)):
-                    problems.append(
-                        f"{ref}'s legend {spec!r} is void at its interior point "
-                        f"({px:.2f}, {py:.2f}), wants material: it is a fill, not an outline"
-                    )
+        counters = list(_hollow_points(solids))
+        if ref in ("SW2", "SW4", "SW5", "SW6", "SW7", "SW8", "SW10") and not counters:
+            problems.append(f"{ref}'s outline has no counter")
+        for px, py in counters:
+            if not cap.is_inside((px, py, z_mid)):
+                problems.append(
+                    f"{ref}'s legend is void inside its counter at ({px:.2f}, {py:.2f}), "
+                    "wants material"
+                )
 
         box = solids[0].bounding_box()
         for solid in solids[1:]:
@@ -633,7 +610,6 @@ def legends_are_strokes(caps):
             problems.append(
                 f"{ref}'s legend groove reaches {worst:.2f} from a wall at "
                 f"({at[0]:.2f}, {at[1]:.2f}), wants at most {bound:.2f} "
-                f"(LEGEND_STROKE_REACH {LEGEND_STROKE_REACH:.2f} x LEGEND_STROKE_W "
-                f"{params.LEGEND_STROKE_W:.2f}): it is wider than a line"
+                f"(LEGEND_STROKE_REACH {LEGEND_STROKE_REACH:.2f} x {width:.2f} mm stroke)"
             )
     return problems

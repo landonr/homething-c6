@@ -8,19 +8,23 @@
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "c125caaa92a520268a7244096339aaafa4eb7fb57dbfaad06380429eb5fb912e",
+    "fingerprint": "43e764ddcc3a359b740e6cf62372817f4f84a5293959d371052e50717d4dfed3",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "5c2aab814d3afd27e0c0058cf7bd4fddf44d01edcd8b81f6b8a1f4810244294a",
+    "fingerprint": "bbe94848af474caf83a1860c7dcd27c8bf0a73253abe3b7e3cf9d8fc9c5b8644",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "b725d83168a82c7e3cd8921c54ef252ccd4f5d73085f00650ec2d4041120b523",
+    "fingerprint": "7fcea5256730496d6620a549a34463b20287f78d92fa15324e58a882dec962cd",
+    "source": "index"
+  },
+  "case-keycap-grid": {
+    "fingerprint": "22408a597b62f7de8d8c475a540bcec9916dac82ad9b0071ff65cd08579c254b",
     "source": "index"
   },
   "case-stills": {
-    "fingerprint": "1f60be38afbcf1d4bed9e69067dec1e57cc0444f45d05e763090ef21a6acb0f5",
+    "fingerprint": "d03050d8e541b5b2885a15ae5a302d6c139b2ae45ee857786f98f1cdac41af30",
     "source": "index"
   },
   "schematic": {
@@ -28,11 +32,11 @@
     "source": "index"
   },
   "self-test-diagrams": {
-    "fingerprint": "bfeefdbb92f7dddcc48d3a99d87663b96564ab7b0f8d02f8c7401162831cde65",
+    "fingerprint": "c0fbebf86ecfe62fd99b5028a0b19c1e7077b3dc0cdb025c391e61e2b5cb24c9",
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "1f60be38afbcf1d4bed9e69067dec1e57cc0444f45d05e763090ef21a6acb0f5",
+    "fingerprint": "d03050d8e541b5b2885a15ae5a302d6c139b2ae45ee857786f98f1cdac41af30",
     "source": "index"
   },
   "site-media": {

@@ -2,9 +2,7 @@
 """Export 1:1 legend artwork and a placement guide for the breakaway cap grid."""
 
 import argparse
-from functools import partial
 from io import BytesIO
-import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,16 +13,14 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "case"))
 
-from build123d import ExportSVG, Kind, Pos, RegularPolygon, Rot, Unit, offset  # noqa: E402
+from build123d import ExportSVG, Pos, Rot, Unit  # noqa: E402
 
-import params  # noqa: E402
 from model.cap_grid import keycap_grid, keycap_grid_layout  # noqa: E402
-from model.legends import _legend_faces, legend_entry  # noqa: E402
+from model.cap_marks import fitted_mark, flat_faces_at, safe_area  # noqa: E402
 
 OUT_DIR = ROOT / "case" / "export" / "keycap-grid-marking"
 SVG_NS = "http://www.w3.org/2000/svg"
 ET.register_namespace("", SVG_NS)
-DIRECTION_ANGLES = {"SW4": 180, "SW6": 90, "SW8": 270, "SW10": 0}
 
 
 def svg_document(exporter, width, height, margin=0):
@@ -40,69 +36,6 @@ def svg_document(exporter, width, height, margin=0):
     return ET.ElementTree(svg)
 
 
-def rounded_mark(radius, sides, angle):
-    """Make a centered polygon outline with rounded outer and inner corners."""
-    corner_radius = params.CAP_GRID_MARK_CORNER_R
-    stroke = params.LEGEND_STROKE_W
-    inner_radius = radius - stroke / math.cos(math.pi / sides)
-    outer = RegularPolygon(radius, sides, rotation=angle, align=None).faces()[0]
-    inner = RegularPolygon(inner_radius, sides, rotation=angle, align=None).faces()[0]
-    outer = outer.fillet_2d(corner_radius, outer.vertices())
-    inner = inner.fillet_2d(corner_radius - stroke, inner.vertices())
-    center = outer.bounding_box().center()
-    return [Pos(*(-center)) * face for face in outer.cut(inner).faces()]
-
-
-def mark_design(ref, spare):
-    """Return an engraving shape builder and its starting size."""
-    if spare:
-        return partial(rounded_mark, sides=4, angle=0), params.CAP_GRID_MARK_DIAMOND_R
-    if ref == "SW5":
-        radius = params.CAP_GRID_MARK_SQUARE_W / math.sqrt(2)
-        return partial(rounded_mark, sides=4, angle=45), radius
-    if ref in DIRECTION_ANGLES:
-        return (
-            partial(rounded_mark, sides=3, angle=DIRECTION_ANGLES[ref]),
-            params.CAP_GRID_MARK_TRIANGLE_R,
-        )
-    spec, size = legend_entry(ref)
-    if ref == "SW2":
-        spec = ("svg", "glyphs/mic-engraving.svg")
-    if ref == "SW7":
-        size = params.CAP_GRID_MARK_CIRCLE_SIZE
-    elif ref in ("SW1", "SW2", "SW9", "SW11"):
-        size = params.CAP_GRID_MARK_CONTROL_SIZE
-    width = params.CAP_GRID_MARK_CONTROL_W if ref in ("SW9", "SW11") else None
-    return partial(_legend_faces, spec, stroke_width=width), size
-
-
-def safe_area(flat_faces, x, y, ref):
-    """Inset the actual flat face at this slot's center."""
-    matches = []
-    for face, box in flat_faces:
-        center = box.center()
-        if math.hypot(center.X - x, center.Y - y) < 1e-5 and not face.inner_wires():
-            matches.append(face)
-    if len(matches) != 1:
-        raise ValueError(f"Expected one flat cap face for {ref}, found {len(matches)}")
-    areas = offset(matches[0], -params.CAP_GRID_MARK_CLEARANCE, kind=Kind.INTERSECTION).faces()
-    if len(areas) != 1 or not areas[0].is_valid:
-        raise ValueError(f"Could not inset the flat cap face for {ref}")
-    return areas[0]
-
-
-def fitted_mark(ref, spare, center, area):
-    """Reduce the mark size if necessary and keep its stroke width."""
-    build_mark, size = mark_design(ref, spare)
-    for step in range(1 if ref == "SW3" else 12):
-        marks = [center * face for face in build_mark(size * 0.98**step)]
-        if marks and all(
-            sum(part.area for part in mark.cut(area).faces()) < 1e-7 for mark in marks
-        ):
-            return marks
-    raise ValueError(f"Engraving for {ref} does not fit its {params.CAP_GRID_MARK_CLEARANCE:g} mm inset")
-
-
 def marking_files(out_dir, converter):
     grid = keycap_grid()
     bounds = grid.bounding_box()
@@ -114,12 +47,9 @@ def marking_files(out_dir, converter):
 
     # The marking view flips the printed part about X, then uses SVG's Y-down axis.
     face_up = Pos(-bounds.min.X, bounds.min.Y) * Rot(180, 0, 0)
-    flat_faces = []
-    for face in grid.faces():
-        box = face.bounding_box()
-        if abs(box.min.Z) < 1e-6 and abs(box.max.Z) < 1e-6:
-            flat_faces.append((face, box))
-            guide.add_shape([face_up * wire for wire in face.wires()], layer="placement")
+    flat_faces = flat_faces_at(grid, 0)
+    for face, _ in flat_faces:
+        guide.add_shape([face_up * wire for wire in face.wires()], layer="placement")
 
     labels = []
     seen = set()

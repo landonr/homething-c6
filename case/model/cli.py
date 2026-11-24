@@ -16,9 +16,9 @@ import params
 
 from .backform import contour_depth
 from .cap_grid import keycap_grid
+from .cap_marks import mark_stroke_width
 from .caps import (
     cap_body,
-    cap_flat,
     cap_counterbore,
     cap_face_hole,
     cap_flange,
@@ -26,6 +26,7 @@ from .caps import (
     cap_refs,
     counterbore_land,
     keycap,
+    rigid_mark_faces,
 )
 from .cell import cell_axis, cell_bay
 from .features import write_features
@@ -63,7 +64,7 @@ from .keypad import (
     ring_land_left,
     wheel_ledge_left,
 )
-from .legends import _bounds, _legend_faces, legend_entry, legend_solids
+from .legends import _bounds
 from .mic import (
     mic_duct_wall_left,
     mic_fillet_r,
@@ -432,24 +433,18 @@ def main():
         f"moves cap and web together through {params.SWITCH_TRAVEL:.2f} of switch travel"
     )
     print(
-        f"  legends {params.LEGEND_STROKE_W:.1f} wide lines {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
+        f"  legends cut {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
         f"so print a cap top face down, over a "
         f"{(cap_flange(full) - cap_body(full)) / 2:.2f} stepped overhang at the flange"
     )
-    flat = cap_flat(full)
-    print(
-        f"  in {flat:.2f} of top, the largest square the cap's own curve holds, "
-        f"sized off each legend's own ink:"
-    )
+    print(f"  legend ink inside a {params.CAP_GRID_MARK_CLEARANCE:.2f} mm inset from each flat cap top:")
     for ref in cap_refs():
-        spec, size = legend_entry(ref)
-        faces = _legend_faces(spec, size)
-        box = _bounds(faces)
-        what = f"svg {spec[1]}" if not isinstance(spec, str) else repr(spec)
-        note = "" if size == params.LEGEND_SIZE else f" at {size:.1f}"
+        blank = keycap(ref, legend=False)
+        box = _bounds(rigid_mark_faces(ref, blank))
+        removed = blank.volume - caps[f"c6remote-cap-{ref.lower()}"].volume
         print(
-            f"    {ref:<4} {what:<22}{note:<9} ink {box.size.X:.2f} x {box.size.Y:.2f}, "
-            f"cuts {sum(s.volume for s in legend_solids(ref)):.2f} mm3"
+            f"    {ref:<4} ink {box.size.X:.2f} x {box.size.Y:.2f}, "
+            f"{mark_stroke_width(ref):.2f} mm stroke, removes {removed:.2f} mm3"
         )
     print(
         f"mic inlet one funnel, {mic_throat_d():.2f} throat on the board's own "

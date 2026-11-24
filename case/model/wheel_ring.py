@@ -61,7 +61,7 @@ import board
 import cache
 import params
 
-from .shape import _face_reach, _fuse, _hole, _isect, _offset_face, _slab
+from .shape import _cut, _face_reach, _fuse, _hole, _isect, _offset_face, _slab
 from .stack import (
     BOARD_TOP,
     CAVITY_FRONT,
@@ -71,6 +71,7 @@ from .stack import (
     PAD_SKIRT_BOTTOM,
     PAD_WEB_TOP,
     SHELL_FRONT,
+    SKIRT_BOTTOM,
     STIFFENED_WALL,
     WHEEL_OPENING_R,
 )
@@ -300,6 +301,37 @@ def led_ring_insert_outer_r():
     return led_ring_face_r() - params.RING_INSERT_FACE_FIT
 
 
+def led_ring_flange_outer_r():
+    return led_ring_face_r() + params.RING_FLANGE_OVERLAP
+
+
+def led_ring_flange_z():
+    bottom = CAVITY_FRONT - params.RING_FLANGE_DROP
+    return bottom, bottom + params.RING_FLANGE_T
+
+
+def led_ring_flange():
+    """The annular flange below the visible seam, with overlap into the band."""
+    x, y = board.wheel_center()
+    bottom, top = led_ring_flange_z()
+    root = LIP_CLEAR_R
+    return _cut(
+        _hole(x, y, 2 * led_ring_flange_outer_r(), bottom, top),
+        _hole(x, y, 2 * root, bottom - MERGE, top + MERGE),
+    )
+
+
+def led_ring_flange_relief():
+    """Clear the flange along its full insertion path from inside the shell."""
+    x, y = board.wheel_center()
+    _, top = led_ring_flange_z()
+    clearance = params.PCBWAY_ASSEMBLY_CLEARANCE
+    return _hole(
+        x, y, 2 * (led_ring_flange_outer_r() + clearance),
+        SKIRT_BOTTOM - MERGE, top + clearance,
+    )
+
+
 def led_ring_lobe_refs():
     """The LEDs that get a lobe: all six status LEDs."""
     return board.refs("D")[1:]
@@ -501,7 +533,7 @@ inner bevel, about twice the reach, and the sag goes as the square of the
 spacing."""
 
 
-def _insert_section(angle):
+def _insert_section(angle, *, step_radius=LIP_CLEAR_R):
     """[(r, z)] of the ring insert's band on the bearing `angle`.
 
     The ring without its lobes: a plain band from the wheel bore out to
@@ -512,12 +544,10 @@ def _insert_section(angle):
     radius and WHEEL_OPENING_CLEARANCE with it, and takes no fit.
     The top meets the bore on led_ring_bore_round(), not on a sharp edge.
 
-    The underside holds nothing up. Inside LIP_CLEAR_R it stands at
-    LED_RING_FOOT, clear of the ENC1 lip. Outside it drops to CAVITY_FRONT.
-    The step is on LIP_CLEAR_R and not on led_ring_inner_r(), so it is flush
-    with the inner face of each of led_ring_feet(). Both face open cavity, so adhesive keeps the part up, led_ring_feet()
-    catches it if that fails, and the lobes are what stop it coming out the
-    front.
+    The underside stands at LED_RING_FOOT inside the step and drops to
+    CAVITY_FRONT outside it. With the flange, the step clears the analytic
+    cylinder at LIP_CLEAR_R. Adhesive holds the insert in place. The feet
+    catch it if the adhesive fails, and the lobes retain it at the front.
 
     Every station returns the same number of points, which the ruled loft
     needs.
@@ -534,8 +564,8 @@ def _insert_section(angle):
     top = [(r, face_floor_at(wx + r * cos_a, wy + r * sin_a)) for r in radii]
     return [
         (WHEEL_OPENING_R, LED_RING_FOOT),
-        (LIP_CLEAR_R, LED_RING_FOOT),
-        (LIP_CLEAR_R, CAVITY_FRONT),
+        (step_radius, LED_RING_FOOT),
+        (step_radius, CAVITY_FRONT),
         (outer, CAVITY_FRONT),
         *top,
         *arc[1:],
@@ -1034,7 +1064,7 @@ def led_ring_feet():
 
 
 @cache.solid
-def led_ring_insert(feet=True):
+def led_ring_insert(feet=True, flange=True):
     """The translucent ring that fills the void the shell leaves round the
     wheel.
 
@@ -1059,13 +1089,17 @@ def led_ring_insert(feet=True):
     the face. A polished clear part shows six bright points and no band,
     because clear resin does not scatter light.
 
-    `feet=False` is the same part without its feet. The one-piece front holds
-    the band and the lobes but no feet, so it is checked against this shape.
+    The flange blocks the sightline through the face seam. The feet and flange
+    can be omitted for comparison with the one-piece front.
     """
+    step_radius = LIP_CLEAR_R
+    if flange:
+        step_radius += params.RING_FLANGE_LOFT_CLEARANCE
     return _fuse(
-        _ring_loft(_insert_section),
+        _ring_loft(functools.partial(_insert_section, step_radius=step_radius)),
         *led_ring_lobes(),
         *(led_ring_feet() if feet else []),
+        *([led_ring_flange()] if flange else []),
     )
 
 

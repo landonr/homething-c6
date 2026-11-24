@@ -968,6 +968,18 @@ RING_INSERT_FACE_FIT = 0.20
 
 The same clearance applies around the full joint. Adhesive holds the insert
 flush with the front face."""
+RING_FLANGE_OVERLAP = 0.30
+"""Radial overlap beyond the face bore. The flange blocks view of the PCB."""
+RING_FLANGE_T = 0.85
+"""Flange thickness. It keeps margin over the 0.80 mm SLA minimum."""
+RING_FLANGE_DROP = 0.45
+"""Depth of the flange base below the cavity ceiling.
+
+This placement leaves shell above the relief and clearance above the LEDs."""
+RING_FLANGE_LOFT_CLEARANCE = 0.05
+"""Radial offset of the faceted band step outside the flange's inner cylinder.
+
+The offset prevents tangent intersections and sliver faces during the union."""
 RING_BORE_ROUND = 0.6
 """Radius of the round on the ring's inner edge, where the dish meets the
 wheel bore.

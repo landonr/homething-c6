@@ -22,7 +22,6 @@ import board  # noqa: E402
 import params  # noqa: E402
 from model import caps as capmod  # noqa: E402
 from model import keypad as kp  # noqa: E402
-from model import legends as lg  # noqa: E402
 from model import mic as micmod  # noqa: E402
 from model import stack  # noqa: E402
 from model import wheel_ring  # noqa: E402
@@ -202,14 +201,12 @@ def circle_pts(cx, cy, r):
 def legend_loops(ref):
     """One cap legend's ink as closed loops in the case frame, outer wires and
     counters alike, ready for an even-odd fill."""
-    spec, size = lg.legend_entry(ref)
-    x, y = board.components()[ref][:2]
     loops = []
-    for face in lg._legend_faces(spec, size):
+    for face in capmod.rigid_mark_faces(ref):
         for wire in [face.outer_wire()] + list(face.inner_wires()):
             n = max(48, int(wire.length * LEGEND_PTS_PER_MM))
             pts = [wire.position_at(i / n) for i in range(n)]
-            loops.append([(x + p.X, y + p.Y) for p in pts])
+            loops.append([(p.X, p.Y) for p in pts])
     return loops
 
 

@@ -18,6 +18,8 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 </p>
 
 The model exports the SLA front shell, back shell, soft button pad, IR window insert, LED ring insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
+The debossed rigid caps and one-piece keypads use the same 11 legends as the engraving artwork.
+`c6remote-keycap-grid.stl` holds 11 blank caps and a spare in one breakaway grid for screen printing or laser engraving.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports an FDM front shell for a filament printer. Read [Front versions](#front-versions).
 It also exports an SLA one-piece front for a clear print, with the LED ring insert fused in. Read [SLA one-piece front](#sla-one-piece-front).
@@ -451,6 +453,45 @@ If the cell has a PicoBlade plug, do not buy the plug housing and the terminals.
 
 `c6remote-case-screw.stl` shows the screw in its installed position. Do not print it.
 
+## Breakaway cap grid
+
+<p align="center">
+  <img alt="Matte black breakaway grid with white screen-printed symbols on all twelve caps" src="../docs/readme-assets/case-keycap-grid.png" width="480">
+</p>
+
+To export only the grid, run this command from the repository root:
+
+```bash
+case/.venv/bin/python case/case.py --keycap-grid-only
+```
+
+1. Print `c6remote-keycap-grid.stl` in its exported orientation, with the cap faces against the build plate.
+2. Turn the grid over. Keep the grid intact while you screen print or laser engrave the faces.
+3. Break the caps free. Trim any tab remnants flush with the flanges.
+4. Seat each cap on its matching stem on the TPU pad printed from `c6remote-case-pad.stl`.
+5. Fit the caps and pad into the front shell from the inside. Continue with step 3 in [Assembly](#assembly).
+
+With the faces up, put the most rounded corner at the top left. Read the grid from left to right:
+
+```text
+SW1   SW2   SW3
+SW4   SW5   SW6
+SW7   SW8   SW9
+SW10  SW11   spare
+```
+
+The spare fits the SW11 position and has a diamond mark.
+
+To export the 1:1 engraving artwork, install `rsvg-convert` from librsvg. Then run this command from the repository root:
+
+```bash
+case/.venv/bin/python scripts/export-keycap-grid-marking.py
+```
+
+Use `keycap-grid-legends.svg` or `keycap-grid-legends.pdf` at 100% scale. Both files contain only the marks.
+Use `keycap-grid-placement.svg` to align the frame before you mark the caps. Find the files in `case/export/keycap-grid-marking/`.
+The teal outlines show the safe area 0.5 mm inside each flat cap face. Keep all marks inside these outlines.
+
 ## Assembly
 
 No screw holds the board. The cavity walls locate it, `BOARD_FIT` per side. The back shell support ledges carry it from below.
@@ -514,7 +555,7 @@ Assemble the remaining parts with the front face down:
 6. Fold the back shell onto the front shell.
 7. Install the end-wall M2 screw at the grip end.
 
-Install the caps before the pad. The caps are captive after pad installation.
+The caps are captive after pad installation.
 
 For the FDM pad, omit step 1 and install `c6remote-case-pad-fdm.stl` in step 2.
 

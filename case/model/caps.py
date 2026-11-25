@@ -10,8 +10,8 @@ import board
 import cache
 import params
 
+from .cap_marks import keytop_mark_faces, mark_cutters
 from .keypad import face_floor_at, face_floor_over, face_plan_margin, key_size
-from .legends import legend_solids
 from .shape import _cut, _fuse, _rounded_prism, _squircle_points, _squircle_prism
 from .stack import CAP_BOTTOM, COUNTERBORE_TOP, MERGE, cap_top, front_face, stem_top
 
@@ -241,6 +241,18 @@ def cap_proud(ref):
     return cap_top(ref) - face_floor_at(x, y)
 
 
+def rigid_mark_faces(ref, blank=None):
+    """The engraving artwork on the built blank cap, projected to XY."""
+    if blank is None:
+        blank = keycap(ref, legend=False)
+    return keytop_mark_faces(ref, blank)
+
+
+def rigid_legend_solids(ref, blank=None):
+    """Cutters for the rigid cap's deboss at LEGEND_DEPTH."""
+    return mark_cutters(ref, rigid_mark_faces(ref, blank))
+
+
 @cache.solid
 def keycap(ref, legend=True):
     """One rigid cap, built where its switch is rather than at the origin.
@@ -297,5 +309,5 @@ def keycap(ref, legend=True):
         ],
         ruled=True,
     )
-    marks = legend_solids(ref, x, y) if legend else []
-    return _cut(_fuse(body, flange), socket, mouth, *marks)
+    blank = _cut(_fuse(body, flange), socket, mouth)
+    return _cut(blank, *rigid_legend_solids(ref, blank)) if legend else blank

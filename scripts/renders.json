@@ -188,6 +188,37 @@
       "The Blender script uses its defaults: 1200 px wide at 512 samples, with one camera for the three shells."
     ]
   },
+  "case-keycap-grid": {
+    "description": "The face-up matte black breakaway keycap grid with white silkscreen for case/README.md.",
+    "made_by": "repo",
+    "outputs": [
+      "docs/readme-assets/case-keycap-grid.png"
+    ],
+    "inputs": [
+      "scripts/render-case-fronts-blender.py",
+      "scripts/export-keycap-grid-marking.py",
+      "c6remote-kicad/c6remote.kicad_pcb",
+      "c6remote-kicad/export/c6remote-pos.csv",
+      "case/board/c6remote-board-only.step",
+      "case/case.py",
+      "case/params.py",
+      "case/board.py",
+      "case/cache.py",
+      "case/model/",
+      "case/fonts/DejaVuSans.ttf",
+      "case/glyphs/"
+    ],
+    "refresh": [
+      "case/.venv/bin/python case/case.py --keycap-grid-only",
+      "case/.venv/bin/python scripts/export-keycap-grid-marking.py",
+      "python3 scripts/render-case-fronts-blender.py --keycap-grid",
+      "python3 scripts/render-status.py --write case-keycap-grid"
+    ],
+    "recipe": [
+      "The Blender script flips the print mesh face up and uses the 1:1 artwork for the white silkscreen.",
+      "The image is 1200 px wide with 512 samples."
+    ]
+  },
   "case-front-face": {
     "description": "The front face plan on the web page. The firmware build embeds this file, so a stale copy ships in the firmware.",
     "made_by": "repo",

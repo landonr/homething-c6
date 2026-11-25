@@ -207,7 +207,7 @@ def legacy_keytops_level(top, main, part=TOP_PAD):
             )
         want = LEGEND_START_ABOVE + params.LEGEND_DEPTH
         sites = 0
-        for glyph in case.legend_solids(ref, x, y):
+        for glyph in case.fdm_legend_solids(ref):
             for px, py in _inside_points(glyph, LEGEND_RAYS):
                 sites += 1
                 z0 = column_top + LEGEND_START_ABOVE

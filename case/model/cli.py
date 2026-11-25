@@ -15,9 +15,10 @@ import cache
 import params
 
 from .backform import contour_depth
+from .cap_grid import keycap_grid
+from .cap_marks import mark_stroke_width
 from .caps import (
     cap_body,
-    cap_flat,
     cap_counterbore,
     cap_face_hole,
     cap_flange,
@@ -25,6 +26,7 @@ from .caps import (
     cap_refs,
     counterbore_land,
     keycap,
+    rigid_mark_faces,
 )
 from .cell import cell_axis, cell_bay
 from .features import write_features
@@ -62,7 +64,7 @@ from .keypad import (
     ring_land_left,
     wheel_ledge_left,
 )
-from .legends import _bounds, _legend_faces, legend_entry, legend_solids
+from .legends import _bounds
 from .mic import (
     mic_duct_wall_left,
     mic_fillet_r,
@@ -122,6 +124,15 @@ from .stack import (
 )
 
 
+KEYCAP_GRID_NAME = "c6remote-keycap-grid"
+
+
+def _export_part(name, part):
+    cache.export_stl_cached(part, EXPORT / f"{name}.stl")
+    box = part.bounding_box()
+    print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", action="store_true", help="preview via ocp-vscode")
@@ -130,9 +141,21 @@ def main():
         action="store_true",
         help="write the STLs and cap placements only, no feature map, no summary",
     )
+    ap.add_argument(
+        "--keycap-grid-only",
+        action="store_true",
+        help="export only the breakaway grid of blank caps",
+    )
     args = ap.parse_args()
+    if args.keycap_grid_only and (args.show or args.draft):
+        ap.error("--keycap-grid-only cannot be combined with --show or --draft")
 
     print(cache.provenance())
+
+    if args.keycap_grid_only:
+        EXPORT.mkdir(exist_ok=True)
+        _export_part(KEYCAP_GRID_NAME, keycap_grid())
+        return
 
     parts = {
         "c6remote-case-front": front_shell(),
@@ -170,6 +193,7 @@ def main():
     parts["c6remote-case-pad-fdm-v2-top"] = legacy_top_pad()
     parts["c6remote-case-pad-tpu-v2-top"] = legacy_top_pad(skirt=True)
     parts["c6remote-case-pad-v2-top"] = legacy_top_pad(fdm=False, skirt=True)
+    parts[KEYCAP_GRID_NAME] = keycap_grid()
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.
@@ -198,9 +222,7 @@ def main():
         )
 
     for name, part in parts.items():
-        cache.export_stl_cached(part, EXPORT / f"{name}.stl")
-        box = part.bounding_box()
-        print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+        _export_part(name, part)
 
     # The facts below all query built geometry, which costs more than the meshes
     # on a warm cache. A draft stops here and leaves the last full run's feature
@@ -411,24 +433,18 @@ def main():
         f"moves cap and web together through {params.SWITCH_TRAVEL:.2f} of switch travel"
     )
     print(
-        f"  legends {params.LEGEND_STROKE_W:.1f} wide lines {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
+        f"  legends cut {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
         f"so print a cap top face down, over a "
         f"{(cap_flange(full) - cap_body(full)) / 2:.2f} stepped overhang at the flange"
     )
-    flat = cap_flat(full)
-    print(
-        f"  in {flat:.2f} of top, the largest square the cap's own curve holds, "
-        f"sized off each legend's own ink:"
-    )
+    print(f"  legend ink inside a {params.CAP_GRID_MARK_CLEARANCE:.2f} mm inset from each flat cap top:")
     for ref in cap_refs():
-        spec, size = legend_entry(ref)
-        faces = _legend_faces(spec, size)
-        box = _bounds(faces)
-        what = f"svg {spec[1]}" if not isinstance(spec, str) else repr(spec)
-        note = "" if size == params.LEGEND_SIZE else f" at {size:.1f}"
+        blank = keycap(ref, legend=False)
+        box = _bounds(rigid_mark_faces(ref, blank))
+        removed = blank.volume - caps[f"c6remote-cap-{ref.lower()}"].volume
         print(
-            f"    {ref:<4} {what:<22}{note:<9} ink {box.size.X:.2f} x {box.size.Y:.2f}, "
-            f"cuts {sum(s.volume for s in legend_solids(ref)):.2f} mm3"
+            f"    {ref:<4} ink {box.size.X:.2f} x {box.size.Y:.2f}, "
+            f"{mark_stroke_width(ref):.2f} mm stroke, removes {removed:.2f} mm3"
         )
     print(
         f"mic inlet one funnel, {mic_throat_d():.2f} throat on the board's own "

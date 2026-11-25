@@ -8,19 +8,23 @@
     "source": "index"
   },
   "case-annotated": {
-    "fingerprint": "12e71c517350980f5cb7aeacb9c0afdaeb7d321159aa6dfc30ec238bfff0e5c4",
+    "fingerprint": "7ab0ee7ac8e2f43904664f44ac0dedcd87cb0de226421a8a9104ebdeff35bb3d",
     "source": "index"
   },
   "case-front-face": {
-    "fingerprint": "2905da2625dd7675b3cf50c236fffb39505176faa7433ec393f6ba3024dd8a26",
+    "fingerprint": "f32de8032d2fe5bffdab9ba088e1e5eef98a6d6a12a68676b8ed6c9f7ae4bd83",
     "source": "index"
   },
   "case-fronts": {
-    "fingerprint": "263d9610311210da6e1b655e16d61b9a446a163fdf6e2a6e8936a569b4a6fb4f",
+    "fingerprint": "871ed9461b9e354742815b0dc0b1266c89e5f813987d0815e45acf8982b51847",
+    "source": "index"
+  },
+  "case-keycap-grid": {
+    "fingerprint": "c38b959f00a687755988b7dd467f39410c27bd2fb066e0f53d000820d9b8d05b",
     "source": "index"
   },
   "case-stills": {
-    "fingerprint": "70e14f435700766b339154df338d96d3a826b015edd6e81f48d42a05d386df07",
+    "fingerprint": "6e4382729df4bfa5677805c96095e4fdaab9a1ae91c4edcf08fd757622c16091",
     "source": "index"
   },
   "schematic": {
@@ -28,15 +32,15 @@
     "source": "index"
   },
   "self-test-diagrams": {
-    "fingerprint": "e76adfa0f2b2e2188a21fc1dacdc8875434f61e05d5282e630a6d387ece4ead4",
+    "fingerprint": "9facae3dc3ac2d6af7a3701297451ec898365ad331369b6f41ddc9552ad9707d",
     "source": "index"
   },
   "site-hero": {
-    "fingerprint": "70e14f435700766b339154df338d96d3a826b015edd6e81f48d42a05d386df07",
+    "fingerprint": "6e4382729df4bfa5677805c96095e4fdaab9a1ae91c4edcf08fd757622c16091",
     "source": "index"
   },
   "site-media": {
-    "fingerprint": "1d46d3121b8b2518a3182a22559004b48493d9038b49d48bb0d2107b030ccddf",
+    "fingerprint": "a354e684bd215fc94d685a628bd37cd8574d572dce5457f111cf2c7dd824fcc9",
     "source": "index"
   },
   "site-voice": {
@@ -44,11 +48,11 @@
     "source": "index"
   },
   "web-page-framed": {
-    "fingerprint": "d14662d53ca29fad041c5398bad246511b328815bdf1f6829870e67bbc2d1542",
+    "fingerprint": "8f498e7df3745749d024bb738756addf8641a97fe08ccac1829b41ef4841c6f3",
     "source": "index"
   },
   "web-page-shots": {
-    "fingerprint": "3fdee91aeea8fa96bebabce384823e637a50378f30e5fd963b92335f269b9b84",
+    "fingerprint": "59b1edf605d754e916c6c61ed1cd9eb1169d7f175b786dceaf0da5d0dfa0e0bc",
     "source": "index"
   }
 }

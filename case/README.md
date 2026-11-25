@@ -20,6 +20,7 @@ The model uses [build123d](https://build123d.readthedocs.io/), so the source is 
 The model exports the SLA front shell, back shell, soft button pad, IR window insert, LED ring insert, and 11 rigid caps. It also exports a blank version of each cap, `c6remote-cap-sw<n>-blank.stl`, with no legend.
 The debossed rigid caps and one-piece keypads use the same 11 legends as the engraving artwork.
 `c6remote-keycap-grid.stl` holds 11 blank caps and a spare in one breakaway grid for screen printing or laser engraving.
+`c6remote-keycap-grid-legends.stl` is the same grid with the marks cut `CAP_GRID_LEGEND_DEPTH` deep for a paint fill.
 It also exports an FDM button pad with all keytops and legends fused into one STL.
 It also exports an FDM front shell for a filament printer. Read [Front versions](#front-versions).
 It also exports an SLA one-piece front for a clear print, with the LED ring insert fused in. Read [SLA one-piece front](#sla-one-piece-front).
@@ -459,14 +460,14 @@ If the cell has a PicoBlade plug, do not buy the plug housing and the terminals.
   <img alt="Matte black breakaway grid with white screen-printed symbols on all twelve caps" src="../docs/readme-assets/case-keycap-grid.png" width="480">
 </p>
 
-To export only the grid, run this command from the repository root:
+To export only the two grids, run this command from the repository root:
 
 ```bash
 case/.venv/bin/python case/case.py --keycap-grid-only
 ```
 
 1. Print `c6remote-keycap-grid.stl` in its exported orientation, with the cap faces against the build plate.
-2. Turn the grid over. Keep the grid intact while you screen print or laser engrave the faces.
+2. Turn the grid over. Keep the grid intact while you screen print or laser engrave the faces. On the legend grid, fill the marks with paint and wipe the faces clean.
 3. Break the caps free. Trim any tab remnants flush with the flanges.
 4. Seat each cap on its matching stem on the TPU pad printed from `c6remote-case-pad.stl`.
 5. Fit the caps and pad into the front shell from the inside. Continue with step 3 in [Assembly](#assembly).
@@ -490,6 +491,7 @@ case/.venv/bin/python scripts/export-keycap-grid-marking.py
 
 Use `keycap-grid-legends.svg` or `keycap-grid-legends.pdf` at 100% scale. Both files contain only the marks.
 Use `keycap-grid-placement.svg` to align the frame before you mark the caps. Find the files in `case/export/keycap-grid-marking/`.
+`keycap-grid-marking.dxf` holds the same marks and the grid outline in mm, on separate layers. Send it when a supplier asks for a DXF file.
 The teal outlines show the safe area 0.5 mm inside each flat cap face. Keep all marks inside these outlines.
 
 ## Assembly

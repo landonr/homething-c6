@@ -15,7 +15,7 @@ import cache
 import params
 
 from .backform import contour_depth
-from .cap_grid import keycap_grid
+from .cap_grid import keycap_grid, keycap_grid_legends
 from .cap_marks import mark_stroke_width
 from .caps import (
     cap_body,
@@ -125,6 +125,7 @@ from .stack import (
 
 
 KEYCAP_GRID_NAME = "c6remote-keycap-grid"
+KEYCAP_GRID_LEGENDS_NAME = "c6remote-keycap-grid-legends"
 
 
 def _export_part(name, part):
@@ -144,7 +145,7 @@ def main():
     ap.add_argument(
         "--keycap-grid-only",
         action="store_true",
-        help="export only the breakaway grid of blank caps",
+        help="export only the two breakaway cap grids, blank and with marks cut",
     )
     args = ap.parse_args()
     if args.keycap_grid_only and (args.show or args.draft):
@@ -155,6 +156,7 @@ def main():
     if args.keycap_grid_only:
         EXPORT.mkdir(exist_ok=True)
         _export_part(KEYCAP_GRID_NAME, keycap_grid())
+        _export_part(KEYCAP_GRID_LEGENDS_NAME, keycap_grid_legends())
         return
 
     parts = {
@@ -194,6 +196,7 @@ def main():
     parts["c6remote-case-pad-tpu-v2-top"] = legacy_top_pad(skirt=True)
     parts["c6remote-case-pad-v2-top"] = legacy_top_pad(fdm=False, skirt=True)
     parts[KEYCAP_GRID_NAME] = keycap_grid()
+    parts[KEYCAP_GRID_LEGENDS_NAME] = keycap_grid_legends()
 
     # The caps are built where their switches are, which is where --show wants
     # them and nowhere near where a slicer does.

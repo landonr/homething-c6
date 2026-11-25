@@ -1927,6 +1927,10 @@ CAP_GRID_MARK_CONTROL_SIZE = 4.6
 """Maximum span of the power, microphone, plus, and minus legends."""
 CAP_GRID_MARK_DIAMOND_R = 2.2
 """Circumradius of the spare cap's diamond before the corner rounds."""
+CAP_GRID_LEGEND_DEPTH = 0.4
+"""Depth of the marks that the legend grid cuts into the cap faces for a paint
+fill. It is deeper than LEGEND_DEPTH, so a spray coat leaves room for the fill
+and a wipe does not empty the recess. It comes out of CAP_TOP_T."""
 
 CAP_FACE_HOLE_CHAMFER = 0.55
 """Radial width of the lead-in cutter around each rigid cap's face hole, on the

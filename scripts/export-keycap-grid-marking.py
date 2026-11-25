@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export 1:1 legend artwork and a placement guide for the breakaway cap grid."""
+"""Export 1:1 legend artwork, a placement guide, and a DXF for the breakaway cap grid."""
 
 import argparse
 from io import BytesIO
@@ -13,7 +13,7 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "case"))
 
-from build123d import ExportSVG, Pos, Rot, Unit  # noqa: E402
+from build123d import ExportDXF, ExportSVG, Pos, Rot, Unit  # noqa: E402
 
 from model.cap_grid import keycap_grid, keycap_grid_layout  # noqa: E402
 from model.cap_marks import fitted_mark, flat_faces_at, safe_area  # noqa: E402
@@ -44,12 +44,16 @@ def marking_files(out_dir, converter):
     guide = ExportSVG(unit=Unit.MM)
     guide.add_layer("placement", line_color=(92, 106, 123), line_weight=0.12)
     guide.add_layer("marking-safe-area", line_color=(20, 125, 112), line_weight=0.07)
+    dxf = ExportDXF(unit=Unit.MM)
+    dxf.add_layer("placement")
 
     # The marking view flips the printed part about X, then uses SVG's Y-down axis.
     face_up = Pos(-bounds.min.X, bounds.min.Y) * Rot(180, 0, 0)
     flat_faces = flat_faces_at(grid, 0)
     for face, _ in flat_faces:
-        guide.add_shape([face_up * wire for wire in face.wires()], layer="placement")
+        wires = [face_up * wire for wire in face.wires()]
+        guide.add_shape(wires, layer="placement")
+        dxf.add_shape(wires, layer="placement")
 
     labels = []
     seen = set()
@@ -65,6 +69,8 @@ def marking_files(out_dir, converter):
         faces = fitted_mark(ref, spare, Pos(x, -y), area)
         marks.add_shape(faces, layer=layer)
         guide.add_shape(faces, layer=layer)
+        dxf.add_layer(layer)
+        dxf.add_shape(faces, layer=layer)
         labels.append((x, y, f"{ref} spare" if spare else ref))
         seen.add(ref)
 
@@ -95,13 +101,15 @@ def marking_files(out_dir, converter):
         legend_svg = tmp / "keycap-grid-legends.svg"
         legend_pdf = tmp / "keycap-grid-legends.pdf"
         guide_svg = tmp / "keycap-grid-placement.svg"
+        guide_dxf = tmp / "keycap-grid-marking.dxf"
         svg.write(legend_svg, encoding="utf-8", xml_declaration=True)
         placement.write(guide_svg, encoding="utf-8", xml_declaration=True)
+        dxf.write(guide_dxf)
         subprocess.run(
             [converter, "--format=pdf", "--output", str(legend_pdf), str(legend_svg)],
             check=True,
         )
-        for artifact in (legend_svg, legend_pdf, guide_svg):
+        for artifact in (legend_svg, legend_pdf, guide_svg, guide_dxf):
             path = out_dir / artifact.name
             artifact.replace(path)
             print(f"wrote {path}")

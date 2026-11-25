@@ -1,13 +1,14 @@
-"""Print carrier for the blank rigid caps."""
+"""Print carrier for the rigid caps, blank or with the marks cut for a paint fill."""
 
 import math
 
-from build123d import Align, Axis, Box, Polygon, Pos, Rot, fillet
+from build123d import Align, Axis, Box, Polygon, Pos, Rot, extrude, fillet
 
 import board
 import cache
 import params
 
+from .cap_marks import fitted_mark, flat_faces_at, safe_area
 from .caps import cap_flange, cap_refs, keycap
 from .shape import _fuse, _slab
 from .stack import CAP_BOTTOM, MERGE, cap_top
@@ -110,3 +111,35 @@ def keycap_grid():
     if len(grid.solids()) != 1 or not grid.is_valid:
         raise ValueError("Breakaway keycap grid must be one valid solid")
     return grid
+
+
+@cache.solid
+def keycap_grid_legends():
+    """Cut the marking artwork CAP_GRID_LEGEND_DEPTH into the grid's cap faces.
+
+    The marks are fitted in the face-up view of the marking export, then mapped
+    back to the print orientation, so the cuts match the artwork and the spare
+    keeps its diamond.
+    """
+    grid = keycap_grid()
+    bounds = grid.bounding_box()
+    face_up = Pos(-bounds.min.X, bounds.min.Y) * Rot(180, 0, 0)
+    to_print = face_up.inverse()
+    flat_faces = flat_faces_at(grid, 0)
+    _, slots = keycap_grid_layout()
+    cutters = []
+    seen = set()
+    for ref, x, y in slots:
+        area = face_up * safe_area(flat_faces, x, y, ref)
+        center = Pos(x - bounds.min.X, -(y - bounds.min.Y))
+        for face in fitted_mark(ref, ref in seen, center, area):
+            cutters.append(extrude(
+                Pos(0, 0, -MERGE) * (to_print * face),
+                amount=MERGE + params.CAP_GRID_LEGEND_DEPTH,
+                dir=(0, 0, 1),
+            ))
+        seen.add(ref)
+    marked = grid.cut(*cutters)
+    if len(marked.solids()) != 1 or not marked.is_valid:
+        raise ValueError("Legend keycap grid must be one valid solid")
+    return marked

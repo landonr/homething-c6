@@ -1962,11 +1962,19 @@ STEM_R = 0.6
 """Corner round on the stem. The socket's inside corners follow it, and a sharp
 inside corner is what a printed or moulded socket rounds off anyway, so matching
 them is what keeps the fit on the flats where it was designed."""
-STEM_GRIP = -0.10
-"""Clearance per side between each rigid stem and cap socket.
+STEM_GRIP = 0.15
+"""Interference per side between each stem and its cap socket. A negative value
+is clearance.
 
-The flange retains the cap. The clearance prevents a rigid printed stem from
-binding in its cap socket. Use a positive value only for a soft pad."""
+The socket bore is STEM_W minus twice this value. The flange retains the cap,
+so the grip only preloads the cap against CAP_FLANGE_FLOAT. With zero or
+negative grip, a cap can rattle through its float.
+
+The stems are on the TPU pad, and TPU at about 95A grips at this value. If caps
+buzz, raise it. If caps do not seat, lower it. Use a positive value only for a
+soft pad, because a rigid printed stem binds in an interference fit.
+checks/caps.py requires an overlap for a positive value and a gap for zero or a
+negative value."""
 FDM_CAP_GUIDE_CLEARANCE = 0.35
 """Clearance per side between an integrated FDM keytop and its face hole.
 

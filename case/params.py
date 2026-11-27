@@ -1907,10 +1907,10 @@ CAP_GRID_INDEX_R = 1.8
 """Larger radius at the SW1 corner to orient the carrier for marking."""
 CAP_GRID_GAP = 1.0
 """Distance from the widest flange to the rail for a short FDM bridge."""
-CAP_GRID_TAB_T = 0.45
-"""Height of each breakaway tab so it splits before the thicker flange."""
-CAP_GRID_TAB_W = 0.8
-"""Width of a tab at the flange. The tab widens toward the rail."""
+CAP_GRID_TAB_T = 1.0
+"""Height of each breakaway tab. Formlabs resin needs a 1 mm wall, and the tab stays inside the flange."""
+CAP_GRID_TAB_W = 1.0
+"""Width of a tab at the flange. The tab widens toward the rail, so it breaks at the flange."""
 CAP_GRID_MARK_CLEARANCE = 0.5
 """Minimum distance from engraving to the edge of each flat cap face."""
 CAP_GRID_MARK_CONTROL_W = 0.8

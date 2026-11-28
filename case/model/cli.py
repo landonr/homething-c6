@@ -1,0 +1,612 @@
+"""The command line: build every part, write the STLs and the cap placement
+JSON, and print the summary of what the stack came out as.
+
+case.py is the entry point that calls main() here.
+"""
+
+import argparse
+import json
+import math
+
+from build123d import Pos
+
+import board
+import cache
+import params
+
+from .backform import contour_depth
+from .cap_grid import keycap_grid, keycap_grid_legends
+from .cap_marks import mark_stroke_width
+from .caps import (
+    cap_body,
+    cap_counterbore,
+    cap_face_hole,
+    cap_flange,
+    cap_proud,
+    cap_refs,
+    counterbore_land,
+    keycap,
+    rigid_mark_faces,
+)
+from .cell import cell_axis, cell_bay
+from .features import write_features
+from .front_ledge import front_ledge_runs
+from .hardware import (
+    end_screw,
+    end_screw_axis,
+    end_screw_block_span,
+    end_screw_length,
+)
+from .ir import (
+    emitter_reach,
+    ir_window,
+    ir_window_retention,
+    ir_window_span,
+)
+from .keypad import (
+    button_pad,
+    centerline_keys_span,
+    centerline_x,
+    exterior_x_bounds,
+    exterior_y_bounds,
+    face_depth_at,
+    face_floor_at,
+    key_pitch,
+    key_size,
+    keypad_recess_facts,
+    legacy_top_pad,
+    outline_length,
+    pad_lobes,
+    pad_reach,
+    pad_keepout_overlap,
+    pad_skirt_breaks,
+    recess_span,
+    ring_land_left,
+    wheel_ledge_left,
+)
+from .legends import _bounds
+from .mic import (
+    mic_duct_wall_left,
+    mic_fillet_r,
+    mic_floor_edge_r,
+    mic_mouth_r,
+    mic_port,
+    mic_port_drill,
+    mic_taper_angle,
+    mic_taper_r,
+    mic_taper_top,
+    mic_throat_d,
+)
+from .shells import CATCH_Z0, back_shell, front_edge_round, front_shell
+from .support import support_bearing_margins, support_run_lengths
+from .wheel_ring import (
+    led_ring_insert,
+    led_ring_clip_reach,
+    led_ring_face_r,
+    led_ring_insert_outer_r,
+    led_ring_lobe_blend_r,
+    led_ring_lobe_land_z,
+    led_ring_lobe_refs,
+    led_ring_lobe_rim_r,
+    led_ring_lobe_rim_z,
+    led_ring_lobe_roof,
+    pad_keepouts,
+)
+from .stack import (
+    BOARD_TOP,
+    FDM_FACE,
+    LAP_OUT,
+    CAP_BOTTOM,
+    CAVITY_FRONT,
+    COUNTERBORE_TOP,
+    DISH_HEADROOM,
+    EXPORT,
+    FACE_ARCH_X,
+    FACE_WALL_TOP,
+    KEYPAD_CEILING,
+    KEYPAD_KEEPOUT,
+    LIP_CLEAR_R,
+    PAD_WEB_BOTTOM,
+    SHELL_BACK,
+    SHELL_FRONT,
+    SHELL_SEAM,
+    SKIRT_BOTTOM,
+    SKIRT_OUT,
+    WHEEL_LIP_OD,
+    WHEEL_LIP_Z0,
+    WHEEL_LIP_Z1,
+    WHEEL_MAIN_OD,
+    WHEEL_OPENING_R,
+    WHEEL_TOP,
+    cap_top,
+    face_z,
+    stem_top,
+)
+
+
+KEYCAP_GRID_NAME = "c6remote-keycap-grid"
+KEYCAP_GRID_LEGENDS_NAME = "c6remote-keycap-grid-legends"
+
+
+def _export_part(name, part):
+    cache.export_stl_cached(part, EXPORT / f"{name}.stl")
+    box = part.bounding_box()
+    print(f"{name}  {box.size.X:.2f} x {box.size.Y:.2f} x {box.size.Z:.2f}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--show", action="store_true", help="preview via ocp-vscode")
+    ap.add_argument(
+        "--draft",
+        action="store_true",
+        help="write the STLs and cap placements only, no feature map, no summary",
+    )
+    ap.add_argument(
+        "--keycap-grid-only",
+        action="store_true",
+        help="export only the two breakaway cap grids, blank and with marks cut",
+    )
+    args = ap.parse_args()
+    if args.keycap_grid_only and (args.show or args.draft):
+        ap.error("--keycap-grid-only cannot be combined with --show or --draft")
+
+    print(cache.provenance())
+
+    if args.keycap_grid_only:
+        EXPORT.mkdir(exist_ok=True)
+        _export_part(KEYCAP_GRID_NAME, keycap_grid())
+        _export_part(KEYCAP_GRID_LEGENDS_NAME, keycap_grid_legends())
+        return
+
+    parts = {
+        "c6remote-case-front": front_shell(),
+        "c6remote-case-back": back_shell(),
+        "c6remote-case-pad": button_pad(),
+        "c6remote-ir-window": ir_window(),
+        "c6remote-ring-insert": led_ring_insert(),
+        "c6remote-case-screw": end_screw(),
+    }
+    caps = {f"c6remote-cap-{ref.lower()}": keycap(ref) for ref in cap_refs()}
+
+    if args.show:
+        from ocp_vscode import show
+
+        show(*parts.values(), *caps.values())
+        return
+
+    # The FDM front, the one-piece front and the one-piece back are more copies
+    # of the same parts, not further parts of the assembly, so they are added
+    # after --show has returned: showing them would draw three front shells in
+    # one place. features.py keys their features under their own file names,
+    # since those are the files the viewer loads. The V2 top pads replace one
+    # lobe of the FDM pads, so they stay out of --show too.
+    parts["c6remote-case-front-fdm"] = front_shell(fdm=True)
+    parts["c6remote-case-front-one-piece"] = front_shell(one_piece=True)
+    parts["c6remote-case-back-one-piece"] = back_shell(one_piece=True)
+    parts["c6remote-case-pad-fdm"] = button_pad(fdm=True)
+    parts["c6remote-case-pad-tpu"] = button_pad(fdm=True, skirt=True, grooves=False)
+    parts["c6remote-case-pad-tpu-blank"] = button_pad(
+        fdm=True, skirt=True, grooves=False, legend=False
+    )
+    parts["c6remote-case-pad-tpu-v2-blank"] = button_pad(
+        fdm=True, skirt=True, grooves=False, legend=False, v2=True
+    )
+    parts["c6remote-case-pad-fdm-v2-top"] = legacy_top_pad()
+    parts["c6remote-case-pad-tpu-v2-top"] = legacy_top_pad(skirt=True)
+    parts["c6remote-case-pad-v2-top"] = legacy_top_pad(fdm=False, skirt=True)
+    parts[KEYCAP_GRID_NAME] = keycap_grid()
+    parts[KEYCAP_GRID_LEGENDS_NAME] = keycap_grid_legends()
+
+    # The caps are built where their switches are, which is where --show wants
+    # them and nowhere near where a slicer does.
+    placements = board.components()
+    for name, ref in zip(caps, cap_refs()):
+        x, y, _, _ = placements[ref]
+        parts[name] = Pos(-x, -y, -CAP_BOTTOM) * caps[name]
+        parts[f"{name}-blank"] = Pos(-x, -y, -CAP_BOTTOM) * keycap(ref, legend=False)
+
+    EXPORT.mkdir(exist_ok=True)
+    # Where each cap STL goes back to in the case frame, since the file itself no
+    # longer says. Anything reassembling the export reads this rather than
+    # rediscovering the switch positions from the board. Caps only: the shells,
+    # the IR window plate and the screw are all exported where they belong, so
+    # they need no entry here and adding one would name them keycaps. The blank
+    # caps stay out too, because the viewer loads every entry as a cap. A blank
+    # cap goes where its legend twin goes (same name less "-blank").
+    with (EXPORT / "c6remote-caps.json").open("w") as f:
+        json.dump(
+            {
+                f"{name}.stl": [round(v, 3) for v in (*placements[ref][:2], CAP_BOTTOM)]
+                for name, ref in zip(caps, cap_refs())
+            },
+            f,
+            indent=2,
+        )
+
+    for name, part in parts.items():
+        _export_part(name, part)
+
+    # The facts below all query built geometry, which costs more than the meshes
+    # on a warm cache. A draft stops here and leaves the last full run's feature
+    # map in place, so Identify still answers, off the geometry it was written from.
+    if args.draft:
+        return
+
+    # What each surface in those meshes is called, for a viewer that has only
+    # triangles to go on. Written from the same builders the parts came from, so
+    # a feature that moves takes its box with it.
+    named = write_features(EXPORT / "c6remote-features.json")["parts"]
+    print(
+        "features "
+        + ", ".join(f"{name} {len(entries)}" for name, entries in named.items())
+    )
+
+    _, _, cy0, cy1 = cell_axis()
+    lo, hi = cell_bay()
+    box = board.board_profile().bounding_box()
+    front = SHELL_FRONT - BOARD_TOP
+    over = params.BOARD_FIT + params.WALL
+    print(f"\ncase closes to {SHELL_FRONT - SHELL_BACK:.2f} over the cell")
+    print(
+        f"  {front + contour_depth(box.min.Y):.2f} at the grip end, "
+        f"{front + contour_depth(box.max.Y):.2f} at the IR end, "
+        f"{front + contour_depth(box.max.Y + over):.2f} at its tip"
+    )
+    print(
+        f"front face {SHELL_FRONT:.2f} at its crown: keypad ceiling {CAVITY_FRONT:.2f}, "
+        f"{KEYPAD_CEILING:.2f} thick there; USB and Qwiic open below the board"
+    )
+    ex0, ex1 = exterior_x_bounds()
+    ey1 = exterior_y_bounds()[1]
+    print(
+        f"  face a power {params.FACE_POWER:g} superellipse across x from wall "
+        f"to wall: crown {SHELL_FRONT:.3f} at x {FACE_ARCH_X:.3f}, meeting every "
+        f"wall vertically at {FACE_WALL_TOP:.3f} (FACE_SIDE_DROP "
+        f"{params.FACE_SIDE_DROP:.3f}), rolled into each end wall over "
+        f"{params.FACE_END_ROLL:.2f}"
+    )
+    wy = board.wheel_center()[1]
+    reads = ", ".join(
+        f"{face_z(ex1 - d, wy):.3f} at {d:g}" for d in (9.55, 6, 4, 2, 1, 0.25)
+    )
+    ends = ", ".join(
+        f"{face_z(FACE_ARCH_X, ey1 - d):.3f} at {d:g}" for d in (4, 2, 1, 0.25)
+    )
+    print(f"  face at the +x side wall less: {reads}; at the IR end wall less: {ends}")
+    print(
+        f"wheel top measured at {WHEEL_TOP:.3f}, "
+        f"lip {WHEEL_LIP_OD:.2f} OD (WHEEL_OD param {board.WHEEL_OD:.2f}) over z "
+        f"{WHEEL_LIP_Z0:.3f} .. {WHEEL_LIP_Z1:.3f}, main body {WHEEL_MAIN_OD:.2f} OD above it"
+    )
+    print(
+        f"  shell opening a {2 * WHEEL_OPENING_R:.2f} bore, flush to the main "
+        f"body at {params.WHEEL_OPENING_CLEARANCE:.2f} rotating clearance; the "
+        f"crown stands {SHELL_FRONT - WHEEL_TOP:.3f} above the knob top by "
+        f"construction (crown is WHEEL_TOP + FACE_CROWN_OVER_WHEEL)"
+    )
+    wheel = keypad_recess_facts()["dishes"]["wheel"]
+    wx, wy = board.wheel_center()
+    rim = {
+        "west": face_floor_at(wx - WHEEL_OPENING_R, wy),
+        "east": face_floor_at(wx + WHEEL_OPENING_R, wy),
+        "south": face_floor_at(wx, wy - WHEEL_OPENING_R),
+        "north": face_floor_at(wx, wy + WHEEL_OPENING_R),
+    }
+    print(
+        "  bore rim "
+        + ", ".join(f"{side} {z:.3f}" for side, z in rim.items())
+        + f": the knob top stands {WHEEL_TOP - rim['west']:.2f} and "
+        f"{WHEEL_TOP - rim['east']:.2f} above it at its west and east sides"
+    )
+    print(
+        f"  seated in the keypad recess's own wheel basin: a "
+        f"{2 * wheel['half'][0]:.2f} angular blend ({params.WHEEL_BASIN_SPREAD:.2f} "
+        f"past the bore on its axes), dishing below the face to "
+        f"{face_depth_at(wx + WHEEL_OPENING_R, wy):.2f} at the bore on the axes, "
+        f"{face_depth_at(wx + WHEEL_OPENING_R * 0.7071, wy + WHEEL_OPENING_R * 0.7071):.2f} "
+        f"on the diagonals and "
+        f"{face_depth_at(wx, wy - WHEEL_OPENING_R):.2f} where a join leaves it; "
+        f"its {params.WHEEL_SQUIRCLE_N:.1f} exponent sets exact diagonal reach, "
+        f"while its cardinal axes keep circular curvature; the "
+        f"rim keeps {wheel_ledge_left():.2f} of seat clear of the bore all the way "
+        f"round, against a {params.WHEEL_RIM_LEDGE:.2f} floor"
+    )
+    print(
+        f"  pad notched round {len(pad_keepouts())} wheel keep-outs (lip, LEDs, "
+        f"ring lobes); its two lobes overlap them by {pad_keepout_overlap():.3f} "
+        f"mm2 and the V2 top lobe by {pad_keepout_overlap(v2=True):.3f} mm2"
+    )
+    print(
+        f"  LEDs uncovered, "
+        f"{PAD_WEB_BOTTOM - BOARD_TOP - params.LED_HEIGHT:.2f} of air over each "
+        f"package, firing into the ring insert. The front face opening has a "
+        f"{led_ring_face_r():.2f} mm radius and gives the insert "
+        f"{params.RING_INSERT_FACE_FIT:.2f} mm radial clearance. The insert "
+        f"clears the cavity wall by "
+        f"{led_ring_clip_reach(0.0) - led_ring_insert_outer_r():.2f} mm at +X."
+    )
+    refs = led_ring_lobe_refs()
+    print(
+        f"  the ring stops short of the LEDs, so {len(refs)} lobes reach out and "
+        f"down over them: a dome from "
+        f"{min(led_ring_lobe_blend_r(ref) for ref in refs):.2f} out to a rim at "
+        f"{max(led_ring_lobe_rim_r(ref) for ref in refs):.2f} and "
+        f"{led_ring_lobe_rim_z():.2f}, which is {params.RING_LOBE_WRAP:.2f} under "
+        f"each package top, with {params.RING_LOBE_WALL:.2f} of wall outside it"
+    )
+    print(
+        f"  each dome clears its own LED by {params.RING_LOBE_GAP:.2f} and keeps "
+        f"{min(led_ring_lobe_roof(ref) for ref in refs):.2f} of insert over it, "
+        f"against RING_LOBE_WALL {params.RING_LOBE_WALL:.2f}, with a "
+        f"{params.RING_LOBE_SHOULDER:.2f} chamfer on its top outer corner. It is "
+        f"open on the inner side, where the ring already sits over the package"
+    )
+    reach = max(
+        led_ring_face_r() + led_ring_lobe_land_z(ref) - CAVITY_FRONT for ref in refs
+    )
+    print(
+        f"  each lobe's 45 degree flare carries that LED's light up into the "
+        f"ring and tucks under the shell. The shell gives up a wedge from "
+        f"{led_ring_face_r():.2f} out to {reach:.2f} at those {len(refs)} places "
+        f"and keeps {ring_land_left():.2f} of land over it, against "
+        f"LED_RING_FACE_ROOF {params.LED_RING_FACE_ROOF:.2f}. Each pocket "
+        f"clears its lobe by {params.RING_LOBE_FIT:.2f} mm."
+    )
+    print(
+        f"  the insert's band is {led_ring_insert_outer_r() - WHEEL_OPENING_R:.2f} mm "
+        f"wide from the wheel bore to the seam."
+    )
+    print(
+        f"  the one-piece front keeps the ring as shell and fuses the "
+        f"{len(refs)} lobes without feet. Each fill closes the "
+        f"{params.RING_LOBE_FIT:.2f} over its lobe, so no slit is left between "
+        f"the two parts"
+    )
+    print(
+        f"cell bay {cy1 - cy0:.2f} long for a {params.CELL_L:.1f} pouch, "
+        f"in {hi - lo:.2f} of clear run"
+    )
+    lengths = support_run_lengths()
+    margins = support_bearing_margins()
+    print(
+        f"board support {len(lengths)} runs at {params.SUPPORT_BEARING:.2f} bearing, "
+        f"{params.SUPPORT_GAP:.2f} below the board"
+    )
+    print("  run lengths " + ", ".join(f"{length:.2f}" for length in lengths))
+    print(
+        "  bearing margin "
+        + ", ".join(f"{side} {margin:.2f}" for side, margin in margins.items())
+    )
+    sizes = {}
+    for ref in board.refs("SW"):
+        sizes.setdefault(round(key_size(ref), 2), []).append(ref)
+    spread = ", ".join(
+        f"{size:.2f} square x{len(refs)}" for size, refs in sorted(sizes.items(), reverse=True)
+    )
+    print(
+        f"keys {spread}, superellipse corners at exponent "
+        f"{params.KEY_SQUIRCLE_N:.1f}, flanks bowed out further than the "
+        f"{params.KEYPAD_SQUIRCLE_N:.1f} of the recesses they sit in, on a "
+        f"{key_pitch():.2f} grid with a {params.KEY_GAP:.1f} gap"
+    )
+    proud = sorted((cap_proud(ref), ref) for ref in cap_refs())
+    lands = sorted((counterbore_land(ref), ref) for ref in cap_refs())
+    print(
+        f"caps on all {len(cap_refs())} keys, tops level and at least "
+        f"{params.CAP_PROTRUSION:.2f} proud of the face, standing "
+        f"{proud[0][0]:.2f} ({proud[0][1]}) to {proud[-1][0]:.2f} ({proud[-1][1]}) "
+        f"proud of the recess floor around them"
+    )
+    columns = []
+    for ref in sorted(cap_refs(), key=lambda r: placements[r][0]):
+        x = placements[ref][0]
+        if columns and abs(x - columns[-1][0][0]) < 1.0:
+            columns[-1].append((x, ref))
+        else:
+            columns.append([(x, ref)])
+    for column in columns:
+        tops = [cap_top(ref) for _, ref in column]
+        xs = [x for x, _ in column]
+        print(
+            f"  column at x {sum(xs) / len(xs):.2f} "
+            f"({', '.join(ref for _, ref in column)}): cap tops "
+            f"{min(tops):.3f} .. {max(tops):.3f}"
+        )
+    full = max(cap_refs(), key=key_size)
+    print(
+        f"  bodies {cap_body(full):.2f} square through {cap_face_hole(full):.2f} face "
+        f"holes, {params.CAP_GUIDE_CLEARANCE:.2f} of guide clearance per side"
+    )
+    print(
+        f"  flange {cap_flange(full):.2f} in a {cap_counterbore(full):.2f} counterbore, "
+        f"{COUNTERBORE_TOP - (CAP_BOTTOM + params.CAP_FLANGE_T):.2f} of float under a "
+        f"face land of {DISH_HEADROOM:.2f} at the crown, {lands[0][0]:.2f} at its thinnest "
+        f"({lands[0][1]}, under its dish and a {params.CAP_FACE_HOLE_CHAMFER:.2f} "
+        f"face-hole lead-in)"
+    )
+    engagements = [stem_top(ref) - CAP_BOTTOM for ref in cap_refs()]
+    print(
+        f"  locating recess {min(engagements):.2f} to {max(engagements):.2f} deep "
+        f"on a {params.STEM_W:.1f} stem, {params.STEM_GRIP:.2f} interference per "
+        f"side; each stem stops at its own cap's socket ceiling"
+    )
+    print(
+        f"  flange rests on the pad web with {params.CAP_LIFT:.2f} of lift, so a press "
+        f"moves cap and web together through {params.SWITCH_TRAVEL:.2f} of switch travel"
+    )
+    print(
+        f"  legends cut {params.LEGEND_DEPTH:.1f} deep into {params.CAP_TOP_T:.1f} of roof, "
+        f"so print a cap top face down, over a "
+        f"{(cap_flange(full) - cap_body(full)) / 2:.2f} stepped overhang at the flange"
+    )
+    print(f"  legend ink inside a {params.CAP_GRID_MARK_CLEARANCE:.2f} mm inset from each flat cap top:")
+    for ref in cap_refs():
+        blank = keycap(ref, legend=False)
+        box = _bounds(rigid_mark_faces(ref, blank))
+        removed = blank.volume - caps[f"c6remote-cap-{ref.lower()}"].volume
+        print(
+            f"    {ref:<4} ink {box.size.X:.2f} x {box.size.Y:.2f}, "
+            f"{mark_stroke_width(ref):.2f} mm stroke, removes {removed:.2f} mm3"
+        )
+    print(
+        f"mic inlet one funnel, {mic_throat_d():.2f} throat on the board's own "
+        f"{mic_port_drill():.2f} port ({params.MIC_THROAT_MARGIN / 2:.2f} of alignment "
+        f"slop per side) opening out to {2 * mic_floor_edge_r():.2f} at the recess's "
+        f"own floor, {face_depth_at(*mic_port()):.2f} under the face there, no "
+        f"straight section between"
+    )
+    print(
+        f"  taper cone {mic_taper_top() - BOARD_TOP:.2f} tall, "
+        f"{params.MIC_TAPER_SHARE:.0%} of the way out to {2 * mic_taper_r():.2f}, "
+        f"{mic_taper_angle():.1f} degrees off the axis so it self-supports either "
+        f"way up"
+    )
+    print(
+        f"  mouth finished by a {mic_fillet_r():.2f} concave fillet band that rides "
+        f"the floor, its {2 * mic_mouth_r():.2f} top ring {params.MIC_MOUTH_LIFT:.2f} "
+        f"above it, so the floor cuts it in one edge {2 * mic_floor_edge_r():.2f} "
+        f"across, leaving {mic_duct_wall_left():.2f} of wall in a "
+        f"{params.MIC_DUCT_OD:.1f} duct at its widest"
+    )
+    x0, x1, y0, y1 = ir_window_span()
+    print(
+        f"IR receiver bottom aperture {x1 - x0:.2f} x {y1 - y0:.2f}, x "
+        f"{x0:.2f} .. {x1:.2f}, y {y0:.2f} .. {y1:.2f}, derived from U2's "
+        "complete envelope"
+    )
+    print(
+        f"  conformal pane {params.IR_WINDOW_T:.2f} thick in the beam with "
+        f"{params.IR_WINDOW_PANE_CLEARANCE:.2f} clearance per side; interior flange "
+        f"{params.IR_WINDOW_FLANGE_T:.2f} thick reaches "
+        f"{params.IR_WINDOW_FLANGE:.2f} past the opening, retaining on "
+        f"{ir_window_retention():.2f} with {params.IR_WINDOW_FIT:.2f} adhesive gap"
+    )
+    print(
+        "  the one-piece back fuses the window in and closes both gaps, "
+        "so U2 still looks through "
+        f"{params.IR_WINDOW_T:.2f} of resin and needs no separate window"
+    )
+    lens = board.emitter_envelope()
+    print(
+        f"  D1 fires through its own {2 * (max(lens.size.X, lens.size.Z) / 2 + params.IR_EMITTER_FIT):.2f} "
+        f"bore with a {params.IR_EMITTER_CHAMFER_ANGLE:.0f}° chamfer per side, "
+        f"{params.IR_EMITTER_FIT:.2f} around a {lens.size.X:.2f} "
+        f"lens that stops {emitter_reach():.2f} short of the exterior face"
+    )
+    print(
+        f"FDM front is the same shell with the face finished differently: the "
+        f"recess's own outline, the same {outline_length():.1f} of rim, as a "
+        f"{params.FDM_OUTLINE_W:.2f} x {params.FDM_OUTLINE_DEPTH:.2f} slot in an "
+        f"otherwise flat face, so it prints face down with no support on the "
+        f"cosmetic surface"
+    )
+    print(
+        f"  top edge has a {front_edge_round(True):.2f} 45 degree chamfer "
+        f"rather than the {front_edge_round():.2f} end roll, leaving the outline "
+        f"{params.FDM_OUTLINE_EDGE_CLEAR:.2f} of flat face outboard of it"
+    )
+    print(
+        f"  face sits {params.FDM_FACE_DROP:.2f} below the recessed front's, at "
+        f"{FDM_FACE:.2f}, so flattening the dish does not keep the material the "
+        f"dish took out; caps and the wheel stand that much further proud, "
+        f"the knob {WHEEL_TOP - FDM_FACE:.2f} above this face, against the "
+        f"{min(cap_proud(r) for r in cap_refs()):.2f} to "
+        f"{max(cap_proud(r) for r in cap_refs()):.2f} a cap already stands proud "
+        f"of the dish around it"
+    )
+    facts = keypad_recess_facts()
+    span = recess_span()
+    print(
+        f"keypad face carries one continuous recess, {span[1] - span[0]:.2f} long "
+        f"on the x={facts['centerline'][0]:.2f} centreline (the three basin "
+        f"centres agree on it to {facts['centerline'][1]:.3f}), lofted through "
+        f"{facts['stations']} stations as one solid; no flat floor, no wall, no "
+        f"seam and no cusp, in {DISH_HEADROOM:.2f} of face land, clearing the wall by "
+        f"{facts['edge_gap']:.2f} (wants {params.KEYPAD_EDGE_MARGIN:.2f})"
+    )
+    for name, f in facts["dishes"].items():
+        keys = (
+            f"keys sit {f['key_depths'][0]:.2f} to {f['key_depths'][1]:.2f} down"
+            if f["key_depths"]
+            else "no keys under it, the bore takes its middle"
+        )
+        print(
+            f"  basin {name:<6} {2 * f['half'][0]:.2f} x {2 * f['half'][1]:.2f} at "
+            f"y {f['center'][1]:.2f}, exponent {f['n']:.1f}, {f['depth']:.2f} deep, "
+            f"{keys}"
+        )
+    for label, f in facts["necks"].items():
+        print(
+            f"  join {label:<13} reach {f['reach'][0]:.1f}/{f['reach'][1]:.1f} into the two rims, y "
+            f"{f['span'][0]:.2f} .. {f['span'][1]:.2f}, narrowing from "
+            f"{2 * f['ends'][0]:.2f} to {2 * f['waist'][1]:.2f} and out to "
+            f"{2 * f['ends'][1]:.2f}"
+        )
+        print(
+            f"       outline turns through {f['radius']:.2f} at its tightest, "
+            f"floor never shallower than {f['floor']:.2f}"
+        )
+    ky0, ky1 = centerline_keys_span()
+    walk = min(
+        face_depth_at(centerline_x(), ky0 + (ky1 - ky0) * i / 800) for i in range(801)
+    )
+    print(
+        f"  unbroken along the centreline from one island's keys to the other's, "
+        f"y {ky0:.2f} .. {ky1:.2f}, never shallower than {walk:.2f}"
+    )
+    print(
+        f"  every counterbore inside the rim, thinnest land {lands[0][0]:.2f} at "
+        f"{lands[0][1]}; the land over the ring's lobe pockets is "
+        f"{ring_land_left():.2f} at its thinnest, against LED_RING_FACE_ROOF "
+        f"{params.LED_RING_FACE_ROOF:.2f}, and the shell keeps no roof over the "
+        f"ring itself"
+    )
+    print(
+        f"pad two lobes, {pad_reach(cap_refs()[0]):.2f} of web past each outer "
+        f"switch centre ({params.PAD_MARGIN:.2f} past the fused keytop), "
+        f"keytop corners, skirt {params.PAD_SKIRT_DEPTH:.2f} deep, skirt breaks "
+        f"{sum(len(pad_skirt_breaks(name)) for name, *_ in pad_lobes())}:"
+    )
+    for name, x0, y0, x1, y1 in pad_lobes():
+        print(f"  {name:<6} {x1 - x0:.2f} x {y1 - y0:.2f}")
+    end_x, end_z = end_screw_axis()
+    block_x0, block_x1 = end_screw_block_span()
+    print(
+        f"screw: one M2 x {end_screw_length():.0f} through the -Y end wall at x "
+        f"{end_x:.2f}, z {end_z:.2f}, into a block behind the front skirt, "
+        f"{params.END_SCREW_PILOT_DEPTH:.1f} of self-tapped engagement in a "
+        f"{params.END_SCREW_PILOT_D:.2f} pilot. The board has no screws"
+    )
+    sides = {"-x": [], "+x": []}
+    middle = board.board_profile().bounding_box().center().X
+    for run in front_ledge_runs():
+        box = run.bounding_box()
+        sides["-x" if box.center().X < middle else "+x"].append(box)
+    for side, boxes in sorted(sides.items()):
+        spans = ", ".join(
+            f"y {b.min.Y:.2f} .. {b.max.Y:.2f}" for b in sorted(boxes, key=lambda b: b.min.Y)
+        )
+        print(f"front ledges {side}: {len(boxes)} run(s), {spans or 'none'}")
+    print(
+        f"IR end: plain skirt with 2 windows {params.CATCH_W:.0f}x{params.CATCH_H:.1f} "
+        f"at z {CATCH_Z0:.2f} to {CATCH_Z0 + params.CATCH_H:.2f}, detents "
+        f"{params.CATCH_D:.1f} proud of the lap behind them, the +x window held "
+        f"{params.CATCH_EMITTER_CLEAR:.1f} off D1's bore rather than mirrored"
+    )
+    print(
+        f"grip end: no detents, closed by the one end-wall screw into a "
+        f"{block_x1 - block_x0:.1f}x{params.END_SCREW_BLOCK_D:.1f} block, "
+        f"{params.END_SCREW_PILOT_DEPTH:.1f} of engagement under "
+        f"{LAP_OUT - params.BOARD_FIT - params.SHELL_SCREW_HEAD_H:.1f} of wall, "
+        f"standing {params.END_SCREW_BLOCK_GAP:.2f} off the back's inner wall"
+    )
+    print(
+        f"lap: skirt {SKIRT_OUT - params.BOARD_FIT:.2f} thick at the IR end and "
+        f"{SKIRT_OUT - params.BOARD_FIT + params.SIDE_SKIRT_THICKEN:.2f} round the "
+        f"grip end and sides, under a {params.SKIRT_T:.2f} lap, "
+        f"{SHELL_SEAM - SKIRT_BOTTOM:.1f} deep, with a seam shadow groove "
+        f"{params.SEAM_SHADOW_DEPTH:.2f} into it and {params.SEAM_SHADOW_H:.2f} "
+        f"down its outer top edge"
+    )
+    print(f"written to {EXPORT}")

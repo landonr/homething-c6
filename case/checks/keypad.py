@@ -1,0 +1,2007 @@
+"""Pad fit: the pad drops into the front shell without fouling it. Every
+switch takes a cap now, so nothing of the pad itself still has to come
+out the far side; caps_fit() covers all eleven against the shell.
+
+Pad wall fit: every pad keeps at least PAD_FIT to the built front's wall on
+both long sides. The fit above rejects overlap only, so it passes a lobe that
+nearly touches the wall. The lobes stop well short of the wall, so the locating
+tabs are what this reads.
+
+Pad x float: no pad can shift in x by more than SOCKET_LEAD before a tab meets
+the wall, so a pad pushed to either side still lands its stems in the cap
+lead-ins.
+
+Plunger stub contact: every switch's plunger actually lands on SWITCH_TOP,
+not merely in the formula, probed on the built pad rather than trusted from
+KEYPAD_PLUNGER_STUB alone: a clearance cut or a wrong z reference could leave
+one short or overlong without any volume-based check noticing either.
+
+Pad lobes clear the wheel: the pad is two tight rectangles now and the wheel
+bore that used to sever one slab into them is gone, so what used to be
+guaranteed by a cut has to be measured instead. The lip's rotating clearance,
+the LEDs' sight line and the ring insert's lobes all depend on it. The V2 top
+lobe has its own outline and is read too.
+
+Recesses open: the front face is genuinely dished at the floor face_floor_at()
+says, probed beside every key, beside the mic, on the wheel's own seat on four
+bearings, and at each neck's waist. Beside, not over: over a key the face is
+open from the cavity right through, so a probe there reads open whether the
+recess was cut or not.
+
+Rim chamfer profile: the built recessed front has a chamfer
+RECESS_CHAMFER_W wide round the whole recess, with a round of
+RECESS_CHAMFER_ROUND_W at its top edge and a round of
+RECESS_CHAMFER_INNER_ROUND_W into the dish floor, straight between them if
+they leave room. Rays read each part at stations all the way round, with the
+dish just inside and the face just outside. The top round must curve down,
+the inner round must curve up, and a straight part must not bend. The depth
+at the inner edge shows that the dish has no soft roll.
+
+Neck continuity: the recess runs unbroken along its centreline from one
+island's keys to the other's, so no parameter change can silently pinch it
+apart; no join runs past either basin's own centre and no two joins overlap;
+each join's waist clears KEYPAD_NECK_MIN and is narrower than both the widths it
+bridges rather than bulging between them; and each join's plan outline still
+turns through a generous radius rather than closing to a corner, which is the
+whole difference between a merged recess and two trays with a slot between
+them.
+
+Neck blends smoothly: the merged field's own one-sided slopes agree at every
+junction and waist, in depth and in plan width both, which is what says a neck
+meets a dish with no tangent break and the outline has no cusp.
+
+Recess land: the ceiling left over each counterbore, at the deepest point the
+dish reaches over it and on the land ring's mid-line under the face-hole
+lead-in, has not gone below what the flange stack can spare. Checked
+arithmetically and then probed on all four sides of each key, because the
+solids build a valid-looking shell right up until it goes negative.
+
+Recess margins: every counterbore stays inside the recess's rim in plan (a
+superellipse inscribed in the coverage box rather than bounding it would put
+the rim through the four corner keys' holes), the rim stays KEYPAD_EDGE_MARGIN
+clear of the case's exterior wall, and the three dish centres and the wheel's
+own centre still share one x, which is what makes the whole recess a single
+column along y and so what one spine and one loft depend on.
+"""
+
+import math
+
+from build123d import Axis, Box, Compound, Cylinder, Pos, extrude
+
+import board
+import case
+from model import keypad as keypad_model
+from model.mic import mic_duct_or, mic_port
+from model.stack import CAVITY_FRONT, LAP_OUT, SKIRT_BOTTOM
+from model.wheel_ring import led_ring_insert_outer_r
+import params
+
+from .common import (
+    PROBE_D,
+    TOLERANCE,
+    Problem,
+    _Crop,
+    _fill_fraction,
+    _ray_runs,
+    _volume,
+)
+
+
+GROOVE_TOLERANCE = 0.05
+"""Allowed built-solid error at a groove wall or floor."""
+
+CLEARANCE_SLOP = 0.005
+"""Float slack on a measured clearance."""
+
+
+def _grid_pad(pad):
+    """Built grid lobe, isolated from the unchanged SW1/SW2 lobe."""
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    top = max(case.stem_top(ref) for ref in case.island_refs("grid"))
+    crop = Pos((x0 + x1) / 2, (y0 + y1) / 2, (case.SWITCH_TOP + top) / 2)
+    crop *= Box(x1 - x0 + 0.2, y1 - y0 + 0.2, top - case.SWITCH_TOP + 0.2)
+    return pad.intersect(crop)
+
+
+def _lip_problems(pad, label, orientation, centre, mid):
+    """Read the built gap of one FDM groove at three heights against the flare."""
+    chamfer = params.FDM_PAD_GRID_CHAMFER
+    width = params.FDM_PAD_GROOVE_W
+    reach = width + 2 * chamfer + 0.5
+    heights = (
+        case.PAD_WEB_TOP - params.FDM_PAD_GROOVE_DEPTH + 0.1,
+        case.PAD_WEB_TOP - 3 * chamfer / 4,
+        case.PAD_WEB_TOP - chamfer / 4,
+    )
+    problems = []
+    for z in heights:
+        wanted = width + 2 * max(0.0, chamfer - (case.PAD_WEB_TOP - z))
+        if orientation == "vertical":
+            ray = ((centre - reach, mid, z), (centre + reach, mid, z))
+        else:
+            ray = ((mid, centre - reach, z), (mid, centre + reach, z))
+        runs = _ray_runs(pad, *ray)
+        if len(runs) != 2:
+            problems.append(f"the built {label} does not have two side walls at z {z:.2f}")
+            continue
+        measured = runs[1][0] - runs[0][1]
+        if abs(measured - wanted) > GROOVE_TOLERANCE:
+            problems.append(f"the built {label} is {measured:.2f} mm wide at z {z:.2f}, wants {wanted:.2f}")
+    return problems
+
+
+def pad_isolation_grooves(pad):
+    """Probe every isolation groove on the built FDM grid-lobe solid.
+
+    Rays at three heights read the slot width against the flare. The pad is cut
+    from the keytop face only: its underside must be flat along the centreline
+    and the hinge must be PAD_WEB_T - FDM_PAD_GROOVE_DEPTH thick.
+    """
+    problems = []
+    grid = _grid_pad(pad)
+    if len(grid.solids()) != 1:
+        problems.append(f"the grooved nine-button lobe has {len(grid.solids())} solids, not one")
+    expected_core = params.PAD_WEB_T - params.FDM_PAD_GROOVE_DEPTH
+    if expected_core <= 0:
+        problems.append("the groove depths consume the complete pad web")
+        return problems
+    for index, (orientation, centre, run0, run1) in enumerate(keypad_model._pad_groove_specs()):
+        label = f"{orientation} groove {index + 1}"
+        problems.extend(_lip_problems(pad, label, orientation, centre, (run0 + run1) / 2))
+        z0, z1 = case.PAD_WEB_BOTTOM - 0.1, case.PAD_WEB_TOP + 0.1
+        if orientation == "vertical":
+            point = (centre, (run0 + run1) / 2)
+        else:
+            point = ((run0 + run1) / 2, centre)
+        core = _ray_runs(pad, (*point, z0), (*point, z1))
+        for fraction in (0.25, 0.5, 0.75):
+            sample = (
+                (centre, run0 + fraction * (run1 - run0))
+                if orientation == "vertical"
+                else (run0 + fraction * (run1 - run0), centre)
+            )
+            runs = _ray_runs(pad, (*sample, z0), (*sample, z1))
+            bottom = z0 + runs[0][0] if runs else None
+            if bottom is None or abs(bottom - case.PAD_WEB_BOTTOM) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} underside is not flat at the plunger face")
+                break
+        if len(core) != 1:
+            problems.append(f"the built {label} has {len(core)} centre-web runs, not one")
+        else:
+            thickness = core[0][1] - core[0][0]
+            if abs(thickness - expected_core) > GROOVE_TOLERANCE:
+                problems.append(f"the built {label} leaves {thickness:.2f} mm of centre web, wants {expected_core:.2f}")
+    return problems
+
+
+def grid_outer_edge(pad):
+    """Read the chamfer on the built grid lobe's outer top edge, once per side.
+    Its leg is FDM_PAD_EDGE_CHAMFER, not the groove lips' FDM_PAD_GRID_CHAMFER."""
+    c = params.FDM_PAD_EDGE_CHAMFER
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    mx = keypad_model._grid_axes("x")[1]
+    my = keypad_model._grid_axes("y")[1]
+    z_w = case.PAD_WEB_TOP - c - (params.PAD_WEB_T - c) / 2
+    sides = (
+        ("-Y", (mx, y0), (0, -1)),
+        ("+Y", (mx, y1), (0, 1)),
+        ("-X", (x0, my), (-1, 0)),
+        ("+X", (x1, my), (1, 0)),
+    )
+    problems = []
+    for side, (ex, ey), (dx, dy) in sides:
+        def inset(z):
+            start = (ex + 2 * dx, ey + 2 * dy, z)
+            end = (ex - 2 * dx, ey - 2 * dy, z)
+            runs = _ray_runs(pad, start, end)
+            return runs[0][0] if runs else None
+
+        edge = inset(z_w)
+        if edge is None:
+            problems.append(f"the built {side} outer edge has no material at z {z_w:.2f}")
+            continue
+        for fraction, extra in ((0.25, 0.75), (0.75, 0.25)):
+            z = case.PAD_WEB_TOP - fraction * c
+            hit = inset(z)
+            if hit is None:
+                problems.append(f"the built {side} outer edge has no material at z {z:.2f}")
+                continue
+            measured = hit - edge
+            if abs(measured - extra * c) > GROOVE_TOLERANCE:
+                problems.append(
+                    f"the built {side} outer edge is {measured:.2f} mm inside the wall at "
+                    f"z {z:.2f}, wants {extra * c:.2f}"
+                )
+    return problems
+
+
+def plain_web_problems(pad, label):
+    """Probe a built pad's grid web for a plain flat slab. `label` names the pad in messages.
+
+    Three vertical rays along each grid groove centreline, between keytops,
+    must read one run of PAD_WEB_T from PAD_WEB_BOTTOM to PAD_WEB_TOP. At each
+    outer edge site, horizontal rays at mid web height and just under
+    PAD_WEB_TOP must read the same edge, so the edge is square.
+    """
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    columns = keypad_model._grid_axes("x")
+    rows = keypad_model._grid_axes("y")
+    z0, z1 = case.PAD_WEB_BOTTOM - 0.5, case.PAD_WEB_TOP + 0.5
+    problems = []
+    for index, (orientation, centre, _, _) in enumerate(keypad_model._pad_groove_specs()):
+        line = f"{orientation} groove line {index + 1}"
+        axes = rows if orientation == "vertical" else columns
+        along = ((axes[0] + axes[1]) / 2, axes[1], (axes[1] + axes[2]) / 2)
+        for a in along:
+            x, y = (centre, a) if orientation == "vertical" else (a, centre)
+            runs = _ray_runs(pad, (x, y, z0), (x, y, z1))
+            if len(runs) != 1:
+                problems.append(Problem(
+                    f"the {label} {line} has {len(runs)} material runs at ({x:.2f}, {y:.2f}), not one",
+                    at=(x, y, case.PAD_WEB_TOP),
+                ))
+                continue
+            low, high = z0 + runs[0][0], z0 + runs[0][1]
+            if (abs(low - case.PAD_WEB_BOTTOM) > GROOVE_TOLERANCE
+                    or abs(high - case.PAD_WEB_TOP) > GROOVE_TOLERANCE
+                    or abs(high - low - params.PAD_WEB_T) > GROOVE_TOLERANCE):
+                problems.append(Problem(
+                    f"the {label} {line} web at ({x:.2f}, {y:.2f}) runs z {low:.2f} to {high:.2f}, "
+                    f"wants {case.PAD_WEB_BOTTOM:.2f} to {case.PAD_WEB_TOP:.2f}",
+                    at=(x, y, case.PAD_WEB_TOP),
+                ))
+    mx, my = columns[1], rows[1]
+    sides = (
+        ("-Y", (mx, y0), (0, -1)),
+        ("+Y", (mx, y1), (0, 1)),
+        ("-X", (x0, my), (-1, 0)),
+        ("+X", (x1, my), (1, 0)),
+    )
+    for side, (ex, ey), (dx, dy) in sides:
+        edges = []
+        for z in ((case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2, case.PAD_WEB_TOP - 0.05):
+            runs = _ray_runs(pad, (ex + 2 * dx, ey + 2 * dy, z), (ex - 2 * dx, ey - 2 * dy, z))
+            if not runs:
+                problems.append(f"the {label} {side} outer edge has no material at z {z:.2f}")
+                break
+            edges.append(runs[0][0])
+        else:
+            if abs(edges[0] - edges[1]) > GROOVE_TOLERANCE:
+                problems.append(
+                    f"the {label} {side} outer edge is not square, its top edge stands "
+                    f"{edges[1] - edges[0]:+.2f} mm off the mid web edge"
+                )
+    return problems
+
+
+def groove_clearances(pad):
+    """Keep FDM groove cuts out of every stem and cap seat, and open their ends."""
+    problems = []
+    _, x0, y0, x1, y1 = next(box for box in case.pad_lobes() if box[0] == "grid")
+    groove_width = params.FDM_PAD_GROOVE_W
+    width = groove_width / 2 + params.FDM_PAD_GRID_CHAMFER
+    if params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL < groove_width / 2:
+        problems.append("the FDM isolation reliefs do not reach full width at the lobe edge")
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
+        low = y0 if orientation == "vertical" else x0
+        high = y1 if orientation == "vertical" else x1
+        overtravel = params.FDM_PAD_GROOVE_EDGE_OVERTRAVEL
+        if run0 > low - overtravel + GROOVE_TOLERANCE or run1 < high + overtravel - GROOVE_TOLERANCE:
+            problems.append(f"the {orientation} FDM relief does not overrun both pad edges")
+        for ref in case.island_refs("grid"):
+            x, y = board.components()[ref][:2]
+            along = min(max((y if orientation == "vertical" else x), run0), run1)
+            across = abs((x if orientation == "vertical" else y) - centre)
+            distance = math.hypot(across, (y if orientation == "vertical" else x) - along)
+            seat = keypad_model.fdm_cap_body(ref)
+            needed = width + max(params.STEM_W / 2, seat / 2)
+            if distance < needed - GROOVE_TOLERANCE:
+                problems.append(f"the {orientation} groove reaches {ref}'s stem or keytop base")
+    # Read unchanged-lobe material above and below its web. A grid-only cut must
+    # not create a new void in SW1/SW2's lobe.
+    for ref in case.island_refs("second"):
+        x, y = board.components()[ref][:2]
+        probe = Pos(x, y, case.PAD_WEB_TOP - params.FDM_PAD_GROOVE_DEPTH / 2) * Cylinder(radius=0.1, height=0.05)
+        if _fill_fraction(pad, probe) < 0.99:
+            problems.append(f"the SW1/SW2 lobe is cut above {ref}")
+    return problems
+
+
+SKIRT_SPACING = 1.0
+"""Distance between samples along a skirt centreline."""
+SKIRT_SITES_PER_SIDE = 3
+"""Thickness and outer-edge readings taken on each side of a lobe."""
+
+
+def _skirt_zones(solids=None, bottom=None):
+    """Plan boxes of every board part that stands up to the skirt, read off the
+    assembly itself so a skirt sample can be excused only where a part is.
+
+    `solids` and `bottom` default to the V3 assembly with its switch bodies and
+    PAD_SKIRT_BOTTOM. The STEP has no switch bodies, so keypad.switch_bodies()
+    adds them. The V2 top pad passes its moved V2 solids and its own skirt
+    bottom."""
+    clear = params.PAD_SKIRT_CLEARANCE
+    if solids is None:
+        solids = list(board.assembly_solids()) + [
+            solid for _, solid in keypad_model.switch_bodies()
+        ]
+    bottom = case.PAD_SKIRT_BOTTOM if bottom is None else bottom
+    zones = []
+    for solid in solids:
+        box = solid.bounding_box()
+        if box.max.Z > bottom - clear:
+            zones.append((box.min.X - clear, box.max.X + clear, box.min.Y - clear, box.max.Y + clear))
+    return zones
+
+
+def _edge(pad, p, n, z):
+    """Distance outward of the first material on a ray in from outside at `p`,
+    and the thickness of that first run, at height z."""
+    reach = params.PAD_SKIRT_T / 2 + 0.6
+    start = (p[0] + n[0] * reach, p[1] + n[1] * reach, z)
+    end = (p[0] - n[0] * reach, p[1] - n[1] * reach, z)
+    runs = _ray_runs(pad, start, end)
+    if not runs:
+        return None, None
+    return reach - runs[0][0], runs[0][1] - runs[0][0]
+
+
+def pad_skirt_depth(
+    pad, fdm=False, grooves=True, lobes=("grid", "second"), zones=None, v2=False,
+):
+    """Walk each moulded lobe's skirt centreline on the built pad.
+
+    Returns (problems, lines). At every sample outside a board part's zone a
+    ray up from below the wall must find unbroken material from
+    PAD_SKIRT_BOTTOM to the web.
+
+    The ray goes up and starts in air. A ray down from inside the web has to be
+    cast again from above the pad. On the TPU and FDM pads the fused keytops
+    overhang the skirt, so that second ray crosses a keytop top fillet. The
+    intersector gives two entering crossings there and one exit at the skirt
+    bottom, so the run never closes and the wall reads too deep. A zone excuses a
+    sample only where the assembly itself puts a part. On the V3 board no zone
+    reaches the skirt, so every sample has to read as material.
+
+    At a few sites per side, rays across the wall read its thickness, and its
+    outer face against the web's, which must be flush. The walk follows the
+    lobe outline without its locating tabs, and no site is read beside a tab,
+    because the web stands past the skirt there. No site is read beside a round
+    tighter than the probe's reach either, because the ray then runs through
+    the corner and not across the wall, or beside a part zone, where it reads
+    the trim at the end of a skirt break. On the FDM pad the
+    skirt must also run unbroken across each groove exit. `grooves` False
+    means a plain slab web, with no chamfer and no groove exits.
+
+    `lobes` names the lobes walked. `zones` are the plan boxes a sample is
+    excused in, default the V3 pad's. The V2 top pad passes its own, because
+    its board puts different parts under the wall, and `v2` so the walk follows
+    that pad's own outline.
+    """
+    from build123d import GeomType, Vertex
+
+    problems, lines = [], []
+    bottom = case.PAD_SKIRT_BOTTOM
+    zones = _skirt_zones() if zones is None else zones
+    z_top = case.PAD_WEB_BOTTOM + 0.1
+    flat = params.PAD_WEB_T - (params.FDM_PAD_EDGE_CHAMFER if fdm and grooves else 0)
+    z_web = case.PAD_WEB_BOTTOM + flat / 2
+    z_skirt = (bottom + case.PAD_WEB_BOTTOM) / 2
+    for name in lobes:
+        face = keypad_model.pad_lobe_face(name, v2, tabs=False)
+        outline = face.outer_wire()
+        reach = params.PAD_SKIRT_T + 0.6
+        tabs = [
+            (tx0 - reach, tx1 + reach, ty0 - reach, ty1 + reach)
+            for tx0, ty0, tx1, ty1 in keypad_model.pad_tabs(name, v2)
+        ]
+        # A ray across the wall beside a round tighter than its own reach runs
+        # through the corner, where the skirt fills solid, and not across the
+        # wall. The notch mouths (PAD_JOIN_RADIUS) are such rounds.
+        tight = [
+            edge for edge in outline.edges()
+            if edge.geom_type == GeomType.CIRCLE and edge.radius < reach
+        ]
+        centre = outline.offset_2d(-params.PAD_SKIRT_T / 2)
+        count = max(8, round(centre.length / SKIRT_SPACING))
+        step = centre.length / count
+        kept, skipped, bad = [], 0, 0
+        for i in range(count):
+            p = centre.position_at((i + 0.5) / count)
+            if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in zones):
+                skipped += 1
+                continue
+            start = bottom - 1.0
+            runs = _ray_runs(pad, (p.X, p.Y, start), (p.X, p.Y, z_top))
+            if not runs or runs[0][1] < z_top - start - 0.05 or len(runs) != 1:
+                bad += 1
+                if bad <= 3:
+                    problems.append(Problem(
+                        f"the {name} lobe skirt has no unbroken wall at ({p.X:.2f}, {p.Y:.2f})",
+                        at=(p.X, p.Y, bottom),
+                    ))
+                continue
+            low = start + runs[0][0]
+            if abs(low - bottom) > PLUNGER_CONTACT_TOLERANCE:
+                bad += 1
+                if bad <= 3:
+                    problems.append(Problem(
+                        f"the {name} lobe skirt bottom at {low:.3f} at ({p.X:.2f}, {p.Y:.2f}) "
+                        f"against PAD_SKIRT_BOTTOM at {bottom:.3f}, off by {low - bottom:.3f}",
+                        at=(p.X, p.Y, low),
+                    ))
+                continue
+            kept.append(p)
+        if bad > 3:
+            problems.append(f"the {name} lobe skirt fails at {bad} samples in all")
+        if not kept:
+            problems.append(f"the {name} lobe has no skirt material at any sample")
+            continue
+        lines.append(f"{name} {len(kept)} samples ({skipped} skipped) over {len(kept) * step:.0f} mm")
+        sides = {}
+        for p in kept:
+            if any(a <= p.X <= b and c <= p.Y <= d for a, b, c, d in tabs):
+                continue
+            if any(edge.distance_to(Vertex(p.X, p.Y, 0)) < reach for edge in tight):
+                continue
+            # Beside a part zone the ray reads the trim at the end of a skirt
+            # break, not the wall. The walk above still runs up to each zone.
+            if any(
+                a - reach <= p.X <= b + reach and c - reach <= p.Y <= d + reach
+                for a, b, c, d in zones
+            ):
+                continue
+            _, near, _ = outline.distance_to_with_closest_points(Vertex(p.X, p.Y, 0))
+            n = (near.X - p.X, near.Y - p.Y)
+            norm = math.hypot(*n)
+            n = (n[0] / norm, n[1] / norm)
+            key = ("x" if abs(n[0]) > abs(n[1]) else "y", 1 if (n[0] if abs(n[0]) > abs(n[1]) else n[1]) > 0 else -1)
+            sides.setdefault(key, []).append((p, n))
+        for key, group in sorted(sides.items()):
+            picks = {round((i + 1) * (len(group) - 1) / (SKIRT_SITES_PER_SIDE + 1)) for i in range(SKIRT_SITES_PER_SIDE)}
+            for index in sorted(picks):
+                p, n = group[index]
+                where = f"the {name} lobe {key[0]}{'+' if key[1] > 0 else '-'} skirt at ({p.X:.2f}, {p.Y:.2f})"
+                out_skirt, thick = _edge(pad, (p.X, p.Y), n, z_skirt)
+                out_web, _ = _edge(pad, (p.X, p.Y), n, z_web)
+                if thick is None or out_web is None:
+                    problems.append(Problem(f"{where} could not be read across", at=(p.X, p.Y, z_skirt)))
+                    continue
+                if abs(thick - params.PAD_SKIRT_T) > GROOVE_TOLERANCE:
+                    problems.append(Problem(
+                        f"{where} is {thick:.2f} mm thick, wants {params.PAD_SKIRT_T:.2f}",
+                        at=(p.X, p.Y, z_skirt),
+                    ))
+                if abs(out_skirt - out_web) > GROOVE_TOLERANCE:
+                    problems.append(Problem(
+                        f"{where} stands {out_skirt - out_web:+.2f} mm off the web's outer edge, "
+                        "so the plan outline is not flush",
+                        at=(p.X, p.Y, z_skirt),
+                    ))
+    if fdm and grooves:
+        problems.extend(_groove_exit_problems(pad, zones, z_skirt))
+    return problems, lines
+
+
+def _groove_exit_problems(pad, zones, z):
+    """Each FDM groove exit leaves the skirt one unbroken run across the groove."""
+    width = params.FDM_PAD_GROOVE_W
+    flat = case.PAD_WEB_BOTTOM + 0.1
+    problems = []
+    for orientation, centre, run0, run1 in keypad_model._pad_groove_specs():
+        a, b = ((centre, run0 - 2), (centre, run1 + 2)) if orientation == "vertical" \
+            else ((run0 - 2, centre), (run1 + 2, centre))
+        edges = _ray_runs(pad, (*a, flat), (*b, flat))
+        if len(edges) != 1:
+            problems.append(f"the FDM {orientation} groove line has {len(edges)} web runs at the lobe edges, not one")
+            continue
+        lo, hi = edges[0]
+        for end, offset in (("low", lo + params.PAD_SKIRT_T / 2), ("high", hi - params.PAD_SKIRT_T / 2)):
+            if orientation == "vertical":
+                y = a[1] + offset
+                x, y2 = centre, y
+                start, stop = (x - width, y2, z), (x + width, y2, z)
+            else:
+                x = a[0] + offset
+                y2 = centre
+                start, stop = (x, y2 - width, z), (x, y2 + width, z)
+            if any(p <= start[0] <= q and r <= start[1] <= t for p, q, r, t in zones) \
+                    or any(p <= stop[0] <= q and r <= stop[1] <= t for p, q, r, t in zones):
+                continue
+            runs = _ray_runs(pad, start, stop)
+            if len(runs) != 1 or runs[0][1] - runs[0][0] < 2 * width - GROOVE_TOLERANCE:
+                problems.append(Problem(
+                    f"the FDM {orientation} groove {end} exit at ({start[0] + width * (orientation == 'vertical'):.2f}, "
+                    f"{start[1] + width * (orientation != 'vertical'):.2f}) breaks the skirt into {len(runs)} runs, wants one",
+                    at=(start[0], start[1], z),
+                ))
+    return problems
+
+
+def pad_clears_board(pad, obstacles=None, columns=None, floor=None):
+    """The built pad below its web keeps PAD_SKIRT_CLEARANCE off every board part.
+
+    The plungers are meant to land on their switches, so a cylinder around each
+    is taken out first. Returns (problems, line).
+
+    `obstacles` is a list of (ref, solid) and defaults to the V3 assembly, each
+    solid named by its nearest placement, and the switch bodies. `columns` are the (x, y) of the
+    plungers and nibs, default every V3 switch. `floor` is the lowest z kept,
+    default one below the plunger contacts.
+    """
+    parts = board.components()
+    z0 = case.SWITCH_TOP - params.PLUNGER_SWITCH_EXTENSION - 1 if floor is None else floor
+    z1 = case.PAD_WEB_BOTTOM - case.MERGE
+    below = Compound(pad.intersect(Pos(0, 0, (z0 + z1) / 2) * Box(400, 400, z1 - z0)).solids())
+    if columns is None:
+        columns = [parts[ref][:2] for ref in board.refs("SW")]
+    for x, y in columns:
+        below = below.cut(Pos(x, y, 0) * Cylinder(radius=params.PLUNGER_D / 2 + 0.5, height=100))
+    below = below.clean()
+    box = below.bounding_box()
+    if obstacles is None:
+        placements = [(ref, x, y) for ref, (x, y, _, _) in parts.items()]
+        placements.append(("ENC1", *board.wheel_center()))
+        obstacles = []
+        for solid in board.assembly_solids():
+            c = solid.bounding_box().center()
+            ref = min(placements, key=lambda p: math.hypot(p[1] - c.X, p[2] - c.Y))[0]
+            obstacles.append((ref, solid))
+        obstacles += keypad_model.switch_bodies()
+    needed = params.PAD_SKIRT_CLEARANCE
+    worst = (math.inf, None)
+    problems = []
+    for ref, solid in obstacles:
+        b = solid.bounding_box()
+        if (b.min.X > box.max.X + needed or b.max.X < box.min.X - needed
+                or b.min.Y > box.max.Y + needed or b.max.Y < box.min.Y - needed):
+            continue
+        d = below.distance_to(solid)
+        c = b.center()
+        if d < worst[0]:
+            worst = (d, ref)
+        if d < needed - CLEARANCE_SLOP:
+            problems.append(Problem(
+                f"the pad skirt is {d:.2f} mm from {ref}, under the {needed:.2f} mm clearance",
+                at=(c.X, c.Y, c.Z),
+            ))
+    return problems, f"the pad skirt is {worst[0]:.2f} mm at its closest, from {worst[1]}"
+
+
+def pad_fits(front, pad):
+    """The pad has to drop into the front shell without fouling it.
+
+    Every switch takes a stem and a cap now rather than nine stems plus two
+    moulded keytops, so there is nothing here still coming through the
+    front face to probe per key: caps_fit() covers all eleven, stems
+    included, against the shell, each other and their sockets.
+    """
+    fouled = _volume(front.intersect(pad))
+    if fouled > TOLERANCE:
+        return [f"pad fouls the front shell by {fouled:.2f} mm3"]
+    return []
+
+
+TPU_PART = "c6remote-case-pad-tpu"
+"""The one-piece TPU pad's export stem. It goes with the recessed front."""
+
+PAD_FIT_TOLERANCE = 0.01
+"""Allowed shortfall on PAD_FIT at the wall. This is float slop, not a margin."""
+
+
+def pad_wall_fit(pairs):
+    """Each (label, front, pad) keeps PAD_FIT to the front's wall on both long
+    sides. Returns the problems and {label: (-X gap, +X gap)}.
+
+    pad_fits rejects overlap only, so a lobe 0.1 off the wall passed it. The
+    lobes stop well short of the wall, so the locating tabs are what this reads.
+    See _wall_gaps() for where the wall is read."""
+    problems = []
+    readings = _wall_gaps(pairs, problems)
+    for label, gaps in readings.items():
+        for name, gap in zip(("-X", "+X"), gaps or ()):
+            if gap < params.PAD_FIT - PAD_FIT_TOLERANCE:
+                problems.append(
+                    f"{label} stands {gap:.3f} off the {name} wall, under "
+                    f"PAD_FIT {params.PAD_FIT:.2f}"
+                )
+    return problems, readings
+
+
+def _wall_gaps(pairs, problems):
+    """{label: (-X gap, +X gap)} from each (label, front, pad) to the front's
+    wall, or None for a label whose wall could not be read. A wall that cannot
+    be read adds a line to `problems`.
+
+    The wall is cut out of the built front outboard of each board edge and stops
+    under the ceiling, which the pad web bears on."""
+    box = board.board_profile().bounding_box()
+    z0, z1 = SKIRT_BOTTOM, CAVITY_FRONT - 0.05
+    reach = LAP_OUT + 1
+    readings = {}
+    for label, front, pad in pairs:
+        gaps = []
+        for name, x0, x1 in (
+            ("-X", box.min.X - reach, box.min.X),
+            ("+X", box.max.X, box.max.X + reach),
+        ):
+            wall = _Crop(front, (x0, box.min.Y, z0), (x1, box.max.Y, z1)).shape
+            if wall is None:
+                problems.append(f"{label} has no {name} wall to measure against")
+                continue
+            gaps.append(pad.distance_to(wall))
+        readings[label] = tuple(gaps) if len(gaps) == 2 else None
+    return readings
+
+
+FLOAT_SLOP = 0.01
+"""Allowed excess on a pad's x float over SOCKET_LEAD. This is float slop, not a
+margin."""
+
+
+def pad_x_float(pairs):
+    """Each (label, front, pad) can shift in x by no more than SOCKET_LEAD before
+    it meets the front's wall. Returns the problems and {label: float}.
+
+    The lobes stop well short of the side walls, so the locating tabs are what
+    meet the wall. The float is the wider of the two gaps that pad_wall_fit()
+    reads, because the pad can be pushed all the way to either side, and a stem
+    further off its cap than SOCKET_LEAD misses the lead-in."""
+    problems, readings = [], {}
+    gaps_by_label = _wall_gaps(pairs, problems)
+    for label, gaps in gaps_by_label.items():
+        if gaps is None:
+            continue
+        drift = max(gaps)
+        readings[label] = drift
+        if drift > params.SOCKET_LEAD + FLOAT_SLOP:
+            problems.append(
+                f"{label} can shift {drift:.2f} in x before it meets the wall, "
+                f"more than SOCKET_LEAD {params.SOCKET_LEAD:.2f}"
+            )
+    return problems, readings
+
+
+def mic_pad_contour(pad, v2=False):
+    """Probe the mic lobe: solid web between the keys, and the pad kept out of
+    the mic duct clearance. Where pad_mic_notch() says the lobe reaches the
+    clearance circle, also probe the notch and its filleted corners. `v2` reads
+    the V2 top pad's lobe."""
+    refs = sorted(case.island_refs("second"), key=lambda ref: board.components()[ref][0])
+    left, right = [board.components()[ref][:2] for ref in refs]
+    mx, my = mic_port()
+    lobe = case.pad_lobe_box("second", v2)
+    top = lobe[3]
+    z = (case.PAD_WEB_BOTTOM + case.PAD_WEB_TOP) / 2
+    problems = []
+
+    def filled(px, py):
+        probe = Pos(px, py, z) * Cylinder(radius=0.05, height=params.PAD_WEB_T / 2)
+        return _fill_fraction(pad, probe)
+
+    sites = [(mx, "between the keys")]
+    for ref, (kx, _), direction in zip(refs, (left, right), (1, -1)):
+        sites.append((kx + direction * (case.key_size(ref) / 2 + 1.0), f"beside {ref}"))
+    for px, label in sites:
+        for py in (-36.5, -38.5):
+            if filled(px, py) < 0.99:
+                problems.append(f"the mic pad web is open {label} at y {py}")
+    # The duct's widest chamfer is the physical floor for the notch.
+    duct = mic_duct_or() + params.STANDOFF_CHAMFER
+    full = duct + params.PAD_MIC_CLEARANCE
+    if filled(mx, my - (duct - 0.1)) > 0.01:
+        problems.append("the mic pad has material inside the mic duct clearance")
+    if not case.pad_mic_notch("second", v2):
+        if filled(mx, my - full + 0.1) > 0.01:
+            problems.append(
+                "the mic pad has material inside the mic clearance circle, "
+                "but pad_mic_notch() cut no notch"
+            )
+        return problems
+    if filled(mx, my - full - 0.1) < 0.99:
+        problems.append("the mic notch is wider than its clearance circle")
+    half = math.sqrt(full**2 - (top - my) ** 2)
+    for side in (-1, 1):
+        corner = (mx + side * half, top)
+        radial = ((corner[0] - mx) / full, (corner[1] - my) / full)
+        # Unit vector along the arc, heading down toward the notch floor.
+        tangent = (-side * abs(radial[1]), -abs(radial[0]))
+        norm = math.hypot(side + tangent[0], tangent[1])
+        bx, by = (side + tangent[0]) / norm, tangent[1] / norm
+        # A sharp corner is solid here. The round takes R(1/sin(a/2) - 1) off the
+        # corner along the bisector, less as the corner opens, so probe halfway in.
+        half_angle = math.acos(side * tangent[0]) / 2
+        reach = params.PAD_JOIN_RADIUS * (1 / math.sin(half_angle) - 1) / 2
+        probe = Pos(corner[0] + bx * reach, corner[1] + by * reach, z) * Cylinder(
+            radius=0.01, height=params.PAD_WEB_T / 2
+        )
+        if _fill_fraction(pad, probe) > 0.01:
+            problems.append(
+                f"the mic notch corner at x {corner[0]:.2f} has no PAD_JOIN_RADIUS round"
+            )
+    return problems
+
+
+PLUNGER_CONTACT_TOLERANCE = 0.05
+"""Allowed error at the plunger bottom. This is float slop, not a design margin."""
+
+PLUNGER_PROBE_SPAN = 0.6
+"""Probe height about the target plunger bottom. It finds the bottom face without reaching the web."""
+
+
+def plunger_bottoms(
+    pad,
+    points,
+    contact,
+    what="plunger",
+    part=None,
+    extension=params.PLUNGER_SWITCH_EXTENSION,
+):
+    """Check the built pad's bottom at each {ref: (x, y)} against `contact`
+    less `extension`. Shared by the V3 pads and the V2 top pad."""
+    problems = []
+    half = PLUNGER_PROBE_SPAN / 2
+    target = contact - extension
+    for ref, (x, y) in points.items():
+        z0, z1 = target - half, target + half
+        probe = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
+        hit = pad.intersect(probe)
+        if _volume(hit) <= TOLERANCE:
+            problems.append(
+                Problem(
+                    f"{ref}'s {what} does not reach its bottom target",
+                    at=(x, y, target),
+                    part=part,
+                )
+            )
+            continue
+        bottom = min(s.bounding_box().min.Z for s in hit.solids())
+        off = bottom - target
+        if abs(off) > PLUNGER_CONTACT_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"{ref}'s {what} bottom at {bottom:.3f} against target "
+                    f"{target:.3f}, off by {off:.3f}",
+                    at=(x, y, bottom),
+                    part=part,
+                )
+            )
+    return problems
+
+
+def plunger_stub_contact(pad):
+    """Check each built plunger bottom against its extension target."""
+    parts = board.components()
+    points = {ref: parts[ref][:2] for ref in board.refs("SW")}
+    return plunger_bottoms(pad, points, case.SWITCH_TOP)
+
+
+KEEPOUT_AREA_SLOP = 1e-3
+"""Plan area, in mm2, a lobe may share with a wheel keep-out before
+pad_clears_wheel() calls it a reach. Not zero, because each notch is cut on the
+keep-out's own edge and the shared boundary can read a sliver."""
+KEEPOUT_VOLUME_SLOP = 1e-3
+"""The same allowance for the built pad, in mm3."""
+
+
+def pad_clears_wheel(pad):
+    """Neither lobe reaches into the keep-outs round the wheel.
+
+    Arithmetic first, on the lobe faces, and then on the built pad's own
+    solids, because the two can disagree: a lobe is clipped against the cavity
+    and a stem is raised on it after that. The keep-outs hold the lip's
+    rotating clearance, the LEDs firing up past the pad, and the ring insert's
+    lobes.
+    """
+    problems = []
+    for label, area in (("a pad lobe", case.pad_keepout_overlap()),
+                        ("the V2 top lobe", case.pad_keepout_overlap(v2=True))):
+        if area > KEEPOUT_AREA_SLOP:
+            problems.append(f"{label} covers {area:.3f} mm2 of the wheel's keep-outs")
+    for keepout in case.pad_keepouts():
+        prism = Pos(0, 0, -50) * extrude(keepout, amount=100)
+        centre = keepout.center()
+        for solid in pad.solids():
+            hit = solid & prism
+            volume = hit.volume if hit is not None else 0.0
+            if volume > KEEPOUT_VOLUME_SLOP:
+                problems.append(
+                    f"a built pad solid enters the wheel keep-out at "
+                    f"({centre.X:.2f}, {centre.Y:.2f}) by {volume:.3f} mm3"
+                )
+    return problems
+
+
+FLOOR_PROBE_DEPTH = 0.3
+"""How far under a recess floor recesses_open() probes for solid shell. Deep
+enough to read as a band rather than a plane, shallow enough to stay above the
+ring channel's own roof, which is the next void down anywhere the keypad recess
+crosses it."""
+FLOOR_PROBE_SLOP = 0.01
+"""Fraction of the solid half of a floor probe allowed to be void. A fully
+solid probe this narrow reads well under TOLERANCE in mm3, so an absolute floor
+could not tell it from a void; anything genuinely sinking past the floor takes
+far more than this."""
+AIR_PROBE_SLOP = 0.05
+"""Fraction of the open half of a floor probe allowed to be material. Not zero,
+because the floor is curved across the probe's own width, so the probe's outer
+side stands a little above the height its centre's floor sets and catches a
+sliver of the dish wall; on the shallowest site here that reads under a
+thousandth. Also a fraction rather than a volume, and for the same reason the
+solid half is: a probe whose height is the local depth is only tenths of a
+millimetre tall at a shallow site, so a fully blocked one measures less than
+TOLERANCE in mm3. An undished face reads 1.0."""
+FLOOR_PROBE_LIFT = 0.025
+"""How far above a floor the open half of a probe starts, and how far below it
+the solid half stops. Small: the point is to straddle the surface
+face_floor_at() predicts, not to confirm that a hole several millimetres deep
+is a hole. It also has to clear the loft's own faceting between stations, which
+is a few thousandths at worst, and it does by several times over."""
+FLOOR_PROBE_MIN_DEPTH = 4 * FLOOR_PROBE_LIFT
+"""Least local depth a probe site may have and still be worth reading. The two
+halves stand twice FLOOR_PROBE_LIFT apart, so at a shallower site the open half
+is barely taller than the slop between them and neither reading distinguishes
+much. A site that shallow is reported rather than passed. The shallowest site
+here is a neck waist, and it clears this by a third; the recess's own floor
+under a waist is held by neck_continuity() rather than by this."""
+HOLE_MARGIN = PROBE_D / 2 + 0.15
+"""How far clear of any hole in the face a probe site has to sit. The probe's
+own radius plus enough that a rounded corner or a boolean's own edge cannot
+reach into it."""
+
+
+JOIN_SITE_SAMPLES = 200
+"""How finely a join is walked looking for its narrowest station clear of every
+hole. At this count the site lands within a few hundredths of the narrowest open
+point there is."""
+
+
+def _clear_of_holes(x, y, own):
+    """Whether a probe standing at (x, y) is clear of everything else cut
+    through the face there: every cap's counterbore, the mic's mouth and the
+    wheel's bore. `own` names the hole the site was offset off, which is the
+    one it sits exactly on the margin of and so the one no float comparison can
+    answer for.
+
+    This is the whole difficulty in probing a recess floor. Directly over a key
+    or the mic the face is open from the cavity right through, so a probe there
+    reads open whether the recess was cut or not, which is a pass that proves
+    nothing. Every site has to stand on face that only the dish can have sunk.
+    """
+    parts = board.components()
+    for ref in board.refs("SW"):
+        if ref == own:
+            continue
+        kx, ky = parts[ref][:2]
+        half = case.cap_counterbore(ref) / 2 + HOLE_MARGIN
+        if abs(x - kx) < half and abs(y - ky) < half:
+            return False
+    if own != "mic":
+        mx, my = case.mic_port()
+        if math.hypot(x - mx, y - my) < case.mic_mouth_r() + HOLE_MARGIN:
+            return False
+    wx, wy = board.wheel_center()
+    return math.hypot(x - wx, y - wy) >= case.WHEEL_OPENING_R + HOLE_MARGIN
+
+
+def _probe_sites():
+    """[(label, x, y)] where recesses_open() reads the face.
+
+    One beside every key and one beside the mic, offset just past that hole's
+    own edge in whichever of the four axis directions the dish is deepest,
+    which is always the one facing the recess centre. That is what makes the
+    reading local: it is the floor immediately around that key's own cap, at
+    whatever depth face_depth_at() says the dish sinks below the curved face
+    there, so a dish
+    built on the wrong centre or at the wrong depth disagrees at the key
+    nearest it and not only in aggregate.
+
+    Plus the wheel's seat on four bearings and each join's own waist. The wheel
+    dish has circular cardinal curvature and superellipse diagonal reach. Its
+    seat is narrowest on the free axis and widest on the diagonals. The
+    two bearings a join leaves on are different again, both reaches taking the
+    bridge past the bore so the seat there is neck rather than dish and reads
+    deeper. The waists are where the merged field is at its shallowest anywhere
+    between the islands, so they are the sites a bridge built the wrong way
+    would show up at first.
+    """
+    parts = board.components()
+    sites = []
+    targets = [
+        (ref, *parts[ref][:2], case.cap_counterbore(ref) / 2)
+        for ref in board.refs("SW")
+    ]
+    targets.append(("mic", *case.mic_port(), case.mic_mouth_r()))
+    for label, x, y, edge in targets:
+        reach = edge + HOLE_MARGIN
+        best = None
+        for dx, dy in ((reach, 0), (-reach, 0), (0, reach), (0, -reach)):
+            px, py = x + dx, y + dy
+            if not _clear_of_holes(px, py, label):
+                continue
+            depth = case.face_depth_at(px, py)
+            if best is None or depth > best[0]:
+                best = (depth, px, py)
+        if best is None:
+            sites.append((f"beside {label}", None, None))
+            continue
+        sites.append((f"beside {label}", best[1], best[2]))
+
+    wx, wy = board.wheel_center()
+    # Out past RING_BORE_ROUND, because the round takes the seat below the
+    # dish on purpose and checks/wheel_ring.py bore_round() reads it there.
+    r = case.WHEEL_OPENING_R + params.RING_BORE_ROUND + params.WHEEL_RIM_LEDGE / 2
+    sites.append(("on the wheel seat on the axis", wx + r, wy))
+    sites.append(
+        ("on the wheel seat on the diagonal", wx + r * 0.70711, wy + r * 0.70711)
+    )
+    # The two bearings a neck leaves on: the seat carries on into the neck
+    # there rather than feathering back to the face, so these read deeper than
+    # the free axis does and are the only sites that see a neck at the bore.
+    sites.append(("on the wheel seat toward the grid", wx, wy - r))
+    sites.append(("on the wheel seat toward the second island", wx, wy + r))
+    cx = case.centerline_x()
+    for neck in case.keypad_necks():
+        # The narrowest point of the join that is actually face. Its true waist
+        # can sit inside the wheel opening's bore, both reaches being longer
+        # than WHEEL_RIM_LEDGE, and a probe standing in the bore reads the bore
+        # rather than the recess. So the whole join is walked and the narrowest
+        # station clear of every hole is taken.
+        span = neck.y1 - neck.y0
+        best = None
+        for i in range(JOIN_SITE_SAMPLES + 1):
+            y = neck.y0 + span * i / JOIN_SITE_SAMPLES
+            if not _clear_of_holes(cx, y, None):
+                continue
+            width = case.recess_spine(y)[0]
+            if best is None or width < best[0]:
+                best = (width, y)
+        sites.append(
+            (
+                f"at the {neck.name} join's narrowest open point",
+                cx,
+                best[1] if best else None,
+            )
+        )
+    return sites
+
+
+def recesses_open(front):
+    """The front face is genuinely dished, at the floor face_floor_at() says,
+    at every site in _probe_sites().
+
+    Two readings per site: open from just above the local floor to the face,
+    and solid from just below it. Together they say the surface is where the
+    arithmetic puts it, which is more than either says alone. Open alone is
+    what a probe standing over a key hole reads whether anything was cut or
+    not; solid alone is what an uncut flat face reads.
+    """
+    problems = []
+    for label, x, y in _probe_sites():
+        if x is None or y is None:
+            problems.append(f"no clear face to probe {label}: it is all hole")
+            continue
+        depth = case.face_depth_at(x, y)
+        if depth < FLOOR_PROBE_MIN_DEPTH:
+            problems.append(
+                f"the face is only {depth:.3f} down {label}, too flat for this "
+                f"pass to mean anything"
+            )
+            continue
+        floor = case.face_floor_at(x, y)
+        z0, z1 = floor + FLOOR_PROBE_LIFT, case.SHELL_FRONT + 0.05
+        air = Pos(x, y, (z0 + z1) / 2) * Cylinder(radius=PROBE_D / 2, height=z1 - z0)
+        if _fill_fraction(front, air) > AIR_PROBE_SLOP:
+            problems.append(f"the face is not dished {label}")
+        z0, z1 = floor - FLOOR_PROBE_DEPTH, floor - FLOOR_PROBE_LIFT
+        solid = Pos(x, y, (z0 + z1) / 2) * Cylinder(
+            radius=PROBE_D / 2, height=z1 - z0
+        )
+        if _fill_fraction(front, solid) < 1 - FLOOR_PROBE_SLOP:
+            problems.append(f"something cuts past the recess floor {label}")
+    return problems
+
+
+CHAMFER_STATIONS = 36
+"""Stations at even arc length round the outline that rim_chamfer_profile()
+reads, before the named stations it adds."""
+
+CHAMFER_PROBE_FRACTIONS = (1 / 6, 1 / 2, 5 / 6)
+"""Where rim_chamfer_profile() reads a straight section at each station, as
+fractions of the way from the top round's end to the inner round's start.
+The three readings are evenly spaced."""
+
+CHAMFER_TOP_FRACTIONS = (1 / 4, 1 / 2, 3 / 4, 1)
+"""Where rim_chamfer_profile() reads the top round at each station, as
+fractions of its whole width, counted in from its start,
+RECESS_CHAMFER_ROUND_OUT outside the outline. Four readings give two
+overlapping sets of three, and a sharp edge at the outline leaves the second
+set straight. The first facet can reach past the first reading."""
+
+CHAMFER_INNER_FRACTIONS = (1 / 3, 2 / 3, 1)
+"""Where rim_chamfer_profile() reads the inner round at each station, as
+fractions of its width, counted back from the chamfer's inner edge."""
+
+CHAMFER_PROBE_MIN_W = 0.15
+"""Narrowest part of the rim chamfer, round or straight, that
+rim_chamfer_profile() reads. Under it the readings crowd together."""
+
+CHAMFER_ROUND_TOLERANCE = 0.002
+"""Slack between a built reading on either round and face_floor_at(), the
+model's faceted floor. Near its start the top round's first facet runs up to
+0.0075 under the parabola, _rim_section(), where the face itself curves, so
+the readings want the facets. The built rounds stand within 0.00001 of them."""
+
+CHAMFER_BEND_TOLERANCE = 0.002
+"""Most that the three readings on a straight section can bend, as the
+second difference z1 - 2 z2 + z3. A built straight section bends less than
+0.0007."""
+
+CHAMFER_TOP_CURVE_MIN = 0.003
+"""Least that every three neighbouring built readings on the top round curve
+down, as the second difference z1 - 2 z2 + z3 below zero. The built round
+reads 0.008 to 0.048 on both sets. A sharp edge at the outline leaves the
+readings inside it straight, at about zero."""
+
+CHAMFER_INNER_CURVE_MIN = 0.0006
+"""Least that the three built readings on the inner round curve up into the
+dish, as the second difference z1 - 2 z2 + z3. The inner round reads 0.0011
+to 0.016. A crease into the dish leaves the readings straight, at 0.0000."""
+
+CHAMFER_DISH_PAST = 0.1
+"""How far past the chamfer's inner edge the dish reading stands."""
+
+CHAMFER_OUTSIDE = 0.05
+"""How far outside the top round's start the face reading stands."""
+
+CHAMFER_TOLERANCE = 0.005
+"""Slack between a built reading on a straight section and face_floor_at().
+The cutter crosses the clip wall CHAMFER_SEAM_LIFT above the dish, so a
+straight section near the inner edge stands up to that much over the model's
+floor."""
+
+CHAMFER_DEPTH_MIN = 0.03
+"""Least depth under the face the built chamfer reaches at its inner edge.
+The dish without its soft roll is 0.059 to 0.31 deep there, and the second
+basin's long sides are the shallowest. With the grid basin's roll put back,
+it is only 0.019 to 0.03 deep on that basin's long sides and grip end
+corners, so the roll fails here."""
+
+CHAMFER_DISH_TOLERANCE = 0.01
+"""Slack between the built dish past the chamfer and face_floor_at(). The loft
+is ruled between stations, and at these readings it stands under 0.005 off
+the field."""
+
+CHAMFER_CROP_GROUPS = 8
+"""How many runs of neighbouring stations rim_chamfer_profile() cuts one
+crop of the front for. Each ray is read against its group's crop. A crop is a
+box boolean, and one through the chamfer's inner crease can come back empty
+although the shell is whole there. So a ray that finds nothing in the crop is
+read again against the whole shell before it is reported."""
+
+
+def _outline_segments():
+    """[(ax, ay, bx, by, s, length)] round the built outline polygon,
+    counter-clockwise, with s the arc length at each segment's start."""
+    wire = case.recess_outline().outer_wire()
+    points = [(e.start_point().X, e.start_point().Y) for e in wire.order_edges()]
+    area = sum(
+        ax * by - bx * ay for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1])
+    )
+    if area < 0:
+        points.reverse()
+    out, s = [], 0.0
+    for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
+        length = math.hypot(bx - ax, by - ay)
+        out.append((ax, ay, bx, by, s, length))
+        s += length
+    return out
+
+
+def _outline_foot(segments, x, y):
+    """(px, py, segment, t): the nearest point on the outline polygon to (x, y),
+    the segment it is on, and how far along that segment it is."""
+    best = None
+    for segment in segments:
+        ax, ay, bx, by, _, length = segment
+        t = ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (length * length)
+        t = min(max(t, 0.0), 1.0)
+        px, py = ax + t * (bx - ax), ay + t * (by - ay)
+        d = math.hypot(x - px, y - py)
+        if best is None or d < best[0]:
+            best = (d, px, py, segment, t)
+    return best[1:]
+
+
+def _station_at(segment, t):
+    """(px, py, nx, ny): the point a fraction t along one outline segment and
+    the segment's inward normal."""
+    ax, ay, bx, by, _, length = segment
+    return (
+        ax + t * (bx - ax),
+        ay + t * (by - ay),
+        -(by - ay) / length,
+        (bx - ax) / length,
+    )
+
+
+def _rim_stations(segments):
+    """[(label, px, py, nx, ny)] where rim_chamfer_profile() reads the
+    chamfer.
+
+    CHAMFER_STATIONS at even arc length, then the named ones: the middle of each
+    flat end, the steepest point on each long side, the four corners where
+    the normal is at 45 degrees, and both sides of each join's waist."""
+    total = sum(seg[5] for seg in segments)
+    out = []
+    for k in range(CHAMFER_STATIONS):
+        s = total * (k + 0.5) / CHAMFER_STATIONS
+        seg = next(g for g in segments if g[4] <= s <= g[4] + g[5])
+        px, py, nx, ny = _station_at(seg, (s - seg[4]) / seg[5])
+        out.append((f"station {k} ({px:.2f}, {py:.2f})", px, py, nx, ny))
+
+    cx = case.centerline_x()
+    mids = [_station_at(seg, 0.5) for seg in segments]
+    ends = sorted(mids, key=lambda m: m[1])
+    out.append(("the grip end's flat tip", *ends[0]))
+    out.append(("the far end's flat tip", *ends[-1]))
+
+    def slope(m):
+        px, py, nx, ny = m
+        return case.face_z(px + 0.2 * nx, py + 0.2 * ny) - case.face_z(px, py)
+
+    for side, sign in (("right", 1.0), ("left", -1.0)):
+        steepest = max((m for m in mids if sign * (m[0] - cx) > 0), key=slope)
+        out.append((f"the steepest point on the {side} side", *steepest))
+    mid_y = sum(m[1] for m in mids) / len(mids)
+    for end, low in (("grip", True), ("far", False)):
+        for side, sx in (("right", -1.0), ("left", 1.0)):
+            want = (sx / math.sqrt(2), (1.0 if low else -1.0) / math.sqrt(2))
+            near = [
+                m for m in mids if (m[1] < mid_y) == low and (m[0] > cx) == (sx < 0)
+            ]
+            best = max(near, key=lambda m: m[2] * want[0] + m[3] * want[1])
+            out.append((f"the {end} end's {side} corner", *best))
+    for neck in case.keypad_necks():
+        y = case.neck_waist(neck)[0]
+        width = case.recess_spine(y)[0]
+        for side, x in (("right", cx + width), ("left", cx - width)):
+            _, _, segment, t = _outline_foot(segments, x, y)
+            out.append((f"the {neck.name} join's waist, {side}", *_station_at(segment, t)))
+    return out
+
+
+def _chamfer_sites(station, width):
+    """[(kind, d, x, y, want)] the readings at one station, d along the inward
+    normal from the outline, each with the z it wants. The "round" (top),
+    "inner" and straight ("chamfer") readings want the model's faceted floor,
+    face_floor_at(): the face or the chamfer's floor triangles, whichever is
+    lower. The "edge" reading stands on the chamfer's inner edge. A part
+    narrower than CHAMFER_PROBE_MIN_W is not read."""
+    _, px, py, nx, ny = station
+    top, inner = params.RECESS_CHAMFER_ROUND_W, params.RECESS_CHAMFER_INNER_ROUND_W
+    out = params.RECESS_CHAMFER_ROUND_OUT
+    straight = width - top - inner
+    section = keypad_model._rim_section(px, py, nx, ny)
+    sites = [("face", -out - CHAMFER_OUTSIDE)]
+    if top + out >= CHAMFER_PROBE_MIN_W:
+        sites += [("round", -out + f * (top + out)) for f in CHAMFER_TOP_FRACTIONS]
+    if straight >= CHAMFER_PROBE_MIN_W:
+        sites += [("chamfer", top + f * straight) for f in CHAMFER_PROBE_FRACTIONS]
+    if inner >= CHAMFER_PROBE_MIN_W:
+        sites += [("inner", width - f * inner) for f in CHAMFER_INNER_FRACTIONS]
+    sites += [("edge", width), ("dish", width + CHAMFER_DISH_PAST)]
+    out = []
+    for kind, d in sites:
+        x, y = px + d * nx, py + d * ny
+        if kind == "face":
+            want = case.face_z(x, y)
+        elif kind == "edge":
+            want = section(d)
+        else:
+            want = case.face_floor_at(x, y)
+        out.append((kind, d, x, y, want))
+    return out
+
+
+def _chamfer_shape(label, points, read):
+    """Problems with the shape of one station's built readings, `read` {d: z},
+    as second differences z1 - 2 z2 + z3 of every three neighbouring, evenly
+    spaced readings on one part: a straight section must not bend, the top
+    round must curve down, and the inner round must curve up into the dish.
+    Each part reports its worst set. None of them reads the model."""
+    problems = []
+    for kind in ("chamfer", "round", "inner"):
+        sites = [(d, x, y) for k, d, x, y, _ in points if k == kind]
+        if len(sites) < 3 or any(d not in read for d, _, _ in sites):
+            continue
+        sets = []
+        for (d1, x, y), (d2, _, _), (d3, _, _) in zip(sites, sites[1:], sites[2:]):
+            sets.append((read[d1] - 2 * read[d2] + read[d3], x, y, read[d1]))
+        if kind == "chamfer":
+            bend, x, y, z = max(sets, key=lambda e: abs(e[0]))
+        elif kind == "round":
+            bend, x, y, z = max(sets)
+        else:
+            bend, x, y, z = min(sets)
+        if kind == "chamfer" and abs(bend) > CHAMFER_BEND_TOLERANCE:
+            problem = (
+                f"the straight chamfer at {label} bends by {bend:+.4f} across "
+                f"its three readings, over {CHAMFER_BEND_TOLERANCE}"
+            )
+        elif kind == "round" and bend > -CHAMFER_TOP_CURVE_MIN:
+            problem = (
+                f"the top edge at {label} is not rounded: three of its readings "
+                f"bend by {bend:+.4f}, wants -{CHAMFER_TOP_CURVE_MIN} or less"
+            )
+        elif kind == "inner" and bend < CHAMFER_INNER_CURVE_MIN:
+            problem = (
+                f"the inner edge at {label} is not rounded into the dish: its "
+                f"three readings bend by {bend:+.4f}, wants "
+                f"{CHAMFER_INNER_CURVE_MIN} or more"
+            )
+        else:
+            continue
+        problems.append(Problem(problem, at=(x, y, z)))
+    return problems
+
+
+def _sites_box(points):
+    """(lo, hi) of a crop that holds every ray over these readings."""
+    xs = [p[2] for p in points]
+    ys = [p[3] for p in points]
+    zs = [p[4] for p in points]
+    return (
+        (min(xs) - 0.1, min(ys) - 0.1, min(zs) - 0.3),
+        (max(xs) + 0.1, max(ys) + 0.1, max(zs) + 0.3),
+    )
+
+
+RING_SEAM_STEP = params.RING_INSERT_FACE_FIT + 0.15
+"""How far either side of a dry chamfer reading the ring seam is looked for.
+
+The step crosses the specified seam and the small offset from the fitted
+face and insert loft."""
+
+RING_SEAM_CHORD_ALLOWANCE = 0.01
+"""Allowance for the insert's faceted wall inside its nominal radius."""
+
+
+def _is_ring_seam(shell, x, y, lo, hi):
+    """True when the hole under (x, y) is only the ring insert's clearance.
+
+    led_ring_channel() bores the whole ring out of the front shell and
+    led_ring_insert() fills it, so the face around the wheel is two parts with
+    RING_INSERT_FACE_FIT between them. The recess rim passes close enough to
+    the ring at the east and west sides that the rim chamfer crosses that seam,
+    and a ray down the chamfer can fall into the gap and read no material
+    although nothing is missing.
+
+    Measured rather than assumed, and bounded twice. The same ray is fired one
+    RING_SEAM_STEP either side, radially off the wheel, which is across the
+    seam rather than along it, and both have to land on material: a hole wider
+    than the step is not the seam. The reading must also sit between the
+    insert's outer radius and the shell bore.
+    """
+    wx, wy = board.wheel_center()
+    r = math.hypot(x - wx, y - wy)
+    inner = led_ring_insert_outer_r() - RING_SEAM_CHORD_ALLOWANCE
+    if not inner <= r <= case.led_ring_face_r():
+        return False
+    ux, uy = (x - wx) / r, (y - wy) / r
+    for step in (-RING_SEAM_STEP, RING_SEAM_STEP):
+        px, py = x + ux * step, y + uy * step
+        if not _ray_runs(shell, (px, py, hi[2] - 0.01), (px, py, lo[2] + 0.01)):
+            return False
+    return True
+
+
+def rim_chamfer_profile(front):
+    """The recessed front has a rim chamfer RECESS_CHAMFER_W wide all the way
+    round the merged recess, with a round at its top edge, a round into the
+    dish at its inner edge, and a straight section between them where they
+    leave room, read on the built face.
+
+    `front` is the shell and the ring insert together, because the face is two
+    parts now: led_ring_channel() bores the whole ring out of the shell and
+    led_ring_insert() fills it. At the east and west sides the
+    recess rim passes close enough to the ring that the chamfer crosses the
+    seam between them, and _is_ring_seam() is what tells that clearance apart
+    from something missing.
+
+    At each station rays down read the built surface along the outline's
+    inward normal, three or four times on each part. Each reading must lie on
+    the model's faceted floor, face_floor_at(). Without the model, the readings
+    on each part must also have their own shape (_chamfer_shape()): a straight
+    section does not bend, the top round curves down, and the inner round
+    curves up into the dish, which a sharp edge does not. At the inner edge
+    the built surface must stand at least CHAMFER_DEPTH_MIN under the face,
+    which a dish with its soft roll does not reach. A reading
+    CHAMFER_DISH_PAST beyond the edge must be the dish, face_floor_at(), and
+    one CHAMFER_OUTSIDE outside the top round's start must be the face.
+
+    The stations include the steepest points on the long sides, the corners,
+    both flat ends and the join waists. A station whose readings are not clear
+    of a hole in the face is not read."""
+    width = params.RECESS_CHAMFER_W
+    if width < CHAMFER_PROBE_MIN_W:
+        return [
+            f"the rim chamfer is {width:.3f} wide, under "
+            f"{CHAMFER_PROBE_MIN_W:.2f}: too narrow for this pass to read"
+        ]
+    segments = _outline_segments()
+    stations = _rim_stations(segments)
+    readable = []
+    for station in stations:
+        points = _chamfer_sites(station, width)
+        if all(_clear_of_holes(x, y, None) for _, _, x, y, _ in points):
+            _, _, segment, t = _outline_foot(segments, *station[1:3])
+            readable.append((segment[4] + t * segment[5], station, points))
+    readable.sort(key=lambda entry: entry[0])
+    problems = []
+    if len(readable) < 3 * len(stations) // 4:
+        problems.append(
+            f"only {len(readable)} of {len(stations)} chamfer stations are clear "
+            "of the holes in the face, too few to read the chamfer all the way round"
+        )
+    count = len(readable)
+    for g in range(CHAMFER_CROP_GROUPS):
+        start = g * count // CHAMFER_CROP_GROUPS
+        end = (g + 1) * count // CHAMFER_CROP_GROUPS
+        group = readable[start:end]
+        if not group:
+            continue
+        boxes = [_sites_box(points) for _, _, points in group]
+        crop = _Crop(
+            front,
+            tuple(min(box[0][i] for box in boxes) for i in range(3)),
+            tuple(max(box[1][i] for box in boxes) for i in range(3)),
+        )
+        for (_, station, points), (lo, hi) in zip(group, boxes):
+            label = station[0]
+            read = {}
+            for kind, d, x, y, want in points:
+                top = hi[2] - 0.01
+                ray = ((x, y, top), (x, y, lo[2] + 0.01))
+                runs = crop.ray_runs(*ray) or _ray_runs(front, *ray)
+                where = f"{abs(d):.2f} {'outside' if d < 0 else 'inside'} the outline"
+                if not runs:
+                    if _is_ring_seam(front, x, y, lo, hi):
+                        continue
+                    problems.append(
+                        Problem(
+                            f"no material under {label} at {where}: wants the "
+                            f"{kind} at z {want:.3f}",
+                            at=(x, y, want),
+                        )
+                    )
+                    continue
+                z = top - runs[0][0]
+                read[d] = z
+                if kind == "edge":
+                    depth = case.face_z(x, y) - z
+                    if depth < CHAMFER_DEPTH_MIN:
+                        problems.append(
+                            Problem(
+                                f"the chamfer at {label} is only {depth:.3f} deep "
+                                f"at its inner edge, under {CHAMFER_DEPTH_MIN:.3f}: "
+                                "the dish still rolls into the face",
+                                at=(x, y, z),
+                            )
+                        )
+                    continue
+                slack = {
+                    "dish": CHAMFER_DISH_TOLERANCE,
+                    "round": CHAMFER_ROUND_TOLERANCE,
+                }.get(kind, CHAMFER_TOLERANCE)
+                if abs(z - want) > slack:
+                    problems.append(
+                        Problem(
+                            f"the built surface at {label}, {where}, is at z "
+                            f"{z:.4f}, wants the {kind} at {want:.4f} "
+                            f"({z - want:+.4f})",
+                            at=(x, y, z),
+                        )
+                    )
+            problems += _chamfer_shape(label, points, read)
+    return problems
+
+
+LAND_FLOOR_MIN = 0.3
+"""Thinnest the ceiling may be left under a recess floor, over the counterbore.
+A real design floor: what is left between COUNTERBORE_TOP and the dish above it
+is the ledge a cap's flange is caught by, and the deepest point of the grid
+recess sits directly over SW7's own counterbore."""
+
+
+def recess_land(front):
+    """The land over every counterbore has not gone below LAND_FLOOR_MIN.
+
+    The arithmetic first, because it is the half that knows where the dish
+    reaches deepest over a given counterbore and how far the face-hole lead-in
+    cuts into the ring, and by how much it misses. Then the built shell, in the
+    ring between the face hole and the counterbore wall, which is the land
+    itself: it has to be solid over the whole of LAND_FLOOR_MIN above the
+    shoulder, which is what says the two holes, the lead-in and the dish above
+    them actually left a ledge rather than the numbers merely allowing one.
+
+    The built probe stands on the ring's mid-line on all four axis sides,
+    counterbore_land_sites(). One side is not enough: the dish slopes across a
+    key, so the land is thinner on the side that faces the dish centre.
+    """
+    problems = []
+    for ref in board.refs("SW"):
+        land = case.counterbore_land(ref)
+        if land < LAND_FLOOR_MIN:
+            problems.append(
+                f"{ref}'s counterbore is left {land:.2f} of land under its recess "
+                f"and face-hole lead-in, wants {LAND_FLOOR_MIN:.2f}"
+            )
+            continue
+        z0, z1 = case.COUNTERBORE_TOP, case.COUNTERBORE_TOP + LAND_FLOOR_MIN
+        for side, px, py in case.counterbore_land_sites(ref):
+            probe = Pos(px, py, (z0 + z1) / 2) * Cylinder(
+                radius=PROBE_D / 2, height=z1 - z0
+            )
+            if _fill_fraction(front, probe) < 0.99:
+                problems.append(
+                    f"{ref}'s face land on its {side} side is not solid over the "
+                    f"{LAND_FLOOR_MIN:.2f} above its counterbore shoulder"
+                )
+    return problems
+
+
+CENTERLINE_SPREAD_MAX = 0.1
+"""How far the three dish centres and the wheel's own centre may sit from the
+shared centreline. The whole construction rests on the recess being a single
+column along y with one interval in x per station, which is only true while they
+share an x; on this board they agree to a couple of hundredths and the model
+averages them. Past this the averaging would be shearing a dish sideways rather
+than absorbing float, and that is worth failing on rather than shipping."""
+
+WHEEL_CURVATURE_STEP = 0.02
+"""Distance from the free wheel axis for the cardinal curvature probe."""
+
+WHEEL_CURVATURE_TOLERANCE = 0.03
+"""Allowed radius error for the numerical wheel curvature probe."""
+
+WHEEL_DIAGONAL_TOLERANCE = 0.002
+"""Allowed radial error for the wheel basin's diagonal reach."""
+
+
+def wheel_basin_shape():
+    """Check circular cardinal curvature and the exact 45-degree reach."""
+    wheel = case.keypad_recesses()["wheel"]
+    h = WHEEL_CURVATURE_STEP
+    centre_width = case.recess_spine(wheel.cy)[0]
+    plus_width = case.recess_spine(wheel.cy + h)[0]
+    minus_width = case.recess_spine(wheel.cy - h)[0]
+    second = (plus_width - 2 * centre_width + minus_width) / h**2
+    radius = 1 / abs(second) if abs(second) > 1e-12 else float("inf")
+
+    diagonal_radius = wheel.ax * 2 ** (0.5 - 1 / wheel.n)
+    diagonal_y = wheel.cy + diagonal_radius / math.sqrt(2)
+    diagonal_x = case.wheel_basin_width(diagonal_y)
+    measured_radius = math.hypot(diagonal_x, diagonal_y - wheel.cy)
+
+    problems = []
+    if abs(radius - wheel.ax) > WHEEL_CURVATURE_TOLERANCE:
+        problems.append(
+            f"the wheel basin's cardinal radius is {radius:.3f}, not circular "
+            f"at its {wheel.ax:.3f} half axis"
+        )
+    if abs(measured_radius - diagonal_radius) > WHEEL_DIAGONAL_TOLERANCE:
+        problems.append(
+            f"the wheel basin's diagonal reaches {measured_radius:.3f}, not the "
+            f"{diagonal_radius:.3f} set by exponent {wheel.n:.1f}"
+        )
+    return problems
+
+
+def recess_margins():
+    """Every counterbore inside the recess's rim, the rim clear of the case's
+    exterior wall, and the dish centres still sharing one x.
+
+    Plan geometry, on the recess definitions rather than on the built solid,
+    because what these catch is a rim landing somewhere it should not and a rim
+    is exactly what keypad_recesses() and recess_spine() state.
+    recess_edge_clearance() below is the built-solid half of the same subject.
+
+    The counterbore margin is the one that is not obvious. A superellipse only
+    touches its own bounding box at the four edge midpoints, so one inscribed
+    in the coverage box would pass inside all four corners of it and cut
+    straight through the corner keys' holes; keypad_recesses() grows it to
+    bound the box instead, and this is what proves the growth is enough after
+    KEYPAD_EDGE_MARGIN has capped it back.
+
+    So is the wheel seat's own ledge. The wheel basin is sized by stating its
+    half axes at WHEEL_RIM_LEDGE past the bore, and that only delivers the
+    ledge at every angle while its exponent is at or above two: above two a
+    superellipse is closest to its centre on its own axes, so the half axis is
+    the clearance, and below two the diagonals come in nearer instead and the
+    sizing rule would quietly stop meaning what it says. WHEEL_SQUIRCLE_N is a
+    tunable now, so the clearance is measured around the merged rim rather than
+    trusted from the rule, and the joins are in that measurement too.
+    """
+    problems = []
+    for ref in board.refs("SW"):
+        margin = case.counterbore_dish_margin(ref)
+        if margin <= 0:
+            problems.append(
+                f"{ref}'s counterbore crosses the recess rim by {-margin:.2f}"
+            )
+    facts = case.keypad_recess_facts()
+    if facts["edge_gap"] < params.KEYPAD_EDGE_MARGIN - TOLERANCE:
+        problems.append(
+            f"the recess is only {facts['edge_gap']:.2f} from the exterior wall, "
+            f"wants {params.KEYPAD_EDGE_MARGIN:.2f}"
+        )
+    spread = facts["centerline"][1]
+    if spread > CENTERLINE_SPREAD_MAX:
+        problems.append(
+            f"the recess centres are {spread:.3f} apart in x, over "
+            f"{CENTERLINE_SPREAD_MAX:.2f}: they no longer share a centreline"
+        )
+    ledge = case.wheel_ledge_left()
+    if ledge < params.WHEEL_RIM_LEDGE - TOLERANCE:
+        problems.append(
+            f"the recess rim comes within {ledge:.3f} of the wheel opening's "
+            f"bore, under WHEEL_RIM_LEDGE at {params.WHEEL_RIM_LEDGE:.2f}: the "
+            "seat is no longer the ledge the basin is sized on"
+        )
+    return problems
+
+
+
+
+NECK_DEPTH_MIN = 0.05
+"""Shallowest the recess may get anywhere along its centreline between the two
+islands' outermost key rows. A floor under the merge itself rather than a design
+target: a join's floor is whatever the two dishes it bridges leave, so a change
+to a depth, a half axis or a KEYPAD_JOIN_REACH could ramp it through zero and
+tear the recess into three, which would still build a valid shell and would still
+look right in every other pass. The present layout leaves several times this."""
+
+JOIN_RADIUS_MIN = 1.0
+"""Tightest radius a join's plan outline may turn through. This is what holds
+the joins round. The reaches are what set it and nothing else in the model would
+notice them shrinking: a tight join builds cleanly, keeps its depth, keeps its
+waist width and simply reads as a pinch between two trays instead of one
+continuous recess. Set under the tighter of the two present joins with room, so
+it catches a reach cut back rather than tracking the current numbers."""
+
+COVERAGE_SAMPLES = 3000
+"""Points the recess span is walked at when checking that exactly one thing
+claims each y. Dense because an uncovered overlap opens as a narrow band between
+a basin's rim and where its join begins, and a coarse walk would step over it."""
+
+NECK_WALK_SAMPLES = 800
+"""Points the centreline is walked at between the key rows. At this count they
+sit a few hundredths apart, well inside the width of any dip a cubic bridge can
+produce."""
+
+
+def neck_continuity():
+    """The recess runs unbroken along its centreline from one island's keys to
+    the other's, and each join is a real rounded join rather than a pinch.
+
+    The merge is the whole point of the joins, and it is not something the
+    solids can be trusted to show: three dishes that had pinched apart would
+    still build one perfectly valid cut solid, one that simply ran to zero
+    depth twice on the way. So the field is walked instead, on the same
+    face_depth_at() the loft is built from.
+
+    Then the structural bounds. A join may not run past either basin's own
+    deepest point, or that basin would stop reaching the depth it is stated at;
+    two joins may not overlap, or the basin between them would have no body left
+    and the spine would be reading two bridges at once; and exactly one thing has
+    to claim every y along the span, which is the assumption the whole
+    single-column construction rests on.
+
+    That last one is what bounds WHEEL_BASIN_SPREAD in y. A basin wide enough to
+    reach past where its own join begins overlaps its neighbour somewhere no
+    join covers, and there recess_spine() has two basins to choose from and
+    silently takes the first. It still builds, still stays continuous and still
+    passes everything else; the only sign is that one stretch of rim follows the
+    wrong basin's curve. All of these are invariants of the construction rather
+    than matters of taste, and none of them shows up anywhere else.
+
+    Then three things about each join in plan. Its waist has to clear
+    KEYPAD_NECK_MIN, which is the floor under how narrow the recess may get. It
+    has to stay narrower than both the widths it bridges, since a cubic between
+    two ends whose slopes point outward would bulge in the middle and the
+    outline would read as three shapes joined by lozenges. And its outline has
+    to turn through at least JOIN_RADIUS_MIN, which is the guard that actually
+    keeps the joins round: nothing else here would notice a reach cut back, a
+    tight join being narrow in no measurement except its own curvature.
+    """
+    problems = []
+    necks = case.keypad_necks()
+    for neck in necks:
+        if neck.y0 <= neck.lower.cy:
+            problems.append(
+                f"the {neck.name} join starts at y={neck.y0:.2f}, past the "
+                f"{neck.lower.name} dish's own centre at {neck.lower.cy:.2f}: its "
+                "reach has swallowed the basin it bridges from"
+            )
+        if neck.y1 >= neck.upper.cy:
+            problems.append(
+                f"the {neck.name} join ends at y={neck.y1:.2f}, past the "
+                f"{neck.upper.name} dish's own centre at {neck.upper.cy:.2f}: its "
+                "reach has swallowed the basin it bridges to"
+            )
+    for lower, upper in zip(necks, necks[1:]):
+        if upper.y0 <= lower.y1:
+            problems.append(
+                f"the {lower.name} and {upper.name} joins overlap between "
+                f"y={upper.y0:.2f} and {lower.y1:.2f}: the dish between them has "
+                "no body left"
+            )
+    basins = list(case.keypad_recesses().values())
+    span0, span1 = case.recess_span()
+    for i in range(COVERAGE_SAMPLES + 1):
+        y = span0 + (span1 - span0) * i / COVERAGE_SAMPLES
+        if any(neck.y0 <= y <= neck.y1 for neck in necks):
+            continue
+        claiming = [b.name for b in basins if abs(y - b.cy) <= b.ay]
+        if len(claiming) > 1:
+            problems.append(
+                f"at y={y:.2f} the {' and '.join(claiming)} basins both claim the "
+                "spine and no join covers it: their rims overlap outside a join, "
+                "so the outline there follows whichever is listed first"
+            )
+            break
+    cx = case.centerline_x()
+    y0, y1 = case.centerline_keys_span()
+    for i in range(NECK_WALK_SAMPLES + 1):
+        y = y0 + (y1 - y0) * i / NECK_WALK_SAMPLES
+        depth = case.face_depth_at(cx, y)
+        if depth < NECK_DEPTH_MIN:
+            problems.append(
+                f"the recess is only {depth:.3f} deep on the centreline at "
+                f"y={y:.2f}, wants {NECK_DEPTH_MIN:.2f}: a join has pinched it "
+                "apart"
+            )
+            break
+    for label, facts in case.keypad_recess_facts()["necks"].items():
+        waist = facts["waist"][1]
+        if 2 * waist < params.KEYPAD_NECK_MIN:
+            problems.append(
+                f"the {label} join narrows to {2 * waist:.2f}, under "
+                f"{params.KEYPAD_NECK_MIN:.2f}"
+            )
+        for end in facts["ends"]:
+            if waist > end + TOLERANCE:
+                problems.append(
+                    f"the {label} join swells to {2 * waist:.2f} against a "
+                    f"{2 * end:.2f} end: it bulges rather than pinching"
+                )
+        if facts["radius"] < JOIN_RADIUS_MIN:
+            problems.append(
+                f"the {label} join's outline turns through only "
+                f"{facts['radius']:.2f}, under {JOIN_RADIUS_MIN:.2f}: its "
+                "KEYPAD_JOIN_REACH is too short for the join to read as round"
+            )
+    return problems
+
+
+BLEND_STEP = 0.002
+"""How far either side of a junction the one-sided slopes are read. Far enough
+out that the difference quotient is not float noise, close enough that a real
+tangent break has not yet been averaged away."""
+BLEND_SLOPE_TOLERANCE = 0.02
+"""How closely the two one-sided slopes have to agree, per unit y. The bridges
+match slopes exactly by construction and the junction values come off a central
+difference, so a passing reading is float noise; what this has to catch is a
+bridge built without slope matching, which disagrees by whole units."""
+
+
+def _one_sided_slope(read, y, step):
+    """The slope of `read` approaching y from one side, to second order. A
+    negative step reads the other side, the formula being symmetric in it.
+
+    A plain difference quotient will not do here. Curvature is deliberately
+    discontinuous at these junctions (the field is C1, not C2), and a first
+    order quotient carries a curvature term proportional to its own step, so it
+    reports a break of its own wherever a junction sits on a steeply turning
+    part of a dish's rim. Three points on one side cancel that term, leaving
+    only genuine tangency.
+    """
+    return (
+        3 * read(y) - 4 * read(y - step) + read(y - 2 * step)
+    ) / (2 * step)
+
+
+def neck_blends_smoothly():
+    """The merged field is C1 across every junction and waist, in depth and in
+    plan width both.
+
+    This is what "one recess" means rather than three cuts that touch. A join
+    that merely met a dish at the same depth would leave a crease running
+    across the floor and a cusp in the outline at the rim, which is the failure
+    the old neck-joined pocket spent a blend radius on avoiding. Measured on
+    the field rather than on the solid, because the field is what the loft
+    reproduces and a crease in it would be faithfully lofted.
+
+    Probe the built recess floor on both flanks at each junction. The angular
+    profile must meet the keyed profile without a step away from the centerline.
+
+    The waist is read as well as the two junctions. Nothing is spliced there
+    any more, one cubic spanning the whole join, so it passes by construction;
+    it is checked so that a future bridge built in two pieces again cannot put a
+    flat spot back without saying so.
+    """
+    problems = []
+    cx = case.centerline_x()
+    h = BLEND_STEP
+    for neck in case.keypad_necks():
+        for where, y in (
+            ("start", neck.y0),
+            ("waist", case.neck_waist(neck)[0]),
+            ("end", neck.y1),
+        ):
+            label = f"{neck.name} join {where}"
+            for what, read in (
+                ("floor", lambda v: case.face_depth_at(cx, v)),
+                ("outline", lambda v: case.recess_spine(v)[0]),
+            ):
+                before = _one_sided_slope(read, y, h)
+                after = _one_sided_slope(read, y, -h)
+                if abs(after - before) > BLEND_SLOPE_TOLERANCE:
+                    problems.append(
+                        f"the {label}'s {what} turns from {before:+.3f} to "
+                        f"{after:+.3f} per mm across it, a tangent break"
+                    )
+    solid = case.keypad_recess()
+    for neck in case.keypad_necks():
+        for where, y in (("start", neck.y0), ("end", neck.y1)):
+            width = case.recess_spine(y)[0]
+            for side in (-1, 1):
+                x = cx + side * 0.75 * width
+                floors = []
+                for offset in (-0.05, 0.05):
+                    hits = solid.find_intersection_points(
+                        Axis((x, y + offset, 0), (0, 0, 1))
+                    )
+                    if len(hits) != 2:
+                        problems.append(
+                            f"the built {neck.name} join {where} has "
+                            f"{len(hits)} floor intersections at x={x:.2f}"
+                        )
+                        break
+                    floors.append(min(point.Z for point, _normal in hits))
+                if len(floors) != 2:
+                    continue
+                if abs(floors[1] - floors[0]) > 0.015:
+                    problems.append(
+                        f"the built {neck.name} join {where} floor changes "
+                        f"{abs(floors[1] - floors[0]):.3f} mm across 0.1 mm "
+                        f"at x={x:.2f}: the join has a step"
+                    )
+    return problems
+
+
+SOLID_BOX_TOLERANCE = 0.05
+"""How far the built recess's own bounding box may sit from the extent its field
+says it should have. The plan tips overshoot their outermost station by a hair
+and the loft's own approximation costs less than that, so this is float and
+tessellation slop rather than a design margin."""
+
+
+def recess_solid_sane():
+    """The built recess is the solid its own field describes: one piece, of
+    positive volume, filling the box the spine spans and no more.
+
+    This is not a design check, it is a guard on the loft. Lofting a spline in y
+    through this many sections was unstable, and when it went it went
+    spectacularly: a single valid-looking solid of negative volume spread over
+    half a metre in every direction, which every arithmetic pass in this file
+    still agreed with because the arithmetic was never wrong. What caught it was
+    two features at the far end of the case failing for no reason. So the built
+    solid is measured against its own definition before anything else probes it,
+    and the loft is ruled now precisely so this cannot recur quietly.
+
+    The lowest point the field gives is recess_floor_min(), read at the loft's
+    own points. It is not the deepest dish under the crown, because the face
+    can put a rim point near a side wall lower than that.
+    """
+    solid = case.keypad_recess()
+    problems = []
+    if len(solid.solids()) != 1:
+        problems.append(f"the recess came out as {len(solid.solids())} solids, not one")
+    if solid.volume <= 0:
+        problems.append(
+            f"the recess has a volume of {solid.volume:.2f}: the loft came out "
+            "inside out"
+        )
+    cx = case.centerline_x()
+    widest = max(r.ax for r in case.keypad_recesses().values())
+    lowest = case.recess_floor_min()[0]
+    y0, y1 = case.recess_span()
+    box = solid.bounding_box()
+    for what, got, want in (
+        ("min x", box.min.X, cx - widest),
+        ("max x", box.max.X, cx + widest),
+        ("min y", box.min.Y, y0),
+        ("max y", box.max.Y, y1),
+        ("min z", box.min.Z, lowest),
+        ("max z", box.max.Z, case.SHELL_FRONT + case.MERGE),
+    ):
+        if abs(got - want) > SOLID_BOX_TOLERANCE:
+            problems.append(
+                f"the recess's {what} is {got:.3f} where its field says "
+                f"{want:.3f}: the loft is not the shape it was built from"
+            )
+    return problems
+
+
+def recess_edge_clearance(front):
+    """The built recess stays clear of the case's exterior side wall, keeping it
+    off the wall itself, where the face turns down vertically.
+
+    Measured on the built solid's own bounding box rather than on the
+    superellipse recess_margins() reads, so a cut that came out wider than its
+    own definition, or one built on the wrong centre, is caught here rather
+    than passing on the strength of the arithmetic that produced it. The
+    smoothed loft overshoots its stations by a couple of thousandths in plan,
+    which is what TOLERANCE absorbs here.
+    """
+    ex0, ex1 = case.exterior_x_bounds()
+    limit = params.KEYPAD_EDGE_MARGIN
+    box = case.keypad_recess().bounding_box()
+    gap = min(box.min.X - ex0, ex1 - box.max.X)
+    if gap < limit - TOLERANCE:
+        return [
+            f"the built recess is only {gap:.2f} from the side wall, "
+            f"wants {limit:.2f}"
+        ]
+    return []
+
+
+KEYTOP_GAP_TOLERANCE = 0.02
+"""Slack on a keytop's gap to its face hole. It is boolean slop, not a margin."""
+
+
+def tpu_pad_fits(front, pad, part=TPU_PART, refs=None, label="TPU pad"):
+    """A one-piece TPU pad fits the recessed front: it clears the shell released
+    and through SWITCH_TRAVEL, every keytop keeps FDM_CAP_GUIDE_CLEARANCE to its
+    face hole, and every keytop stands proud of the recess floor beside it.
+
+    The gap is the built keytop's distance to the built front, read in a crop
+    around the key, so a face hole or keytop that drifts shows here. The proud
+    reading is a ray down just outside the face hole. It reads where the dished
+    face is, then takes the keytop top from it. `refs` defaults to every
+    key and the V2 top pad passes its own.
+    """
+    refs = case.cap_refs() if refs is None else refs
+    problems = []
+    for state, offset in (("released", 0), ("pressed", -params.SWITCH_TRAVEL)):
+        fouled = _volume(front.intersect(Pos(0, 0, offset) * pad))
+        if fouled > TOLERANCE:
+            problems.append(
+                Problem(
+                    f"the {label} fouls the recessed front by {fouled:.2f} mm3 "
+                    f"when {state}",
+                    part=part,
+                )
+            )
+    for ref in refs:
+        x, y = board.components()[ref][:2]
+        top = case.cap_top(ref)
+        keytop = case.fdm_keycap(ref, legend=False)
+        box = keytop.bounding_box()
+        crop = _Crop(
+            front,
+            (box.min.X - 1, box.min.Y - 1, box.min.Z - 1),
+            (box.max.X + 1, box.max.Y + 1, box.max.Z + 1),
+        )
+        gap = keytop.distance_to(crop.shape) if crop.shape else float("inf")
+        if gap < params.FDM_CAP_GUIDE_CLEARANCE - KEYTOP_GAP_TOLERANCE:
+            problems.append(
+                Problem(
+                    f"{ref}'s {label} keytop is {gap:.3f} from its face hole, "
+                    f"under FDM_CAP_GUIDE_CLEARANCE {params.FDM_CAP_GUIDE_CLEARANCE:.2f}",
+                    at=(x, y, top),
+                    part=part,
+                )
+            )
+        px = x + case.cap_face_hole(ref) / 2 + 0.3
+        start = top + 1
+        runs = crop.ray_runs((px, y, start), (px, y, box.min.Z - 0.5))
+        if not runs:
+            problems.append(
+                Problem(
+                    f"{ref} has no recessed face beside its hole to stand proud of",
+                    at=(px, y, top),
+                    part=part,
+                )
+            )
+            continue
+        proud = top - (start - runs[0][0])
+        if proud < MIN_PROUD:
+            problems.append(
+                Problem(
+                    f"{ref}'s {label} keytop stands {proud:.3f} proud of the "
+                    f"recessed face beside it, under {MIN_PROUD:.2f}",
+                    at=(px, y, top),
+                    part=part,
+                )
+            )
+    return problems
+
+
+MIN_PROUD = 0.2
+"""Least a keytop may stand proud of the recessed face beside its hole. It is
+the same floor checks/caps.py holds a rigid cap to."""
+
+
+BLANK_CONTAIN_TOLERANCE = 0.05
+"""Volume in mm3 of a part allowed to fall outside the blank pad containing it."""
+
+
+def blank_tpu_pads(pairs):
+    """Each blank TPU pad matches its legend twin's extents, holds more
+    material, contains the twin and any required lobe, and is flat at every
+    keytop centre.
+
+    `pairs` is (label, blank, twin, lobes) with `lobes` a list of (name, solid)
+    the blank must contain. Containment is volume of the part minus the blank,
+    so the blank may only add material where legends were. The volume gain must be positive and below
+    the legends' total volume, since a legend tool can reach above the cap. The
+    centre ray alone cannot prove a legend is absent, because a glyph may miss
+    the exact centre, so the volume reading backs it.
+    """
+    refs = case.cap_refs()
+    marks = sum(
+        _volume(shape) for ref in refs for shape in case.fdm_legend_solids(ref)
+    )
+    problems, lines = [], []
+    for label, blank, twin, lobes in pairs:
+        a, b = blank.bounding_box(), twin.bounding_box()
+        for axis in "XYZ":
+            for end in ("min", "max"):
+                got = getattr(getattr(a, end), axis)
+                want = getattr(getattr(b, end), axis)
+                if abs(got - want) > 0.01:
+                    problems.append(
+                        Problem(
+                            f"the blank {label} {end} {axis} is {got:.3f}, "
+                            f"its legend twin's is {want:.3f}",
+                            part=TPU_PART,
+                        )
+                    )
+        for name, part in [("legend twin", twin), *lobes]:
+            missing = _volume(part - blank)
+            if missing > BLANK_CONTAIN_TOLERANCE:
+                problems.append(
+                    Problem(
+                        f"the blank {label} lacks {missing:.2f} mm3 of its {name}",
+                        part=TPU_PART,
+                    )
+                )
+        gain = _volume(blank) - _volume(twin)
+        if not 0 < gain < marks:
+            problems.append(
+                Problem(
+                    f"the blank {label} holds {gain:.2f} mm3 more than its legend "
+                    f"twin, outside (0, {marks:.2f}) mm3 of legends",
+                    part=TPU_PART,
+                )
+            )
+        for ref in refs:
+            x, y = board.components()[ref][:2]
+            top = case.cap_top(ref)
+            runs = _ray_runs(blank, (x, y, top + 1), (x, y, top - 1))
+            if not runs or abs(runs[0][0] - 1) > 0.02:
+                first = "no material" if not runs else f"{top + 1 - runs[0][0]:.3f}"
+                problems.append(
+                    Problem(
+                        f"the blank {label} keytop {ref} first meets material at "
+                        f"z {first}, not its cap_top() {top:.3f}",
+                        part=TPU_PART,
+                        at=(x, y, top),
+                    )
+                )
+        lines.append(f"{label} +{gain:.2f}")
+    return problems, lines

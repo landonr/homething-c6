@@ -32,7 +32,7 @@ packages:
 # (swapped in the schematic), P12=sw11. Names follow silkscreen.
 binary_sensor:
   - platform: gpio
-    name: Encoder Press
+    name: Wheel Press
     id: ano_press
     pin: &grid_pin
       pcf8574: button_expander

@@ -1,0 +1,1650 @@
+#include "button_config.h"
+
+#include "esphome/core/application.h"
+#include "esphome/core/log.h"
+
+#include "esphome/components/button_slots/hold_actions.h"
+#include "esphome/components/button_slots/ir_learning.h"
+#include "esphome/components/button_slots/zigbee_learning.h"
+#include "esphome/components/api/api_server.h"
+#include "esphome/components/ble_hid/ble_hid.h"
+#include "esphome/components/wifi/wifi_component.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
+
+namespace esphome::button_config {
+
+static const char *const TAG = "button_config";
+static_assert(ButtonConfig::FRIENDLY_NAME_MAX <= esphome::ble_hid::BleHid::DEVICE_NAME_MAX,
+              "BleHid must hold a whole friendly name");
+
+// The 400 check runs on the httpd task. IdleSleep checks the range again.
+static constexpr uint32_t SLEEP_AFTER_MIN_S = 10;
+static constexpr uint32_t SLEEP_AFTER_MAX_S = 3600;
+// The reply leaves on the httpd task, so the reboot waits for it to clear the socket.
+static constexpr uint32_t RESTART_DELAY_MS = 500;
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&
+                  SLEEP_AFTER_MAX_S == idle_sleep::IdleSleep::MAX_SLEEP_AFTER_S,
+              "the page range must match IdleSleep");
+#endif
+// The page and the state JSON name the holds in HoldActions order.
+static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};
+
+static const char *hold_name(uint8_t hold) { return hold < HoldActions::COUNT ? HOLD_NAMES[hold] : "none"; }
+
+static const SlotInfo SLOTS[] = {
+    {3},  {4},  {5},  {6},  {7},  {8},  {9},  {10}, {11}, {12},
+    {13}, {14}, {15}, {16}, {17},  // wheel clockwise
+    {18},                          // wheel anticlockwise
+    {19}, {20},
+};
+
+static const SlotInfo *find_slot(long slot) {
+  for (const auto &info : SLOTS) {
+    if (info.slot == slot)
+      return &info;
+  }
+  return nullptr;
+}
+
+static const SlotInfo *parse_slot(const std::string &text) {
+  char *end = nullptr;
+  const long slot = std::strtol(text.c_str(), &end, 10);
+  if (text.empty() || end == text.c_str() || *end != '\0')
+    return nullptr;
+  return find_slot(slot);
+}
+
+// Accepts a bare list of signed microsecond values in any bracket or separator
+// style. A mark is positive and a space is negative, and the two must alternate
+// from a mark, which rejects a truncated paste.
+static bool parse_timings(const std::string &text, std::vector<int32_t> &raw) {
+  raw.clear();
+  const char *cursor = text.c_str();
+  while (*cursor != '\0') {
+    while (*cursor != '\0' && *cursor != '-' && *cursor != '+' && (*cursor < '0' || *cursor > '9'))
+      cursor++;
+    if (*cursor == '\0')
+      break;
+    char *end = nullptr;
+    const long value = std::strtol(cursor, &end, 10);
+    if (end == cursor)
+      return false;
+    cursor = end;
+    if (value == 0 || value < -327670 || value > 327670)
+      return false;
+    if (raw.size() >= IrCodeStore::MAX_PULSES)
+      return false;
+    if ((raw.size() % 2 == 0) != (value > 0))
+      return false;
+    raw.push_back(static_cast<int32_t>(value));
+  }
+  return raw.size() >= 4 && raw.size() % 2 == 0;
+}
+
+static std::string trim(const std::string &text) {
+  size_t start = 0;
+  size_t end = text.size();
+  while (start < end && (text[start] == ' ' || text[start] == '\t' || text[start] == '\r'))
+    start++;
+  while (end > start && (text[end - 1] == ' ' || text[end - 1] == '\t' || text[end - 1] == '\r'))
+    end--;
+  return text.substr(start, end - start);
+}
+
+static bool lower_equals(const std::string &text, const char *want) {
+  size_t i = 0;
+  for (; i < text.size() && want[i] != '\0'; i++) {
+    char value = text[i];
+    if (value >= 'A' && value <= 'Z')
+      value = static_cast<char>(value + ('a' - 'A'));
+    char other = want[i];
+    if (other >= 'A' && other <= 'Z')
+      other = static_cast<char>(other + ('a' - 'A'));
+    if (value != other)
+      return false;
+  }
+  return i == text.size() && want[i] == '\0';
+}
+
+// Accepts a decimal or 0x hex group id. 0xFFF8 and above are the reserved
+// Zigbee broadcast addresses, so the manager rejects them too.
+static bool parse_group_id(const std::string &text, uint16_t &group_id) {
+  if (text.empty() || text.size() > 6)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 0);
+  if (end == text.c_str() || *end != '\0' || value == 0 ||
+      value > ZigbeeAssignmentManager::MAX_GROUP_ID)
+    return false;
+  group_id = static_cast<uint16_t>(value);
+  return true;
+}
+
+// Zigbee2MQTT prints an IEEE address with the most significant nibble first. The
+// radio holds an EUI-64 as little endian bytes, so the parsed value copies whole
+// and needs no swap on the way to flash.
+static bool parse_ieee(const std::string &text, uint8_t (&ieee)[8]) {
+  std::string digits = trim(text);
+  if (digits.size() > 2 && digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X'))
+    digits = digits.substr(2);
+  if (digits.size() != 16)
+    return false;
+  for (const char digit : digits) {
+    if (std::isxdigit(static_cast<unsigned char>(digit)) == 0)
+      return false;
+  }
+  const uint64_t value = std::strtoull(digits.c_str(), nullptr, 16);
+  std::memcpy(ieee, &value, sizeof(ieee));
+  return true;
+}
+
+// The page names an action by its number, so the two tables have to agree. The
+// manager bounds the value that goes with it.
+static bool parse_action(const std::string &text, uint8_t &action) {
+  if (text.empty()) {
+    action = ZigbeeAssignmentManager::ACT_TOGGLE;
+    return true;
+  }
+  if (text.size() > 3)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value >= ZigbeeAssignmentManager::ACTION_COUNT)
+    return false;
+  action = static_cast<uint8_t>(value);
+  return true;
+}
+
+static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {
+  if (text.empty() || text.size() > 4 || std::isdigit(static_cast<unsigned char>(text[0])) == 0)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (*end != '\0' || value < SLEEP_AFTER_MIN_S || value > SLEEP_AFTER_MAX_S)
+    return false;
+  seconds = static_cast<uint32_t>(value);
+  return true;
+}
+
+static bool parse_status_mode(const std::string &text, uint8_t &mode) {
+  if (text == "off")
+    mode = ButtonConfig::STATUS_OFF;
+  else if (text == "on")
+    mode = ButtonConfig::STATUS_ON;
+  else if (text == "hold")
+    mode = ButtonConfig::STATUS_HOLD;
+  else
+    return false;
+  return true;
+}
+
+static const char *status_mode_name(uint8_t mode) {
+  switch (mode) {
+    case ButtonConfig::STATUS_OFF:
+      return "off";
+    case ButtonConfig::STATUS_HOLD:
+      return "hold";
+    default:
+      return "on";
+  }
+}
+
+// "none" takes the hold off the button.
+static bool parse_hold_name(const std::string &text, uint8_t &hold) {
+  for (uint8_t i = 0; i <= HoldActions::COUNT; i++) {
+    if (text == hold_name(i)) {
+      hold = i;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Wheel rotation has no release edge, so it is not a hold slot.
+static bool parse_hold_slot(const std::string &text, uint8_t &slot) {
+  if (text.empty() || text.size() > 2 || std::isdigit(static_cast<unsigned char>(text[0])) == 0)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (*end != '\0' || !HoldActions::valid_slot(static_cast<uint8_t>(value)))
+    return false;
+  slot = static_cast<uint8_t>(value);
+  return true;
+}
+
+// The HLD1 rule: each hold on its own button slot, or 0 for none.
+static bool hld1_valid(const uint8_t *slots) {
+  for (uint8_t a = 0; a < HoldActions::COUNT; a++) {
+    if (slots[a] == 0)
+      continue;
+    if (!HoldActions::valid_slot(slots[a]))
+      return false;
+    for (uint8_t b = a + 1; b < HoldActions::COUNT; b++) {
+      if (slots[b] == slots[a])
+        return false;
+    }
+  }
+  return true;
+}
+
+// Home Assistant reads the name as a protobuf string, which must be valid UTF-8.
+// A long name is refused and never cut, so no multibyte sequence is split.
+// ESPHome reserves the slash in a device name. An empty result means the YAML name.
+static bool parse_friendly_name(const std::string &text, std::string &name) {
+  size_t start = 0;
+  size_t end = text.size();
+  while (start < end && text[start] == ' ')
+    start++;
+  while (end > start && text[end - 1] == ' ')
+    end--;
+  name = text.substr(start, end - start);
+  if (name.size() > ButtonConfig::FRIENDLY_NAME_MAX)
+    return false;
+  for (size_t i = 0; i < name.size();) {
+    const auto lead = static_cast<unsigned char>(name[i]);
+    if (lead < 0x20 || lead == 0x7F || lead == '/')
+      return false;
+    size_t extra = 0;
+    unsigned char low = 0x80;
+    unsigned char high = 0xBF;
+    if (lead >= 0xC2 && lead <= 0xDF) {
+      extra = 1;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
+      extra = 2;
+      low = lead == 0xE0 ? 0xA0 : 0x80;   // overlong
+      high = lead == 0xED ? 0x9F : 0xBF;  // UTF-16 surrogate
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
+      extra = 3;
+      low = lead == 0xF0 ? 0x90 : 0x80;   // overlong
+      high = lead == 0xF4 ? 0x8F : 0xBF;  // above U+10FFFF
+    } else if (lead >= 0x80) {
+      return false;
+    }
+    if (i + extra >= name.size())
+      return false;
+    for (size_t k = 1; k <= extra; k++) {
+      const auto next = static_cast<unsigned char>(name[i + k]);
+      if (next < (k == 1 ? low : 0x80) || next > (k == 1 ? high : 0xBF))
+        return false;
+    }
+    i += extra + 1;
+  }
+  return true;
+}
+
+static bool parse_param(const std::string &text, int16_t &param) {
+  if (text.empty()) {
+    param = 0;
+    return true;
+  }
+  if (text.size() > 6)
+    return false;
+  char *end = nullptr;
+  const long value = std::strtol(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value < 0 || value > 32767)
+    return false;
+  param = static_cast<int16_t>(value);
+  return true;
+}
+
+static bool parse_hid_kind(const std::string &text, esphome::ble_hid::BleHid::Kind &kind) {
+  if (text == "keyboard")
+    kind = esphome::ble_hid::BleHid::KEYBOARD;
+  else if (text == "consumer")
+    kind = esphome::ble_hid::BleHid::CONSUMER;
+  else if (text == "gamepad_button")
+    kind = esphome::ble_hid::BleHid::GAMEPAD_BUTTON;
+  else if (text == "gamepad_dpad")
+    kind = esphome::ble_hid::BleHid::GAMEPAD_DPAD;
+  else
+    return false;
+  return true;
+}
+
+static bool parse_hid_number(const std::string &text, uint16_t max, uint16_t &value) {
+  if (text.empty() || text.size() > 6)
+    return false;
+  char *end = nullptr;
+  const unsigned long parsed = std::strtoul(text.c_str(), &end, 0);
+  if (end == text.c_str() || *end != '\0' || parsed > max)
+    return false;
+  value = static_cast<uint16_t>(parsed);
+  return true;
+}
+
+// An empty value is 0. Anything but 1 to 3 digits is -1, which no check accepts.
+static int parse_ha_value(const std::string &text) {
+  if (text.empty())
+    return 0;
+  if (text.size() > 3)
+    return -1;
+  for (const char digit : text) {
+    if (digit < '0' || digit > '9')
+      return -1;
+  }
+  return static_cast<int>(std::strtol(text.c_str(), nullptr, 10));
+}
+
+static const char *hid_kind_name(esphome::ble_hid::BleHid::Kind kind) {
+  switch (kind) {
+    case esphome::ble_hid::BleHid::KEYBOARD: return "keyboard";
+    case esphome::ble_hid::BleHid::CONSUMER: return "consumer";
+    case esphome::ble_hid::BleHid::GAMEPAD_BUTTON: return "gamepad_button";
+    case esphome::ble_hid::BleHid::GAMEPAD_DPAD: return "gamepad_dpad";
+    default: return "none";
+  }
+}
+
+// Endpoint 0 is the ZDO and 0xF1 and above are reserved.
+static bool parse_endpoint(const std::string &text, uint8_t &endpoint) {
+  if (text.empty() || text.size() > 3)
+    return false;
+  char *end = nullptr;
+  const unsigned long value = std::strtoul(text.c_str(), &end, 10);
+  if (end == text.c_str() || *end != '\0' || value < ZigbeeAssignmentManager::MIN_ENDPOINT ||
+      value > ZigbeeAssignmentManager::MAX_ENDPOINT)
+    return false;
+  endpoint = static_cast<uint8_t>(value);
+  return true;
+}
+
+// A Flipper field holds four little endian bytes, of which Samsung32 uses one.
+static bool parse_leading_byte(const std::string &text, uint8_t &value) {
+  const std::string field = trim(text);
+  if (field.size() < 2)
+    return false;
+  char *end = nullptr;
+  const long parsed = std::strtol(field.substr(0, 2).c_str(), &end, 16);
+  if (end == nullptr || *end != '\0' || parsed < 0 || parsed > 0xFF)
+    return false;
+  value = static_cast<uint8_t>(parsed);
+  return true;
+}
+
+// A Flipper raw line holds unsigned durations that alternate from a mark. The
+// last value is a mark, so the count is odd in every Flipper-IRDB file.
+static bool parse_raw_data(const std::string &text, std::vector<int32_t> &raw) {
+  raw.clear();
+  const char *cursor = text.c_str();
+  while (*cursor != '\0') {
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r')
+      cursor++;
+    if (*cursor == '\0')
+      break;
+    char *end = nullptr;
+    const long value = std::strtol(cursor, &end, 10);
+    if (end == cursor)
+      return false;
+    cursor = end;
+    if (value < 1 || value > 327670)
+      return false;
+    if (raw.size() >= IrCodeStore::MAX_PULSES)
+      return false;
+    raw.push_back(raw.size() % 2 == 0 ? static_cast<int32_t>(value) : -static_cast<int32_t>(value));
+  }
+  return raw.size() >= 4;
+}
+
+// Reads one signal of a Flipper .ir file, so a code from Flipper-IRDB pastes in
+// unchanged. A file holds many signals, and only the first one is taken. A bare
+// list of signed values still parses, which keeps an older copy usable.
+static bool parse_ir_text(const std::string &text, std::string &name, std::vector<int32_t> &raw) {
+  name.clear();
+  raw.clear();
+  std::string type;
+  std::string protocol;
+  std::string data;
+  bool have_address = false;
+  bool have_command = false;
+  uint8_t address = 0;
+  uint8_t command = 0;
+  bool keyed = false;
+  bool named = false;
+
+  size_t line_start = 0;
+  while (line_start <= text.size()) {
+    const size_t line_end = std::min(text.find('\n', line_start), text.size());
+    const std::string line = trim(text.substr(line_start, line_end - line_start));
+    line_start = line_end + 1;
+    if (line.empty() || line[0] == '#')
+      continue;
+    const size_t colon = line.find(':');
+    if (colon == std::string::npos)
+      continue;
+    const std::string key = trim(line.substr(0, colon));
+    const std::string value = trim(line.substr(colon + 1));
+    if (lower_equals(key, "filetype") || lower_equals(key, "version"))
+      continue;
+    if (lower_equals(key, "name")) {
+      // The next name line starts the next signal of the file.
+      if (named)
+        break;
+      name = value;
+      named = true;
+      keyed = true;
+    } else if (lower_equals(key, "type")) {
+      type = value;
+      keyed = true;
+    } else if (lower_equals(key, "protocol")) {
+      protocol = value;
+      keyed = true;
+    } else if (lower_equals(key, "address")) {
+      have_address = parse_leading_byte(value, address);
+      keyed = true;
+    } else if (lower_equals(key, "command")) {
+      have_command = parse_leading_byte(value, command);
+      keyed = true;
+    } else if (lower_equals(key, "data")) {
+      data = value;
+      keyed = true;
+    }
+  }
+
+  if (!keyed)
+    return parse_timings(text, raw);
+  if (lower_equals(type, "parsed")) {
+    if (!lower_equals(protocol, "samsung32") || !have_address || !have_command)
+      return false;
+    IrCodeStore::samsung_timings(address, command, raw);
+    return true;
+  }
+  if (lower_equals(type, "raw"))
+    return parse_raw_data(data, raw);
+  return false;
+}
+
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+using HaAssignment = ha_action::HaAction::Assignment;
+static const char *ha_result_name(uint8_t result) { return ha_action::HaAction::result_name(result); }
+#else
+struct HaAssignment {
+  bool assigned{false};
+  const char *kind{""};
+  const char *act{""};
+  uint8_t val{0};
+  std::string entity;
+};
+static const char *ha_result_name(uint8_t) { return "none"; }
+#endif
+
+static const char *state_name(uint8_t state) {
+  switch (state) {
+    case IrUi::READY:
+      return "ready";
+    case IrUi::READING:
+      return "reading";
+    case IrUi::SAVED:
+      return "saved";
+    case IrUi::ERROR:
+      return "error";
+    case IrUi::CLEARED:
+      return "cleared";
+    default:
+      return "off";
+  }
+}
+
+static const char *result_name(uint8_t result) {
+  switch (result) {
+    case IrUi::SAVED:
+      return "saved";
+    case IrUi::ERROR:
+      return "error";
+    default:
+      return "none";
+  }
+}
+
+// Escapes a Zigbee2MQTT name into a JSON string body. The names come from the
+// bridge, so they can hold a quote, a backslash, or a control character.
+static void print_json_text(AsyncResponseStream *stream, const char *text) {
+  char buffer[8];
+  for (const char *cursor = text; *cursor != '\0'; cursor++) {
+    const unsigned char value = static_cast<unsigned char>(*cursor);
+    if (value == '"' || value == '\\') {
+      buffer[0] = '\\';
+      buffer[1] = static_cast<char>(value);
+      buffer[2] = '\0';
+    } else if (value < 0x20) {
+      std::snprintf(buffer, sizeof(buffer), "\\u%04X", static_cast<unsigned>(value));
+    } else {
+      buffer[0] = static_cast<char>(value);
+      buffer[1] = '\0';
+    }
+    stream->print(buffer);
+  }
+}
+
+void ButtonConfig::setup() {
+  // mDNS builds its TXT record at AFTER_CONNECTION, which runs after this, so
+  // a saved name reaches it on every boot.
+  this->default_name_ = App.get_friendly_name();
+  this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
+  this->load_name_pref_();
+  this->load_ha_pref_();
+  this->sync_ha_action_();
+  this->load_wifi_pref_();
+  this->load_hold_pref_();
+  ::hold_actions.set_status_active(this->status_mode() == STATUS_HOLD);
+  this->boot_wifi_always_on_ = this->wifi_always_on();
+  if (this->boot_wifi_always_on_)
+    this->enable_wifi_();
+  // Each pairing restart drops the page. ZigbeeAssignmentManager::setup() runs
+  // first, from on_boot at priority 600, so pairing() already reads this boot.
+  if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())
+    this->open_temporary_wifi_("for Zigbee pairing");
+  this->base_->init();
+  this->base_->add_handler(this);
+}
+
+void ButtonConfig::loop() {
+  if (!this->temporary_wifi_ && !this->action_wifi_)
+    return;
+  const uint32_t now = millis();
+  bool ended = false;
+  if (this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) >= WIFI_IDLE_MS) {
+    this->temporary_wifi_ = false;
+    ended = true;
+  }
+  if (this->action_wifi_ && static_cast<int32_t>(now - this->action_wifi_until_ms_) >= 0) {
+    this->action_wifi_ = false;
+    ended = true;
+    // A page opened during the lease carries on as a temporary session.
+    if (!this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) <= ACTION_WIFI_LEASE_MS)
+      this->temporary_wifi_ = true;
+  }
+  // Wi-Fi closes only when both the page session and the action lease are over.
+  if (!ended || this->temporary_wifi_ || this->action_wifi_ || this->boot_wifi_always_on_)
+    return;
+  wifi::global_wifi_component->disable();
+  ESP_LOGI(TAG, "Temporary Wi-Fi session closed: no page activity for ten minutes and no Home Assistant action");
+}
+
+void ButtonConfig::load_wifi_pref_() {
+  this->wifi_pref_ = global_preferences->make_preference<WifiPref>(WIFI_PREF_KEY, true);
+  WifiPref loaded{};
+  const bool enabled = this->wifi_pref_.load(&loaded) && loaded.magic == WIFI_PREF_MAGIC &&
+                       loaded.enabled <= 1 && loaded.reserved[0] == 0 &&
+                       loaded.reserved[1] == 0 && loaded.reserved[2] == 0 && loaded.enabled == 1;
+  this->wifi_always_on_.store(enabled, std::memory_order_release);
+}
+
+bool ButtonConfig::set_wifi_always_on_(bool enabled) {
+  if (this->wifi_always_on() == enabled)
+    return true;
+  WifiPref next{WIFI_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!this->wifi_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the Wi-Fi boot switch");
+    return false;
+  }
+  this->wifi_always_on_.store(enabled, std::memory_order_release);
+  ESP_LOGI(TAG, "Wi-Fi default on next boot: %s", enabled ? "on" : "off");
+  return true;
+}
+
+uint8_t ButtonConfig::status_mode() const {
+  int8_t value = this->status_mode_.load(std::memory_order_acquire);
+  if (value < 0) {
+    // Preferences open in app_main, so this works before setup().
+    auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
+    LedPref loaded{};
+    const bool valid = preference.load(&loaded) && loaded.magic == LED_PREF_MAGIC &&
+                       loaded.enabled <= STATUS_HOLD && loaded.reserved[0] == 0 && loaded.reserved[1] == 0 &&
+                       loaded.reserved[2] == 0;
+    value = static_cast<int8_t>(valid ? loaded.enabled : STATUS_ON);
+    this->status_mode_.store(value, std::memory_order_release);
+  }
+  return static_cast<uint8_t>(value);
+}
+
+bool ButtonConfig::set_status_mode(uint8_t mode) {
+  if (mode > STATUS_HOLD)
+    return false;
+  if (this->status_mode() == mode)
+    return true;
+  auto preference = global_preferences->make_preference<LedPref>(LED_PREF_KEY, true);
+  LedPref next{LED_PREF_MAGIC, mode, {0, 0, 0}};
+  if (!preference.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the status LED mode");
+    return false;
+  }
+  this->status_mode_.store(static_cast<int8_t>(mode), std::memory_order_release);
+  ESP_LOGI(TAG, "Status LEDs %s", status_mode_name(mode));
+  // Before the callbacks, so a running peek has ended when the trigger reads it.
+  ::hold_actions.set_status_active(mode == STATUS_HOLD);
+  this->status_leds_callbacks_.call(mode == STATUS_ON);
+  return true;
+}
+
+bool ButtonConfig::boot_leds() const {
+  int8_t value = this->boot_leds_.load(std::memory_order_acquire);
+  if (value < 0) {
+    auto preference = global_preferences->make_preference<LedPref>(BOOT_LED_PREF_KEY, true);
+    LedPref loaded{};
+    const bool off = preference.load(&loaded) && loaded.magic == BOOT_LED_PREF_MAGIC && loaded.enabled == 0 &&
+                     loaded.reserved[0] == 0 && loaded.reserved[1] == 0 && loaded.reserved[2] == 0;
+    value = off ? 0 : 1;
+    this->boot_leds_.store(value, std::memory_order_release);
+  }
+  return value == 1;
+}
+
+bool ButtonConfig::set_boot_leds(bool enabled) {
+  if (this->boot_leds() == enabled)
+    return true;
+  auto preference = global_preferences->make_preference<LedPref>(BOOT_LED_PREF_KEY, true);
+  LedPref next{BOOT_LED_PREF_MAGIC, enabled ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!preference.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the boot LED switch");
+    return false;
+  }
+  this->boot_leds_.store(enabled ? 1 : 0, std::memory_order_release);
+  ESP_LOGI(TAG, "Boot and wake LEDs %s", enabled ? "on" : "off");
+  return true;
+}
+
+ButtonConfig::SleepState ButtonConfig::sleep_state_() const {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  if (this->idle_sleep_ != nullptr) {
+    using Sleep = idle_sleep::IdleSleep;
+    const uint8_t mask = this->idle_sleep_->wake_replay_mask();
+    return {true, this->idle_sleep_->enabled(), this->idle_sleep_->sleep_after_s(),
+            (mask & Sleep::WAKE_IR) != 0, (mask & Sleep::WAKE_HA) != 0,
+            (mask & Sleep::WAKE_ZIGBEE) != 0, (mask & Sleep::WAKE_BLE) != 0};
+  }
+#endif
+  return {};
+}
+
+ButtonConfig::BatteryState ButtonConfig::battery_state_() const {
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  if (this->battery_level_ != nullptr && this->battery_volts_ != nullptr) {
+    const float level = this->battery_level_->state;
+    const float volts = this->battery_volts_->state;
+    if (!std::isnan(level) && !std::isnan(volts))
+      return {true, static_cast<int>(std::lround(level)), volts};
+  }
+#endif
+  return {false, 0, 0.0f};
+}
+
+// Main loop only. The IdleSleep setters save and restart its idle window.
+bool ButtonConfig::set_sleep_enabled_(bool enabled) {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_enabled(enabled);
+#else
+  (void) enabled;
+  return false;
+#endif
+}
+
+bool ButtonConfig::set_sleep_replay_(uint8_t mask, bool enabled) {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_wake_replay(mask, enabled);
+#else
+  (void) mask;
+  (void) enabled;
+  return false;
+#endif
+}
+
+bool ButtonConfig::set_sleep_after_(uint32_t seconds) {
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  return this->idle_sleep_ != nullptr && this->idle_sleep_->set_sleep_after_s(seconds);
+#else
+  (void) seconds;
+  return false;
+#endif
+}
+
+// A missing, corrupt, or empty record keeps the YAML name.
+void ButtonConfig::load_name_pref_() {
+  this->name_pref_ = global_preferences->make_preference<NamePref>(NAME_PREF_KEY, true);
+  NamePref loaded{};
+  if (!this->name_pref_.load(&loaded) || loaded.magic != NAME_PREF_MAGIC || loaded.length == 0 ||
+      loaded.length > FRIENDLY_NAME_MAX)
+    return;
+  const std::string stored(loaded.name, loaded.length);
+  std::string name;
+  if (!parse_friendly_name(stored, name) || name != stored)
+    return;
+  this->apply_friendly_name_(name);
+}
+
+// Main loop only. An empty name saves a length 0 record, which means the YAML name.
+bool ButtonConfig::set_friendly_name_(const std::string &name) {
+  if (name.size() > FRIENDLY_NAME_MAX)
+    return false;
+  NamePref next{};
+  next.magic = NAME_PREF_MAGIC;
+  next.length = static_cast<uint8_t>(name.size());
+  std::memcpy(next.name, name.data(), name.size());
+  if (!this->name_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the friendly name");
+    return false;
+  }
+  this->apply_friendly_name_(name);
+  ESP_LOGI(TAG, "Friendly name set to \"%s\"", this->current_name_.load(std::memory_order_relaxed));
+  return true;
+}
+
+// Main loop only. App and its member are not const, so a write through the
+// const getter is defined. pre_setup() cannot run again, because it reruns
+// arch_init() and puts the MAC suffix back. App.get_name() stays unchanged.
+void ButtonConfig::apply_friendly_name_(const std::string &name) {
+  if (name.size() > FRIENDLY_NAME_MAX)
+    return;
+  if (name.empty()) {
+    this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);
+    const_cast<StringRef &>(App.get_friendly_name()) = this->default_name_;
+  } else {
+    char *buffer =
+        this->current_name_.load(std::memory_order_relaxed) == this->names_[0] ? this->names_[1] : this->names_[0];
+    std::memcpy(buffer, name.data(), name.size());
+    buffer[name.size()] = '\0';
+    this->current_name_.store(buffer, std::memory_order_release);
+    const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());
+  }
+  // BleHid keeps its own copy, because its NimBLE task reads the name.
+  auto *hid = esphome::ble_hid::BleHid::instance();
+  if (hid != nullptr)
+    hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));
+}
+
+// A valid HLD2 record is used as stored. Otherwise a valid HLD1 record moves to
+// HLD2 once. Otherwise every input takes its default hold.
+void ButtonConfig::load_hold_pref_() {
+  static_assert(HOLD_COUNT == HoldActions::COUNT, "the HLD1 record stores one slot for each hold");
+  static_assert(HOLD_SLOTS == HoldActions::SLOT_LIMIT, "the HLD2 record stores one hold for each slot");
+  this->hold_pref_ = global_preferences->make_preference<HoldTablePref>(HOLD_TABLE_PREF_KEY, true);
+  HoldTablePref table{};
+  if (this->hold_pref_.load(&table) && table.magic == HOLD_TABLE_PREF_MAGIC) {
+    this->apply_holds_(table.hold);
+    return;
+  }
+  ESPPreferenceObject old_pref = global_preferences->make_preference<HoldPref>(HOLD_PREF_KEY, true);
+  HoldPref old{};
+  if (old_pref.load(&old) && old.magic == HOLD_PREF_MAGIC && hld1_valid(old.slot)) {
+    HoldTablePref next{HOLD_TABLE_PREF_MAGIC, {}, {}};
+    for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+      next.hold[s] = HoldActions::NONE;
+    for (uint8_t a = 0; a < HoldActions::COUNT; a++) {
+      if (old.slot[a] != 0)
+        next.hold[old.slot[a]] = a;
+    }
+    this->apply_holds_(next.hold);
+    if (this->hold_pref_.save(&next)) {
+      ESP_LOGI(TAG, "Moved the hold buttons to the per-slot record");
+    } else {
+      ESP_LOGE(TAG, "Failed to save the hold buttons");
+    }
+    return;
+  }
+  uint8_t defaults[HOLD_SLOTS];
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    defaults[s] = HoldActions::default_hold(s);
+  this->apply_holds_(defaults);
+}
+
+void ButtonConfig::apply_holds_(const uint8_t *holds) {
+  ::hold_actions.set_holds(holds);
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    this->holds_[s].store(::hold_actions.hold(s), std::memory_order_release);
+}
+
+// Main loop only. Several slots can carry the same hold.
+bool ButtonConfig::set_hold_(uint8_t slot, uint8_t hold) {
+  if (!HoldActions::valid_slot(slot) || hold > HoldActions::NONE)
+    return false;
+  if (::hold_actions.hold(slot) == hold)
+    return true;
+  HoldTablePref next{HOLD_TABLE_PREF_MAGIC, {}, {}};
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++)
+    next.hold[s] = ::hold_actions.hold(s);
+  next.hold[slot] = hold;
+  if (!this->hold_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the hold buttons");
+    return false;
+  }
+  this->apply_holds_(next.hold);
+  ESP_LOGI(TAG, "Slot %u hold: %s", static_cast<unsigned>(slot), hold_name(hold));
+  return true;
+}
+
+void ButtonConfig::note_activity_() {
+  this->last_activity_ms_.store(millis(), std::memory_order_release);
+}
+
+void ButtonConfig::enable_wifi_() {
+  // WiFiComponent::start() keys the saved network on the config version as soon
+  // as the component holds a network, and that key changes with every build. A
+  // clear leaves every session of a boot on the fixed key, so a network that
+  // Improv saves in a later session stays through the next update. start()
+  // loads the saved network again straight after this.
+  wifi::global_wifi_component->clear_sta();
+  wifi::global_wifi_component->enable();
+}
+
+void ButtonConfig::open_temporary_wifi_(const char *reason) {
+  this->note_activity_();
+  this->temporary_wifi_ = true;
+  this->enable_wifi_();
+  ESP_LOGI(TAG, "Temporary Wi-Fi session opened %s", reason);
+}
+
+void ButtonConfig::toggle_temporary_wifi() {
+  if (this->boot_wifi_always_on_)
+    return;
+  // Wi-Fi up for the action lease alone is no page session, so the Wi-Fi hold opens one.
+  if (wifi::global_wifi_component->is_disabled() || (this->action_wifi_ && !this->temporary_wifi_)) {
+    this->open_temporary_wifi_("by the Wi-Fi hold");
+  } else {
+    this->temporary_wifi_ = false;
+    // A running Home Assistant action keeps Wi-Fi until its lease ends.
+    if (this->action_wifi_) {
+      ESP_LOGI(TAG, "The Wi-Fi hold ended the temporary Wi-Fi session, but a Home Assistant action holds Wi-Fi");
+      return;
+    }
+    wifi::global_wifi_component->disable();
+    ESP_LOGI(TAG, "Temporary Wi-Fi session closed by the Wi-Fi hold");
+  }
+}
+
+void ButtonConfig::open_boot_wifi_session(const char *reason) {
+  // Always On or a Zigbee pairing session already has Wi-Fi up.
+  if (wifi::global_wifi_component->is_disabled())
+    this->open_temporary_wifi_(reason);
+}
+
+void ButtonConfig::hold_wifi_for_action() {
+  this->action_wifi_ = true;
+  this->action_wifi_until_ms_ = millis() + ACTION_WIFI_LEASE_MS;
+  if (wifi::global_wifi_component->is_disabled()) {
+    this->enable_wifi_();
+    ESP_LOGI(TAG, "Wi-Fi enabled for a Home Assistant action");
+  }
+}
+
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+void ButtonConfig::set_ha_action(ha_action::HaAction *action) {
+  this->ha_action_ = action;
+  action->set_wifi_hold([this]() { this->hold_wifi_for_action(); });
+}
+#endif
+
+// Preferences open in app_main, ahead of every component, so this works at any
+// boot priority.
+bool ButtonConfig::ha_api_expected_from_flash() {
+  auto preference = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
+  HaPref loaded{};
+  return !preference.load(&loaded) || loaded.magic != HA_PREF_MAGIC || loaded.expected != 0;
+}
+
+void ButtonConfig::load_ha_pref_() {
+  this->ha_pref_ = global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);
+  this->ha_api_expected_.store(ha_api_expected_from_flash(), std::memory_order_release);
+}
+
+void ButtonConfig::set_ha_api_gated(bool gated) {
+  this->ha_api_gated_.store(gated, std::memory_order_release);
+  this->sync_ha_action_();
+}
+
+// A held-down API server reaches nobody, so the gate turns the actions off too.
+void ButtonConfig::sync_ha_action_() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr)
+    this->ha_action_->set_enabled(this->ha_api_expected() && !this->ha_api_gated());
+#endif
+}
+
+bool ButtonConfig::save_ha_pref_() {
+  HaPref next{HA_PREF_MAGIC, this->ha_api_expected() ? uint8_t{1} : uint8_t{0}, {0, 0, 0}};
+  if (!this->ha_pref_.save(&next)) {
+    ESP_LOGE(TAG, "Failed to save the Home Assistant API switch");
+    return false;
+  }
+  return true;
+}
+
+// The API server runs on until the next boot, because it has no stop.
+bool ButtonConfig::set_ha_api_expected(bool expected) {
+  if (this->ha_api_expected() == expected)
+    return true;
+  this->ha_api_expected_.store(expected, std::memory_order_release);
+  this->sync_ha_action_();
+  // The lease only keeps Wi-Fi up for later presses, and none can send now.
+  if (!expected && this->action_wifi_)
+    this->action_wifi_until_ms_ = millis();
+  if (!this->save_ha_pref_())
+    return false;
+  ESP_LOGI(TAG, "Home Assistant switch %s", expected ? "on" : "off");
+  return true;
+}
+
+void ButtonConfig::dump_config() {
+  ESP_LOGCONFIG(TAG, "Button config page at /");
+  ESP_LOGCONFIG(TAG, "  Firmware: %s", this->firmware_version_);
+  ESP_LOGCONFIG(TAG, "  Friendly name: %s", this->current_name_.load(std::memory_order_acquire));
+  ESP_LOGCONFIG(TAG, "  Home Assistant switch: %s", YESNO(this->ha_api_expected()));
+  ESP_LOGCONFIG(TAG, "  API server held down this boot: %s", YESNO(this->ha_api_gated()));
+  ESP_LOGCONFIG(TAG, "  Wi-Fi always on: %s", YESNO(this->wifi_always_on()));
+  ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));
+  for (uint8_t s = 0; s < HOLD_SLOTS; s++) {
+    const uint8_t hold = this->holds_[s].load(std::memory_order_acquire);
+    if (hold != HoldActions::NONE)
+      ESP_LOGCONFIG(TAG, "  Hold on slot %u: %s", static_cast<unsigned>(s), hold_name(hold));
+  }
+  ESP_LOGCONFIG(TAG, "  Boot and wake LEDs: %s", YESNO(this->boot_leds()));
+  ESP_LOGCONFIG(TAG, "  Sleep settings: %s", this->sleep_state_().available ? "idle_sleep" : "not configured");
+}
+
+// init() starts the HTTP server, which asserts if it runs before the network is
+// up. WebServer uses WIFI - 1.0f, so stay just behind it and reuse its server.
+float ButtonConfig::get_setup_priority() const { return setup_priority::WIFI - 2.0f; }
+
+bool ButtonConfig::canHandle(AsyncWebServerRequest *request) const {
+  char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  const StringRef url = request->url_to(url_buf);
+  const http_method method = request->method();
+  if (method == HTTP_GET)
+    return url == "/" || url == "/buttons" || url == "/buttons/api/state" || url == "/buttons/api/code";
+  if (method == HTTP_POST)
+    return url == "/buttons/api/action" || url == "/buttons/api/activity";
+  return false;
+}
+
+void ButtonConfig::handleRequest(AsyncWebServerRequest *request) {
+  char url_buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  const StringRef url = request->url_to(url_buf);
+  if (url == "/buttons/api/state") {
+    this->handle_state_(request);
+  } else if (url == "/buttons/api/code") {
+    this->handle_code_(request);
+  } else if (url == "/buttons/api/action") {
+    this->handle_action_(request);
+  } else if (url == "/buttons/api/activity") {
+    this->handle_activity_(request);
+  } else {
+    this->handle_page_(request);
+  }
+}
+
+void ButtonConfig::handle_page_(AsyncWebServerRequest *request) {
+  this->note_activity_();
+  AsyncWebServerResponse *response =
+      request->beginResponse(200, "text/html; charset=utf-8", this->page_, this->page_size_);
+  response->addHeader("Content-Encoding", "gzip");
+  // The shell pins the loader, so a stale copy would point at the loader of an
+  // older firmware. It is under 1 KB, so revalidate it on every visit.
+  response->addHeader("Cache-Control", "no-cache");
+  request->send(response);
+}
+
+void ButtonConfig::handle_activity_(AsyncWebServerRequest *request) {
+  this->note_activity_();
+  request->send(200, "application/json", R"({"ok":true})");
+}
+
+// Reads only, so it runs on the httpd task without a defer.
+void ButtonConfig::handle_state_(AsyncWebServerRequest *request) {
+  const bool action_pending = this->action_pending_.load(std::memory_order_acquire);
+  const bool busy = action_pending || ::ir_ui.state != IrUi::OFF;
+  // A web Zigbee assignment keeps the receiver mode closed, so the reserved
+  // action, not the LED state machine, marks the page as the owner.
+  const char *owner = !busy ? "none" : ((action_pending || ::ir_ui.web_owner()) ? "web" : "device");
+  const uint32_t completed_id = this->completed_action_id_.load(std::memory_order_acquire);
+  char ip[network::IP_ADDRESS_BUFFER_SIZE] = "";
+  for (const auto &address : wifi::global_wifi_component->get_ip_addresses()) {
+    if (address.is_ip4() && address.is_set()) {
+      address.str_to(ip);
+      break;
+    }
+  }
+  char mac[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+  get_mac_address_pretty_into_buffer(mac);
+  const SleepState sleep = this->sleep_state_();
+  const BatteryState battery = this->battery_state_();
+
+  AsyncResponseStream *stream = request->beginResponseStream("application/json");
+  stream->print(R"({"firmware":")");
+  print_json_text(stream, this->firmware_version_);
+  stream->printf(
+      R"(","busy":%s,"owner":"%s","saves":%u,"op_slot":%u,"op_state":"%s","result_slot":%u,"result":"%s","action_id":%u,"action_ok":%s,"status_leds":"%s","boot_leds":%s,"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"},"sleep":{"available":%s,"enabled":%s,"after_s":%u,"replay":%s,"replay_ir":%s,"replay_ha":%s,"replay_zigbee":%s,"replay_ble":%s},"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s},"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"},"ble":{"connected":%s,"bonded":%s,"pairing":%s})",
+      busy ? "true" : "false", owner, static_cast<unsigned>(::ir_code_store.saves()),
+      static_cast<unsigned>(::ir_ui.target), state_name(::ir_ui.state),
+      static_cast<unsigned>(::ir_ui.web_result_slot()), result_name(::ir_ui.web_result()),
+      static_cast<unsigned>(completed_id), this->completed_action_ok_.load(std::memory_order_relaxed) ? "true" : "false",
+      status_mode_name(this->status_mode()), this->boot_leds() ? "true" : "false",
+      wifi::global_wifi_component->is_connected() ? "true" : "false",
+      wifi::global_wifi_component->is_disabled() ? "false" : "true",
+      this->wifi_always_on() ? "true" : "false",
+      api::global_api_server->is_connected() ? "true" : "false",
+      this->ha_api_gated() ? "true" : "false",
+      ip, mac,
+      sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",
+      static_cast<unsigned>(sleep.after_s), sleep.replay_ha && sleep.replay_zigbee ? "true" : "false",
+      sleep.replay_ir ? "true" : "false", sleep.replay_ha ? "true" : "false",
+      sleep.replay_zigbee ? "true" : "false", sleep.replay_ble ? "true" : "false",
+      battery.available ? "true" : "false", battery.percent, static_cast<double>(battery.volts),
+      ::zigbee_assignments.radio_enabled() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->radio_enabled() ? "true" : "false",
+      this->ha_api_expected() ? "true" : "false",
+      ::zigbee_assignments.link_started() ? "true" : "false",
+      ::zigbee_assignments.link_paired() ? "true" : "false",
+      ::zigbee_assignments.link_factory_new() ? "true" : "false",
+      ::zigbee_assignments.boot_gated() ? "true" : "false",
+      ::zigbee_assignments.pairing() ? "true" : "false",
+      static_cast<unsigned>(::zigbee_assignments.pairing_seconds_left()),
+      ::zigbee_assignments.pair_failed() ? "true" : "false",
+      ZigbeeAssignmentManager::reach_name(::zigbee_assignments.reach()),
+      esphome::ble_hid::BleHid::instance()->connected() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->bonded() ? "true" : "false",
+      esphome::ble_hid::BleHid::instance()->pairing() ? "true" : "false");
+  size_t ha_pending = 0;
+  uint8_t ha_last_slot = 0;
+  uint8_t ha_last = 0;
+  std::string ha_error;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr) {
+    ha_pending = this->ha_action_->pending();
+    ha_last_slot = this->ha_action_->last_slot();
+    ha_last = this->ha_action_->last_result();
+    this->ha_action_->last_error(ha_error);
+  }
+#endif
+  stream->printf(R"(,"ha":{"pending":%u,"last_slot":%u,"last":"%s","error":")", static_cast<unsigned>(ha_pending),
+                 static_cast<unsigned>(ha_last_slot), ha_result_name(ha_last));
+  print_json_text(stream, ha_error.c_str());
+  stream->print(R"("},"slots":[)");
+  bool first = true;
+  for (const auto &info : SLOTS) {
+    const auto zigbee = ::zigbee_assignments.assignment(info.slot);
+    const auto hid = esphome::ble_hid::BleHid::instance()->assignment(info.slot);
+    HaAssignment ha;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    if (this->ha_action_ != nullptr)
+      ha = this->ha_action_->assignment(info.slot);
+#endif
+    const char *action = hid.assigned                          ? "hid"
+                         : zigbee.assigned                     ? "zigbee"
+                         : ha.assigned                         ? "ha"
+                         : ::ir_code_store.has_code(info.slot) ? "ir"
+                                                              : "none";
+    // Hex only, so it needs no JSON escape. A Zigbee slot shows its target name,
+    // and an IR slot shows the code name that set_name() cleaned.
+    char code[12] = "";
+    char fields[8] = "";
+    uint32_t samsung = 0;
+    uint8_t address = 0;
+    uint8_t command = 0;
+    if (::ir_code_store.code_samsung_data(info.slot, samsung))
+      std::snprintf(code, sizeof(code), "0x%08X", static_cast<unsigned>(samsung));
+    if (::ir_code_store.code_samsung_fields(info.slot, address, command))
+      std::snprintf(fields, sizeof(fields), "%02X %02X", address, command);
+    // The stored bytes are the little endian EUI-64, so this prints the value
+    // that Zigbee2MQTT shows rather than the byte order on the wire.
+    char ieee_text[20] = "";
+    if (zigbee.assigned && zigbee.kind == ZigbeeAssignmentManager::KIND_DEVICE) {
+      uint64_t value = 0;
+      std::memcpy(&value, zigbee.ieee, sizeof(value));
+      std::snprintf(ieee_text, sizeof(ieee_text), "0x%016llx",
+                    static_cast<unsigned long long>(value));
+    }
+    stream->printf(
+        R"(%s{"slot":%u,"action":"%s","pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":")",
+        first ? "" : ",", static_cast<unsigned>(info.slot), action,
+        static_cast<unsigned>(::ir_code_store.code_pulses(info.slot)),
+        static_cast<unsigned>(::ir_code_store.code_duration_us(info.slot)), code, fields,
+        static_cast<unsigned>(zigbee.group_id), ieee_text,
+        static_cast<unsigned>(zigbee.endpoint), static_cast<unsigned>(zigbee.action),
+        static_cast<int>(zigbee.param), hid_kind_name(hid.kind), static_cast<unsigned>(hid.usage),
+        static_cast<unsigned>(hid.modifiers), ha.kind, ha.act, static_cast<unsigned>(ha.val));
+    print_json_text(stream, ha.entity.c_str());
+    stream->print(R"(","name":")");
+    print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() : ::ir_code_store.name(info.slot));
+    // Wheel rotation never carries a hold, so it reads none.
+    stream->printf(R"(","hold":"%s"})", hold_name(this->holds_[info.slot].load(std::memory_order_acquire)));
+    first = false;
+  }
+  stream->print(R"(],"name":")");
+  print_json_text(stream, this->current_name_.load(std::memory_order_acquire));
+  stream->print(R"(","default_name":")");
+  print_json_text(stream, this->default_name_.c_str());
+  stream->print("\"}");
+  request->send(stream);
+}
+
+bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {
+  if (!::ir_code_store.has_code(slot))
+    return false;
+  if (esphome::ble_hid::BleHid::instance()->assignment(slot).assigned || ::zigbee_assignments.assignment(slot).assigned)
+    return false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  if (this->ha_action_ != nullptr && this->ha_action_->has_assignment(slot))
+    return false;
+#endif
+  return true;
+}
+
+// Reads only, so it runs on the httpd task without a defer. The block is the
+// Flipper .ir signal syntax, so a code moves between this board, a Flipper, and
+// the Flipper-IRDB files without a converter. Every printed value is a name
+// that set_name() cleaned, a hex byte, or a digit, so none of it needs a JSON
+// escape. The newline is the one exception.
+void ButtonConfig::handle_code_(AsyncWebServerRequest *request) {
+  const SlotInfo *info = parse_slot(request->arg("slot"));
+  if (info == nullptr) {
+    request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
+    return;
+  }
+  std::vector<int32_t> raw;
+  const bool present = ::ir_code_store.code_timings(info->slot, raw);
+  const char *name = ::ir_code_store.name(info->slot);
+  uint8_t address = 0;
+  uint8_t command = 0;
+  const bool parsed = ::ir_code_store.code_samsung_fields(info->slot, address, command);
+
+  AsyncResponseStream *stream = request->beginResponseStream("application/json");
+  stream->printf(R"({"slot":%u,"present":%s,"text":")", static_cast<unsigned>(info->slot),
+                 present ? "true" : "false");
+  if (present) {
+    // A Flipper signal needs a name line, so a code with no name prints the
+    // placeholder that set_ir_code reads back as no name.
+    if (name[0] != '\0')
+      stream->printf("name: %s\\n", name);
+    else
+      stream->printf("name: Slot%u\\n", static_cast<unsigned>(info->slot));
+    if (parsed) {
+      stream->print("type: parsed\\nprotocol: Samsung32\\n");
+      stream->printf("address: %02X 00 00 00\\ncommand: %02X 00 00 00", address, command);
+    } else {
+      stream->print("type: raw\\nfrequency: 38000\\nduty_cycle: 0.500000\\ndata:");
+      for (const int32_t pulse : raw)
+        stream->printf(" %d", static_cast<int>(pulse < 0 ? -pulse : pulse));
+    }
+  }
+  stream->print(R"("})");
+  request->send(stream);
+}
+
+// The store and the state machine are main-loop owned, so every mutation is
+// deferred off the httpd task. NVS writes from the httpd task would race.
+void ButtonConfig::handle_action_(AsyncWebServerRequest *request) {
+  this->note_activity_();
+  const std::string action = request->arg("action");
+  if (action.empty()) {
+    request->send(400, "application/json", R"({"ok":false,"error":"missing action"})");
+    return;
+  }
+
+  if (action == "cancel") {
+    if (this->action_pending_.load(std::memory_order_acquire) || ::ir_ui.state != IrUi::OFF)
+      this->defer([]() { ::ir_ui.close(); });
+    ESP_LOGI(TAG, "Web cancelled the assignment operation");
+    request->send(200, "application/json", R"({"ok":true})");
+    return;
+  }
+
+  const bool replay_action = action == "set_sleep_replay" || action == "set_sleep_replay_ir";
+  const bool sleep_action = action == "set_sleep_enabled" || action == "set_sleep_after" || replay_action;
+  const bool known = action == "record_ir" || action == "set_ir_code" ||
+                     action == "set_zigbee" || action == "set_zigbee_device" ||
+                     action == "set_hid" || action == "set_ha" || action == "test_ha" || action == "forget_ble" || action == "set_radio" ||
+                     action == "set_wifi_always_on" || action == "set_status_leds" || action == "set_boot_leds" ||
+                     action == "set_hold" || sleep_action || action == "pair" || action == "restart" ||
+                     action == "set_name" || action == "set_ir_name" || action == "clear";
+  if (!known) {
+    request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");
+    return;
+  }
+
+  const bool ha_action_call = action == "set_ha" || action == "test_ha";
+  bool ha_linked = false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  ha_linked = this->ha_action_ != nullptr;
+#endif
+  if (ha_action_call && !ha_linked) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"Home Assistant actions are not configured"})");
+    return;
+  }
+
+  // The switch covers every button at once, so it carries a radio name and a
+  // state instead of a slot.
+  const std::string radio = request->arg("radio");
+  bool radio_on = false;
+  if (action == "set_radio") {
+    const std::string on = request->arg("on");
+    if ((radio != "zigbee" && radio != "ble" && radio != "home_assistant") ||
+        (on != "0" && on != "1")) {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid radio switch"})");
+      return;
+    }
+    radio_on = on == "1";
+  }
+
+  bool wifi_default_on = false;
+  if (action == "set_wifi_always_on") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid Wi-Fi default"})");
+      return;
+    }
+    wifi_default_on = enabled == "1";
+  }
+
+  uint8_t led_mode = STATUS_ON;
+  if (action == "set_status_leds" && !parse_status_mode(request->arg("mode"), led_mode)) {
+    request->send(400, "application/json", R"({"ok":false,"error":"a status LED mode is off, hold, or on"})");
+    return;
+  }
+
+  // A hold slot excludes wheel rotation, so it skips the slot parse below.
+  uint8_t hold = HoldActions::NONE;
+  uint8_t hold_slot = 0;
+  if (action == "set_hold") {
+    if (!parse_hold_name(request->arg("hold"), hold)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"a hold is none, wifi, status, sleep, or assign"})");
+      return;
+    }
+    if (!parse_hold_slot(request->arg("slot"), hold_slot)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"a hold slot is 3 to 16, 19, or 20"})");
+      return;
+    }
+  }
+
+  bool boot_leds_on = false;
+  if (action == "set_boot_leds") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid boot LED switch"})");
+      return;
+    }
+    boot_leds_on = enabled == "1";
+  }
+
+  if (sleep_action && !this->sleep_state_().available) {
+    request->send(400, "application/json", R"({"ok":false,"error":"sleep is not configured"})");
+    return;
+  }
+  bool sleep_on = false;
+  if (action == "set_sleep_enabled") {
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid sleep switch"})");
+      return;
+    }
+    sleep_on = enabled == "1";
+  }
+  bool replay_on = false;
+  uint8_t replay_mask = 0;
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  if (replay_action) {
+    using Sleep = idle_sleep::IdleSleep;
+    const std::string radio = request->arg("radio");
+    if (action == "set_sleep_replay_ir" || radio == "ir")
+      replay_mask = Sleep::WAKE_IR;
+    else if (radio.empty())
+      replay_mask = Sleep::WAKE_NETWORK;
+    else if (radio == "ha")
+      replay_mask = Sleep::WAKE_HA;
+    else if (radio == "zigbee")
+      replay_mask = Sleep::WAKE_ZIGBEE;
+    else if (radio == "ble")
+      replay_mask = Sleep::WAKE_BLE;
+    else {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid wake press radio"})");
+      return;
+    }
+    const std::string enabled = request->arg("enabled");
+    if (enabled != "0" && enabled != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid wake press switch"})");
+      return;
+    }
+    replay_on = enabled == "1";
+  }
+#endif
+  uint32_t sleep_after_s = 0;
+  if (action == "set_sleep_after" && !parse_sleep_after(request->arg("seconds"), sleep_after_s)) {
+    request->send(400, "application/json", R"({"ok":false,"error":"sleep after is 10 to 3600 seconds"})");
+    return;
+  }
+
+  // Pairing carries the same on flag, so one control can start and stop it.
+  bool pair_on = false;
+  if (action == "pair") {
+    const std::string on = request->arg("on");
+    if (on != "0" && on != "1") {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid pairing state"})");
+      return;
+    }
+    pair_on = on == "1";
+  }
+
+  // The request dies before the defer runs, so the name is checked and copied
+  // here. An empty name restores the YAML name.
+  std::string friendly_name;
+  if (action == "set_name" && !parse_friendly_name(request->arg("name"), friendly_name)) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"a name is up to 40 bytes, with no slash or control character"})");
+    return;
+  }
+
+  const bool needs_slot = action != "forget_ble" && action != "set_radio" &&
+                          action != "set_wifi_always_on" && action != "set_status_leds" && action != "set_boot_leds" &&
+                          action != "set_hold" && !sleep_action && action != "pair" &&
+                          action != "restart" && action != "set_name";
+  const SlotInfo *info = needs_slot ? parse_slot(request->arg("slot")) : nullptr;
+  if (needs_slot && info == nullptr) {
+    request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");
+    return;
+  }
+
+  // The request dies before the defer runs, so the pasted text is parsed here.
+  std::vector<int32_t> timings;
+  std::string name;
+  if (action == "set_ir_code" && !parse_ir_text(request->arg("code"), name, timings)) {
+    request->send(400, "application/json",
+                  R"({"ok":false,"error":"a code is a Flipper signal block, or 4 to 512 alternating values in us"})");
+    return;
+  }
+  // The code block of a code with no name carries a placeholder, so an export,
+  // an import, or a copy to another input keeps the code unnamed.
+  if (action == "set_ir_code" && ir_name::placeholder(name.data(), name.size()))
+    name.clear();
+
+  // A rename keeps the timings, so only a slot that sends its stored code takes
+  // one. A name that set_name() would change is refused, so the page never
+  // shows a name that differs from the stored one.
+  std::string ir_name_text;
+  if (action == "set_ir_name") {
+    if (!this->slot_sends_ir_(info->slot)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"the slot holds no IR code"})");
+      return;
+    }
+    ir_name_text = request->arg("name");
+    if (ir_name::placeholder(ir_name_text.data(), ir_name_text.size())) {
+      request->send(400, "application/json", R"({"ok":false,"error":"Slot3 to Slot20 mark a code with no name"})");
+      return;
+    }
+    if (!ir_name::fits(ir_name_text.data(), ir_name_text.size())) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"a code name is up to 23 printable ASCII characters, with no quote, no backslash, and no space at either end"})");
+      return;
+    }
+  }
+
+  // Every slot accepts a Zigbee target, because playback rides the same path as
+  // IR. The page resolves the name to a group id against Zigbee2MQTT, so the
+  // remote stores the id and never needs the broker itself.
+  uint16_t group_id = 0;
+  uint8_t ieee[8] = {};
+  uint8_t endpoint = 0;
+  uint8_t zb_action = ZigbeeAssignmentManager::ACT_TOGGLE;
+  int16_t zb_param = 0;
+  std::string target_name;
+  if (action == "set_zigbee" || action == "set_zigbee_device") {
+    if (action == "set_zigbee" && !parse_group_id(request->arg("group"), group_id)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"a group is 1 to 65527, in decimal or 0x hex"})");
+      return;
+    }
+    if (action == "set_zigbee_device" && !parse_ieee(request->arg("ieee"), ieee)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"an IEEE address is 16 hex digits"})");
+      return;
+    }
+    if (action == "set_zigbee_device" && !parse_endpoint(request->arg("ep"), endpoint)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"an endpoint is 1 to 240"})");
+      return;
+    }
+    if (!parse_action(request->arg("act"), zb_action)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"unknown Zigbee action"})");
+      return;
+    }
+    if (!parse_param(request->arg("val"), zb_param)) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"an action value is 0 to 32767"})");
+      return;
+    }
+    target_name = request->arg("name");
+    if (target_name.size() > 64) {
+      request->send(400, "application/json", R"({"ok":false,"error":"target name too long"})");
+      return;
+    }
+  }
+
+  esphome::ble_hid::BleHid::Kind hid_kind = esphome::ble_hid::BleHid::NONE;
+  uint16_t hid_usage = 0;
+  uint16_t hid_mod = 0;
+  if (action == "set_hid") {
+    if (!parse_hid_kind(request->arg("kind"), hid_kind) ||
+        !parse_hid_number(request->arg("usage"), 0x03FF, hid_usage) ||
+        !parse_hid_number(request->arg("mod"), 0x00FF, hid_mod)) {
+      request->send(400, "application/json", R"({"ok":false,"error":"invalid HID assignment"})");
+      return;
+    }
+    const bool valid = (hid_kind == esphome::ble_hid::BleHid::KEYBOARD && hid_usage <= 0xE7 &&
+                        (hid_usage != 0 || hid_mod != 0)) ||
+                       (hid_kind == esphome::ble_hid::BleHid::CONSUMER && hid_usage > 0 && hid_mod == 0) ||
+                       (hid_kind == esphome::ble_hid::BleHid::GAMEPAD_BUTTON && hid_usage >= 1 &&
+                        hid_usage <= 16 && hid_mod == 0) ||
+                       (hid_kind == esphome::ble_hid::BleHid::GAMEPAD_DPAD && hid_usage <= 7 && hid_mod == 0);
+    if (!valid) {
+      request->send(400, "application/json", R"({"ok":false,"error":"HID value is outside its range"})");
+      return;
+    }
+  }
+
+  // The request dies before the defer runs, so the fields are checked and
+  // copied here.
+  std::string ha_kind;
+  std::string ha_act;
+  std::string ha_entity;
+  int ha_val = 0;
+  if (action == "set_ha") {
+    ha_kind = request->arg("kind");
+    ha_act = request->arg("act");
+    ha_entity = request->arg("entity");
+    const std::string val_text = request->arg("val");
+    ha_val = parse_ha_value(val_text);
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    switch (ha_action::HaAction::validate(ha_kind, ha_act, ha_val, ha_entity)) {
+      case ha_action::HaAction::Check::BAD_ACTION:
+        request->send(400, "application/json",
+                      R"({"ok":false,"error":"unknown Home Assistant kind or action"})");
+        return;
+      case ha_action::HaAction::Check::BAD_ENTITY:
+        request->send(400, "application/json",
+                      R"({"ok":false,"error":"an entity id is domain.object_id, up to 64 characters, and its domain must match the kind"})");
+        return;
+      case ha_action::HaAction::Check::BAD_STEP:
+        request->send(400, "application/json", R"({"ok":false,"error":"a brightness step is 1 to 100"})");
+        return;
+      default:
+        break;
+    }
+#endif
+  }
+  if (action == "test_ha") {
+    bool assigned = false;
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+    assigned = this->ha_action_->has_assignment(info->slot);
+#endif
+    if (!assigned) {
+      request->send(400, "application/json", R"({"ok":false,"error":"slot has no Home Assistant action"})");
+      return;
+    }
+    if (!this->ha_api_expected()) {
+      request->send(400, "application/json", R"({"ok":false,"error":"Home Assistant is off in Config"})");
+      return;
+    }
+    if (this->ha_api_gated()) {
+      request->send(400, "application/json",
+                    R"({"ok":false,"error":"Home Assistant API is off until the remote restarts"})");
+      return;
+    }
+  }
+
+  bool expected = false;
+  if (::ir_ui.state != IrUi::OFF ||
+      !this->action_pending_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+    request->send(409, "application/json", R"({"ok":false,"error":"busy"})");
+    return;
+  }
+  if (::ir_ui.state != IrUi::OFF) {
+    this->action_pending_.store(false, std::memory_order_release);
+    request->send(409, "application/json", R"({"ok":false,"error":"busy"})");
+    return;
+  }
+
+  const uint8_t button = info == nullptr ? 0 : info->slot;
+  const uint32_t action_id = this->next_action_id_.fetch_add(1, std::memory_order_relaxed) + 1;
+  if (action == "record_ir") {
+    this->defer([this, button, action_id]() {
+      ::ir_ui.open_from_web(button);
+      this->complete_action_(action_id, true);
+    });
+  } else if (action == "set_ir_code") {
+    this->defer([this, button, action_id, timings, name]() {
+      const bool saved = ::ir_code_store.save(button, timings);
+      this->complete_action_(action_id, saved && ::ir_code_store.set_name(button, name.c_str()));
+    });
+  } else if (action == "set_ir_name") {
+    this->defer([this, button, action_id, ir_name_text]() {
+      this->complete_action_(action_id, ::ir_code_store.rename(button, ir_name_text.c_str()));
+    });
+  } else if (action == "set_zigbee") {
+    this->defer([this, button, action_id, group_id, zb_action, zb_param, target_name]() {
+      this->complete_action_(action_id, ::zigbee_assignments.assign_from_web(
+                                            button, group_id, zb_action, zb_param, target_name));
+    });
+  } else if (action == "set_zigbee_device") {
+    // The array decays in a lambda capture, so it rides along as a struct.
+    struct Target {
+      uint8_t ieee[8];
+    } target{};
+    std::memcpy(target.ieee, ieee, sizeof(target.ieee));
+    this->defer([this, button, action_id, target, endpoint, zb_action, zb_param, target_name]() {
+      this->complete_action_(action_id,
+                             ::zigbee_assignments.assign_device_from_web(
+                                 button, target.ieee, endpoint, zb_action, zb_param, target_name));
+    });
+  } else if (action == "set_hid") {
+    this->defer([this, button, action_id, hid_kind, hid_usage, hid_mod]() {
+      this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->assign(
+                                            button, hid_kind, hid_usage, static_cast<uint8_t>(hid_mod)));
+    });
+  } else if (action == "set_ha") {
+    this->defer([this, button, action_id, ha_kind, ha_act, ha_val, ha_entity]() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+      this->complete_action_(action_id, this->ha_action_->assign(button, ha_kind, ha_act, ha_val, ha_entity));
+#else
+      this->complete_action_(action_id, false);
+#endif
+    });
+  } else if (action == "test_ha") {
+    this->defer([this, button, action_id]() {
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+      // play() is true for a skipped press, and the switch can go off before this runs.
+      this->complete_action_(action_id, this->ha_action_->enabled() && this->ha_action_->play(button));
+#else
+      this->complete_action_(action_id, false);
+#endif
+    });
+  } else if (action == "forget_ble") {
+    this->defer([this, action_id]() {
+      this->complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond());
+    });
+  } else if (action == "pair") {
+    // A call that reaches the restart never returns, so the action id it was
+    // given is never completed and the page watches its own poll fail instead.
+    // A false return means no restart happened, and then the id has to be
+    // completed or every later action answers 409.
+    this->defer([this, action_id, pair_on]() {
+      const bool ok = pair_on ? ::zigbee_assignments.begin_pairing()
+                              : ::zigbee_assignments.cancel_pairing();
+      this->complete_action_(action_id, ok);
+    });
+  } else if (action == "set_radio") {
+    this->defer([this, action_id, radio, radio_on]() {
+      bool ok = false;
+      if (radio == "zigbee")
+        ok = ::zigbee_assignments.set_radio_enabled(radio_on);
+      else if (radio == "ble")
+        ok = esphome::ble_hid::BleHid::instance()->set_radio_enabled(radio_on);
+      else
+        ok = this->set_ha_api_expected(radio_on);
+      this->complete_action_(action_id, ok);
+    });
+  } else if (action == "set_wifi_always_on") {
+    this->defer([this, action_id, wifi_default_on]() {
+      this->complete_action_(action_id, this->set_wifi_always_on_(wifi_default_on));
+    });
+  } else if (action == "set_status_leds") {
+    this->defer([this, action_id, led_mode]() {
+      this->complete_action_(action_id, this->set_status_mode(led_mode));
+    });
+  } else if (action == "set_hold") {
+    this->defer([this, action_id, hold_slot, hold]() {
+      this->complete_action_(action_id, this->set_hold_(hold_slot, hold));
+    });
+  } else if (action == "set_boot_leds") {
+    this->defer([this, action_id, boot_leds_on]() {
+      this->complete_action_(action_id, this->set_boot_leds(boot_leds_on));
+    });
+  } else if (action == "set_sleep_enabled") {
+    this->defer([this, action_id, sleep_on]() {
+      this->complete_action_(action_id, this->set_sleep_enabled_(sleep_on));
+    });
+  } else if (replay_action) {
+    this->defer([this, action_id, replay_mask, replay_on]() {
+      this->complete_action_(action_id, this->set_sleep_replay_(replay_mask, replay_on));
+    });
+  } else if (action == "set_sleep_after") {
+    this->defer([this, action_id, sleep_after_s]() {
+      this->complete_action_(action_id, this->set_sleep_after_(sleep_after_s));
+    });
+  } else if (action == "set_name") {
+    this->defer([this, action_id, friendly_name]() {
+      this->complete_action_(action_id, this->set_friendly_name_(friendly_name));
+    });
+  } else if (action == "restart") {
+    this->defer([this, action_id]() {
+      ESP_LOGI(TAG, "Restart requested from the page");
+      this->complete_action_(action_id, true);
+      this->set_timeout("restart", RESTART_DELAY_MS, []() { App.safe_reboot(); });
+    });
+  } else {
+    this->defer([this, button, action_id]() {
+      this->complete_action_(action_id, ::ir_code_store.clear(button));
+    });
+  }
+  if (needs_slot)
+    ESP_LOGI(TAG, "Web action %s on slot %u", action.c_str(), static_cast<unsigned>(button));
+  else
+    ESP_LOGI(TAG, "Web action %s", action.c_str());
+  char response[32];
+  std::snprintf(response, sizeof(response), R"({"ok":true,"id":%u})", static_cast<unsigned>(action_id));
+  request->send(200, "application/json", response);
+}
+
+void ButtonConfig::complete_action_(uint32_t id, bool ok) {
+  this->completed_action_ok_.store(ok, std::memory_order_relaxed);
+  this->completed_action_id_.store(id, std::memory_order_release);
+  this->action_pending_.store(false, std::memory_order_release);
+}
+
+}  // namespace esphome::button_config

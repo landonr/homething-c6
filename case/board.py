@@ -1,0 +1,574 @@
+"""Board geometry read out of the KiCad exports, so the case follows the PCB.
+
+Nothing here is hand-transcribed except WHEEL_OD, which no KiCad export carries
+and which wheel_profile() now cross-checks against the assembly STEP rather than
+trusting blind. Run `python board.py` for a keepout report re-derived from it.
+"""
+
+import csv
+import functools
+import math
+import re
+from collections import namedtuple
+from pathlib import Path
+
+from build123d import Axis, Box, Face, Plane, Pos, Rot, import_step
+
+ROOT = Path(__file__).resolve().parent.parent
+KICAD_PCB = ROOT / "c6remote-kicad" / "c6remote.kicad_pcb"
+POS_CSV = ROOT / "c6remote-kicad" / "export" / "c6remote-pos.csv"
+BOARD_ONLY_STEP = Path(__file__).resolve().parent / "board" / "c6remote-board-only.step"
+ASSEMBLY_STEP = Path(__file__).resolve().parent / "board" / "c6remote-board.step"
+LEGACY_BOARD_ONLY_STEP = (
+    Path(__file__).resolve().parent / "board" / "c6remote-v2-board-only.step"
+)
+"""The V2 board, frozen. Release 2026.8.0, commit d0a2c2e, exported with
+`kicad-cli pcb export step --board-only` the same way scripts/export-case-refs.sh
+exports the live one. It is static reference geometry: that revision is gone from
+the working tree, so nothing regenerates this file and nothing should."""
+LEGACY_POS_CSV = Path(__file__).resolve().parent / "board" / "c6remote-v2-pos.csv"
+"""The V2 placements, frozen with the STEP above: c6remote-pos.csv as release
+2026.8.0, commit d0a2c2e, committed it. Static reference, never regenerated."""
+
+WHEEL_CUTOUT_R = 2.0
+
+WHEEL_OD = 34.0
+"""Widest ANO solid in the assembly STEP. ENC1 has no dimension in the board file."""
+
+
+def _require(path):
+    if not path.exists():
+        raise FileNotFoundError(f"{path} missing. Run scripts/export-case-refs.sh")
+    return path
+
+
+def _edge_cut_circles():
+    src = _require(KICAD_PCB).read_text()
+    pattern = re.compile(
+        r"\(gr_circle\s*\(center ([-\d.]+) ([-\d.]+)\)\s*"
+        r"\(end ([-\d.]+) ([-\d.]+)\).*?\(layer \"([^\"]+)\"",
+        re.S,
+    )
+    out = []
+    for cx, cy, ex, ey, layer in pattern.findall(src):
+        if layer != "Edge.Cuts":
+            continue
+        cx, cy, ex, ey = float(cx), float(cy), float(ex), float(ey)
+        out.append((cx, -cy, math.hypot(ex - cx, ey - cy)))
+    return out
+
+
+LEGACY_FRAME_TOLERANCE = 0.01
+"""How far the two revisions' outlines may disagree before a V2 coordinate is
+meaningless in the case frame. The two boards share an outline and an origin,
+which is the only reason a V2 placement can be used at all."""
+
+
+@functools.cache
+def legacy_frame_check():
+    """Raise if V2 and V3 no longer share an outline, so a V2 placement is
+    meaningless in the case frame. Reads the V2 outline out of
+    LEGACY_BOARD_ONLY_STEP, the one thing that file is still used for."""
+    solid = import_step(_require(LEGACY_BOARD_ONLY_STEP)).solids()[0]
+    legacy_box = solid.bounding_box()
+    live_box = board_profile().bounding_box()
+    for axis in ("X", "Y"):
+        for end in ("min", "max"):
+            apart = abs(
+                getattr(getattr(legacy_box, end), axis)
+                - getattr(getattr(live_box, end), axis)
+            )
+            if apart > LEGACY_FRAME_TOLERANCE:
+                raise ValueError(
+                    f"V2 and V3 outlines disagree on {end}.{axis} by {apart:.3f}: "
+                    "they no longer share a frame, so no V2 coordinate means "
+                    "anything in the case frame"
+                )
+    return True
+
+
+def legacy_components():
+    """V2's placement rows, in the same form components() returns.
+
+    Out of LEGACY_POS_CSV, the same parse over the frozen file. A V2 xy is only
+    meaningful in the case frame because legacy_frame_check() holds the two
+    outlines to one frame, so this calls it first for that guard.
+    """
+    legacy_frame_check()
+    return _placements(LEGACY_POS_CSV)
+
+
+def wheel_center():
+    pts = [
+        (x, y)
+        for x, y, r in _edge_cut_circles()
+        if math.isclose(r, WHEEL_CUTOUT_R, abs_tol=0.01)
+    ]
+    return (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
+
+
+def _placements(path):
+    """{ref: (x, y, rotation, side)} out of one KiCad position CSV."""
+    out = {}
+    with _require(path).open() as fh:
+        for row in csv.DictReader(fh):
+            out[row["Ref"]] = (
+                float(row["PosX"]),
+                float(row["PosY"]),
+                float(row["Rot"]),
+                row["Side"],
+            )
+    return out
+
+
+def components():
+    """Placement rows in STEP frame: {ref: (x, y, rotation, side)}."""
+    return _placements(POS_CSV)
+
+
+def _packages(path):
+    """{ref: footprint name} out of one KiCad position CSV."""
+    with _require(path).open() as fh:
+        return {row["Ref"]: row["Package"] for row in csv.DictReader(fh)}
+
+
+def refs(prefix):
+    matches = [r for r in components() if re.fullmatch(rf"{prefix}\d+", r)]
+    return sorted(matches, key=lambda r: int(re.search(r"\d+", r).group()))
+
+
+def board_profile():
+    """Outer edge of the board as a Face, cutouts dropped."""
+    solid = import_step(_require(BOARD_ONLY_STEP)).solids()[0]
+    bottom = solid.faces().filter_by(Plane.XY).sort_by(Axis.Z)[0]
+    return Face(bottom.outer_wire())
+
+
+@functools.cache
+def _assembly():
+    return import_step(_require(ASSEMBLY_STEP))
+
+
+@functools.cache
+def assembly_solids():
+    return _assembly().solids()
+
+
+@functools.cache
+def _assembly_boxes():
+    return [(solid, solid.bounding_box()) for solid in assembly_solids()]
+
+
+@functools.cache
+def placement_groups():
+    """Map STEP component occurrences to their complete imported solids.
+
+    KiCad records reference names on assembly occurrences. The importer keeps
+    product names instead, so verify the product order before pairing them.
+    """
+    src = _require(ASSEMBLY_STEP).read_text()
+    entities = dict(re.findall(r"#(\d+)\s*=\s*(.*?);", src, re.S))
+    occurrences = re.findall(
+        r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\(\s*'[^']*',\s*'([^']*)',"
+        r"\s*'[^']*',\s*#(\d+)\s*,\s*#(\d+)\s*,", src,
+    )
+    roots = {parent for _, parent, _ in occurrences} - {
+        child for _, _, child in occurrences
+    }
+    if len(roots) != 1:
+        raise ValueError("STEP assembly does not have one root occurrence")
+    root = roots.pop()
+    rows = [(ref, child) for ref, parent, child in occurrences if parent == root]
+    children = _assembly().children
+    if len(rows) != len(children):
+        raise ValueError("STEP occurrence count differs from imported components")
+    groups = {}
+    courts = courtyards()
+    mid_z = sum(board_z_span()) / 2
+    for (ref, definition), child in zip(rows, children):
+        formation = re.search(r"PRODUCT_DEFINITION\('.*?','.*?',#(\d+),", entities[definition], re.S)
+        product = re.search(r"PRODUCT_DEFINITION_FORMATION\('.*?','.*?',#(\d+)\)", entities[formation[1]], re.S)
+        name = re.search(r"PRODUCT\(\s*'([^']*)'", entities[product[1]])[1]
+        if child.label != name.replace(" ", "_").replace(".", "_"):
+            raise ValueError(f"STEP product order differs at {ref}: {child.label!r} != {name!r}")
+        if re.fullmatch(r"[A-Z]+\d+", ref):
+            if ref in groups:
+                raise ValueError(f"STEP repeats component {ref}")
+            if ref in courts:
+                x0, y0, x1, y1, side = courts[ref]
+                centre = child.bounding_box().center()
+                if not (x0 <= centre.X <= x1 and y0 <= centre.Y <= y1):
+                    raise ValueError(f"STEP component {ref} is outside its footprint courtyard")
+                if (centre.Z < mid_z) != (side == "bottom"):
+                    raise ValueError(f"STEP component {ref} is on the wrong board side")
+            groups[ref] = tuple(child.solids())
+    return groups
+
+
+@functools.cache
+def board_z_span():
+    """(bottom, top) of the V3 board body, read off the board-only STEP."""
+    box = import_step(_require(BOARD_ONLY_STEP)).solids()[0].bounding_box()
+    return box.min.Z, box.max.Z
+
+
+@functools.cache
+def legacy_part_solids(ref):
+    """Every V3 assembly solid of `ref`, moved from its V3 placement to its V2
+    placement, at V3's Z. The caller drops it by SUPPORT_GAP for the V2 board.
+
+    V2 has no 3D model of its own, so this is the V3 body carried over. The move
+    is a rotation about Z by the V2 rotation less the V3 rotation, then an XY
+    translation. If a part is on the other board side in V2, the body is turned
+    over first: 180 degrees about the X axis through the board mid plane, which is
+    KiCad's default top-to-bottom flip.
+
+    Raises if the package differs between the two position files, or if the ref
+    has no placement in one of them or no 3D body in V3. A different package
+    would make the carried body the wrong shape.
+    """
+    v3, v2 = components(), legacy_components()
+    if ref not in v3 or ref not in v2:
+        raise ValueError(f"{ref} has no placement in both V2 and V3")
+    pkg3, pkg2 = _packages(POS_CSV)[ref], _packages(LEGACY_POS_CSV)[ref]
+    if pkg3 != pkg2:
+        raise ValueError(f"{ref} is {pkg3} in V3 and {pkg2} in V2, so its V3 body is the wrong shape")
+    solids = placement_groups().get(ref)
+    if not solids:
+        raise ValueError(f"{ref} has no 3D body in the V3 assembly")
+    x3, y3, rot3, side3 = v3[ref]
+    x2, y2, rot2, side2 = v2[ref]
+    z_mid = sum(board_z_span()) / 2
+    out = []
+    for solid in solids:
+        moved = Pos(-x3, -y3, 0) * solid
+        moved = Rot(Z=-rot3) * moved
+        if side3 != side2:
+            moved = Pos(0, 0, z_mid) * (Rot(X=180) * (Pos(0, 0, -z_mid) * moved))
+        moved = Rot(Z=rot2) * moved
+        out.append(Pos(x2, y2, 0) * moved)
+    return tuple(out)
+
+
+@functools.cache
+def part_solid(ref):
+    """Return the largest body from the component's own STEP occurrence."""
+    solids = placement_groups().get(ref, ())
+    if not solids:
+        raise ValueError(f"{ref} has no 3D model in the assembly STEP")
+    return max(solids, key=lambda solid: solid.volume)
+
+
+@functools.cache
+def part_envelope(ref, radius=None):
+    """Return a body box, or the complete component box when radius is set.
+
+    The optional argument retains the existing multi-solid reader interface.
+    Component ownership comes from STEP occurrences, without a distance guess.
+    """
+    if radius is None:
+        return part_solid(ref).bounding_box()
+    solids = placement_groups().get(ref, ())
+    if not solids:
+        raise ValueError(f"{ref} has no 3D model in the assembly STEP")
+    box = solids[0].bounding_box()
+    for solid in solids[1:]:
+        box = box.add(solid.bounding_box())
+    return box
+
+
+WheelProfile = namedtuple("WheelProfile", "top lip_od lip_z0 lip_z1 main_od")
+
+WHEEL_ENVELOPE_OFFSET = 5.0
+"""How far a solid's bounding-box centre may sit from wheel_center() and still
+count toward wheel_profile(). ENC1's revolved discs land on wheel_center(), the
+mean of the four ANO cutouts. Its centre pin sits 1.57 off. Both are well inside
+5.0, so WHEEL_SQUARENESS is what tells the two groups apart."""
+
+WHEEL_SQUARENESS = 0.5
+"""Max difference between a candidate solid's X and Y bounding-box size, for
+wheel_profile(). ENC1's revolved discs come out exactly square in plan; the pin
+and legs do not, so this is what excludes them from the profile."""
+
+
+@functools.cache
+def wheel_profile():
+    """ENC1's revolved shape, measured off the assembly STEP rather than
+    hand-entered: WheelProfile(top, lip_od, lip_z0, lip_z1, main_od).
+
+    The reader selects solids near wheel_center(). WHEEL_ENVELOPE_OFFSET and
+    WHEEL_SQUARENESS separate the revolved discs from the pins and mounting legs.
+
+    `top` is the highest point of anything in that set: the knob. `lip` is
+    the widest disc, a flange under the bezel. The pad's wheel bore clears it.
+    `main` is the widest disc entirely at or above the lip's top face: the
+    fixed bezel. The shell's wheel opening clears it.
+
+    Five solids make up the assembly:
+    - a 32.00 base from z 0.545 to 3.545. It starts inside the board.
+    - the 34.00 lip from 3.545 to 4.145.
+    - the 31.70 bezel from 4.145 to 7.145. This is `main`. It does not turn.
+      Its top face has four recessed direction marks.
+    - the 23.00 knob in the bezel bore, from 4.145 to the 7.345 top. This is
+      the part that turns. Its top face has 16 grip bumps.
+    - the 8.00 centre button in the knob bore, from 4.145 to 7.145.
+    Nothing above the lip is wider than the bezel, so one radius covers the
+    full span up to the top.
+    """
+    wx, wy = wheel_center()
+    near = []
+    for solid in assembly_solids():
+        box = solid.bounding_box()
+        center = box.center()
+        if math.hypot(center.X - wx, center.Y - wy) > WHEEL_ENVELOPE_OFFSET:
+            continue
+        if abs(box.size.X - box.size.Y) > WHEEL_SQUARENESS:
+            continue
+        near.append(box)
+    if not near:
+        raise ValueError(f"no wheel solids within {WHEEL_ENVELOPE_OFFSET} of wheel_center()")
+
+    top = max(box.max.Z for box in near)
+    lip = max(near, key=lambda box: box.size.X)
+    above = [box for box in near if box.min.Z >= lip.max.Z - 0.01]
+    if not above:
+        raise ValueError("no solid sits above the wheel's lip")
+    main = max(above, key=lambda box: box.size.X)
+
+    return WheelProfile(
+        top=top, lip_od=lip.size.X, lip_z0=lip.min.Z, lip_z1=lip.max.Z, main_od=main.size.X
+    )
+
+
+def _graphic_items(body):
+    """Each fp_line, fp_rect, fp_poly and fp_circle as its own balanced substring.
+
+    Regex alone cannot do this: a pattern spanning from one item's coordinates to
+    the next item's layer tag matches happily and yields a mix of the two.
+    """
+    for match in re.finditer(r"\(fp_(?:line|rect|poly|circle)\b", body):
+        depth = 0
+        for i in range(match.start(), len(body)):
+            if body[i] == "(":
+                depth += 1
+            elif body[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    yield body[match.start() : i + 1]
+                    break
+
+
+@functools.cache
+def courtyards():
+    """{ref: (x0, y0, x1, y1, side)} in STEP frame, from the board's courtyards.
+
+    Courtyards cover parts that have no STEP model, including the eleven switches.
+    These planar bounds give each part's location, but not its height.
+    """
+    src = _require(KICAD_PCB).read_text()
+    out = {}
+    for block in re.finditer(r'\(footprint "[^"]+"(.*?)\n\t\)\n', src, re.S):
+        body = block.group(1)
+        ref = re.search(r'\(property "Reference" "([^"]+)"', body)
+        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", body)
+        if not ref or not at:
+            continue
+        side = "bottom" if '(layer "B.Cu")' in body else "top"
+        ox, oy = float(at.group(1)), float(at.group(2))
+        angle = math.radians(float(at.group(3) or 0))
+
+        pts = []
+        for item in _graphic_items(body):
+            if "CrtYd" not in item:
+                continue
+            pts += [
+                (float(x), float(y))
+                for x, y in re.findall(r"(?:xy|start|end) ([-\d.]+) ([-\d.]+)", item)
+            ]
+        if not pts:
+            continue
+
+        cos, sin = math.cos(angle), math.sin(angle)
+        placed = [(x * cos - y * sin + ox, x * sin + y * cos + oy) for x, y in pts]
+        xs = [p[0] for p in placed]
+        ys = [p[1] for p in placed]
+        out[ref.group(1)] = (min(xs), -max(ys), max(xs), -min(ys), side)
+    return out
+
+
+@functools.cache
+def npth_pads(ref):
+    """[(x, y, drill)] in STEP frame for a footprint's unplated holes.
+
+    MK1's is its acoustic port: a 0.5 drill at (53.350, -31.582). The mic is on
+    the board's bottom side and bottom-ported, so it hears through the board, and
+    that hole is why the audio inlet belongs on the front of the case.
+    """
+    src = _require(KICAD_PCB).read_text()
+    for block in re.finditer(r'\(footprint "[^"]+"(.*?)\n\t\)\n', src, re.S):
+        body = block.group(1)
+        found = re.search(r'\(property "Reference" "([^"]+)"', body)
+        if not found or found.group(1) != ref:
+            continue
+        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", body)
+        ox, oy = float(at.group(1)), float(at.group(2))
+        angle = math.radians(float(at.group(3) or 0))
+        cos, sin = math.cos(angle), math.sin(angle)
+
+        out = []
+        for pad in re.finditer(
+            r"\(pad \"[^\"]*\" np_thru_hole \w+\s*\(at ([-\d.]+) ([-\d.]+)"
+            r"(?: [-\d.]+)?\)\s*\(size [-\d.]+ [-\d.]+\)\s*\(drill ([-\d.]+)\)",
+            body,
+        ):
+            px, py, drill = (float(v) for v in pad.groups())
+            out.append(
+                (px * cos - py * sin + ox, -(px * sin + py * cos + oy), drill)
+            )
+        return out
+    raise KeyError(f"no footprint {ref}")
+
+
+def _usb_overhang():
+    """Return the U1 solid that extends past the board's -Y edge, and that edge."""
+    edge_y = board_profile().bounding_box().min.Y
+    overhang = min(placement_groups()["U1"], key=lambda s: s.bounding_box().min.Y)
+    if overhang.bounding_box().min.Y >= edge_y:
+        raise RuntimeError("no solid overhangs the board edge; USB not located")
+    return overhang, edge_y
+
+
+def usb_envelope():
+    """Read the USB shell that extends past the board's -Y edge from U1."""
+    return _usb_overhang()[0].bounding_box()
+
+
+@functools.cache
+def reset_actuator():
+    """Return the centre of U1's RESET contact face in the assembly frame."""
+    solids = placement_groups()["U1"]
+    # KiCad flattens the STEP subassemblies. Their solid volumes survive placement.
+    switches = [s for s in solids if math.isclose(s.volume, 1.359781, abs_tol=1e-3)]
+    antennas = [s for s in solids if math.isclose(s.volume, 3.355715, abs_tol=1e-3)]
+    if len(switches) != 2 or len(antennas) != 1:
+        raise ValueError("U1 STEP must contain two SKTAAAE010 switches and one U.FL body")
+    # The Seeed front pinout puts RESET on the U.FL connector side.
+    antenna = antennas[0].bounding_box().center()
+    reset = min(switches, key=lambda s: (s.bounding_box().center() - antenna).length)
+    faces = reset.faces().filter_by(Plane.XY).sort_by(Axis.Z)
+    if not faces or not math.isclose(
+        faces[0].center().Z, reset.bounding_box().min.Z, abs_tol=1e-5
+    ):
+        raise ValueError("U1 RESET contact face must face the back shell")
+    return faces[0].center()
+
+
+def usb_profile():
+    """Return the outer outline of the USB shell in the -Y end wall.
+
+    The face is in the XZ plane, halfway between the board edge and the shell
+    tip. Use this section, not the bounding box, because the legs inside the
+    footprint add approximately 1 mm to the box height.
+    """
+    overhang, edge_y = _usb_overhang()
+    y = (edge_y + overhang.bounding_box().min.Y) / 2
+    section = overhang.intersect(
+        Plane(origin=(0, y, 0), x_dir=(1, 0, 0), z_dir=(0, 1, 0))
+    )
+    faces = section.faces() if section else []
+    if len(faces) != 1:
+        raise RuntimeError(
+            f"USB shell section at y {y:.3f} gives {len(faces)} outer outlines, not 1"
+        )
+    return Face(faces[0].outer_wire())
+
+
+def emitter_envelope():
+    """Bounding box of D1's lens where it crosses the board's +Y edge.
+
+    D1 is a horizontal through-hole emitter on the board's bottom side, so
+    its body hangs under the board and fires along the board, out the +Y
+    end: the same end U2 listens through, lower down. Only the part past
+    the board's own edge ever has to pass through a case wall, so that is
+    what this measures.
+
+    Clipped rather than taken whole because the whole solid is 5.9 tall:
+    it carries the leads bent up through the board and a rim wider than
+    the lens, neither of which reaches the wall, and a window sized to
+    that box would notch the front shell's skirt for parts that never
+    arrive there. Same reasoning as usb_envelope() being found by shape
+    rather than by ref: what the case needs is the part in the wall's way.
+    """
+    solid = part_solid("D1")
+    box = solid.bounding_box()
+    edge_y = board_profile().bounding_box().max.Y
+    if box.max.Y <= edge_y:
+        raise RuntimeError(
+            "D1 does not reach the board's +Y edge, so nothing of it passes "
+            "through the end wall; its window has to come from somewhere else"
+        )
+
+    y0, y1 = edge_y, box.max.Y + 1
+    clip = Pos(box.center().X, (y0 + y1) / 2, box.center().Z) * Box(
+        box.size.X + 2, y1 - y0, box.size.Z + 2
+    )
+    hit = solid.intersect(clip)
+    solids = hit.solids() if hit else []
+    if not solids:
+        raise RuntimeError("D1's overhang clipped to nothing")
+    out = solids[0].bounding_box()
+    for extra in solids[1:]:
+        out = out.add(extra.bounding_box())
+    return out
+
+
+def keepouts():
+    """Return each component's measured Z span from its STEP occurrence."""
+    return {
+        ref: (min(s.bounding_box().min.Z for s in solids),
+              max(s.bounding_box().max.Z for s in solids))
+        for ref, solids in placement_groups().items()
+    }
+
+
+if __name__ == "__main__":
+    import params
+
+    box = board_profile().bounding_box()
+    print(f"board {box.size.X:.2f} x {box.size.Y:.2f}")
+    print(f"wheel centre {wheel_center()[0]:.3f}, {wheel_center()[1]:.3f}")
+
+    z = keepouts()
+    top = max(hi for _, hi in z.values()) - params.BOARD_THICKNESS
+    bottom = -min(lo for lo, _ in z.values())
+    print(f"\nfront keepout {top:.2f} (wheel excluded by its opening)")
+    print(f"back keepout {bottom:.2f} (param {params.BACK_KEEPOUT})")
+    print("\ntallest above board face:")
+    for ref, (_, hi) in sorted(z.items(), key=lambda kv: -kv[1][1])[:5]:
+        print(f"  {ref:<6} {hi - params.BOARD_THICKNESS:5.2f}")
+    print("deepest below board:")
+    for ref, (lo, _) in sorted(z.items(), key=lambda kv: kv[1][0])[:5]:
+        print(f"  {ref:<6} {-lo:5.2f}")
+
+    lens = emitter_envelope()
+    print(
+        f"\nD1 lens at the +Y edge {lens.size.X:.2f} x {lens.size.Z:.2f}, "
+        f"z {lens.min.Z:.2f} .. {lens.max.Z:.2f}, overhanging "
+        f"{lens.size.Y:.2f} past it"
+    )
+
+    ir = part_envelope("U2", radius=3.0)
+    print(
+        f"U2 complete envelope {ir.size.X:.2f} x {ir.size.Y:.2f}, z "
+        f"{ir.min.Z:.2f} .. {ir.max.Z:.2f}, receiving through the back along -Z"
+    )
+
+    profile = wheel_profile()
+    print(f"\nwheel top {profile.top:.3f}")
+    print(f"wheel lip {profile.lip_od:.2f} OD, z {profile.lip_z0:.3f} .. {profile.lip_z1:.3f}")
+    print(f"wheel main body {profile.main_od:.2f} OD above it")
+    disagreement = profile.lip_od - WHEEL_OD
+    if abs(disagreement) > 0.1:
+        print(f"WHEEL_OD param {WHEEL_OD:.2f} disagrees with the measured lip by {disagreement:+.2f}")
+    else:
+        print(f"WHEEL_OD param {WHEEL_OD:.2f} agrees with the measured lip")

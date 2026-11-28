@@ -1,0 +1,32 @@
+# Deep-sleep wake-latency bench spike: esphome run c6remote-test-sleep.yaml --device /dev/cu.usbmodem2101
+
+substitutions:
+  # Override with `esphome -s sleep_wake_stub false run ...`.
+  sleep_wake_stub: "true"
+  # true adds CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP and a WARN bootloader log.
+  sleep_boot_trim: "false"
+
+# Same device name, so the build directory, the Zigbee network in NVS, the IR
+# codes and the BLE bond all carry over from the production firmware.
+packages:
+  base: !include c6remote.yaml
+
+# Production logs at INFO. The bench keeps the DEBUG lines and the CONFIG blocks.
+logger:
+  level: DEBUG
+
+# The package merge adds these keys to the production idle_sleep block.
+idle_sleep:
+  wake_stub: ${sleep_wake_stub}
+  boot_trim: ${sleep_boot_trim}
+
+# The package merge appends this to the production intervals. It logs the
+# production awake_led state.
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          const auto &cv = id(awake_led)->current_values;
+          const auto &rv = id(awake_led)->remote_values;
+          ESP_LOGI("awake_led", "on=%d brightness=%.3f remote_on=%d remote=%.3f",
+                   cv.is_on(), cv.get_brightness(), rv.is_on(), rv.get_brightness());

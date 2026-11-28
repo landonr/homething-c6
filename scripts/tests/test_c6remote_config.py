@@ -1,0 +1,1138 @@
+"""Regression checks for production remote input and status-light wiring."""
+
+from pathlib import Path
+import re
+import unittest
+
+from scripts.tests.yaml_blocks import list_entries, top_level_block
+
+
+ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
+
+CONFIG = ROOT / "c6remote.yaml"
+IR_LEARNING = SLOTS / "ir_learning.h"
+ZIGBEE_LEARNING = SLOTS / "zigbee_learning.h"
+HOLD_ACTIONS = SLOTS / "hold_actions.h"
+
+# Expander input name to its assignment slot.
+INPUT_SLOTS = {f"Button {number}": number for number in range(3, 12)}
+INPUT_SLOTS.update({"Button 1": 20, "Button 2": 19, "Wheel Right": 12, "Wheel Up": 13,
+                    "Wheel Press": 14, "Wheel Down": 15, "Wheel Left": 16})
+
+
+def button_pin(config: str, button: int) -> int:
+    match = re.search(
+        rf"name: Button {button}\n    id: button_{button}\n    pin:\n      <<: \*button_1\n      number: (\d+)",
+        config,
+    )
+    if match is None:
+        raise AssertionError(f"Button {button} pin not found")
+    return int(match.group(1))
+
+
+def button_entry(config: str, button: int) -> str:
+    start = config.index(f"    name: Button {button}\n")
+    end = config.find("\n  - platform: gpio", start + 1)
+    return config[start:end if end >= 0 else None]
+
+
+def script_entry(config: str, script_id: str) -> str:
+    return config.split(f"  - id: {script_id}\n", 1)[1].split("\n  - id:", 1)[0]
+
+
+def hold_tick_step(config: str) -> str:
+    steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+    return next(step for step in steps if "hold_actions.tick(" in step)
+
+
+def status_led_index(effect: str, name: str, count: int) -> int:
+    """Evaluates the strip index the Status Indicators lambda gives one fixed LED."""
+    match = re.search(rf"const int32_t {name} = it\.size\(\) >= 6 \? (\d+) : (\d+);", effect)
+    if match is None:
+        raise AssertionError(f"{name} index not found")
+    return int(match.group(1) if count >= 6 else match.group(2))
+
+
+def status_light_entry(config: str) -> str:
+    match = re.search(
+        r"  - platform: esp32_rmt_led_strip\n    id: status_light(?P<entry>[\s\S]*?)\n\nswitch:",
+        config,
+    )
+    if match is None:
+        raise AssertionError("Status Light entry not found")
+    return match.group("entry")
+
+
+class ProductionConfigTest(unittest.TestCase):
+    def test_the_status_leds_setting_gates_both_light_sources(self) -> None:
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn("return id(button_cfg).status_leds() ||", turn_on)
+        self.assertLess(turn_on.index("status_leds()"), turn_on.index("switch.turn_on: led_rail"))
+        self.assertIn("id: status_light\n                transition_length: 0s", turn_on)
+        awake = entry[entry.index("    id: awake_led"):]
+        self.assertIn("return !id(button_cfg).status_leds();", awake)
+        self.assertIn("id: awake_led", awake)
+        self.assertIn("armed && !was_armed && id(button_cfg).status_leds()", config)
+        boot = config[config.index("    - priority: 600"):]
+        self.assertLess(boot.index("!id(button_cfg).status_leds()"), boot.index("script.execute: show_idle_status"))
+        self.assertIn("on_status_leds:", config)
+
+    def test_the_boot_leds_setting_gates_only_the_intro_animations(self) -> None:
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", entry)
+        wake = config[config.index("if (!id(button_cfg).boot_leds())\n            return;"):]
+        self.assertLess(wake.index("id(wake_pulse_until_ms) = first_ms + 1600;"), wake.index("turn_on().set_brightness(0.4f)"))
+        self.assertEqual(config.count("id(wake_pulse_until_ms) = "), 1)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        gate = turn_on[:turn_on.index("switch.turn_on: led_rail")]
+        self.assertIn("id(button_cfg).boot_leds()", gate)
+        self.assertIn("millis() < id(wake_pulse_until_ms)", gate)
+        self.assertIn("if (!status_on || ir_ui.state == IrUi::OFF)", entry)
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn("!id(button_cfg).status_leds() && id(status_light).remote_values.is_on()", tick)
+        self.assertIn("id(status_light).turn_off().set_transition_length(0).perform();", tick)
+        self.assertIn("id(boot_chase_done) = true;", config)
+
+    def test_a_radio_switch_pulses_its_own_led_while_status_leds_are_off(self) -> None:
+        """With Status LEDs off, a radio switch still gives one pulse on the LED of that radio."""
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        term = "millis() < id(led_event_until_ms)"
+        # Each gate that holds the light on with status LEDs off must see the pulse.
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        self.assertIn(term, status_off)
+        # The radio pulse and the sleep lap each extend the gate end, and neither shortens it.
+        self.assertEqual(config.count("id(led_event_until_ms) = "), 2)
+        self.assertEqual(config.count("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + "), 2)
+        # The wake step returns early after a cold boot, so the poll is an earlier step of its own.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        poll = next(i for i, step in enumerate(steps) if "zigbee_assignments.radio_enabled()" in step)
+        wake = next(i for i, step in enumerate(steps) if "if (!id(idle).woke_from_sleep())\n            return;" in step)
+        self.assertLess(poll, wake)
+        step = steps[poll]
+        # One slot per radio. The draw maps each slot to the LED of that radio.
+        self.assertIn("on[0] = !wifi::global_wifi_component->is_disabled();", step)
+        self.assertIn("on[1] = id(ble_hid_remote).radio_enabled();", step)
+        self.assertIn("on[2] = zigbee_assignments.radio_enabled();", step)
+        self.assertIn("  - id: radio_pulse_end_ms\n    type: uint32_t[3]\n", config)
+        # The switch, not the boot gate, so a turn-on after a gated boot still pulses green.
+        self.assertNotIn("boot_gated()", step)
+        # The first poll is the baseline, so a boot or a wake plays no pulse.
+        self.assertIn("static bool last[3] = {on[0], on[1], on[2]};", step)
+        # Setup can tick intervals before ButtonConfig::setup() enables Wi-Fi.
+        self.assertLess(step.index("if (!App.is_setup_complete())\n            return;"),
+                        step.index("static bool last[3]"))
+        # The baseline moves while status LEDs are on, but no pulse starts.
+        self.assertLess(step.index("last[n] = on[n];"),
+                        step.index("if (id(button_cfg).status_leds())\n              continue;"))
+        self.assertLess(step.index("if (id(button_cfg).status_leds())\n              continue;"),
+                        step.index("id(radio_pulse_end_ms)[n] = now + 800;"))
+        self.assertIn("if (on[n])\n              id(radio_pulse_red) &= ~(1u << n);", step)
+        # The gate end is set first, so on_turn_on powers the rail.
+        self.assertLess(step.index("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + 800);"),
+                        step.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators")'))
+        # The pulse draws after the wake overlay, and only with status LEDs off.
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        # The newline pins the indent, so a block nested inside the wake overlay fails.
+        radio = effect.index("\n            if (!status_on) {\n")
+        self.assertLess(effect.index("if (millis() < id(wake_pulse_until_ms)) {"), radio)
+        # Up to the close of the block, because the sleep lap draws after it.
+        draw = effect[radio:].split("\n            }\n", 1)[0]
+        self.assertIn("const uint32_t end = id(radio_pulse_end_ms)[n];", draw)
+        self.assertIn("const float phase = (end - now) / 800.0f;", draw)
+        self.assertIn("192.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
+        # Wi-Fi on D2, Bluetooth on D4, Zigbee on D5, at either LED count.
+        self.assertIn("const int32_t radio_led[3] = {0, d4, d5};", draw)
+        self.assertIn("it[radio_led[n]] = ((id(radio_pulse_red) >> n) & 1) ? Color(level, 0, 0) : Color(0, level, 0);",
+                      draw)
+        self.assertNotIn("it[0]", draw)
+        self.assertNotIn("it.all()", draw)
+
+    def test_the_sleep_hold_arm_plays_one_anticlockwise_lap_then_goes_dark(self) -> None:
+        """The arm must show with either LED setting, and the LEDs stay dark until the release sleeps."""
+        config = CONFIG.read_text()
+        entry = status_light_entry(config)
+        # The lap shares the short LED event gate, so no gate needs a term of its own.
+        self.assertNotIn("radio_pulse_until_ms", config)
+        term = "millis() < id(led_event_until_ms)"
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        self.assertIn(term, turn_on[:turn_on.index("switch.turn_on: led_rail")])
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        self.assertIn(term, tick[:tick.index("id(status_light).turn_off()")])
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        self.assertIn(term, status_off)
+        self.assertIn("  - id: led_event_until_ms\n    type: uint32_t\n", config)
+        self.assertIn("  - id: sleep_lap_start_ms\n    type: uint32_t\n", config)
+        # The arm edge sets both globals before the turn-on, so on_turn_on powers the rail.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        step = next(step for step in steps if "id(idle).sleep_armed()" in step)
+        lap = step[step.index("if (armed && !was_armed) {"):step.index("was_armed = armed;")]
+        self.assertNotIn("status_leds()", lap)
+        self.assertNotIn("boot_leds()", lap)
+        light = lap.index('id(status_light).turn_on().set_brightness(0.4f).set_effect("Status Indicators").perform();')
+        self.assertLess(lap.index("id(sleep_lap_start_ms) = now;"), light)
+        self.assertLess(lap.index("id(led_event_until_ms) = std::max<uint32_t>(id(led_event_until_ms), now + 900);"),
+                        light)
+        # The draw is the last block, so it covers status, the wake pulse, a radio pulse and a peek.
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        block = effect.index("\n            if (id(idle).sleep_armed()) {\n")
+        self.assertLess(effect.index("\n            if (!status_on) {\n"), block)
+        draw = effect[block:].rstrip("\n")
+        self.assertEqual(draw.count("\n            }"), 1)
+        self.assertTrue(draw.endswith("\n            }"))
+        self.assertNotIn("status_on", draw)
+        self.assertNotIn("status_leds()", draw)
+        # Black first, so every LED stays dark after the lap while sleep stays armed.
+        self.assertLess(draw.index("it.all() = Color::BLACK;"), draw.index("for (int32_t n = 0; n < it.size(); n++) {"))
+        self.assertIn("const uint32_t t = millis() - id(sleep_lap_start_ms);", draw)
+        self.assertIn("const uint32_t start = n * step;", draw)
+        self.assertIn("if (t < start || t >= start + 3 * step)", draw)
+        # The 900 ms rail gate must cover the lap, which ends after count + 2 steps.
+        for count in (4, 6):
+            self.assertLessEqual((count + 2) * (600 // count), 900, count)
+        self.assertEqual((4 + 2) * (600 // 4), 900)
+        self.assertIn("160.0f * (0.5f - 0.5f * cosf(2.0f * static_cast<float>(M_PI) * phase))", draw)
+        # Strip order is clockwise, so the lap runs from the last LED back to D2.
+        self.assertIn("it[it.size() - 1 - n] = Color(level / 3, level / 3, level);", draw)
+
+    def test_name_carries_the_mac_suffix(self) -> None:
+        """Several remotes on one network need distinct hostnames and HA names."""
+        self.assertRegex(
+            CONFIG.read_text(),
+            r"esphome:\n  name: \$\{device_name\}\n  friendly_name: \$\{friendly_name\}\n"
+            r"(?:  #.*\n)*  name_add_mac_suffix: true\n",
+        )
+
+    def test_production_logs_at_warning_and_the_sleep_bench_at_debug(self) -> None:
+        """Every string below the level costs app partition flash, so a release
+        keeps the warnings and errors alone. The bench puts the rest back, and
+        `-s log_level DEBUG` does the same for a one-off build."""
+        config = CONFIG.read_text()
+        self.assertIn("\n  log_level: WARN\n", config)
+        self.assertIn("\nlogger:\n  level: ${log_level}\n", config)
+        bench = (CONFIG.parent / "c6remote-test-sleep.yaml").read_text()
+        self.assertRegex(bench, r"packages:\n  base: !include c6remote\.yaml\n")
+        self.assertRegex(bench, r"\nlogger:\n  level: DEBUG\n")
+
+    def test_idf_assertions_are_silent_and_the_error_name_table_is_out(self) -> None:
+        config = CONFIG.read_text()
+        esp32 = config.split("\nesp32:\n", 1)[1].split("\nexternal_components:", 1)[0]
+        self.assertRegex(esp32, r"\n    advanced:\n(?:      #.*\n)*      assertion_level: SILENT\n")
+        self.assertIn('\n      CONFIG_ESP_ERR_TO_NAME_LOOKUP: "n"\n', esp32)
+        self.assertNotIn("CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS", config)
+
+    def test_wifi_starts_disabled_without_a_saved_preference(self) -> None:
+        config = CONFIG.read_text()
+        wifi = config.split("\nwifi:\n", 1)[1].split("\ntext_sensor:", 1)[0]
+        api = config.split("\napi:\n", 1)[1].split("\nota:", 1)[0]
+        self.assertIn("  enable_on_boot: false\n", wifi)
+        self.assertIn("  reboot_timeout: 0s\n", wifi)
+        self.assertIn("  reboot_timeout: 0s\n", api)
+
+    def test_home_assistant_shows_the_web_page_address_as_a_diagnostic(self) -> None:
+        """Without web_server, Home Assistant has no Visit link, so a text sensor
+        carries the hostname address, which a DHCP change cannot move."""
+        config = CONFIG.read_text()
+        self.assertNotRegex(config, r"(?m)^web_server:")
+        sensors = config.split("\ntext_sensor:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("  - platform: wifi_info\n    ip_address:\n      name: IP Address\n"
+                      "      id: ip_address\n      entity_category: diagnostic\n", sensors)
+        page = sensors.split("\n  - platform: template\n", 1)[1].split("\n  - platform:", 1)[0]
+        for text in ("    id: web_page_url\n", "    name: Web Page\n", "    entity_category: diagnostic\n",
+                     "    icon: mdi:web\n", "    update_interval: never\n",
+                     '      return "http://" + App.get_name() + ".local/";'):
+            self.assertIn(text, page)
+        # A never interval runs no update, so the boot step must publish the state once.
+        boot = config.split("    - priority: 600\n", 1)[1].split("\n  on_shutdown:", 1)[0]
+        self.assertIn("\n        - component.update: web_page_url", boot)
+        self.assertEqual(config.count("component.update: web_page_url"), 1)
+
+    def test_the_firmware_includes_the_hold_actions_header(self) -> None:
+        self.assertIn('"hold_actions.h",', (SLOTS / "__init__.py").read_text())
+        # The header stays free of ESPHome, so a host compiler can test it.
+        header = HOLD_ACTIONS.read_text()
+        self.assertNotIn("esphome", header)
+        self.assertNotIn("ESP_LOG", header)
+        self.assertNotIn("millis()", header)
+        self.assertIn("inline HoldActions hold_actions;", header)
+
+    def test_every_expander_input_shares_one_press_and_one_release_path(self) -> None:
+        """A hold can move to any input, so no input may keep a path of its own."""
+        config = CONFIG.read_text()
+        section = config[config.index("\nbinary_sensor:\n"):config.index("\nsensor:\n")]
+        found = {}
+        for entry in section.split("  - platform: gpio\n")[1:]:
+            name = re.search(r"name: ([^\n]+)", entry).group(1)
+            press = re.findall(r"on_press:\n      - script\.execute: \{id: button_press, slot: (\d+)\}\n", entry)
+            release = re.findall(r"on_release:\n      - script\.execute: \{id: button_release, slot: (\d+)\}", entry)
+            self.assertEqual(len(press), 1, name)
+            self.assertEqual(press, release, name)
+            found[name] = int(press[0])
+        self.assertEqual(found, INPUT_SLOTS)
+        for gone in ("ir_ui.tap(", "set_pressed(", "release_assignment", "hold_consumed"):
+            self.assertNotIn(gone, section)
+
+    def test_the_press_path_taps_only_when_hold_actions_allows_it(self) -> None:
+        config = CONFIG.read_text()
+        press = script_entry(config, "button_press")
+        self.assertIn("    mode: parallel\n", press)
+        self.assertIn("    parameters:\n      slot: int\n", press)
+        # The decision comes first, with no delay in front of it.
+        self.assertNotIn("delay:", press)
+        decide = press.index("lambda: return hold_actions.press(static_cast<uint8_t>(slot), millis());")
+        tap = press.index("- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);")
+        self.assertLess(decide, tap)
+        self.assertLess(tap, press.index("- if: *send_learned_code"))
+        self.assertEqual(config.count("hold_actions.press("), 1)
+
+    def test_the_release_path_taps_a_deferred_press_and_releases_the_rest(self) -> None:
+        config = CONFIG.read_text()
+        release = script_entry(config, "button_release")
+        self.assertIn("    mode: parallel\n", release)
+        self.assertNotIn("delay:", release)
+        # One call, because release() clears the latched press.
+        self.assertEqual(config.count("hold_actions.release("), 1)
+        call = release.index("- lambda: id(hold_release) = hold_actions.release(static_cast<uint8_t>(slot));")
+        tap_branch = release.split("lambda: return id(hold_release) == HoldActions::TAP_AND_RELEASE;", 1)[1]
+        tap_branch = tap_branch.split("\n      - if:\n", 1)[0]
+        self.assertLess(call, release.index("HoldActions::TAP_AND_RELEASE"))
+        order = ["- lambda: ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);", "- if: *send_learned_code",
+                 "- lambda: ir_ui.release(static_cast<uint8_t>(slot));"]
+        positions = [tap_branch.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        release_only = release.split("lambda: return id(hold_release) == HoldActions::RELEASE_ONLY;", 1)[1]
+        self.assertIn("            - script.execute:\n                id: release_assignment\n"
+                      "                slot: !lambda return slot;", release_only)
+        # A fired hold is SILENT, so neither branch runs for it.
+        self.assertNotIn("HoldActions::SILENT", config)
+        self.assertIn("  - id: hold_release\n    type: uint8_t\n    restore_value: false\n", config)
+        self.assertLess(config.index("  - id: button_press\n"), config.index("  - id: button_release\n"))
+
+    def test_the_hold_tick_dispatches_each_action(self) -> None:
+        config = CONFIG.read_text()
+        step = hold_tick_step(config)
+        # The wake step returns early after a cold boot, so the tick is its own earlier step.
+        steps = config.split("  - interval: 50ms\n", 1)[1].split("\n\n", 1)[0].split("\n      - lambda: |-\n")
+        tick = next(i for i, item in enumerate(steps) if "hold_actions.tick(" in item)
+        wake = next(i for i, item in enumerate(steps) if "if (!id(idle).woke_from_sleep())\n            return;" in item)
+        self.assertLess(tick, wake)
+        self.assertLess(step.index("if (!App.is_setup_complete())\n            return;"),
+                        step.index("const uint8_t fired = hold_actions.tick(millis());"))
+        self.assertIn("if (fired & (1u << HoldActions::WIFI))\n            id(button_cfg).toggle_temporary_wifi();", step)
+        self.assertIn("if (fired & (1u << HoldActions::STATUS))\n            id(status_light).turn_on()"
+                      '.set_brightness(0.4f).set_effect("Status Indicators").perform();', step)
+        self.assertIn("if (fired & (1u << HoldActions::SLEEP))\n            id(idle).arm_sleep();", step)
+        assign = step.split("if (fired & (1u << HoldActions::ASSIGN)) {", 1)[1]
+        opened = assign.split("} else {", 1)[0]
+        self.assertIn("if (ir_ui.state == IrUi::OFF) {", opened)
+        order = ["ir_ui.open();", "id(ir_rail).turn_on();", 'set_effect("Status Indicators")']
+        positions = [opened.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("ir_ui.close();", assign.split("} else {", 1)[1])
+        self.assertEqual(config.count("hold_actions.tick("), 1)
+
+    def _light_gates(self, config: str) -> dict:
+        """The four places that keep the strip lit with Status LEDs off or on hold."""
+        entry = status_light_entry(config)
+        turn_on = entry[entry.index("    on_turn_on:"):entry.index("    on_turn_off:")]
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        status_off = config.split("  on_status_leds:", 1)[1].split("\nidle_sleep:", 1)[0].split("        else:", 1)[1]
+        effect = entry.split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        return {
+            "on_turn_on": turn_on[:turn_on.index("switch.turn_on: led_rail")],
+            "250ms turn-off": tick[:tick.index("id(status_light).turn_off()")],
+            "on_status_leds off": status_off,
+            "status_on": effect[effect.index("const bool status_on ="):].split(";", 1)[0],
+        }
+
+    def test_a_status_peek_holds_the_status_light_on(self) -> None:
+        """Each status_light gate must see the peek, or the rail stays off or the 250 ms tick blanks the light."""
+        config = CONFIG.read_text()
+        for name, gate in self._light_gates(config).items():
+            self.assertIn("hold_actions.peeking()", gate, name)
+        # A negated term would turn the light off during a peek instead.
+        self.assertNotIn("!hold_actions.peeking()", config)
+        effect = status_light_entry(config).split("name: Status Indicators", 1)[1].split("    on_turn_on:", 1)[0]
+        self.assertIn("const bool status_on = id(button_cfg).status_leds() || hold_actions.peeking() || "
+                      "ir_ui.state != IrUi::OFF;", effect)
+        self.assertIn("if (!status_on)\n              it.all() = Color::BLACK;", effect)
+        self.assertEqual(config.count("hold_actions.peeking()"), 4)
+
+    def test_an_open_assignment_mode_lights_the_strip_in_every_led_mode(self) -> None:
+        """Assignment mode gives its only feedback on D3 and D4, so Off and Hold must not darken it."""
+        config = CONFIG.read_text()
+        term = "ir_ui.state != IrUi::OFF"
+        for name, gate in self._light_gates(config).items():
+            self.assertIn(term, gate, name)
+            self.assertNotIn("ir_ui.state == IrUi::OFF", gate, name)
+        # Each opener sets the state before it asks for the light.
+        step = hold_tick_step(config)
+        opened = step.split("if (ir_ui.state == IrUi::OFF) {", 1)[1].split("} else {", 1)[0]
+        self.assertLess(opened.index("ir_ui.open();"), opened.index("id(status_light).turn_on()"))
+        tick = config[config.index("  - interval: 250ms"):config.index("  - interval: 50ms")]
+        # A web open sets the state in open_from_web(), on the httpd defer, before this tick.
+        self.assertLess(tick.index("if (ir_ui.take_open_request()) {"), tick.index("id(status_light).turn_on()"))
+        # A close restores idle status, which the on_turn_on gate then darkens, and the
+        # turn-off gate reads the state after tick() closed the mode.
+        self.assertLess(tick.index("if (ir_ui.tick())\n            id(show_idle_status).execute();"),
+                        tick.index("id(status_light).turn_off()"))
+        self.assertIn("open_requested_ = true;", IR_LEARNING.read_text().split("void open_from_web(uint8_t button) {", 1)[1])
+
+    def test_the_fixed_hold_paths_are_gone(self) -> None:
+        config = CONFIG.read_text()
+        for gone in ("detect_wifi_hold", "detect_peek_hold", "detect_receiver_hold", "exit_receiver_hold",
+                     "sw8_hold_consumed", "sw9_hold_consumed", "status_peek", "hold_consumed",
+                     "sleep_hold_bit", "sleep_hold_time"):
+            self.assertNotIn(gone, config)
+        before_replay, replay_and_rest = config.split("  replay: !lambda |-\n", 1)
+        after_replay = replay_and_rest.split("\n\ni2c:", 1)[1]
+        self.assertNotIn("set_pressed(", before_replay + after_replay)
+        self.assertNotIn("hold_consumed", IR_LEARNING.read_text())
+
+    def test_sw9_and_sw10_follow_silkscreen_wiring(self) -> None:
+        """Catches swapping PCF8575 P8 and P9 under Button 9 and Button 10."""
+        config = CONFIG.read_text()
+        self.assertEqual(button_pin(config, 9), 9)
+        self.assertEqual(button_pin(config, 10), 8)
+
+    def test_every_assignable_input_runs_the_tap_cycle(self) -> None:
+        """Catches an input that lost its slot or a path that lost the full cycle."""
+        config = CONFIG.read_text()
+        for name, slot in INPUT_SLOTS.items():
+            entry = button_entry(config, int(name.split()[1])) if name.startswith("Button") else \
+                config.split(f"    name: {name}\n", 1)[1].split("\n  - platform:", 1)[0]
+            self.assertIn(f"{{id: button_press, slot: {slot}}}", entry, name)
+        # Both shared paths run the full cycle, so every expander input can clear.
+        self.assertEqual(config.count("ir_ui.tap(static_cast<uint8_t>(slot), IrUi::Tap::FULL);"), 2)
+        self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", config)
+        self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", config)
+
+    def test_status_light_drives_the_cascaded_leds_of_the_board(self) -> None:
+        """V2 boards have four LEDs and V3 boards six. The default must stay safe for V2."""
+        config = CONFIG.read_text()
+        self.assertRegex(config, r"^substitutions:\n(?:  .*\n)*?  status_led_count: \"4\"\n")
+        self.assertRegex(
+            config,
+            r"platform: esp32_rmt_led_strip\n    id: status_light[\s\S]*?num_leds: \$\{status_led_count\}\n",
+        )
+
+    def test_status_led_indices_follow_the_led_count(self) -> None:
+        """D2 and D3 lead both chains. A six-LED ring puts D6 before D4 and D7 after D5."""
+        effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
+        self.assertEqual(status_led_index(effect, "d4", 4), 2)
+        self.assertEqual(status_led_index(effect, "d5", 4), 3)
+        self.assertEqual(status_led_index(effect, "d4", 6), 3)
+        self.assertEqual(status_led_index(effect, "d5", 6), 4)
+        # The index setup comes before the boot chase, which returns early.
+        self.assertLess(effect.index("const int32_t d5 = "), effect.index("if (boot_chase) {"))
+        # Only D2 and D3 are fixed literals. Every other fixed LED goes through d4 or d5.
+        for literal in ("it[2]", "it[3]", "it[4]", "it[5]"):
+            self.assertNotIn(literal, effect)
+        self.assertIn("const uint32_t step = 600 / it.size();", effect)
+        self.assertEqual(600 // 4, 150)
+        self.assertEqual(600 // 6, 100)
+
+    def test_production_carries_no_bench_diagnostics(self) -> None:
+        """The production firmware carries no microphone, and the IR burst
+        duplicated a learned slot. Both diagnostics live in the bench configs."""
+        config = CONFIG.read_text()
+        for name in ("Start Microphone Test", "Stop Microphone Test", "Send Short IR Test Burst",
+                     "Mic SD Pulldown", "Expander INT"):
+            self.assertNotIn(f"name: {name}", config)
+        self.assertNotIn("microphone.capture:", config)
+        self.assertNotIn("microphone.stop_capture:", config)
+        self.assertNotIn("GPIO_NUM_21", config)
+        # The mic level only fed the removed 1 s log.
+        self.assertNotIn("mic_level", config)
+        # Assist went with the app slot, so the microphone and its bus are out too.
+        for gone in ("\nmicrophone:\n", "\ni2s_audio:\n", "board_microphone", "voice_assistant"):
+            self.assertNotIn(gone, config)
+        mic_vu = (CONFIG.parent / "c6remote-test-mic-vu.yaml").read_text()
+        self.assertIn("name: Mic SD Pulldown", mic_vu)
+        self.assertIn("gpio_set_pull_mode(GPIO_NUM_21, GPIO_PULLDOWN_ONLY);", mic_vu)
+        common = (CONFIG.parent / "c6remote-test-common.yaml").read_text()
+        self.assertIn("name: Expander INT", common)
+
+    def test_zigbee_dependency_and_client_endpoint_are_pinned(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn(
+            "github://luar123/zigbee_esphome@6cb5480cd2499faf9afb825754fa46b084296cb8",
+            config,
+        )
+        self.assertRegex(
+            config,
+            r"zigbee:\n  id: zigbee_radio[\s\S]*?router: false"
+            r"[\s\S]*?sleepy: false[\s\S]*?num: 1"
+            r"[\s\S]*?device_type: ON_OFF_SWITCH[\s\S]*?id: ON_OFF"
+            r"\n          role: CLIENT",
+        )
+
+    def test_the_device_cycle_has_no_zigbee_stage(self) -> None:
+        """A Zigbee target is resolved against Zigbee2MQTT by the browser, so the
+        remote has nothing to train and the cycle skips straight to clear."""
+        header = IR_LEARNING.read_text()
+        self.assertIn("FULL cycles IR, then clear", header)
+        for gone in ("ZIGBEE_WAIT", "ZIGBEE_SAVED", "zigbee_result", "zigbee_learn_callback_", "NO_VOICE"):
+            self.assertNotIn(gone, header)
+        self.assertIn("enum class Tap : uint8_t { FULL, ARM_ONLY };", header)
+        self.assertIn("ir_ui.tap(17, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
+        self.assertIn("ir_ui.tap(18, IrUi::Tap::ARM_ONLY);", CONFIG.read_text())
+
+    def test_nvs_v5_stores_kind_address_action_name_mask_and_checksum(self) -> None:
+        """Version 5 carries a target kind and the command, so a group entry, a
+        device entry and every action share one record."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("static constexpr uint16_t VERSION = 5;", header)
+        self.assertIn("enum Kind : uint8_t { KIND_GROUP = 0, KIND_DEVICE = 1 };", header)
+        self.assertRegex(
+            header,
+            r"struct Entry \{\n"
+            r"    uint8_t kind;\n"
+            r"    uint8_t endpoint;\n"
+            r"    uint16_t group_id;\n"
+            r"    uint8_t action;\n"
+            r"    uint8_t reserved;\n"
+            r"    int16_t param;\n"
+            r"    uint8_t ieee\[8\];\n"
+            r"    char friendly_name\[TARGET_SIZE\];",
+        )
+        self.assertRegex(
+            header,
+            r"struct Record \{[\s\S]*?uint32_t mask;[\s\S]*?"
+            r"Entry entries\[SLOT_COUNT\];[\s\S]*?uint32_t checksum;",
+        )
+
+    def test_a_stored_action_value_is_bounded_by_its_action(self) -> None:
+        """An import block reaches the manager without passing a picker, so the
+        step, the scene and the duration are bounded here or nowhere."""
+        header = ZIGBEE_LEARNING.read_text()
+        bounds = re.search(
+            r"static bool action_valid_\(uint8_t action, int16_t param\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if bounds is None:
+            raise AssertionError("Zigbee action_valid_ method not found")
+        body = bounds.group("body")
+        self.assertIn("param >= 1 && param <= MAX_LEVEL_STEP", body)
+        self.assertIn("param >= 0 && param <= MAX_SCENE_ID", body)
+        self.assertIn("param >= 1 && param <= MAX_TENTH_DEGREES", body)
+        # An action that takes no value must carry none, or a later format would
+        # read a field this one never set.
+        self.assertRegex(body, r"case ACT_TOGGLE:[\s\S]*?return param == 0;")
+        # An unknown action is a future format, not a toggle.
+        self.assertRegex(body, r"default:\n        return false;")
+        for path in ("bool assign_from_web(", "bool assign_device_from_web("):
+            assign = header.split(path, 1)[1].split("\n  }", 1)[0]
+            self.assertIn("action_valid_(action, param)", assign)
+
+    def test_a_version_4_entry_validates_only_the_fields_of_its_kind(self) -> None:
+        """A group entry with an IEEE address, or a device entry with a group id,
+        is a half written record and must not load."""
+        header = ZIGBEE_LEARNING.read_text()
+        valid = re.search(
+            r"static bool valid_\(const Record &record\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if valid is None:
+            raise AssertionError("Zigbee valid_ method not found")
+        body = valid.group("body")
+        self.assertRegex(
+            body,
+            r"if \(entry\.kind == KIND_GROUP\) \{[\s\S]*?entry\.endpoint != 0[\s\S]*?"
+            r"!ieee_all_zero_\(entry\.ieee\)",
+        )
+        self.assertRegex(
+            body,
+            r"\} else if \(entry\.kind == KIND_DEVICE\) \{[\s\S]*?entry\.group_id != 0[\s\S]*?"
+            r"entry\.endpoint < MIN_ENDPOINT[\s\S]*?entry\.endpoint > MAX_ENDPOINT[\s\S]*?"
+            r"!ieee_valid_\(entry\.ieee\)",
+        )
+        # An unknown kind is a future format, not a group.
+        self.assertRegex(body, r"\} else \{\n        return false;")
+
+    def test_an_older_record_migrates_instead_of_clearing_the_slots(self) -> None:
+        """The blob lengths differ, so the version 5 load fails first and the old
+        assignments survive the update. A version 4 target toggled, so that is
+        the action it carries forward."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertRegex(
+            header,
+            r"if \(preference_\.load\(&loaded\) && valid_\(loaded\)\)[\s\S]*?"
+            r"\} else if \(load_version_4_\(record_\) \|\| load_version_3_\(record_\)\) \{"
+            r"[\s\S]*?preference_\.save\(&record_\)"
+            r"[\s\S]*?\} else \{[\s\S]*?reset_record_\(record_\);",
+        )
+        for older in ("RecordV4", "RecordV3"):
+            self.assertIn(f"static_assert(sizeof(Record) != sizeof({older}),", header)
+        self.assertIn("static_assert(sizeof(RecordV4) != sizeof(RecordV3),", header)
+        for version, kind in (("4", "old.entries[index].kind"), ("3", "KIND_GROUP")):
+            migrate = re.search(
+                rf"static bool load_version_{version}_\(Record &out\) \{{(?P<body>[\s\S]*?)\n  \}}\n",
+                header,
+            )
+            if migrate is None:
+                raise AssertionError(f"Zigbee load_version_{version}_ method not found")
+            body = migrate.group("body")
+            self.assertIn(f"make_preference<RecordV{version}>(PREFERENCE_KEY, true)", body)
+            self.assertIn(f"!valid_v{version}_(old)", body)
+            self.assertIn(f"entry.kind = {kind};", body)
+            self.assertIn("entry.action = ACT_TOGGLE;", body)
+            self.assertIn("out.checksum = checksum_(out);", body)
+
+    def test_a_device_target_unicasts_to_the_stored_endpoint(self) -> None:
+        """A groupcast carries no endpoint, so a device target has to name one and
+        address the short form the mesh routes."""
+        header = ZIGBEE_LEARNING.read_text()
+        send = re.search(
+            r"void send_command_\(uint8_t slot, const Entry &entry, bool device, uint16_t nwk\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if send is None:
+            raise AssertionError("Zigbee send_command_ method not found")
+        body = send.group("body")
+        device = body.split("if (device) {", 1)[1].split("} else {", 1)[0]
+        self.assertIn("addr_mode = EZB_ADDR_MODE_SHORT", device)
+        self.assertIn("u.short_addr = nwk", device)
+        self.assertIn("dst_ep = entry.endpoint", device)
+        self.assertIn("cnf_ctx.cb = on_confirm_", device)
+
+    def test_one_command_table_covers_every_action(self) -> None:
+        """The control block is built once, so an action only picks its payload
+        and its request function. A press reads no target state, which keeps it
+        to one frame and no round trip."""
+        header = ZIGBEE_LEARNING.read_text()
+        send = re.search(
+            r"static ezb_err_t dispatch_\(const ezb_zcl_cluster_cmd_ctrl_t &ctrl, "
+            r"const Entry &entry\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if send is None:
+            raise AssertionError("Zigbee dispatch_ method not found")
+        body = send.group("body")
+        for request in (
+            "ezb_zcl_on_off_toggle_cmd_req",
+            "ezb_zcl_on_off_on_cmd_req",
+            "ezb_zcl_on_off_off_cmd_req",
+            "ezb_zcl_level_step_with_on_off_cmd_req",
+            "ezb_zcl_color_control_step_color_temperature_cmd_req",
+            "ezb_zcl_scenes_recall_scene_cmd_req",
+            "ezb_zcl_window_covering_movement_cmd_req",
+            "ezb_zcl_thermostat_setpoint_raise_or_lower_cmd_req",
+            "ezb_zcl_door_lock_lock_door_cmd_req",
+            "ezb_zcl_door_lock_unlock_door_cmd_req",
+            "ezb_zcl_ias_wd_start_warning_cmd_req",
+            "ezb_zcl_ias_wd_squawk_cmd_req",
+        ):
+            self.assertIn(request, body)
+        # Nothing here reads an attribute, so no press waits for an answer.
+        for gone in ("read_attr", "esp_zigbee_lock_acquire"):
+            self.assertNotIn(gone, body)
+        # A cooler step is the same command with the sign flipped, not a second
+        # action id the remote has to store.
+        self.assertIn("static_cast<int8_t>(-entry.param)", body)
+        # Every action the enum names has to reach a request here.
+        actions = re.search(r"enum Action : uint8_t \{(?P<body>[\s\S]*?)\n  \};", header)
+        if actions is None:
+            raise AssertionError("Zigbee Action enum not found")
+        for name in re.findall(r"(ACT_[A-Z_]+) =", actions.group("body")):
+            self.assertIn(f"case {name}:", body)
+
+    def test_the_endpoint_declares_a_client_cluster_for_every_action(self) -> None:
+        """A command from a cluster the simple descriptor omits leaves the remote
+        looking like an On/Off switch that sends something else."""
+        config = CONFIG.read_text()
+        block = config.split("endpoints:", 1)[1].split("\n  on_join:", 1)[0]
+        for cluster in (
+            "ON_OFF",
+            "LEVEL",
+            "COLOR_CONTROL",
+            "SCENES",
+            "WINDOW_COVERING",
+            "THERMOSTAT",
+            "DOOR_LOCK",
+            "IAS_WD",
+        ):
+            self.assertRegex(block, rf"- id: {cluster}\n          role: CLIENT")
+
+    def test_the_endpoint_serves_the_battery_percent_over_power_config(self) -> None:
+        config = CONFIG.read_text()
+        block = config.split("endpoints:", 1)[1].split("\n  on_join:", 1)[0]
+        cluster = block.split("        - id: POWER_CONFIG\n", 1)[1]
+        # Server is the default role, so no role line may turn it into a client.
+        self.assertNotIn("role:", cluster)
+        self.assertIn("- attribute_id: 0x0021", cluster)
+        self.assertIn("type: UINT8", cluster)
+        # The component config fails on access with report: force.
+        self.assertNotIn("access:", cluster)
+        self.assertIn("device: battery_level", cluster)
+        self.assertIn("report: force", cluster)
+        # Casting NAN to uint8_t is undefined, so the lambda sends ZCL invalid.
+        self.assertIn("if (std::isnan(x))\n                  return 0xFF;", cluster)
+        self.assertIn("std::lround(std::min(std::max(x, 0.0f), 100.0f) * 2.0f)", cluster)
+        self.assertNotIn("scale:", cluster)
+
+    def test_the_percent_sensor_copies_the_adc_through_the_curve_and_a_delta(self) -> None:
+        config = CONFIG.read_text()
+        adc = config.split("  - platform: adc\n", 1)[1].split("  - platform: copy\n", 1)[0]
+        self.assertIn("id: battery_voltage", adc)
+        self.assertIn("samples: 16", adc)
+        # Auto attenuation cannot multisample, so ESPHome refuses the pair.
+        self.assertNotIn("attenuation: auto", adc)
+        self.assertIn("attenuation: 12db", adc)
+        self.assertIn("multiply: 2.0", adc)
+        copy = config.split("  - platform: copy\n", 1)[1].split("\noutput:", 1)[0]
+        for text in ("source_id: battery_voltage", "id: battery_level", "name: Battery\n",
+                     'unit_of_measurement: "%"', "device_class: battery", "if (std::isnan(x))\n            return NAN;",
+                     "{3.30f, 0.0f}", "{3.76f, 30.0f}", "{3.86f, 60.0f}", "{4.20f, 100.0f}",
+                     "return 0.0f;", "return 100.0f;"):
+            self.assertIn(text, copy)
+        self.assertLess(copy.index("- lambda:"), copy.index("- delta: 2"))
+
+    def test_the_button_config_block_links_both_battery_sensors(self) -> None:
+        config = CONFIG.read_text()
+        block = config.split("\nbutton_config:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("  battery_level_id: battery_level", block.splitlines())
+        self.assertIn("  battery_voltage_id: battery_voltage", block.splitlines())
+
+    def test_a_short_address_never_reaches_flash(self) -> None:
+        """A device takes a new short address when it rejoins, so a stored one
+        would send every press to the wrong device after a rejoin."""
+        header = ZIGBEE_LEARNING.read_text()
+        record = re.search(r"struct Entry \{(?P<body>[\s\S]*?)\n  \};", header)
+        if record is None:
+            raise AssertionError("Zigbee Entry struct not found")
+        self.assertNotIn("nwk", record.group("body"))
+        self.assertIn("std::atomic<uint16_t> nwk_cache_[SLOT_COUNT];", header)
+
+    def test_a_radio_callback_parks_work_for_the_loop(self) -> None:
+        """The Zigbee task must not block on the flash or the record mutex, so a
+        failed confirm only sets state that tick() acts on."""
+        header = ZIGBEE_LEARNING.read_text()
+        confirm = re.search(
+            r"static void on_confirm_\(ezb_af_user_cnf_t \*cnf, void \*user_ctx\) \{"
+            r"(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if confirm is None:
+            raise AssertionError("Zigbee on_confirm_ method not found")
+        body = confirm.group("body")
+        for gone in ("preference_", "cache_mutex_", "cmd_req", "esp_zigbee_lock_acquire"):
+            self.assertNotIn(gone, body)
+        self.assertIn("request_resolve_", body)
+        # A press earns one resend, so a second failure stops instead of looping.
+        self.assertIn("retry_armed_.exchange(false", body)
+
+    def test_a_resolve_is_rate_limited_and_times_out(self) -> None:
+        """NWK_addr_req floods the mesh, so a stuck button must not repeat it and
+        a lost answer must not wedge the state machine."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("RESOLVE_BROADCAST = 0xFFFD", header)
+        self.assertRegex(
+            header,
+            r"start_resolve_\(uint8_t slot, const Entry &entry, bool send_after, uint32_t now\) \{"
+            r"[\s\S]*?now - last_resolve_ms_\[index\] < RESOLVE_GAP_MS[\s\S]*?return;",
+        )
+        self.assertRegex(
+            header,
+            r"void tick\(\) \{[\s\S]*?resolve_in_flight_[\s\S]*?"
+            r"now - resolve_started_ms_ < RESOLVE_TIMEOUT_MS",
+        )
+
+    def test_a_late_resolve_answer_cannot_toggle_the_wrong_light(self) -> None:
+        """A warm resolve and a press resolve share one slot of state. An answer
+        that outlived its timeout must be dropped, or it resends a Toggle that
+        the press no longer wants, to whichever device the warm walk reached."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("if (seq != resolve_seq_.load(std::memory_order_acquire))", header)
+        # Only the in-flight request owns the resend intent, so a queued request
+        # cannot hand it to the resolve already on the air.
+        request = header.split("void request_resolve_(uint8_t slot) {", 1)[1]
+        self.assertNotIn("resolve_send_", request.split("\n  }", 1)[0])
+        self.assertRegex(header, r"void tick\(\) \{[\s\S]*?resolve_seq_\.fetch_add\(1")
+
+    def test_the_loop_and_the_join_drive_the_resolve_machine(self) -> None:
+        """Nothing else calls tick() or on_network_up(), so a missing hook leaves
+        every device button waiting on a resolve that never starts."""
+        config = CONFIG.read_text()
+        self.assertIn("zigbee_assignments.tick();", config)
+        self.assertIn("zigbee_assignments.on_network_up(x);", config)
+
+    def test_clear_only_drops_the_local_record(self) -> None:
+        """Group membership lives in the light, so the remote cannot and must not
+        try to undo it."""
+        header = ZIGBEE_LEARNING.read_text()
+        clear = re.search(
+            r"void clear\(uint8_t slot\) \{(?P<body>[\s\S]*?)\n  \}\n\n private:",
+            header,
+        )
+        if clear is None:
+            raise AssertionError("Zigbee clear method not found")
+        body = clear.group("body")
+        self.assertLess(body.index("record_ = next;"), body.index("preference_.save(&record_)"))
+        self.assertNotIn("publish", body)
+
+    def test_the_firmware_carries_no_mqtt_client(self) -> None:
+        """The browser reads Zigbee2MQTT over the frontend websocket. An MQTT
+        client on the remote buffered whole retained payloads and exhausted the
+        heap, and it made playback depend on a broker that a groupcast does not
+        need."""
+        config = CONFIG.read_text()
+        self.assertNotRegex(config, r"(?m)^mqtt:")
+        self.assertNotIn("mqtt::global_mqtt_client", config)
+        self.assertNotIn("mqtt_broker", config)
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertNotIn("mqtt", header)
+        self.assertNotIn("ArduinoJson", header)
+        self.assertNotIn("subscribe(", header)
+        # Nothing is left to train, so the training clocks went with it. tick()
+        # came back for the address resolve, which is not a training clock.
+        for gone in ("TRAINING_TIMEOUT_MS", "REQUEST_TIMEOUT_MS", "allowed_targets_"):
+            self.assertNotIn(gone, header)
+
+    def test_playback_is_a_groupcast_that_needs_no_broker(self) -> None:
+        """Membership lives in the light's group table, so a button keeps working
+        with Zigbee2MQTT and Home Assistant both down."""
+        header = ZIGBEE_LEARNING.read_text()
+        send = header.split(
+            "void send_command_(uint8_t slot, const Entry &entry, bool device, uint16_t nwk) {", 1
+        )[1].split("\n  }", 1)[0]
+        group = send.split("} else {", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("ctrl.dst_addr.addr_mode = EZB_ADDR_MODE_GROUP;", group)
+        self.assertIn("entry.group_id", group)
+        # A groupcast is unacknowledged, so it asks for no confirm and no retry.
+        self.assertNotIn("cnf_ctx", group)
+        self.assertIn("ezb_zcl_on_off_toggle_cmd_req(&request)", header)
+
+    def test_a_stored_group_id_is_bounded_below_the_broadcast_range(self) -> None:
+        """0xFFF8 and above are the reserved Zigbee broadcast addresses."""
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn("static constexpr uint16_t MAX_GROUP_ID = 0xFFF7;", header)
+        assign = header.split("bool assign_from_web(", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("group_id == 0 || group_id > MAX_GROUP_ID", assign)
+        # Both assign paths commit through store_, which drops the old action.
+        store = header.split("bool store_(uint8_t slot, const Entry &entry) {", 1)[1]
+        self.assertIn("ir_code_store.clear_for_zigbee(slot)", store.split("\n  }", 1)[0])
+
+    def test_a_cold_boot_chases_the_ring_twice_before_status(self) -> None:
+        """A deep-sleep wake must skip the chase, so a wake press shows status at once."""
+        effect = status_light_entry(CONFIG.read_text()).split("name: Status Indicators", 1)[1]
+        chase = effect.split("// D2 stays dark", 1)[0]
+        self.assertIn("static bool boot_chase = !id(idle).woke_from_sleep() && id(button_cfg).boot_leds();", chase)
+        # Two laps of one pulse per LED, each three steps long and one step apart.
+        self.assertIn("const uint32_t step = 600 / it.size();", chase)
+        self.assertIn("const uint32_t pulses = 2 * it.size();", chase)
+        self.assertIn("if (t < (pulses + 2) * step) {", chase)
+        self.assertIn("for (uint32_t n = 0; n < pulses; n++) {", chase)
+        self.assertIn("const uint32_t start = n * step;", chase)
+        self.assertIn("if (t < start || t >= start + 3 * step)", chase)
+        self.assertIn("const float phase = (t - start) / (3.0f * step);", chase)
+        self.assertIn("const uint32_t led = n % it.size();", chase)
+        self.assertIn(
+            "const Color base = boot_colors[it.size() >= 6 ? led % 6 : (led >= 2 ? led + 1 : led)];", chase)
+        self.assertIn("it[led] = base * level;", chase)
+        # README render palette in chain order D2 D3 D6 D4 D5 D7.
+        palette = chase.split("static const Color boot_colors[6] = {", 1)[1].split("};", 1)[0]
+        self.assertEqual(
+            [tuple(int(v) for v in c) for c in re.findall(r"Color\((\d+), (\d+), (\d+)\)", palette)],
+            [(255, 0, 0), (0, 112, 255), (170, 0, 171), (0, 255, 0), (0, 0, 255), (0, 171, 170)])
+        # Four LEDs keep the original chase: eight 450 ms pulses 150 ms apart over
+        # 1500 ms. Six LEDs keep the 600 ms lap.
+        for count, total in ((4, 1500), (6, 1400)):
+            step = 600 // count
+            self.assertEqual(step % 50, 0, count)
+            self.assertEqual((2 * count + 2) * step, total, count)
+        self.assertIn("return;", chase)
+
+    def test_d5_is_reserved_for_zigbee_status_alone(self) -> None:
+        # Zigbee training used to pulse D5, which hid the radio state for the
+        # whole training window. It now pulses D3 and D4 instead.
+        entry = status_light_entry(CONFIG.read_text())
+        # A radio the switch or the boot gate holds off sends nothing, so D5 stays dark for it too.
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())",
+                      entry)
+        self.assertIn("else if (!id(zigbee_radio).is_connected())", entry)
+        self.assertIn("it[d5] = Color(0, 128, 0);", entry)
+        before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
+        self.assertNotIn("it[d5]", before_d5.split("// D3 and D4", 1)[1])
+
+    def test_d5_separates_pairing_and_an_unreachable_target(self) -> None:
+        # An open window is a normal state, so it must not borrow the red that
+        # means the stack is up with no network.
+        entry = status_light_entry(CONFIG.read_text())
+        d5 = entry.split("// D5 is Zigbee status", 1)[1]
+        pairing = d5.index("zigbee_assignments.pairing_window_open()")
+        self.assertLess(pairing, d5.index("!id(zigbee_radio).is_connected()"))
+        self.assertIn("it[d5] = Color(0, 0, level);", d5)
+        # Amber sits after the join test, so only a joined remote can show it.
+        reach = d5.index("ZigbeeAssignmentManager::REACH_FAILED")
+        self.assertLess(d5.index("!id(zigbee_radio).is_connected()"), reach)
+        self.assertIn("it[d5] = Color(level, level / 2, 0);", d5)
+
+    def test_d5_shows_yellow_while_a_stored_network_rejoins(self) -> None:
+        # A boot on stored credentials must show yellow, not dark, before the stack starts.
+        d5 = status_light_entry(CONFIG.read_text()).split("// D5 is Zigbee status", 1)[1]
+        yellow = "if (!zigbee_assignments.pairing() && !id(zigbee_radio)->factory_new_.load()) {"
+        self.assertIn(yellow, d5)
+        self.assertIn("it[d5] = Color(192, 128, 0);", d5)
+        connected = d5.index("!id(zigbee_radio).is_connected()")
+        self.assertLess(connected, d5.index(yellow))
+        self.assertLess(d5.index(yellow), d5.index("!id(zigbee_radio).is_started()"))
+        self.assertLess(d5.index("!id(zigbee_radio).is_started()"),
+                        d5.index("ZigbeeAssignmentManager::REACH_FAILED"))
+
+    def test_d4_shows_bluetooth_when_the_pair_is_idle(self) -> None:
+        # Assignment mode keeps D3 and D4, so the Bluetooth branch is the last
+        # else of that chain and never touches D5.
+        entry = status_light_entry(CONFIG.read_text())
+        before_d5 = entry.split("// D5 is Zigbee status", 1)[0]
+        # The wake pulse is an overlay after D5, so Bluetooth follows assignment mode.
+        self.assertNotIn("wake_pulse_until_ms", before_d5)
+        self.assertIn("            } else {\n              auto *ble = id(ble_hid_remote);", before_d5)
+        ble = before_d5[before_d5.index("auto *ble = id(ble_hid_remote);"):]
+        self.assertIn("it[d4] =", ble)
+        self.assertNotIn("it[d5]", ble)
+        self.assertNotIn("it[1]", ble)
+        order = [
+            "!ble->radio_enabled()",
+            "ble->stack_failed()",
+            "ble->connected()",
+            "ble->pair_failed_recently()",
+            "ble->pairing() || !ble->bonded()",
+        ]
+        positions = [ble.index(text) for text in order]
+        self.assertEqual(positions, sorted(positions))
+        for color in ("Color(0, 128, 0)", "Color(0, 0, level)", "Color(192, 128, 0)",
+                      "Color(200, 0, 0)", "Color(255, 0, 0)"):
+            self.assertIn(color, ble)
+        self.assertIn("(millis() % 1600) / 1600.0f", ble)
+        # A bond that has not reconnected is solid yellow, the same as D5, not a red pulse.
+        self.assertNotIn("(millis() % 3200) / 3200.0f", ble)
+        self.assertIn("((millis() / 150) % 2) == 0", ble)
+
+    def test_a_stopped_window_is_told_apart_from_one_that_ran_out(self) -> None:
+        # Only an expiry leaves the radio off with no explanation, so only it
+        # sets the flag the page reads back after the restart.
+        header = ZIGBEE_LEARNING.read_text()
+        self.assertIn('return end_pairing_("Pairing stopped", false);', header)
+        self.assertIn('return end_pairing_("Pairing window closed with no join", true);', header)
+        end = header.split("bool end_pairing_(const char *reason, bool failed) {", 1)[1]
+        self.assertIn("flags | FLAG_PAIR_FAILED", end.split("\n  }", 1)[0])
+        # Taking the radio back by hand clears the explanation with it.
+        switch = header.split("bool set_radio_enabled(bool enabled) {", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("~(FLAG_RADIO_OFF | FLAG_PAIR_FAILED)", switch)
+
+    def test_the_pairing_step_runs_before_the_credential_erase(self) -> None:
+        # set_link_state feeds the step, and the erase restarts the remote, so
+        # the order in the interval decides whether a window ever opens.
+        config = CONFIG.read_text()
+        block = config.split("interval:", 1)[1].split("\n  - interval: 50ms", 1)[0]
+        link = block.index("zigbee_assignments.set_link_state(")
+        tick = block.index("zigbee_assignments.tick();")
+        erase = block.index("zigbee_assignments.take_credential_erase_request()")
+        self.assertLess(link, tick)
+        self.assertLess(tick, erase)
+        self.assertIn("id(zigbee_radio)->reset();", block)
+
+    def test_a_stored_credential_join_leaves_the_pairing_request_pending(self) -> None:
+        # A boot on the old credentials fires on_join before the tick can ask for
+        # the erase. If that join cleared the request, the remote would stay on
+        # the old network and the window would never open.
+        header = ZIGBEE_LEARNING.read_text()
+        up = re.search(
+            r"void on_network_up\(bool factory_new\) \{(?P<body>[\s\S]*?)\n  \}\n",
+            header,
+        )
+        if up is None:
+            raise AssertionError("on_network_up(bool factory_new) not found")
+        body = up.group("body")
+        guard = body.index("if (pairing() && !factory_new)")
+        self.assertIn("return;", body[guard:body.index("pairing_joined();")])
+        self.assertLess(guard, body.index("pairing_joined();"))
+        self.assertLess(guard, body.index("warm_mask_ = 0;"))
+
+    @staticmethod
+    def _method(header: str, signature: str) -> str:
+        body = header.split(signature + " {", 1)[1].split("\n  }\n", 1)[0]
+        return re.sub(r"\s+", " ", body)
+
+    def test_pairing_flag_writes_are_committed_at_once(self) -> None:
+        # save() only queues, and a restart or reset() can follow a pairing step
+        # before the 60 s syncer runs.
+        write = self._method(ZIGBEE_LEARNING.read_text(), "bool write_flags_(uint16_t flags)")
+        self.assertIn("preference_.save(&record_) && esphome::global_preferences->sync()", write)
+
+    def test_a_pairing_request_lives_for_one_boot(self) -> None:
+        # A restart that the sequence did not start must come back not pairing
+        # and with the radio off, but this boot still pairs from RAM.
+        setup = self._method(ZIGBEE_LEARNING.read_text(), "void setup()")
+        radio = setup.index("radio_on_.store((boot_flags & FLAG_RADIO_OFF) == 0")
+        pairing = setup.index("pairing_.store((boot_flags & FLAG_PAIRING_PENDING) != 0")
+        consume = setup.index("if (pairing()) {")
+        self.assertLess(radio, consume)
+        self.assertLess(pairing, consume)
+        self.assertIn(
+            "write_flags_(static_cast<uint16_t>( (boot_flags & ~(FLAG_PAIRING_PENDING | "
+            "FLAG_PAIR_FAILED)) | FLAG_RADIO_OFF));",
+            setup[consume:],
+        )
+
+    def test_the_erase_waits_for_a_committed_pairing_request(self) -> None:
+        # reset() may not sync, so the request that brings the remote back
+        # factory new must be in flash before the YAML can erase.
+        tick = self._method(ZIGBEE_LEARNING.read_text(), "void pairing_tick_()")
+        rearm = tick.index(
+            "!write_flags_(static_cast<uint16_t>( (record_.flags & ~(FLAG_RADIO_OFF | "
+            "FLAG_PAIR_FAILED)) | FLAG_PAIRING_PENDING))) {"
+        )
+        erase = tick.index("erase_request_.exchange(true")
+        self.assertLess(rearm, erase)
+        # A request that cannot be stored keeps the old credentials.
+        failed = tick[rearm:erase]
+        self.assertIn("end_pairing_(", failed)
+        self.assertIn("return;", failed)
+
+    def test_a_join_turns_the_radio_back_on_in_flash(self) -> None:
+        # The boot consumed the request with the radio off, so a power cut
+        # after a join must not leave the paired remote dark.
+        joined = self._method(ZIGBEE_LEARNING.read_text(), "void pairing_joined()")
+        self.assertIn(
+            "write_flags_(static_cast<uint16_t>( record_.flags & ~(FLAG_PAIRING_PENDING | "
+            "FLAG_PAIR_FAILED | FLAG_RADIO_OFF)));",
+            joined,
+        )
+
+
+
+class ComponentIdTest(unittest.TestCase):
+    """Made for ESPHome needs an id on every entity and component, so a user who
+    adopts the config can extend or remove any part of it."""
+
+    LIST_BLOCKS = ("ota", "update", "text_sensor", "pcf8574", "binary_sensor", "sensor",
+                   "output", "light", "switch", "button")
+    MAP_BLOCKS = ("i2c", "http_request", "improv_serial", "improv_ble", "ble_hid", "ha_action",
+                  "zigbee", "button_config", "idle_sleep", "remote_receiver", "remote_transmitter")
+    # The entry marker carries the id, or the entry does, or the one entity of a
+    # platform that can carry several, as wifi_info does.
+    ID_LINE = r"(?m)^(?:  - |    |      )id: \w+$"
+
+    def test_every_entity_has_an_id(self) -> None:
+        config = CONFIG.read_text()
+        for key in self.LIST_BLOCKS:
+            for entry in list_entries(top_level_block(config, key)):
+                with self.subTest(block=key, entry=entry.splitlines()[0]):
+                    self.assertRegex(entry, self.ID_LINE)
+
+    def test_every_bus_and_radio_has_an_id(self) -> None:
+        config = CONFIG.read_text()
+        for key in self.MAP_BLOCKS:
+            with self.subTest(block=key):
+                self.assertRegex(top_level_block(config, key), r"(?m)^  id: \w+$")
+
+
+class AdoptionTest(unittest.TestCase):
+    """A user who adopts the config builds it in a Device Builder that has no
+    checkout of this repository. ESPHome resolves an include against the config
+    directory of the user, so a header must travel inside a component."""
+
+    USERS = ("button_config", "ha_action", "ble_hid")
+
+    def test_the_production_config_includes_no_local_header(self) -> None:
+        self.assertNotIn("\n  includes:\n", CONFIG.read_text())
+
+    def test_the_component_carries_every_header_that_it_names(self) -> None:
+        init = (SLOTS / "__init__.py").read_text()
+        named = re.findall(r'^    "(\w+\.h)",$', init, re.M)
+        self.assertEqual(sorted(named), sorted(path.name for path in SLOTS.glob("*.h")))
+        # The build reaches a header through the component directory, never
+        # through the config directory of the user.
+        self.assertIn('#include "esphome/components/button_slots/{header}"', init)
+
+    def test_each_component_that_includes_a_header_loads_the_component(self) -> None:
+        for name in self.USERS:
+            with self.subTest(component=name):
+                init = (ROOT / "components" / name / "__init__.py").read_text()
+                self.assertRegex(init, r"(?m)^AUTO_LOAD = \[[^\]]*\"button_slots\"")
+
+    def test_the_local_components_come_from_github_by_default(self) -> None:
+        config = CONFIG.read_text()
+        source = re.search(
+            r"(?m)^  components_source: (\S+)$", config
+        )
+        self.assertIsNotNone(source, "c6remote.yaml declares no components_source")
+        self.assertRegex(source.group(1), r"^github://landonr/homething-c6@")
+        # ESPHome resolves a local path against the config directory of the
+        # user, which holds no components directory in a Device Builder.
+        block = top_level_block(config, "external_components")
+        self.assertNotIn("type: local", block)
+        self.assertIn("- source: ${components_source}", block)
+
+    def test_the_component_ref_agrees_with_the_package_ref(self) -> None:
+        config = CONFIG.read_text()
+        components = re.search(r"(?m)^  components_source: \S+@(\S+)$", config)
+        package = re.search(r"(?m)^  package_import_url: \S+@(\S+)$", config)
+        self.assertIsNotNone(package, "c6remote.yaml declares no package_import_url")
+        # An adopted build takes the config from one ref and the components from
+        # the other, so a difference gives the user a mismatched pair.
+        self.assertEqual(components.group(1), package.group(1))
+
+    def test_the_release_build_takes_the_components_of_its_own_commit(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "firmware.yml").read_text()
+        for line in workflow.splitlines():
+            if "compile c6remote.yaml" not in line:
+                continue
+            # Without the override the release would hold the components of the
+            # GitHub ref, not the components of the tagged commit.
+            self.assertIn("-s components_source components", line)
+            break
+        else:
+            self.fail("firmware.yml compiles no c6remote.yaml")
+
+
+class HomeAssistantActionConfigTest(unittest.TestCase):
+    def test_production_declares_the_component_and_keeps_wifi_off_by_default(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("\nha_action:\n  id: ha_actions\n", config)
+        self.assertIn("  enable_on_boot: false\n", config)
+        self.assertIn("  ha_action_id: ha_actions\n", config)
+
+    def test_a_failed_action_blinks_d2_at_150_ms(self) -> None:
+        config = CONFIG.read_text()
+        self.assertIn("id(ha_actions).failed_recently()", config)
+        self.assertIn("it[0] = ((millis() / 150) % 2) == 0 ? Color(200, 0, 0) : Color::BLACK;", config)
+
+    def test_an_off_home_assistant_switch_holds_the_api_server_down_at_boot(self) -> None:
+        """The API server has no stop and no restart, so like the Zigbee stack it
+        must fail before its own setup runs, or Home Assistant connects anyway."""
+        config = CONFIG.read_text()
+        gate = config[config.index("    - priority: 800\n"):config.index("    - priority: 600\n")]
+        block = gate[gate.index("if (!button_config::ButtonConfig::ha_api_expected_from_flash()) {"):]
+        block = block[:block.index("\n            }\n")]
+        self.assertIn("api::global_api_server->mark_failed();", block)
+        self.assertIn("id(button_cfg).set_ha_api_gated(true);", block)
+        self.assertIn('ESP_LOGI("button_config", "Home Assistant is off, so the API server stays down");', block)
+        # The Zigbee gate stays first and keeps its own block.
+        self.assertLess(gate.index("ZigbeeAssignmentManager::radio_enabled_from_flash()"),
+                        gate.index("ha_api_expected_from_flash()"))
+        self.assertNotIn("zigbee", block.lower())
+
+    def test_the_home_assistant_entity_says_only_the_page_can_turn_it_back_on(self) -> None:
+        config = CONFIG.read_text()
+        entity = config[config.index("    name: Home Assistant API\n") - 400:config.index("    name: Home Assistant API\n")]
+        comment = entity[entity.rindex("\n\n") + 2:]
+        self.assertIn("API server from the\n  # next boot on.", comment)
+        self.assertIn("only the\n  # web page can turn it back on.", comment)
+        self.assertNotIn("stays up", comment)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,615 @@
+"""Caps fit: all eleven rigid caps clear the shell pressed and released, clear each
+other, fit their stems, stay captive under the face land, and still go in from
+inside. A positive STEM_GRIP requires interference. A zero or negative value
+requires clearance. The solids alone cannot prove either fit mode.
+
+Caps face height: every released cap top lands at one level, and the cap with
+the least room stands exactly CAP_PROTRUSION above the curved front face at its
+own centre. It exists to catch cap_top() drifting away from the design parameter
+that is meant to drive it. A full press must also leave every top at or above
+the face.
+
+Caps proud of pocket: a cap stands proud of the recess floor around it by
+exactly its height over the curved face plus how far the dish sinks below that
+face there, the same reasoning as the face-height check applied to the dished
+floor instead of the undished face.
+
+Legends present: every cap carries a real legend, cut out of one solid cap,
+in a glyph the vendored font actually has. A blank cap is the quietest
+failure in the model: an empty entry, a mistyped SVG path or a character
+DejaVu does not carry all build a cap that passes every other pass here,
+the last of them as a .notdef box with more ink than a hyphen. Volume, cmap
+coverage, the cut having landed and the ink fitting the flat top, because no
+one of those covers the others.
+"""
+
+import math
+
+from build123d import Box, Compound, Face, Pos, Vertex
+from fontTools.ttLib import TTFont
+
+import board
+import case
+import params
+from model.cap_marks import flat_faces_at, mark_font_glyph, mark_stroke_width
+
+from .common import TOLERANCE, _volume
+
+CAP_GAP = 0.5
+"""Closest two keytops may come in plan. Wider than a moulding needs, because the
+caps are separate parts now: two of them out of tolerance in opposite directions
+have to still miss each other, and a finger has to find the split."""
+MIN_LOCATING_DEPTH = 0.3
+"""Shallowest the stem's locating recess may be and still key a cap square in
+plan. The recess no longer does the gripping, CAP_FLANGE_T does that in shear
+against the face land, so this only has to be deep enough that the cap cannot
+tip off the stem's flats before the flange catches it."""
+SWAP_MARGIN = 0.1
+"""Slack a cap needs on its way in, over the clearance the two holes already
+carry. It goes in from inside now, body through the face hole and flange into
+the counterbore, so a negative here is a cap that cannot be fitted at all rather
+than one that cannot be swapped."""
+RETENTION_MIN = 0.3
+"""Flange left over the face land with the cap pushed as far off centre as
+CAP_GUIDE_CLEARANCE allows. This is the worst case that has to hold, so it is
+what CAP_FLANGE_OVERLAP is really sized against."""
+COUNTERBORE_RIB = 1.2
+"""Thinnest rib of ceiling left between two counterbores. They are the widest
+cut in the front plate and they sit at the grid pitch, so this is the front
+plate's thinnest section anywhere."""
+FLANGE_FLOAT_RANGE = (0.1, 0.5)
+"""How far a cap may lift before its flange meets the shoulder. Too little and
+tolerance turns the float into a clamp that stops the cap pressing; too much and
+STEM_GRIP has more slop to take up than it can."""
+PERIMETER_SAMPLES = 240
+"""Points each cap curve is sampled at when the fits between them are measured
+around the whole perimeter. Dense enough that the sampled minimum lands within a
+thousandth of the true one at these radii."""
+
+PERIMETER_TOLERANCE = 0.005
+"""How far under its stated axis figure a fit may read around the curve before
+it counts as a real shortfall. Sampling slop: two concentric similar
+superellipses are exactly their axis gap apart at the closest point, so a
+correct pair reads the axis figure to within the sample spacing."""
+
+LEGEND_FLOOR = 0.5
+"""Roof left under a legend. It is what the pad's backlight crosses, so it is
+bounded by wanting to see through it as much as by strength."""
+
+
+def caps_fit(front, pad, caps):
+    """The rigid caps against the shell, each other, their stems and the two
+    holes each one has to sit in.
+
+    A positive STEM_GRIP requires cap-to-pad interference. A zero or negative
+    STEM_GRIP requires no cap-to-pad intersection.
+    """
+    problems = []
+    parts = board.components()
+
+    for ref, cap in caps.items():
+        fouled = _volume(front.intersect(cap))
+        if fouled > TOLERANCE:
+            problems.append(f"{ref}'s cap fouls the front shell by {fouled:.2f} mm3")
+        pressed = Pos(0, 0, -params.SWITCH_TRAVEL) * cap
+        fouled = _volume(front.intersect(pressed))
+        if fouled > TOLERANCE:
+            problems.append(f"{ref}'s cap fouls the front shell once pressed")
+        stem_overlap = _volume(pad.intersect(cap))
+        if params.STEM_GRIP > 0 and stem_overlap <= TOLERANCE:
+            problems.append(f"{ref}'s cap has no interference with its stem")
+        if params.STEM_GRIP <= 0 and stem_overlap > TOLERANCE:
+            problems.append(
+                f"{ref}'s cap fouls its stem by {stem_overlap:.2f} mm3 with clearance fit"
+            )
+
+    # A cap's visible width is its body: the flange is behind the face and is
+    # answered for by the counterbore rib.
+    tops = [
+        (ref, *parts[ref][:2], case.cap_body(ref))
+        for ref in board.refs("SW")
+    ]
+    for i, (a, ax, ay, asize) in enumerate(tops):
+        for b, bx, by, bsize in tops[i + 1 :]:
+            reach = (asize + bsize) / 2
+            gap = max(abs(ax - bx) - reach, abs(ay - by) - reach)
+            if gap < CAP_GAP:
+                problems.append(f"{a} and {b} come within {gap:.2f} of each other")
+
+    for ref in case.cap_refs():
+        depth = case.stem_top(ref) - case.CAP_BOTTOM
+        if depth < MIN_LOCATING_DEPTH:
+            problems.append(f"{ref}'s locating recess is only {depth:.2f} deep")
+
+    float_ = case.COUNTERBORE_TOP - (case.CAP_BOTTOM + params.CAP_FLANGE_T)
+    low, high = FLANGE_FLOAT_RANGE
+    if not low <= float_ <= high:
+        problems.append(f"flange floats {float_:.2f} under the counterbore shoulder")
+
+    # The socket mouth, not the bore: SOCKET_LEAD opens it out on every side and
+    # that is the widest the cap is ever hollowed.
+    widest = (params.STEM_W - 2 * params.STEM_GRIP) + 2 * params.SOCKET_LEAD
+    for ref in case.cap_refs():
+        body = case.cap_body(ref)
+        flange = case.cap_flange(ref)
+        counterbore = case.cap_counterbore(ref)
+        hole = case.cap_face_hole(ref)
+
+        wall = (body - widest) / 2
+        if wall < params.CAP_WALL:
+            problems.append(f"{ref}'s cap is left {wall:.2f} of wall around its socket")
+
+        # Retention, worst case: the body sits hard against one side of the face
+        # hole and the flange has to still be caught on the other.
+        held = (flange - hole) / 2 - params.CAP_GUIDE_CLEARANCE
+        if held < RETENTION_MIN:
+            problems.append(
+                f"{ref}'s flange holds on {held:.2f} once the cap sits off centre"
+            )
+
+        # Insertion is from inside now, so both widths have to pass their own hole.
+        if body > hole - 2 * SWAP_MARGIN:
+            problems.append(f"{ref}'s cap body will not enter its face hole")
+        if flange > counterbore - 2 * SWAP_MARGIN:
+            problems.append(f"{ref}'s flange will not enter its counterbore")
+
+        rib = case.key_pitch() - counterbore
+        if rib < COUNTERBORE_RIB:
+            problems.append(
+                f"{ref}'s counterbore leaves {rib:.2f} of ceiling to its neighbour"
+            )
+        if counterbore > case.key_size(ref) + 2 * params.KEY_CLEARANCE:
+            problems.append(f"{ref}'s counterbore reaches past what key_size() cleared")
+
+        if params.STEM_W > hole - 2 * SWAP_MARGIN:
+            problems.append(f"{ref}'s bare stem snags its hole with the cap off")
+
+    roof = params.CAP_TOP_T - params.LEGEND_DEPTH
+    if roof < LEGEND_FLOOR:
+        problems.append(f"legends leave {roof:.2f} of roof to glow through")
+
+    return problems
+
+
+FACE_HEIGHT_TOLERANCE = 0.01
+"""How exactly a released cap's height must follow CAP_PROTRUSION.
+
+This is float slop, not a design margin; a larger error means cap_top() stopped
+following the parameter."""
+
+
+def cap_fits_around_perimeter():
+    """The three fits in the cap chain are no tighter anywhere around the plan
+    curve than the axis figures they are stated at.
+
+    caps_fit() does its retention and clearance arithmetic on widths, which is
+    only the truth if the axis gap between two of these curves is also their
+    closest approach. For concentric similar superellipses it is, and for the
+    rounded squares this shape replaced it was too, but neither is obvious and
+    the corner is where a plan shape change would break it: a superellipse pulls
+    its corner in relative to a rounded square, and had that pulled the flange
+    in faster than the hole it would have eaten the retention the caps hang on
+    without moving a single number caps_fit() reads.
+
+    Measured on the curves rather than on the built solids because it is the
+    curves the arithmetic is about; the solids are covered by caps_fit()'s own
+    volume probes against the shell.
+    """
+    problems = []
+    for ref in case.cap_refs():
+        widths = (
+            ("flange past the face hole", case.cap_face_hole(ref), case.cap_flange(ref)),
+            ("counterbore past the flange", case.cap_flange(ref), case.cap_counterbore(ref)),
+            ("face hole past the cap body", case.cap_body(ref), case.cap_face_hole(ref)),
+        )
+        for what, small, large in widths:
+            inner = case.cap_outline(small)
+            outer = case.cap_outline(large)
+            measured = min(
+                min(math.hypot(px - qx, py - qy) for qx, qy in outer)
+                for px, py in inner
+            )
+            axis = (large - small) / 2
+            if measured < axis - PERIMETER_TOLERANCE:
+                problems.append(
+                    f"{ref}'s {what} closes to {measured:.3f} around the curve "
+                    f"against {axis:.3f} on the axes: the width the fit is stated "
+                    "at is no longer its worst case"
+                )
+    return problems
+
+
+FLANGE_PROBE = 0.1
+"""Side of the thin column used to read the cap's lowest material and the pad's
+top at one point under the flange."""
+
+
+def _column_z(solid, x, y, top):
+    """Lowest (or, with `top`, highest) Z of `solid` inside a thin column at (x, y)."""
+    hit = solid.intersect(Pos(x, y, 0) * Box(FLANGE_PROBE, FLANGE_PROBE, 100))
+    bounds = [s.bounding_box() for s in hit.solids()]
+    if not bounds:
+        return None
+    return max(b.max.Z for b in bounds) if top else min(b.min.Z for b in bounds)
+
+
+def caps_rest_on_pad(pad, caps, label="pad"):
+    """Each built cap's flange underside rests on the built pad web.
+
+    `caps` may hold only some of the caps, for a pad that covers only some
+    switches. `label` names the pad in the messages.
+
+    A vertical column through the flange, outside the socket mouth and inside the
+    body wall, reads the cap's lowest material and the pad's highest material at
+    the same x and y. They have to agree: a cap above the web leaves an air gap,
+    and a cap below it is inside the pad. Read off the built solids, so it holds
+    whatever CAP_LIFT and the stack say.
+    """
+    problems = []
+    parts = board.components()
+    widest = (params.STEM_W - 2 * params.STEM_GRIP) + 2 * params.SOCKET_LEAD
+    for ref, cap in caps.items():
+        x, y = parts[ref][:2]
+        px = x + widest / 2 + FLANGE_PROBE
+        bottom = _column_z(cap, px, y, top=False)
+        web = _column_z(pad, px, y, top=True)
+        if bottom is None or web is None:
+            problems.append(f"{ref} has no cap or no {label} material under its flange")
+            continue
+        if abs(bottom - web) > FACE_HEIGHT_TOLERANCE:
+            problems.append(
+                f"{ref}'s cap flange bottom is at {bottom:.3f} but the {label} web top "
+                f"is at {web:.3f}, so the flange does not rest on the web"
+            )
+        overlap = _volume(pad.intersect(cap))
+        if params.STEM_GRIP <= 0 and overlap > TOLERANCE:
+            problems.append(f"{ref}'s cap overlaps the {label} by {overlap:.2f} mm3")
+    return problems
+
+
+def caps_flush():
+    """Every released cap top has to land at one level. The cap over the
+    highest face stands exactly CAP_PROTRUSION above the built front face at its
+    centre, and every other cap stands at least that far. A full press of
+    SWITCH_TRAVEL must leave each top at or above the face there."""
+    problems = []
+    tops = {ref: case.cap_top(ref) for ref in case.cap_refs()}
+    if max(tops.values()) - min(tops.values()) > FACE_HEIGHT_TOLERANCE:
+        problems.append(
+            f"cap tops range {min(tops.values()):.3f} .. {max(tops.values()):.3f}, "
+            "wants every cap top at one level"
+        )
+    offs = {}
+    for ref, top in tops.items():
+        x, y = board.components()[ref][:2]
+        off = top - case.face_z(x, y)
+        offs[ref] = off
+        pressed = off - params.SWITCH_TRAVEL
+        if pressed < -FACE_HEIGHT_TOLERANCE:
+            problems.append(
+                f"a full press of {params.SWITCH_TRAVEL:.3f} leaves {ref}'s cap "
+                f"top {pressed:.3f} below the front face, wants it at or above"
+            )
+    least = min(offs, key=offs.get)
+    if abs(offs[least] - params.CAP_PROTRUSION) > FACE_HEIGHT_TOLERANCE:
+        problems.append(
+            f"{least}, the cap with the least room, stands {offs[least]:.3f} proud "
+            f"of the face but wants {params.CAP_PROTRUSION:.3f}"
+        )
+    return problems
+
+
+MIN_PROUD = 0.2
+"""Least a cap may stand proud of the floor around it and still read as
+standing in a dish rather than flush with a flat face. It falls out of the
+recess depths rather than being designed to, so this is a floor to notice a
+recess that got shallow enough to stop showing, not a target."""
+
+
+def caps_proud_of_pocket():
+    """A released cap stands above its recess floor by its height over the
+    curved face plus how far face_depth_at() says the dish sits below that face
+    there.
+
+    Arithmetic, because case.cap_top() and the recess floor are both built off
+    the curved face by construction and the failure this catches is one of them
+    stopping following it. Every cap, not one: the floor is curved now, so the
+    number is different at every switch and a single reading would only prove
+    it at whichever one was picked. The floor guard beside it is what catches a
+    recess that quietly went flat.
+    """
+    problems = []
+    for ref in case.cap_refs():
+        x, y = board.components()[ref][:2]
+        want = case.cap_top(ref) - case.face_z(x, y) + case.face_depth_at(x, y)
+        proud = case.cap_proud(ref)
+        if abs(proud - want) > FACE_HEIGHT_TOLERANCE:
+            problems.append(
+                f"{ref}'s cap stands {proud:.3f} proud of its recess floor, "
+                f"wants {want:.3f}"
+            )
+        if proud < MIN_PROUD:
+            problems.append(
+                f"{ref}'s cap stands only {proud:.2f} proud of its recess floor, "
+                f"wants {MIN_PROUD:.2f}"
+            )
+    return problems
+
+
+LEGEND_MIN_VOLUME = 0.2
+"""Least a legend may take out of its cap and still be a legend. Comfortably
+under the smallest one the current table sets, the minus at SW9, and
+comfortably over the zero an entry resolving to no faces at all leaves. It
+catches an empty string, an SVG whose paths imported as nothing, and a
+legend cut somewhere other than the cap top; it does not catch a missing
+glyph, which is what the cmap check beside it is for."""
+
+FLAT_SAMPLE_STEP = 0.1
+"""Spacing, mm, of the points sampled along a legend's footprint and along the
+flat's outline. The clearance can over-read by less than this."""
+
+
+def _flat_top(blank, top):
+    """The planar face a blank cap's fillet leaves at its top z `top`, as a
+    polyline."""
+    flats = [
+        face
+        for face in blank.faces()
+        if abs(face.center().Z - top) < 0.01
+        and abs(face.normal_at().Z - 1) < 1e-6
+    ]
+    if not flats:
+        raise ValueError(f"the blank cap has no planar top face at {top:.3f}")
+    wire = max(flats, key=lambda f: f.area).outer_wire()
+    count = max(int(wire.length / FLAT_SAMPLE_STEP), 16)
+    return [(p.X, p.Y) for p in (wire @ (i / count) for i in range(count))]
+
+
+def _flat_clearance(polygon, x, y):
+    """Signed distance from (x, y) to the flat's edge, positive inside it."""
+    inside = False
+    best = math.inf
+    n = len(polygon)
+    for i in range(n):
+        x0, y0 = polygon[i]
+        x1, y1 = polygon[(i + 1) % n]
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+        dx, dy = x1 - x0, y1 - y0
+        t = max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy)))
+        best = min(best, math.hypot(x - x0 - t * dx, y - y0 - t * dy))
+    return best if inside else -best
+
+
+def legend_flat_clearance(blank, solids, top):
+    """Worst clearance, mm, from any legend footprint point to the blank cap's
+    flat top edge at z `top`, and that point. Negative means the ink leaves the
+    flat."""
+    polygon = _flat_top(blank, top)
+    worst, at = math.inf, None
+    for solid in solids:
+        top = solid.bounding_box().max.Z
+        for face in solid.faces():
+            if abs(face.center().Z - top) > 1e-6 or abs(face.normal_at().Z - 1) > 1e-6:
+                continue
+            for edge in face.edges():
+                count = max(int(edge.length / FLAT_SAMPLE_STEP), 2)
+                for i in range(count + 1):
+                    p = edge @ (i / count)
+                    c = _flat_clearance(polygon, p.X, p.Y)
+                    if c < worst:
+                        worst, at = c, (p.X, p.Y)
+    return worst, at
+
+
+def legends_present(caps):
+    """Every cap carries a real legend, cut out of one solid cap.
+
+    Four things, because each covers a way of shipping a blank or broken cap
+    that the others miss.
+
+    The ink has to be there at all: an entry that resolves to no faces, an
+    empty string or an SVG whose paths imported as nothing, builds a
+    perfectly good blank cap and no other pass in this file would notice.
+
+    Every character of a string legend has to be in LEGEND_FONT's own cmap.
+    Volume alone does not cover this: freetype maps a character the font
+    does not carry onto .notdef, which DejaVu draws as a hollow box with
+    several times the ink of the smallest legend here, so a missing glyph
+    ships as a legend that passes a volume floor and reads as a rectangle.
+    A .notdef box is a hollow rectangle that would pass for a legend, and
+    nothing else in this file would tell it from a deliberate outline, so the
+    cmap is checked against the font file rather than the rendering.
+    fontTools is build123d's own transitive dependency, through ezdxf, so
+    it is present wherever this model builds at all.
+
+    The cut has to have landed: each cap is weighed against the same cap
+    built blank, so the number is what the deboss removed rather than what
+    its own solids measure, and a cap has to come out as exactly one solid,
+    which is what a legend reaching past the roof would break.
+
+    And the ink has to fit the flat top that the top fillet leaves on the
+    built blank cap, with CAP_GRID_MARK_CLEARANCE between every point of every
+    legend's footprint and the flat's edge.
+    """
+    font = TTFont(params.LEGEND_FONT)
+    cmap = font.getBestCmap()
+
+    problems = []
+    for ref, cap in caps.items():
+        spec = mark_font_glyph(ref)
+        if spec is not None:
+            missing = sorted({c for c in spec if ord(c) not in cmap})
+            if missing:
+                names = ", ".join(f"U+{ord(c):04X}" for c in missing)
+                problems.append(
+                    f"{ref}'s legend {spec!r} wants {names}, which "
+                    f"{params.LEGEND_FONT.name} does not carry: it would cut "
+                    "a .notdef box"
+                )
+
+        # Weighed against the same cap built blank, so this is what the deboss
+        # actually removed rather than what its solids measure. Not the same
+        # number: a legend whose solids sit off the cap top entirely would
+        # measure full and remove nothing.
+        blank = case.keycap(ref, legend=False)
+        cut = blank.volume - cap.volume
+        if cut < LEGEND_MIN_VOLUME:
+            problems.append(
+                f"{ref}'s legend takes {cut:.2f} mm3 out of the cap, wants "
+                f"{LEGEND_MIN_VOLUME:.2f}: is the entry empty?"
+            )
+
+        solids = case.rigid_legend_solids(ref, blank)
+        if len(cap.solids()) != 1:
+            problems.append(
+                f"{ref}'s cap came out as {len(cap.solids())} solids, not one"
+            )
+
+        if solids:
+            clearance, at = legend_flat_clearance(blank, solids, case.cap_top(ref))
+            if clearance < params.CAP_GRID_MARK_CLEARANCE:
+                problems.append(
+                    f"{ref}'s legend ink comes within {clearance:.2f} of the "
+                    f"edge of the cap's flat top at ({at[0]:.2f}, {at[1]:.2f}), "
+                    f"wants {params.CAP_GRID_MARK_CLEARANCE:.2f} of margin"
+                )
+    return problems
+
+
+LEGEND_STROKE_REACH = 0.75
+"""Widest a legend groove may be, as a multiple of LEGEND_STROKE_W: the farthest
+any void point on the cap's section sits from the nearest groove wall. A round-
+capped line reaches 0.5, two strokes crossing about 0.65, and an inward outline
+at a sharp tip about 0.67 (measured worst, SW6, at a 0.1 grid), so 0.75 leaves
+headroom for sampling error and none for a fill: a filled plus bar reaches 0.9
+and a filled square about 2.8."""
+
+LEGEND_PROBE_STEP = 0.15
+"""Grid step, mm, of the line-weight probe over each legend's ink box. Coarse
+enough to keep the pass near a minute; it can only under-read a reach, by less
+than the step."""
+
+LEGEND_PROBE_HALF = 0.05
+"""Distance above and below the groove floor the depth probe reads at."""
+
+
+def _legend_points(solids, per_solid=4):
+    """Up to `per_solid` (x, y) points truly inside each legend solid, off a
+    grid over its box so a concave stroke cannot hand back an outside centroid."""
+    found = []
+    for solid in solids:
+        box = solid.bounding_box()
+        zmid = (box.min.Z + box.max.Z) / 2
+        hits = []
+        steps = 14
+        for i in range(1, steps):
+            for j in range(1, steps):
+                x = box.min.X + (box.max.X - box.min.X) * i / steps
+                y = box.min.Y + (box.max.Y - box.min.Y) * j / steps
+                if solid.is_inside((x, y, zmid)):
+                    hits.append((x, y))
+        stride = max(1, len(hits) // per_solid)
+        found.extend(hits[::stride][:per_solid])
+    return found
+
+
+def _hollow_points(solids):
+    """Centers of the actual counters enclosed by the cutter outlines."""
+    for solid in solids:
+        top = solid.bounding_box().max.Z
+        for face, _ in flat_faces_at(solid, top):
+            for wire in face.inner_wires():
+                point = Face(wire).center()
+                yield point.X, point.Y
+
+
+def legends_are_strokes(caps):
+    """Every legend is a shallow line, read off the built cap.
+
+    Three probes, each on the finished cap solid rather than the legend
+    builder's own output.
+
+    Depth: at points on the stroke the cap is void LEGEND_PROBE_HALF above
+    LEGEND_DEPTH below the cap's own cap_top() and material the same distance
+    below it.
+
+    Hollow: a closed outline contains material half a LEGEND_DEPTH below
+    cap_top(). A legend that reverts to a fill is void there.
+
+    Line weight: a grid over the legend's ink box is sampled half a
+    LEGEND_DEPTH below cap_top(). Each void sample's horizontal distance to the
+    groove walls, the cap faces wholly within the legend depth that are not
+    flat, is how far it sits from the nearest wall, and the largest must stay
+    within LEGEND_STROKE_REACH times the mark's stroke width. A planar boolean
+    through the top fillet is unreliable.
+    """
+    problems = []
+    for ref, cap in caps.items():
+        top = case.cap_top(ref)
+        z_mid = top - params.LEGEND_DEPTH / 2
+        width = mark_stroke_width(ref)
+        bound = LEGEND_STROKE_REACH * width
+        solids = case.rigid_legend_solids(ref)
+        if not solids:
+            continue
+
+        floor = top - params.LEGEND_DEPTH
+        for px, py in _legend_points(solids):
+            above = cap.is_inside((px, py, floor + LEGEND_PROBE_HALF))
+            below = cap.is_inside((px, py, floor - LEGEND_PROBE_HALF))
+            if above or not below:
+                problems.append(
+                    f"{ref}'s legend at ({px:.2f}, {py:.2f}) is "
+                    f"{'material' if above else 'void'} {LEGEND_PROBE_HALF:.2f} above and "
+                    f"{'material' if below else 'void'} {LEGEND_PROBE_HALF:.2f} below "
+                    f"{floor:.2f}, wants void above and material below: "
+                    f"is it LEGEND_DEPTH {params.LEGEND_DEPTH:.2f} deep?"
+                )
+                break
+
+        counters = list(_hollow_points(solids))
+        if ref in ("SW2", "SW4", "SW5", "SW6", "SW7", "SW8", "SW10") and not counters:
+            problems.append(f"{ref}'s outline has no counter")
+        for px, py in counters:
+            if not cap.is_inside((px, py, z_mid)):
+                problems.append(
+                    f"{ref}'s legend is void inside its counter at ({px:.2f}, {py:.2f}), "
+                    "wants material"
+                )
+
+        box = solids[0].bounding_box()
+        for solid in solids[1:]:
+            box = box.add(solid.bounding_box())
+        walls = [
+            face for face in cap.faces()
+            if face.bounding_box().min.Z > floor - 0.01
+            and face.bounding_box().max.Z < top + 0.01
+            and face.bounding_box().size.Z > params.LEGEND_DEPTH / 2
+        ]
+        if not walls:
+            problems.append(
+                f"{ref}'s cap has no legend groove walls in the top "
+                f"{params.LEGEND_DEPTH:.2f}"
+            )
+            continue
+        walls = Compound(walls)
+        worst, at = 0.0, None
+        nx = int((box.max.X - box.min.X) / LEGEND_PROBE_STEP) + 1
+        ny = int((box.max.Y - box.min.Y) / LEGEND_PROBE_STEP) + 1
+        for i in range(nx + 1):
+            for j in range(ny + 1):
+                px = box.min.X + i * LEGEND_PROBE_STEP
+                py = box.min.Y + j * LEGEND_PROBE_STEP
+                if cap.is_inside((px, py, z_mid)):
+                    continue
+                d = Vertex(px, py, z_mid).distance_to(walls)
+                if d > worst:
+                    worst, at = d, (px, py)
+        if worst > bound:
+            problems.append(
+                f"{ref}'s legend groove reaches {worst:.2f} from a wall at "
+                f"({at[0]:.2f}, {at[1]:.2f}), wants at most {bound:.2f} "
+                f"(LEGEND_STROKE_REACH {LEGEND_STROKE_REACH:.2f} x {width:.2f} mm stroke)"
+            )
+    return problems

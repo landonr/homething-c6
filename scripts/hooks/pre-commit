@@ -11,6 +11,18 @@
 # a staged PCB rerenders the board views (3D PNGs + flat SVGs), a staged
 # schematic rerenders schematic.svg; docs/readme-assets/ is then staged.
 #
+# A staged PCB also reruns scripts/render-annotated-remote.py --only board, so
+# the annotated board SVGs embed the new board PNGs. A staged board PNG without
+# the PCB does the same. The case sets stay out: their ImageMagick step can
+# change the PNG bytes without a design change.
+#
+# scripts/renders.json lists every render group, its inputs and its refresh
+# steps. After the hook regenerates a group, it runs render-status.py --write
+# --stage, which stages only that group's entry in
+# docs/readme-assets/renders.stamp.json. The blanket git add never stages the
+# stamp file. Last, the hook runs render-status.py --check --if-staged, which
+# warns about each stale group that a staged file feeds. It never blocks.
+#
 # A staged PCB also refreshes c6remote-kicad/ibom.html via scripts/gen-ibom.sh,
 # so the pre-fab pin-1 walk artifact never lags the board. It is gitignored and
 # deliberately not staged. Non-fatal: the generator needs KiCad's bundled Python
@@ -53,8 +65,59 @@ PCB_STAGED=false
 grep -qE '^c6remote-kicad/c6remote\.kicad_sch$' <<<"$STAGED" && SCH_STAGED=true
 grep -qE '^c6remote-kicad/c6remote\.kicad_pcb$' <<<"$STAGED" && PCB_STAGED=true
 
+# Warn, never block. Runs after the hook's own stamps, so a group it just regenerated reads OK.
+check_renders() {
+	"$REPO_ROOT/scripts/render-status.py" --check --if-staged \
+		|| echo "[pre-commit] WARNING: render-status.py failed, render staleness unknown" >&2
+}
+
+stamp_renders() {
+	"$REPO_ROOT/scripts/render-status.py" --write "$@" --stage \
+		|| echo "[pre-commit] WARNING: render-status.py --write failed, the $* stamps are stale" >&2
+}
+
+# The annotated board SVGs embed the board PNGs, so a PNG-only rerender must refresh them.
+if ! $PCB_STAGED && grep -qE '^docs/readme-assets/board-3d-rotated-(top|bottom)\.png$' <<<"$STAGED"; then
+	echo "[pre-commit] board PNG staged -> rerendering annotated board SVGs"
+	python3 "$REPO_ROOT/scripts/render-annotated-remote.py" --only board >/dev/null
+	git add -- \
+		"$REPO_ROOT/docs/readme-assets/board-front-annotated.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-front-annotated-dark.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-back-annotated.svg" \
+		"$REPO_ROOT/docs/readme-assets/board-back-annotated-dark.svg"
+	stamp_renders board-annotated
+fi
+
+# The loader checks the signature of the bundle, so a page change needs a new
+# bundle and a new signature. The ESPHome build fails when either is missing.
+if grep -qE '^(components/button_config/(button_config_page\.html|shell_build\.py|face_svg\.py)|docs/readme-assets/case-front-face\.svg)$' <<<"$STAGED"; then
+	echo "[pre-commit] page source staged -> writing and signing the website bundle"
+	if python3 "$REPO_ROOT/scripts/build-shell-bundle.py"; then
+		git add -- \
+			"$REPO_ROOT/site/app/app.js" \
+			"$REPO_ROOT/site/app/app.js.sig" \
+			"$REPO_ROOT/site/app/ui.version"
+	else
+		echo "[pre-commit] build-shell-bundle.py failed, so the firmware cannot build" >&2
+		exit 1
+	fi
+fi
+
+# The shell pins the loader by its hash, so a loader change needs a firmware
+# build. Rebuild it here, because esbuild runs in no firmware build.
+if grep -qE '^(site/app/loader\.src\.js|third_party/noble/|site/app/ui-signing-key\.pub)' <<<"$STAGED"; then
+	echo "[pre-commit] loader source staged -> bundling the loader"
+	if python3 "$REPO_ROOT/scripts/build-ui-loader.py"; then
+		git add -- "$REPO_ROOT/site/app"
+	else
+		echo "[pre-commit] build-ui-loader.py failed, so the firmware cannot build" >&2
+		exit 1
+	fi
+fi
+
 # Only regenerate when a design file is actually part of this commit.
 if ! $SCH_STAGED && ! $PCB_STAGED; then
+	check_renders
 	exit 0
 fi
 
@@ -73,8 +136,19 @@ else
 	echo "[pre-commit] schematic staged -> rerendering README schematic SVG"
 	"$REPO_ROOT/scripts/render-readme-assets.sh" --only schematic
 fi
-git add "$REPO_ROOT/docs/readme-assets/"
+if $PCB_STAGED; then
+	echo "[pre-commit] PCB staged -> rerendering annotated board SVGs"
+	python3 "$REPO_ROOT/scripts/render-annotated-remote.py" --only board >/dev/null
+fi
+git add -- "$REPO_ROOT/docs/readme-assets/" ':(top,exclude)docs/readme-assets/renders.stamp.json'
 echo "[pre-commit] docs/readme-assets/ regenerated and staged"
+if $PCB_STAGED && $SCH_STAGED; then
+	stamp_renders board board-annotated schematic
+elif $PCB_STAGED; then
+	stamp_renders board board-annotated
+else
+	stamp_renders schematic
+fi
 
 if $PCB_STAGED; then
 	echo "[pre-commit] PCB staged -> refreshing ibom.html (not staged, gitignored)"
@@ -85,3 +159,5 @@ if $PCB_STAGED; then
 		echo "[pre-commit] Run scripts/gen-ibom.sh by hand before any pin-1 walk." >&2
 	fi
 fi
+
+check_renders

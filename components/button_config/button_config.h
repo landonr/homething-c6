@@ -1,0 +1,262 @@
+#pragma once
+
+#include "esphome/components/web_server_base/web_server_base.h"
+#include "esphome/core/automation.h"
+#include "esphome/core/component.h"
+#include "esphome/core/defines.h"
+#include "esphome/core/preferences.h"
+#include "esphome/core/string_ref.h"
+
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+#include "esphome/components/idle_sleep/idle_sleep.h"
+#endif
+
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+#include "esphome/components/ha_action/ha_action.h"
+#endif
+
+#ifdef USE_BUTTON_CONFIG_BATTERY
+#include "esphome/components/sensor/sensor.h"
+#endif
+
+#include <atomic>
+#include <cstdint>
+#include <string>
+
+namespace esphome::button_config {
+
+// One row per assignable slot. Slot numbers are frozen by the NVS key layout in
+// ir_learning.h, so the table is ordered by slot and not by physical position.
+struct SlotInfo {
+  uint8_t slot;
+};
+
+class ButtonConfig final : public AsyncWebHandler, public Component {
+ public:
+  // Bytes, not characters, so a multibyte name holds fewer characters.
+  static constexpr size_t FRIENDLY_NAME_MAX = 40;
+
+  ButtonConfig(web_server_base::WebServerBase *base) : base_(base) {}
+
+  void setup() override;
+  void loop() override;
+  void dump_config() override;
+  float get_setup_priority() const override;
+
+  bool canHandle(AsyncWebServerRequest *request) const override;
+  void handleRequest(AsyncWebServerRequest *request) override;
+  void set_firmware_version(const char *version) { this->firmware_version_ = version; }
+  void set_page(const uint8_t *page, size_t size) {
+    this->page_ = page;
+    this->page_size_ = size;
+  }
+
+  // The Home Assistant switch. Off turns the Home Assistant actions off at once,
+  // and D2 stays solid orange on Wi-Fi alone. The API server has no stop, so
+  // off holds it down from the next boot on.
+  bool ha_api_expected() const { return this->ha_api_expected_.load(std::memory_order_acquire); }
+  bool set_ha_api_expected(bool expected);
+  // Reads the switch before setup() runs, so on_boot at priority 800 can hold
+  // the API server down before its own setup. A missing record means on.
+  static bool ha_api_expected_from_flash();
+  // True when that gate held the API server down for this boot.
+  void set_ha_api_gated(bool gated);
+  bool ha_api_gated() const { return this->ha_api_gated_.load(std::memory_order_acquire); }
+  // Stored mode for the ring LEDs and the XIAO LED. The first call reads flash, so
+  // on_boot at priority 800 sees it before this component's own setup(). The
+  // byte keeps an older off or on record valid.
+  enum StatusMode : uint8_t { STATUS_OFF = 0, STATUS_ON = 1, STATUS_HOLD = 2 };
+  uint8_t status_mode() const;
+  bool set_status_mode(uint8_t mode);
+  // True only in On. Hold stays dark until the status hold fires.
+  bool status_leds() const { return this->status_mode() == STATUS_ON; }
+  // The argument is status_leds() after the change.
+  void add_on_status_leds_callback(std::function<void(bool)> &&callback) {
+    this->status_leds_callbacks_.add(std::move(callback));
+  }
+  // Stored switch for the cold-boot chase and the wake battery pulses. Same lazy
+  // flash read as status_leds().
+  bool boot_leds() const;
+  bool set_boot_leds(bool enabled);
+  bool wifi_always_on() const { return this->wifi_always_on_.load(std::memory_order_acquire); }
+  void toggle_temporary_wifi();
+  // Main loop only. Opens a temporary Wi-Fi session, logged with this reason,
+  // if Wi-Fi is off. on_boot uses it for Improv and after a software restart.
+  void open_boot_wifi_session(const char *reason);
+  // Main loop only. True while a Home Assistant action lease alone holds Wi-Fi:
+  // no page, hold, pairing or boot session, and no Always On at boot.
+  bool wifi_for_action_only() const {
+    return this->action_wifi_ && !this->temporary_wifi_ && !this->boot_wifi_always_on_;
+  }
+  // Main loop only. Enables Wi-Fi if it is off and keeps it up for
+  // ACTION_WIFI_LEASE_MS from now. Call it again to extend the lease.
+  void hold_wifi_for_action();
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  void set_ha_action(ha_action::HaAction *action);
+#endif
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  void set_idle_sleep(idle_sleep::IdleSleep *sleep) { this->idle_sleep_ = sleep; }
+#endif
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  void set_battery(sensor::Sensor *level, sensor::Sensor *volts) {
+    this->battery_level_ = level;
+    this->battery_volts_ = volts;
+  }
+#endif
+
+ protected:
+  void handle_page_(AsyncWebServerRequest *request);
+  void handle_state_(AsyncWebServerRequest *request);
+  void handle_code_(AsyncWebServerRequest *request);
+  void handle_action_(AsyncWebServerRequest *request);
+  void handle_activity_(AsyncWebServerRequest *request);
+  void complete_action_(uint32_t id, bool ok);
+  void load_ha_pref_();
+  bool save_ha_pref_();
+  void sync_ha_action_();
+  void load_wifi_pref_();
+  bool set_wifi_always_on_(bool enabled);
+  void note_activity_();
+  // Clears the saved network first, so start() keys it on the fixed key.
+  void enable_wifi_();
+  void open_temporary_wifi_(const char *reason);
+  // Zeros and available=false when the build has no idle_sleep_id.
+  struct SleepState {
+    bool available;
+    bool enabled;
+    uint32_t after_s;
+    bool replay_ir;
+    bool replay_ha;
+    bool replay_zigbee;
+    bool replay_ble;
+  };
+  SleepState sleep_state_() const;
+  // Zeros and available=false when unlinked or when either reading is NAN.
+  struct BatteryState {
+    bool available;
+    int percent;
+    float volts;
+  };
+  BatteryState battery_state_() const;
+  bool set_sleep_enabled_(bool enabled);
+  bool set_sleep_after_(uint32_t seconds);
+  bool set_sleep_replay_(uint8_t mask, bool enabled);
+  void load_name_pref_();
+  bool set_friendly_name_(const std::string &name);
+  void apply_friendly_name_(const std::string &name);
+  void load_hold_pref_();
+  bool set_hold_(uint8_t slot, uint8_t hold);
+  // True when a press of the slot sends its stored IR code, as the state reports it.
+  bool slot_sends_ir_(uint8_t slot) const;
+  void apply_holds_(const uint8_t *holds);
+
+  // 'HAP1' record under key 'HAPI'. Missing or corrupt means expected=true.
+  static constexpr uint32_t HA_PREF_KEY = 0x48415049U;
+  static constexpr uint32_t HA_PREF_MAGIC = 0x48415031U;
+  struct HaPref {
+    uint32_t magic;
+    uint8_t expected;
+    uint8_t reserved[3];
+  };
+  static constexpr uint32_t WIFI_PREF_KEY = 0x5746414FU;
+  static constexpr uint32_t WIFI_PREF_MAGIC = 0x57465031U;
+  static constexpr uint32_t WIFI_IDLE_MS = 10U * 60U * 1000U;
+  // Wi-Fi stays up this long after the last Home Assistant action finished.
+  static constexpr uint32_t ACTION_WIFI_LEASE_MS = 60U * 1000U;
+  struct WifiPref {
+    uint32_t magic;
+    uint8_t enabled;
+    uint8_t reserved[3];
+  };
+  static constexpr uint32_t LED_PREF_KEY = 0x4C454453U;
+  static constexpr uint32_t LED_PREF_MAGIC = 0x4C454431U;
+  struct LedPref {
+    uint32_t magic;
+    uint8_t enabled;
+    uint8_t reserved[3];
+  };
+  static constexpr uint32_t BOOT_LED_PREF_KEY = 0x424C4544U;
+  static constexpr uint32_t BOOT_LED_PREF_MAGIC = 0x424C4431U;
+  // Older 'HLD1' record under key 'HOLD'. One slot for each hold in HoldActions
+  // order, 0 for none. A valid one moves to the 'HLD2' record once.
+  static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;
+  static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;
+  static constexpr size_t HOLD_COUNT = 4;
+  struct HoldPref {
+    uint32_t magic;
+    uint8_t slot[HOLD_COUNT];
+  };
+  // 'HLD2' record under key 'HLDS'. One HoldActions value for each slot below
+  // HOLD_SLOTS, HoldActions::NONE for none. A bad entry takes its default.
+  static constexpr uint32_t HOLD_TABLE_PREF_KEY = 0x484C4453U;
+  static constexpr uint32_t HOLD_TABLE_PREF_MAGIC = 0x484C4432U;
+  static constexpr size_t HOLD_SLOTS = 21;
+  struct HoldTablePref {
+    uint32_t magic;
+    uint8_t hold[HOLD_SLOTS];
+    uint8_t reserved[3];
+  };
+  // 'NAM1' record under key 'NAME'. Length 0 means the YAML friendly name.
+  static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;
+  static constexpr uint32_t NAME_PREF_MAGIC = 0x4E414D31U;
+  struct NamePref {
+    uint32_t magic;
+    uint8_t length;
+    char name[FRIENDLY_NAME_MAX];  // not terminated
+    uint8_t reserved[3];
+  };
+
+  web_server_base::WebServerBase *base_;
+  const uint8_t *page_{nullptr};
+  size_t page_size_{0};
+  const char *firmware_version_{"unknown"};
+  std::atomic<bool> action_pending_{false};
+  std::atomic<uint32_t> next_action_id_{0};
+  std::atomic<uint32_t> completed_action_id_{0};
+  std::atomic<bool> completed_action_ok_{false};
+  std::atomic<bool> ha_api_expected_{true};
+  std::atomic<bool> ha_api_gated_{false};
+  std::atomic<bool> wifi_always_on_{false};
+  // -1 until the first read of the stored value.
+  mutable std::atomic<int8_t> status_mode_{-1};
+  CallbackManager<void(bool)> status_leds_callbacks_;
+  mutable std::atomic<int8_t> boot_leds_{-1};
+  // The httpd task reads this copy, because HoldActions is main-loop owned.
+  std::atomic<uint8_t> holds_[HOLD_SLOTS]{};
+  ESPPreferenceObject hold_pref_;
+  std::atomic<uint32_t> last_activity_ms_{0};
+  bool boot_wifi_always_on_{false};
+  bool temporary_wifi_{false};
+  bool action_wifi_{false};
+  uint32_t action_wifi_until_ms_{0};
+  ESPPreferenceObject ha_pref_;
+  ESPPreferenceObject wifi_pref_;
+  ESPPreferenceObject name_pref_;
+  // The YAML name is a static buffer or a literal, so it outlives this
+  // component and nothing writes it after boot.
+  StringRef default_name_;
+  // The main loop fills the buffer that current_name_ does not point at, then
+  // swaps the pointer. httpd runs one task, and a rename is accepted on that
+  // task, so a state reply never reads a buffer that is being filled.
+  char names_[2][FRIENDLY_NAME_MAX + 1]{};
+  std::atomic<const char *> current_name_{""};
+#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP
+  idle_sleep::IdleSleep *idle_sleep_{nullptr};
+#endif
+#ifdef USE_BUTTON_CONFIG_HA_ACTION
+  ha_action::HaAction *ha_action_{nullptr};
+#endif
+#ifdef USE_BUTTON_CONFIG_BATTERY
+  sensor::Sensor *battery_level_{nullptr};
+  sensor::Sensor *battery_volts_{nullptr};
+#endif
+};
+
+class StatusLedsTrigger : public Trigger<bool> {
+ public:
+  explicit StatusLedsTrigger(ButtonConfig *parent) {
+    parent->add_on_status_leds_callback([this](bool enabled) { this->trigger(enabled); });
+  }
+};
+
+}  // namespace esphome::button_config

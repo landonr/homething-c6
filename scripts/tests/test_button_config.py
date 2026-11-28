@@ -1,0 +1,2624 @@
+"""Regression checks for the button_config component and its web page."""
+
+from pathlib import Path
+import ast
+import importlib.util
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import types
+import unittest
+from unittest import mock
+
+
+ROOT = Path(__file__).parents[2]
+SLOTS = ROOT / "components" / "button_slots"
+COMPONENT = ROOT / "components" / "button_config"
+CPP = (COMPONENT / "button_config.cpp").read_text()
+HEADER = (COMPONENT / "button_config.h").read_text()
+PAGE = (COMPONENT / "button_config_page.html").read_text()
+INIT = (COMPONENT / "__init__.py").read_text()
+SHELL_BUILD = (COMPONENT / "shell_build.py").read_text()
+CONFIG = (ROOT / "c6remote.yaml").read_text()
+STORE = (SLOTS / "ir_learning.h").read_text()
+HOLDS = (SLOTS / "hold_actions.h").read_text()
+PREVIEW = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+ZIGBEE = (SLOTS / "zigbee_learning.h").read_text()
+BLE = (ROOT / "components" / "ble_hid" / "ble_hid.cpp").read_text()
+BLE_HEADER = (ROOT / "components" / "ble_hid" / "ble_hid.h").read_text()
+
+ALL_SLOTS = list(range(3, 21))
+# The inputs that can carry a hold: every expander input, no wheel rotation.
+HOLD_SLOTS = set(range(3, 17)) | {19, 20}
+HOLD_KEYS = ["wifi", "status", "sleep", "assign"]
+
+
+def section(text: str, start: str, end: str) -> str:
+    """Return the text between the first start marker and the next end marker."""
+    head = text.split(start, 1)
+    if len(head) != 2:
+        raise AssertionError(f"{start!r} not found")
+    tail = head[1].split(end, 1)
+    if len(tail) != 2:
+        raise AssertionError(f"{end!r} not found after {start!r}")
+    return tail[0]
+
+
+def cpp_slots() -> list:
+    """Parse the SLOTS table out of button_config.cpp as slot numbers."""
+    table = section(CPP, "static const SlotInfo SLOTS[] = {", "};")
+    rows = re.findall(r"\{\s*(\d+)\s*\}", table)
+    if not rows:
+        raise AssertionError("SLOTS table has no rows")
+    return [int(slot) for slot in rows]
+
+
+def page_slots() -> list:
+    """Parse the S array out of button_config_page.html as one dict per input."""
+    array = section(PAGE, "var S=[", "];")
+    rows = re.findall(
+        r'\{s:(\d+),l:"([^"]+)",x:([\d.]+),y:([\d.]+)(?:,c:"([^"]+)")?\}',
+        array,
+    )
+    if not rows:
+        raise AssertionError("page S array has no rows")
+    return [
+        {"slot": int(slot), "label": label, "x": float(x), "y": float(y), "class": css_class}
+        for slot, label, x, y, css_class in rows
+    ]
+
+
+class RoutingTest(unittest.TestCase):
+    def test_the_component_claims_all_four_paths(self) -> None:
+        for path in ("/buttons", "/buttons/api/state", "/buttons/api/code",
+                     "/buttons/api/action", "/buttons/api/activity"):
+            self.assertIn(f'"{path}"', CPP)
+        self.assertIn('url == "/"', CPP)
+
+    def test_get_serves_the_page_and_state_and_post_serves_the_action(self) -> None:
+        """Catches a method change that would hide an endpoint or open a new one."""
+        handler = section(CPP, "bool ButtonConfig::canHandle", "void ButtonConfig::handleRequest")
+        self.assertIn(
+            'if (method == HTTP_GET)\n    return url == "/" || url == "/buttons" || url == "/buttons/api/state"'
+            ' || url == "/buttons/api/code";',
+            handler,
+        )
+        self.assertIn(
+            'if (method == HTTP_POST)\n    return url == "/buttons/api/action" || '
+            'url == "/buttons/api/activity";',
+            handler,
+        )
+        self.assertIn("return false;", handler)
+        for method in ("HTTP_PUT", "HTTP_DELETE", "HTTP_PATCH", "HTTP_ANY"):
+            self.assertNotIn(method, handler)
+
+    def test_an_accepted_action_answers_200_and_never_202(self) -> None:
+        """web_server_idf in ESPHome 2026.7.4 maps only 200, 204, 400, 401, 404,
+        409 and 422. Any other status leaves the device as a 500."""
+        self.assertIn('request->send(200, "application/json", R"({"ok":true})");', CPP)
+        self.assertNotIn("202", CPP)
+        self.assertNotIn("202", PAGE)
+
+    def test_a_bad_request_answers_400_and_a_busy_device_answers_409(self) -> None:
+        self.assertIn('request->send(400, "application/json", R"({"ok":false,"error":"invalid slot"})");', CPP)
+        self.assertIn('request->send(400, "application/json", R"({"ok":false,"error":"unknown action"})");', CPP)
+        self.assertIn('request->send(400, "application/json", R"({"ok":false,"error":"missing action"})");', CPP)
+        self.assertIn('request->send(409, "application/json", R"({"ok":false,"error":"busy"})");', CPP)
+        self.assertIn("if (::ir_ui.state != IrUi::OFF) {", CPP)
+
+    def test_the_page_reports_a_busy_device_from_the_409(self) -> None:
+        self.assertIn("if(r.code===409)", PAGE)
+        self.assertIn("if(r.code!==200)", PAGE)
+
+
+class WifiSessionTest(unittest.TestCase):
+    def test_missing_or_invalid_preference_keeps_wifi_off(self) -> None:
+        load = section(CPP, "void ButtonConfig::load_wifi_pref_() {", "\n}")
+        self.assertIn("WifiPref loaded{};", load)
+        self.assertIn("this->wifi_pref_.load(&loaded) && loaded.magic == WIFI_PREF_MAGIC", load)
+        self.assertIn("loaded.enabled <= 1", load)
+        self.assertIn("loaded.enabled == 1", load)
+        self.assertIn("this->wifi_always_on_.store(enabled", load)
+
+    def test_saved_default_only_changes_wifi_at_boot(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertLess(setup.index("this->load_wifi_pref_();"),
+                        setup.index("this->enable_wifi_();"))
+        self.assertIn("this->boot_wifi_always_on_ = this->wifi_always_on();", setup)
+        setter = section(CPP, "bool ButtonConfig::set_wifi_always_on_(bool enabled) {", "\n}")
+        self.assertIn("this->wifi_pref_.save(&next)", setter)
+        self.assertNotIn("global_wifi_component->enable()", setter)
+        self.assertNotIn("global_wifi_component->disable()", setter)
+        toggle = section(CPP, "void ButtonConfig::toggle_temporary_wifi() {", "\n}")
+        self.assertIn("if (this->boot_wifi_always_on_)\n    return;", toggle)
+        self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', toggle)
+        self.assertNotIn("SW9", toggle)
+        self.assertIn("this->temporary_wifi_ = false;", toggle)
+        opener = section(CPP, "void ButtonConfig::open_temporary_wifi_(const char *reason) {", "\n}")
+        self.assertIn("this->note_activity_();", opener)
+        self.assertIn("this->temporary_wifi_ = true;", opener)
+        self.assertIn("this->enable_wifi_();", opener)
+
+    def test_only_temporary_sessions_expire_after_page_inactivity(self) -> None:
+        self.assertIn("WIFI_IDLE_MS = 10U * 60U * 1000U", HEADER)
+        loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
+        self.assertIn("if (!this->temporary_wifi_ && !this->action_wifi_)\n    return;", loop)
+        self.assertIn("this->temporary_wifi_ && now - this->last_activity_ms_.load(std::memory_order_acquire) >= "
+                      "WIFI_IDLE_MS", loop)
+        self.assertIn("wifi::global_wifi_component->disable();", loop)
+        page = section(CPP, "void ButtonConfig::handle_page_", "\n}")
+        activity = section(CPP, "void ButtonConfig::handle_activity_", "\n}")
+        action = section(CPP, "void ButtonConfig::handle_action_", "\n}")
+        state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
+        for handler in (page, activity, action):
+            self.assertIn("this->note_activity_();", handler)
+        self.assertNotIn("note_activity_", state)
+        self.assertIn('request->send(200, "application/json", R"({"ok":true})");', activity)
+
+    def test_a_pairing_boot_opens_a_temporary_session(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        load = setup.index("this->load_wifi_pref_();")
+        gate = setup.index("if (this->boot_wifi_always_on_)\n    this->enable_wifi_();")
+        pair = setup.index("if (!this->boot_wifi_always_on_ && ::zigbee_assignments.pairing())\n"
+                           '    this->open_temporary_wifi_("for Zigbee pairing");')
+        self.assertLess(load, gate)
+        self.assertLess(gate, pair)
+        # The boot decides, so a window that never opens cannot keep Wi-Fi off.
+        loop = section(CPP, "void ButtonConfig::loop() {", "\n}")
+        self.assertNotIn("pairing_window_open", loop)
+        self.assertNotIn("zigbee_assignments", loop)
+        self.assertNotIn("pairing_wifi_checked_", CPP + HEADER)
+
+    def test_page_switch_and_real_interactions_refresh_the_idle_clock(self) -> None:
+        self.assertIn('aria-label="WiFi Always On"', PAGE)
+        self.assertIn('id="wfd"', PAGE)
+        self.assertIn('id="wfs"', PAGE)
+        status = section(PAGE, "function networkStatus(){", "\n\nfunction ")
+        self.assertIn("st.network.wifi_enabled===true", status)
+        self.assertIn("st.network.wifi_always_on===true", status)
+        switch = section(PAGE, "function setWifiAlwaysOn(){", "\n\nfunction ")
+        self.assertIn('post("set_wifi_always_on"', switch)
+        self.assertIn('"&enabled="+(wifiWant?"1":"0")', switch)
+        self.assertIn('fetch("/buttons/api/activity",{method:"POST"', PAGE)
+        self.assertIn('sendActivity();', PAGE)
+        self.assertIn('["click","touchstart","keydown","input","change"]', PAGE)
+        self.assertIn('document.addEventListener(type,pageActivity,true)', PAGE)
+        self.assertNotIn("pageActivity()", section(PAGE, "function stateWatch(){", "\n\nfunction "))
+
+
+class SleepSettingsTest(unittest.TestCase):
+    """Production links idle_sleep, but the component must still build without it."""
+
+    def test_the_idle_sleep_link_is_optional_and_behind_a_define(self) -> None:
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn("cv.Optional(CONF_IDLE_SLEEP_ID): cv.use_id(idle_sleep.IdleSleep)", INIT)
+        guarded = section(INIT, "    if CONF_IDLE_SLEEP_ID in config:\n", "\n\n")
+        self.assertIn("sleep = await cg.get_variable(config[CONF_IDLE_SLEEP_ID])", guarded)
+        self.assertIn("cg.add(var.set_idle_sleep(sleep))", guarded)
+        self.assertIn('cg.add_define("USE_BUTTON_CONFIG_IDLE_SLEEP")', guarded)
+        self.assertEqual(INIT.count("USE_BUTTON_CONFIG_IDLE_SLEEP"), 1)
+        self.assertNotIn("idle_sleep", INIT.split("AUTO_LOAD", 1)[1].split("\n", 1)[0])
+        self.assertIn('#include "esphome/core/defines.h"', HEADER)
+        # Every idle_sleep symbol in the C++ sits inside the define.
+        for text in (HEADER, CPP):
+            outside = re.sub(r"#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP\n.*?#(?:else|endif)", "", text,
+                             flags=re.DOTALL)
+            outside = re.sub(r"//[^\n]*", "", outside)
+            for symbol in ("idle_sleep::", "idle_sleep_", "idle_sleep/"):
+                self.assertNotIn(symbol, outside)
+        self.assertIn('#ifdef USE_BUTTON_CONFIG_IDLE_SLEEP\n#include "esphome/components/idle_sleep/idle_sleep.h"\n'
+                      '#endif', HEADER)
+
+    def test_the_state_reports_sleep_with_zeros_when_absent(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        for key in ("replay", "replay_ir", "replay_ha", "replay_zigbee", "replay_ble"):
+            self.assertIn(f'"{key}":%s', state)
+        self.assertIn("const SleepState sleep = this->sleep_state_();", state)
+        self.assertIn('sleep.available ? "true" : "false", sleep.enabled ? "true" : "false",', state)
+        body = section(CPP, "ButtonConfig::SleepState ButtonConfig::sleep_state_() const {", "\n}")
+        self.assertIn("const uint8_t mask = this->idle_sleep_->wake_replay_mask();", body)
+        self.assertTrue(body.rstrip().endswith("return {};"))
+
+    def test_both_sleep_actions_follow_the_wifi_action_pattern(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        known = section(action, "const bool known = ", ";")
+        self.assertIn("sleep_action", known)
+        sleep_action = section(action, "const bool sleep_action =", ";")
+        self.assertIn('action == "set_sleep_enabled"', sleep_action)
+        self.assertIn('action == "set_sleep_after"', sleep_action)
+        # Every refusal comes before the busy claim, so none holds action_pending_.
+        claim = action.index("compare_exchange_strong(expected, true")
+        for error in ("sleep is not configured", "invalid sleep switch", "sleep after is 10 to 3600 seconds"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', action)
+            self.assertLess(action.index(error), claim)
+        self.assertIn('if (sleep_action && !this->sleep_state_().available) {', action)
+        self.assertIn('const std::string enabled = request->arg("enabled");', section(
+            action, 'if (action == "set_sleep_enabled") {', "\n  }"))
+        self.assertIn('parse_sleep_after(request->arg("seconds"), sleep_after_s)', action)
+        self.assertIn('action != "set_wifi_always_on" && action != "set_status_leds" && action != "set_boot_leds" &&', action)
+        for name, call in (("set_sleep_enabled", "this->set_sleep_enabled_(sleep_on)"),
+                           ("set_sleep_after", "this->set_sleep_after_(sleep_after_s)")):
+            branch = section(action, f'}} else if (action == "{name}") {{', "\n  } else")
+            self.assertIn("this->defer([this, action_id, ", branch)
+            self.assertIn(f"this->complete_action_(action_id, {call});", branch)
+
+    def test_the_status_mode_is_stored_validated_and_exposed(self) -> None:
+        self.assertIn("enum StatusMode : uint8_t { STATUS_OFF = 0, STATUS_ON = 1, STATUS_HOLD = 2 };", HEADER)
+        self.assertIn("uint8_t status_mode() const;", HEADER)
+        self.assertIn("bool set_status_mode(uint8_t mode);", HEADER)
+        # Every gate and the on_status_leds trigger keep reading the On mode alone.
+        self.assertIn("bool status_leds() const { return this->status_mode() == STATUS_ON; }", HEADER)
+        status = section(CPP, "uint8_t ButtonConfig::status_mode() const {", "\n}")
+        self.assertIn("make_preference<LedPref>(LED_PREF_KEY, true)", status)
+        self.assertIn("value < 0", status)
+        # Byte 0 is off and 1 is on, as in the older switch record, so it keeps its meaning.
+        self.assertIn("loaded.enabled <= STATUS_HOLD", status)
+        self.assertIn("value = static_cast<int8_t>(valid ? loaded.enabled : STATUS_ON);", status)
+        setter = section(CPP, "bool ButtonConfig::set_status_mode(uint8_t mode) {", "\n}")
+        self.assertIn("if (mode > STATUS_HOLD)\n    return false;", setter)
+        self.assertIn("preference.save(&next)", setter)
+        # The peek ends before the trigger asks for the light.
+        self.assertLess(setter.index("::hold_actions.set_status_active(mode == STATUS_HOLD);"),
+                        setter.index("this->status_leds_callbacks_.call(mode == STATUS_ON);"))
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertIn("::hold_actions.set_status_active(this->status_mode() == STATUS_HOLD);", setup)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertIn('parse_status_mode(request->arg("mode"), led_mode)', action)
+        self.assertIn('R"({"ok":false,"error":"a status LED mode is off, hold, or on"})"', action)
+        self.assertNotIn("invalid status LED switch", CPP)
+        self.assertLess(action.index("a status LED mode is off, hold, or on"),
+                        action.index("compare_exchange_strong(expected, true"))
+        branch = section(action, '} else if (action == "set_status_leds") {', "\n  } else")
+        self.assertIn("this->set_status_mode(led_mode)", branch)
+        parse = section(CPP, "static bool parse_status_mode(const std::string &text, uint8_t &mode) {", "\n}")
+        for word in ('"off"', '"on"', '"hold"'):
+            self.assertIn(word, parse)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"status_leds":"%s","boot_leds":%s,"network":{', state)
+        self.assertIn("status_mode_name(this->status_mode()), this->boot_leds()", state)
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Status LEDs: %s", status_mode_name(this->status_mode()));', CPP)
+        self.assertIn('post("set_status_leds"', PAGE)
+        self.assertIn('"&mode="+ledWant', PAGE)
+        self.assertIn('<h2 class="ttl">Status LEDs<select id="lgm" aria-label="Status LEDs" disabled>\n'
+                      '<option value="off">Off</option><option value="hold">Hold button</option>'
+                      '<option value="on">Always on</option></select></h2>', PAGE)
+        self.assertNotIn('id="lgb"', PAGE)
+        self.assertRegex(PAGE, r'var CFG_BOOL=\[[^\]]*"boot_leds"')
+        self.assertIn("o.status_leds=ledMode();", PAGE)
+        self.assertIn('function ledMode(){var m=st&&st.status_leds;return m==="off"||m==="hold"?m:m===false?"off":"on"}',
+                      PAGE)
+
+    def test_the_boot_leds_setting_mirrors_the_status_leds_setting(self) -> None:
+        self.assertIn("bool boot_leds() const;", HEADER)
+        boot = section(CPP, "bool ButtonConfig::boot_leds() const {", "\n}")
+        self.assertIn("make_preference<LedPref>(BOOT_LED_PREF_KEY, true)", boot)
+        self.assertIn("value < 0", boot)
+        setter = section(CPP, "bool ButtonConfig::set_boot_leds(bool enabled) {", "\n}")
+        self.assertIn("preference.save(&next)", setter)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertIn('R"({"ok":false,"error":"invalid boot LED switch"})"', action)
+        branch = section(action, '} else if (action == "set_boot_leds") {', "\n  } else")
+        self.assertIn("this->set_boot_leds(boot_leds_on)", branch)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"boot_leds":%s,"network":{', state)
+        self.assertIn("this->boot_leds() ? \"true\" : \"false\"", state)
+        self.assertIn('post("set_boot_leds"', PAGE)
+        self.assertIn('id="blb"', PAGE)
+        self.assertIn('add("boot_leds",st.boot_leds,"set_boot_leds",en);', PAGE)
+        self.assertIn("o.boot_leds=st.boot_leds;", PAGE)
+
+    def test_the_wake_replay_action_follows_the_sleep_switch_pattern(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        known = section(action, "const bool known = ", ";")
+        self.assertIn("sleep_action", known)
+        self.assertIn('const bool replay_action = action == "set_sleep_replay" || action == "set_sleep_replay_ir";',
+                      action)
+        self.assertIn("replay_action", section(action, "const bool sleep_action =", ";"))
+        claim = action.index("compare_exchange_strong(expected, true")
+        self.assertLess(action.index("invalid wake press switch"), claim)
+        self.assertLess(action.index("invalid wake press radio"), claim)
+        parse = section(action, "if (replay_action) {", "\n  }")
+        self.assertIn('const std::string enabled = request->arg("enabled");', parse)
+        self.assertIn("else if (radio.empty())\n      replay_mask = Sleep::WAKE_NETWORK;", parse)
+        branch = section(action, "} else if (replay_action) {", "\n  } else")
+        self.assertIn("this->defer([this, action_id, replay_mask, replay_on]() {", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_sleep_replay_(replay_mask, replay_on));", branch)
+        setter = section(CPP, "bool ButtonConfig::set_sleep_replay_(uint8_t mask, bool enabled) {", "\n}")
+        self.assertIn("this->idle_sleep_->set_wake_replay(mask, enabled)", setter)
+        self.assertIn("return false;", setter.split("#else", 1)[1])
+
+    def test_the_setters_pass_through_and_the_range_matches_idle_sleep(self) -> None:
+        enabled = section(CPP, "bool ButtonConfig::set_sleep_enabled_(bool enabled) {", "\n}")
+        self.assertIn("return this->idle_sleep_ != nullptr && this->idle_sleep_->set_enabled(enabled);", enabled)
+        self.assertIn("return false;", enabled.split("#else", 1)[1])
+        after = section(CPP, "bool ButtonConfig::set_sleep_after_(uint32_t seconds) {", "\n}")
+        self.assertIn("return this->idle_sleep_ != nullptr && this->idle_sleep_->set_sleep_after_s(seconds);",
+                      after)
+        self.assertIn("return false;", after.split("#else", 1)[1])
+        parse = section(CPP, "static bool parse_sleep_after(const std::string &text, uint32_t &seconds) {", "\n}")
+        self.assertIn("std::isdigit(static_cast<unsigned char>(text[0])) == 0", parse)
+        self.assertIn("value < SLEEP_AFTER_MIN_S || value > SLEEP_AFTER_MAX_S", parse)
+        self.assertIn("static constexpr uint32_t SLEEP_AFTER_MIN_S = 10;", CPP)
+        self.assertIn("static constexpr uint32_t SLEEP_AFTER_MAX_S = 3600;", CPP)
+        self.assertIn("static_assert(SLEEP_AFTER_MIN_S == idle_sleep::IdleSleep::MIN_SLEEP_AFTER_S &&", CPP)
+
+    def test_the_page_block_shows_only_with_idle_sleep(self) -> None:
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        block = section(dev, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Status LEDs')
+        self.assertLess(dev.index('id="bat"'), dev.index('id="dip"'))
+        self.assertLess(dev.index('id="dip"'), dev.index('id="slpcfg"'))
+        self.assertIn('document.getElementById("dip")', PAGE)
+        self.assertIn('dip.textContent=st.network.ip||"Unavailable"', PAGE)
+        self.assertLess(dev.index('id="slpcfg"'), dev.index('id="lgm"'))
+        self.assertIn('<h2 class="ttl">Sleep<label class="sw" id="slw"><input type="checkbox" id="slb"\n'
+                      'aria-label="Sleep" disabled>', block)
+        self.assertIn('<input type="number" id="sla" min="1" max="60" step="1"', block)
+        self.assertIn('<div class="act" id="slr">', block)
+        row = section(block, '<div class="act" id="slr">', "</div>")
+        self.assertLess(row.index('id="sla"'), row.index('id="slap"'))
+        self.assertIn('<button type="button" id="slap" disabled>Apply</button>', row)
+        self.assertLess(block.index("Each press restarts the timer."), block.index('for="sla"'))
+        self.assertLess(block.index('for="sla"'), block.index('id="slr"'))
+        status = section(PAGE, "function sleepStatus(){", "\n\nfunction ")
+        self.assertIn("if(blk)blk.hidden=!(z&&z.available);", status)
+        self.assertIn("box.checked=sleepBusy?sleepWant:on;box.disabled=sleepBusy", status)
+        self.assertIn("document.activeElement!==num&&document.activeElement!==ap", status)
+        self.assertIn("if(ap)ap.disabled=sleepBusy", status)
+        switch = section(PAGE, "function setSleepEnabled(){", "\n\nfunction ")
+        self.assertIn('sleepSave("set_sleep_enabled","&enabled="+(sleepWant?"1":"0")', switch)
+        after = section(PAGE, "function setSleepAfter(){", "\n\nfunction ")
+        self.assertIn("m<1||m>60", after)
+        self.assertIn('sleepSave("set_sleep_after","&seconds="+(m*60)', after)
+        save = section(PAGE, "function sleepSave(a,x,why){", "\n\nfunction ")
+        self.assertIn("return waitAction(r.body.id)", save)
+        self.assertIn("sleepBusy=false;return load().then(paint)", save)
+        self.assertIn('document.getElementById("slb").onchange=setSleepEnabled;', PAGE)
+        self.assertIn('document.getElementById("slap").onclick=setSleepAfter;', PAGE)
+        self.assertIn('document.getElementById("sla").onkeydown=function(e){if(e.key==="Enter")setSleepAfter()};', PAGE)
+        self.assertNotIn('document.getElementById("sla").onchange', PAGE)
+
+    def test_the_wake_radios_share_one_heading(self) -> None:
+        """Four headings read as four settings, so one heading carries the group."""
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        block = section(dev, '<div id="slpcfg" hidden>', '</div>\n<hr class="rule">\n<h2 class="ttl">Status LEDs')
+        self.assertIn('<hr class="rule">\n<h2 class="ttl">Send on sleep wake</h2>\n<p class="sub" id="srh"></p>', block)
+        for label, box in (("IR", "sri"), ("Home Assistant", "srha"), ("Zigbee", "srz"), ("Bluetooth", "srb")):
+            self.assertIn(f'<div class="opt">{label}<label class="sw"><input type="checkbox" id="{box}"\n'
+                          f'aria-label="Send {label} on wake" disabled><span></span></label></div>', block)
+            # The visible label drops the verb, so the aria-label keeps it.
+            self.assertNotIn(f"Send {label} on wake<", block)
+        self.assertLess(block.index("Send on sleep wake"), block.index('id="srh"'))
+        self.assertLess(block.index('id="srh"'), block.index('id="sri"'))
+        self.assertLess(block.index('id="slap"'), block.index("Send on sleep wake"))
+        self.assertIn(".opt{display:flex;align-items:center;justify-content:space-between", PAGE)
+
+    def test_the_preview_serves_the_sleep_block(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('"sleep": {"available": True, "enabled": True, "after_s": 300, "replay": False,', preview)
+        for radio in ("ir", "ha", "zigbee", "ble"):
+            self.assertIn(f'"replay_{radio}": False', preview)
+        self.assertIn('elif action == "set_sleep_enabled":', preview)
+        self.assertIn('elif action == "set_sleep_after":', preview)
+        self.assertIn("10 <= int(seconds) <= 3600", preview)
+
+
+class HoldSettingsTest(unittest.TestCase):
+    """One hold or none on each input, stored by ButtonConfig and run by HoldActions.
+    Several inputs can share a hold."""
+
+    def test_the_hold_table_loads_migrates_the_old_record_and_falls_back_to_the_defaults(self) -> None:
+        self.assertIn("static constexpr uint32_t HOLD_PREF_KEY = 0x484F4C44U;", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_PREF_MAGIC = 0x484C4431U;", HEADER)
+        self.assertIn("  struct HoldPref {\n    uint32_t magic;\n    uint8_t slot[HOLD_COUNT];\n  };", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_TABLE_PREF_KEY = 0x484C4453U;", HEADER)
+        self.assertIn("static constexpr uint32_t HOLD_TABLE_PREF_MAGIC = 0x484C4432U;", HEADER)
+        self.assertIn("  struct HoldTablePref {\n    uint32_t magic;\n    uint8_t hold[HOLD_SLOTS];\n"
+                      "    uint8_t reserved[3];\n  };", HEADER)
+        load = section(CPP, "void ButtonConfig::load_hold_pref_() {", "\n}")
+        self.assertIn("static_assert(HOLD_SLOTS == HoldActions::SLOT_LIMIT,", load)
+        self.assertIn("make_preference<HoldTablePref>(HOLD_TABLE_PREF_KEY, true)", load)
+        self.assertIn("table.magic == HOLD_TABLE_PREF_MAGIC", load)
+        # The new record wins, then the old one moves over, then the defaults apply.
+        new_record = load.index("this->apply_holds_(table.hold);")
+        old_record = load.index("old.magic == HOLD_PREF_MAGIC && hld1_valid(old.slot)")
+        self.assertLess(new_record, old_record)
+        self.assertLess(old_record, load.index("defaults[s] = HoldActions::default_hold(s);"))
+        self.assertIn("next.hold[old.slot[a]] = a;", load)
+        self.assertLess(load.index("next.hold[old.slot[a]] = a;"), load.index("this->hold_pref_.save(&next)"))
+        old_rule = section(CPP, "static bool hld1_valid(const uint8_t *slots) {", "\n}")
+        self.assertIn("if (slots[b] == slots[a])", old_rule)
+        self.assertIn("static constexpr uint8_t DEFAULT_SLOT[COUNT] = {5, 7, 20, 9};", HOLDS)
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        self.assertLess(setup.index("this->load_hold_pref_();"),
+                        setup.index("::hold_actions.set_status_active("))
+        apply_ = section(CPP, "void ButtonConfig::apply_holds_(const uint8_t *holds) {", "\n}")
+        # A bad entry takes its default inside set_holds(), so the copy reads the result.
+        self.assertIn("::hold_actions.set_holds(holds);", apply_)
+        self.assertIn("this->holds_[s].store(::hold_actions.hold(s), std::memory_order_release);", apply_)
+        self.assertIn("std::atomic<uint8_t> holds_[HOLD_SLOTS]{};", HEADER)
+        self.assertNotIn("valid_slots", HOLDS + CPP)
+
+    def test_the_set_hold_action_refuses_a_bad_request_before_the_busy_claim(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "set_hold"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "set_hold"', section(action, "const bool needs_slot = ", ";"))
+        claim = action.index("compare_exchange_strong(expected, true")
+        for error in ("a hold is none, wifi, status, sleep, or assign", "a hold slot is 3 to 16, 19, or 20"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', action)
+            self.assertLess(action.index(error), claim)
+        # Several inputs can share a hold, so no request is refused for a used hold.
+        self.assertNotIn("another hold already uses that button", CPP)
+        self.assertIn('parse_hold_name(request->arg("hold"), hold)', action)
+        self.assertIn('parse_hold_slot(request->arg("slot"), hold_slot)', action)
+        branch = section(action, '} else if (action == "set_hold") {', "\n  } else")
+        self.assertIn("this->complete_action_(action_id, this->set_hold_(hold_slot, hold));", branch)
+        names = section(CPP, "static bool parse_hold_name(const std::string &text, uint8_t &hold) {", "\n}")
+        self.assertIn("for (uint8_t i = 0; i <= HoldActions::COUNT; i++) {", names)
+        self.assertIn('return hold < HoldActions::COUNT ? HOLD_NAMES[hold] : "none";', CPP)
+        slot = section(CPP, "static bool parse_hold_slot(const std::string &text, uint8_t &slot) {", "\n}")
+        self.assertIn("!HoldActions::valid_slot(static_cast<uint8_t>(value))", slot)
+        setter = section(CPP, "bool ButtonConfig::set_hold_(uint8_t slot, uint8_t hold) {", "\n}")
+        self.assertIn("if (!HoldActions::valid_slot(slot) || hold > HoldActions::NONE)", setter)
+        self.assertLess(setter.index("next.hold[slot] = hold;"), setter.index("this->hold_pref_.save(&next)"))
+        self.assertLess(setter.index("this->hold_pref_.save(&next)"),
+                        setter.index("this->apply_holds_(next.hold);"))
+
+    def test_the_state_serves_a_hold_on_each_slot_and_the_log_lists_the_held_slots(self) -> None:
+        self.assertIn('static const char *const HOLD_NAMES[HoldActions::COUNT] = {"wifi", "status", "sleep", "assign"};',
+                      CPP)
+        self.assertIn("enum Action : uint8_t { WIFI = 0, STATUS = 1, SLEEP = 2, ASSIGN = 3, COUNT = 4 };", HOLDS)
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertNotIn('"holds":', state)
+        self.assertIn('stream->printf(R"(","hold":"%s"})", hold_name(this->holds_[info.slot].load(std::memory_order_acquire)));',
+                      state)
+        dump = section(CPP, "void ButtonConfig::dump_config() {", "\n}")
+        self.assertIn("if (hold != HoldActions::NONE)", dump)
+        self.assertIn('"  Hold on slot %u: %s"', dump)
+        self.assertIn('this->open_temporary_wifi_("by the Wi-Fi hold");', CPP)
+
+    def test_the_button_card_offers_each_hold_once(self) -> None:
+        holds = re.findall(r'\{k:"(\w+)",n:"[^"]+",d:"(\d+) s",t:"[^"]+"\}', section(PAGE, "var HOLDS=[", "];"))
+        self.assertEqual([key for key, _ in holds], HOLD_KEYS)
+        # The page shows the hold time that the firmware times.
+        times = re.search(r"HOLD_MS\[COUNT\] = \{([^}]*)\}", HOLDS).group(1)
+        self.assertEqual([int(s) * 1000 for _, s in holds], [int(v) for v in times.split(",")])
+        inputs = [int(value) for value in section(PAGE, "var HB=[", "];").split(",")]
+        self.assertEqual(len(inputs), len(set(inputs)))
+        self.assertEqual(set(inputs), HOLD_SLOTS)
+        table = re.search(r"SLOT_OF_BIT\[16\] = \{([^}]*)\}", HOLDS).group(1)
+        self.assertEqual({int(value) for value in table.split(",")}, HOLD_SLOTS)
+        card = section(PAGE, "function holdSection(lock){", "\n\n")
+        # Wheel rotation is not in HB, so slots 17 and 18 get no section.
+        self.assertIn('if(HB.indexOf(sel)<0||!st)return "";', card)
+        # The draft hold shows until Save, and no option names another input.
+        self.assertIn("var cur=hdv!==null?hdv:holdAt(sel),i,d,h;", card)
+        self.assertIn('h+="<option value="+d.k+(cur===d.k?" selected":"")+">"+esc(d.n)+", "+d.d+"</option>"}', card)
+        self.assertNotIn("info(by)", PAGE)
+        # Several inputs can share a hold, and the stored hold comes from the slot entry.
+        self.assertIn('function holdAt(s){var r=row(s);return r&&r.hold&&r.hold!=="none"?r.hold:""}', PAGE)
+        change = section(PAGE, "function holdChange(){", "\n\n")
+        self.assertIn("hdv=k===holdAt(sel)?null:k;paint()", change)
+        self.assertNotIn("post(", change)
+        for gone in ("function holdRun(", "holdBusy", "holdWant", "holdError", "st.holds"):
+            self.assertNotIn(gone, PAGE)
+        edit = section(PAGE, "function editor(){", "\nfunction ")
+        self.assertIn('h+="</div>"+holdSection(lock)+edBar(lock);', edit)
+        self.assertIn('var hs=document.getElementById("hsel");if(hs)hs.onchange=holdChange;', edit)
+        self.assertIn('var hl=holdOf(d.s),lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
+        # The Config tab has no hold block now.
+        dev = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        self.assertNotIn("Hold buttons", dev)
+        for gone in ('id="hbx"', 'id="hbs"', "function holdPaint(", "function setHold("):
+            self.assertNotIn(gone, PAGE)
+
+    def test_no_page_text_names_a_fixed_hold_button(self) -> None:
+        script = section(PAGE, "<script>", "</script>")
+        self.assertNotRegex(PAGE, r"Hold Button \d")
+        self.assertNotIn("SW1", PAGE)
+        self.assertNotIn("SW9", PAGE)
+        for name in ("wifi", "status", "sleep", "assign"):
+            self.assertIn(f'holdName("{name}")', script)
+        self.assertIn('var wh=document.getElementById("wfh"),wn=holdName("wifi");', script)
+        self.assertIn("function wifiHoldText(){", script)
+        self.assertIn("(a===false?wifiHoldText():", script)
+
+    def test_the_export_puts_a_hold_on_each_slot_and_the_import_reads_both_forms(self) -> None:
+        blob = section(PAGE, "function cfgBlob(){", "\n\n")
+        self.assertIn('if(HB.indexOf(s)>=0)e.hold=holdAt(s)||"none";', blob)
+        self.assertNotIn("hold_", section(PAGE, "function cfgSettings(){", "\n\n"))
+        self.assertNotIn("set_hold", section(PAGE, "function cfgSetList(o){", "\n\n"))
+        # An older file still imports its four keys.
+        self.assertIn('var CFG_HOLD=["hold_wifi","hold_status","hold_sleep","hold_assign"];', PAGE)
+        holds = section(PAGE, "function cfgHoldList(o,slots){", "\n\n")
+        old_key = holds.index('HB.forEach(function(x){if(want[x]===d.k)want[x]="none"});if(v)want[v]=d.k')
+        slot_field = holds.index("want[e.slot]=e.hold")
+        self.assertLess(old_key, slot_field)
+        self.assertIn('list.push({key:"hold of slot "+s,action:"set_hold",args:"&slot="+s+"&hold="+want[s]})', holds)
+        check = section(PAGE, "function cfgCheck(e){", "\n\n")
+        self.assertIn('if(!holdInfo(e.hold))return "Slot "+e.slot+" carries the unknown hold "+e.hold+".";', check)
+        self.assertIn('if(HB.indexOf(e.slot)<0)return "Slot "+e.slot+" is wheel rotation, which cannot carry a hold."', check)
+        apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
+        # The holds go after the inputs and the settings.
+        self.assertIn("list=list.concat(sets.list,holds);", apply_)
+
+    def test_the_preview_serves_the_holds_and_the_status_mode(self) -> None:
+        self.assertIn('"status_leds": "on",', PREVIEW)
+        self.assertIn('DEFAULT_HOLDS = {5: "wifi", 7: "status", 20: "sleep", 9: "assign"}', PREVIEW)
+        self.assertIn('"hold": HOLDS.get(slot, "none"),', PREVIEW)
+        self.assertNotIn('"holds":', PREVIEW)
+        self.assertIn("HOLD_SLOTS = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20}", PREVIEW)
+        self.assertIn('elif action == "set_hold":', PREVIEW)
+        for error in ("a status LED mode is off, hold, or on", "a hold is none, wifi, status, sleep, or assign",
+                      "a hold slot is 3 to 16, 19, or 20"):
+            self.assertIn(error, PREVIEW)
+            self.assertIn(error, CPP)
+        # Several slots can share a hold, so the preview refuses no used hold.
+        self.assertNotIn("another hold already uses that button", PREVIEW)
+
+
+class IrNameTest(unittest.TestCase):
+    """A stored IR code takes a name from the page, and the code block keeps a
+    Flipper-valid name line without a name that the remote invented."""
+
+    ACTION = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+
+    def test_the_header_is_shared_by_the_store_and_the_build(self) -> None:
+        headers = (SLOTS / "__init__.py").read_text()
+        self.assertLess(headers.index('"ir_name.h"'), headers.index('"ir_learning.h"'))
+        rule = (SLOTS / "ir_name.h").read_text()
+        self.assertNotIn("esphome", rule)
+        self.assertIn("static constexpr size_t MAX = 23;", rule)
+
+    def test_set_ir_name_refuses_a_bad_request_before_the_busy_claim(self) -> None:
+        self.assertIn('action == "set_ir_name"', section(self.ACTION, "const bool known = ", ";"))
+        self.assertNotIn('action != "set_ir_name"', section(self.ACTION, "const bool needs_slot = ", ";"))
+        claim = self.ACTION.index("compare_exchange_strong(expected, true")
+        for error in ("the slot holds no IR code", "Slot3 to Slot20 mark a code with no name",
+                      "a code name is up to 23 printable ASCII characters, with no quote, no backslash, "
+                      "and no space at either end"):
+            self.assertIn(f'R"({{"ok":false,"error":"{error}"}})"', self.ACTION)
+            self.assertLess(self.ACTION.index(error), claim)
+        check = section(self.ACTION, 'if (action == "set_ir_name") {', "\n  }\n")
+        order = ["this->slot_sends_ir_(info->slot)", 'ir_name_text = request->arg("name");',
+                 "ir_name::placeholder(ir_name_text.data(), ir_name_text.size())",
+                 "ir_name::fits(ir_name_text.data(), ir_name_text.size())"]
+        positions = [check.index(item) for item in order]
+        self.assertEqual(positions, sorted(positions))
+        branch = section(self.ACTION, '} else if (action == "set_ir_name") {', "\n  } else")
+        self.assertIn("this->defer([this, button, action_id, ir_name_text]() {", branch)
+        self.assertIn("::ir_code_store.rename(button, ir_name_text.c_str())", branch)
+
+    def test_only_a_slot_that_sends_its_code_takes_a_name(self) -> None:
+        """The same order as the state report, so the page and the check agree."""
+        body = section(CPP, "bool ButtonConfig::slot_sends_ir_(uint8_t slot) const {", "\n}")
+        for text in ("::ir_code_store.has_code(slot)",
+                     "BleHid::instance()->assignment(slot).assigned",
+                     "::zigbee_assignments.assignment(slot).assigned",
+                     "this->ha_action_->has_assignment(slot)"):
+            self.assertIn(text, body)
+        self.assertIn("bool slot_sends_ir_(uint8_t slot) const;", HEADER)
+
+    def test_a_pasted_placeholder_stores_no_name(self) -> None:
+        """An export, an import, and a copy to another input all carry the line."""
+        paste = self.ACTION.index("ir_name::placeholder(name.data(), name.size()))\n    name.clear();")
+        self.assertLess(self.ACTION.index('!parse_ir_text(request->arg("code"), name, timings)'), paste)
+        self.assertLess(paste, self.ACTION.index("::ir_code_store.set_name(button, name.c_str())"))
+        self.assertIn(R'stream->printf("name: Slot%u\\n"', CPP)
+        # The page drops the line on an import too, with the same range.
+        self.assertIn("var IR_SLOT_NAME=/^Slot(?:[3-9]|1[0-9]|20)$/;", PAGE)
+        self.assertIn("return !(m&&IR_SLOT_NAME.test(m[1]))", section(PAGE, "function cfgCode(text){", "\n\n"))
+
+    def test_the_page_edits_and_shows_the_code_name(self) -> None:
+        box = section(PAGE, "function nameBox(lock){", "\n\n")
+        self.assertIn('if(!r||r.action!=="ir")return "";', box)
+        self.assertIn("if(inSlot!==sel||!inDirty){inv=r.name||\"\";inSlot=sel;inDirty=false}", box)
+        self.assertIn("maxlength=23", box)
+        self.assertNotIn("id=ins", box)
+        plan = section(PAGE, "function savePlan(s){", "\n\n")
+        # The name is checked before the first write, and a code apply goes before it.
+        self.assertLess(plan.index("why=irNameWhy(v);"), plan.index("plan={steps:steps"))
+        self.assertLess(plan.index('steps.push({a:"set_ir_code",s:s,c:cd,'), plan.index('{a:"set_ir_name",s:s,n:v,'))
+        # The code apply takes the name from its name line, so the name write runs only if it still differs.
+        self.assertIn('steps.push(function(){var x=row(s);return x&&x.action==="ir"&&(x.name||"")===v?null:', plan)
+        self.assertIn("nameBytes(v)>23", section(PAGE, "function irNameWhy(v){", "\n\n"))
+        self.assertIn('<span class=cn>"+esc(irName(sel))+"</span>', PAGE)
+        # words() carries the code name, and an active hold follows it.
+        self.assertIn('lb=d.l+": "+words(d.s)+(hl?". Hold: "+hl.n:"");', PAGE)
+        self.assertIn('b.setAttribute("title",lb);', PAGE)
+        # A late Save result never paints on another input.
+        self.assertIn('if(sel===s){hdv=null;edReset(s);msg="Saved.";bad=false}', section(PAGE, "function saveCard(){", "\n\n"))
+
+    def test_the_preview_mirrors_set_ir_name(self) -> None:
+        self.assertIn('if action == "set_ir_name":', PREVIEW)
+        self.assertIn('IR_NAME_PLACEHOLDER = re.compile(r"^Slot(?:[3-9]|1[0-9]|20)$")', PREVIEW)
+        for error in ("the slot holds no IR code", "Slot3 to Slot20 mark a code with no name"):
+            self.assertIn(error, PREVIEW)
+        self.assertIn('"a code name is up to 23 printable ASCII characters, with no quote, no backslash, "', PREVIEW)
+        self.assertIn('elif action == "set_ir_name":', PREVIEW)
+
+
+class BatteryTest(unittest.TestCase):
+    """Bench configs have no battery sensors, so the link is optional and guarded."""
+
+    def test_the_battery_link_is_optional_and_behind_a_define(self) -> None:
+        self.assertIn("from esphome.components import ha_action, idle_sleep, sensor, web_server_base", INIT)
+        self.assertIn('cv.Inclusive(CONF_BATTERY_LEVEL_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
+        self.assertIn('cv.Inclusive(CONF_BATTERY_VOLTAGE_ID, "battery"): cv.use_id(sensor.Sensor)', INIT)
+        guarded = section(INIT, "    if CONF_BATTERY_LEVEL_ID in config:\n", "\n\n")
+        self.assertIn("cg.add(var.set_battery(level, volts))", guarded)
+        self.assertIn('cg.add_define("USE_BUTTON_CONFIG_BATTERY")', guarded)
+        self.assertEqual(INIT.count("USE_BUTTON_CONFIG_BATTERY"), 1)
+        # Every sensor symbol in the C++ sits inside the define.
+        for text in (HEADER, CPP):
+            outside = re.sub(r"#ifdef USE_BUTTON_CONFIG_BATTERY\n.*?#(?:else|endif)", "", text,
+                             flags=re.DOTALL)
+            outside = re.sub(r"//[^\n]*", "", outside)
+            for symbol in ("sensor::", "battery_level_", "battery_volts_", "sensor/sensor.h"):
+                self.assertNotIn(symbol, outside)
+
+    def test_the_state_serves_the_battery_block_with_zeros_when_unavailable(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"battery":{"available":%s,"percent":%d,"volts":%.2f},"radios":', state)
+        self.assertIn("const BatteryState battery = this->battery_state_();", state)
+        self.assertIn('battery.available ? "true" : "false", battery.percent, '
+                      "static_cast<double>(battery.volts),", state)
+        body = section(CPP, "ButtonConfig::BatteryState ButtonConfig::battery_state_() const {", "\n}")
+        self.assertIn("if (!std::isnan(level) && !std::isnan(volts))", body)
+        self.assertIn("return {true, static_cast<int>(std::lround(level)), volts};", body)
+        self.assertTrue(body.rstrip().endswith("return {false, 0, 0.0f};"))
+
+    def test_the_page_names_a_missing_reading(self) -> None:
+        status = section(PAGE, "function batteryStatus(){", "\n\nfunction ")
+        self.assertIn('"Battery reading is not available."', status)
+        self.assertIn('line.textContent=b&&b.available?"Battery "+b.percent+" % ("+Number(b.volts).toFixed(2)+" V)":',
+                      status)
+        self.assertNotIn("hidden", status)
+        self.assertIn('<p class="sub st" id="bat">', PAGE)
+        self.assertNotIn('id="bat" hidden', PAGE)
+        self.assertIn("function paint(){\nnamePaint();z2mStatus();networkStatus();sleepStatus();batteryStatus();",
+                      PAGE)
+
+    def test_the_preview_serves_the_battery_block(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('"battery": {"available": True, "percent": 72, "volts": 3.87}', preview)
+
+
+class RestartTest(unittest.TestCase):
+    """The page loses its socket to the reboot, so the reply has to leave first."""
+
+    def test_the_restart_action_follows_the_wifi_action_pattern(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "restart"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "restart"', section(action, "const bool needs_slot = ", ";"))
+        branch = section(action, '} else if (action == "restart") {', "\n  } else")
+        self.assertIn("this->defer([this, action_id]() {", branch)
+        self.assertIn('ESP_LOGI(TAG, "Restart requested from the page");', branch)
+        # The busy claim comes first, so a restart during a capture answers 409.
+        self.assertLess(action.index("compare_exchange_strong(expected, true"),
+                        action.index('} else if (action == "restart") {'))
+
+    def test_the_reply_leaves_before_a_delayed_safe_reboot(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        branch = section(action, '} else if (action == "restart") {', "\n  } else")
+        complete = branch.index("this->complete_action_(action_id, true);")
+        timer = branch.index('this->set_timeout("restart", RESTART_DELAY_MS, []() { App.safe_reboot(); });')
+        self.assertLess(complete, timer)
+        # The httpd task sends the reply after it queues the defer, and the
+        # reboot waits on the main loop timer.
+        self.assertLess(action.index('} else if (action == "restart") {'),
+                        action.index('R"({"ok":true,"id":%u})"'))
+        self.assertIn("static constexpr uint32_t RESTART_DELAY_MS = 500;", CPP)
+        self.assertEqual(CPP.count("safe_reboot("), 1)
+        for bare in ("esp_restart(", "App.reboot(", "arch_restart("):
+            self.assertNotIn(bare, CPP)
+        self.assertIn('#include "esphome/core/application.h"', CPP)
+
+    def test_the_page_confirms_and_posts_the_restart(self) -> None:
+        wifi = section(PAGE, '<section class="card full conn" id="devcfg">', "</section>")
+        self.assertLess(wifi.index('id="slpcfg"'), wifi.index('id="rsb"'))
+        self.assertLess(wifi.index('id="blb"'), wifi.index('id="rsb"'))
+        self.assertIn('<div class="act"><button type="button" id="rsb">Restart remote</button></div>',
+                      wifi)
+        self.assertIn('<p class="sub st" id="rss" hidden></p>', wifi)
+        self.assertNotIn("The remote is not restarting.", wifi)
+        self.assertNotIn("A restart keeps the settings", wifi)
+        self.assertNotIn('id="rsb"', section(PAGE, '<section class="card full conn" id="zbcfg">', "</section>"))
+        self.assertIn('document.getElementById("rsb").onclick=restartRemote;', PAGE)
+        send = section(PAGE, "function restartRemote(){", "\n\n")
+        self.assertIn("if(restartBusy)return;", send)
+        self.assertIn('if(!confirm("Restart the remote? The settings and the button assignments are kept."))return;',
+                      send)
+        self.assertIn('post("restart")', send)
+        # The reboot drops the socket, so the poll that comes back confirms it.
+        self.assertNotIn("waitAction(", send)
+        paint = section(PAGE, "function restartPaint(){", "\n\n")
+        self.assertIn('b.disabled=restartBusy;b.textContent=restartBusy?"Restarting...":"Restart remote"', paint)
+        self.assertIn("st.network.wifi_always_on===true", paint)
+        self.assertIn('" Wi-Fi stays off after the restart."+wifiHoldText()', paint)
+        self.assertIn('"The remote is restarting."', paint)
+        self.assertIn("function restartLost(){if(restartBusy&&restartId)restartDown=true}", PAGE)
+        sync = section(PAGE, "function restartSync(j){", "\n\n")
+        self.assertIn("restartBusy&&restartDown&&Number(j.action_id)<restartId", sync)
+        # The page says restart everywhere, as the Zigbee pairing text does.
+        self.assertNotIn("reboot", re.sub(r"//[^\n]*", "", section(PAGE, "<body>", "</html>")).lower())
+
+    def test_the_preview_fakes_a_restart(self) -> None:
+        preview = (ROOT / "scripts" / "preview-buttons-page.py").read_text()
+        self.assertIn('elif action == "restart":', preview)
+        self.assertIn('RESTART["until"] = time.monotonic() + RESTART_SECONDS', preview)
+        self.assertIn('STATE["action_id"] = 0', preview)
+
+
+class FriendlyNameTest(unittest.TestCase):
+    """A rename moves the friendly name only. App.get_name() is the hostname that
+    the mDNS address and the Home Assistant link use, so it never changes."""
+
+    APPLY = "void ButtonConfig::apply_friendly_name_(const std::string &name) {"
+    SETTER = "bool ButtonConfig::set_friendly_name_(const std::string &name) {"
+    PARSE = "static bool parse_friendly_name(const std::string &text, std::string &name) {"
+
+    def test_the_name_has_its_own_validated_record(self) -> None:
+        self.assertIn("static constexpr size_t FRIENDLY_NAME_MAX = 40;", HEADER)
+        self.assertIn("static constexpr uint32_t NAME_PREF_KEY = 0x4E414D45U;", HEADER)
+        self.assertIn("static constexpr uint32_t NAME_PREF_MAGIC = 0x4E414D31U;", HEADER)
+        record = section(HEADER, "struct NamePref {", "};")
+        self.assertIn("uint32_t magic;", record)
+        self.assertIn("uint8_t length;", record)
+        self.assertIn("char name[FRIENDLY_NAME_MAX];", record)
+        for other in (STORE, ZIGBEE, BLE):
+            self.assertNotIn("0x4E414D45", other)
+        load = section(CPP, "void ButtonConfig::load_name_pref_() {", "\n}")
+        self.assertIn("make_preference<NamePref>(NAME_PREF_KEY, true)", load)
+        self.assertIn("loaded.magic != NAME_PREF_MAGIC || loaded.length == 0 ||", load)
+        self.assertIn("loaded.length > FRIENDLY_NAME_MAX", load)
+        # A stored name passes the same rules as a typed one before it applies.
+        self.assertIn("if (!parse_friendly_name(stored, name) || name != stored)\n    return;", load)
+        self.assertTrue(load.rstrip().endswith("this->apply_friendly_name_(name);"))
+
+    def test_setup_keeps_the_default_and_applies_a_saved_name_first(self) -> None:
+        setup = section(CPP, "void ButtonConfig::setup() {", "\n}")
+        default = setup.index("this->default_name_ = App.get_friendly_name();")
+        self.assertLess(default, setup.index("this->load_name_pref_();"))
+        self.assertLess(setup.index("this->load_name_pref_();"), setup.index("this->base_->add_handler(this);"))
+        # mDNS builds its TXT record once at AFTER_CONNECTION, which runs later.
+        self.assertIn("float ButtonConfig::get_setup_priority() const { return setup_priority::WIFI - 2.0f; }",
+                      CPP)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("const_cast<StringRef &>(App.get_friendly_name()) = StringRef(buffer, name.size());", apply)
+        self.assertIn("const_cast<StringRef &>(App.get_friendly_name()) = this->default_name_;", apply)
+        # pre_setup() reruns arch_init() and forces the MAC suffix back on.
+        code = re.sub(r"//[^\n]*", "", CPP)
+        self.assertNotIn("pre_setup(", code)
+        self.assertNotIn("App.get_name()", code)
+        self.assertEqual(code.count("const_cast<StringRef &>("), 2)
+
+    def test_the_state_reply_never_reads_a_buffer_the_loop_is_filling(self) -> None:
+        self.assertIn("char names_[2][FRIENDLY_NAME_MAX + 1]{};", HEADER)
+        self.assertIn('std::atomic<const char *> current_name_{""};', HEADER)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("== this->names_[0] ? this->names_[1] : this->names_[0];", apply)
+        fill = apply.index("std::memcpy(buffer, name.data(), name.size());")
+        swap = apply.index("this->current_name_.store(buffer, std::memory_order_release);")
+        self.assertLess(fill, apply.index("buffer[name.size()] = '\\0';"))
+        self.assertLess(fill, swap)
+        self.assertLess(swap, apply.index("= StringRef(buffer, name.size());"))
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertNotIn("names_[", state)
+        self.assertNotIn("get_friendly_name", state)
+
+    def test_the_state_prints_both_names_through_the_json_escape(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('stream->print(R"(],"name":")");\n'
+                      "  print_json_text(stream, this->current_name_.load(std::memory_order_acquire));\n"
+                      '  stream->print(R"(","default_name":")");\n'
+                      "  print_json_text(stream, this->default_name_.c_str());\n"
+                      '  stream->print("\\"}");', state)
+
+    def test_set_name_is_checked_on_the_web_task_and_saved_on_the_loop(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        self.assertIn('action == "set_name"', section(action, "const bool known = ", ";"))
+        self.assertIn('action != "set_name"', section(action, "const bool needs_slot = ", ";"))
+        self.assertIn('if (action == "set_name" && !parse_friendly_name(request->arg("name"), friendly_name)) {',
+                      action)
+        error = 'R"({"ok":false,"error":"a name is up to 40 bytes, with no slash or control character"})"'
+        self.assertIn(error, action)
+        # The refusal comes before the busy claim, so it holds no action_pending_.
+        self.assertLess(action.index(error), action.index("compare_exchange_strong(expected, true"))
+        branch = section(action, '} else if (action == "set_name") {', "\n  } else")
+        self.assertIn("this->defer([this, action_id, friendly_name]() {", branch)
+        self.assertIn("this->complete_action_(action_id, this->set_friendly_name_(friendly_name));", branch)
+        setter = section(CPP, self.SETTER, "\n}")
+        self.assertLess(setter.index("this->name_pref_.save(&next)"), setter.index("this->apply_friendly_name_(name);"))
+        self.assertIn('ESP_LOGI(TAG, "Friendly name set to \\"%s\\""', setter)
+        self.assertEqual(CPP.count("Friendly name set to"), 1)
+        self.assertIn('ESP_LOGCONFIG(TAG, "  Friendly name: %s"', CPP)
+
+    def test_the_rules_trim_cap_and_restore_the_default(self) -> None:
+        parse = section(CPP, self.PARSE, "\n}")
+        self.assertIn("while (start < end && text[start] == ' ')", parse)
+        self.assertIn("while (end > start && text[end - 1] == ' ')", parse)
+        self.assertIn("if (name.size() > ButtonConfig::FRIENDLY_NAME_MAX)\n    return false;", parse)
+        self.assertIn("if (lead < 0x20 || lead == 0x7F || lead == '/')\n      return false;", parse)
+        # A long name is refused and never cut, and a split sequence is refused too.
+        self.assertNotIn("substr(0, ", parse)
+        self.assertIn("if (i + extra >= name.size())\n      return false;", parse)
+        # An empty name saves a length 0 record and points back at the YAML name.
+        setter = section(CPP, self.SETTER, "\n}")
+        self.assertIn("next.length = static_cast<uint8_t>(name.size());", setter)
+        apply = section(CPP, self.APPLY, "\n}")
+        self.assertIn("if (name.empty()) {\n"
+                      "    this->current_name_.store(this->default_name_.c_str(), std::memory_order_release);",
+                      apply)
+
+    def test_the_header_shows_the_name_with_a_rename_control(self) -> None:
+        header = section(PAGE, '<header class="full">', "</header>")
+        self.assertIn('<div class="act nm" id="dnv"><h1 id="dn">homeThing c6</h1>'
+                      '<button type="button" class="sec" id="dnr" disabled>Rename</button></div>', header)
+        self.assertIn('<div class="act nm" id="dne" hidden><input type="text" id="dni" maxlength="40"', header)
+        self.assertIn('<button type="button" id="dns">Save</button>'
+                      '<button type="button" class="sec" id="dnc">Cancel</button></div>', header)
+        self.assertLess(header.index('id="dne"'), header.index("github.com/landonr/homething-c6</a>"))
+        self.assertLess(header.index("github.com/landonr/homething-c6</a>"), header.index('id="dnm"'))
+        self.assertIn("<title>homeThing c6 config</title>", PAGE)
+        # .act sets display:flex, which beats the hidden attribute without this.
+        self.assertIn(".nm[hidden]{display:none}", PAGE)
+        self.assertIn("header.full>div{flex:1;min-width:0}", PAGE)
+        self.assertIn(".nm h1{margin:0;min-width:0;overflow-wrap:anywhere}", PAGE)
+        for wire in ('"dnr").onclick=nameOpen;', '"dns").onclick=nameSave;', '"dnc").onclick=nameClose;',
+                     '"dni").onkeydown=nameKey;'):
+            self.assertIn(wire, section(PAGE, "function build(){", "\n\nfunction "))
+
+    def test_the_title_follows_each_poll_and_never_the_open_box(self) -> None:
+        paint = section(PAGE, "function namePaint(){", "\n\nfunction ")
+        self.assertIn("if(t)t.textContent=n;", paint)
+        self.assertIn('if(has)document.title=n+" config";', paint)
+        self.assertIn("m.textContent=nameMsg", paint)
+        self.assertNotIn("innerHTML", paint)
+        self.assertNotIn(".value", paint)
+        refresh = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
+        self.assertIn("st.name=j.name;st.default_name=j.default_name;namePaint();", refresh)
+        self.assertIn("function paint(){\nnamePaint();", PAGE)
+        # Only the Rename press fills the box.
+        self.assertEqual(section(PAGE, "<script>", "</script>").count(".value=st.name"), 1)
+        self.assertIn("b.value=st.name;", section(PAGE, "function nameOpen(){", "\n\nfunction "))
+
+    def test_save_posts_set_name_and_follows_the_action_pattern(self) -> None:
+        save = section(PAGE, "function nameSave(){", "\n\nfunction ")
+        self.assertIn('.replace(/^ +| +$/g,"")', save)
+        self.assertIn("if(n<0||n>40||/[\\x00-\\x1f\\x7f\\/]/.test(v)){", save)
+        self.assertIn('post("set_name",null,undefined,v)', save)
+        self.assertIn("if(r.code!==200)throw new Error(fail(r));", save)
+        self.assertIn("return waitAction(r.body.id)", save)
+        self.assertIn('nameMsg="Home Assistant shows the new name when it next connects. '
+                      'A paired Bluetooth host can show the old name until it pairs again."', save)
+        self.assertIn("nameBusy=false;nameBad=true;", save)
+        key = section(PAGE, "function nameKey(e){", "\n\n")
+        self.assertIn('if(e.key==="Enter"){e.preventDefault();nameSave()}', key)
+        self.assertIn('else if(e.key==="Escape"){e.preventDefault();nameClose()}', key)
+        # maxlength counts UTF-16 units, so the byte count is checked apart.
+        self.assertIn('function nameBytes(t){try{return encodeURIComponent(t).replace(/%[0-9A-F]{2}/g,"x").length}',
+                      PAGE)
+
+    def test_the_preview_applies_the_same_rules(self) -> None:
+        path = ROOT / "scripts" / "preview-buttons-page.py"
+        spec = importlib.util.spec_from_file_location("preview_buttons_page", path)
+        preview = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(preview)
+        self.assertEqual(preview.STATE["name"], "homeThing C6 13f498")
+        self.assertEqual(preview.STATE["default_name"], "homeThing C6 13f498")
+        self.assertEqual(preview.FRIENDLY_NAME_MAX, 40)
+        self.assertEqual(preview.clean_name("  Den remote  "), "Den remote")
+        self.assertEqual(preview.clean_name("   "), "")
+        self.assertEqual(preview.clean_name("x" * 40), "x" * 40)
+        self.assertEqual(preview.clean_name("é" * 20), "é" * 20)
+        for refused in ("x" * 41, "é" * 21, "a/b", "a\tb", "a\x7fb"):
+            self.assertIsNone(preview.clean_name(refused), refused)
+        text = path.read_text()
+        self.assertIn('elif action == "set_name":\n            STATE["name"] = name or STATE["default_name"]', text)
+
+    def test_every_apply_gives_the_name_to_ble_hid(self) -> None:
+        """The Bluetooth name follows the friendly name, and the default name too."""
+        apply = section(CPP, self.APPLY, "\n}")
+        push = "hid->set_device_name(this->current_name_.load(std::memory_order_relaxed));"
+        self.assertIn("auto *hid = esphome::ble_hid::BleHid::instance();\n  if (hid != nullptr)\n    " + push, apply)
+        # Only the length check returns early, so a boot load, a rename, and a
+        # restored default all reach the push.
+        self.assertEqual(apply.count("return;"), 1)
+        self.assertLess(apply.index("= this->default_name_;"), apply.index(push))
+        self.assertLess(apply.index("= StringRef(buffer, name.size());"), apply.index(push))
+        self.assertIn("void set_device_name(const char *name);", BLE_HEADER)
+        self.assertIn("static_assert(ButtonConfig::FRIENDLY_NAME_MAX <= esphome::ble_hid::BleHid::DEVICE_NAME_MAX,",
+                      CPP)
+
+
+class SlotTableTest(unittest.TestCase):
+    def test_the_cpp_table_holds_slots_3_to_20_once_each(self) -> None:
+        slots = cpp_slots()
+        self.assertEqual(sorted(slots), ALL_SLOTS)
+        self.assertEqual(len(slots), len(set(slots)))
+
+    def test_the_page_array_holds_slots_3_to_20_once_each(self) -> None:
+        slots = [row["slot"] for row in page_slots()]
+        self.assertEqual(sorted(slots), ALL_SLOTS)
+        self.assertEqual(len(slots), len(set(slots)))
+
+    def test_the_cpp_table_and_the_page_array_hold_the_same_slots(self) -> None:
+        """Catches an input that moves in one table and not the other."""
+        self.assertEqual(sorted(cpp_slots()), sorted(row["slot"] for row in page_slots()))
+
+
+FACE_SVG = ROOT / "docs" / "readme-assets" / "case-front-face.svg"
+# Percentage points of the viewBox. The SVG prints one decimal, so a cap edge
+# can move 0.05 units.
+FACE_TOLERANCE = 0.3
+
+
+def face_shapes() -> dict:
+    """Returns {class: [(cx, cy, w, h)]} for each subpath of the face, as percents
+    of the viewBox. x and w are percents of its width, y and h of its height."""
+    text = FACE_SVG.read_text()
+    x0, y0, width, height = (float(v) for v in re.search(r'viewBox="([^"]+)"', text).group(1).split())
+    shapes: dict = {}
+    for attrs in re.findall(r"<path([^>]*)>", text):
+        cls = re.search(r'class="([^"]*)"', attrs)
+        path = re.search(r'\sd="([^"]*)"', attrs)
+        if cls is None or path is None:
+            continue
+        for sub in re.split(r"(?=M)", path.group(1)):
+            nums = [float(v) for v in re.findall(r"-?\d*\.?\d+", sub)]
+            if not nums:
+                continue
+            xs, ys = nums[0::2], nums[1::2]
+            shapes.setdefault(cls.group(1), []).append((
+                100 * ((min(xs) + max(xs)) / 2 - x0) / width,
+                100 * ((min(ys) + max(ys)) / 2 - y0) / height,
+                100 * (max(xs) - min(xs)) / width,
+                100 * (max(ys) - min(ys)) / height,
+            ))
+    return shapes
+
+
+def css_percent(rule: str, prop: str) -> float:
+    body = section(PAGE, rule + "{", "}")
+    return float(re.search(rf"(?:^|;){prop}:([\d.]+)%", body).group(1))
+
+
+class FaceGeometryTest(unittest.TestCase):
+    """The overlays are percents of the face image, so a regenerated face with a
+    new viewBox moves every key. These checks fail before the overlays do."""
+
+    def assertNear(self, got: float, want: float, what: str) -> None:
+        self.assertLessEqual(abs(got - want), FACE_TOLERANCE, f"{what}: page {got}, face {want:.2f}")
+
+    def test_the_page_and_the_preview_embed_this_face(self) -> None:
+        self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', SHELL_BUILD)
+        self.assertIn('CASE_FRONT_FACE = ROOT / "docs" / "readme-assets" / "case-front-face.svg"', PREVIEW)
+        # Only absolute moves and lines, so the point pairs above are the outline.
+        letters = set(re.findall(r"[A-Za-z]", "".join(re.findall(r'\sd="([^"]*)"', FACE_SVG.read_text()))))
+        self.assertLessEqual(letters, {"M", "L", "Z"})
+
+    def test_each_button_overlay_sits_on_its_own_cap(self) -> None:
+        caps = face_shapes()["cap"]
+        buttons = [row for row in page_slots() if row["label"].startswith("Button ")]
+        self.assertEqual(len(caps), len(buttons))
+        used = set()
+        for row in buttons:
+            index = min(range(len(caps)), key=lambda i: abs(caps[i][0] - row["x"]) + abs(caps[i][1] - row["y"]))
+            self.assertNotIn(index, used, row["label"])
+            used.add(index)
+            self.assertNear(row["x"], caps[index][0], row["label"] + " x")
+            self.assertNear(row["y"], caps[index][1], row["label"] + " y")
+
+    def test_the_key_overlay_is_the_size_of_a_cap(self) -> None:
+        width = css_percent(".remote .k", "width")
+        for cx, cy, w, h in face_shapes()["cap"]:
+            self.assertNear(width, w, f"cap at {cx:.1f} {cy:.1f}")
+
+    @staticmethod
+    def wheel() -> tuple:
+        """Returns the wheel centre, the black wheel radius and the dial radius,
+        in viewBox units, and the viewBox width and height."""
+        text = FACE_SVG.read_text()
+        _, _, width, height = (float(v) for v in re.search(r'viewBox="([^"]+)"', text).group(1).split())
+        shapes = face_shapes()
+        (knob,) = shapes["knob"]
+        (dial,) = shapes["wheelmark scrolldial"]
+        centre = (knob[0] * width / 100, knob[1] * height / 100)
+        outer = (knob[2] * width + knob[3] * height) / 400
+        inner = (dial[2] * width + dial[3] * height) / 400
+        return centre, outer, inner, width, height
+
+    def direction_rows(self) -> list:
+        """(row, glyph) for Up, Down, Left and Right."""
+        glyphs = face_shapes()["wheelglyph"]
+        self.assertEqual(len(glyphs), 4)
+        rows = {row["slot"]: row for row in page_slots()}
+        return [(rows[13], min(glyphs, key=lambda g: g[1])), (rows[15], max(glyphs, key=lambda g: g[1])),
+                (rows[16], min(glyphs, key=lambda g: g[0])), (rows[12], max(glyphs, key=lambda g: g[0]))]
+
+    def test_the_direction_overlay_is_the_ring_band_width(self) -> None:
+        _, outer, inner, width, _ = self.wheel()
+        self.assertNear(css_percent(".remote .k.dir", "width"), 100 * (outer - inner) / width, "direction width")
+
+    def test_each_direction_overlay_sits_mid_band_and_covers_its_glyph(self) -> None:
+        (wx, wy), outer, inner, width, height = self.wheel()
+        side = css_percent(".remote .k.dir", "width") * width / 100
+        for row, glyph in self.direction_rows():
+            self.assertEqual(row["class"], "dir", row["label"])
+            x, y = row["x"] * width / 100, row["y"] * height / 100
+            gx, gy = glyph[0] * width / 100, glyph[1] * height / 100
+            # On the axis of the glyph, at the middle of the ring band.
+            if abs(gx - wx) < abs(gy - wy):
+                self.assertNear(row["x"], glyph[0], row["label"] + " x")
+            else:
+                self.assertNear(row["y"], glyph[1], row["label"] + " y")
+            self.assertNear(100 * math.hypot(x - wx, y - wy) / width, 100 * (outer + inner) / 2 / width,
+                            row["label"] + " radius")
+            # The glyph stays inside the overlay.
+            for corner_x in (gx - glyph[2] * width / 200, gx + glyph[2] * width / 200):
+                self.assertLessEqual(abs(corner_x - x), side / 2, row["label"])
+            for corner_y in (gy - glyph[3] * height / 200, gy + glyph[3] * height / 200):
+                self.assertLessEqual(abs(corner_y - y), side / 2, row["label"])
+
+    def test_the_direction_overlay_corners_stay_on_the_wheel(self) -> None:
+        """A rounded square is its inner square grown by the corner radius, so its
+        farthest point is an inner corner plus that radius."""
+        (wx, wy), outer, _, width, height = self.wheel()
+        side = css_percent(".remote .k.dir", "width") * width / 100
+        radius = section(PAGE, ".remote .k{", "}")
+        self.assertNotIn("border-radius", section(PAGE, ".remote .k.dir{", "}"))
+        corner = float(re.search(r"border-radius:([\d.]+)%", radius).group(1)) * side / 100
+        half = side / 2 - corner
+        for row, _ in self.direction_rows():
+            x, y = row["x"] * width / 100, row["y"] * height / 100
+            far = max(math.hypot(x + dx - wx, y + dy - wy) for dx in (-half, half) for dy in (-half, half)) + corner
+            self.assertLessEqual(far, outer, f"{row['label']} reaches {far:.2f} past the wheel edge {outer:.2f}")
+
+    def test_the_press_overlay_is_the_round_centre_key(self) -> None:
+        (circle,) = face_shapes()["wheelmark"]
+        press = {row["slot"]: row for row in page_slots()}[14]
+        self.assertEqual(press["class"], "press")
+        self.assertNear(press["x"], circle[0], "Wheel Press x")
+        self.assertNear(press["y"], circle[1], "Wheel Press y")
+        self.assertNear(css_percent(".remote .k.press", "width"), circle[2], "Wheel Press width")
+        self.assertIn("border-radius:50%", section(PAGE, ".remote .k.press{", "}"))
+
+    def test_the_rotation_overlay_is_the_scroll_dial(self) -> None:
+        (dial,) = face_shapes()["wheelmark scrolldial"]
+        rows = {row["slot"]: row for row in page_slots()}
+        for slot in (17, 18):
+            self.assertNear(rows[slot]["x"], dial[0], rows[slot]["label"] + " x")
+            self.assertNear(rows[slot]["y"], dial[1], rows[slot]["label"] + " y")
+        self.assertNear(css_percent(".remote .k.rot", "left"), dial[0], "rotation left")
+        self.assertNear(css_percent(".remote .k.rot", "top"), dial[1], "rotation top")
+        self.assertNear(css_percent(".remote .k.rot", "width"), dial[2], "rotation width")
+
+
+class PlacementTest(unittest.TestCase):
+    def test_the_top_group_puts_button_1_on_the_right(self) -> None:
+        """Button 1 sits to the right of Button 2 on the board."""
+        rows = page_slots()[:2]
+        self.assertEqual(
+            [(row["slot"], row["label"]) for row in rows],
+            [(19, "Button 2"), (20, "Button 1")],
+        )
+        self.assertLess(rows[0]["x"], rows[1]["x"])
+
+    def test_the_wheel_hotspots_match_the_physical_directions(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()[2:9]}
+        self.assertEqual(rows[18]["class"], "rot left")
+        self.assertEqual(rows[17]["class"], "rot right")
+        self.assertLess(rows[16]["x"], rows[14]["x"])
+        self.assertGreater(rows[12]["x"], rows[14]["x"])
+        self.assertLess(rows[13]["y"], rows[14]["y"])
+        self.assertGreater(rows[15]["y"], rows[14]["y"])
+
+    def test_both_rotation_slots_flank_the_wheel_up_hotspot(self) -> None:
+        rows = {row["slot"]: row for row in page_slots()}
+        self.assertEqual((rows[18]["x"], rows[18]["y"]), (rows[17]["x"], rows[17]["y"]))
+        self.assertEqual((rows[17]["x"], rows[17]["y"]), (rows[14]["x"], rows[14]["y"]))
+        self.assertIn(".remote .k.rot.left{clip-path:inset(0 50% 0 0)}", PAGE)
+        self.assertIn(".remote .k.rot.right{clip-path:inset(0 0 0 50%)}", PAGE)
+
+    def test_the_keypad_group_fills_column_by_column(self) -> None:
+        """The 3x3 grid fills in array order, so the array order is the layout.
+        The board reads 3 6 11, 4 7 10, 5 8 9 across its rows."""
+        rows = page_slots()[9:]
+        self.assertEqual([row["slot"] for row in rows], [3, 6, 11, 4, 7, 10, 5, 8, 9])
+        self.assertEqual(
+            [row["label"] for row in rows],
+            [f"Button {n}" for n in (3, 6, 11, 4, 7, 10, 5, 8, 9)],
+        )
+
+    def test_the_page_renders_the_full_front_face_selector(self) -> None:
+        self.assertIn('<div class="remote" id="remote">', PAGE)
+        self.assertIn('data:image/svg+xml,__CASE_FRONT_FACE_SVG__', PAGE)
+        self.assertIn('"case-front-face.svg"', SHELL_BUILD)
+
+    def test_the_front_face_image_is_not_draggable(self) -> None:
+        self.assertIn('alt="Front face of the homeThing c6 remote" draggable="false">', PAGE)
+        self.assertIn('user-select:none;-webkit-user-drag:none', PAGE)
+
+
+class EnforcementTest(unittest.TestCase):
+    def test_the_firmware_accepts_a_zigbee_target_on_every_slot(self) -> None:
+        """Zigbee playback rides the IR path, so the wheel detents accept it too."""
+        self.assertIn('action == "set_zigbee"', CPP)
+        self.assertIn('"error":"a group is 1 to 65527, in decimal or 0x hex"', CPP)
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        self.assertNotIn('set_zigbee" && !info->', action)
+
+    def test_every_store_and_state_mutation_runs_on_a_defer(self) -> None:
+        """HTTP handlers run on the httpd task. An NVS write from there races."""
+        for call in (
+            "ir_code_store.clear(",
+            "ir_ui.open_from_web(",
+            "zigbee_assignments.assign_from_web(",
+            "BleHid::instance()->assign(",
+        ):
+            total = CPP.count(call)
+            self.assertEqual(total, 1, call)
+            deferred = re.findall(r"defer\(\[[^\]]*\]\(\)\s*\{[^}]*" + re.escape(call), CPP)
+            self.assertEqual(len(deferred), total, call)
+
+    def test_the_cancel_action_also_closes_on_the_main_loop(self) -> None:
+        self.assertIn("this->defer([]() { ::ir_ui.close(); });", CPP)
+        self.assertEqual(CPP.count("ir_ui.close("), 1)
+
+    def test_the_state_endpoint_only_reads(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        for call in (
+            ".clear(",
+            "open_from_web(",
+            ".save(",
+            "defer(",
+            "assign_from_web(",
+        ):
+            self.assertNotIn(call, state)
+        self.assertIn("::zigbee_assignments.assignment(info.slot)", state)
+
+    def test_the_state_endpoint_reports_wifi_and_home_assistant(self) -> None:
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertIn('"network":{"wifi":%s,"wifi_enabled":%s,"wifi_always_on":%s,'
+                      '"home_assistant":%s,"api_gated":%s,"ip":"%s","mac":"%s"}', state)
+        self.assertIn("wifi::global_wifi_component->is_connected()", state)
+        # The gate flag follows the connection flag, as the format string orders them.
+        self.assertIn('api::global_api_server->is_connected() ? "true" : "false",\n'
+                      '      this->ha_api_gated() ? "true" : "false",\n      ip, mac,', state)
+        self.assertIn("wifi::global_wifi_component->get_ip_addresses()", state)
+        self.assertIn("get_mac_address_pretty_into_buffer(mac)", state)
+
+    def test_the_state_row_reports_the_zigbee_target_first(self) -> None:
+        """A slot holds one action, and a Zigbee target hides an old IR code."""
+        state = section(CPP, "void ButtonConfig::handle_state_", "void ButtonConfig::handle_code_")
+        self.assertRegex(
+            state,
+            r'hid\.assigned\s+\? "hid"[\s\S]*?zigbee\.assigned\s+\? "zigbee"'
+            r'[\s\S]*?has_code\(info\.slot\) \? "ir"',
+        )
+        self.assertIn('"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"', state)
+        self.assertIn(
+            "print_json_text(stream, zigbee.assigned ? zigbee.name.c_str() "
+            ": ::ir_code_store.name(info.slot));",
+            state,
+        )
+
+    def test_an_action_is_reserved_before_its_deferred_mutation(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "void ButtonConfig::complete_action_")
+        reserve = action.index("compare_exchange_strong")
+        self.assertLess(reserve, action.index("ir_ui.open_from_web("))
+        self.assertIn("action_pending_.load", CPP)
+        self.assertIn("action_pending_.store(false", CPP)
+
+    def test_preference_results_complete_the_deferred_action(self) -> None:
+        self.assertIn("complete_action_(action_id, ::ir_code_store.clear(button))", CPP)
+        self.assertIn("complete_action_(action_id, esphome::ble_hid::BleHid::instance()->forget_bond())", CPP)
+        self.assertIn('"Flash write failed. The assignment was not saved."', PAGE)
+        self.assertIn("waitAction(r.body.id)", PAGE)
+
+
+class StorageTest(unittest.TestCase):
+    def test_the_slot_range_and_record_keys_are_unchanged(self) -> None:
+        """Catches a key change that would hand each button its neighbour's code."""
+        self.assertIn("FIRST_BUTTON = 3;", STORE)
+        self.assertIn("LAST_BUTTON = 20;", STORE)
+        self.assertIn("make_preference<Record>(0x49524330U + i, true)", STORE)
+
+    def test_the_save_counter_stays_in_memory(self) -> None:
+        """The diagnostic capture counter must not cause another flash write."""
+        self.assertIn("uint32_t saves_ = 0;", STORE)
+        self.assertNotIn("saves_pref", STORE)
+        self.assertNotIn("save(&saves_", STORE)
+        for line in STORE.splitlines():
+            if "make_preference" in line:
+                self.assertNotIn("saves", line)
+        self.assertEqual(STORE.count("make_preference"), 2)
+
+    def test_assignment_writes_report_code_failures(self) -> None:
+        self.assertIn("bool erase_code_(uint8_t button)", STORE)
+        self.assertIn('ESP_LOGI("ir_learn", "Button %u cleared%s", button, erased ? "" : " (flash write failed)");',
+                      STORE)
+
+
+class ZigbeeTargetTest(unittest.TestCase):
+    def test_the_manager_holds_no_mqtt_client_at_all(self) -> None:
+        """The retained device inventory is larger than the C6 heap, and ESPHome
+        buffers a whole MQTT payload into a std::string before it delivers the
+        message. The browser reads the inventory over the Zigbee2MQTT frontend
+        websocket instead, so the remote stores only the resolved group id."""
+        for gone in ("mqtt", "subscribe(", "ArduinoJson", "JsonDocument", "base_topic_",
+                     "bridge/", "allowed_targets_", "target_states_", "Operation",
+                     "start_training", "cancel_training", "TargetKind"):
+            self.assertNotIn(gone, ZIGBEE)
+
+    def test_the_record_and_its_reader_use_one_lock(self) -> None:
+        """The httpd task reads the record while the main loop writes it."""
+        self.assertIn("mutable std::mutex cache_mutex_;", ZIGBEE)
+        reader = section(ZIGBEE, "Assignment assignment(uint8_t slot) const {", "\n  }")
+        self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);", reader)
+        for writer in ("bool store_(uint8_t slot, const Entry &entry) {",
+                       "void clear(uint8_t slot) {"):
+            self.assertIn("const std::lock_guard<std::mutex> lock(cache_mutex_);",
+                          section(ZIGBEE, writer, "\n  }"))
+
+    def test_a_web_assignment_lands_in_flash_without_a_round_trip(self) -> None:
+        """A group target needs no network confirmation, so the action result is
+        known before assign_from_web returns and nothing has to stay open."""
+        body = section(ZIGBEE, "bool assign_from_web(uint8_t slot, uint16_t group_id,", "\n  }")
+        self.assertIn("if (!slot_valid_(slot) || group_id == 0 || group_id > MAX_GROUP_ID)", body)
+        self.assertIn("if (!store_(slot, entry))", body)
+        self.assertIn("preference_.save(&record_)",
+                      section(ZIGBEE, "bool store_(uint8_t slot, const Entry &entry) {", "\n  }"))
+        self.assertNotIn("deadline_", body)
+        self.assertNotIn("web_result_callback_", ZIGBEE)
+
+    def test_an_assignment_replaces_the_old_action_on_the_slot(self) -> None:
+        """A slot holds one action, so a stale IR code must not survive."""
+        body = section(ZIGBEE, "bool store_(uint8_t slot, const Entry &entry) {", "\n  }")
+        self.assertIn("ir_code_store.clear_for_zigbee(slot)", body)
+        # Both kinds of target commit through store_, so neither can skip it.
+        for assign in ("bool assign_from_web(uint8_t slot, uint16_t group_id,",
+                       "bool assign_device_from_web("):
+            self.assertIn("store_(slot, entry)", section(ZIGBEE, assign, "\n  }"))
+        # The name belongs to the erased code, so it goes with it.
+        clear = section(STORE, "bool clear_for_zigbee(uint8_t button) {", "\n  }")
+        self.assertIn('write_name_(button, "")', clear)
+        # The reverse direction is the store's callback, set up in setup().
+        self.assertIn("ir_code_store.add_assignment_clear_callback(", ZIGBEE)
+        self.assertIn("ir_code_store.release_others(slot, IrCodeStore::OWNER_ZIGBEE);", body)
+
+
+class PageTest(unittest.TestCase):
+    def test_the_page_loads_nothing_from_outside_the_device(self) -> None:
+        """The remote often sits on a LAN with no route to the internet."""
+        for marker in ("<script src", "@import", "//cdn", 'src="http'):
+            self.assertNotIn(marker, PAGE)
+        # The one <link> is the favicon, and it carries the whole image inline.
+        # Its only http:// is the SVG namespace, which no browser fetches.
+        self.assertEqual(PAGE.count("<link"), 1)
+        self.assertIn('<link rel=icon href="data:image/svg+xml,', PAGE)
+        self.assertEqual(re.findall(r"http://[^\s\"'>%]*", PAGE),
+                         ["http://www.w3.org/2000/svg"])
+        # Outbound anchors load nothing until the reader follows them, so they
+        # cannot stall the page on an offline LAN.
+        self.assertEqual(
+            re.findall(r"https://[^\s\"'>]+", PAGE),
+            [
+                "https://github.com/landonr/homething-c6",
+                "https://github.com/Lucaslhm/Flipper-IRDB",
+            ],
+        )
+
+    def test_the_page_only_calls_its_own_endpoints(self) -> None:
+        calls = re.findall(r'fetch\("([^"?]+)', PAGE)
+        self.assertEqual(
+            sorted(set(calls)),
+            ["/buttons/api/action", "/buttons/api/activity", "/buttons/api/code",
+             "/buttons/api/state"],
+        )
+
+    def test_the_tile_shows_the_code_name(self) -> None:
+        """A tile holds one line, and the name says more than the protocol does.
+        The placeholder of the code block is not a name, so the tile never shows it."""
+        label = section(PAGE, "function words(s){", "return \"Clear\"}")
+        self.assertIn('if(r.action==="ir")return r.name?"IR: "+r.name:"IR code";', label)
+        self.assertNotIn("Samsung32", label)
+        self.assertNotIn("codeName", PAGE)
+        # A Flipper signal needs a name line, so the code endpoint prints the placeholder.
+        self.assertIn(R'stream->printf("name: Slot%u\\n"', CPP)
+
+    def test_the_page_details_the_action_of_a_slot(self) -> None:
+        """A pulse count alone does not say what the button sends. Only the rows
+        that separate one code from another belong here, because the heading
+        already names the action."""
+        body = section(PAGE, "function detail(s){", 'return h+"</dl>"}')
+        self.assertIn('if(!r||r.action!=="ir")return ""', body)
+        self.assertIn('k.push(["Protocol","Samsung32"])', body)
+        self.assertIn('k.push(["Address",r.fields.split(" ")[0]])', body)
+        self.assertIn('k.push(["Command",r.fields.split(" ")[1]])', body)
+        self.assertIn('k.push(["Protocol","Raw capture"])', body)
+        self.assertIn('k.push(["Pulses",String(r.pulses)])', body)
+        self.assertIn('if(r.us)k.push(["Frame",ms(r.us)])', body)
+        # A constant row says nothing. Every frame goes out at 38 kHz.
+        self.assertNotIn("Carrier", body)
+        self.assertNotIn('"Type"', body)
+        self.assertNotIn("<details", body)
+        self.assertIn('function ms(u){return (u/1000).toFixed(1)+" ms"}', PAGE)
+        # The IR detail sits in its code box, under the text and above the loading line.
+        box = section(PAGE, "function codeBox(lock){", "\n\nfunction loadCode")
+        self.assertIn('h+=detail(sel)+(cdSlot!==sel?"<p class=load>Loading the stored code.</p>":"")', box)
+        self.assertNotIn("Now:", PAGE)
+
+    def test_the_state_row_reports_the_frame_length_and_the_code(self) -> None:
+        """Nine slots hold 68 pulses of the same length, so only the data word
+        separates them."""
+        state = section(CPP, "void ButtonConfig::handle_state_", "\n}")
+        self.assertIn(
+            '"pulses":%u,"us":%u,"code":"%s","fields":"%s","group":%u,"ieee":"%s","ep":%u,"act":%u,"val":%d,"hid_kind":"%s","hid_usage":%u,"hid_mod":%u,"ha_kind":"%s","ha_act":"%s","ha_val":%u,"ha_entity":"',
+            state,
+        )
+        self.assertIn("::ir_code_store.name(info.slot)", state)
+        self.assertIn("::ir_code_store.code_duration_us(info.slot)", state)
+        self.assertIn("::ir_code_store.code_samsung_data(info.slot, samsung)", state)
+        self.assertIn("::ir_code_store.code_samsung_fields(info.slot, address, command)", state)
+        self.assertIn(R'std::snprintf(code, sizeof(code), "0x%08X"', state)
+        self.assertIn(R'std::snprintf(fields, sizeof(fields), "%02X %02X"', state)
+        length = section(STORE, "uint32_t code_duration_us(uint8_t button) const {", "\n  }")
+        self.assertIn("* 10U", length)
+        decode = section(STORE, "bool code_samsung_data(uint8_t button, uint32_t &data) const {", "\n  }")
+        self.assertIn("if (record.count != 68)", decode)
+        self.assertIn("const int16_t space = record.pulses[3 + 2 * bit];", decode)
+        self.assertIn("value = (value << 1) | (-space > 100 ? 1U : 0U);", decode)
+
+    def test_the_page_can_save_a_code_and_copy_an_assignment(self) -> None:
+        box = section(PAGE, "function codeBox(lock){", 'return h}')
+        self.assertIn("<textarea id=ct", box)
+        # The box carries the only copy of a code, so it never hides behind a toggle.
+        self.assertNotIn("<details", box)
+        self.assertIn('function hasCode(text){return !!String(text||"").replace(/\\s+/g,"")}', PAGE)
+        self.assertNotIn('id=cc', box)
+        # Save in the card applies the code, so the box has no button of its own.
+        self.assertNotIn("id=ca", PAGE)
+        self.assertNotIn("Apply to this input", PAGE)
+        # Loading follows the box, so it cannot move it.
+        self.assertIn(".code .load{color:var(--mut);font-size:13px;margin:8px 0 0}", PAGE)
+        self.assertIn('"<p class=load>Loading the stored code.</p>"', box)
+        # A blank box is no change, and a cleared stored code is one.
+        self.assertIn('function codeDirty(){return act==="ir"&&cdSlot===sel&&(hasCode(cd)?cd!==cdBase:hasCode(cdBase))}',
+                      PAGE)
+        # Assignment and config copies use one fallback for plain HTTP.
+        copy = section(PAGE, "function copyBox(t){", "return ok}")
+        self.assertIn('document.execCommand("copy")', copy)
+        self.assertIn("if(!ok&&navigator.clipboard)", copy)
+        self.assertNotIn("function copyCode()", PAGE)
+        self.assertIn('steps.push({a:"set_ir_code",s:s,c:cd,why:"The remote refused that code."})', PAGE)
+        self.assertIn('fetch("/buttons/api/code?slot="+s', PAGE)
+        self.assertIn('cd=cdBase=code;cdSlot=s', PAGE)
+        # The block is line based, so the newlines have to survive the encode.
+        self.assertIn('"&code=")+encodeURIComponent(v)', PAGE)
+        self.assertNotIn(R'c.replace(/[^0-9+\-]+/g,",")', PAGE)
+
+    def test_the_code_endpoint_prints_a_flipper_signal_block(self) -> None:
+        """The .ir syntax moves a code between this board, a Flipper, and the
+        Flipper-IRDB files without a converter."""
+        body = section(CPP, "void ButtonConfig::handle_code_", "\n}")
+        self.assertIn("::ir_code_store.code_timings(info->slot, raw)", body)
+        self.assertIn(R'"present":%s,"text":"', body)
+        self.assertIn(R'stream->printf("name: %s\\n", name)', body)
+        self.assertIn(R'stream->print("type: parsed\\nprotocol: Samsung32\\n")', body)
+        self.assertIn(R'"address: %02X 00 00 00\\ncommand: %02X 00 00 00"', body)
+        self.assertIn(R'"type: raw\\nfrequency: 38000\\nduty_cycle: 0.500000\\ndata:"', body)
+        self.assertIn("::ir_code_store.code_samsung_fields(info->slot, address, command)", body)
+        self.assertIn('url == "/buttons/api/code"', CPP)
+        self.assertIn("void handle_code_(AsyncWebServerRequest *request);", HEADER)
+        # code_timings() exists because load() logs the whole frame.
+        reader = section(STORE, "bool code_timings(uint8_t button, std::vector<int32_t> &raw) const {", "\n  }")
+        self.assertIn("* 10)", reader)
+
+    def test_a_pasted_code_is_validated_before_the_flash_write(self) -> None:
+        """A truncated paste would otherwise reach the store as a valid frame."""
+        parser = section(CPP, "static bool parse_timings", "\n}")
+        self.assertIn("value < -327670 || value > 327670", parser)
+        self.assertIn("raw.size() >= IrCodeStore::MAX_PULSES", parser)
+        self.assertIn("if ((raw.size() % 2 == 0) != (value > 0))", parser)
+        self.assertIn("return raw.size() >= 4 && raw.size() % 2 == 0;", parser)
+        action = section(CPP, "void ButtonConfig::handle_action_", "\n}")
+        self.assertIn('action == "set_ir_code"', action)
+        self.assertIn('!parse_ir_text(request->arg("code"), name, timings)', action)
+        self.assertIn("::ir_code_store.save(button, timings)", action)
+        self.assertIn("::ir_code_store.set_name(button, name.c_str())", action)
+
+    def test_a_pasted_flipper_block_is_read_a_line_at_a_time(self) -> None:
+        """A Flipper-IRDB file holds many signals, and only the first one lands."""
+        parser = section(CPP, "static bool parse_ir_text", "\n}")
+        self.assertIn('lower_equals(key, "filetype") || lower_equals(key, "version")', parser)
+        self.assertIn("if (named)\n        break;", parser)
+        self.assertIn('lower_equals(type, "parsed")', parser)
+        self.assertIn('!lower_equals(protocol, "samsung32") || !have_address || !have_command', parser)
+        self.assertIn("IrCodeStore::samsung_timings(address, command, raw)", parser)
+        self.assertIn('lower_equals(type, "raw")', parser)
+        self.assertIn("return parse_raw_data(data, raw);", parser)
+        # A code copied out of an older build is a bare list of signed values.
+        self.assertIn("if (!keyed)\n    return parse_timings(text, raw);", parser)
+        raw = section(CPP, "static bool parse_raw_data", "\n}")
+        self.assertIn("if (value < 1 || value > 327670)", raw)
+        self.assertIn("raw.size() % 2 == 0 ? static_cast<int32_t>(value) : -static_cast<int32_t>(value)", raw)
+        # A Flipper raw frame ends on a mark, so its value count is odd.
+        self.assertIn("return raw.size() >= 4;", raw)
+        byte = section(CPP, "static bool parse_leading_byte", "\n}")
+        self.assertIn('field.substr(0, 2).c_str(), &end, 16', byte)
+        # The default 1024 byte cap truncates a long frame.
+        self.assertRegex(CONFIG, r'CONFIG_HTTPD_MAX_REQ_HDR_LEN: "8192"')
+    def test_one_selector_carries_all_actions(self) -> None:
+        """A slot holds one action, so the panel shows one action at a time and
+        the IR code box cannot sit under a Zigbee assignment."""
+        editor = section(PAGE, "function editor(){", "\nfunction actFor(")
+        self.assertIn('var opts=[["ir","IR code"],["zb","Zigbee target"],["hid","BLE HID"]];', editor)
+        self.assertIn('opts.push(["cl","Clear"]);', editor)
+        self.assertLess(editor.index('"Zigbee target"'), editor.index('opts.push(["cl"'))
+        # The action list stays open, and the panel beside it repeats the selected
+        # action as a heading so the fields under it are never read out of context.
+        self.assertIn('class=aslist role=radiogroup', editor)
+        self.assertIn('if(on)title=opts[i][1]}', editor)
+        self.assertIn('var panel="<h2>"+esc(title)+"</h2>"+', editor)
+        self.assertNotIn('var panel="<h2 class=hd2>', editor)
+        self.assertIn('p.innerHTML="<h2>IR code</h2><p class=sub>', editor)
+        self.assertIn('p.innerHTML=panel;', editor)
+        self.assertIn('act=v;msg="";bad=false;paint()', editor)
+        self.assertNotIn("<select id=as", editor)
+        # Record IR and the code box belong to the IR panel alone.
+        ir = section(PAGE, "function irPanel(lock){", "\n\nfunction ")
+        self.assertIn('id=b1', ir)
+        self.assertIn("codeBox(lock)", ir)
+        self.assertNotIn("codeBox(", editor)
+
+    def test_the_kind_selector_shows_one_target_at_a_time(self) -> None:
+        """Holding a group ID and an IEEE address on screen at once let the panel
+        describe two targets, which Assign then had to choose between. The kind
+        selector removes the choice instead of resolving it."""
+        form = section(PAGE, "function zbForm(lock){", "\nreturn h}")
+        self.assertIn("<label class=hd2 for=zn>Target kind</label>", form)
+        device = form.split('if(zkv==="d"){', 1)[1].split("\nelse{", 1)[0]
+        group = form.split("\nelse{", 1)[1]
+        # Each branch renders its own picker and its own fields, and no others.
+        self.assertIn("<label class=hd2 for=zh>IEEE address</label>", device)
+        self.assertIn("<label class=hd2 for=zp>Endpoint</label>", device)
+        self.assertIn("<select id=zd", device)
+        self.assertNotIn("id=zg", device)
+        self.assertNotIn("id=zs", device)
+        self.assertIn("<label class=hd2 for=zg>Group ID</label>", group)
+        self.assertIn("<select id=zs", group)
+        self.assertNotIn("id=zh", group)
+        self.assertNotIn("id=zp", group)
+        # A label must render like the other headings and take its own line.
+        self.assertIn("h2.hd2,label.hd2{display:block;", PAGE)
+        # One box per kind, so nothing has to guess from the digit count.
+        self.assertNotIn("ztv", PAGE)
+
+    def test_switching_kind_drops_the_other_kind_of_target(self) -> None:
+        """A hidden field must not still be assignable, and a slot that holds a
+        device should open on the device fields rather than on an empty group."""
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="hid"){')
+        self.assertIn('document.getElementById("zn").onchange=function(){zkv=this.value;\n'
+                      'zsv="";zdv="";zgv="";zhv="";zpv="";', wiring)
+        self.assertIn('zkv=(pr&&pr.action==="zigbee"&&pr.ieee)?"d":"g";', section(PAGE, "function edReset(s){", "\n\n"))
+
+    def test_the_open_panel_follows_the_stored_action(self) -> None:
+        """Opening a slot on its own action saves a hunt through the selector."""
+        body = section(PAGE, "function actFor(s){", "\n\n// The card and the panel from the stored slot")
+        self.assertIn('if(r.action==="zigbee")return "zb";', body)
+        self.assertIn('if(!r||r.action==="none")return "ir";', body)
+        self.assertIn("act=actFor(s);", PAGE)
+
+    def test_only_an_ir_assignment_loads_stored_code_on_selection(self) -> None:
+        """An empty slot has no IR code, so its ready code box must not show a
+        loading state while the endpoint returns an empty response."""
+        reset = section(PAGE, "function edReset(s){", "\n\n")
+        self.assertIn('if(!pr||pr.action!=="ir")cdSlot=s;', reset)
+        self.assertIn('if(pr&&pr.action==="ir"&&cdSlot!==s)loadCode(s)', section(PAGE, "function edOpen(s){", "\n\n"))
+
+    def test_the_zigbee_fields_survive_a_repaint(self) -> None:
+        """A late bridge/devices message repaints the panel, and a half typed
+        group ID must not vanish with it."""
+        self.assertIn("var act=", PAGE)
+        self.assertIn("zgv=gi.value", PAGE)
+        self.assertIn("zhv=hi.value", PAGE)
+        self.assertIn("zpv=pi.value", PAGE)
+        self.assertIn("zsv=this.value", PAGE)
+        self.assertIn("zdv=this.value", PAGE)
+        # The panel is rebuilt from these vars, so each field re-renders its value.
+        for field in ("value='\"+att(zgv)+\"'", "value='\"+att(zhv)+\"'",
+                      "value='\"+att(zpv)+\"'"):
+            self.assertIn(field, PAGE)
+        # None of it may follow the selection to the next slot.
+        self.assertIn('act=actFor(s);zsv="";zdv="";zgv="";zhv="";zpv="";', PAGE)
+        self.assertIn("(zsv===String(tg[i].id)?\" selected\":\"\")", PAGE)
+        self.assertIn("(zdv===td[i].ieee?\" selected\":\"\")", PAGE)
+
+    def test_the_page_offers_a_zigbee_target_picker_on_every_slot(self) -> None:
+        self.assertIn("<select id=zs", PAGE)
+        self.assertIn("<select id=zd", PAGE)
+        self.assertIn("<input id=zg type=text", PAGE)
+        self.assertIn("<input id=zh type=text", PAGE)
+        self.assertIn("<input id=zp type=text", PAGE)
+        self.assertIn("<select id=zt", PAGE)
+        self.assertIn('post("set_zigbee",s,v,name,', PAGE)
+
+    def test_one_button_assigns_whatever_the_target_box_holds(self) -> None:
+        """The page once had three assign buttons and claimed a typed ID won over
+        the pickers, which nothing implemented. A picker now fills the box and
+        Save in the card sends it, so there is no second route to disagree."""
+        self.assertNotIn("wins over", PAGE)
+        for gone in ('id=za', 'id=zw', 'id=zi', 'assignGroup', 'assignDevice', 'assignTyped', 'assignTarget',
+                     'Assign group', 'Assign device', 'Assign typed'):
+            self.assertNotIn(gone, PAGE)
+        wiring = section(PAGE, 'if(act==="zb"){', '\nif(act==="hid"){')
+        self.assertIn('e=act==="zb"?zbWrite(s):act==="hid"?hidWrite(s):haWrite(s);', section(PAGE, "function savePlan(s){", "\n\n"))
+        # A picker only fills the fields of the kind already on screen.
+        self.assertIn('if(gs)gs.onchange=function(){zsv=this.value;if(zsv)zgv=zsv;paint()};',
+                      wiring)
+        self.assertIn('if(zdv){zhv=zdv;zpv=String(deviceEp(zdv,zav))}', wiring)
+
+    def test_the_one_button_reaches_a_device_and_a_group(self) -> None:
+        """Neither picker renders without the bridge lists, so the box is the only
+        disconnected route and it has to carry both kinds of target."""
+        body = section(PAGE, "function zbWrite(s){", "\n\n")
+        self.assertIn('return {a:"set_zigbee_device",s:s,n:name,x:"&ieee="+encodeURIComponent(ieee)+'
+                      '"&ep="+encodeURIComponent(ep||"1")+', body)
+        self.assertIn('return {a:"set_zigbee",s:s,c:g,n:name,x:"&act="+Number(zav)+"&val="+encodeURIComponent(val),', body)
+        # The kind selector already decided, so nothing reads the digit count.
+        self.assertIn('if(zkv==="d"){', body)
+        # A malformed address is caught here rather than by the remote.
+        self.assertIn('if(!/^[0-9a-fA-F]{16}$/.test(hex))return {error:"An IEEE address is 16 hex digits."};', body)
+        # 0x1201 and 4609 are the same group, so the name lookup reads the value.
+        self.assertIn('parseInt(g,g.slice(0,2).toLowerCase()==="0x"?16:10)', body)
+        # The name is re-derived, so an edited box cannot keep the old label.
+        self.assertIn('var name="",i,val=actionValue();', body)
+
+    def test_a_device_target_is_assigned_without_writing_to_the_bridge(self) -> None:
+        """The remote unicasts to the device now, so the page sends the IEEE
+        address and the endpoint and creates no group. A group per device left
+        one behind on every repeat assign."""
+        body = section(PAGE, "function sendDevice(ieee,ep,name,val){", "\n\nfunction sendGroup(")
+        self.assertIn('post("set_zigbee_device",s,null,name,', body)
+        self.assertIn('"&ieee="+encodeURIComponent(ieee)', body)
+        self.assertIn('"&ep="+encodeURIComponent(ep)', body)
+
+    def test_the_page_never_publishes_to_zigbee2mqtt(self) -> None:
+        """The websocket is read only. Assignment never published, because a
+        group per device left one behind on every repeat assign, and pairing is
+        now the remote's own window, so nothing is left that writes."""
+        for gone in ("zpub", "zreq", "transaction", "bridge/request/group",
+                     "bridge/request/device", "bridge/request/permit_join",
+                     "bridge/response/permit_join"):
+            self.assertNotIn(gone, PAGE)
+        self.assertEqual(PAGE.count("ws.send("), 0)
+
+    def test_the_pairing_button_pairs_the_remote_for_three_minutes(self) -> None:
+        """The window belongs to the remote, so the button posts to the remote
+        and the countdown follows the state endpoint."""
+        self.assertIn("var ZPJ_SECONDS=180;", PAGE)
+        # The radio and its pairing window sit above the rule. The browser link
+        # to Zigbee2MQTT is a different subject and sits below it.
+        self.assertIn('<hr class="rule">\n<h3>Zigbee2MQTT</h3>', PAGE)
+        self.assertIn("hr.rule{border:0;border-top:1px solid var(--line);margin:16px 0}", PAGE)
+        # The pairing line sits beside the button, so the pair reads as one row.
+        self.assertIn('<div class="act"><button type="button" class="sec" id="zpj">'
+                      'Pair this remote for 3 minutes</button>'
+                      '<p class="sub st" id="zpjs">Pairing state is loading.</p></div>', PAGE)
+        self.assertIn(".act .st{margin:0;align-self:center}", PAGE)
+        # The control outlives the browser block, so build() wires it.
+        self.assertNotIn("id=zpj>", PAGE)
+        self.assertIn('document.getElementById("zpj").onclick=function(){zpjSet(!zpjOn)};', PAGE)
+        send = section(PAGE, "function zpjSet(open){", "\n\n")
+        self.assertIn('post("pair",null,undefined,undefined,"&on="+(open?"1":"0"))', send)
+        # The remote restarts, so the press is never confirmed by an action id.
+        self.assertNotIn("waitAction(", send)
+        # A call that never restarts still has to release the action id, or every
+        # later action answers 409.
+        pair = section(CPP, 'else if (action == "pair") {', "  } else if")
+        self.assertIn("::zigbee_assignments.begin_pairing()", pair)
+        self.assertIn("::zigbee_assignments.cancel_pairing();", pair)
+        self.assertIn("this->complete_action_(action_id, ok);", pair)
+        # Both directions restart the remote, so every press asks first. A joined
+        # remote also loses its network to a pairing press.
+        self.assertIn("if(!confirm(open?(zbPaired()?", send)
+        self.assertLess(send.index("if(!confirm("), send.index("zpjBusy=true;"))
+        self.assertIn("erases the Zigbee network credentials of this remote", send)
+        self.assertIn("The button assignments are kept.", send)
+        self.assertIn('"The remote restarts to start pairing. This page reconnects when the remote '
+                      'is back. Continue?"', send)
+        self.assertIn('"The remote restarts with the Zigbee radio off."', send)
+        self.assertIn("var always=!!(st.network&&st.network.wifi_always_on===true);", send)
+        self.assertIn('(always?"":" Wi-Fi stays off after the restart."+wifiHoldText())', send)
+        paint = section(PAGE, "function zpjPaint(){", "\n\n// The state poll")
+        self.assertIn("b.disabled=zpjBusy||!known;", paint)
+        self.assertIn('b.textContent=zpjBusy?"Restarting...":zpjOn?"Stop pairing":'
+                      '"Pair this remote for 3 minutes"}', paint)
+        self.assertIn('zpjDown?"The remote is restarting.":', paint)
+        self.assertIn('zpjOn?"The remote is pairing for "+mmss(zpjLeft)+".":', paint)
+        self.assertIn('"The remote is not pairing."', paint)
+        # A window that runs out turns the radio off, so the off line names the
+        # cause. Otherwise the page reports a radio nobody switched off.
+        why = section(PAGE, "function zbOffWhy(){", "\n\n")
+        self.assertIn("st.zigbee.pair_failed", why)
+        self.assertIn('" The last pairing attempt found no coordinator, '
+                      'so the radio went off."', why)
+        self.assertIn('"off. Zigbee buttons are disabled."+zbOffWhy()', PAGE)
+
+    def test_the_coordinator_window_is_reported_and_never_asked_for(self) -> None:
+        """A join needs both sides open, so the page still names the coordinator
+        state. bridge/info is retained, so it arrives on connect and on change."""
+        self.assertIn('<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>', PAGE)
+        self.assertIn('if(m.topic==="bridge/info"&&m.payload){', PAGE)
+        self.assertIn("zcOn=!!m.payload.permit_join;", PAGE)
+        self.assertIn("end>0?Math.max(0,Math.round((end-Date.now())/1000)):ZPJ_SECONDS;", PAGE)
+        paint = section(PAGE, "function zcPaint(){", "\n\n// bridge/info reports")
+        self.assertIn('"The coordinator pairing state needs the Zigbee2MQTT link.":', paint)
+        self.assertIn('zcOn?"Pairing is open on the coordinator for "+mmss(zcLeft)+".":', paint)
+        self.assertIn('"Pairing is closed on the coordinator. Permit joining in Zigbee2MQTT."',
+                      paint)
+        # A closed socket only means this browser stopped watching the window.
+        self.assertIn("zcOn=false;zcLeft=0;zcTick();", PAGE)
+
+    def test_the_state_poll_carries_the_zigbee_half(self) -> None:
+        """One 1.5s poll drives every live line. It used to drop j.zigbee, which
+        froze the link line at whatever the first load put there."""
+        body = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch")
+        self.assertIn("st.network=j.network;st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", body)
+        self.assertIn("st.sleep=j.sleep;st.battery=j.battery;st.status_leds=j.status_leds;st.boot_leds=j.boot_leds;"
+                      "holdSync(j);zpjSync();networkStatus();sleepStatus();"
+                      "batteryStatus();restartSync(j);radioStatus();bleStatus();", body)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()}},"
+                      "\nfunction(){zpjLost();restartLost()})", body)
+        self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
+                      PAGE)
+        # A failed poll while a press is open is the restart, not a dead remote.
+        self.assertIn("function zpjLost(){if(zpjBusy)zpjDown=true;zpjPaint()}", PAGE)
+        sync = section(PAGE, "function zpjSync(){", "\n\n")
+        self.assertIn("if(zpjBusy&&on===zpjWant)zpjBusy=false;", sync)
+        self.assertIn("zpjOn=on;zpjLeft=on?(Number(z.pair_left)||0):0;", sync)
+
+    def test_a_device_target_carries_the_endpoint_of_its_action(self) -> None:
+        """A groupcast needs no endpoint but a unicast does, and the endpoint that
+        answers depends on the action. A thermostat cluster and an On/Off cluster
+        on one device do not have to share an endpoint."""
+        body = section(PAGE, "function epForCluster(eps,cluster){", "\n\nfunction ")
+        self.assertIn("if(eps[k].indexOf(cluster)<0)continue;", body)
+        self.assertIn("if(!best||n<best)best=n", body)
+        pick = section(PAGE, "function deviceEp(ieee,action){", "\n\n")
+        self.assertIn('epForCluster(td[i].eps,A?A.c:"genOnOff")||1', pick)
+        # An older bridge publishes no endpoint list, so the picker still works.
+        self.assertIn("return 1}", pick)
+        # A device that answers none of the actions is dropped from the picker.
+        self.assertIn("if(eps&&!commandable(eps))continue;", PAGE)
+
+    def test_the_action_list_follows_the_clusters_of_the_target(self) -> None:
+        """Zigbee2MQTT publishes the cluster list of every device, so the page can
+        offer only the commands the target accepts. A group accepts what every
+        member accepts, and a typed address describes nothing, so it offers all."""
+        catalogue = section(PAGE, "var ZA=[", "];")
+        for cluster in ("genOnOff", "genLevelCtrl", "lightingColorCtrl", "genScenes",
+                        "closuresWindowCovering", "hvacThermostat", "closuresDoorLock",
+                        "ssIasWd"):
+            self.assertIn(f'c:"{cluster}"', catalogue)
+        offer = section(PAGE, "function zActions(){", "\n\n")
+        self.assertIn("if(!have)return ZA.slice(0);", offer)
+        self.assertIn("if(have[ZA[i].c])out.push(ZA[i]);", offer)
+        # A group only accepts what every member accepts.
+        group = section(PAGE, "function grpClusters(g){", "\n\nfunction ")
+        self.assertIn("if(Object.prototype.hasOwnProperty.call(have,j))keep[j]=true;", group)
+        # An action the target dropped cannot stay selected, or Assign sends it.
+        form = section(PAGE, "function actionForm(dis){", "\n\n")
+        self.assertIn('if(!found){zav=list[0].a;zvv=""}', form)
+
+    def test_the_browser_reads_the_group_list_from_zigbee2mqtt(self) -> None:
+        """The remote holds no MQTT client, so the picker is filled by this
+        browser over the Zigbee2MQTT frontend websocket. A websocket needs no
+        CORS grant, which a fetch to the same host would."""
+        self.assertIn("new WebSocket(full)", PAGE)
+        self.assertIn('m.topic==="bridge/groups"&&Array.isArray(m.payload)', PAGE)
+        self.assertIn('m.topic==="bridge/devices"&&Array.isArray(m.payload)', PAGE)
+        # The frontend relays MQTT with the base topic already stripped.
+        self.assertNotIn("zigbee2mqtt/", PAGE)
+        self.assertIn('g.id<1||g.id>65527', PAGE)
+        # The coordinator cannot be a toggle target.
+        self.assertIn('d.type==="Coordinator"', PAGE)
+
+    def test_the_broker_address_and_token_stay_in_the_browser(self) -> None:
+        """They are this browser's credentials, so they must not reach the flash
+        of a remote that has no use for them."""
+        self.assertIn('localStorage.setItem("c6.z2m.url",u)', PAGE)
+        self.assertIn('localStorage.setItem("c6.z2m.token",k)', PAGE)
+        self.assertNotIn("token", section(PAGE, "function post(", "\nfunction fail("))
+        # A private window throws on the accessor itself.
+        save = section(PAGE, "function z2mSave(){", "\n\nfunction ")
+        self.assertIn("try{localStorage.setItem", save)
+
+    def test_the_page_explains_that_membership_lives_in_the_light(self) -> None:
+        """A group id alone does nothing until the light joins the group, and
+        only Zigbee2MQTT can write that."""
+        self.assertIn("Membership lives in the", PAGE)
+        self.assertIn("light, so a group only works once the light has joined it.", PAGE)
+
+    def test_the_page_reports_a_zigbee_assignment_and_its_target_name(self) -> None:
+        """An unnamed group still has to say which group it is."""
+        self.assertIn(
+            'return "Zigbee "+(A?A.n:"action "+r.act)+": "+\n'
+            '(r.name?r.name:(r.ieee?r.ieee:"group "+r.group))',
+            PAGE,
+        )
+
+    def test_the_hid_form_builds_the_modifier_mask_from_checkboxes(self) -> None:
+        """The form posts one 0 to 255 number, built from left-hand bits."""
+        panel = section(PAGE, "function hidPanel(lock){", "\n\nfunction clearPanel(")
+        for box in ('["hmc",1,"Ctrl"]', '["hms",2,"Shift"]',
+                    '["hma",4,"Alt / Option"]', '["hmg",8,"Cmd / Win"]'):
+            self.assertIn(box, panel)
+        self.assertIn("type=checkbox", panel)
+        self.assertIn("<label for=", panel)
+        self.assertIn("The remote holds the checked keys while it sends the key.", panel)
+        self.assertNotIn("Modifier mask", PAGE)
+        self.assertNotIn("id=hm ", PAGE)
+        self.assertIn("function modLeft(m){m=Number(m)||0;return (m|m>>4)&15}", PAGE)
+        self.assertIn('var mod=hkv==="keyboard"?modLeft(hmv):0;', PAGE)
+        self.assertIn('o.push(N[i])', PAGE)
+        self.assertIn('return o.join("+")', PAGE)
+
+    def test_the_selected_input_title_copies_and_pastes_ir_and_zigbee_configs(self) -> None:
+        """Paste asks before it writes the copied config to the selected input."""
+        self.assertIn(".edtitle .clip{display:flex", PAGE)
+        editor = section(PAGE, "function editor(){", "\n\nfunction actFor(")
+        self.assertIn('<h2 class=edtitle><span>', editor)
+        self.assertIn('id=bcopy', editor)
+        self.assertIn('id=bpaste', editor)
+        self.assertIn('document.getElementById("bcopy").onclick=copyAssignment', editor)
+        self.assertIn('document.getElementById("bpaste").onclick=pasteAssignment', editor)
+        self.assertIn('!clip||locked', editor)
+        self.assertNotIn('clip.source===sel', editor)
+        clip = section(PAGE, "function clipConfig(r){", "\n\nfunction clipName(")
+        self.assertIn('if(r.action==="ir")return {kind:"ir",source:r.slot}', clip)
+        self.assertIn('if(r.action!=="zigbee")return null;', clip)
+        copy = section(PAGE, "function copyAssignment(){", "\n\nfunction pasteAssignment(")
+        self.assertIn('if(cfgAll[source]!==undefined){c.code=cfgAll[source]', copy)
+        # The shared reader rejects a failed response, so a 500 cannot reach JSON.parse.
+        self.assertIn('fetch("/buttons/api/code?slot="+source', copy)
+        self.assertIn('if(j.slot!==source||!j.present||!j.text)throw new Error();', copy)
+        self.assertIn('clip=c;', copy)
+        paste = section(PAGE, "function pasteAssignment(){", "\n\n// One entry per input")
+        self.assertIn('if(!confirm("Apply the "+', paste)
+        self.assertIn('if(c.kind==="ir"){act="ir";codeLoad++;cd=c.code;cdSlot=target}', paste)
+        self.assertIn('act="zb";zkv=c.device?"d":"g";', paste)
+        self.assertIn('zsv=c.device?"":String(c.group);zdv=c.device?c.ieee:"";', paste)
+        self.assertIn('zpv=c.device?String(c.ep||1):"";zav=Number(c.act)||0;', paste)
+        self.assertIn('zvv=za(zav)&&za(zav).p?String(c.val):""}', paste)
+        self.assertIn('go("set_ir_code",c.code)', paste)
+        self.assertIn('go("set_hid",null,"&kind="+hkv', paste)
+        self.assertIn('sendDevice(c.ieee,String(c.ep||1),c.name||"",String(c.val||0))', paste)
+        self.assertIn('sendGroup(String(c.group),c.name||"",String(c.val||0))', paste)
+        load = section(PAGE, "function loadCode(s){", "\n\n// The page")
+        self.assertIn("var loadId=++codeLoad", load)
+        self.assertIn("if(loadId!==codeLoad)return;", load)
+        self.assertIn("if(cfgAll[s]!==undefined)return cfgAll[s]", load)
+
+    def test_the_page_carries_one_import_and_export_card(self) -> None:
+        """The whole assignment set moves as one block of text, so a remote can
+        be restored without a source remote in hand."""
+        # All radio types use vertical sections above import and export.
+        self.assertIn('<nav class="tabs full" aria-label="Setup sections">', PAGE)
+        self.assertIn('<div class="tabgrid" id="buttonstab">', PAGE)
+        self.assertIn('<p class="sub full">Select a button to assign an action.</p>', PAGE)
+        self.assertIn('<div class="tabgrid" id="configtab" hidden>', PAGE)
+        order = ['<h1 class="full secttl">Settings</h1>', '<section class="card full conn" id="devcfg">',
+                 '<h1 class="full secttl">Connections</h1>', '<section class="card full conn" id="wificfg">',
+                 '<section class="card full conn" id="zbcfg">', '<section class="card full conn" id="blecfg">',
+                 '<h1 class="full secttl">Import Export</h1>']
+        marks = [PAGE.index(m) for m in order]
+        self.assertEqual(marks, sorted(marks))
+        self.assertGreater(marks[0], PAGE.index('<div class="tabgrid" id="configtab" hidden>'))
+        dev = section(PAGE, order[1], "</section>")
+        for want in ('id="fwv"', 'id="bat"', 'id="slpcfg"', 'id="lgm"', 'id="blb"', 'id="rsb"'):
+            self.assertIn(want, dev)
+        wifi = section(PAGE, order[3], "</section>")
+        for want in ('id="wfb"', 'id="wip"', 'id="wmac"', 'id="hab"'):
+            self.assertIn(want, wifi)
+        self.assertNotIn('<hr class="rule">', dev.split("</dl>", 1)[0])
+        self.assertFalse(wifi.rstrip().endswith('<hr class="rule">'))
+        self.assertIn('<p class="sub st" id="wfs">Wi-Fi state is loading.</p>', PAGE)
+        self.assertIn('<p class="sub st" id="has">Home Assistant API state is loading.</p>', PAGE)
+        self.assertIn('<section class="card full conn" id="zbcfg">\n'
+                      '<h2 class="ttl">Zigbee<label class="sw" id="zrw">'
+                      '<input type="checkbox" id="zrb"\naria-label="Zigbee radio">'
+                      '<span></span></label></h2>\n'
+                      '<p class="sub st" id="zrs">Zigbee radio state is loading.</p>\n'
+                      '<p class="sub">Pairing erases the Zigbee network credentials of '
+                      'this remote and restarts it.\n'
+                      'The button assignments are kept. If WiFi Always On is off, the '
+                      'remote opens a temporary Wi-Fi\n'
+                      'session when it restarts to pair, so this page reconnects. '
+                      'Permit joining in Zigbee2MQTT as\n'
+                      'well, because a join needs both sides.</p>\n'
+                      '<div class="act"><button type="button" class="sec" id="zpj">'
+                      'Pair this remote for 3 minutes</button>'
+                      '<p class="sub st" id="zpjs">Pairing state is loading.</p></div>\n'
+                      '<hr class="rule">\n'
+                      '<h3>Zigbee2MQTT</h3>\n'
+                      '<p class="sub st" id="zcs">Coordinator pairing state is loading.</p>\n'
+                      '<div id="z2m"></div>', PAGE)
+        # The link line sits under the inputs it reports on, above the add-on hint.
+        self.assertIn('"<button type=button id=zc>Connect</button></div>"+\n'
+                      '"<p class=\'sub st\' id=zsum>Zigbee2MQTT status is loading.</p>"+\n'
+                      '"<p class=\'sub st\' id=zhp></p>";', PAGE)
+        self.assertEqual(PAGE.count("id=zsum"), 1)
+        self.assertNotIn('id="zsum"', PAGE)
+        self.assertIn('<section class="card full conn" id="blecfg">\n'
+                      '<h2 class="ttl">Bluetooth<label class="sw" id="brw">'
+                      '<input type="checkbox" id="brb"\naria-label="Bluetooth radio">'
+                      '<span></span></label></h2>\n'
+                      '<p class="sub st" id="bst">BLE HID state is loading.</p>', PAGE)
+        self.assertIn('<section class="card full" id="cfg">', PAGE.split('id="configtab"', 1)[1])
+        self.assertIn('<h1 class="full secttl">Import Export</h1>\n'
+                      '<section class="card full" id="cfg">\n<div id="cfgio"></div>', PAGE)
+        self.assertNotIn("saveWifi", PAGE)
+        self.assertIn('aria-label="WiFi Always On"', PAGE)
+        # A connection card cannot sit inside the collapsed import card.
+        self.assertNotIn('id="cfgb" hidden><div id="z2m">', PAGE)
+        self.assertNotIn('class="sep"', PAGE)
+        self.assertNotIn("cfg-status", PAGE)
+        self.assertNotIn('id="cxz"', PAGE)
+        # The page title leads, so neither radio card pushes it down.
+        self.assertIn('<div>\n<div class="act nm" id="dnv"><h1 id="dn">homeThing c6</h1>', PAGE)
+        self.assertIn('<p class="sub"><a href="https://github.com/landonr/homething-c6">'
+                      'github.com/landonr/homething-c6</a></p>\n'
+                      '<p class="sub st" id="dnm" hidden></p>\n'
+                      '<p class="sub st" id="lnk">Connecting to the remote.</p>\n'
+                      '</div>\n</header>', PAGE)
+        # The logo is inline and uncoloured, so one copy follows the theme text
+        # colour instead of shipping a light file and a dark file.
+        self.assertIn('<header class="full">\n<svg class=logo viewBox="0 0 805.333 795.107" '
+                      'fill=currentColor aria-hidden=true><path ', PAGE)
+        self.assertIn(".logo{width:34px;height:34px;flex:none}", PAGE)
+        # The tab icon is the same mark as a data URI. It carries its own
+        # colour rule, because a standalone favicon has no page to inherit from.
+        self.assertIn('<link rel=icon href="data:image/svg+xml,%3Csvg%20'
+                      'xmlns=%22http://www.w3.org/2000/svg%22%20'
+                      'viewBox=%220%200%20805.333%20795.107%22%3E', PAGE)
+        self.assertIn("%3Cstyle%3Epath%7Bfill:%2316181d%7D"
+                      "@media(prefers-color-scheme:dark)%7Bpath%7Bfill:%23e7eaef%7D%7D"
+                      "%3C/style%3E", PAGE)
+        self.assertIn("header.full{display:flex;align-items:center;gap:12px}", PAGE)
+        card = section(PAGE, "function cfgPaint(){", "\n\nfunction editor(){")
+        self.assertIn('<h1 class="full secttl">Import Export</h1>', PAGE)
+        self.assertNotIn('id="cxo"', PAGE)
+        self.assertNotIn('id="cxs"', PAGE)
+        # The button keeps its place and locks instead, so no line moves.
+        self.assertIn('id="bfr">Forget Bluetooth host</button>', PAGE)
+        self.assertIn('post("forget_ble")', PAGE)
+        forget = section(PAGE, "function forgetBle(){", "\n\n")
+        self.assertIn("if(!confirm(", forget)
+        self.assertLess(forget.index("if(bleForgetBusy)return;"), forget.index("if(!confirm("))
+        self.assertLess(forget.index("if(!confirm("), forget.index("bleForgetBusy=true;"))
+        self.assertLess(forget.index("if(!confirm("), forget.index('post("forget_ble")'))
+        # The remote reads no name from the host, so the state carries none and
+        # the page names no host of its own.
+        self.assertNotIn('"host":"', CPP)
+        self.assertNotIn("host_name()", CPP)
+        self.assertNotIn("st.ble.host", PAGE)
+        # One line under the inputs reports the link, so no second line can
+        # disagree with it.
+        status = section(PAGE, "function z2mLine(){", "\n\n// The pairing control")
+        self.assertIn('var e=document.getElementById("zsum");', status)
+        self.assertIn('if(z2mUp()){e.innerHTML="<span class=dot></span>This browser is connected to "+\n'
+                      '"Zigbee2MQTT. "+z2mCounts()+".";return}', status)
+        self.assertIn('if(zerr){e.innerHTML="<span class=\'dot bad\'></span>This browser is not '
+                      'connected to "+\n"Zigbee2MQTT. "+esc(zerr);return}', status)
+        self.assertIn('e.innerHTML="<span class=\'dot off\'></span>This browser is not connected to "+',
+                      status)
+        self.assertNotIn("z2mTitle", PAGE)
+        self.assertNotIn("id=zst", PAGE)
+        self.assertIn(".dot.off{background:var(--line)}.dot.warn{background:var(--warn)}\n"
+                      ".dot.bad{background:var(--bad)}", PAGE)
+        self.assertIn("function stateWatch(){if(!stTimer)stTimer=setInterval(stateRefresh,1500)}",
+                      PAGE)
+        refresh = section(PAGE, "function stateRefresh(){", "\n\nfunction stateWatch()")
+        self.assertIn("readState()", refresh)
+        self.assertIn('tfetch("/buttons/api/state",{cache:"no-store"},5000)', PAGE)
+        self.assertIn("st.ble=j.ble;st.radios=j.radios;st.zigbee=j.zigbee;", refresh)
+        self.assertIn("radioStatus();bleStatus()", refresh)
+        # A steady poll updates the status lines only. It repaints only when a
+        # Config switch changed, because the Action list grays out by switch.
+        self.assertEqual(refresh.count("paint()"), 1)
+        self.assertIn("if(booted&&radioKey()!==radioSeen)paint()", refresh)
+        # The connection inputs are built once, so the repaint owns cfgio alone.
+        self.assertIn('var e=document.getElementById("cfgio")', card)
+        # The startup path reads state, then preloads every stored IR code.
+        start = section(PAGE, "load().then(function(j){", "document.getElementById(\"ed\")")
+        self.assertIn("return cfgRefresh()", start)
+        self.assertIn('<textarea id=cx', card)
+        # The card heading names the block, so the body repeats no title.
+        self.assertNotIn('Import and export</p>', card)
+        self.assertNotIn("cfgMode", PAGE)
+        self.assertNotIn("cfgOut", PAGE)
+        self.assertNotIn('id=cs', card)
+        self.assertNotIn('id=cxr', card)
+        self.assertIn('id=cxfp"+rd+">Choose File</button>', card)
+        self.assertIn('id=cxd"+em+">Download JSON</button>', card)
+        self.assertIn("id=cxf type=file accept='.json,application/json'", card)
+        self.assertIn('id=cxc"+em+">Copy</button>', card)
+        self.assertIn('id=cxa"+wr+">Apply to the remote</button>', card)
+        # Copy and download need text, so an empty box disables both.
+        self.assertIn('var em=rd||(!cfgReady&&!cfgDirty?" disabled":String(cfgIn).trim()?"":" disabled")', card)
+        # One buffer keeps a pasted file and manual edits through a repaint.
+        self.assertIn('esc(cfgIn)', card)
+        self.assertIn("box.oninput=function(){cfgIn=box.value;", card)
+        self.assertIn('var off=cfgBusy||!String(cfgIn).trim()', card)
+        self.assertIn('document.getElementById("cxd").onclick=cfgDownload', card)
+        self.assertIn('cfgDirty=true', card)
+        self.assertIn('document.getElementById("cxfp").onclick=', card)
+        self.assertIn('document.getElementById("cxf").onchange=cfgLoadFile', card)
+        # An import writes flash, so it stays disabled while the remote is busy.
+        self.assertIn('wr=(cfgBusy||(st&&st.busy)||(!cfgReady&&!cfgDirty))?" disabled":""', card)
+        self.assertIn("editor();cfgPaint()}", PAGE)
+
+    def test_the_config_card_can_download_and_load_a_local_json_file(self) -> None:
+        download = section(PAGE, "function cfgDownload(){", "\n\nfunction cfgJsonFile")
+        self.assertIn('new Blob([cfgIn],{type:"application/json"})', download)
+        self.assertIn("a.download=cfgFile()", download)
+        self.assertIn("URL.createObjectURL", download)
+        self.assertIn("URL.revokeObjectURL", download)
+        load = section(PAGE, "function cfgLoadFile(){", "\n\n// A repaint")
+        self.assertIn('document.getElementById("cxf")', load)
+        self.assertIn("cfgJsonFile(file)", load)
+        self.assertIn("file.size>262144", load)
+        self.assertIn("new FileReader()", load)
+        self.assertIn("cfgParse(text)", load)
+        self.assertIn('cfgMsg="Loaded "+name+"."', load)
+
+    def test_the_firmware_version_is_set_at_codegen_and_served_in_the_state(self) -> None:
+        """A setter keeps the version out of defines.h, so a new commit does not
+        rebuild every file. The import ignores the key, so it needs no check."""
+        self.assertIn("cg.add(var.set_firmware_version(firmware_version()))", INIT)
+        self.assertNotIn("add_define(\"FIRMWARE", INIT)
+        self.assertIn("dc560eec464c05707991582992bff0d27b0d960b", INIT)
+        self.assertIn('"--is-ancestor"', INIT)
+        self.assertIn("%cI", INIT)
+        self.assertIn('"--untracked-files=no"', INIT)
+        # A shallow clone has no history to count, so an adopted build reports
+        # the pinned ref and the commit of the clone instead of "unknown".
+        self.assertIn("return source_ref()", INIT)
+        self.assertIn("from esphome.components.external_components import get_sources", INIT)
+        self.assertIn("here.is_relative_to(Path(source.components_dir).resolve())", INIT)
+        self.assertIn('"rev-parse", "--short", "HEAD"', INIT)
+        self.assertIn('f"{source.ref}@{short}"', INIT)
+        self.assertIn("void set_firmware_version(const char *version)", HEADER)
+        self.assertIn('R"({"firmware":")"', section(CPP, "void ButtonConfig::handle_state_", "\n}\n"))
+        self.assertIn('"  Firmware: %s"', section(CPP, "void ButtonConfig::dump_config()", "\n}\n"))
+        parse = section(PAGE, "function cfgParse(text){", "\n\n")
+        self.assertNotIn("firmware", parse)
+
+    def test_the_page_markup_has_no_repeated_id(self) -> None:
+        markup = PAGE.split("<script>", 1)[0]
+        ids = re.findall(r'\bid="([^"]+)"', markup)
+        self.assertTrue(ids)
+        self.assertEqual(sorted({i for i in ids if ids.count(i) > 1}), [])
+
+    def test_the_page_shows_the_firmware_version(self) -> None:
+        self.assertIn('<dt>Firmware</dt><dd id="fwv">', PAGE)
+        self.assertIn("st.firmware", section(PAGE, "function networkStatus(){", "\n\nfunction "))
+
+    def test_an_export_holds_the_action_and_the_payload_of_every_input(self) -> None:
+        """An export that named the action alone would restore nothing, because
+        the group ID, the address, and the code are the assignment."""
+        blob = section(PAGE, "function cfgBlob(){", "\n\n")
+        self.assertIn("""return '{"c6remote":1,'+(typeof st.firmware==="string"&&st.firmware?'"firmware":'+JSON.stringify(st.firmware)+",":"")+'"settings":'+JSON.stringify(cfgSettings())+',"slots":[""", blob)
+        # One line for each input, so an entry stays readable in the box.
+        self.assertIn(R'lines.join(",\n")', blob)
+        self.assertIn("for(i=0;i<S.length;i++){", blob)
+        self.assertIn('e={slot:s,label:S[i].l,action:"none"}', blob)
+        self.assertIn('e.kind="device";e.ieee=r.ieee;e.ep=r.ep||1', blob)
+        self.assertIn('e.kind="group";e.group=r.group', blob)
+        self.assertIn('e.action="ir";e.code=cfgAll[s]||""', blob)
+        # The codes come from the endpoint that already serves the editor box,
+        # one request at a time, and the editor read fills the same cache.
+        self.assertIn('cfgAll[s]=j.text', PAGE)
+        refresh = section(PAGE, "function cfgRefresh(){", "\n\n")
+        self.assertIn('fetch("/buttons/api/code?slot="+slot', refresh)
+        self.assertIn("cfgTask=need.reduce(function(p,slot){", refresh)
+        self.assertIn("cfgIn=cfgBlob()", refresh)
+
+    def test_an_import_is_read_in_full_before_the_first_flash_write(self) -> None:
+        """A refusal in the middle would leave half of the inputs on the old
+        config, so every entry is checked before any of them is sent."""
+        check = section(PAGE, "function cfgCheck(e){", '\nreturn ""}')
+        self.assertIn('return "A slot number is missing or unknown."', check)
+        self.assertIn('/^[0-9a-fA-F]{16}$/.test(cfgHex(e.ieee))', check)
+        self.assertIn("if(!(ep>=1&&ep<=240))", check)
+        self.assertIn("if(!(g>=1&&g<=65527))", check)
+        apply_ = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy")
+        self.assertIn("var parsed=cfgParse(cfgIn),j,i,list=[],ins,sets,holds,n,skip;", apply_)
+        self.assertIn("if(parsed.error){cfgNote(parsed.error,true);return}", apply_)
+        self.assertLess(apply_.index("cfgParse"), apply_.index("cfgRun("))
+        parse = section(PAGE, "function cfgParse(text){", "\n\n// An action")
+        self.assertIn("why=cfgCheck(j.slots[i]);", parse)
+        self.assertIn('j.c6remote!==1', parse)
+        self.assertIn("why=cfgSetCheck(j.settings)", parse)
+        # A clear on an input that holds nothing is the one skipped write.
+        self.assertIn("for(i=0;i<j.slots.length;i++)if(cfgNeeded(j.slots[i]))list.push(j.slots[i]);", apply_)
+        needed = section(PAGE, "function cfgNeeded(e){", "\n\n")
+        self.assertIn('if(e.action!=="none")return true', needed)
+
+    def test_the_settings_block_reuses_the_requests_of_the_page_controls(self) -> None:
+        """The name stays out of the file, and each setting goes through the
+        same action as its own switch."""
+        settings = section(PAGE, "function cfgSettings(){", "\n\n")
+        self.assertNotIn("name", settings)
+        send = section(PAGE, "function cfgSetList(o){", "\n\n")
+        for action in ("set_radio", "set_wifi_always_on", "set_status_leds", "set_boot_leds",
+                       "set_sleep_enabled", "set_sleep_after", "set_sleep_replay"):
+            self.assertIn('"%s"' % action, send)
+        # A hold belongs to a slot now, so its write comes from the hold list, with the card action.
+        self.assertIn('action:"set_hold"', section(PAGE, "function cfgHoldList(o,slots){", "\n\n"))
+        # A poll before the first load has no slots, and the hold hints still read them.
+        self.assertIn("function row(s){if(!st||!st.slots)return null;", PAGE)
+        failed = section(PAGE, "function cfgApply(){", "\n\nfunction cfgCopy").split(".catch(function(err){", 1)[1]
+        self.assertNotIn("edReset", failed)
+        self.assertIn("if(cfgReady&&!cfgDirty)cfgIn=cfgBlob();", section(PAGE, "function load(){", "\n\n"))
+
+    def test_an_import_reuses_the_action_endpoint_one_input_at_a_time(self) -> None:
+        """The remote reserves one action at a time, so a burst would take the
+        409. Nothing new is added to the firmware for an import."""
+        send = section(PAGE, "function cfgSend(e){", '\nreturn post("clear",e.slot)}')
+        self.assertIn('return post("set_ir_code",e.slot,cfgCode(e.code))', send)
+        self.assertIn('return post("set_zigbee_device",e.slot,null,e.name||""', send)
+        self.assertIn('return post("set_zigbee",e.slot,String(parseInt(e.group,10))', send)
+        run = section(PAGE, "function cfgRun(list,i){", "return cfgRun(list,i+1)})}")
+        self.assertIn("return waitAction(r.body.id)", run)
+        self.assertIn('throw new Error(who+": "+fail(r))', run)
+        # The import adds no endpoint, so canHandle still claims four paths.
+        self.assertNotIn("/buttons/api/export", PAGE)
+        self.assertNotIn("/buttons/api/import", PAGE)
+        self.assertNotIn("api/export", CPP)
+        self.assertNotIn("api/import", CPP)
+
+    def test_capture_success_matches_the_recorded_slot(self) -> None:
+        self.assertIn('j.result==="saved"&&j.result_slot===rec', PAGE)
+        self.assertNotIn("st.saves>", PAGE)
+        self.assertNotIn('j.op_state==="saved"', PAGE)
+
+    def test_reload_reuses_the_persisted_capture_result(self) -> None:
+        startup = section(PAGE, "build();", "</script>")
+        self.assertIn('seen=j.result==="saved"&&j.result_slot===rec', startup)
+
+
+class RadioSwitchTest(unittest.TestCase):
+    """One switch for each radio, held on the remote and shown on the page."""
+
+    def test_each_radio_keeps_its_switch_in_its_own_record(self) -> None:
+        # The flag replaces a reserved field, so an old record loads unchanged
+        # and reads as on.
+        self.assertIn("static constexpr uint16_t FLAG_RADIO_OFF = 0x0001;", ZIGBEE)
+        self.assertIn("uint16_t flags;", ZIGBEE)
+        self.assertIn("static constexpr uint8_t FLAG_RADIO_OFF = 0x01;", BLE_HEADER)
+        self.assertIn("uint8_t flags;", BLE_HEADER)
+        self.assertIn("uint8_t reserved[2];", BLE_HEADER)
+        self.assertIn("const uint16_t boot_flags = record_.flags;", ZIGBEE)
+        self.assertIn("radio_on_.store((boot_flags & FLAG_RADIO_OFF) == 0", ZIGBEE)
+        self.assertIn("this->radio_on_.store((this->record_.flags & FLAG_RADIO_OFF) == 0", BLE)
+
+    def test_an_off_radio_sends_nothing(self) -> None:
+        play = section(ZIGBEE, "  bool play(uint8_t slot) {", "\n  }")
+        self.assertIn("!radio_enabled()", play)
+        tick = section(ZIGBEE, "  void tick() {", "const uint32_t now")
+        self.assertIn("if (!radio_enabled())\n      return;", tick)
+        pressed = section(BLE, "bool BleHid::set_pressed(uint8_t slot, bool pressed) {", "\n}")
+        self.assertIn("!this->radio_enabled()", pressed)
+        self.assertIn("if (!this->radio_enabled() || !this->hid_started_", BLE)
+
+    def test_the_bluetooth_stack_stays_down_while_the_switch_is_off(self) -> None:
+        setup = section(BLE, "void BleHid::setup() {", "\n}")
+        self.assertIn("if (!this->radio_enabled()) {", setup)
+        self.assertNotIn("mark_failed", section(setup, "radio_enabled()) {", "  }"))
+        # The first turn-on starts the stack, because setup skipped it.
+        switch = section(BLE, "bool BleHid::set_radio_enabled(bool enabled) {", "\n}")
+        self.assertIn("if (!this->stack_ready_) {", switch)
+        self.assertIn("this->release_all_();", switch)
+        self.assertIn("ble_gap_adv_stop();", switch)
+        self.assertIn("ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);", switch)
+
+    def test_the_state_and_action_endpoints_carry_both_switches(self) -> None:
+        self.assertIn('"radios":{"zigbee":%s,"ble":%s,"home_assistant":%s}', CPP)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
+                      '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
+        self.assertIn("::zigbee_assignments.link_started() ? \"true\" : \"false\"", CPP)
+        self.assertIn("::zigbee_assignments.link_factory_new() ? \"true\" : \"false\"", CPP)
+        self.assertIn("::zigbee_assignments.radio_enabled() ? \"true\" : \"false\"", CPP)
+        self.assertIn('action == "set_radio"', CPP)
+        self.assertIn('R"({"ok":false,"error":"invalid radio switch"})"', CPP)
+        self.assertIn('const bool needs_slot = action != "forget_ble" && action != "set_radio" &&'
+                      '\n                          action != "set_wifi_always_on" && action != "set_status_leds" '
+                      '&& action != "set_boot_leds" &&\n                          action != "set_hold" && !sleep_action && '
+                      'action != "pair" &&\n                          action != "restart" && '
+                      'action != "set_name";', CPP)
+        # A switch writes flash, so it runs on the loop like every other write.
+        switch = section(CPP, 'else if (action == "set_radio") {', "  } else {")
+        self.assertIn("this->defer(", switch)
+        self.assertIn("::zigbee_assignments.set_radio_enabled(radio_on)", switch)
+        self.assertIn("set_radio_enabled(radio_on)", switch)
+        self.assertIn("this->set_ha_api_expected(radio_on)", switch)
+        self.assertIn('radio != "home_assistant"', CPP)
+
+    def test_an_off_zigbee_radio_keeps_the_stack_down_after_a_boot(self) -> None:
+        """The ESP-Zigbee stack has no stop and no restart, so the only way to
+        keep the radio off is to hold the component down before its setup."""
+        gate = section(CONFIG, "    - priority: 800", "    - priority: 600")
+        self.assertIn("if (!ZigbeeAssignmentManager::radio_enabled_from_flash()) {", gate)
+        self.assertIn("id(zigbee_radio)->mark_failed();", gate)
+        self.assertIn("zigbee_assignments.set_boot_gated(true);", gate)
+        # The rest of the boot work keeps its own priority behind that gate.
+        self.assertIn("    - priority: 600\n      then:\n"
+                      "        - lambda: ir_code_store.setup();", CONFIG)
+        # Preferences open in app_main, so a flash read works at any priority.
+        self.assertIn("static bool radio_enabled_from_flash() {", ZIGBEE)
+        # A remote with no record has never paired, so it boots with the radio
+        # off and waits for the pairing button.
+        self.assertIn("if (!preference.load(&record) || !valid_(record))\n      return false;",
+                      ZIGBEE)
+        setup = section(ZIGBEE, "  void setup() {", "\n  }")
+        self.assertIn("record_.flags = FLAG_RADIO_OFF;", setup)
+        # A migrated record keeps the radio its owner already had, so the bit is
+        # set in that branch alone and never in reset_record_.
+        self.assertNotIn("FLAG_RADIO_OFF",
+                         section(ZIGBEE, "static void reset_record_(Record &record) {", "\n  }"))
+        # The switch cannot lift the gate, so the page asks for the one cure.
+        self.assertIn('if(z.gated)return "The stack is down. Restart the remote to start it.";', PAGE)
+        self.assertIn('"zigbee":{"started":%s,"paired":%s,"new":%s,"gated":%s,'
+                      '"pairing":%s,"pair_left":%u,"pair_failed":%s,"reach":"%s"}', CPP)
+        self.assertIn("::zigbee_assignments.boot_gated() ? \"true\" : \"false\"", CPP)
+        # Home Assistant offers the same restart as the page.
+        self.assertIn("  - platform: restart\n    name: Restart", CONFIG)
+
+    def test_neither_radio_switch_acts_on_its_own_state_at_boot(self) -> None:
+        """A template switch defaults to ALWAYS_OFF, and its setup fires
+        turn_off_action. That switched both radios off on every boot before the
+        stored flag was even read."""
+        block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
+        self.assertEqual(block.count("restore_mode: DISABLED"), 3)
+        self.assertNotIn("restore_mode: ALWAYS", block)
+
+    def test_the_yaml_exposes_one_switch_for_each_radio(self) -> None:
+        block = section(CONFIG, "  - platform: template\n    name: Zigbee Radio", "\nremote_receiver:")
+        self.assertIn("lambda: return zigbee_assignments.radio_enabled();", block)
+        self.assertIn("lambda: zigbee_assignments.set_radio_enabled(true);", block)
+        self.assertIn("lambda: zigbee_assignments.set_radio_enabled(false);", block)
+        self.assertIn("lambda: return id(ble_hid_remote).radio_enabled();", block)
+        self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(true);", block)
+        self.assertIn("lambda: id(ble_hid_remote).set_radio_enabled(false);", block)
+        self.assertIn("lambda: return id(button_cfg).ha_api_expected();", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(true);", block)
+        self.assertIn("lambda: id(button_cfg).set_ha_api_expected(false);", block)
+        # The component keeps no global instance, so the YAML pushes the link
+        # state to the manager the page reads.
+        self.assertIn("zigbee_assignments.set_link_state(id(zigbee_radio).is_started(),", CONFIG)
+        self.assertIn("id(zigbee_radio)->factory_new_.load());", CONFIG)
+        # D5 must not report a healthy Zigbee link that sends nothing.
+        self.assertIn("if (!zigbee_assignments.radio_enabled() || zigbee_assignments.boot_gated())",
+                      CONFIG)
+        self.assertIn("const bool ha_expected = id(button_cfg).ha_api_expected();", CONFIG)
+        self.assertIn("it[0] = Color(140, 70, 0);", CONFIG)
+
+    def test_the_page_marks_a_held_input_and_keeps_its_assignment(self) -> None:
+        self.assertIn('function radioOn(kind){return !st||!st.radios||st.radios[kind]!==false}', PAGE)
+        # A Home Assistant press skips while its switch is off, so it is held like a radio.
+        self.assertIn('function slotRadio(r){return !r?"":r.action==="zigbee"?"zigbee":'
+                      'r.action==="hid"?"ble":\nr.action==="ha"?"home_assistant":""}', PAGE)
+        self.assertIn('b.className=["k",d.c,setClass(r),slotRadioOff(d.s)?"rf":""]', PAGE)
+        # The label stays, so the tile still says what the input is assigned to.
+        self.assertIn(".k.rf span{opacity:.55}", PAGE)
+        self.assertIn("background:var(--bad);margin-left:6px;vertical-align:middle}", PAGE)
+        self.assertIn('(sk==="home_assistant"?"Home Assistant is":"The "+(sk==="zigbee"?"Zigbee":"Bluetooth")'
+                      '+" radio is")+\n" off, so this input is disabled. The assignment is kept.</div>";', PAGE)
+        self.assertIn('b.checked=radioBusy[kind]?radioWant[kind]:radioOn(kind);', PAGE)
+        self.assertIn('.sw input:checked+span{background:var(--acc)}', PAGE)
+        self.assertIn("h2.ttl{display:flex;align-items:center;justify-content:space-between", PAGE)
+        self.assertIn('document.getElementById("zrb").onchange=function(){setRadio("zigbee")};', PAGE)
+        self.assertIn('document.getElementById("hab").onchange=function(){setRadio("home_assistant")}', PAGE)
+        self.assertIn('post("set_radio",null,undefined,undefined,"&radio="+kind+"&on="+next)', PAGE)
+        self.assertIn('radioSwitch("home_assistant","hab");', PAGE)
+        self.assertIn('"Home Assistant is off. Home Assistant buttons are disabled."', PAGE)
+        self.assertNotIn("Home Assistant is not required.", PAGE)
+
+    def test_the_home_assistant_line_names_a_switch_this_boot_does_not_follow(self) -> None:
+        """The API server starts only at boot, so the switch and the API can
+        disagree until a restart. The line says which way and what cures it."""
+        status = section(PAGE, "function networkStatus(){", "\n\nfunction ")
+        self.assertIn("gated=st.network.api_gated===true", status)
+        self.assertIn('(gated?"":" The API stops at the next restart.")', status)
+        self.assertIn('gated?"Home Assistant is on. The API is off. Restart the remote to start it.":', status)
+        self.assertLess(status.index("!expect?"), status.index('gated?"Home Assistant is on.'))
+        self.assertIn("Home Assistant then cannot turn this switch on again, so use this page.", PAGE)
+
+    def test_the_api_gate_reads_flash_before_setup_and_reaches_the_state(self) -> None:
+        self.assertIn("static bool ha_api_expected_from_flash();", HEADER)
+        self.assertIn("void set_ha_api_gated(bool gated);", HEADER)
+        self.assertIn("std::atomic<bool> ha_api_gated_{false};", HEADER)
+        read = section(CPP, "bool ButtonConfig::ha_api_expected_from_flash() {", "\n}")
+        self.assertIn("global_preferences->make_preference<HaPref>(HA_PREF_KEY, true);", read)
+        # A missing or corrupt record means on, the same rule setup() applies.
+        self.assertIn("return !preference.load(&loaded) || loaded.magic != HA_PREF_MAGIC || "
+                      "loaded.expected != 0;", read)
+        load = section(CPP, "void ButtonConfig::load_ha_pref_() {", "\n}")
+        self.assertIn("this->ha_api_expected_.store(ha_api_expected_from_flash(), std::memory_order_release);", load)
+        self.assertNotIn("loaded.magic", load)
+
+    def test_test_ha_refuses_while_home_assistant_is_off_or_gated(self) -> None:
+        action = section(CPP, "void ButtonConfig::handle_action_", "\nvoid ButtonConfig::complete_action_")
+        test = section(action, '  if (action == "test_ha") {', "\n  }\n")
+        off = test.index("if (!this->ha_api_expected()) {")
+        gated = test.index("if (this->ha_api_gated()) {")
+        self.assertLess(test.index('"slot has no Home Assistant action"'), off)
+        self.assertLess(off, gated)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant is off in Config"})"', test)
+        self.assertIn('R"({"ok":false,"error":"Home Assistant API is off until the remote restarts"})"', test)
+        # A refusal must not claim the action slot or queue anything.
+        self.assertLess(action.index("Home Assistant API is off until the remote restarts"),
+                        action.index("compare_exchange_strong"))
+        self.assertNotIn("play(", test)
+
+    def test_set_inputs_have_action_background_colors(self) -> None:
+        self.assertIn('.set-ble{--set-bg:#2f80ed}', PAGE)
+        self.assertIn('.set-zigbee{--set-bg:#38a169}', PAGE)
+        self.assertIn('.set-ir{--set-bg:#e5b700}', PAGE)
+        self.assertIn('function setClass(r){var a=r&&r.action;', PAGE)
+        self.assertIn('a==="hid"?"set-ble"', PAGE)
+        self.assertIn('a==="zigbee"||a==="ir"', PAGE)
+        self.assertIn('body.set-colors .remote .k[class*=set-]', PAGE)
+        self.assertNotIn('body.set-colors .assignment-list button[class*=set-]', PAGE)
+        self.assertIn('localStorage.getItem("c6.set-colors")', PAGE)
+        self.assertIn('document.getElementById("scb").onchange=setColorsToggle;', PAGE)
+        self.assertIn('aria-label="Assignment colors"', PAGE)
+
+    def test_assignment_collection_is_removed_and_color_switch_stays(self) -> None:
+        self.assertNotIn('<section class="card assignments">', PAGE)
+        self.assertNotIn('id="assignmentList"', PAGE)
+        self.assertNotIn('id="assignmentSummary"', PAGE)
+        self.assertNotIn("function assignmentPaint(){", PAGE)
+        self.assertIn('<label class="sw" id="scw">', PAGE)
+        self.assertIn('<div class="colorbar"><h2>Assignment colors</h2>', PAGE)
+        self.assertIn('id="scb"', PAGE)
+        self.assertIn('.colorbar{display:flex;align-items:center;justify-content:center;gap:8px;', PAGE)
+        self.assertIn('.remote-pane{background:transparent;border:0;border-radius:0;padding:0;\n'
+                      'display:flex;flex-direction:column;align-items:center;gap:8px;width:fit-content;max-width:100%}', PAGE)
+
+    def test_every_radio_line_states_what_is_on_or_off(self) -> None:
+        """A line that hides moves the text and the buttons under it, so each one
+        is always rendered and always names its own subject."""
+        # The sleep block hides because the build fixes it. The idle restart line
+        # hides because an idle remote has nothing to report.
+        for card_id in ("devcfg", "wificfg", "zbcfg", "blecfg"):
+            card = section(PAGE, f'<section class="card full conn" id="{card_id}">', "</section>")
+            card = card.replace('<div id="slpcfg" hidden>', "", 1)
+            card = card.replace('<p class="sub st" id="rss" hidden></p>', "", 1)
+            self.assertNotIn("hidden", card)
+        # The switch locks instead of leaving the page while the state is unknown.
+        self.assertIn("b.disabled=radioBusy[kind]||!(st&&st.radios)}", PAGE)
+        self.assertIn('bf.disabled=bleForgetBusy||!st.ble.bonded;', PAGE)
+        line = section(PAGE, "function radioStatus(){", "\n\nfunction setRadio(")
+        self.assertIn('e.innerHTML=!known?"<span class=\'dot off\'></span>'
+                      'Zigbee radio state is loading.":', line)
+        # A radio that is on with no network is neither healthy nor failed, so
+        # the dot uses the warning colour instead of the idle grey.
+        self.assertIn('"<span class=\'dot "+(on?(zbPaired()?"":"warn"):"bad")+"\'></span>'
+                      'Zigbee radio is "+', line)
+        self.assertIn(".dot.warn{background:var(--warn)}", PAGE)
+        self.assertIn("--warn:#8a5300;", PAGE)
+        self.assertIn("--warn:#e0a44a;", PAGE)
+        # The remote can be on with no network, so the line names which it is.
+        self.assertIn('if(!z.started)return "The stack has not started.";', PAGE)
+        self.assertIn('if(z.pairing)return "Pairing.";', PAGE)
+        self.assertIn('if(z.paired)return z.reach==="failed"?\n'
+                      '"Paired, but the last command to a device was not acknowledged.":\n'
+                      '"Paired to a Zigbee network.";', PAGE)
+        self.assertIn('return z["new"]?"Not paired.":', PAGE)
+        self.assertIn('"Not on the network yet. The remote is rejoining."}', PAGE)
+        self.assertIn('(on?"on. "+zbLink():"off. Zigbee buttons are disabled."+zbOffWhy())', PAGE)
+        # The remote radio and the browser link are separate subjects.
+        self.assertIn('This browser is connected to "+\n"Zigbee2MQTT. "', PAGE)
+        # The Bluetooth radio and its host each own a line, and the host line
+        # sits above the Forget text. A live flag never survives an off radio.
+        self.assertIn('<p class="sub st" id="bst">BLE HID state is loading.</p>\n'
+                      '<p class="sub st" id="bhs">Bluetooth host state is loading.</p>\n'
+                      '<p class="sub">Forget the saved host', PAGE)
+        ble = section(PAGE, "function bleStatus(){", "\n\nfunction forgetBle(")
+        self.assertIn('var off=!radioOn("ble"),live=!off&&st.ble.connected;', ble)
+        self.assertIn('(off?"off. BLE buttons are disabled.":"on.")', ble)
+        self.assertIn('(!st.ble.bonded?("No host bond."+(off?"":st.ble.pairing?" Pairing.":'
+                      '" Ready to pair.")):', ble)
+        self.assertIn('live?"Connected to the saved host.":', ble)
+        self.assertIn('"Bonded to a saved host."+(off?"":" Waiting for the host."))', ble)
+
+    def test_a_forget_works_while_the_bluetooth_radio_is_off(self) -> None:
+        """The NimBLE keys are their own NVS namespace, so the stack is not
+        needed to read the bond or to drop it."""
+        self.assertIn('static const char *const BOND_NAMESPACE = "nimble_bond";', BLE)
+        present = section(BLE, "static bool stored_bond_present() {", "\n}")
+        self.assertIn("nvs_entry_find(NVS_DEFAULT_PART_NAME, BOND_NAMESPACE, NVS_TYPE_ANY", present)
+        self.assertIn("nvs_release_iterator(iterator);", present)
+        erase = section(BLE, "static bool erase_stored_bonds() {", "\n}")
+        self.assertIn("nvs_open(BOND_NAMESPACE, NVS_READWRITE, &handle)", erase)
+        self.assertIn("nvs_erase_all(handle)", erase)
+        self.assertIn("nvs_commit(handle)", erase)
+        self.assertIn("nvs_close(handle);", erase)
+        setup = section(BLE, "void BleHid::setup() {", "\n}")
+        self.assertIn("this->bonded_.store(stored_bond_present(), std::memory_order_release);", setup)
+        forget = section(BLE, "bool BleHid::forget_bond() {", "\n}")
+        self.assertIn("if (!this->stack_ready_) {", forget)
+        self.assertIn("const bool erased = erase_stored_bonds();", forget)
+
+
+class WiringTest(unittest.TestCase):
+    def test_the_config_loads_the_local_component(self) -> None:
+        """The web page owns the root URL, so the stock entity page must stay out."""
+        block = section(CONFIG, "external_components:", "\nlogger:")
+        # A Device Builder that adopts this config has no components directory,
+        # so the source is a substitution that defaults to GitHub.
+        self.assertIn("- source: ${components_source}", block)
+        self.assertRegex(CONFIG, r"\nbutton_config:")
+        self.assertNotRegex(CONFIG, r"(?m)^web_server:")
+
+    def test_the_interval_opens_the_rail_and_effect_for_a_web_request(self) -> None:
+        """Rail and LED work needs YAML ids, so the web open lands on this tick."""
+        block = section(CONFIG, "  - interval: 250ms", "  - interval: 50ms")
+        self.assertIn("if (ir_ui.take_open_request()) {", block)
+        self.assertIn("id(ir_rail).turn_on();", block)
+        # Assignment mode shares the one effect, so a web open selects it too.
+        self.assertIn('set_brightness(0.4f).set_effect("Status Indicators")', block)
+
+    def test_the_interval_restores_idle_status_on_any_close(self) -> None:
+        block = section(CONFIG, "  - interval: 250ms", "  - interval: 50ms")
+        self.assertIn("if (ir_ui.tick())", block)
+        self.assertIn("id(show_idle_status).execute();", block)
+
+    def test_the_assignment_hold_leaves_the_idle_restore_to_the_interval(self) -> None:
+        """Catches a double restore once tick() reports a close from any source."""
+        block = section(CONFIG, "if (fired & (1u << HoldActions::ASSIGN)) {", "\n      - lambda: |-")
+        self.assertIn("ir_ui.close();", block)
+        self.assertNotIn("show_idle_status", block)
+
+
+class IrUiStateTest(unittest.TestCase):
+    def test_close_drops_the_web_owner_and_raises_the_closed_flag(self) -> None:
+        body = section(STORE, "  void close() {", "\n  }")
+        self.assertIn("web_owner_ = false;", body)
+        self.assertIn("closed_ = true;", body)
+        self.assertIn("state = OFF;", body)
+
+    def test_a_web_open_arms_the_slot_with_arm_only(self) -> None:
+        """A web request names its slot, so it must not run the tap cycle."""
+        body = section(STORE, "  void open_from_web(uint8_t button) {", "\n  }")
+        self.assertIn("web_owner_ = true;", body)
+        self.assertIn("open_requested_ = true;", body)
+        self.assertIn("tap(button, Tap::ARM_ONLY);", body)
+
+    def test_capture_result_survives_ready_and_close(self) -> None:
+        captured = section(STORE, "  void captured(", "\n  }")
+        close = section(STORE, "  void close() {", "\n  }")
+        tick = section(STORE, "  bool tick() {", "\n  }")
+        self.assertIn("web_result_ = state;", captured)
+        self.assertIn("web_result_slot_ = target;", captured)
+        self.assertNotIn("web_result_", close)
+        self.assertNotIn("web_result_", tick)
+
+
+class ComponentSchemaTest(unittest.TestCase):
+    def test_the_component_binds_to_the_existing_web_server(self) -> None:
+        self.assertIn('AUTO_LOAD = ["web_server_base", "button_slots"]', INIT)
+        self.assertIn("CONF_WEB_SERVER_BASE_ID", INIT)
+        self.assertIn("cv.use_id(web_server_base.WebServerBase)", INIT)
+
+    def test_the_page_is_stored_as_gzip_data(self) -> None:
+        self.assertIn("gzip.compress", INIT)
+        self.assertIn("cg.progmem_array", INIT)
+        self.assertIn('response->addHeader("Content-Encoding", "gzip")', CPP)
+        # The page is data that the build reads, never a compiled header.
+        self.assertNotIn("button_config_page", CPP)
+
+    def test_the_schema_reserves_lwip_sockets_for_the_page(self) -> None:
+        """Production has no web_server, so nothing else sizes CONFIG_LWIP_MAX_SOCKETS
+        for browser connections. At the old pool of 10, accept failed with ENFILE (23)
+        before httpd reached its own limit and could purge the oldest connection."""
+        tree = ast.parse(INIT)
+        schema = next(
+            n for n in tree.body
+            if isinstance(n, ast.Assign) and [ast.unparse(t) for t in n.targets] == ["CONFIG_SCHEMA"]
+        )
+        self.assertEqual(ast.unparse(schema.value.func), "cv.All")
+        self.assertIn("_consume_page_sockets", [ast.unparse(arg) for arg in schema.value.args])
+
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_consume_page_sockets")
+        calls = []
+
+        def consume_sockets(value, consumer, socket_type="tcp"):
+            calls.append((value, consumer, socket_type))
+            return lambda config: config
+
+        socket = types.ModuleType("esphome.components.socket")
+        socket.consume_sockets = consume_sockets
+        socket.SocketType = types.SimpleNamespace(TCP="tcp", UDP="udp", TCP_LISTEN="tcp_listen")
+        components = types.ModuleType("esphome.components")
+        components.socket = socket
+        stubs = {
+            "esphome": types.ModuleType("esphome"),
+            "esphome.components": components,
+            "esphome.components.socket": socket,
+        }
+        ns = {}
+        exec(compile(ast.Module(body=[func], type_ignores=[]), "_consume_page_sockets", "exec"), ns)
+        config = {}
+        with mock.patch.dict(sys.modules, stubs):
+            self.assertIs(ns["_consume_page_sockets"](config), config)
+        # 7 matches HTTPD_DEFAULT_CONFIG max_open_sockets. The 2 UDP sockets are the
+        # httpd control pair. The production pool is then 17 (api 3+1, ota 1, mdns 2, base 1).
+        self.assertEqual(calls, [(7, "button_config", "tcp"), (2, "button_config", "udp")])
+
+
+@unittest.skipUnless(shutil.which("git"), "git is not installed")
+class FirmwareVersionTests(unittest.TestCase):
+    """Run the real firmware_version() against throwaway git repos."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name)
+        self.git("init", "-q")
+        self.n = 0
+        self.sources: list[types.SimpleNamespace] = []
+        tree = ast.parse(INIT)
+        wanted = ["_git", "source_ref", "firmware_version"]
+        funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+        self.assertEqual([f.name for f in funcs], wanted)
+        self.code = compile(ast.Module(body=funcs, type_ignores=[]), "firmware_version", "exec")
+
+    def source(self, components_dir: Path, ref: str | None) -> types.SimpleNamespace:
+        return types.SimpleNamespace(components_dir=components_dir, ref=ref)
+
+    def external_components(self) -> dict[str, types.ModuleType]:
+        """Stub the ESPHome module that names the source of each component."""
+        module = types.ModuleType("esphome.components.external_components")
+        module.get_sources = lambda: self.sources
+        components = types.ModuleType("esphome.components")
+        components.external_components = module
+        return {
+            "esphome": types.ModuleType("esphome"),
+            "esphome.components": components,
+            "esphome.components.external_components": module,
+        }
+
+    def git(self, *args: str, date: str | None = None) -> str:
+        env = dict(os.environ)
+        if date:
+            env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = date
+        cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", *args]
+        out = subprocess.run(cmd, cwd=self.repo, env=env, capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+
+    def commit(self, date: str) -> str:
+        self.n += 1
+        (self.repo / "f.txt").write_text(str(self.n))
+        self.git("add", "f.txt")
+        self.git("commit", "-q", "-m", f"c{self.n}", date=date)
+        return self.git("rev-parse", "HEAD")
+
+    def short(self) -> str:
+        return self.git("rev-parse", "--short", "HEAD")
+
+    def version(self, base: str, root: Path | None = None) -> str:
+        root = root or self.repo
+        ns = {
+            "Path": Path,
+            "subprocess": subprocess,
+            "__file__": str(root / "components" / "button_config" / "__init__.py"),
+            "VERSION_BASE": base,
+        }
+        exec(self.code, ns)
+        with mock.patch.dict(sys.modules, self.external_components()):
+            return ns["firmware_version"]()
+
+    def test_root_commit_base_is_patch_zero(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_earlier_same_month_commits_before_the_base_do_not_count(self) -> None:
+        self.commit("2026-10-01T10:00:00-07:00")
+        base = self.commit("2026-10-02T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_later_same_month_commits_increment_patch(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.commit("2026-10-05T10:00:00-07:00")
+        self.commit("2026-10-09T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.10.2")
+
+    def test_next_month_restarts_patch(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.commit("2026-10-20T10:00:00-07:00")
+        self.commit("2026-11-02T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2026.11.0")
+
+    def test_december_rolls_over_to_january(self) -> None:
+        base = self.commit("2026-12-01T10:00:00-07:00")
+        self.commit("2026-12-15T10:00:00-07:00")
+        self.commit("2027-01-03T10:00:00-07:00")
+        self.assertEqual(self.version(base), "2027.1.0")
+
+    def test_modified_tracked_file_adds_dirty(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        (self.repo / "f.txt").write_text("changed")
+        self.assertEqual(self.version(base), "2026.10.0-dirty")
+
+    def test_untracked_file_is_not_dirty(self) -> None:
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        (self.repo / "new.txt").write_text("x")
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_base_that_is_not_an_ancestor_is_unknown(self) -> None:
+        first = self.commit("2026-10-01T10:00:00-07:00")
+        self.git("checkout", "-q", "-b", "side")
+        side = self.commit("2026-10-02T10:00:00-07:00")
+        self.git("checkout", "-q", first)
+        self.commit("2026-10-03T10:00:00-07:00")
+        self.assertEqual(self.version(side), "unknown")
+
+    def test_missing_base_is_unknown(self) -> None:
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.assertEqual(self.version("0" * 40), "unknown")
+
+    def test_non_git_directory_is_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as plain:
+            self.assertEqual(self.version("0" * 40, Path(plain)), "unknown")
+
+    def test_a_clone_with_no_history_reports_the_pinned_ref(self) -> None:
+        """ESPHome clones an external source with --depth=1, so an adopted build
+        holds one commit and the base is not in it. The pinned ref is the same
+        string on every unit, so the commit of the clone goes with it."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "develop")]
+        self.assertEqual(self.version("0" * 40), f"develop@{self.short()}")
+
+    def test_a_pinned_release_tag_is_the_reported_version(self) -> None:
+        """One code path, so a tag carries the commit as a branch does."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "fw-2026.11.0")]
+        self.assertEqual(self.version("0" * 40), f"fw-2026.11.0@{self.short()}")
+
+    def test_a_ref_with_no_commit_to_resolve_is_the_bare_ref(self) -> None:
+        """A directory with no git repository still has the pinned ref."""
+        with tempfile.TemporaryDirectory() as plain:
+            self.sources = [self.source(Path(plain) / "components", "develop")]
+            self.assertEqual(self.version("0" * 40, Path(plain)), "develop")
+
+    def test_a_checkout_counts_the_patch_although_a_ref_is_pinned(self) -> None:
+        """The git count wins, so a build from a checkout keeps its own version."""
+        base = self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", "develop")]
+        self.assertEqual(self.version(base), "2026.10.0")
+
+    def test_a_source_with_no_ref_is_unknown(self) -> None:
+        """A local source names a path, not a ref."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "components", None)]
+        self.assertEqual(self.version("0" * 40), "unknown")
+
+    def test_the_ref_of_another_source_is_not_this_version(self) -> None:
+        """The config also pins the zigbee source, so the match is on the
+        directory that holds this file."""
+        self.commit("2026-10-01T10:00:00-07:00")
+        self.sources = [self.source(self.repo / "zigbee" / "components", "6cb5480")]
+        self.assertEqual(self.version("0" * 40), "unknown")
+
+
+if __name__ == "__main__":
+    unittest.main()

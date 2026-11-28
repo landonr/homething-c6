@@ -101,8 +101,8 @@
       "case/.venv/bin/python case/case.py",
       "REPO=\"$PWD\" \"$EXPLODE/refresh-assets.sh\"",
       "python3 scripts/render-clear-case.py --preset readme-assembled --width 900 --out \"$PWD/docs/readme-assets/case-assembled.png\" --log /tmp/c6remote-case-assembled.log",
-      "python3 scripts/render-clear-case.py --preset readme-exploded --width 1200 --height 1440 --out \"$PWD/docs/readme-assets/case-exploded.png\" --log /tmp/c6remote-case-exploded.log",
-      "python3 scripts/render-clear-case.py --spin --explode-loop readme-loop-exploded --preset readme-loop-spin --seconds 15.6 --width 720 --height 540 --fps 15 --loop-stand --loop-elevation 0 --loop-boom 0 --loop-start 29 --loop-swing 360 --loop-back 130 --loop-components 28 --out \"$PWD/docs/readme-assets/case-explode-loop.webp\" --log /tmp/c6remote-case-explode-loop.log",
+      "python3 scripts/render-clear-case.py --translucent --preset readme-exploded --width 1200 --height 1440 --out \"$PWD/docs/readme-assets/case-exploded.png\" --log /tmp/c6remote-case-exploded.log",
+      "python3 scripts/render-clear-case.py --translucent --spin --explode-loop readme-loop-exploded --preset readme-loop-spin --seconds 15.6 --width 720 --height 540 --fps 15 --loop-stand --loop-elevation 0 --loop-boom 0 --loop-start 29 --loop-swing 360 --loop-back 130 --loop-components 28 --out \"$PWD/docs/readme-assets/case-explode-loop.webp\" --log /tmp/c6remote-case-explode-loop.log",
       "python3 scripts/render-clear-case.py --preset readme-annotated-front --width 900 --out \"$PWD/docs/readme-assets/case-front.png\" --log /tmp/c6remote-case-front.log",
       "(cd \"$EXPLODE\" && python3 scripts/render-blender.py --preset readme-annotated-front --colorway white --width 900 --out-default case-front-white.png)",
       "python3 scripts/render-clear-case.py --preset readme-annotated-back --width 900 --out \"$PWD/docs/readme-assets/case-back.png\" --log /tmp/c6remote-case-back.log",
@@ -119,7 +119,8 @@
       "case-front-white.png uses the readme-annotated-front preset with the white colorway, so the status LEDs glow through a white shell. The white colorway renders the shell with random-walk subsurface scattering, so the glow depends on the wall thickness.",
       "The two -grey stills use the grey colorway, a matte dark grey shell with purple caps. The web page shows this pair.",
       "The loop uses the readme-loop-spin and readme-loop-exploded presets at 720x540 px, 15 fps, 15.6 s, and 256 samples per frame.",
-      "render-clear-case.py uses both one-piece shells with the same transparent UTR-8100 appearance. The white and grey renders use dated files in c6remote-explode.",
+      "The exploded still and loop use translucent UTR-8100 shells and clear TPU pads with separate caps. The other clear stills use transparent shells.",
+      "The white and grey renders use dated files in c6remote-explode.",
       "The presets and the render scripts are in c6remote-explode, so the fingerprint cannot see a change to them.",
       "After you refresh this group, refresh case-annotated and site-media too, because they read these files."
     ]

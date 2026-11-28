@@ -5,17 +5,13 @@
 #   scripts/site-media.sh <IMG_7480_clicks.mp4>
 #
 # The feature clips come from the living room demo video. The explode clip comes from
-# docs/readme-assets/case-explode-loop.webp. Needs ffmpeg, ImageMagick, and webpmux (libwebp).
+# docs/readme-assets/case-explode-loop.webp. Needs FFmpeg with animated WebP support and ImageMagick.
 #
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${1:?usage: scripts/site-media.sh <IMG_7480_clicks.mp4>}"
 OUT="$REPO_ROOT/site/assets/c6"
-# H.264 has no alpha, so the explode frames are flattened onto a white card. The browser
-# draws video colours a little differently from CSS colours, so an exact band match shows a box.
-CARD="#ffffff"
-
 mkdir -p "$OUT"
 
 # name start end crop-y poster-time
@@ -36,18 +32,11 @@ for clip in "${CLIPS[@]}"; do
 done
 
 LOOP="$REPO_ROOT/docs/readme-assets/case-explode-loop.webp"
-FRAMES="$(mktemp -d)"
-trap 'rm -rf "$FRAMES"' EXIT
-magick "$LOOP" -coalesce \
-	-background "$CARD" -alpha remove -alpha off "$FRAMES/f_%04d.png"
-# ImageMagick rounds the frame delay to centiseconds, so read it in ms with webpmux.
-MS="$(webpmux -info "$LOOP" | awk '$1 == "1:" && !d { d = $7 } END { print d }')"
-if ! [[ "$MS" =~ ^[1-9][0-9]*$ ]]; then
-	echo "site-media.sh: no valid frame duration in $LOOP (got '$MS')" >&2
-	exit 1
-fi
-ffmpeg -v error -y -framerate "1000/$MS" -i "$FRAMES/f_%04d.png" \
-	-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" \
+IFS=, read -r width height fps < <(ffprobe -v error -select_streams v:0 \
+	-show_entries stream=width,height,r_frame_rate -of csv=p=0 "$LOOP")
+ffmpeg -v error -y -i "$LOOP" \
+	-filter_complex "color=c=white:s=${width}x${height}:r=${fps}[bg];[bg][0:v]overlay=shortest=1:format=auto,scale=out_color_matrix=bt709:out_range=tv,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709,format=yuv420p[out]" \
+	-map '[out]' -fps_mode passthrough \
 	-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv \
 	-c:v libx264 -profile:v high -preset slow -crf 26 -movflags +faststart \
 	"$OUT/explode.mp4"

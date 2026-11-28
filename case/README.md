@@ -466,6 +466,8 @@ To export only the two grids, run this command from the repository root:
 case/.venv/bin/python case/case.py --keycap-grid-only
 ```
 
+`CAP_GRID_TAB_T` and `CAP_GRID_TAB_W` must not be less than the minimum wall in the PCBWay size table for a 50 x 50 mm part. If a tab is thinner, the PCBWay review stops a Formlabs resin order of the grid.
+
 1. Print `c6remote-keycap-grid.stl` in its exported orientation, with the cap faces against the build plate.
 2. Turn the grid over. Keep the grid intact while you screen print or laser engrave the faces. On the legend grid, fill the marks with paint and wipe the faces clean.
 3. Break the caps free. Trim any tab remnants flush with the flanges.
